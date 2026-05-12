@@ -1,0 +1,98 @@
+import prisma from "@/lib/prisma";
+import { Role } from "@prisma/client";
+
+export async function createUser(name: string, email: string, clerkId: string, phone: string, role: Role = Role.CUSTOMER) {
+    try {
+        let customerId: string | null = null;
+        const newUser = await prisma.user.create({
+            data: {
+                name,
+                email,
+                clerkId,
+                role,
+                phone,
+            }
+        });
+
+        if (role === Role.CUSTOMER) {
+            const customer = await prisma.customer.create({
+                data: {
+                    userId: newUser.id,
+                    email,
+                    name,
+                    phone,
+                }
+            });
+
+            await prisma.user.update({
+                where: { id: newUser.id },
+                data: { customerId: customer.id },
+            });
+            customerId = customer.id;
+        }
+
+        return {
+            success: true,
+            message: "User created successfully",
+            userId: newUser.id,
+            customerId,
+            role: newUser.role,
+        };
+    } catch (error) {
+        console.error("Error creating user:", error);
+        throw error;
+    }
+}
+
+export async function getUserByClerkId(clerkId: string) {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { clerkId },
+        });
+        return user;
+    } catch (error) {
+        console.error("Error fetching user by Clerk ID:", error);
+        throw error;
+    }
+}
+
+export async function updateUser(clerkId: string, updates: Partial<{ name: string; email: string; phone: string; role: Role }>) {
+    try {
+        // Remove undefined fields
+        const filteredUpdates = Object.fromEntries(
+            Object.entries(updates).filter(
+                ([_, value]) => value !== undefined
+            )
+        );
+        
+        const user = await prisma.user.update({
+            where: { clerkId },
+            data: filteredUpdates,
+        });
+
+        return {
+            success: true,
+            message: "User updated successfully",
+            userId: user.id,
+            role: user.role,
+        };
+    } catch (error) {
+        console.error("Error updating user:", error);
+        throw error;
+    }
+}
+
+export async function deleteUser(clerkId: string) {
+    try {
+        await prisma.user.delete({
+            where: { clerkId },
+        });
+        return {
+            success: true,
+            message: "User deleted successfully",
+        };
+    } catch (error) {
+        console.error("Error deleting user:", error);
+        throw error;
+    }
+}

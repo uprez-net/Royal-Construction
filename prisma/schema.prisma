@@ -1,12 +1,121 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  CUSTOMER
+  SITE_MANAGER
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  customerId  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  milestones Milestone[]
+  files      File[]      @relation("ProjectFiles")
+  tradies    Tradie[]    @relation("ProjectTradies")
+  customer   Customer    @relation("CustomerProjects", fields: [customerId], references: [id])
+
+  @@index([name])
+  @@index([customerId])
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  projectId   String
+  order       Int
+  name        String
+  description String?
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project Project  @relation(fields: [projectId], references: [id])
+  files   File[]   @relation("MilestoneFiles")
+  tradies Tradie[] @relation("TradieMilestones")
+
+  @@unique([projectId, name, order])
+  @@index([projectId])
+}
+
+model Tradie {
+  id        String   @id @default(uuid())
+  name      String
+  trade     String
+  email     String   @unique
+  phone     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects   Project[]   @relation("ProjectTradies")
+  milestones Milestone[] @relation("TradieMilestones")
+
+  @@index([name])
+  @@index([trade])
+  @@index([email])
+  @@index([phone])
+}
+
+model File {
+  id          String   @id @default(uuid())
+  projectId   String
+  milestoneId String?
+  filename    String
+  url         String
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project   Project    @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone? @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  User      User       @relation("UserFiles", fields: [uploadedBy], references: [id])
+
+  @@index([projectId])
+  @@index([milestoneId])
+  @@index([uploadedBy])
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  name      String
+  email     String   @unique
+  phone     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[] @relation("CustomerProjects")
+  user     User      @relation("CustomerUsers", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([phone])
+}
+
+model User {
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  phone      String   @unique
+  role       Role     @default(CUSTOMER)
+  customerId String?
+  clerkId    String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  files    File[]    @relation("UserFiles")
+  customer Customer? @relation("CustomerUsers")
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@index([clerkId])
 }
