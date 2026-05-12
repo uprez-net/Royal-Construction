@@ -26,7 +26,6 @@ import { StatusPill } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ProjectCard } from "@/components/project/project-card"
-import { ProjectDetailIndex } from "@/components/projects/project-detail-index"
 import { ProjectsScreen } from "@/components/projects/projects-screen"
 import { TradiesScreen } from "@/components/tradies/tradies-screen"
 
@@ -269,7 +268,6 @@ export const screenRegistry: Record<string, (props?: { searchParams?: Record<str
       </SectionCard>
     </div>
   ),
-  "project-detail": () => <ProjectDetailIndex />,
 }
 
 function SimpleListScreen({ title, items }: { title: string; items: string[] }) {

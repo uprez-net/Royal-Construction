@@ -1,4 +1,8 @@
+"use server";
+
+
 import { Prisma, TradieScheduleStatus } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 
 import prisma from "@/lib/prisma";
 
@@ -68,3 +72,27 @@ export async function getTradieScheduleKPIs(): Promise<TradieKPIs> {
 
   return { totalScheduled, pending, pendingResponse, confirmed, noResponse, declined, completed };
 }
+
+export const getCachedTradies = unstable_cache(
+  async () => getTradies(),
+  ["tradies"],
+  { tags: ["tradies"], revalidate: false },
+);
+
+export const getCachedTradieSchedules = unstable_cache(
+  async (filters?: {
+    projectId?: string;
+    status?: TradieScheduleStatus;
+    tradeType?: string;
+    sort?: "scheduledDate" | "tradieName" | "projectName";
+    order?: "asc" | "desc";
+  }) => getTradieSchedules(filters),
+  ["tradie-schedules"],
+  { tags: ["tradies"], revalidate: false },
+);
+
+export const getCachedTradieScheduleKPIs = unstable_cache(
+  async () => getTradieScheduleKPIs(),
+  ["tradies-kpis"],
+  { tags: ["tradies"], revalidate: false },
+);

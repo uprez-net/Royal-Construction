@@ -18,8 +18,15 @@ type Tradie = { id: string; name: string; tradeType: string; company: string | n
 type Project = { id: string; name: string };
 type Milestone = { id: string; name: string };
 
-export function ScheduleTradieModal({ onSuccess }: { onSuccess: () => void }) {
-  const [open, setOpen] = useState(false);
+export function ScheduleTradieModal({
+  open,
+  onOpenChange,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
   const [tradies, setTradies] = useState<Tradie[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -31,7 +38,7 @@ export function ScheduleTradieModal({ onSuccess }: { onSuccess: () => void }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!open) {
+    if (!open || !projectId) {
       return;
     }
 
@@ -46,7 +53,7 @@ export function ScheduleTradieModal({ onSuccess }: { onSuccess: () => void }) {
     }
 
     void loadOptions();
-  }, [open]);
+  }, [open, projectId]);
 
   useEffect(() => {
     if (!projectId) {
@@ -84,7 +91,7 @@ export function ScheduleTradieModal({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
-    setOpen(false);
+    onOpenChange(false);
     setTradieId("");
     setProjectId("");
     setMilestoneId("");
@@ -95,11 +102,7 @@ export function ScheduleTradieModal({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button type="button" onClick={() => setOpen(true)}>
-        <Plus className="size-4" />
-        Schedule New Tradie
-      </Button>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Schedule New Tradie</DialogTitle>
@@ -182,7 +185,7 @@ export function ScheduleTradieModal({ onSuccess }: { onSuccess: () => void }) {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading || !tradieId || !projectId}>

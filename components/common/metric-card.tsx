@@ -1,3 +1,5 @@
+"use client"
+
 import type { ComponentType } from "react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"

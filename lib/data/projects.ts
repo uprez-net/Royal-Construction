@@ -1,4 +1,7 @@
+"use server";
+
 import { ProjectStatus, Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 
 import prisma from "@/lib/prisma";
 
@@ -108,3 +111,21 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
 
   return { totalActive, onTrack, needsAttention, delayed };
 }
+
+export const getCachedProjects = unstable_cache(
+  async (status?: ProjectStatus) => getProjects(status ? { status } : undefined),
+  ["projects"],
+  { tags: ["projects"], revalidate: false },
+);
+
+export const getCachedProjectById = unstable_cache(
+  async (id: string) => getProjectById(id),
+  ["projects-detail"],
+  { tags: ["projects", "milestones"], revalidate: false },
+);
+
+export const getCachedProjectKPIs = unstable_cache(
+  async () => getProjectKPIs(),
+  ["projects-kpis"],
+  { tags: ["projects"], revalidate: false },
+);

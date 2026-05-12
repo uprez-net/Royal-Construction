@@ -3,6 +3,9 @@ import type { ReactNode } from "react"
 import { ClerkProvider } from "@clerk/nextjs"
 import { Fraunces, IBM_Plex_Mono, Manrope } from "next/font/google"
 
+import { ModalManager } from "@/components/modals/modal-manager"
+import { ReduxProvider } from "@/components/providers/redux-provider"
+
 import "./globals.css"
 
 const sans = Manrope({
@@ -33,7 +36,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${heading.variable} ${mono.variable} h-full antialiased`}>
       <body className="min-h-full bg-background text-foreground">
-        <ClerkProvider>{children}</ClerkProvider>
+        <ClerkProvider>
+          <ReduxProvider>
+            {children}
+            <ModalManager />
+          </ReduxProvider>
+        </ClerkProvider>
       </body>
     </html>
   )

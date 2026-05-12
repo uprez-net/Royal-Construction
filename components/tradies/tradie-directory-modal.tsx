@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { List, Loader2, Users } from "lucide-react";
+import { useState } from "react";
+import { List } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,56 +10,42 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAppSelector } from "@/lib/store/hooks";
 
-type Tradie = {
-  id: string;
-  name: string;
-  company: string | null;
-  tradeType: string;
-  phone: string;
-  email: string;
-  rating: string | null;
-};
+export function TradieDirectoryModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const tradies = useAppSelector((state) => state.tradies.tradies);
+  const [search, setSearch] = useState("");
 
-export function TradieDirectoryModal() {
-  const [open, setOpen] = useState(false);
-  const [tradies, setTradies] = useState<Tradie[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    async function loadTradies() {
-      setLoading(true);
-      const response = await fetch("/api/tradies");
-      const data = (await response.json()) as Tradie[];
-      setTradies(data);
-      setLoading(false);
-    }
-
-    void loadTradies();
-  }, [open]);
+  const filteredTradies = tradies.filter((tradie) => {
+    const query = search.toLowerCase();
+    return [tradie.name, tradie.company ?? "", tradie.tradeType].some((value) => value.toLowerCase().includes(query));
+  });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-        <Users className="size-4" />
-        Tradie Directory
-      </Button>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setSearch("");
+        }
+
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Tradie Directory</DialogTitle>
           <DialogDescription>Read-only directory of all active tradies in the database.</DialogDescription>
         </DialogHeader>
-        {loading ? (
-          <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 size-4 animate-spin" /> Loading tradies
-          </div>
-        ) : (
+        <div className="space-y-4">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search name, company, or trade type"
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
           <div className="grid gap-3 sm:grid-cols-2">
-            {tradies.map((tradie) => (
+            {filteredTradies.map((tradie) => (
               <div key={tradie.id} className="rounded-2xl border border-border bg-background p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -73,12 +58,12 @@ export function TradieDirectoryModal() {
                   <p>{tradie.tradeType}</p>
                   <p>{tradie.phone}</p>
                   <p>{tradie.email}</p>
-                  <p>Rating: {tradie.rating ?? "N/A"}</p>
+                  <p>Rating: {tradie.rating ? String(tradie.rating) : "N/A"}</p>
                 </div>
               </div>
             ))}
           </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );

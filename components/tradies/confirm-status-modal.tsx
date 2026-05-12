@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,12 +26,15 @@ const statusOptions = [
 
 export function ConfirmStatusModal({
   schedule,
+  open,
+  onOpenChange,
   onSuccess,
 }: {
   schedule: TradieScheduleWithRelations;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [status, setStatus] = useState(schedule.status);
   const [loading, setLoading] = useState(false);
 
@@ -50,16 +53,12 @@ export function ConfirmStatusModal({
       return;
     }
 
-    setOpen(false);
+    onOpenChange(false);
     onSuccess();
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
-        <CheckCircle2 className="size-4" />
-        Update Status
-      </Button>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Confirm Status</DialogTitle>
@@ -83,7 +82,7 @@ export function ConfirmStatusModal({
           </Select>
         </div>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button type="button" onClick={() => void handleSave()} disabled={loading}>

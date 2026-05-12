@@ -1,3 +1,5 @@
+"use client";
+
 import { ClipboardList } from "lucide-react";
 
 import { AppShell } from "@/components/common/app-shell";

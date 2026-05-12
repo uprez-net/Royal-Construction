@@ -32,9 +32,9 @@ export async function POST(
 
   const milestone = milestoneId
     ? await prisma.milestone.findUnique({
-        where: { id: milestoneId },
-        select: { id: true, isPhotoRequired: true },
-      })
+      where: { id: milestoneId },
+      select: { id: true, isPhotoRequired: true },
+    })
     : null;
 
   const photoUrls = await Promise.all(

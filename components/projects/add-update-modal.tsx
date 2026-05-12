@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, Loader2, Plus } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,13 +17,16 @@ import { Textarea } from "@/components/ui/textarea";
 export function AddUpdateModal({
   projectId,
   milestones,
+  open,
+  onOpenChange,
   onSuccess,
 }: {
   projectId: string;
   milestones: { id: string; name: string }[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [milestoneId, setMilestoneId] = useState<string | undefined>();
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -51,7 +54,7 @@ export function AddUpdateModal({
       return;
     }
 
-    setOpen(false);
+    onOpenChange(false);
     setNotes("");
     setMilestoneId(undefined);
     setPhotos([]);
@@ -59,11 +62,7 @@ export function AddUpdateModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button type="button" onClick={() => setOpen(true)}>
-        <Plus className="size-4" />
-        Add Update
-      </Button>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add Site Update</DialogTitle>
@@ -108,7 +107,7 @@ export function AddUpdateModal({
             <p className="text-xs text-muted-foreground">Image files only.</p>
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving}>

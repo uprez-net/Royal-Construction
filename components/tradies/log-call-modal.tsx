@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, PhoneCall } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,12 +16,15 @@ import type { TradieScheduleWithRelations } from "@/lib/data/tradies";
 
 export function LogCallModal({
   schedule,
+  open,
+  onOpenChange,
   onSuccess,
 }: {
   schedule: TradieScheduleWithRelations;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState<"CONFIRMED" | "NO_RESPONSE" | "DECLINED" | null>(null);
 
   async function submit(status: "CONFIRMED" | "NO_RESPONSE" | "DECLINED") {
@@ -39,16 +42,12 @@ export function LogCallModal({
       return;
     }
 
-    setOpen(false);
+    onOpenChange(false);
     onSuccess();
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
-        <PhoneCall className="size-4" />
-        Log Call
-      </Button>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Log Call Outcome</DialogTitle>

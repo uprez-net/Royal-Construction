@@ -1,11 +1,15 @@
+"use client"
+
 import type { ReactNode } from "react"
 
 export function DataTable({
   headers,
   rows,
+  onRowClick,
 }: {
   headers: string[]
   rows: ReactNode[][]
+  onRowClick?: (rowIndex: number) => void
 }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-border/70 bg-background">
@@ -21,7 +25,11 @@ export function DataTable({
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-t border-border/70 transition-colors hover:bg-muted/40">
+            <tr
+              key={rowIndex}
+              className={onRowClick ? "cursor-pointer border-t border-border/70 transition-colors hover:bg-muted/40" : "border-t border-border/70 transition-colors hover:bg-muted/40"}
+              onClick={onRowClick ? () => onRowClick(rowIndex) : undefined}
+            >
               {row.map((cell, cellIndex) => (
                 <td key={cellIndex} className="px-4 py-3">
                   {cell}

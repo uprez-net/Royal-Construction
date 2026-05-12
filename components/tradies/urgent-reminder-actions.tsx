@@ -1,19 +1,29 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
-import { ConfirmStatusModal } from "@/components/tradies/confirm-status-modal";
-import { LogCallModal } from "@/components/tradies/log-call-modal";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 import type { TradieScheduleWithRelations } from "@/lib/data/tradies";
 
 export function UrgentReminderActions({ schedule }: { schedule: TradieScheduleWithRelations }) {
-  const router = useRouter();
+  const dispatch = useAppDispatch();
 
   return (
     <div className="flex flex-wrap gap-2">
-      <LogCallModal schedule={schedule} onSuccess={() => router.refresh()} />
-      <ConfirmStatusModal schedule={schedule} onSuccess={() => router.refresh()} />
+      <button
+        type="button"
+        className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium transition-colors hover:bg-muted"
+        onClick={() => dispatch(openModal({ type: "logCall", payload: { schedule } }))}
+      >
+        Log Call
+      </button>
+      <button
+        type="button"
+        className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium transition-colors hover:bg-muted"
+        onClick={() => dispatch(openModal({ type: "confirmStatus", payload: { schedule } }))}
+      >
+        Confirm Status
+      </button>
     </div>
   );
 }

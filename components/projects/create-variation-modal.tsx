@@ -16,12 +16,15 @@ import { Textarea } from "@/components/ui/textarea";
 
 export function CreateVariationModal({
   projectId,
+  open,
+  onOpenChange,
   onSuccess,
 }: {
   projectId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [cost, setCost] = useState("");
   const [requestedDate, setRequestedDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -47,7 +50,7 @@ export function CreateVariationModal({
       return;
     }
 
-    setOpen(false);
+    onOpenChange(false);
     setDescription("");
     setCost("");
     setRequestedDate(new Date().toISOString().slice(0, 10));
@@ -55,11 +58,7 @@ export function CreateVariationModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-        <Plus className="size-4" />
-        Create Variation
-      </Button>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create Variation</DialogTitle>
@@ -87,7 +86,7 @@ export function CreateVariationModal({
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving}>
