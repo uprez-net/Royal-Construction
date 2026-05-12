@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leads & Marketing - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.12);
+  --accent:#E8730C;--accent-light:#FFF3E0;
+  --success:#16A34A;--success-light:#DCFCE7;
+  --danger:#DC2626;--danger-light:#FEE2E2;
+  --warning:#F59E0B;--warning-light:#FEF9C3;
+  --info:#2563EB;--info-light:#DBEAFE;
+  --purple:#7C3AED;--purple-light:#EDE9FE;
+  --bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;
+  --text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;
+  --border-color:#E2E8F0;--border-light:#F1F5F9;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);
+  --sidebar-bg:#0F172A;--sidebar-width:64px;
+  --transition:all .2s cubic-bezier(.4,0,.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#94A3B8}
+.wrapper{display:flex;min-height:100vh}
+
+/* ── Sidebar (exact match index.html) ── */
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}
+.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}
+.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}
+.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}
+.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}
+.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}
+.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}
+.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}
+@media(max-width:768px){.sidebar-tooltip{display:none}}
+
+/* ── Main Panel ── */
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+
+/* ── Top Header (exact match) ── */
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}
+.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px;letter-spacing:.01em}
+.header-menu a:hover{color:rgba(255,255,255,.9)}
+.header-menu a.active{color:white}
+.header-menu a.active::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+
+/* ── Sub Header ── */
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+
+/* ── Content ── */
+.content-container{padding:20px;max-width:1560px;margin:0 auto;width:100%}
+
+/* ── Shared Components ── */
+.card-custom{background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);margin-bottom:16px;transition:var(--transition)}
+.card-custom:hover{box-shadow:var(--shadow-md)}
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.stat-value{font-size:26px;font-weight:800;line-height:1.2;color:var(--text-primary);margin-top:2px;letter-spacing:-.02em}
+.stat-desc{font-size:11.5px;color:var(--text-tertiary);margin-top:3px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;flex-shrink:0}
+.trend-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.02em}
+.trend-up{color:var(--success);background:rgba(22,163,74,.08)}.trend-down{color:var(--danger);background:rgba(220,38,38,.08)}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}
+.pill-success{background:rgba(22,163,74,.08);color:var(--success)}.pill-warning{background:rgba(245,158,11,.08);color:#D97706}.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}.pill-info{background:rgba(37,99,235,.08);color:var(--info)}.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}.pill-purple{background:rgba(124,58,237,.08);color:var(--purple)}.pill-accent{background:rgba(232,115,12,.08);color:var(--accent)}
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white;text-decoration:none}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-sm-custom{padding:5px 10px;font-size:11.5px;border-radius:6px}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.btn-danger-custom{background:var(--danger);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.btn-danger-custom:hover{background:#B91C1C;transform:translateY(-1px);color:white}
+.table-custom{width:100%;border-collapse:separate;border-spacing:0}
+.table-custom thead th{font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;letter-spacing:.04em;padding:10px 14px;border-bottom:1px solid var(--border-color);background:var(--bg-body)}
+.table-custom td{font-size:13px;vertical-align:middle;padding:12px 14px;border-bottom:1px solid var(--border-light)}
+.table-custom tr:last-child td{border-bottom:none}
+.table-custom tbody tr{transition:background .15s;cursor:pointer}
+.table-custom tbody tr:hover td{background:var(--bg-hover)}
+.progress-bar-custom{height:7px;background:#E2E8F0;border-radius:4px;overflow:hidden}
+.progress-fill-custom{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.search-box{position:relative}
+.search-box input{width:220px;padding:6px 12px 6px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);font-family:inherit;outline:none}
+.search-box input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);width:280px}
+.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px}
+.cc{position:relative;height:260px}
+
+/* ── Notifications (exact match) ── */
+.notification-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;background:var(--danger);border-radius:99px;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg)}
+.notification-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:360px;background:white;border-radius:10px;box-shadow:var(--shadow-lg);z-index:1001;display:none;border:1px solid var(--border-color);overflow:hidden}
+.notification-dropdown.show{display:block;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notification-header{padding:14px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.notification-mark-all{font-size:11.5px;color:var(--primary);cursor:pointer;font-weight:600;transition:var(--transition)}
+.notification-mark-all:hover{color:var(--primary-dark)}
+.notification-item{padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s;display:flex;align-items:flex-start;gap:10px}
+.notification-item:hover{background:var(--bg-hover)}
+.notification-item.unread{background:rgba(13,148,136,.03)}
+.notification-item.dismissing{animation:slideOut .25s ease forwards;overflow:hidden}
+@keyframes slideOut{to{opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin:0}}
+.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.notif-text{flex:1;min-width:0}.notif-msg{font-size:12.5px;line-height:1.4;color:var(--text-primary)}.notif-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.notif-dismiss{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);cursor:pointer;opacity:0;transition:var(--transition);flex-shrink:0;font-size:10px;border:none;background:none}
+.notification-item:hover .notif-dismiss{opacity:1}
+.notif-dismiss:hover{background:var(--danger-light);color:var(--danger)}
+.notification-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--border-color)}
+.notification-view-all{font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600}
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}
+.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}
+.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+
+/* ── Toast ── */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:320px;animation:toastIn .3s ease}
+.toast-item.removing{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.toast-msg{flex:1;font-size:13px;font-weight:500}
+.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;padding:0;line-height:1}
+.toast-close:hover{color:var(--text-primary)}
+
+/* ── Modal ── */
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center;animation:fadeIn .2s}
+.modal-backdrop-custom.show{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:90%;max-width:680px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:20px 24px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.modal-body-custom{padding:20px 24px}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:16px}
+.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+
+/* ── Pipeline Card ── */
+.pipeline-col{min-width:260px;max-width:280px;flex-shrink:0}
+.pipeline-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:10px 10px 0 0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.pipeline-count{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.pipeline-body{background:var(--bg-body);border:1px solid var(--border-color);border-top:none;border-radius:0 0 10px 10px;padding:10px;min-height:120px;display:flex;flex-direction:column;gap:8px}
+.lead-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:12px;cursor:pointer;transition:var(--transition);position:relative}
+.lead-card:hover{box-shadow:var(--shadow-md);border-color:var(--primary);transform:translateY(-1px)}
+.lead-card-name{font-size:13px;font-weight:700;margin-bottom:3px;display:flex;align-items:center;gap:6px}
+.lead-card-sub{font-size:11px;color:var(--text-tertiary);margin-bottom:4px}
+.lead-card-source{font-size:10px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:3px;padding:2px 6px;background:var(--bg-body);border-radius:4px}
+.lead-card-actions{display:flex;gap:4px;margin-top:8px;opacity:0;transition:opacity .15s}
+.lead-card:hover .lead-card-actions{opacity:1}
+.lc-btn{padding:4px 8px;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-card);font-size:10px;font-weight:600;cursor:pointer;transition:var(--transition);color:var(--text-secondary);font-family:inherit;display:inline-flex;align-items:center;gap:3px}
+.lc-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.lc-btn.danger:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-light)}
+.urgent-dot{width:6px;height:6px;border-radius:50%;background:var(--danger);animation:pulseDot 2s infinite;flex-shrink:0}
+@keyframes pulseDot{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.4)}50%{box-shadow:0 0 0 6px rgba(220,38,38,0)}}
+
+/* ── Form ── */
+.form-group{margin-bottom:14px}
+.form-label{font-size:11.5px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.03em}
+.form-input{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:7px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition);background:var(--bg-card)}
+.form-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.form-select-custom{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:7px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition);background:var(--bg-card);cursor:pointer;appearance:auto}
+.form-select-custom:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+textarea.form-input{resize:vertical;min-height:70px}
+
+/* ── Detail Grid ── */
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}
+.detail-value{font-size:13px;font-weight:600}
+
+/* ── Tab Nav ── */
+.tab-nav{display:flex;gap:0;border-bottom:2px solid var(--border-color);margin-bottom:20px}
+.tab-btn{padding:10px 20px;background:none;border:none;font-size:13px;font-weight:600;color:var(--text-tertiary);cursor:pointer;position:relative;transition:var(--transition);font-family:inherit}
+.tab-btn:hover{color:var(--text-primary)}
+.tab-btn.active{color:var(--primary)}
+.tab-btn.active::after{content:'';position:absolute;bottom:-2px;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+
+/* ── Email Template Card ── */
+.email-tpl-card{border:1px solid var(--border-color);border-radius:8px;padding:12px;cursor:pointer;transition:var(--transition)}
+.email-tpl-card:hover{border-color:var(--primary);background:var(--primary-glow);box-shadow:var(--shadow-sm)}
+.email-tpl-card.selected{border-color:var(--primary);background:var(--primary-glow);box-shadow:0 0 0 2px var(--primary)}
+
+/* ── Follow-up Timeline ── */
+.fu-tl{position:relative;padding-left:24px}
+.fu-tl::before{content:'';position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--border-color);border-radius:1px}
+.fu-tl-item{position:relative;padding-bottom:16px}
+.fu-tl-item:last-child{padding-bottom:0}
+.fu-tl-item::before{content:'';position:absolute;left:-20px;top:4px;width:10px;height:10px;border-radius:50%;border:2px solid white}
+.fu-tl-item.done::before{background:var(--success);box-shadow:0 0 0 2px var(--success)}
+.fu-tl-item.pending::before{background:var(--warning);box-shadow:0 0 0 2px var(--warning)}
+.fu-tl-item.skipped::before{background:var(--text-tertiary);box-shadow:0 0 0 2px var(--text-tertiary)}
+
+/* ── Filter Bar ── */
+.filter-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.filter-chip{padding:5px 12px;border-radius:99px;border:1px solid var(--border-color);background:var(--bg-card);font-size:11.5px;font-weight:600;cursor:pointer;transition:var(--transition);color:var(--text-secondary);font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.filter-chip:hover{border-color:var(--primary);color:var(--primary)}
+.filter-chip.active{background:var(--primary);color:white;border-color:var(--primary)}
+
+/* ── Live Indicator ── */
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--success);display:inline-block;animation:livePulse 2s infinite}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Responsive ── */
+@media(max-width:992px){.detail-grid{grid-template-columns:1fr}.stat-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:576px){.stat-grid{grid-template-columns:1fr}.content-container{padding:12px}.search-box input{width:160px}.search-box input:focus{width:200px}.pipeline-col{min-width:240px}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<!-- Sidebar (exact match index.html) -->
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon active" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+
+<!-- Main Panel -->
+<div class="main-panel">
+
+  <!-- Top Header (exact match) -->
+  <header class="top-header">
+    <div class="d-flex align-items-center gap-3">
+      <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+      <nav class="header-menu d-none d-lg-block">
+        <a href="index.html">Dashboard</a><a href="leads.html" class="active">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a>
+      </nav>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+      <div class="position-relative">
+        <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7);" onclick="toggleNotif()" id="notifBtn">
+          <i class="bi bi-bell"></i>
+          <span class="notification-badge" id="notifCount">3</span>
+        </button>
+        <div class="notification-dropdown" id="notifDrop">
+          <div class="notification-header"><div style="font-size:13px;font-weight:700;">Notifications</div><div class="notification-mark-all" onclick="markAllRead()">Mark all read</div></div>
+          <div id="notifList"></div>
+          <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notification center...','info');return false;">View all notifications</a></div>
+        </div>
+      </div>
+      <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+    </div>
+  </header>
+
+  <div class="sub-header">
+    <i class="bi bi-house me-1" style="font-size:11px;"></i><span>Home</span>
+    <span class="mx-2" style="color:var(--border-color);">/</span>
+    <span style="font-weight:600;color:var(--text-primary);">Leads & Marketing</span>
+    <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);"><span class="live-dot me-1"></span>Auto-sync from Google Ads active</span>
+  </div>
+
+  <!-- Content -->
+  <div class="content-container">
+
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div>
+        <h2 style="font-size:18px;font-weight:800;margin:0;">Lead Pipeline</h2>
+        <p style="font-size:12.5px;color:var(--text-tertiary);margin:0;">Google Ads auto-capture &bull; Follow-up automation &bull; Email templates</p>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn-outline-custom" onclick="openEmailTemplates()"><i class="bi bi-envelope"></i> Email Templates</button>
+        <button class="btn-outline-custom" onclick="simulateNewLead()"><i class="bi bi-arrow-down-circle"></i> Simulate New Lead</button>
+        <button class="btn-primary-custom" onclick="openAddLead()"><i class="bi bi-plus-lg"></i> Add Lead Manually</button>
+      </div>
+    </div>
+
+    <!-- KPI Stats -->
+    <div class="stat-grid" id="statsGrid"></div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-nav" id="tabNav">
+      <button class="tab-btn active" onclick="switchTab('pipeline',this)"><i class="bi bi-columns-gap me-1"></i>Pipeline View</button>
+      <button class="tab-btn" onclick="switchTab('table',this)"><i class="bi bi-table me-1"></i>Table View</button>
+      <button class="tab-btn" onclick="switchTab('followups',this)"><i class="bi bi-clock-history me-1"></i>Follow-ups</button>
+      <button class="tab-btn" onclick="switchTab('analytics',this)"><i class="bi bi-bar-chart me-1"></i>Analytics</button>
+    </div>
+
+    <!-- ═══ PIPELINE VIEW ═══ -->
+    <div id="tab-pipeline">
+      <div class="d-flex gap-3 overflow-auto pb-2" id="pipelineContainer" style="scrollbar-width:thin;"></div>
+    </div>
+
+    <!-- ═══ TABLE VIEW ═══ -->
+    <div id="tab-table" style="display:none;">
+      <div class="card-custom">
+        <div class="section-heading">
+          All Leads
+          <div class="filter-bar">
+            <div class="search-box"><i class="bi bi-search"></i><input type="text" placeholder="Search leads..." id="leadSearch" oninput="renderTableView()"></div>
+            <button class="filter-chip active" onclick="toggleFilter(this,'all')">All</button>
+            <button class="filter-chip" onclick="toggleFilter(this,'New')">New</button>
+            <button class="filter-chip" onclick="toggleFilter(this,'Contacted')">Contacted</button>
+            <button class="filter-chip" onclick="toggleFilter(this,'Qualified')">Qualified</button>
+            <button class="filter-chip" onclick="toggleFilter(this,'Quoted')">Quoted</button>
+            <button class="filter-chip" onclick="toggleFilter(this,'Negotiating')">Negotiating</button>
+            <button class="filter-chip" onclick="toggleFilter(this,'Won')">Won</button>
+            <button class="filter-chip" onclick="toggleFilter(this,'Lost')">Lost</button>
+            <button class="btn-outline-custom btn-sm-custom" onclick="exportLeadsCSV()"><i class="bi bi-download"></i> Export</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom" id="leadTable">
+            <thead><tr><th>Lead</th><th>Phone</th><th>Location</th><th>Source</th><th>Stage</th><th>Follow-up</th><th>Assigned</th><th>Actions</th></tr></thead>
+            <tbody id="leadTableBody"></tbody>
+          </table>
+        </div>
+        <div id="noLeadResults" style="display:none;text-align:center;padding:30px;color:var(--text-tertiary);font-size:13px;"><i class="bi bi-search" style="font-size:24px;display:block;margin-bottom:8px;"></i>No leads match your search.</div>
+      </div>
+    </div>
+
+    <!-- ═══ FOLLOW-UPS VIEW ═══ -->
+    <div id="tab-followups" style="display:none;">
+      <div class="row g-3">
+        <div class="col-lg-8">
+          <div class="card-custom">
+            <div class="section-heading">Follow-up Schedule <span class="status-pill pill-danger" style="font-size:10px;" id="fuPendingCount">0 pending</span></div>
+            <div id="followupContainer"></div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="card-custom">
+            <div class="section-heading">Upcoming Reminders</div>
+            <div id="reminderList"></div>
+          </div>
+          <div class="card-custom">
+            <div class="section-heading">Quick Stats</div>
+            <div id="fuQuickStats"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ ANALYTICS VIEW ═══ -->
+    <div id="tab-analytics" style="display:none;">
+      <div class="row g-3 mb-3">
+        <div class="col-lg-5"><div class="card-custom"><div class="section-heading">Lead Sources</div><div class="cc"><canvas id="sourceChart"></canvas></div></div></div>
+        <div class="col-lg-7"><div class="card-custom"><div class="section-heading">Monthly Lead Trend</div><div class="cc"><canvas id="trendChart"></canvas></div></div></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-lg-5"><div class="card-custom"><div class="section-heading">Conversion by Source</div><div class="cc"><canvas id="convSourceChart"></canvas></div></div></div>
+        <div class="col-lg-7"><div class="card-custom"><div class="section-heading">Lost Reasons</div><div class="cc"><canvas id="lostReasonChart"></canvas></div></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ═══ ADD LEAD MODAL ═══ -->
+<div class="modal-backdrop-custom" id="addLeadModal">
+  <div class="modal-content-custom" style="max-width:600px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Add New Lead</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;">Manually add a lead to the pipeline</p></div>
+      <button class="modal-close" onclick="closeModal('addLeadModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="row g-3">
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="addName" placeholder="e.g. Jaswinder Singh"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Phone *</label><input class="form-input" id="addPhone" placeholder="e.g. 0412 345 678"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Email</label><input class="form-input" id="addEmail" placeholder="e.g. name@email.com" type="email"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Location *</label><input class="form-input" id="addLocation" placeholder="e.g. Blacktown, NSW"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Source</label><select class="form-select-custom" id="addSource"><option>Google Ads</option><option>Referral</option><option>Facebook Ads</option><option>Walk-in</option><option>Repeat Client</option><option>Website</option></select></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Assigned To</label><select class="form-select-custom" id="addAssigned"><option>Guri Singh</option><option>Amrit Singh</option><option>Deepak Sharma</option></select></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Budget Range</label><select class="form-select-custom" id="addBudget"><option>Not Discussed</option><option>$200K - $350K</option><option>$350K - $500K</option><option>$500K - $700K</option><option>$700K+</option></select></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Project Type</label><select class="form-select-custom" id="addType"><option>Not Specified</option><option>New Home</option><option>Duplex</option><option>Renovation</option><option>Granny Flat</option><option>Townhouse</option></select></div></div>
+        <div class="col-12"><div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="addNotes" placeholder="Initial notes about this lead..."></textarea></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Follow-up Date</label><input class="form-input" id="addFollowup" type="date"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Follow-up Time</label><input class="form-input" id="addFollowupTime" type="time" value="10:00"></div></div>
+      </div>
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn-primary-custom" onclick="submitNewLead()"><i class="bi bi-check-lg"></i> Save Lead</button>
+        <button class="btn-outline-custom" onclick="submitNewLeadAndNotify()"><i class="bi bi-bell"></i> Save & Set Reminder</button>
+        <button class="btn-outline-custom" onclick="closeModal('addLeadModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LEAD DETAIL MODAL ═══ -->
+<div class="modal-backdrop-custom" id="leadDetailModal">
+  <div class="modal-content-custom" style="max-width:740px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="ldTitle">Lead Details</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;" id="ldSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('leadDetailModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="ldBody"></div>
+  </div>
+</div>
+
+<!-- ═══ EMAIL TEMPLATE MODAL ═══ -->
+<div class="modal-backdrop-custom" id="emailTplModal">
+  <div class="modal-content-custom" style="max-width:640px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Email Templates</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;">Select a template to send to the lead</p></div>
+      <button class="modal-close" onclick="closeModal('emailTplModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="emailTplBody"></div>
+  </div>
+</div>
+
+<!-- ═══ SEND EMAIL MODAL ═══ -->
+<div class="modal-backdrop-custom" id="sendEmailModal">
+  <div class="modal-content-custom" style="max-width:600px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="seTitle">Send Email</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;" id="seSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('sendEmailModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="seBody"></div>
+  </div>
+</div>
+
+<!-- ═══ FOLLOW-UP ACTION MODAL ═══ -->
+<div class="modal-backdrop-custom" id="fuActionModal">
+  <div class="modal-content-custom" style="max-width:520px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="fuActTitle">Follow-up Action</h4></div>
+      <button class="modal-close" onclick="closeModal('fuActionModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="fuActBody"></div>
+  </div>
+</div>
+
+<!-- ═══ MARK LOST MODAL ═══ -->
+<div class="modal-backdrop-custom" id="lostModal">
+  <div class="modal-content-custom" style="max-width:460px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;color:var(--danger);">Mark Lead as Lost</h4></div>
+      <button class="modal-close" onclick="closeModal('lostModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="lostBody"></div>
+  </div>
+</div>
+
+<!-- ═══ STATUS CHANGE MODAL ═══ -->
+<div class="modal-backdrop-custom" id="statusModal">
+  <div class="modal-content-custom" style="max-width:420px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="statusTitle">Change Stage</h4></div>
+      <button class="modal-close" onclick="closeModal('statusModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="statusBody"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// DATA — Complete Lead Database
+// ══════════════════════════════════════
+let leads = [
+  { id:1, name:"Ravinder Singh", phone:"0432 156 789", email:"ravinder@email.com", location:"Penrith, NSW", source:"Google Ads", sourceDetail:"builder near me", stage:"New", assigned:"Guri Singh", budget:"Not Discussed", type:"Not Specified", notes:"First enquiry via Google Ads. Interested in 4BR home.", followupDate:"2025-07-07", followupTime:"10:00", followupNotes:"", history:[{date:"2025-07-05",time:"09:15",action:"Lead captured",detail:"Auto-captured from Google Ads — keyword: builder near me",type:"system"}], created:"2025-07-05", urgent:false },
+  { id:2, name:"Priya Sharma", phone:"0445 678 901", email:"priya.s@email.com", location:"Auburn, NSW", source:"Google Ads", sourceDetail:"home builder NSW", stage:"New", assigned:"Guri Singh", budget:"$350K - $500K", type:"New Home", notes:"Wants open-plan living with optional theatre room. Land already owned.", followupDate:"2025-07-07", followupTime:"15:30", followupNotes:"Send revised floor plan options email", history:[{date:"2025-07-05",time:"11:30",action:"Lead captured",detail:"Auto-captured from Google Ads — keyword: home builder NSW",type:"system"}], created:"2025-07-05", urgent:true },
+  { id:3, name:"James Wilson", phone:"0421 345 678", email:"james.w@email.com", location:"Hornsby, NSW", source:"Google Ads", sourceDetail:"custom home builder", stage:"New", assigned:"Guri Singh", budget:"$500K - $700K", type:"New Home", notes:"Land purchased at Hornsby Heights. Wants 4BR modern home.", followupDate:"2025-07-07", followupTime:"17:00", followupNotes:"Initial consultation call", history:[{date:"2025-07-06",time:"08:45",action:"Lead captured",detail:"Auto-captured from Google Ads — keyword: custom home builder",type:"system"}], created:"2025-07-06", urgent:false },
+  { id:4, name:"Simran Gill", phone:"0456 789 012", email:"simran.g@email.com", location:"Ryde, NSW", source:"Referral", sourceDetail:"Harpreet Kaur", stage:"New", assigned:"Guri Singh", budget:"Not Discussed", type:"Not Specified", notes:"Referred by Harpreet Kaur (Penrith project). Trusted lead.", followupDate:"2025-07-08", followupTime:"11:00", followupNotes:"", history:[{date:"2025-07-06",time:"14:00",action:"Lead captured",detail:"Referral from Harpreet Kaur — Penrith Residence client",type:"referral"}], created:"2025-07-06", urgent:false },
+  { id:5, name:"Manpreet Dhillon", phone:"0478 901 234", email:"manpreet.d@email.com", location:"Liverpool, NSW", source:"Google Ads", sourceDetail:"duplex builder Sydney", stage:"Contacted", assigned:"Amrit Singh", budget:"$350K - $500K", type:"Duplex", notes:"Interested in duplex construction. Has two adjacent blocks.", followupDate:"2025-07-08", followupTime:"10:00", followupNotes:"Site visit scheduled", history:[{date:"2025-07-02",time:"09:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-07-03",time:"10:30",action:"Called",detail:"Discussed duplex options. Client interested in modern design.",type:"call"},{date:"2025-07-04",time:"09:00",action:"Email sent",detail:"Sent duplex portfolio PDF with 5 designs",type:"email"}], created:"2025-07-02", urgent:false },
+  { id:6, name:"Sunita Kaur", phone:"0490 123 456", email:"sunita.k@email.com", location:"Blacktown, NSW", source:"Google Ads", sourceDetail:"renovation builder", stage:"Contacted", assigned:"Guri Singh", budget:"$200K - $350K", type:"Renovation", notes:"Needs full kitchen + 2 bathroom renovation + extension.", followupDate:"2025-07-09", followupTime:"14:00", followupNotes:"Renovation scope discussion", history:[{date:"2025-07-03",time:"11:15",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-07-04",time:"14:00",action:"Called",detail:"Discussed renovation scope. Client needs site visit.",type:"call"}], created:"2025-07-03", urgent:false },
+  { id:7, name:"Andrew Nguyen", phone:"0412 345 678", email:"andrew.n@email.com", location:"Parramatta, NSW", source:"Google Ads", sourceDetail:"townhouse builder", stage:"Contacted", assigned:"Deepak Sharma", budget:"$500K - $700K", type:"Townhouse", notes:"Townhouse project — 3 units on single block. DA approved.", followupDate:"2025-07-09", followupTime:"09:30", followupNotes:"Send townhouse pricing breakdown", history:[{date:"2025-07-03",time:"15:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-07-05",time:"11:00",action:"Called",detail:"DA already approved. Needs construction quote urgently.",type:"call"}], created:"2025-07-03", urgent:false },
+  { id:8, name:"Gurpreet Nagra", phone:"0465 432 109", email:"gurpreet.n@email.com", location:"Campbelltown, NSW", source:"Facebook Ads", sourceDetail:"FB — Lookalike audience", stage:"Contacted", assigned:"Guri Singh", budget:"Not Discussed", type:"New Home", notes:"Responded to FB ad. Needs more info on process.", followupDate:"2025-07-10", followupTime:"10:00", followupNotes:"Explain building process", history:[{date:"2025-07-04",time:"16:30",action:"Lead captured",detail:"Facebook Ads — Lookalike audience campaign",type:"system"},{date:"2025-07-06",time:"09:00",action:"Called",detail:"No answer, left voicemail.",type:"call"}], created:"2025-07-04", urgent:false },
+  { id:9, name:"Kuldeep Johal", phone:"0467 890 123", email:"kuldeep.j@email.com", location:"Castle Hill, NSW", source:"Google Ads", sourceDetail:"luxury home builder", stage:"Qualified", assigned:"Guri Singh", budget:"$500K - $700K", type:"New Home", notes:"Budget confirmed $500K-$600K. Wants 4BR + study + double garage.", followupDate:"2025-07-08", followupTime:"11:00", followupNotes:"Send material catalogue", history:[{date:"2025-06-28",time:"10:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-06-29",time:"11:00",action:"Called",detail:"Discussed requirements. Budget $500K-$600K.",type:"call"},{date:"2025-07-01",time:"14:00",action:"Email sent",detail:"Sent initial scope document",type:"email"},{date:"2025-07-03",time:"10:00",action:"Called",detail:"Client confirmed budget range. Ready for catalogue.",type:"call"}], created:"2025-06-28", urgent:false },
+  { id:10, name:"Sarah Thompson", phone:"0489 012 345", email:"sarah.t@email.com", location:"Chatswood, NSW", source:"Google Ads", sourceDetail:"apartment builder Sydney", stage:"Qualified", assigned:"Deepak Sharma", budget:"$700K+", type:"New Home", notes:"Apartment build on existing block. $800K budget confirmed.", followupDate:"2025-07-10", followupTime:"14:00", followupNotes:"Architect meeting setup", history:[{date:"2025-06-30",time:"09:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-07-02",time:"15:00",action:"Called",detail:"Confirmed $800K budget. Apartment-style build.",type:"call"},{date:"2025-07-04",time:"10:00",action:"Meeting",detail:"In-person meeting at Chatswood site. Took measurements.",type:"meeting"}], created:"2025-06-30", urgent:false },
+  { id:11, name:"Baljinder Grewal", phone:"0471 234 567", email:"baljinder.g@email.com", location:"Mount Druitt, NSW", source:"Referral", sourceDetail:"Sukhwinder Singh", stage:"Qualified", assigned:"Guri Singh", budget:"$350K - $500K", type:"Duplex", notes:"Referred by Sukhwinder (Blacktown project). Wants similar duplex.", followupDate:"2025-07-09", followupTime:"16:00", followupNotes:"Show Blacktown duplex photos", history:[{date:"2025-07-01",time:"13:00",action:"Lead captured",detail:"Referral from Sukhwinder Singh — Blacktown Duplex client",type:"referral"},{date:"2025-07-03",time:"11:00",action:"Called",detail:"Interested in same duplex design as Blacktown project.",type:"call"},{date:"2025-07-05",time:"14:00",action:"Email sent",detail:"Sent Blacktown duplex photos and floor plans",type:"email"}], created:"2025-07-01", urgent:false },
+  { id:12, name:"Rajesh Kumar", phone:"0403 222 111", email:"rajesh.k@email.com", location:"Castle Hill, NSW", source:"Google Ads", sourceDetail:"builder Castle Hill", stage:"Quoted", assigned:"Guri Singh", budget:"$500K - $700K", type:"New Home", notes:"Quote sent: $620K for 5BR luxury villa. Comparing with competitors.", followupDate:"2025-07-07", followupTime:"14:00", followupNotes:"5% discount discussion — comparing with other builders", history:[{date:"2025-06-20",time:"10:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-06-22",time:"11:00",action:"Called",detail:"Discussed 5BR villa requirements.",type:"call"},{date:"2025-06-25",time:"14:00",action:"Meeting",detail:"Site visit at Castle Hill. Took measurements and discussed design.",type:"meeting"},{date:"2025-06-28",time:"09:00",action:"Email sent",detail:"Sent formal quotation $620K with approval button.",type:"email"},{date:"2025-07-02",time:"10:00",action:"Called",detail:"Client comparing quotes. Interested but price-sensitive.",type:"call"},{date:"2025-07-05",time:"15:00",action:"Called",detail:"Discussed timeline advantage. He seemed interested but needs 5% discount.",type:"call"}], created:"2025-06-20", urgent:true },
+  { id:13, name:"Wei Zhang", phone:"0456 123 789", email:"wei.z@email.com", location:"Chatswood, NSW", source:"Google Ads", sourceDetail:"apartment renovation", stage:"Quoted", assigned:"Deepak Sharma", budget:"$700K+", type:"New Home", notes:"Quote sent: $890K for 3BR apartment renovation. Awaiting response.", followupDate:"2025-07-10", followupTime:"11:00", followupNotes:"Follow up on quote response", history:[{date:"2025-06-25",time:"09:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-06-27",time:"14:00",action:"Called",detail:"Discussed apartment renovation scope.",type:"call"},{date:"2025-07-01",time:"10:00",action:"Meeting",detail:"Site inspection at Chatswood apartment.",type:"meeting"},{date:"2025-07-03",time:"09:00",action:"Email sent",detail:"Sent formal quotation $890K.",type:"email"}], created:"2025-06-25", urgent:false },
+  { id:14, name:"Harpreet Kaur", phone:"0412 345 678", email:"harpreet.k@email.com", location:"Penrith, NSW", source:"Google Ads", sourceDetail:"Penrith builder", stage:"Negotiating", assigned:"Guri Singh", budget:"$350K - $500K", type:"New Home", notes:"Discussing 5% discount on $485K quote for 4BR modern home.", followupDate:"2025-07-07", followupTime:"16:00", followupNotes:"Finalize discount and get sign-off", history:[{date:"2025-06-15",time:"08:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-06-17",time:"10:00",action:"Called",detail:"Discussed 4BR home requirements.",type:"call"},{date:"2025-06-20",time:"14:00",action:"Meeting",detail:"Site visit. Client loved the design options.",type:"meeting"},{date:"2025-06-23",time:"09:00",action:"Email sent",detail:"Sent quotation $485K.",type:"email"},{date:"2025-06-26",time:"11:00",action:"Called",detail:"Client requested 5% discount. Discussing with Guri.",type:"call"},{date:"2025-07-01",time:"15:00",action:"Called",detail:"Offered 3% discount. Client wants 5%. Negotiating.",type:"call"},{date:"2025-07-04",time:"10:00",action:"Email sent",detail:"Sent revised quote with 4% discount — $465,600.",type:"email"}], created:"2025-06-15", urgent:true },
+  { id:15, name:"Gurmail Sidhu", phone:"0478 123 901", email:"gurmail.s@email.com", location:"Liverpool, NSW", source:"Referral", sourceDetail:"Gurpreet Mann", stage:"Negotiating", assigned:"Guri Singh", budget:"$500K - $700K", type:"New Home", notes:"Payment terms negotiation. Wants staged payments aligned with milestones.", followupDate:"2025-07-09", followupTime:"13:00", followupNotes:"Finalize payment schedule", history:[{date:"2025-06-18",time:"10:00",action:"Lead captured",detail:"Referral from Gurpreet Mann — Site Manager",type:"referral"},{date:"2025-06-20",time:"14:00",action:"Called",detail:"Discussed 5BR double-storey requirements.",type:"call"},{date:"2025-06-24",time:"10:00",action:"Meeting",detail:"Site visit at Liverpool block.",type:"meeting"},{date:"2025-06-27",time:"09:00",action:"Email sent",detail:"Sent quotation $680K.",type:"email"},{date:"2025-07-02",time:"11:00",action:"Called",detail:"Client wants milestone-based payments instead of standard schedule.",type:"call"}], created:"2025-06-18", urgent:false },
+  { id:16, name:"Sukhwinder Singh", phone:"0412 789 456", email:"sukhwinder.s@email.com", location:"Blacktown, NSW", source:"Google Ads", sourceDetail:"duplex builder Blacktown", stage:"Won", assigned:"Amrit Singh", budget:"$350K - $500K", type:"Duplex", notes:"$380K duplex project. Signed 4 Jan. Construction started.", followupDate:"", followupTime:"", followupNotes:"", history:[{date:"2025-05-20",time:"09:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-05-22",time:"10:00",action:"Called",detail:"Duplex enquiry.",type:"call"},{date:"2025-05-28",time:"14:00",action:"Meeting",detail:"Site visit and design discussion.",type:"meeting"},{date:"2025-06-02",time:"09:00",action:"Email sent",detail:"Sent quotation $380K.",type:"email"},{date:"2025-06-05",time:"11:00",action:"Called",detail:"Client happy with quote.",type:"call"},{date:"2025-01-04",time:"10:00",action:"Won",detail:"Signed contract received. $380K duplex.",type:"conversion"}], created:"2025-05-20", urgent:false },
+  { id:17, name:"David Chen", phone:"0434 901 234", email:"david.c@email.com", location:"Parramatta, NSW", source:"Google Ads", sourceDetail:"granny flat builder", stage:"Won", assigned:"Amrit Singh", budget:"$500K - $700K", type:"New Home", notes:"$550K 4BR + Granny Flat. Signed 2 Jan. Lockup stage.", followupDate:"", followupTime:"", followupNotes:"", history:[{date:"2025-05-15",time:"08:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-05-18",time:"10:00",action:"Called",detail:"4BR + granny flat enquiry.",type:"call"},{date:"2025-05-25",time:"14:00",action:"Meeting",detail:"Detailed scope discussion.",type:"meeting"},{date:"2025-05-30",time:"09:00",action:"Email sent",detail:"Sent quotation $550K.",type:"email"},{date:"2025-01-02",time:"11:00",action:"Won",detail:"Signed contract received. $550K home + granny flat.",type:"conversion"}], created:"2025-05-15", urgent:false },
+  { id:18, name:"Aman Bassi", phone:"0443 567 890", email:"aman.b@email.com", location:"Quakers Hill, NSW", source:"Google Ads", sourceDetail:"new home builder", stage:"Won", assigned:"Gurpreet Mann", budget:"$350K - $500K", type:"New Home", notes:"$420K 4BR home. Signed last week. Design phase.", followupDate:"", followupTime:"", followupNotes:"", history:[{date:"2025-06-01",time:"09:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-06-03",time:"10:00",action:"Called",detail:"4BR new home.",type:"call"},{date:"2025-06-08",time:"14:00",action:"Meeting",detail:"Site visit at Quakers Hill.",type:"meeting"},{date:"2025-06-12",time:"09:00",action:"Email sent",detail:"Sent quotation $420K.",type:"email"},{date:"2025-06-20",time:"10:00",action:"Called",detail:"Client approved. Sending contract.",type:"call"},{date:"2025-06-28",time:"11:00",action:"Won",detail:"Signed contract. $420K 4BR home.",type:"conversion"}], created:"2025-06-01", urgent:false },
+  { id:19, name:"Jaswinder Bhatia", phone:"0488 345 678", email:"jaswinder.b@email.com", location:"Bankstown, NSW", source:"Google Ads", sourceDetail:"budget builder Sydney", stage:"Lost", assigned:"Guri Singh", budget:"$200K - $350K", type:"New Home", notes:"Budget was too low for requirements. Went with cheaper builder.", followupDate:"", followupTime:"", followupNotes:"", lostReason:"Budget Constraints", history:[{date:"2025-06-10",time:"10:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-06-12",time:"11:00",action:"Called",detail:"Wants 4BR home for $280K — not feasible.",type:"call"},{date:"2025-06-15",time:"14:00",action:"Email sent",detail:"Sent minimum viable quote $350K.",type:"email"},{date:"2025-06-20",time:"10:00",action:"Called",detail:"Client chose cheaper builder at $290K.",type:"call"},{date:"2025-06-22",time:"09:00",action:"Lost",detail:"Reason: Budget Constraints — client chose competitor at lower price.",type:"lost"}], created:"2025-06-10", urgent:false },
+  { id:20, name:"Mike Richards", phone:"0422 111 333", email:"mike.r@email.com", location:"Northern Beaches, NSW", source:"Walk-in", sourceDetail:"Office walk-in", stage:"Lost", assigned:"Guri Singh", budget:"$700K+", type:"Renovation", notes:"Wanted heritage-style renovation. Chose specialist heritage builder.", followupDate:"", followupTime:"", followupNotes:"", lostReason:"Chose Competitor", history:[{date:"2025-06-05",time:"14:00",action:"Lead captured",detail:"Walk-in at office.",type:"system"},{date:"2025-06-08",time:"10:00",action:"Called",detail:"Discussed heritage renovation requirements.",type:"call"},{date:"2025-06-12",time:"14:00",action:"Meeting",detail:"Site visit — heritage home needs specialist approach.",type:"meeting"},{date:"2025-06-18",time:"11:00",action:"Called",detail:"Client decided to go with heritage specialist.",type:"call"},{date:"2025-06-20",time:"09:00",action:"Lost",detail:"Reason: Chose Competitor — specialist heritage builder.",type:"lost"}], created:"2025-06-05", urgent:false },
+  { id:21, name:"Neetu Verma", phone:"0455 890 123", email:"neetu.v@email.com", location:"Wentworthville, NSW", source:"Google Ads", sourceDetail:"home builder western Sydney", stage:"Lost", assigned:"Deepak Sharma", budget:"$350K - $500K", type:"New Home", notes:"Delayed decision for 3 weeks then stopped responding.", followupDate:"", followupTime:"", followupNotes:"", lostReason:"Delayed Decision", history:[{date:"2025-05-25",time:"09:00",action:"Lead captured",detail:"Auto-captured from Google Ads",type:"system"},{date:"2025-05-27",time:"10:00",action:"Called",detail:"Initial discussion about new home.",type:"call"},{date:"2025-06-01",time:"14:00",action:"Called",detail:"Client said needs more time to decide.",type:"call"},{date:"2025-06-08",time:"11:00",action:"Called",detail:"No answer. Left voicemail.",type:"call"},{date:"2025-06-15",time:"10:00",action:"Called",detail:"No answer. Email sent — no response.",type:"call"},{date:"2025-06-20",time:"09:00",action:"Lost",detail:"Reason: Delayed Decision — no response after 3 follow-ups.",type:"lost"}], created:"2025-05-25", urgent:false },
+  { id:22, name:"Parminder Dhillon", phone:"0477 654 321", email:"parminder.d@email.com", location:"Kellyville, NSW", source:"Referral", sourceDetail:"Gurpreet Mann", stage:"Lost", assigned:"Guri Singh", budget:"Not Discussed", type:"Not Specified", notes:"Moved to Melbourne. No longer building in NSW.", followupDate:"", followupTime:"", followupNotes:"", lostReason:"Location Changed", history:[{date:"2025-06-15",time:"13:00",action:"Lead captured",detail:"Referral from Gurpreet Mann.",type:"referral"},{date:"2025-06-18",time:"10:00",action:"Called",detail:"Client informed they relocated to Melbourne.",type:"call"},{date:"2025-06-20",time:"09:00",action:"Lost",detail:"Reason: Location Changed — moved to Melbourne.",type:"lost"}], created:"2025-06-15", urgent:false },
+  { id:23, name:"Linda Park", phone:"0433 221 110", email:"linda.p@email.com", location:"Epping, NSW", source:"Website", sourceDetail:"Contact form submission", stage:"Lost", assigned:"Guri Singh", budget:"Not Discussed", type:"Not Specified", notes:"Just exploring options. Not ready to build for 12+ months.", followupDate:"", followupTime:"", followupNotes:"", lostReason:"Not Ready", history:[{date:"2025-06-22",time:"16:00",action:"Lead captured",detail:"Website contact form submission.",type:"system"},{date:"2025-06-24",time:"10:00",action:"Called",detail:"Client just researching. Not ready to commit.",type:"call"},{date:"2025-06-28",time:"09:00",action:"Lost",detail:"Reason: Not Ready — researching only, timeline 12+ months.",type:"lost"}], created:"2025-06-22", urgent:false },
+];
+
+let nextId = 24;
+let currentFilter = 'all';
+let emailTargetLead = null;
+
+// Email templates
+const emailTemplates = [
+  { id:1, subject:"Welcome to BuildPro — Your Home Building Journey Starts Here", category:"Welcome", body:"Dear {name},\n\nThank you for choosing BuildPro for your home building project in NSW. We're excited to partner with you on this journey.\n\nHere's what happens next:\n1. We'll schedule a detailed consultation to understand your requirements\n2. Our team will prepare a personalised quotation\n3. You'll receive access to our client portal for real-time updates\n\nOur team will be in touch within 24 hours to arrange your first consultation.\n\nWarm regards,\nGuri Singh\nBuildPro NSW" },
+  { id:2, subject:"Your Personalised Quotation — {project}", category:"Quotation", body:"Dear {name},\n\nPlease find attached your personalised quotation for {project} at {location}.\n\nQuote Summary:\n• Project Type: {type}\n• Total Cost: ${amount}\n• Estimated Duration: {duration}\n\nTo proceed, please:\n1. Review the attached quotation\n2. Click the APPROVE button in the email\n3. Upload the signed copy using the upload link\n\nThis quote is valid for 14 days from the date of this email.\n\nKind regards,\nGuri Singh\nBuildPro NSW" },
+  { id:3, subject:"Follow-up: Next Steps for Your {type} Project", category:"Follow-up", body:"Dear {name},\n\nI wanted to follow up on our recent conversation regarding your {type} project at {location}.\n\nDuring our last call, we discussed:\n{notes}\n\nI'd love to answer any questions you might have and help move things forward. Would you be available for a quick call this week?\n\nBest regards,\nGuri Singh\nBuildPro NSW\n{phone}" },
+  { id:4, subject:"Material Catalogue — Choose Your Finishes", category:"Catalogue", body:"Dear {name},\n\nAs discussed, please find below the link to our material catalogue where you can select your preferred finishes:\n\n• Bricks & External Cladding\n• Slab & Foundation Options\n• Roofing Materials\n• Internal Fixtures & Fittings\n• Kitchen & Bathroom Selections\n\nPlease make your selections and we'll update your quotation if any variations apply.\n\nKind regards,\nGuri Singh\nBuildPro NSW" },
+  { id:5, subject:"Variation Quote — {project} Update", category:"Variation", body:"Dear {name},\n\nFollowing your recent selections from our catalogue, there are some variations to the original quotation for {project}.\n\nVariation Summary:\n• Original Quote: ${originalAmount}\n• Variation Amount: +${variationAmount}\n• Revised Total: ${revisedAmount}\n\nPlease review and approve by clicking the button below. As before, a signed copy is required.\n\nKind regards,\nGuri Singh\nBuildPro NSW" },
+  { id:6, subject:"Special Offer — Exclusive Discount for BuildPro Clients", category:"Promotion", body:"Dear {name},\n\nAs a valued BuildPro enquiry, we're pleased to offer you an exclusive upgrade package:\n\n• FREE premium kitchen upgrade (value $8,500)\n• Complimentary landscaping consultation\n• Priority scheduling for your project\n\nThis offer is available if you confirm within the next 7 days.\n\nLet's discuss how we can make your dream home even better.\n\nWarm regards,\nGuri Singh\nBuildPro NSW" },
+  { id:7, subject:"Site Visit Confirmation — {location}", category:"Meeting", body:"Dear {name},\n\nThis confirms your site visit scheduled for:\n\nDate: {date}\nTime: {time}\nLocation: {location}\n\nWhat to expect:\n• Site assessment by our team\n• Measurement taking\n• Initial design discussion\n• Q&A session\n\nPlease ensure someone is available at the site during the scheduled time.\n\nKind regards,\nGuri Singh\nBuildPro NSW" },
+  { id:8, subject:"Project Update — Milestone Completed at {location}", category:"Update", body:"Dear {name},\n\nGreat news! Your project at {location} has reached an important milestone:\n\nMilestone: {milestone}\nCompletion Date: {date}\n\nPhoto updates are available on your client portal. The next milestone is scheduled for {nextMilestone}.\n\nIf you have any questions, don't hesitate to reach out.\n\nKind regards,\nGuri Singh\nBuildPro NSW" },
+];
+
+// Notification data
+const notifData = [
+  { id:1, icon:"bi-person-plus", bg:"var(--primary-light)", color:"var(--primary)", msg:"New lead captured: James Wilson — Hornsby (Google Ads)", time:"Just now", unread:true },
+  { id:2, icon:"bi-exclamation-triangle", bg:"var(--warning-light)", color:"#D97706", msg:"Follow-up overdue: Rajesh Kumar — Castle Hill Villa", time:"15 min ago", unread:true },
+  { id:3, icon:"bi-envelope", bg:"var(--info-light)", color:"var(--info)", msg:"Email sent to Priya Sharma — Floor plan options", time:"1 hr ago", unread:true },
+  { id:4, icon:"bi-check-circle", bg:"var(--success-light)", color:"var(--success)", msg:"Harpreet Kaur approved revised quote — $465,600", time:"2 hrs ago", unread:false },
+  { id:5, icon:"bi-clock", bg:"var(--danger-light)", color:"var(--danger)", msg:"3 follow-ups due today — check your schedule", time:"3 hrs ago", unread:false },
+];
+
+let notifs = JSON.parse(JSON.stringify(notifData));
+
+// Pipeline stages config
+const pipelineStages = [
+  { key:"New", label:"New Leads", color:"var(--primary)", bg:"rgba(13,148,136,.06)", countBg:"var(--primary)", countColor:"white" },
+  { key:"Contacted", label:"Contacted", color:"#D97706", bg:"rgba(245,158,11,.04)", countBg:"#D97706", countColor:"white" },
+  { key:"Qualified", label:"Qualified", color:"var(--info)", bg:"rgba(37,99,235,.04)", countBg:"var(--info)", countColor:"white" },
+  { key:"Quoted", label:"Quoted", color:"var(--accent)", bg:"rgba(232,115,12,.04)", countBg:"var(--accent)", countColor:"white" },
+  { key:"Negotiating", label:"Negotiating", color:"var(--purple)", bg:"rgba(124,58,237,.04)", countBg:"var(--purple)", countColor:"white" },
+  { key:"Won", label:"Won", color:"var(--success)", bg:"rgba(22,163,74,.04)", countBg:"var(--success)", countColor:"white" },
+  { key:"Lost", label:"Lost", color:"var(--danger)", bg:"rgba(220,38,38,.03)", countBg:"var(--danger)", countColor:"white" },
+];
+
+// ══════════════════════════════════════
+// LIVE CLOCK
+// ══════════════════════════════════════
+function updateClock(){
+  const n=new Date(),h=String(n.getHours()).padStart(2,'0'),m=String(n.getMinutes()).padStart(2,'0'),s=String(n.getSeconds()).padStart(2,'0');
+  document.getElementById('liveClock').innerHTML=`<span>${h}:${m}:${s}</span> AEST`;
+}
+setInterval(updateClock,1000);updateClock();
+
+// ══════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════
+function showToast(msg,type='info'){
+  const c=document.getElementById('toastContainer');
+  const cols={success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'},danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'},info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'},warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'}};
+  const cl=cols[type]||cols.info;
+  const t=document.createElement('div');t.className='toast-item';
+  t.innerHTML=`<div class="toast-icon" style="background:${cl.bg};color:${cl.color};"><i class="bi ${cl.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;
+  c.appendChild(t);setTimeout(()=>removeToast(t),4500);
+}
+function removeToast(el){if(!el||!el.parentElement)return;el.classList.add('removing');setTimeout(()=>el.remove(),250);}
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+function renderNotifs(){
+  const list=document.getElementById('notifList');
+  const uc=notifs.filter(n=>n.unread).length;
+  const badge=document.getElementById('notifCount');
+  badge.textContent=uc;badge.style.display=uc>0?'flex':'none';
+  list.innerHTML=notifs.map(n=>`<div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})"><div class="notif-icon" style="background:${n.bg};color:${n.color};"><i class="bi ${n.icon}"></i></div><div class="notif-text"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div><button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button></div>`).join('');
+}
+function toggleNotif(){document.getElementById('notifDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn');if(d&&!d.contains(e.target)&&!b.contains(e.target))d.classList.remove('show')});
+function readNotif(id){const n=notifs.find(x=>x.id===id);if(n&&n.unread){n.unread=false;renderNotifs()}showToast('Opening notification...','info')}
+function dismissNotif(id){const el=document.querySelector(`.notification-item[data-id="${id}"]`);if(el){el.classList.add('dismissing');setTimeout(()=>{notifs=notifs.filter(x=>x.id!==id);renderNotifs()},250)}}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('All notifications marked as read','success')}
+
+// ══════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-backdrop-custom').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'))});
+
+// ══════════════════════════════════════
+// TABS
+// ══════════════════════════════════════
+function switchTab(tab,btn){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  ['pipeline','table','followups','analytics'].forEach(t=>{document.getElementById('tab-'+t).style.display=t===tab?'block':'none'});
+  if(tab==='analytics')setTimeout(initAnalyticsCharts,100);
+  if(tab==='followups')renderFollowupsView();
+}
+
+// ══════════════════════════════════════
+// STATS
+// ══════════════════════════════════════
+function renderStats(){
+  const total=leads.length, won=leads.filter(l=>l.stage==='Won').length, pending=leads.filter(l=>l.followupDate&&!['Won','Lost'].includes(l.stage)).length, lost=leads.filter(l=>l.stage==='Lost').length;
+  const convRate=total>0?((won/total)*100).toFixed(1):0;
+  document.getElementById('statsGrid').innerHTML=`
+    <div class="card-custom" style="cursor:pointer" onclick="switchTab('table',document.querySelectorAll('.tab-btn')[1])"><div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--primary);"><i class="bi bi-person-plus"></i></div><span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>18%</span></div><div class="stat-value">${total}</div><div class="stat-desc">Total Leads</div></div>
+    <div class="card-custom" style="cursor:pointer" onclick="currentFilter='Won';renderTableView();switchTab('table',document.querySelectorAll('.tab-btn')[1])"><div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--success);"><i class="bi bi-check-circle"></i></div><span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>12%</span></div><div class="stat-value">${won}</div><div class="stat-desc">Converted <span style="color:var(--text-tertiary)">(${convRate}%)</span></div></div>
+    <div class="card-custom" style="cursor:pointer" onclick="switchTab('followups',document.querySelectorAll('.tab-btn')[2])"><div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--warning);"><i class="bi bi-clock"></i></div></div><div class="stat-value">${pending}</div><div class="stat-desc">Pending Follow-up</div></div>
+    <div class="card-custom" style="cursor:pointer" onclick="currentFilter='Lost';renderTableView();switchTab('table',document.querySelectorAll('.tab-btn')[1])"><div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--danger);"><i class="bi bi-x-circle"></i></div><span class="trend-badge trend-down"><i class="bi bi-arrow-down-short"></i>5%</span></div><div class="stat-value">${lost}</div><div class="stat-desc">Lost Leads</div></div>`;
+}
+
+// ══════════════════════════════════════
+// PIPELINE VIEW
+// ══════════════════════════════════════
+function renderPipeline(){
+  const c=document.getElementById('pipelineContainer');
+  c.innerHTML=pipelineStages.map(stage=>{
+    const stageLeads=leads.filter(l=>l.stage===stage.key);
+    const pills={'New':'pill-success','Contacted':'pill-warning','Qualified':'pill-info','Quoted':'pill-accent','Negotiating':'pill-purple','Won':'pill-success','Lost':'pill-danger'};
+    return `<div class="pipeline-col">
+      <div class="pipeline-header" style="background:${stage.bg};color:${stage.color};border:1px solid var(--border-color);border-bottom:none;border-radius:10px 10px 0 0;">
+        <span>${stage.label}</span>
+        <span class="pipeline-count" style="background:${stage.countBg};color:${stage.countColor};">${stageLeads.length}</span>
+      </div>
+      <div class="pipeline-body">
+        ${stageLeads.map(l=>`
+          <div class="lead-card" onclick="openLeadDetail(${l.id})">
+            <div class="lead-card-name">${l.urgent?'<span class="urgent-dot"></span>':''}${l.name}</div>
+            <div class="lead-card-sub">${l.phone} &bull; ${l.location}</div>
+            <div class="lead-card-sub">${l.budget!=='Not Discussed'?'<i class="bi bi-wallet2" style="font-size:10px;"></i> '+l.budget:''} ${l.type!=='Not Specified'?'&bull; '+l.type:''}</div>
+            <div class="lead-card-source"><i class="bi bi-${l.source==='Google Ads'?'google':l.source==='Referral'?'person-heart':l.source==='Facebook Ads'?'facebook':'globe'}"></i> ${l.source}${l.sourceDetail?' — '+l.sourceDetail:''}</div>
+            ${l.followupDate&&!['Won','Lost'].includes(l.stage)?`<div style="margin-top:6px;font-size:10.5px;color:${l.urgent?'var(--danger)':'var(--text-tertiary)'};font-weight:${l.urgent?'700':'500'};"><i class="bi bi-clock me-1"></i>Follow-up: ${formatDate(l.followupDate)} ${l.followupTime}</div>`:''}
+            <div class="lead-card-actions">
+              ${!['Won','Lost'].includes(l.stage)?`<button class="lc-btn" onclick="event.stopPropagation();openStatusChange(${l.id})" title="Move stage"><i class="bi bi-arrow-right"></i> Move</button>`:''}
+              ${!['Won','Lost'].includes(l.stage)?`<button class="lc-btn" onclick="event.stopPropagation();openFollowupAction(${l.id})" title="Log follow-up"><i class="bi bi-telephone"></i></button>`:''}
+              ${l.email?`<button class="lc-btn" onclick="event.stopPropagation();emailTargetLead=${l.id};openEmailTemplates()" title="Send email"><i class="bi bi-envelope"></i></button>`:''}
+              ${!['Won','Lost'].includes(l.stage)?`<button class="lc-btn danger" onclick="event.stopPropagation();openMarkLost(${l.id})" title="Mark lost"><i class="bi bi-x"></i></button>`:''}
+            </div>
+          </div>
+        `).join('')}
+        ${stageLeads.length===0?'<div style="text-align:center;padding:20px;color:var(--text-tertiary);font-size:12px;"><i class="bi bi-inbox" style="font-size:20px;display:block;margin-bottom:6px;"></i>No leads</div>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+// TABLE VIEW
+// ══════════════════════════════════════
+function renderTableView(){
+  const search=(document.getElementById('leadSearch')?.value||'').toLowerCase();
+  const filtered=leads.filter(l=>{
+    if(currentFilter!=='all'&&l.stage!==currentFilter)return false;
+    if(search&&!l.name.toLowerCase().includes(search)&&!l.phone.includes(search)&&!l.location.toLowerCase().includes(search)&&!l.source.toLowerCase().includes(search)&&!l.stage.toLowerCase().includes(search))return false;
+    return true;
+  });
+  const body=document.getElementById('leadTableBody');
+  const noRes=document.getElementById('noLeadResults');
+  if(filtered.length===0){body.innerHTML='';noRes.style.display='block';return}
+  noRes.style.display='none';
+  const stagePill={'New':'pill-success','Contacted':'pill-warning','Qualified':'pill-info','Quoted':'pill-accent','Negotiating':'pill-purple','Won':'pill-success','Lost':'pill-danger'};
+  body.innerHTML=filtered.map(l=>`<tr onclick="openLeadDetail(${l.id})">
+    <td><div style="display:flex;align-items:center;gap:8px;">${l.urgent?'<span class="urgent-dot"></span>':''}<div><b style="font-size:13px;">${l.name}</b><div style="font-size:10.5px;color:var(--text-tertiary);">${l.email||'No email'}</div></div></div></td>
+    <td style="font-size:12px;">${l.phone}</td>
+    <td style="font-size:12px;">${l.location}</td>
+    <td><span style="font-size:11px;color:var(--text-secondary);"><i class="bi bi-${l.source==='Google Ads'?'google':l.source==='Referral'?'person-heart':l.source==='Facebook Ads'?'facebook':'globe'} me-1"></i>${l.source}</span></td>
+    <td><span class="status-pill ${stagePill[l.stage]||'pill-gray'}">${l.stage}</span></td>
+    <td>${l.followupDate&&!['Won','Lost'].includes(l.stage)?`<span style="font-size:11.5px;color:${l.urgent?'var(--danger)':'var(--text-secondary)'};">${formatDate(l.followupDate)} ${l.followupTime}</span>`:'<span style="font-size:11px;color:var(--text-tertiary);">—</span>'}</td>
+    <td style="font-size:12px;">${l.assigned}</td>
+    <td><div class="d-flex gap-1" onclick="event.stopPropagation()">
+      ${!['Won','Lost'].includes(l.stage)?`<button class="btn-icon" style="width:28px;height:28px;font-size:12px;" onclick="openFollowupAction(${l.id})" title="Log call/follow-up"><i class="bi bi-telephone"></i></button>`:''}
+      ${l.email?`<button class="btn-icon" style="width:28px;height:28px;font-size:12px;" onclick="emailTargetLead=${l.id};openEmailTemplates()" title="Send email"><i class="bi bi-envelope"></i></button>`:''}
+      ${!['Won','Lost'].includes(l.stage)?`<button class="btn-icon" style="width:28px;height:28px;font-size:12px;" onclick="openStatusChange(${l.id})" title="Change stage"><i class="bi bi-arrow-right"></i></button>`:''}
+    </div></td>
+  </tr>`).join('');
+}
+
+function toggleFilter(btn,filter){
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');currentFilter=filter;renderTableView();
+}
+
+// ══════════════════════════════════════
+// FOLLOW-UPS VIEW
+// ══════════════════════════════════════
+function renderFollowupsView(){
+  const pending=leads.filter(l=>l.followupDate&&!['Won','Lost'].includes(l.stage)).sort((a,b)=>a.followupDate.localeCompare(b.followupDate));
+  document.getElementById('fuPendingCount').textContent=pending.length+' pending';
+  document.getElementById('followupContainer').innerHTML=pending.length===0?'<div style="text-align:center;padding:30px;color:var(--text-tertiary);"><i class="bi bi-check-circle" style="font-size:28px;display:block;margin-bottom:8px;color:var(--success);"></i>All caught up! No pending follow-ups.</div>':
+    pending.map(l=>{
+      const isToday=l.followupDate==='2025-07-07';
+      const isPast=new Date(l.followupDate)<new Date('2025-07-07');
+      return `<div style="display:flex;align-items:center;gap:14px;padding:14px;border:1px solid ${isPast?'rgba(220,38,38,.2)':'var(--border-color)'};border-radius:10px;margin-bottom:10px;background:${isPast?'var(--danger-light)':isToday?'var(--warning-light)':'var(--bg-card)'};cursor:pointer;transition:var(--transition);" onclick="openLeadDetail(${l.id})" onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='none'">
+        <div style="width:42px;height:42px;border-radius:10px;background:${isPast?'var(--danger)':isToday?'var(--warning)':'var(--primary)'};color:white;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"><i class="bi bi-${isPast?'exclamation-triangle':'telephone'}"></i></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:700;">${l.name} ${l.urgent?'<span class="urgent-dot"></span>':''}</div>
+          <div style="font-size:11.5px;color:var(--text-secondary);">${l.location} &bull; ${l.stage}</div>
+          ${l.followupNotes?`<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;"><i class="bi bi-chat-left-text me-1"></i>${l.followupNotes}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:12px;font-weight:700;color:${isPast?'var(--danger)':isToday?'var(--warning)':'var(--text-primary)'};">${formatDate(l.followupDate)}</div>
+          <div style="font-size:11px;color:var(--text-tertiary);">${l.followupTime}</div>
+          ${isPast?'<span class="status-pill pill-danger" style="font-size:9px;margin-top:4px;">Overdue</span>':isToday?'<span class="status-pill pill-warning" style="font-size:9px;margin-top:4px;">Today</span>':''}
+        </div>
+        <div class="d-flex gap-1" onclick="event.stopPropagation()">
+          <button class="btn-primary-custom btn-sm-custom" onclick="openFollowupAction(${l.id})"><i class="bi bi-telephone"></i></button>
+          ${l.email?`<button class="btn-outline-custom btn-sm-custom" onclick="emailTargetLead=${l.id};openEmailTemplates()"><i class="bi bi-envelope"></i></button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+
+  // Reminders
+  const reminders=leads.filter(l=>l.followupDate&&!['Won','Lost'].includes(l.stage)&&l.followupDate!=='2025-07-07').slice(0,5);
+  document.getElementById('reminderList').innerHTML=reminders.length===0?'<div style="text-align:center;padding:20px;color:var(--text-tertiary);font-size:12px;">No upcoming reminders</div>':
+    reminders.map(l=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);">
+      <div style="width:8px;height:8px;border-radius:50%;background:var(--info);flex-shrink:0;"></div>
+      <div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;">${l.name}</div><div style="font-size:10.5px;color:var(--text-tertiary);">${l.followupNotes||'No notes'}</div></div>
+      <div style="font-size:11px;color:var(--info);font-weight:600;">${formatDate(l.followupDate)}</div>
+    </div>`).join('');
+
+  // Quick stats
+  const todayCount=leads.filter(l=>l.followupDate==='2025-07-07'&&!['Won','Lost'].includes(l.stage)).length;
+  const overdueCount=leads.filter(l=>l.followupDate&&new Date(l.followupDate)<new Date('2025-07-07')&&!['Won','Lost'].includes(l.stage)).length;
+  const thisWeek=leads.filter(l=>{if(!l.followupDate||['Won','Lost'].includes(l.stage))return false;const d=new Date(l.followupDate);return d>=new Date('2025-07-07')&&d<=new Date('2025-07-13')}).length;
+  document.getElementById('fuQuickStats').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div style="text-align:center;padding:14px 8px;background:var(--warning-light);border-radius:8px;"><div style="font-size:22px;font-weight:800;color:var(--warning);">${todayCount}</div><div style="font-size:10px;color:var(--text-tertiary);font-weight:600;">Today</div></div>
+      <div style="text-align:center;padding:14px 8px;background:var(--danger-light);border-radius:8px;"><div style="font-size:22px;font-weight:800;color:var(--danger);">${overdueCount}</div><div style="font-size:10px;color:var(--text-tertiary);font-weight:600;">Overdue</div></div>
+      <div style="text-align:center;padding:14px 8px;background:var(--info-light);border-radius:8px;"><div style="font-size:22px;font-weight:800;color:var(--info);">${thisWeek}</div><div style="font-size:10px;color:var(--text-tertiary);font-weight:600;">This Week</div></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════
+// ANALYTICS CHARTS
+// ══════════════════════════════════════
+let analyticsInit=false;
+function initAnalyticsCharts(){
+  if(analyticsInit)return;analyticsInit=true;
+  const def={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11,family:'Inter'},color:'#64748B',padding:12,usePointStyle:true,pointStyleWidth:8}}}};
+  // Source chart
+  const sources={};leads.forEach(l=>{sources[l.source]=(sources[l.source]||0)+1});
+  new Chart(document.getElementById('sourceChart').getContext('2d'),{type:'doughnut',data:{labels:Object.keys(sources),datasets:[{data:Object.values(sources),backgroundColor:['#0D9488','#16A34A','#F59E0B','#7C3AED','#6B7280','#2563EB'],borderWidth:0,hoverOffset:6}]},options:{...def,cutout:'62%',plugins:{...def.plugins,legend:{position:'bottom',labels:{...def.plugins.legend.labels,padding:10,font:{size:10.5}}}}}});
+  // Trend chart
+  new Chart(document.getElementById('trendChart').getContext('2d'),{type:'line',data:{labels:['Jan','Feb','Mar','Apr','May','Jun','Jul'],datasets:[{label:'Leads',data:[28,30,32,34,35,40,47],borderColor:'#0D9488',backgroundColor:'rgba(13,148,136,.08)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#0D9488',tension:.3,fill:true},{label:'Converted',data:[14,15,16,17,15,18,23],borderColor:'#16A34A',backgroundColor:'rgba(22,163,74,.08)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#16A34A',tension:.3,fill:true}]},options:{...def,scales:{x:{grid:{display:false},ticks:{font:{size:11},color:'#94A3B8'}},y:{beginAtZero:true,grid:{color:'#F1F5F9'},ticks:{font:{size:11},color:'#94A3B8'}}}}});
+  // Conversion by source
+  const convData={};leads.forEach(l=>{if(!convData[l.source])convData[l.source]={total:0,won:0};convData[l.source].total++;if(l.stage==='Won')convData[l.source].won++});
+  new Chart(document.getElementById('convSourceChart').getContext('2d'),{type:'bar',data:{labels:Object.keys(convData),datasets:[{label:'Total',data:Object.values(convData).map(v=>v.total),backgroundColor:'#0D9488',borderRadius:5,barPercentage:.4},{label:'Won',data:Object.values(convData).map(v=>v.won),backgroundColor:'#16A34A',borderRadius:5,barPercentage:.4}]},options:{...def,scales:{x:{grid:{display:false},ticks:{font:{size:10.5},color:'#94A3B8'}},y:{beginAtZero:true,grid:{color:'#F1F5F9'},ticks:{font:{size:11},color:'#94A3B8'}}}}});
+  // Lost reasons
+  const lostReasons={};leads.filter(l=>l.stage==='Lost').forEach(l=>{lostReasons[l.lostReason||'Unknown']=(lostReasons[l.lostReason||'Unknown']||0)+1});
+  new Chart(document.getElementById('lostReasonChart').getContext('2d'),{type:'doughnut',data:{labels:Object.keys(lostReasons),datasets:[{data:Object.values(lostReasons),backgroundColor:['#DC2626','#F59E0B','#0D9488','#7C3AED','#94A3B8'],borderWidth:0,hoverOffset:6}]},options:{...def,cutout:'55%',plugins:{...def.plugins,legend:{position:'right',labels:{...def.plugins.legend.labels,padding:8,font:{size:10.5}}}}}});
+}
+
+// ══════════════════════════════════════
+// LEAD DETAIL MODAL
+// ══════════════════════════════════════
+function openLeadDetail(id){
+  const l=leads.find(x=>x.id===id);if(!l)return;
+  document.getElementById('ldTitle').textContent=l.name;
+  document.getElementById('ldSubtitle').textContent=l.location+' — '+l.stage;
+  const stagePill={'New':'pill-success','Contacted':'pill-warning','Qualified':'pill-info','Quoted':'pill-accent','Negotiating':'pill-purple','Won':'pill-success','Lost':'pill-danger'};
+  const daysSince=Math.floor((new Date()-new Date(l.created))/86400000);
+  document.getElementById('ldBody').innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <span class="status-pill ${stagePill[l.stage]||'pill-gray'}" style="font-size:12px;padding:5px 14px;">${l.stage}</span>
+      ${l.urgent?'<span class="status-pill pill-danger" style="font-size:12px;padding:5px 14px;"><span class="urgent-dot me-1"></span>Urgent</span>':''}
+      <span style="font-size:11px;color:var(--text-tertiary);margin-left:auto;">Created ${daysSince} days ago</span>
+    </div>
+    <div class="detail-grid" style="margin-bottom:20px;">
+      <div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${l.phone}</div></div>
+      <div class="detail-item"><div class="detail-label">Email</div><div class="detail-value">${l.email||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">Location</div><div class="detail-value">${l.location}</div></div>
+      <div class="detail-item"><div class="detail-label">Source</div><div class="detail-value"><i class="bi bi-${l.source==='Google Ads'?'google':l.source==='Referral'?'person-heart':l.source==='Facebook Ads'?'facebook':'globe'} me-1"></i>${l.source} ${l.sourceDetail?'('+l.sourceDetail+')':''}</div></div>
+      <div class="detail-item"><div class="detail-label">Budget</div><div class="detail-value">${l.budget}</div></div>
+      <div class="detail-item"><div class="detail-label">Project Type</div><div class="detail-value">${l.type}</div></div>
+      <div class="detail-item"><div class="detail-label">Assigned To</div><div class="detail-value">${l.assigned}</div></div>
+      <div class="detail-item"><div class="detail-label">Follow-up</div><div class="detail-value" style="color:${l.urgent?'var(--danger)':'var(--text-primary)'};">${l.followupDate?formatDate(l.followupDate)+' '+l.followupTime:'—'}</div></div>
+    </div>
+    ${l.lostReason?`<div style="padding:10px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--danger);"><i class="bi bi-exclamation-triangle me-1"></i>Lost Reason: <b>${l.lostReason}</b></div>`:''}
+    <div style="margin-bottom:16px;">
+      <div class="detail-label" style="margin-bottom:6px;">Notes</div>
+      <div style="background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;padding:12px;font-size:13px;line-height:1.6;color:var(--text-secondary);">${l.notes}</div>
+    </div>
+    <div style="margin-bottom:20px;">
+      <div class="detail-label" style="margin-bottom:10px;">Activity History</div>
+      <div class="fu-tl">
+        ${[...l.history].reverse().map(h=>{
+          const typeIcon={'system':'bi-gear','call':'bi-telephone','email':'bi-envelope','meeting':'bi-people','referral':'bi-person-heart','conversion':'bi-check-circle','lost':'bi-x-circle'};
+          const typeColor={'system':'var(--text-tertiary)','call':'var(--info)','email':'var(--primary)','meeting':'var(--purple)','referral':'var(--success)','conversion':'var(--success)','lost':'var(--danger)'};
+          const typeClass={system:'',call:'done',email:'done',meeting:'done',referral:'done',conversion:'done',lost:''};
+          return `<div class="fu-tl-item ${typeClass[h.type]||''}"><div style="display:flex;align-items:flex-start;gap:8px;"><div style="margin-left:-36px;width:24px;height:24px;border-radius:6px;background:${typeColor[h.type]==='var(--text-tertiary)'?'var(--bg-body)':typeColor[h.type]+'18'};color:${typeColor[h.type]};display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;"><i class="bi ${typeIcon[h.type]||'bi-circle'}"></i></div><div><div style="font-size:12px;font-weight:700;">${h.action}</div><div style="font-size:12px;color:var(--text-secondary);margin-top:1px;">${h.detail}</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;">${h.date} ${h.time}</div></div></div></div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${!['Won','Lost'].includes(l.stage)?`<button class="btn-primary-custom" onclick="closeModal('leadDetailModal');openFollowupAction(${l.id})"><i class="bi bi-telephone"></i> Log Follow-up</button>`:''}
+      ${l.email&&!['Won','Lost'].includes(l.stage)?`<button class="btn-outline-custom" onclick="closeModal('leadDetailModal');emailTargetLead=${l.id};openEmailTemplates()"><i class="bi bi-envelope"></i> Send Email</button>`:''}
+      ${!['Won','Lost'].includes(l.stage)?`<button class="btn-outline-custom" onclick="closeModal('leadDetailModal');openStatusChange(${l.id})"><i class="bi bi-arrow-right"></i> Change Stage</button>`:''}
+      ${!['Won','Lost'].includes(l.stage)?`<button class="btn-outline-custom" onclick="closeModal('leadDetailModal');openMarkLost(${l.id})" style="border-color:rgba(220,38,38,.2);color:var(--danger);"><i class="bi bi-x-circle"></i> Mark Lost</button>`:''}
+      ${l.stage==='Won'?`<button class="btn-primary-custom" onclick="showToast('Opening project for ${l.name}...','success');closeModal('leadDetailModal')"><i class="bi bi-building"></i> Open Project</button>`:''}
+    </div>`;
+  document.getElementById('leadDetailModal').classList.add('show');
+}
+
+// ══════════════════════════════════════
+// ADD LEAD
+// ══════════════════════════════════════
+function openAddLead(){
+  ['addName','addPhone','addEmail','addLocation','addNotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
+  document.getElementById('addSource').value='Google Ads';
+  document.getElementById('addAssigned').value='Guri Singh';
+  document.getElementById('addBudget').value='Not Discussed';
+  document.getElementById('addType').value='Not Specified';
+  document.getElementById('addFollowup').value='';
+  document.getElementById('addFollowupTime').value='10:00';
+  document.getElementById('addLeadModal').classList.add('show');
+  setTimeout(()=>document.getElementById('addName').focus(),200);
+}
+
+function submitNewLead(){addLeadCommon(false)}
+function submitNewLeadAndNotify(){addLeadCommon(true)}
+function addLeadCommon(withNotify){
+  const name=document.getElementById('addName').value.trim();
+  const phone=document.getElementById('addPhone').value.trim();
+  const location=document.getElementById('addLocation').value.trim();
+  if(!name){showToast('Please enter the lead name','danger');return}
+  if(!phone){showToast('Please enter the phone number','danger');return}
+  if(!location){showToast('Please enter the location','danger');return}
+  const newLead={id:nextId++,name,phone,email:document.getElementById('addEmail').value.trim(),location,source:document.getElementById('addSource').value,sourceDetail:'Manual entry',stage:'New',assigned:document.getElementById('addAssigned').value,budget:document.getElementById('addBudget').value,type:document.getElementById('addType').value,notes:document.getElementById('addNotes').value.trim()||'Manually added lead.',followupDate:document.getElementById('addFollowup').value||'',followupTime:document.getElementById('addFollowupTime').value||'10:00',followupNotes:'',history:[{date:new Date().toISOString().slice(0,10),time:new Date().toTimeString().slice(0,5),action:'Lead captured',detail:'Manually added by '+document.getElementById('addAssigned').value,type:'system'}],created:new Date().toISOString().slice(0,10),urgent:withNotify};
+  leads.unshift(newLead);
+  closeModal('addLeadModal');
+  refreshAll();
+  showToast(`Lead "${name}" added successfully`,'success');
+  if(withNotify){showToast(`Reminder set for ${name} — ${formatDate(newLead.followupDate)}`,'warning');notifs.unshift({id:Date.now(),icon:'bi-person-plus',bg:'var(--primary-light)',color:'var(--primary)',msg:`New lead added: ${name} — ${location}`,time:'Just now',unread:true});renderNotifs();}
+}
+
+// ══════════════════════════════════════
+// SIMULATE NEW LEAD (Google Ads auto-capture)
+// ══════════════════════════════════════
+const simNames=["Jaswinder Bajwa","Gurleen Sandhu","Rupinder Khera","Harman Brar","Navjot Pannu","Baljit Dhaliwal","Kulwant Rai","Parwinder Grewal","Mandeep Sahota","Jaspreet Randhawa"];
+const simLocations=["Rouse Hill, NSW","Kellyville, NSW","Bella Vista, NSW","Box Hill, NSW","The Ponds, NSW","Schofields, NSW","Marsden Park, NSW","Riverstone, NSW","Richmond, NSW","Windsor, NSW"];
+const simKeywords=["builder near me","home builder NSW","custom home builder","duplex builder Sydney","renovation builder","new home construction","granny flat builder","affordable builder Sydney","luxury home builder","townhouse builder"];
+let simIndex=0;
+function simulateNewLead(){
+  const name=simNames[simIndex%simNames.length];
+  const loc=simLocations[simIndex%simLocations.length];
+  const kw=simKeywords[simIndex%simKeywords.length];
+  simIndex++;
+  const phone='04'+Math.floor(10000000+Math.random()*90000000);
+  const newLead={id:nextId++,name,phone,email:name.toLowerCase().replace(' ','.')+'@email.com',location:loc,source:'Google Ads',sourceDetail:kw,stage:'New',assigned:'Guri Singh',budget:'Not Discussed',type:'Not Specified',notes:`Auto-captured from Google Ads — keyword: "${kw}". Awaiting initial contact.`,followupDate:new Date().toISOString().slice(0,10),followupTime:'10:00',followupNotes:'',history:[{date:new Date().toISOString().slice(0,10),time:new Date().toTimeString().slice(0,5),action:'Lead captured',detail:`Auto-captured from Google Ads — keyword: ${kw}`,type:'system'}],created:new Date().toISOString().slice(0,10),urgent:false};
+  leads.unshift(newLead);
+  notifs.unshift({id:Date.now(),icon:'bi-person-plus',bg:'var(--primary-light)',color:'var(--primary)',msg:`New lead auto-captured: ${name} — ${loc} (${kw})`,time:'Just now',unread:true});
+  renderNotifs();refreshAll();
+  showToast(`New lead auto-captured from Google Ads: ${name}`,'success');
+  showToast(`Notification sent: ${name} — ${loc}`,'info');
+}
+
+// ══════════════════════════════════════
+// EMAIL TEMPLATES
+// ══════════════════════════════════════
+function openEmailTemplates(){
+  const target=emailTargetLead?leads.find(l=>l.id===emailTargetLead):null;
+  document.getElementById('emailTplBody').innerHTML=`
+    ${target?`<div style="padding:10px 14px;background:var(--primary-glow);border:1px solid rgba(13,148,136,.15);border-radius:8px;margin-bottom:16px;font-size:13px;display:flex;align-items:center;gap:8px;"><i class="bi bi-person" style="color:var(--primary);"></i>Sending to: <b>${target.name}</b> &mdash; ${target.email||'No email'}</div>`:'<div style="padding:10px 14px;background:var(--warning-light);border:1px solid rgba(245,158,11,.15);border-radius:8px;margin-bottom:16px;font-size:13px;color:#D97706;"><i class="bi bi-info-circle me-1"></i>Select a template, then choose a lead to send it to.</div>'}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${emailTemplates.map(t=>`<div class="email-tpl-card" onclick="selectEmailTemplate(${t.id})">
+        <div style="font-size:11px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;">${t.category}</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px;line-height:1.3;">${t.subject.replace(/\{[^}]+\}/g,'...')}</div>
+        <div style="font-size:11px;color:var(--text-tertiary);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${t.body.substring(0,100)}...</div>
+      </div>`).join('')}
+    </div>`;
+  document.getElementById('emailTplModal').classList.add('show');
+}
+
+function selectEmailTemplate(tplId){
+  const tpl=emailTemplates.find(t=>t.id===tplId);if(!tpl)return;
+  const target=emailTargetLead?leads.find(l=>l.id===emailTargetLead):null;
+  if(!target){showToast('No lead selected. Open email from a lead card first.','warning');closeModal('emailTplModal');return}
+  const body=tpl.body.replace(/\{name\}/g,target.name).replace(/\{location\}/g,target.location).replace(/\{type\}/g,target.type).replace(/\{phone\}/g,target.phone).replace(/\{project\}/g,target.type+' at '+target.location).replace(/\{notes\}/g,target.notes||'Previous discussion details').replace(/\{amount\}/g,target.budget!=='Not Discussed'?target.budget:'TBD').replace(/\{duration\}/g,'6-8 months').replace(/\{date\}/g,formatDate(new Date().toISOString().slice(0,10))).replace(/\{time\}/g,'10:00 AM').replace(/\{milestone\}/g,'Foundation Complete').replace(/\{nextMilestone\}/g,'Frame Stage').replace(/\{originalAmount\}/g,'$480,000').replace(/\{variationAmount\}/g,'$4,500').replace(/\{revisedAmount\}/g,'$484,500');
+  document.getElementById('seTitle').textContent='Send Email';
+  document.getElementById('seSubtitle').textContent='To: '+target.name+' ('+target.email+')';
+  document.getElementById('seBody').innerHTML=`
+    <div class="form-group"><label class="form-label">To</label><input class="form-input" value="${target.email||target.name}" readonly style="background:var(--bg-body);"></div>
+    <div class="form-group"><label class="form-label">Subject</label><input class="form-input" id="seSubject" value="${tpl.subject.replace(/\{[^}]+\}/g,target.name)}"></div>
+    <div class="form-group"><label class="form-label">Body</label><textarea class="form-input" id="seBodyText" style="min-height:200px;">${body}</textarea></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary-custom" onclick="sendEmail(${target.id})"><i class="bi bi-send"></i> Send Email</button>
+      <button class="btn-outline-custom" onclick="closeModal('sendEmailModal')"><i class="bi bi-x"></i> Cancel</button>
+    </div>`;
+  closeModal('emailTplModal');
+  document.getElementById('sendEmailModal').classList.add('show');
+}
+
+function sendEmail(leadId){
+  const l=leads.find(x=>x.id===leadId);if(!l)return;
+  const now=new Date();
+  l.history.push({date:now.toISOString().slice(0,10),time:now.toTimeString().slice(0,5),action:'Email sent',detail:'Subject: '+document.getElementById('seSubject').value,type:'email'});
+  closeModal('sendEmailModal');
+  refreshAll();
+  showToast(`Email sent to ${l.name} successfully`,'success');
+  notifs.unshift({id:Date.now(),icon:'bi-envelope',bg:'var(--info-light)',color:'var(--info)',msg:`Email sent to ${l.name} — ${document.getElementById('seSubject').value.substring(0,40)}...`,time:'Just now',unread:true});
+  renderNotifs();
+}
+
+// ══════════════════════════════════════
+// FOLLOW-UP ACTION
+// ══════════════════════════════════════
+function openFollowupAction(id){
+  const l=leads.find(x=>x.id===id);if(!l)return;
+  document.getElementById('fuActTitle').textContent='Log Follow-up — '+l.name;
+  document.getElementById('fuActBody').innerHTML=`
+    <div style="padding:10px 14px;background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;">Last Notes:</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">${l.followupNotes||l.notes||'No previous notes.'}</div>
+    </div>
+    <div class="form-group"><label class="form-label">Action Type</label><select class="form-select-custom" id="fuActType"><option value="Called">Phone Call</option><option value="Email sent">Email Sent</option><option value="Meeting">In-Person Meeting</option><option value="Site Visit">Site Visit</option></select></div>
+    <div class="form-group"><label class="form-label">Notes from this interaction</label><textarea class="form-input" id="fuActNotes" placeholder="What was discussed? What's the next step?">${l.followupNotes||''}</textarea></div>
+    <div class="row g-3">
+      <div class="col-6"><div class="form-group"><label class="form-label">Next Follow-up Date</label><input class="form-input" id="fuActDate" type="date" value="${l.followupDate||''}"></div></div>
+      <div class="col-6"><div class="form-group"><label class="form-label">Next Follow-up Time</label><input class="form-input" id="fuActTime" type="time" value="${l.followupTime||'10:00'}"></div></div>
+    </div>
+    <div class="form-group"><label class="form-label">Mark as Urgent</label><select class="form-select-custom" id="fuActUrgent"><option value="false">Normal</option><option value="true">Urgent — Needs immediate attention</option></select></div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn-primary-custom" onclick="saveFollowup(${l.id})"><i class="bi bi-check-lg"></i> Save & Set Next Follow-up</button>
+      <button class="btn-outline-custom" onclick="closeModal('fuActionModal')">Cancel</button>
+    </div>`;
+  document.getElementById('fuActionModal').classList.add('show');
+}
+
+function saveFollowup(id){
+  const l=leads.find(x=>x.id===id);if(!l)return;
+  const type=document.getElementById('fuActType').value;
+  const notes=document.getElementById('fuActNotes').value.trim();
+  const nextDate=document.getElementById('fuActDate').value;
+  const nextTime=document.getElementById('fuActTime').value;
+  const urgent=document.getElementById('fuActUrgent').value==='true';
+  const now=new Date();
+  l.history.push({date:now.toISOString().slice(0,10),time:now.toTimeString().slice(0,5),action:type,detail:notes||'Follow-up completed.',type:type==='Called'?'call':type==='Email sent'?'email':'meeting'});
+  l.followupDate=nextDate;l.followupTime=nextTime;l.followupNotes=notes;l.urgent=urgent;
+  if(type==='Called'&&['New','Contacted'].includes(l.stage)){l.stage='Contacted'}
+  closeModal('fuActionModal');refreshAll();
+  showToast(`${type} logged for ${l.name}`,'success');
+  if(nextDate){showToast(`Next follow-up set: ${formatDate(nextDate)} ${nextTime}`,'info')}
+  notifs.unshift({id:Date.now(),icon:type==='Called'?'bi-telephone':'bi-envelope',bg:type==='Called'?'var(--info-light)':'var(--primary-light)',color:type==='Called'?'var(--info)':'var(--primary)',msg:`${type}: ${l.name} — ${notes.substring(0,50)}${notes.length>50?'...':''}`,time:'Just now',unread:true});
+  renderNotifs();
+}
+
+// ══════════════════════════════════════
+// STATUS CHANGE
+// ══════════════════════════════════════
+function openStatusChange(id){
+  const l=leads.find(x=>x.id===id);if(!l)return;
+  const stages=['New','Contacted','Qualified','Quoted','Negotiating','Won'];
+  document.getElementById('statusTitle').textContent='Move: '+l.name;
+  document.getElementById('statusBody').innerHTML=`
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:8px;">Current Stage:</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;">
+        ${stages.map(s=>`<span class="status-pill ${s===l.stage?'pill-success':'pill-gray'}" style="font-size:11px;${s===l.stage?'font-weight:700;':''}">${s}</span>`).join('')}
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Move to Stage</label>
+      <select class="form-select-custom" id="statusSelect">
+        ${stages.map(s=>`<option value="${s}" ${s===l.stage?'disabled':''}>${s} ${s===l.stage?'(current)':''}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Notes (optional)</label><textarea class="form-input" id="statusNotes" placeholder="Why are you moving this lead?"></textarea></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary-custom" onclick="saveStatusChange(${l.id})"><i class="bi bi-arrow-right"></i> Move Lead</button>
+      <button class="btn-outline-custom" onclick="closeModal('statusModal')">Cancel</button>
+    </div>`;
+  document.getElementById('statusModal').classList.add('show');
+}
+
+function saveStatusChange(id){
+  const l=leads.find(x=>x.id===id);if(!l)return;
+  const newStage=document.getElementById('statusSelect').value;
+  const notes=document.getElementById('statusNotes').value.trim();
+  if(newStage===l.stage){closeModal('statusModal');return}
+  const now=new Date();
+  l.history.push({date:now.toISOString().slice(0,10),time:now.toTimeString().slice(0,5),action:'Stage changed',detail:`Moved from "${l.stage}" to "${newStage}". ${notes||''}`,type:newStage==='Won'?'conversion':'system'});
+  l.stage=newStage;
+  if(newStage==='Won'){l.followupDate='';l.followupNotes='';l.urgent=false;showToast(`${l.name} converted! Project created.`,'success')}
+  else{showToast(`${l.name} moved to "${newStage}"`,'info')}
+  closeModal('statusModal');refreshAll();
+  notifs.unshift({id:Date.now(),icon:newStage==='Won'?'bi-check-circle':'bi-arrow-right',bg:newStage==='Won'?'var(--success-light)':'var(--info-light)',color:newStage==='Won'?'var(--success)':'var(--info)',msg:`${l.name}: ${l.stage==='Won'?'Converted!':'Moved to '+newStage}`,time:'Just now',unread:true});
+  renderNotifs();
+}
+
+// ══════════════════════════════════════
+// MARK LOST
+// ══════════════════════════════════════
+function openMarkLost(id){
+  const l=leads.find(x=>x.id===id);if(!l)return;
+  document.getElementById('lostBody').innerHTML=`
+    <div style="padding:10px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;margin-bottom:16px;font-size:13px;"><i class="bi bi-exclamation-triangle me-1" style="color:var(--danger);"></i>This will mark <b>${l.name}</b> as lost. This action can help track why leads don't convert.</div>
+    <div class="form-group"><label class="form-label">Reason for Loss *</label>
+      <select class="form-select-custom" id="lostReason"><option value="">Select a reason...</option><option>Budget Constraints</option><option>Chose Competitor</option><option>Delayed Decision</option><option>Location Changed</option><option>Not Ready</option><option>Communication Issues</option><option>Other</option></select>
+    </div>
+    <div class="form-group"><label class="form-label">Additional Notes</label><textarea class="form-input" id="lostNotes" placeholder="Any additional context..."></textarea></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-danger-custom" onclick="confirmMarkLost(${l.id})"><i class="bi bi-x-circle"></i> Confirm — Mark as Lost</button>
+      <button class="btn-outline-custom" onclick="closeModal('lostModal')">Cancel</button>
+    </div>`;
+  document.getElementById('lostModal').classList.add('show');
+}
+
+function confirmMarkLost(id){
+  const reason=document.getElementById('lostReason').value;
+  if(!reason){showToast('Please select a reason for marking this lead as lost','danger');return}
+  const l=leads.find(x=>x.id===id);if(!l)return;
+  const notes=document.getElementById('lostNotes').value.trim();
+  const now=new Date();
+  l.history.push({date:now.toISOString().slice(0,10),time:now.toTimeString().slice(0,5),action:'Lost',detail:`Reason: ${reason}${notes?' — '+notes:''}`,type:'lost'});
+  l.stage='Lost';l.lostReason=reason;l.followupDate='';l.followupNotes='';l.urgent=false;
+  closeModal('lostModal');refreshAll();
+  showToast(`${l.name} marked as lost — ${reason}`,'danger');
+}
+
+// ══════════════════════════════════════
+// EXPORT CSV
+// ══════════════════════════════════════
+function exportLeadsCSV(){
+  const headers=['Name','Phone','Email','Location','Source','Stage','Budget','Type','Assigned','Follow-up Date','Notes','Lost Reason'];
+  const rows=leads.map(l=>[l.name,l.phone,l.email,l.location,l.source,l.stage,l.budget,l.type,l.assigned,l.followupDate||'',`"${l.notes.replace(/"/g,'""')}"`,l.lostReason||'']);
+  let csv=headers.join(',')+'\n'+rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='BuildPro_Leads_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast('Leads exported as CSV successfully','success');
+}
+
+// ══════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════
+function formatDate(d){if(!d)return'—';const parts=d.split('-');const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(parts[2])+' '+months[parseInt(parts[1])-1]+' '+parts[0]}
+
+function refreshAll(){renderStats();renderPipeline();renderTableView();renderFollowupsView()}
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(()=>{renderStats();renderPipeline();renderTableView();renderFollowupsView();renderNotifs()},100);
+</script>
+</body>
+</html>

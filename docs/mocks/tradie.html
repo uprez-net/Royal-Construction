@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tradie Coordination - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.15);--accent:#E8730C;--accent-light:#FFF3E0;--success:#16A34A;--success-light:#DCFCE7;--danger:#DC2626;--danger-light:#FEE2E2;--warning:#F59E0B;--warning-light:#FEF9C3;--info:#2563EB;--info-light:#DBEAFE;--purple:#7C3AED;--purple-light:#EDE9FE;--bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;--text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;--border-color:#E2E8F0;--border-light:#F1F5F9;--shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);--sidebar-bg:#0F172A;--sidebar-width:64px;--transition:all .2s cubic-bezier(.4,0,.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#94A3B8}
+.wrapper{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}
+.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}
+.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}
+.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}
+.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}
+.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}
+.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}
+.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}
+@media(max-width:768px){.sidebar-tooltip{display:none}}
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}
+.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px;letter-spacing:.01em}
+.header-menu a:hover{color:rgba(255,255,255,.9)}.header-menu a.active{color:white}
+.header-menu a.active::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+.content-container{padding:20px;max-width:1560px;margin:0 auto;width:100%}
+.card-custom{background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);margin-bottom:16px;transition:var(--transition)}
+.card-custom:hover{box-shadow:var(--shadow-md)}
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.stat-value{font-size:26px;font-weight:800;line-height:1.2;color:var(--text-primary);margin-top:2px;letter-spacing:-.02em}
+.stat-desc{font-size:11.5px;color:var(--text-tertiary);margin-top:3px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;flex-shrink:0}
+.trend-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.02em}
+.trend-up{color:var(--success);background:rgba(22,163,74,.08)}.trend-down{color:var(--danger);background:rgba(220,38,38,.08)}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}
+.pill-success{background:rgba(22,163,74,.08);color:var(--success)}.pill-warning{background:rgba(245,158,11,.08);color:#D97706}.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}.pill-info{background:rgba(37,99,235,.08);color:var(--info)}.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}.pill-purple{background:rgba(124,58,237,.08);color:var(--purple)}
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white;text-decoration:none}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-sm-custom{padding:5px 10px;font-size:11.5px;border-radius:6px}
+.btn-danger-custom{background:var(--danger);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-danger-custom:hover{background:#B91C1C;transform:translateY(-1px);color:white}
+.btn-warning-custom{background:var(--warning);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-warning-custom:hover{background:#D97706;transform:translateY(-1px);color:white}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.table-custom{width:100%;border-collapse:separate;border-spacing:0}
+.table-custom thead th{font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;letter-spacing:.04em;padding:10px 14px;border-bottom:1px solid var(--border-color);background:var(--bg-body);white-space:nowrap}
+.table-custom td{font-size:13px;vertical-align:middle;padding:12px 14px;border-bottom:1px solid var(--border-light)}
+.table-custom tr:last-child td{border-bottom:none}
+.table-custom tbody tr{transition:background .15s;cursor:pointer}
+.table-custom tbody tr:hover td{background:var(--bg-hover)}
+.progress-bar-custom{height:7px;background:#E2E8F0;border-radius:4px;overflow:hidden}
+.progress-fill-custom{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.notification-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;background:var(--danger);border-radius:99px;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg)}
+.notification-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:360px;background:white;border-radius:10px;box-shadow:var(--shadow-lg);z-index:1001;display:none;border:1px solid var(--border-color);overflow:hidden}
+.notification-dropdown.show{display:block;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notification-header{padding:14px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.notification-mark-all{font-size:11.5px;color:var(--primary);cursor:pointer;font-weight:600}
+.notification-item{padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s;display:flex;align-items:flex-start;gap:10px}
+.notification-item:hover{background:var(--bg-hover)}
+.notification-item.unread{background:rgba(13,148,136,.03)}
+.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.notif-msg{font-size:12.5px;line-height:1.4;color:var(--text-primary)}
+.notif-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.notification-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--border-color)}
+.notification-view-all{font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600}
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}
+.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}
+.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:300px;animation:toastIn .3s ease}
+.toast-item.removing{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.toast-msg{flex:1;font-size:13px;font-weight:500}
+.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;padding:0;line-height:1}
+.toast-close:hover{color:var(--text-primary)}
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center;animation:fadeIn .2s}
+.modal-backdrop-custom.show{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:90%;max-width:680px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:20px 24px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.modal-body-custom{padding:20px 24px}
+.modal-footer-custom{padding:16px 24px;border-top:1px solid var(--border-color);display:flex;justify-content:flex-end;gap:8px}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:16px}
+.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+.search-box{position:relative}
+.search-box input{width:220px;padding:6px 12px 6px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);font-family:inherit;outline:none}
+.search-box input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);width:280px}
+.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px}
+.filter-select{padding:6px 30px 6px 10px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);font-family:inherit;outline:none;cursor:pointer;transition:var(--transition);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.filter-select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.tab-nav{display:flex;border-bottom:2px solid var(--border-color);margin-bottom:16px;gap:0}
+.tab-btn{padding:10px 18px;background:none;border:none;font-size:12.5px;font-weight:600;color:var(--text-tertiary);cursor:pointer;position:relative;transition:var(--transition);font-family:inherit}
+.tab-btn:hover{color:var(--text-secondary)}
+.tab-btn.active{color:var(--primary)}
+.tab-btn.active::after{content:'';position:absolute;bottom:-2px;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+.tab-btn .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:99px;font-size:10px;font-weight:700;margin-left:5px;padding:0 5px}
+.tab-btn.active .tab-count{background:var(--primary);color:white}
+.tab-btn:not(.active) .tab-count{background:var(--bg-body);color:var(--text-tertiary)}
+.days-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.days-urgent{background:var(--danger-light);color:var(--danger)}
+.days-warning{background:var(--warning-light);color:#D97706}
+.days-normal{background:var(--primary-glow);color:var(--primary)}
+.days-far{background:rgba(148,163,184,.1);color:var(--text-tertiary)}
+.tl-custom{position:relative;padding-left:28px}
+.tl-custom::before{content:'';position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--border-color);border-radius:1px}
+.ti-custom{position:relative;padding-bottom:18px}
+.ti-custom::before{content:'';position:absolute;left:-23px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--primary);border:2px solid white;box-shadow:0 0 0 2px var(--primary);z-index:1}
+.ti-custom.done::before{background:var(--success);box-shadow:0 0 0 2px var(--success)}
+.ti-custom.warn::before{background:var(--warning);box-shadow:0 0 0 2px var(--warning)}
+.ti-custom.urgent::before{background:var(--danger);box-shadow:0 0 0 2px var(--danger);animation:pulse-dot 2s infinite}
+.ti-custom:last-child{padding-bottom:0}
+@keyframes pulse-dot{0%,100%{box-shadow:0 0 0 2px var(--danger)}50%{box-shadow:0 0 0 5px rgba(220,38,38,.2)}}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}
+.detail-value{font-size:13px;font-weight:600}
+.alert-strip{padding:14px 18px;border-radius:10px;display:flex;align-items:flex-start;gap:14px;margin-bottom:10px;transition:var(--transition);cursor:pointer;border:1px solid transparent}
+.alert-strip:hover{transform:translateX(3px)}
+.alert-strip-danger{background:var(--danger-light);border-color:rgba(220,38,38,.12)}
+.alert-strip-warning{background:var(--warning-light);border-color:rgba(245,158,11,.12)}
+.alert-strip-success{background:var(--success-light);border-color:rgba(22,163,74,.12)}
+.alert-strip-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.form-label-custom{font-size:11.5px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;display:block}
+.form-input-custom{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition)}
+.form-input-custom:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+textarea.form-input-custom{resize:vertical;min-height:70px}
+.tradie-card{border:1px solid var(--border-color);border-radius:10px;padding:16px;transition:var(--transition);cursor:pointer;background:var(--bg-card)}
+.tradie-card:hover{border-color:var(--primary);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.cc{position:relative;height:260px}
+.outcome-btn{display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px solid var(--border-color);border-radius:10px;cursor:pointer;transition:var(--transition);background:var(--bg-card);width:100%}
+.outcome-btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.outcome-btn .ob-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.outcome-btn .ob-text{font-size:13px;font-weight:600}
+.outcome-btn .ob-desc{font-size:11px;color:var(--text-tertiary);margin-top:1px}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.sending-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@media(max-width:992px){.detail-grid{grid-template-columns:1fr}}
+@media(max-width:576px){.stat-grid{grid-template-columns:1fr}.content-container{padding:12px}.search-box input{width:160px}.search-box input:focus{width:200px}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon active" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+
+<!-- Main Panel -->
+<div class="main-panel">
+  <header class="top-header">
+    <div class="d-flex align-items-center gap-3">
+      <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+      <nav class="header-menu d-none d-lg-block">
+        <a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a>
+      </nav>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+      <div class="position-relative">
+        <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7);" onclick="toggleNotif()" id="notifBtn">
+          <i class="bi bi-bell"></i><span class="notification-badge" id="notifCount">3</span>
+        </button>
+        <div class="notification-dropdown" id="notifDrop">
+          <div class="notification-header"><div style="font-size:13px;font-weight:700;">Notifications</div><div class="notification-mark-all" onclick="markAllRead()">Mark all read</div></div>
+          <div id="notifList"></div>
+          <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notification center...','info');return false;">View all</a></div>
+        </div>
+      </div>
+      <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+    </div>
+  </header>
+
+  <div class="sub-header">
+    <i class="bi bi-house me-1" style="font-size:11px;"></i><span>Home</span>
+    <span class="mx-2" style="color:var(--border-color);">/</span>
+    <span style="font-weight:600;color:var(--text-primary);">Tradie Coordination</span>
+    <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);" id="lastUpdated">Updated just now</span>
+  </div>
+
+  <div class="content-container">
+
+    <!-- Page Banner -->
+    <div class="card-custom" style="background:linear-gradient(135deg,#F0FDFA 0%,#CCFBF1 50%,#D1FAE5 100%);border:1px solid rgba(13,148,136,.12);position:relative;overflow:hidden;">
+      <div style="position:absolute;right:-20px;top:-20px;width:160px;height:160px;border-radius:50%;background:rgba(13,148,136,.06);"></div>
+      <div style="position:absolute;right:60px;bottom:-30px;width:100px;height:100px;border-radius:50%;background:rgba(13,148,136,.04);"></div>
+      <div class="row align-items-center">
+        <div class="col-md-7">
+          <h3 style="font-size:17px;font-weight:800;margin-bottom:4px;"><i class="bi bi-tools me-2" style="color:var(--primary);"></i>Tradie Coordination Hub</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:0;">Schedule tradies, send 1-week advance reminders, track confirmations across all active sites in NSW</p>
+        </div>
+        <div class="col-md-5 text-md-end mt-2 mt-md-0 d-flex gap-2 justify-content-md-end flex-wrap">
+          <button class="btn-primary-custom" onclick="openScheduleModal()"><i class="bi bi-plus-lg me-1"></i>Schedule Tradie</button>
+          <button class="btn-outline-custom" onclick="openDirectoryModal()"><i class="bi bi-people me-1"></i>Directory</button>
+          <button class="btn-outline-custom" onclick="exportTradieCSV()"><i class="bi bi-download me-1"></i>Export</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-grid">
+      <div class="card-custom" style="cursor:pointer;" onclick="openDirectoryModal()">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--primary);"><i class="bi bi-people"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>4</span>
+        </div>
+        <div class="stat-value" data-count="32">0</div>
+        <div class="stat-desc">Registered Tradies</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="switchTab('week')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--accent);"><i class="bi bi-calendar-week"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>2</span>
+        </div>
+        <div class="stat-value" data-count="11">0</div>
+        <div class="stat-desc">Scheduled This Week</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="switchTab('confirmed')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--success);"><i class="bi bi-check-circle"></i></div>
+        </div>
+        <div class="stat-value" data-count="7">0</div>
+        <div class="stat-desc">Confirmed Bookings</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="switchTab('pending')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--danger);"><i class="bi bi-exclamation-circle"></i></div>
+        </div>
+        <div class="stat-value" data-count="4">0</div>
+        <div class="stat-desc">Pending / No Response</div>
+      </div>
+    </div>
+
+    <!-- Urgent Reminders -->
+    <div class="card-custom" id="urgentPanel">
+      <div class="section-heading">
+        <span><i class="bi bi-exclamation-triangle me-2" style="color:var(--danger);"></i>1-Week Advance Reminders — Action Required</span>
+        <button class="btn-outline-custom btn-sm-custom" onclick="toggleUrgent()" id="urgentToggle"><i class="bi bi-chevron-up"></i> Collapse</button>
+      </div>
+      <div id="urgentContent"></div>
+    </div>
+
+    <!-- Tabs + Filters -->
+    <div class="card-custom">
+      <div class="tab-nav" id="tabNav"></div>
+      <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+        <div class="search-box"><i class="bi bi-search"></i><input type="text" placeholder="Search tradies, projects, trades..." id="searchInput" oninput="applyFilters()"></div>
+        <select class="filter-select" id="tradeFilter" onchange="applyFilters()"><option value="all">All Trades</option></select>
+        <select class="filter-select" id="projectFilter" onchange="applyFilters()"><option value="all">All Projects</option></select>
+        <select class="filter-select" id="statusFilter" onchange="applyFilters()"><option value="all">All Status</option><option value="Confirmed">Confirmed</option><option value="Pending">Pending</option><option value="No Response">No Response</option><option value="Awaiting Materials">Awaiting Materials</option><option value="Declined">Declined</option><option value="Completed">Completed</option></select>
+        <span style="margin-left:auto;font-size:12px;color:var(--text-tertiary);" id="resultCount"></span>
+      </div>
+
+      <!-- Table -->
+      <div style="overflow-x:auto;">
+        <table class="table-custom" id="mainTable">
+          <thead>
+            <tr>
+              <th style="width:30px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+              <th onclick="sortTable('tradie')">Tradie <i class="bi bi-arrow-down-up" style="font-size:9px;opacity:.5;"></i></th>
+              <th onclick="sortTable('trade')">Trade <i class="bi bi-arrow-down-up" style="font-size:9px;opacity:.5;"></i></th>
+              <th onclick="sortTable('project')">Project <i class="bi bi-arrow-down-up" style="font-size:9px;opacity:.5;"></i></th>
+              <th>Task</th>
+              <th onclick="sortTable('scheduled')">Scheduled <i class="bi bi-arrow-down-up" style="font-size:9px;opacity:.5;"></i></th>
+              <th>Days Left</th>
+              <th>Milestone</th>
+              <th onclick="sortTable('status')">Status <i class="bi bi-arrow-down-up" style="font-size:9px;opacity:.5;"></i></th>
+              <th style="text-align:center;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div id="noResults" style="display:none;text-align:center;padding:40px;color:var(--text-tertiary);">
+        <i class="bi bi-search" style="font-size:28px;display:block;margin-bottom:10px;"></i>
+        <div style="font-size:14px;font-weight:600;">No tradies match your filters</div>
+        <div style="font-size:12px;margin-top:4px;">Try adjusting your search or filter criteria</div>
+      </div>
+      <div id="bulkActions" style="display:none;padding:12px 0;border-top:1px solid var(--border-color);display:none;align-items:center;gap:12px;">
+        <span style="font-size:12px;font-weight:600;color:var(--primary);" id="selectedCount">0 selected</span>
+        <button class="btn-primary-custom btn-sm-custom" onclick="bulkSendReminder()"><i class="bi bi-envelope me-1"></i>Send Reminders</button>
+        <button class="btn-outline-custom btn-sm-custom" onclick="bulkMarkConfirmed()"><i class="bi bi-check-lg me-1"></i>Mark Confirmed</button>
+      </div>
+    </div>
+
+    <!-- Bottom Row -->
+    <div class="row g-3">
+      <div class="col-lg-5">
+        <div class="card-custom">
+          <div class="section-heading">Recent Activity</div>
+          <div class="tl-custom" id="activityTimeline"></div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="card-custom">
+          <div class="section-heading">Tradie Performance by Trade</div>
+          <div class="cc"><canvas id="perfChart"></canvas></div>
+        </div>
+        <div class="card-custom">
+          <div class="section-heading">Confirmation Status Breakdown</div>
+          <div class="cc" style="height:200px;"><canvas id="confChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Schedule Modal -->
+<div class="modal-backdrop-custom" id="scheduleModal">
+  <div class="modal-content-custom" style="max-width:600px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="scheduleModalTitle">Schedule New Tradie</h4><p style="font-size:12px;color:var(--text-tertiary);">Assign a tradie to a project milestone</p></div>
+      <button class="modal-close" onclick="closeModal('scheduleModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="detail-grid">
+        <div><label class="form-label-custom">Tradie *</label><select class="form-input-custom" id="schTradie"><option value="">Select tradie...</option></select></div>
+        <div><label class="form-label-custom">Trade Type *</label><input class="form-input-custom" id="schTrade" placeholder="Auto-filled" readonly></div>
+        <div><label class="form-label-custom">Project *</label><select class="form-input-custom" id="schProject"><option value="">Select project...</option></select></div>
+        <div><label class="form-label-custom">Milestone *</label><select class="form-input-custom" id="schMilestone"><option value="">Select milestone...</option></select></div>
+        <div><label class="form-label-custom">Start Date *</label><input type="date" class="form-input-custom" id="schDate"></div>
+        <div><label class="form-label-custom">Duration (days)</label><input type="number" class="form-input-custom" id="schDuration" value="3" min="1" max="30"></div>
+      </div>
+      <div style="margin-top:14px;"><label class="form-label-custom">Task Description *</label><input class="form-input-custom" id="schTask" placeholder="e.g. Ground floor rough-in wiring"></div>
+      <div style="margin-top:14px;"><label class="form-label-custom">Notes</label><textarea class="form-input-custom" id="schNotes" placeholder="Any special instructions, material requirements, site access details..."></textarea></div>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--primary-glow);border-radius:8px;font-size:12px;color:var(--primary-dark);display:flex;align-items:flex-start;gap:8px;">
+        <i class="bi bi-info-circle" style="margin-top:1px;"></i>
+        <span>A 1-week advance reminder will be automatically sent to the tradie and site manager before the scheduled date.</span>
+      </div>
+    </div>
+    <div class="modal-footer-custom">
+      <button class="btn-outline-custom" onclick="closeModal('scheduleModal')">Cancel</button>
+      <button class="btn-primary-custom" onclick="submitSchedule()" id="schSubmitBtn"><i class="bi bi-check-lg me-1"></i>Schedule & Send Reminder</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tradie Detail Modal -->
+<div class="modal-backdrop-custom" id="detailModal">
+  <div class="modal-content-custom" style="max-width:640px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="detailTitle">Tradie Details</h4><p style="font-size:12px;color:var(--text-tertiary);" id="detailSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('detailModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- Call Modal -->
+<div class="modal-backdrop-custom" id="callModal">
+  <div class="modal-content-custom" style="max-width:480px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="callTitle">Log Call</h4><p style="font-size:12px;color:var(--text-tertiary);" id="callSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('callModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="callBody"></div>
+  </div>
+</div>
+
+<!-- Reminder Modal -->
+<div class="modal-backdrop-custom" id="reminderModal">
+  <div class="modal-content-custom" style="max-width:560px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Send Reminder</h4><p style="font-size:12px;color:var(--text-tertiary);" id="reminderSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('reminderModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="reminderBody"></div>
+  </div>
+</div>
+
+<!-- Directory Modal -->
+<div class="modal-backdrop-custom" id="directoryModal">
+  <div class="modal-content-custom" style="max-width:900px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Tradie Directory</h4><p style="font-size:12px;color:var(--text-tertiary);">32 registered tradies across all trade types</p></div>
+      <button class="modal-close" onclick="closeModal('directoryModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="directoryBody"></div>
+  </div>
+</div>
+
+<!-- Confirm Status Modal -->
+<div class="modal-backdrop-custom" id="confirmStatusModal">
+  <div class="modal-content-custom" style="max-width:420px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="confirmStatusTitle">Update Status</h4></div>
+      <button class="modal-close" onclick="closeModal('confirmStatusModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="confirmStatusBody"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// DATE HELPER
+// ══════════════════════════════════════
+const today = new Date();
+function d(offset) {
+  const dt = new Date(today);
+  dt.setDate(dt.getDate() + offset);
+  return dt.toISOString().split('T')[0];
+}
+function formatDate(str) {
+  if (!str) return '—';
+  const dt = new Date(str + 'T00:00:00');
+  return dt.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
+}
+function daysUntil(dateStr) {
+  const target = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  return Math.ceil((target - now) / (1000*60*60*24));
+}
+function daysBadge(days) {
+  if (days < 0) return `<span class="days-badge days-urgent"><i class="bi bi-exclamation-circle"></i>${Math.abs(days)}d overdue</span>`;
+  if (days <= 2) return `<span class="days-badge days-urgent"><i class="bi bi-exclamation-circle"></i>${days}d left</span>`;
+  if (days <= 7) return `<span class="days-badge days-warning"><i class="bi bi-clock"></i>${days}d left</span>`;
+  if (days <= 14) return `<span class="days-badge days-normal"><i class="bi bi-calendar"></i>${days}d left</span>`;
+  return `<span class="days-badge days-far"><i class="bi bi-calendar3"></i>${days}d left</span>`;
+}
+
+// ══════════════════════════════════════
+// TRADIE DIRECTORY DATA
+// ══════════════════════════════════════
+const tradieDir = [
+  { id:1, name:"Kulwinder Electric", company:"NSW Spark Solutions", trade:"Electrician", phone:"+61 412 345 111", email:"kulwinder@nswspark.com.au", abn:"12 345 678 901", rate:85, rating:4.7, jobs:28, avatar:"KE", color:"var(--warning)" },
+  { id:2, name:"Flow Right Plumbing", company:"Flow Right Plumbing Pty Ltd", trade:"Plumber", phone:"+61 403 222 444", email:"info@flowright.com.au", abn:"23 456 789 012", rate:80, rating:4.5, jobs:22, avatar:"FR", color:"var(--info)" },
+  { id:3, name:"Top Roof Co", company:"Top Roof Co NSW", trade:"Roofer", phone:"+61 455 678 333", email:"quotes@toproof.com.au", abn:"34 567 890 123", rate:95, rating:4.8, jobs:35, avatar:"TR", color:"var(--danger)" },
+  { id:4, name:"Smooth Walls Plaster", company:"Smooth Walls Plastering", trade:"Plasterer", phone:"+61 466 111 888", email:"steve@smoothwalls.com.au", abn:"45 678 901 234", rate:70, rating:4.3, jobs:18, avatar:"SW", color:"var(--purple)" },
+  { id:5, name:"Wagners Concrete", company:"Wagners Concrete NSW", trade:"Concreter", phone:"+61 488 999 222", email:"dispatch@wagners.com.au", abn:"56 789 012 345", rate:90, rating:4.6, jobs:42, avatar:"WC", color:"var(--text-secondary)" },
+  { id:6, name:"Precision Tiling", company:"Precision Tiling NSW", trade:"Tiler", phone:"+61 411 555 777", email:"mark@precisiontiling.com.au", abn:"67 890 123 456", rate:75, rating:4.4, jobs:15, avatar:"PT", color:"var(--success)" },
+  { id:7, name:"Colour Masters", company:"Colour Masters Painting", trade:"Painter", phone:"+61 422 333 555", email:"jobs@colourmasters.com.au", abn:"78 901 234 567", rate:65, rating:4.2, jobs:20, avatar:"CM", color:"var(--accent)" },
+  { id:8, name:"Raj Singh Bricklaying", company:"Raj Singh Bricklaying", trade:"Bricklayer", phone:"+61 477 444 666", email:"raj@rsbricklaying.com.au", abn:"89 012 345 678", rate:88, rating:4.9, jobs:38, avatar:"RS", color:"#DC2626" },
+  { id:9, name:"Elite Kitchens NSW", company:"Elite Kitchens NSW Pty Ltd", trade:"Kitchen Installer", phone:"+61 499 888 111", email:"install@elitekitchens.com.au", abn:"90 123 456 789", rate:110, rating:4.6, jobs:12, avatar:"EK", color:"var(--primary)" },
+  { id:10, name:"Mandeep Framing", company:"Mandeep Framing NSW", trade:"Carpenter", phone:"+61 433 777 222", email:"mandeep@mfps.com.au", abn:"11 234 567 890", rate:85, rating:4.5, jobs:30, avatar:"MF", color:"#92400E" },
+  { id:11, name:"Aussie Glass & Glazing", company:"Aussie Glass & Glazing", trade:"Glazier", phone:"+61 444 555 333", email:"sales@aussieglaz.com.au", abn:"22 345 678 901", rate:92, rating:4.3, jobs:16, avatar:"AG", color:"var(--info)" },
+  { id:12, name:"Jinder's Landscaping", company:"Jinder's Landscaping NSW", trade:"Landscaper", phone:"+61 455 666 444", email:"jinder@jindersland.com.au", abn:"33 456 789 012", rate:70, rating:4.7, jobs:14, avatar:"JL", color:"var(--success)" },
+  { id:13, name:"Pro Floor Solutions", company:"Pro Floor Solutions", trade:"Floorer", phone:"+61 466 777 555", email:"info@profloor.com.au", abn:"44 567 890 123", rate:78, rating:4.1, jobs:10, avatar:"PF", color:"#7C3AED" },
+  { id:14, name:"NSW Air Con Pro", company:"NSW Air Con Professionals", trade:"HVAC", phone:"+61 477 888 666", email:"bookings@nswaircon.com.au", abn:"55 678 901 234", rate:100, rating:4.4, jobs:19, avatar:"AC", color:"var(--primary)" },
+  { id:15, name:"Gurpreet Electrical", company:"Gurpreet Electrical Services", trade:"Electrician", phone:"+61 488 999 777", email:"gurpreet@gelectrical.com.au", abn:"66 789 012 345", rate:82, rating:4.6, jobs:24, avatar:"GE", color:"var(--warning)" },
+];
+
+// ══════════════════════════════════════
+// SCHEDULED TRADIES DATA
+// ══════════════════════════════════════
+let scheduled = [
+  { id:1, tradieId:1, tradie:"Kulwinder Electric", company:"NSW Spark Solutions", trade:"Electrician", project:"Penrith Residence", task:"Ground floor rough-in wiring", scheduled:d(1), duration:5, reminderSent:d(-6), milestone:"Frame Stage → Lockup", status:"Confirmed", sm:"Amrit Singh", notes:"Need access to switchboard room before 8 AM" },
+  { id:2, tradieId:2, tradie:"Flow Right Plumbing", company:"Flow Right Plumbing", trade:"Plumber", project:"Penrith Residence", task:"First fix — water & waste layout", scheduled:d(4), duration:4, reminderSent:d(-3), milestone:"Frame Stage → Lockup", status:"Confirmed", sm:"Amrit Singh", notes:"Hot water system already delivered on site" },
+  { id:3, tradieId:3, tradie:"Top Roof Co", company:"Top Roof Co NSW", trade:"Roofer", project:"Penrith Residence", task:"Colorbond roof sheeting installation", scheduled:d(8), duration:3, reminderSent:d(-7), milestone:"Lockup Stage", status:"Awaiting Materials", sm:"Amrit Singh", notes:"Colorbond sheets delayed — supplier says 3 more days" },
+  { id:4, tradieId:5, tradie:"Wagners Concrete", company:"Wagners Concrete NSW", trade:"Concreter", project:"Liverpool Estate", task:"Ground floor slab pour — 120m²", scheduled:d(5), duration:2, reminderSent:d(-8), milestone:"Foundation → Slab Stage", status:"No Response", sm:"Jasbir Kaur", notes:"Called twice, no answer. Left voicemail." },
+  { id:5, tradieId:8, tradie:"Raj Singh Bricklaying", company:"Raj Singh Bricklaying", trade:"Bricklayer", project:"Blacktown Duplex", task:"External brickwork — Unit A", scheduled:d(2), duration:5, reminderSent:d(-5), milestone:"Slab Stage → Frame Stage", status:"Confirmed", sm:"Gurpreet Mann", notes:"Bricks delivered. Scaffolding already up." },
+  { id:6, tradieId:6, tradie:"Precision Tiling", company:"Precision Tiling NSW", trade:"Tiler", project:"Parramatta Home", task:"Bathroom & ensuite tiling", scheduled:d(14), duration:4, reminderSent:null, milestone:"Lockup → Fixing Stage", status:"Pending", sm:"Amrit Singh", notes:"Tiles selected by customer — gloss white 300x600" },
+  { id:7, tradieId:7, tradie:"Colour Masters", company:"Colour Masters Painting", trade:"Painter", project:"Parramatta Home", task:"Interior painting — all rooms", scheduled:d(25), duration:7, reminderSent:null, milestone:"Fixing Stage → Practical Completion", status:"Pending", sm:"Amrit Singh", notes:"Colour: Dulux White Duck Quarter for walls" },
+  { id:8, tradieId:4, tradie:"Smooth Walls Plaster", company:"Smooth Walls Plastering", trade:"Plasterer", project:"Penrith Residence", task:"Internal plastering — all walls", scheduled:d(12), duration:4, reminderSent:null, milestone:"Lockup → Fixing Stage", status:"Pending", sm:"Amrit Singh", notes:"Plasterboard already fixed by carpenter" },
+  { id:9, tradieId:10, tradie:"Mandeep Framing", company:"Mandeep Framing NSW", trade:"Carpenter", project:"Liverpool Estate", task:"Timber frame erection — ground floor", scheduled:d(10), duration:8, reminderSent:null, milestone:"Slab Stage → Frame Stage", status:"Pending", sm:"Jasbir Kaur", notes:"Frame prefabricated off-site, delivery to site 9th Jan" },
+  { id:10, tradieId:9, tradie:"Elite Kitchens NSW", company:"Elite Kitchens NSW", trade:"Kitchen Installer", project:"Penrith Residence", task:"Kitchen cabinetry & benchtop install", scheduled:d(30), duration:3, reminderSent:null, milestone:"Fixing Stage → Practical Completion", status:"Pending", sm:"Amrit Singh", notes:"Kitchen design approved. Caesarstone benchtop ordered." },
+  { id:11, tradieId:15, tradie:"Gurpreet Electrical", company:"Gurpreet Electrical Services", trade:"Electrician", project:"Blacktown Duplex", task:"Switchboard & power points — Unit B", scheduled:d(6), duration:3, reminderSent:d(-1), milestone:"Frame Stage → Lockup", status:"Pending", sm:"Gurpreet Mann", notes:"Second electrician for duplex unit B" },
+  { id:12, tradieId:14, tradie:"NSW Air Con Pro", company:"NSW Air Con Professionals", trade:"HVAC", project:"Parramatta Home", task:"Ducted AC installation — whole house", scheduled:d(18), duration:3, reminderSent:null, milestone:"Fixing Stage → Practical Completion", status:"No Response", sm:"Amrit Singh", notes:"Daikin 8kW system. Pre-wire done by electrician." },
+  { id:13, tradieId:11, tradie:"Aussie Glass & Glazing", company:"Aussie Glass & Glazing", trade:"Glazier", project:"Penrith Residence", task:"Window & door glazing", scheduled:d(-1), duration:2, reminderSent:d(-8), milestone:"Frame Stage → Lockup", status:"Completed", sm:"Amrit Singh", notes:"All windows glazed successfully." },
+];
+
+// ══════════════════════════════════════
+// ACTIVITY LOG
+// ══════════════════════════════════════
+const activities = [
+  { type:"done", icon:"bi-check-circle", text:"Aussie Glass completed glazing at <b>Penrith Residence</b>", time:"1 hour ago" },
+  { type:"urgent", icon:"bi-telephone-x", text:"Wagners Concrete — no response to 2 calls for <b>Liverpool Estate</b> slab pour", time:"2 hours ago" },
+  { type:"warn", icon:"bi-clock", text:"Auto-reminder sent to Top Roof Co — materials delay for <b>Penrith</b>", time:"3 hours ago" },
+  { type:"done", icon:"bi-envelope-check", text:"1-week reminder sent to Kulwinder Electric for <b>Penrith</b> rough-in", time:"5 hours ago" },
+  { type:"", icon:"bi-calendar-plus", text:"Mandeep Framing scheduled for <b>Liverpool Estate</b> — 10 Jan", time:"Yesterday" },
+  { type:"done", icon:"bi-check-circle", text:"Raj Singh Bricklaying confirmed for <b>Blacktown Duplex</b> — starts in 2 days", time:"Yesterday" },
+  { type:"", icon:"bi-person-plus", text:"New tradie added: <b>Gurpreet Electrical</b> — Electrician", time:"2 days ago" },
+  { type:"warn", icon:"bi-exclamation-triangle", text:"Colorbond delivery delayed — Top Roof Co may need reschedule at <b>Penrith</b>", time:"2 days ago" },
+];
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+let notifs = [
+  { id:1, icon:"bi-tools", bg:"var(--danger-light)", color:"var(--danger)", msg:"Wagners Concrete — No response for Liverpool slab pour (5 days away)", time:"2 hrs ago", unread:true },
+  { id:2, icon:"bi-clock", bg:"var(--warning-light)", color:"#D97706", msg:"Top Roof Co — Awaiting materials for Penrith roof installation", time:"3 hrs ago", unread:true },
+  { id:3, icon:"bi-telephone", bg:"var(--info-light)", color:"var(--info)", msg:"NSW Air Con Pro — Reminder sent, awaiting confirmation for Parramatta", time:"5 hrs ago", unread:true },
+];
+
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+let currentTab = 'all';
+let sortField = 'scheduled';
+let sortAsc = true;
+let selectedRows = new Set();
+let nextId = 14;
+
+// ══════════════════════════════════════
+// LIVE CLOCK
+// ══════════════════════════════════════
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('liveClock').innerHTML = `<span>${h}:${m}:${s}</span> AEST`;
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ══════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════
+function showToast(msg, type='info') {
+  const c = { success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'}, danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'}, info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'}, warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'} };
+  const s = c[type]||c.info;
+  const t = document.createElement('div');
+  t.className = 'toast-item';
+  t.innerHTML = `<div class="toast-icon" style="background:${s.bg};color:${s.color};"><i class="bi ${s.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => removeToast(t), 4500);
+}
+function removeToast(el) { if(!el||!el.parentElement) return; el.classList.add('removing'); setTimeout(()=>el.remove(),250); }
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+function renderNotifs() {
+  const unread = notifs.filter(n=>n.unread).length;
+  document.getElementById('notifCount').textContent = unread;
+  document.getElementById('notifCount').style.display = unread > 0 ? 'flex' : 'none';
+  document.getElementById('notifList').innerHTML = notifs.map(n => `
+    <div class="notification-item ${n.unread?'unread':''}" onclick="n.unread=false;renderNotifs();showToast('Opening: ${n.msg.substring(0,35)}...','info')">
+      <div class="notif-icon" style="background:${n.bg};color:${n.color};"><i class="bi ${n.icon}"></i></div>
+      <div style="flex:1;min-width:0;"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div>
+    </div>`).join('');
+}
+function toggleNotif() { document.getElementById('notifDrop').classList.toggle('show'); }
+document.addEventListener('click', e => { const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn'); if(d&&!d.contains(e.target)&&!b.contains(e.target)) d.classList.remove('show'); });
+function markAllRead() { notifs.forEach(n=>n.unread=false); renderNotifs(); showToast('All notifications marked as read','success'); }
+
+// ══════════════════════════════════════
+// ANIMATED COUNTERS
+// ══════════════════════════════════════
+function animateCounters() {
+  document.querySelectorAll('.stat-value[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count);
+    const duration = 1000;
+    const start = performance.now();
+    function step(now) {
+      const p = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(eased * target);
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+// ══════════════════════════════════════
+// TABS
+// ══════════════════════════════════════
+function switchTab(tab) {
+  currentTab = tab;
+  applyFilters();
+}
+
+function renderTabs() {
+  const counts = {
+    all: scheduled.length,
+    week: scheduled.filter(s => { const dy = daysUntil(s.scheduled); return dy >= 0 && dy <= 7; }).length,
+    confirmed: scheduled.filter(s => s.status === 'Confirmed').length,
+    pending: scheduled.filter(s => s.status === 'Pending' || s.status === 'No Response').length,
+    overdue: scheduled.filter(s => daysUntil(s.scheduled) < 0 && s.status !== 'Completed').length,
+    completed: scheduled.filter(s => s.status === 'Completed').length,
+  };
+  const tabs = [
+    { key:'all', label:'All' },
+    { key:'week', label:'Next 7 Days' },
+    { key:'confirmed', label:'Confirmed' },
+    { key:'pending', label:'Pending' },
+    { key:'overdue', label:'Overdue' },
+    { key:'completed', label:'Completed' },
+  ];
+  document.getElementById('tabNav').innerHTML = tabs.map(t =>
+    `<button class="tab-btn ${currentTab===t.key?'active':''}" onclick="switchTab('${t.key}')">${t.label}<span class="tab-count">${counts[t.key]}</span></button>`
+  ).join('');
+}
+
+// ══════════════════════════════════════
+// FILTERS
+// ══════════════════════════════════════
+function populateFilters() {
+  const trades = [...new Set(scheduled.map(s=>s.trade))].sort();
+  const projects = [...new Set(scheduled.map(s=>s.project))].sort();
+  document.getElementById('tradeFilter').innerHTML = '<option value="all">All Trades</option>' + trades.map(t=>`<option value="${t}">${t}</option>`).join('');
+  document.getElementById('projectFilter').innerHTML = '<option value="all">All Projects</option>' + projects.map(p=>`<option value="${p}">${p}</option>`).join('');
+}
+
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.toLowerCase().trim();
+  const trade = document.getElementById('tradeFilter').value;
+  const project = document.getElementById('projectFilter').value;
+  const status = document.getElementById('statusFilter').value;
+
+  let filtered = scheduled.filter(s => {
+    if (trade !== 'all' && s.trade !== trade) return false;
+    if (project !== 'all' && s.project !== project) return false;
+    if (status !== 'all' && s.status !== status) return false;
+    if (currentTab === 'week') { const dy = daysUntil(s.scheduled); if (dy < 0 || dy > 7) return false; }
+    else if (currentTab === 'confirmed' && s.status !== 'Confirmed') return false;
+    else if (currentTab === 'pending' && s.status !== 'Pending' && s.status !== 'No Response') return false;
+    else if (currentTab === 'overdue' && (daysUntil(s.scheduled) >= 0 || s.status === 'Completed')) return false;
+    else if (currentTab === 'completed' && s.status !== 'Completed') return false;
+    if (search) {
+      const hay = (s.tradie + s.company + s.trade + s.project + s.task + s.status + s.milestone + s.sm).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  filtered.sort((a,b) => {
+    let va = a[sortField], vb = b[sortField];
+    if (sortField === 'scheduled') { va = new Date(va); vb = new Date(vb); }
+    else { va = (va||'').toLowerCase(); vb = (vb||'').toLowerCase(); }
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  renderTable(filtered);
+  renderTabs();
+}
+
+function sortTable(field) {
+  if (sortField === field) sortAsc = !sortAsc;
+  else { sortField = field; sortAsc = true; }
+  applyFilters();
+}
+
+// ══════════════════════════════════════
+// TABLE
+// ══════════════════════════════════════
+function statusPill(status) {
+  const map = {
+    'Confirmed': 'pill-success', 'Pending': 'pill-warning', 'No Response': 'pill-danger',
+    'Awaiting Materials': 'pill-info', 'Declined': 'pill-danger', 'Completed': 'pill-gray'
+  };
+  return `<span class="status-pill ${map[status]||'pill-gray'}">${status}</span>`;
+}
+
+function renderTable(data) {
+  const body = document.getElementById('tableBody');
+  const noRes = document.getElementById('noResults');
+  document.getElementById('resultCount').textContent = `${data.length} result${data.length!==1?'s':''}`;
+
+  if (data.length === 0) { body.innerHTML = ''; noRes.style.display = 'block'; return; }
+  noRes.style.display = 'none';
+
+  body.innerHTML = data.map(s => {
+    const dy = daysUntil(s.scheduled);
+    const checked = selectedRows.has(s.id) ? 'checked' : '';
+    const isOverdue = dy < 0 && s.status !== 'Completed';
+    const rowStyle = isOverdue ? 'style="background:rgba(220,38,38,.03);"' : '';
+    const actions = getActionButtons(s);
+
+    return `<tr ${rowStyle} data-id="${s.id}" onclick="openDetailModal(${s.id})">
+      <td onclick="event.stopPropagation()"><input type="checkbox" ${checked} onchange="toggleRowSelect(${s.id},this)"></td>
+      <td><b style="font-size:13px;">${s.tradie}</b><div style="font-size:10.5px;color:var(--text-tertiary);margin-top:1px;">${s.company}</div></td>
+      <td><span style="font-size:12px;">${s.trade}</span></td>
+      <td><span style="font-size:12px;font-weight:600;color:var(--primary);">${s.project}</span><div style="font-size:10.5px;color:var(--text-tertiary);">SM: ${s.sm}</div></td>
+      <td style="font-size:12px;max-width:160px;">${s.task}</td>
+      <td style="white-space:nowrap;font-size:12px;font-weight:600;">${formatDate(s.scheduled)}<div style="font-size:10px;color:var(--text-tertiary);">${s.duration} day${s.duration>1?'s':''}</div></td>
+      <td>${daysBadge(dy)}</td>
+      <td style="font-size:11px;color:var(--text-tertiary);max-width:130px;">${s.milestone}</td>
+      <td>${statusPill(s.status)}</td>
+      <td style="text-align:center;white-space:nowrap;" onclick="event.stopPropagation()">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+function getActionButtons(s) {
+  const dy = daysUntil(s.scheduled);
+  let btns = '';
+  if (s.status === 'No Response' || s.status === 'Pending') {
+    btns += `<button class="btn-icon" title="Call" onclick="openCallModal(${s.id})" style="color:var(--primary);border-color:var(--primary-glow);"><i class="bi bi-telephone"></i></button>`;
+    btns += `<button class="btn-icon" title="Send Reminder" onclick="openReminderModal(${s.id})"><i class="bi bi-envelope"></i></button>`;
+  }
+  if (s.status !== 'Confirmed' && s.status !== 'Completed' && s.status !== 'Declined') {
+    btns += `<button class="btn-icon" title="Mark Confirmed" onclick="quickConfirm(${s.id})" style="color:var(--success);border-color:rgba(22,163,74,.2);"><i class="bi bi-check-lg"></i></button>`;
+  }
+  if (s.status !== 'Declined' && s.status !== 'Completed') {
+    btns += `<button class="btn-icon" title="Update Status" onclick="openConfirmStatusModal(${s.id})"><i class="bi bi-three-dots-vertical"></i></button>`;
+  }
+  if (s.status === 'Completed') {
+    btns += `<span style="font-size:11px;color:var(--text-tertiary);"><i class="bi bi-check-circle"></i></span>`;
+  }
+  return btns;
+}
+
+// ══════════════════════════════════════
+// BULK SELECT
+// ══════════════════════════════════════
+function toggleRowSelect(id, cb) {
+  if (cb.checked) selectedRows.add(id); else selectedRows.delete(id);
+  updateBulkBar();
+}
+function toggleSelectAll() {
+  const cb = document.getElementById('selectAll');
+  const rows = document.querySelectorAll('#tableBody input[type=checkbox]');
+  if (cb.checked) rows.forEach(r => { selectedRows.add(parseInt(r.closest('tr').dataset.id)); r.checked = true; });
+  else { selectedRows.clear(); rows.forEach(r => r.checked = false); }
+  updateBulkBar();
+}
+function updateBulkBar() {
+  const bar = document.getElementById('bulkActions');
+  document.getElementById('selectedCount').textContent = selectedRows.size + ' selected';
+  bar.style.display = selectedRows.size > 0 ? 'flex' : 'none';
+}
+function bulkSendReminder() {
+  const count = selectedRows.size;
+  selectedRows.forEach(id => {
+    const s = scheduled.find(x=>x.id===id);
+    if (s) s.reminderSent = d(0);
+  });
+  selectedRows.clear(); updateBulkBar();
+  document.getElementById('selectAll').checked = false;
+  showToast(`Reminders sent to ${count} tradie${count>1?'s':''}`,'success');
+  applyFilters();
+}
+function bulkMarkConfirmed() {
+  const count = selectedRows.size;
+  selectedRows.forEach(id => {
+    const s = scheduled.find(x=>x.id===id);
+    if (s && s.status !== 'Completed') s.status = 'Confirmed';
+  });
+  selectedRows.clear(); updateBulkBar();
+  document.getElementById('selectAll').checked = false;
+  showToast(`${count} tradie${count>1?'s':''} marked as confirmed`,'success');
+  applyFilters(); renderUrgent(); renderCharts();
+}
+
+// ══════════════════════════════════════
+// URGENT REMINDERS
+// ══════════════════════════════════════
+function renderUrgent() {
+  const urgent = scheduled.filter(s => {
+    const dy = daysUntil(s.scheduled);
+    return dy >= 0 && dy <= 7 && s.status !== 'Confirmed' && s.status !== 'Completed';
+  }).sort((a,b) => daysUntil(a.scheduled) - daysUntil(b.scheduled));
+
+  if (urgent.length === 0) {
+    document.getElementById('urgentContent').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-tertiary);font-size:13px;"><i class="bi bi-check-circle" style="font-size:20px;color:var(--success);display:block;margin-bottom:6px;"></i>No urgent reminders — all upcoming tradies confirmed!</div>';
+    return;
+  }
+
+  document.getElementById('urgentContent').innerHTML = urgent.map(s => {
+    const dy = daysUntil(s.scheduled);
+    const isCritical = dy <= 2;
+    const stripClass = isCritical ? 'alert-strip-danger' : 'alert-strip-warning';
+    const iconBg = isCritical ? 'var(--danger)' : 'var(--warning)';
+    const iconColor = 'white';
+    return `<div class="alert-strip ${stripClass}" onclick="openCallModal(${s.id})">
+      <div class="alert-strip-icon" style="background:${iconBg};color:${iconColor};"><i class="bi ${isCritical?'bi-exclamation-triangle':'bi-clock'}"></i></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;">${s.tradie} — ${s.project}</div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">${s.trade}: ${s.task} &bull; Scheduled: ${formatDate(s.scheduled)} &bull; Site Manager: ${s.sm}</div>
+        <div style="margin-top:4px;">${daysBadge(dy)} ${statusPill(s.status)}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        ${s.status === 'No Response' ? `<button class="btn-primary-custom btn-sm-custom" onclick="event.stopPropagation();openCallModal(${s.id})"><i class="bi bi-telephone me-1"></i>Call Now</button>` : ''}
+        ${s.status === 'Pending' || s.status === 'Awaiting Materials' ? `<button class="btn-outline-custom btn-sm-custom" onclick="event.stopPropagation();openReminderModal(${s.id})"><i class="bi bi-envelope me-1"></i>Remind</button>` : ''}
+        <button class="btn-outline-custom btn-sm-custom" onclick="event.stopPropagation();openDetailModal(${s.id})"><i class="bi bi-eye"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let urgentCollapsed = false;
+function toggleUrgent() {
+  urgentCollapsed = !urgentCollapsed;
+  document.getElementById('urgentContent').style.display = urgentCollapsed ? 'none' : 'block';
+  document.getElementById('urgentToggle').innerHTML = urgentCollapsed ? '<i class="bi bi-chevron-down"></i> Expand' : '<i class="bi bi-chevron-up"></i> Collapse';
+}
+
+// ══════════════════════════════════════
+// ACTIVITY TIMELINE
+// ══════════════════════════════════════
+function renderTimeline() {
+  document.getElementById('activityTimeline').innerHTML = activities.map(a =>
+    `<div class="ti-custom ${a.type}"><h4 style="font-size:13px;font-weight:600;">${a.text}</h4><p style="font-size:11px;color:var(--text-tertiary);margin-bottom:0;"><i class="bi bi-clock me-1"></i>${a.time}</p></div>`
+  ).join('');
+}
+
+// ══════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════
+let perfChart, confChart;
+function renderCharts() {
+  const tradeStats = {};
+  scheduled.forEach(s => {
+    if (!tradeStats[s.trade]) tradeStats[s.trade] = { total:0, confirmed:0 };
+    tradeStats[s.trade].total++;
+    if (s.status === 'Confirmed' || s.status === 'Completed') tradeStats[s.trade].confirmed++;
+  });
+  const labels = Object.keys(tradeStats);
+  const rates = labels.map(t => Math.round((tradeStats[t].confirmed / tradeStats[t].total) * 100));
+  const colors = rates.map(r => r >= 80 ? '#16A34A' : r >= 50 ? '#F59E0B' : '#DC2626');
+
+  if (perfChart) perfChart.destroy();
+  perfChart = new Chart(document.getElementById('perfChart').getContext('2d'), {
+    type:'bar',
+    data:{ labels, datasets:[{ label:'Confirmation Rate %', data:rates, backgroundColor:colors, borderRadius:6, barPercentage:.5 }] },
+    options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{display:false} }, scales:{ x:{beginAtZero:true,max:100,grid:{color:'#F1F5F9'},ticks:{font:{size:11},callback:v=>v+'%'}}, y:{grid:{display:false},ticks:{font:{size:11,family:'Inter'}}} } }
+  });
+
+  const statusCounts = {
+    'Confirmed': scheduled.filter(s=>s.status==='Confirmed').length,
+    'Pending': scheduled.filter(s=>s.status==='Pending').length,
+    'No Response': scheduled.filter(s=>s.status==='No Response').length,
+    'Awaiting Materials': scheduled.filter(s=>s.status==='Awaiting Materials').length,
+    'Completed': scheduled.filter(s=>s.status==='Completed').length,
+  };
+  if (confChart) confChart.destroy();
+  confChart = new Chart(document.getElementById('confChart').getContext('2d'), {
+    type:'doughnut',
+    data:{ labels:Object.keys(statusCounts), datasets:[{ data:Object.values(statusCounts), backgroundColor:['#16A34A','#F59E0B','#DC2626','#2563EB','#94A3B8'], borderWidth:0, hoverOffset:6 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{ legend:{ position:'right', labels:{ font:{size:11,family:'Inter'}, color:'#64748B', padding:10, usePointStyle:true, pointStyleWidth:8 } } } }
+  });
+}
+
+// ══════════════════════════════════════
+// MODALS
+// ══════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-backdrop-custom').forEach(m => {
+  m.addEventListener('click', e => { if(e.target===m) m.classList.remove('show'); });
+});
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape') document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'));
+});
+
+// Schedule Modal
+function openScheduleModal() {
+  document.getElementById('scheduleModalTitle').textContent = 'Schedule New Tradie';
+  const sel = document.getElementById('schTradie');
+  sel.innerHTML = '<option value="">Select tradie...</option>' + tradieDir.map(t => `<option value="${t.id}">${t.name} — ${t.trade}</option>`).join('');
+  sel.onchange = function() {
+    const t = tradieDir.find(x=>x.id==this.value);
+    document.getElementById('schTrade').value = t ? t.trade : '';
+  };
+  document.getElementById('schProject').innerHTML = '<option value="">Select project...</option><option>Penrith Residence</option><option>Castle Hill Villa</option><option>Blacktown Duplex</option><option>Parramatta Home</option><option>Liverpool Estate</option><option>Chatswood Apartment</option>';
+  document.getElementById('schMilestone').innerHTML = '<option value="">Select milestone...</option><option>Foundation → Slab Stage</option><option>Slab Stage → Frame Stage</option><option>Frame Stage → Lockup</option><option>Lockup Stage</option><option>Lockup → Fixing Stage</option><option>Fixing Stage → Practical Completion</option><option>Practical Completion</option>';
+  document.getElementById('schDate').value = '';
+  document.getElementById('schTask').value = '';
+  document.getElementById('schNotes').value = '';
+  document.getElementById('schDuration').value = 3;
+  document.getElementById('scheduleModal').classList.add('show');
+}
+
+function submitSchedule() {
+  const tradieId = document.getElementById('schTradie').value;
+  const project = document.getElementById('schProject').value;
+  const milestone = document.getElementById('schMilestone').value;
+  const date = document.getElementById('schDate').value;
+  const task = document.getElementById('schTask').value;
+  const duration = parseInt(document.getElementById('schDuration').value) || 3;
+  const notes = document.getElementById('schNotes').value;
+
+  if (!tradieId || !project || !milestone || !date || !task) {
+    showToast('Please fill in all required fields','danger');
+    return;
+  }
+
+  const t = tradieDir.find(x=>x.id==tradieId);
+  const smMap = {'Penrith Residence':'Amrit Singh','Castle Hill Villa':'Deepak Sharma','Blacktown Duplex':'Gurpreet Mann','Parramatta Home':'Amrit Singh','Liverpool Estate':'Jasbir Kaur','Chatswood Apartment':'Deepak Sharma'};
+
+  const newEntry = {
+    id: nextId++,
+    tradieId: parseInt(tradieId),
+    tradie: t.name,
+    company: t.company,
+    trade: t.trade,
+    project,
+    task,
+    scheduled: date,
+    duration,
+    reminderSent: d(0),
+    milestone,
+    status: 'Pending',
+    sm: smMap[project] || 'TBD',
+    notes
+  };
+
+  scheduled.unshift(newEntry);
+  closeModal('scheduleModal');
+  showToast(`${t.name} scheduled for ${project} — reminder sent!`,'success');
+
+  // Add to activity
+  activities.unshift({ type:'', icon:'bi-calendar-plus', text:`<b>${t.name}</b> scheduled for <b>${project}</b> — ${formatDate(date)}`, time:'Just now' });
+
+  populateFilters();
+  applyFilters();
+  renderUrgent();
+  renderTimeline();
+  renderCharts();
+  animateCounters();
+}
+
+// Detail Modal
+function openDetailModal(id) {
+  const s = scheduled.find(x=>x.id===id);
+  if (!s) return;
+  const t = tradieDir.find(x=>x.id===s.tradieId);
+  const dy = daysUntil(s.scheduled);
+  document.getElementById('detailTitle').textContent = s.tradie;
+  document.getElementById('detailSubtitle').textContent = s.company + ' — ' + s.trade;
+
+  const relatedHistory = scheduled.filter(x => x.tradieId === s.tradieId && x.id !== s.id).slice(0,4);
+
+  document.getElementById('detailBody').innerHTML = `
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${t?t.phone:'N/A'}</div></div>
+      <div class="detail-item"><div class="detail-label">Email</div><div class="detail-value" style="font-size:12px;">${t?t.email:'N/A'}</div></div>
+      <div class="detail-item"><div class="detail-label">Hourly Rate</div><div class="detail-value">$${t?t.rate:'—'}/hr</div></div>
+      <div class="detail-item"><div class="detail-label">Rating</div><div class="detail-value" style="color:var(--warning);">${t?'★'.repeat(Math.floor(t.rating))+(t.rating%1>=.5?'½':''):'—'} <span style="color:var(--text-tertiary);font-size:11px;">${t?t.rating:''}</span></div></div>
+      <div class="detail-item"><div class="detail-label">Project</div><div class="detail-value" style="color:var(--primary);">${s.project}</div></div>
+      <div class="detail-item"><div class="detail-label">Site Manager</div><div class="detail-value">${s.sm}</div></div>
+      <div class="detail-item"><div class="detail-label">Scheduled</div><div class="detail-value">${formatDate(s.scheduled)} (${s.duration} days)</div></div>
+      <div class="detail-item"><div class="detail-label">Days Until</div><div class="detail-value">${daysBadge(dy)}</div></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="detail-label">Milestone</div>
+      <div style="font-size:13px;font-weight:600;margin-top:2px;">${s.milestone}</div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="detail-label">Task</div>
+      <div style="font-size:13px;margin-top:2px;">${s.task}</div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="detail-label">Status</div>
+      <div style="margin-top:4px;">${statusPill(s.status)}</div>
+    </div>
+    ${s.notes ? `<div style="margin-bottom:16px;"><div class="detail-label">Notes</div><div style="background:var(--bg-body);padding:12px;border-radius:8px;font-size:13px;margin-top:4px;border:1px solid var(--border-color);">${s.notes}</div></div>` : ''}
+    <div style="margin-bottom:16px;">
+      <div class="detail-label">Reminder</div>
+      <div style="font-size:13px;margin-top:2px;">${s.reminderSent ? 'Sent on ' + formatDate(s.reminderSent) : '<span style="color:var(--text-tertiary);">Not sent yet</span>'}</div>
+    </div>
+    ${relatedHistory.length > 0 ? `
+    <div style="margin-top:20px;">
+      <div class="detail-label" style="margin-bottom:8px;">Other Jobs by ${s.tradie}</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${relatedHistory.map(r => `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-body);border-radius:8px;font-size:12px;"><span><b>${r.project}</b> — ${r.task}</span>${statusPill(r.status)}</div>`).join('')}
+      </div>
+    </div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;">
+      ${s.status !== 'Confirmed' && s.status !== 'Completed' && s.status !== 'Declined' ? `<button class="btn-primary-custom" onclick="quickConfirm(${s.id});closeModal('detailModal')"><i class="bi bi-check-lg me-1"></i>Mark Confirmed</button>` : ''}
+      ${s.status === 'No Response' || s.status === 'Pending' ? `<button class="btn-warning-custom" onclick="openCallModal(${s.id});closeModal('detailModal')"><i class="bi bi-telephone me-1"></i>Call Tradie</button>` : ''}
+      <button class="btn-outline-custom" onclick="openReminderModal(${s.id});closeModal('detailModal')"><i class="bi bi-envelope me-1"></i>Send Reminder</button>
+      <button class="btn-outline-custom" onclick="openConfirmStatusModal(${s.id});closeModal('detailModal')"><i class="bi bi-pencil me-1"></i>Update Status</button>
+    </div>
+  `;
+  document.getElementById('detailModal').classList.add('show');
+}
+
+// Call Modal
+function openCallModal(id) {
+  const s = scheduled.find(x=>x.id===id);
+  if (!s) return;
+  const t = tradieDir.find(x=>x.id===s.tradieId);
+  document.getElementById('callTitle').textContent = 'Log Call — ' + s.tradie;
+  document.getElementById('callSubtitle').textContent = s.project + ' — ' + s.task;
+
+  document.getElementById('callBody').innerHTML = `
+    <div style="text-align:center;padding:20px 0;">
+      <div style="width:64px;height:64px;border-radius:50%;background:var(--primary-glow);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;"><i class="bi bi-telephone" style="font-size:28px;color:var(--primary);"></i></div>
+      <div style="font-size:20px;font-weight:800;">${t?t.phone:s.tradie}</div>
+      <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">${s.company}</div>
+    </div>
+    <div style="margin-bottom:16px;"><label class="form-label-custom">Call Notes</label><textarea class="form-input-custom" id="callNotes" placeholder="What was discussed? Any outcomes or commitments made..."></textarea></div>
+    <div class="detail-label" style="margin-bottom:10px;">Outcome</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="outcome-btn" onclick="logCallOutcome(${s.id},'Confirmed')" style="border-color:rgba(22,163,74,.2);"><div class="ob-icon" style="background:var(--success-light);color:var(--success);"><i class="bi bi-check-circle"></i></div><div><div class="ob-text" style="color:var(--success);">Confirmed</div><div class="ob-desc">Tradie confirmed availability</div></div></div>
+      <div class="outcome-btn" onclick="logCallOutcome(${s.id},'Pending')" style="border-color:rgba(245,158,11,.2);"><div class="ob-icon" style="background:var(--warning-light);color:#D97706;"><i class="bi bi-clock"></i></div><div><div class="ob-text" style="color:#D97706;">Will Call Back</div><div class="ob-desc">Tradie will check and revert</div></div></div>
+      <div class="outcome-btn" onclick="logCallOutcome(${s.id},'No Response')" style="border-color:rgba(148,163,184,.2);"><div class="ob-icon" style="background:var(--bg-body);color:var(--text-tertiary);"><i class="bi bi-telephone-x"></i></div><div><div class="ob-text">No Answer</div><div class="ob-desc">Went to voicemail / not reachable</div></div></div>
+      <div class="outcome-btn" onclick="logCallOutcome(${s.id},'Declined')" style="border-color:rgba(220,38,38,.2);"><div class="ob-icon" style="background:var(--danger-light);color:var(--danger);"><i class="bi bi-x-circle"></i></div><div><div class="ob-text" style="color:var(--danger);">Declined</div><div class="ob-desc">Tradie not available</div></div></div>
+    </div>
+  `;
+  document.getElementById('callModal').classList.add('show');
+}
+
+function logCallOutcome(id, outcome) {
+  const s = scheduled.find(x=>x.id===id);
+  const notes = document.getElementById('callNotes')?.value || '';
+  if (s) {
+    s.status = outcome;
+    if (outcome === 'Confirmed') s.reminderSent = s.reminderSent || d(0);
+  }
+  closeModal('callModal');
+  const msgs = {
+    'Confirmed': `${s.tradie} confirmed for ${s.project}!`,
+    'Pending': `Logged callback request for ${s.tradie}`,
+    'No Response': `${s.tradie} — no answer, logged call attempt`,
+    'Declined': `${s.tradie} declined — you may need an alternative`,
+  };
+  const types = { 'Confirmed':'success', 'Pending':'warning', 'No Response':'info', 'Declined':'danger' };
+  showToast(msgs[outcome], types[outcome]);
+  activities.unshift({ type: outcome==='Confirmed'?'done':outcome==='Declined'?'urgent':'warn', icon: outcome==='Confirmed'?'bi-check-circle':'bi-telephone', text:`Call logged: <b>${s.tradie}</b> — ${outcome}${notes?' — "'+notes+'"':''}`, time:'Just now' });
+  populateFilters(); applyFilters(); renderUrgent(); renderTimeline(); renderCharts();
+}
+
+// Reminder Modal
+function openReminderModal(id) {
+  const s = scheduled.find(x=>x.id===id);
+  if (!s) return;
+  const t = tradieDir.find(x=>x.id===s.tradieId);
+  document.getElementById('reminderSubtitle').textContent = s.tradie + ' — ' + s.project;
+
+  const emailBody = `Hi ${s.tradie},\n\nThis is a reminder that you're scheduled for:\n\nTask: ${s.task}\nProject: ${s.project}\nDate: ${formatDate(s.scheduled)}\nDuration: ${s.duration} day${s.duration>1?'s':''}\nMilestone: ${s.milestone}\n\nSite Contact: ${s.sm}\n${t?'Phone: '+t.phone:''}\n\nPlease confirm your availability and let us know if you need any materials on site before you start.\n\nThanks,\nGuri Singh\nBuildPro Construction\nNSW, Australia`;
+
+  const smsBody = `Hi ${s.tradie}, reminder: ${s.task} at ${s.project} on ${formatDate(s.scheduled)}. Please confirm. - Guri, BuildPro`;
+
+  document.getElementById('reminderBody').innerHTML = `
+    <div style="display:flex;gap:6px;margin-bottom:16px;">
+      <button class="btn-primary-custom btn-sm-custom reminder-tab active" onclick="switchReminderTab('email',this)" id="remTabEmail"><i class="bi bi-envelope me-1"></i>Email</button>
+      <button class="btn-outline-custom btn-sm-custom reminder-tab" onclick="switchReminderTab('sms',this)" id="remTabSms"><i class="bi bi-chat-dots me-1"></i>SMS</button>
+    </div>
+    <div id="remEmailPreview">
+      <div style="margin-bottom:8px;"><label class="form-label-custom">To</label><div style="font-size:13px;font-weight:600;">${t?t.email:'N/A'}</div></div>
+      <div style="margin-bottom:8px;"><label class="form-label-custom">Subject</label><div style="font-size:13px;font-weight:600;">Reminder: ${s.trade} work at ${s.project} — ${formatDate(s.scheduled)}</div></div>
+      <div style="margin-bottom:8px;"><label class="form-label-custom">CC</label><div style="font-size:13px;color:var(--text-secondary);">${s.sm} (Site Manager)</div></div>
+      <div><label class="form-label-custom">Body</label><pre style="background:var(--bg-body);padding:14px;border-radius:8px;font-size:12.5px;font-family:Inter,sans-serif;white-space:pre-wrap;border:1px solid var(--border-color);line-height:1.6;">${emailBody}</pre></div>
+    </div>
+    <div id="remSmsPreview" style="display:none;">
+      <div style="margin-bottom:8px;"><label class="form-label-custom">To</label><div style="font-size:13px;font-weight:600;">${t?t.phone:'N/A'}</div></div>
+      <div><label class="form-label-custom">Message</label><div style="background:var(--bg-body);padding:14px;border-radius:8px;font-size:13px;border:1px solid var(--border-color);">${smsBody}</div><div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">${smsBody.length}/160 characters</div></div>
+    </div>
+    <div style="margin-top:16px;text-align:right;">
+      <button class="btn-outline-custom" onclick="closeModal('reminderModal')">Cancel</button>
+      <button class="btn-primary-custom" onclick="sendReminder(${s.id})" id="sendRemBtn"><i class="bi bi-send me-1"></i>Send Reminder</button>
+    </div>
+  `;
+  document.getElementById('reminderModal').classList.add('show');
+}
+
+function switchReminderTab(tab, btn) {
+  document.querySelectorAll('.reminder-tab').forEach(b => { b.className = 'btn-outline-custom btn-sm-custom reminder-tab'; });
+  btn.className = 'btn-primary-custom btn-sm-custom reminder-tab active';
+  document.getElementById('remEmailPreview').style.display = tab === 'email' ? 'block' : 'none';
+  document.getElementById('remSmsPreview').style.display = tab === 'sms' ? 'block' : 'none';
+}
+
+function sendReminder(id) {
+  const btn = document.getElementById('sendRemBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="sending-spinner"></span>Sending...';
+  setTimeout(() => {
+    const s = scheduled.find(x=>x.id===id);
+    if (s) { s.reminderSent = d(0); if(s.status==='No Response') s.status='Pending'; }
+    closeModal('reminderModal');
+    showToast(`Reminder sent to ${s.tradie} for ${s.project}`,'success');
+    activities.unshift({ type:'done', icon:'bi-envelope-check', text:`Reminder sent to <b>${s.tradie}</b> — ${s.project}`, time:'Just now' });
+    populateFilters(); applyFilters(); renderUrgent(); renderTimeline();
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>Send Reminder';
+  }, 1200);
+}
+
+// Quick Confirm
+function quickConfirm(id) {
+  const s = scheduled.find(x=>x.id===id);
+  if (!s) return;
+  s.status = 'Confirmed';
+  s.reminderSent = s.reminderSent || d(0);
+  showToast(`${s.tradie} marked as confirmed for ${s.project}`,'success');
+  activities.unshift({ type:'done', icon:'bi-check-circle', text:`<b>${s.tradie}</b> confirmed for <b>${s.project}</b>`, time:'Just now' });
+  populateFilters(); applyFilters(); renderUrgent(); renderTimeline(); renderCharts();
+}
+
+// Confirm Status Modal
+function openConfirmStatusModal(id) {
+  const s = scheduled.find(x=>x.id===id);
+  if (!s) return;
+  document.getElementById('confirmStatusTitle').textContent = 'Update Status — ' + s.tradie;
+  const statuses = [
+    { val:'Confirmed', label:'Confirmed', icon:'bi-check-circle', color:'var(--success)', bg:'var(--success-light)', desc:'Tradie confirmed and will attend' },
+    { val:'Pending', label:'Pending Response', icon:'bi-clock', color:'#D97706', bg:'var(--warning-light)', desc:'Awaiting tradie response' },
+    { val:'No Response', label:'No Response', icon:'bi-telephone-x', color:'var(--danger)', bg:'var(--danger-light)', desc:'Multiple attempts, no response' },
+    { val:'Awaiting Materials', label:'Awaiting Materials', icon:'bi-box-seam', color:'var(--info)', bg:'var(--info-light)', desc:'Confirmed but waiting on materials' },
+    { val:'Declined', label:'Declined', icon:'bi-x-circle', color:'var(--danger)', bg:'var(--danger-light)', desc:'Tradie declined the job' },
+    { val:'Completed', label:'Completed', icon:'bi-check2-all', color:'var(--text-tertiary)', bg:'var(--bg-body)', desc:'Work has been completed' },
+  ];
+  document.getElementById('confirmStatusBody').innerHTML = `
+    <div style="margin-bottom:16px;padding:12px;background:var(--bg-body);border-radius:8px;">
+      <div style="font-size:12px;"><b>Current Status:</b> ${statusPill(s.status)}</div>
+      <div style="font-size:12px;color:var(--text-tertiary);margin-top:2px;">${s.project} — ${s.task}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      ${statuses.map(st => `<div class="outcome-btn" onclick="updateStatus(${s.id},'${st.val}')" style="${s.status===st.val?'border-color:'+st.color+';background:'+st.bg:''}">
+        <div class="ob-icon" style="background:${st.bg};color:${st.color};"><i class="bi ${st.icon}"></i></div>
+        <div><div class="ob-text" style="color:${st.color};">${st.label}</div><div class="ob-desc">${st.desc}</div></div>
+        ${s.status===st.val?'<i class="bi bi-check-lg" style="margin-left:auto;color:'+st.color+';"></i>':''}
+      </div>`).join('')}
+    </div>
+  `;
+  document.getElementById('confirmStatusModal').classList.add('show');
+}
+
+function updateStatus(id, status) {
+  const s = scheduled.find(x=>x.id===id);
+  if (s) {
+    s.status = status;
+    if (status === 'Confirmed') s.reminderSent = s.reminderSent || d(0);
+  }
+  closeModal('confirmStatusModal');
+  const types = { 'Confirmed':'success', 'Pending':'warning', 'No Response':'danger', 'Awaiting Materials':'info', 'Declined':'danger', 'Completed':'info' };
+  showToast(`${s.tradie} status updated to ${status}`, types[status]);
+  activities.unshift({ type: status==='Confirmed'?'done':status==='Declined'?'urgent':'warn', icon:'bi-pencil-square', text:`<b>${s.tradie}</b> status changed to <b>${status}</b> — ${s.project}`, time:'Just now' });
+  populateFilters(); applyFilters(); renderUrgent(); renderTimeline(); renderCharts();
+}
+
+// Directory Modal
+function openDirectoryModal() {
+  const trades = [...new Set(tradieDir.map(t=>t.trade))].sort();
+  document.getElementById('directoryBody').innerHTML = `
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <div class="search-box"><i class="bi bi-search"></i><input type="text" placeholder="Search directory..." id="dirSearch" oninput="filterDirectory()" style="width:250px;"></div>
+      <select class="filter-select" id="dirTradeFilter" onchange="filterDirectory()"><option value="all">All Trades</option>${trades.map(t=>`<option>${t}</option>`).join('')}</select>
+      <span style="margin-left:auto;font-size:12px;color:var(--text-tertiary);" id="dirCount">${tradieDir.length} tradies</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;" id="dirGrid">
+      ${tradieDir.map(t => dirCard(t)).join('')}
+    </div>
+  `;
+  document.getElementById('directoryModal').classList.add('show');
+}
+
+function dirCard(t) {
+  return `<div class="tradie-card" onclick="closeModal('directoryModal');openDetailModal(${scheduled.find(s=>s.tradieId===t.id)?.id||0})" data-trade="${t.trade}" data-name="${t.name.toLowerCase()}">
+    <div class="d-flex align-items-center gap-3 mb-2">
+      <div style="width:40px;height:40px;border-radius:10px;background:${t.color};color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">${t.avatar}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;">${t.name}</div>
+        <div style="font-size:11px;color:var(--text-tertiary);">${t.company}</div>
+      </div>
+      <span style="color:var(--warning);font-size:11px;">★ ${t.rating}</span>
+    </div>
+    <div class="d-flex align-items-center justify-content-between" style="font-size:11px;color:var(--text-secondary);">
+      <span class="status-pill pill-gray">${t.trade}</span>
+      <span>$${t.rate}/hr &bull; ${t.jobs} jobs</span>
+    </div>
+  </div>`;
+}
+
+function filterDirectory() {
+  const search = document.getElementById('dirSearch').value.toLowerCase().trim();
+  const trade = document.getElementById('dirTradeFilter').value;
+  const filtered = tradieDir.filter(t => {
+    if (trade !== 'all' && t.trade !== trade) return false;
+    if (search && !t.name.toLowerCase().includes(search) && !t.company.toLowerCase().includes(search) && !t.trade.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  document.getElementById('dirGrid').innerHTML = filtered.map(t => dirCard(t)).join('');
+  document.getElementById('dirCount').textContent = filtered.length + ' tradies';
+  if (filtered.length === 0) {
+    document.getElementById('dirGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-tertiary);">No tradies match your search</div>';
+  }
+}
+
+// ══════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════
+function exportTradieCSV() {
+  const headers = ['Tradie','Company','Trade','Project','Task','Scheduled','Duration','Status','Milestone','Site Manager'];
+  const rows = scheduled.map(s => [s.tradie, s.company, s.trade, s.project, s.task, s.scheduled, s.duration, s.status, s.milestone, s.sm]);
+  let csv = headers.join(',') + '\n' + rows.map(r => r.map(v => '"'+v+'"').join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'BuildPro_Tradie_Schedule_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Tradie schedule exported as CSV','success');
+}
+
+// ══════════════════════════════════════
+// AUTO-UPDATE TIMESTAMP
+// ══════════════════════════════════════
+let updateSec = 0;
+setInterval(() => {
+  updateSec++;
+  const el = document.getElementById('lastUpdated');
+  if (updateSec < 60) el.textContent = 'Updated just now';
+  else if (updateSec < 120) el.textContent = 'Updated 1 min ago';
+  else el.textContent = 'Updated ' + Math.floor(updateSec/60) + ' min ago';
+}, 1000);
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(() => {
+  animateCounters();
+  renderNotifs();
+  populateFilters();
+  renderTabs();
+  renderUrgent();
+  renderTimeline();
+  renderCharts();
+  applyFilters();
+}, 100);
+</script>
+</body>
+</html>

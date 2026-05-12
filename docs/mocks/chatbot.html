@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customer Chatbot - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.12);--accent:#E8730C;--accent-light:#FFF3E0;--success:#16A34A;--success-light:#DCFCE7;--danger:#DC2626;--danger-light:#FEE2E2;--warning:#F59E0B;--warning-light:#FEF9C3;--info:#2563EB;--info-light:#DBEAFE;--purple:#7C3AED;--purple-light:#EDE9FE;--bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;--bg-chat:#F8FAFC;--text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;--border-color:#E2E8F0;--border-light:#F1F5F9;--shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);--sidebar-bg:#0F172A;--sidebar-width:64px;--transition:all .2s cubic-bezier(.4,0,.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#94A3B8}
+.wrapper{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}
+.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}
+.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}
+.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}
+.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}
+.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}
+.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}
+.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}
+@media(max-width:768px){.sidebar-tooltip{display:none}}
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}
+.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px}
+.header-menu a:hover{color:rgba(255,255,255,.9)}
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+.content-container{padding:12px;max-width:1600px;margin:0 auto;width:100%;height:calc(100vh - 54px - 37px);display:flex;flex-direction:column;overflow:hidden}
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}
+.pill-success{background:rgba(22,163,74,.08);color:var(--success)}.pill-warning{background:rgba(245,158,11,.08);color:#D97706}.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}.pill-info{background:rgba(37,99,235,.08);color:var(--info)}.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.notification-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;background:var(--danger);border-radius:99px;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg)}
+.notification-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:360px;background:white;border-radius:10px;box-shadow:var(--shadow-lg);z-index:1001;display:none;border:1px solid var(--border-color);overflow:hidden}
+.notification-dropdown.show{display:block;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notification-header{padding:14px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.notification-mark-all{font-size:11.5px;color:var(--primary);cursor:pointer;font-weight:600}
+.notification-item{padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s;display:flex;align-items:flex-start;gap:10px}
+.notification-item:hover{background:var(--bg-hover)}.notification-item.unread{background:rgba(13,148,136,.03)}
+.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.notif-msg{font-size:12.5px;line-height:1.4}.notif-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.notif-dismiss{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);cursor:pointer;opacity:0;transition:var(--transition);flex-shrink:0;font-size:10px;border:none;background:none}
+.notification-item:hover .notif-dismiss{opacity:1}
+.notif-dismiss:hover{background:var(--danger-light);color:var(--danger)}
+.notification-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--border-color)}
+.notification-view-all{font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600}
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}
+.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}
+.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+
+/* ── Chat Layout ── */
+.chat-layout{display:grid;grid-template-columns:270px 1fr 290px;gap:10px;flex:1;min-height:0;overflow:hidden}
+@media(max-width:1200px){.chat-layout{grid-template-columns:1fr}.chat-sidebar,.chat-settings{display:none}}
+
+/* ── Sidebar ── */
+.chat-sidebar{background:var(--bg-card);border-radius:12px;border:1px solid var(--border-color);display:flex;flex-direction:column;overflow:hidden}
+.chat-sidebar-header{padding:12px 14px;border-bottom:1px solid var(--border-color);flex-shrink:0}
+.chat-sidebar-search{width:100%;padding:7px 12px 7px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12px;background:var(--bg-body);color:var(--text-primary);outline:none;font-family:inherit;transition:var(--transition)}
+.chat-sidebar-search:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.customer-list{flex:1;overflow-y:auto;padding:4px}
+.customer-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:var(--transition);position:relative;border-left:3px solid transparent}
+.customer-item:hover{background:var(--bg-hover)}
+.customer-item.active{background:var(--primary-glow);border-left-color:var(--primary)}
+.customer-avatar{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;color:white;position:relative}
+.customer-info{flex:1;min-width:0}
+.customer-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.customer-preview{font-size:10.5px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.customer-meta{display:flex;justify-content:space-between;align-items:center;margin-top:2px}
+.customer-time{font-size:10px;color:var(--text-tertiary)}
+.unread-badge{min-width:18px;height:18px;border-radius:99px;background:var(--primary);color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;flex-shrink:0}
+.online-dot{position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;background:var(--success);border:2px solid var(--bg-card)}
+
+/* ── Chat Main ── */
+.chat-main{background:var(--bg-card);border-radius:12px;border:1px solid var(--border-color);display:flex;flex-direction:column;overflow:hidden}
+.chat-header{padding:12px 18px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:white}
+.chat-header-info{display:flex;align-items:center;gap:10px}
+.chat-header-avatar{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:white}
+.chat-header-name{font-size:14px;font-weight:700}
+.chat-header-project{font-size:11px;color:var(--text-tertiary)}
+.chat-header-status{display:flex;align-items:center;gap:5px}
+.chat-header-dot{width:7px;height:7px;border-radius:50%}
+.chat-header-dot.online{background:var(--success);box-shadow:0 0 0 2px rgba(22,163,74,.2)}
+.chat-header-dot.offline{background:var(--text-tertiary)}
+.chat-header-status-text{font-size:10.5px;color:var(--text-tertiary)}
+.chat-body{flex:1;overflow-y:auto;padding:16px 18px;background:var(--bg-chat);display:flex;flex-direction:column;gap:4px}
+.chat-footer{padding:12px 18px;border-top:1px solid var(--border-color);background:white;flex-shrink:0}
+.chat-input-row{display:flex;gap:8px;align-items:flex-end}
+.chat-input-wrap{flex:1;position:relative}
+.chat-input{width:100%;padding:10px 14px;padding-right:80px;border:1px solid var(--border-color);border-radius:10px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition);resize:none;line-height:1.4;min-height:42px;max-height:100px}
+.chat-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.chat-input-actions{position:absolute;right:6px;bottom:6px;display:flex;gap:2px}
+.chat-input-action{width:28px;height:28px;border-radius:6px;border:none;background:transparent;color:var(--text-tertiary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition);font-size:14px}
+.chat-input-action:hover{background:var(--bg-body);color:var(--text-secondary)}
+.chat-send{width:42px;height:42px;border-radius:10px;border:none;background:var(--primary);color:white;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:var(--transition);flex-shrink:0}
+.chat-send:hover{background:var(--primary-dark);transform:scale(1.05)}
+.chat-send:disabled{background:#CBD5E1;cursor:not-allowed;transform:none}
+.quick-actions{display:flex;gap:5px;margin-top:8px;overflow-x:auto;padding-bottom:2px}
+.quick-btn{padding:4px 10px;border:1px solid var(--border-color);background:var(--bg-card);border-radius:20px;font-size:11px;font-weight:600;color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-family:inherit;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+.quick-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+
+/* ── Message Types ── */
+.msg-row{display:flex;gap:8px;max-width:82%;animation:msgIn .3s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.msg-row.user{flex-direction:row-reverse;align-self:flex-end}
+.msg-row.bot{align-self:flex-start}
+.msg-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;margin-top:2px}
+.msg-avatar.bot{background:var(--primary);color:white}
+.msg-avatar.human{background:var(--accent);color:white}
+.msg-content{min-width:0}
+.msg-bubble{padding:10px 14px;font-size:13px;line-height:1.55}
+.msg-bubble.bot{background:white;border:1px solid var(--border-color);border-radius:2px 14px 14px 14px;box-shadow:var(--shadow-sm)}
+.msg-bubble.user{background:var(--primary);color:white;border-radius:14px 2px 14px 14px}
+.msg-meta{display:flex;align-items:center;gap:6px;margin-top:3px;padding:0 4px}
+.msg-row.user .msg-meta{justify-content:flex-end}
+.msg-time{font-size:10px;color:var(--text-tertiary)}
+.msg-read{font-size:11px;color:var(--primary)}
+.msg-reactions{display:flex;gap:2px;margin-top:2px}
+.msg-reaction{width:22px;height:22px;border-radius:99px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:var(--transition)}
+.msg-reaction:hover{border-color:var(--primary);background:var(--primary-glow);transform:scale(1.15)}
+.msg-reaction.active{border-color:var(--primary);background:var(--primary-light)}
+
+/* System message */
+.msg-system{text-align:center;padding:6px 0}
+.msg-system-inner{display:inline-block;background:var(--purple-light);color:var(--purple);border-radius:6px;font-size:11px;font-weight:500;padding:5px 14px}
+
+/* Typing indicator */
+.typing-indicator{display:flex;gap:8px;max-width:82%;align-self:flex-start;animation:msgIn .3s ease}
+.typing-dots{background:white;border:1px solid var(--border-color);border-radius:2px 14px 14px 14px;padding:12px 16px;box-shadow:var(--shadow-sm);display:flex;align-items:center;gap:4px}
+.typing-dots span{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);animation:typingBounce 1.4s infinite}
+.typing-dots span:nth-child(2){animation-delay:.2s}
+.typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+.customer-typing{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px;color:var(--text-tertiary);animation:fadeInOut 3s ease forwards}
+@keyframes fadeInOut{0%{opacity:0}10%{opacity:1}85%{opacity:1}100%{opacity:0}}
+
+/* ── Rich Chat Components ── */
+.chat-table{width:100%;border-collapse:collapse;margin:8px 0;font-size:11.5px}
+.chat-table th{text-align:left;padding:5px 8px;background:var(--bg-body);color:var(--text-tertiary);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.03em;border:1px solid var(--border-color)}
+.chat-table td{padding:5px 8px;border:1px solid var(--border-light);font-weight:500}
+.chat-progress{height:6px;background:var(--border-color);border-radius:3px;overflow:hidden;margin:6px 0}
+.chat-progress-fill{height:100%;border-radius:3px;background:var(--primary);transition:width .6s ease}
+.chat-pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:600;margin:1px 2px}
+
+/* Quote Card */
+.quote-card{background:var(--bg-body);border:1px solid var(--border-color);border-radius:10px;overflow:hidden;margin:8px 0}
+.quote-card-header{padding:10px 12px;background:var(--bg-card);border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.quote-card-header-title{font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
+.quote-card-body{padding:10px 12px}
+.quote-card-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border-light)}
+.quote-card-row:last-child{border-bottom:none}
+.quote-card-row-label{color:var(--text-tertiary)}
+.quote-card-row-value{font-weight:600}
+.quote-card-footer{padding:10px 12px;border-top:1px solid var(--border-color);display:flex;gap:6px;background:var(--bg-card)}
+.quote-card-btn{flex:1;padding:7px;border-radius:7px;border:none;font-size:11.5px;font-weight:600;cursor:pointer;transition:var(--transition);font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px}
+.quote-card-btn.approve{background:var(--success);color:white}
+.quote-card-btn.approve:hover{background:#15803D}
+.quote-card-btn.reject{background:var(--bg-body);color:var(--danger);border:1px solid var(--border-color)}
+.quote-card-btn.reject:hover{background:var(--danger-light);border-color:transparent}
+.quote-card-btn.view{background:var(--primary);color:white}
+.quote-card-btn.view:hover{background:var(--primary-dark)}
+
+/* Image Card */
+.img-card{margin:8px 0;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);cursor:pointer;transition:var(--transition)}
+.img-card:hover{box-shadow:var(--shadow-md)}
+.img-card img{width:100%;height:140px;object-fit:cover;display:block}
+.img-card-caption{padding:8px 10px;font-size:11px;color:var(--text-secondary);background:var(--bg-card);display:flex;justify-content:space-between;align-items:center}
+
+/* File Card */
+.file-card{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;margin:6px 0;cursor:pointer;transition:var(--transition)}
+.file-card:hover{border-color:var(--primary);background:var(--primary-glow)}
+.file-card-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.file-card-info{flex:1;min-width:0}
+.file-card-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-card-size{font-size:10px;color:var(--text-tertiary)}
+
+/* Satisfaction Rating */
+.satisfaction-card{text-align:center;padding:12px;margin:8px 0;background:var(--bg-body);border-radius:10px;border:1px solid var(--border-color)}
+.satisfaction-card-title{font-size:12px;font-weight:600;margin-bottom:8px}
+.satisfaction-stars{display:flex;gap:4px;justify-content:center}
+.satisfaction-star{font-size:22px;color:var(--border-color);cursor:pointer;transition:var(--transition)}
+.satisfaction-star:hover,.satisfaction-star.active{color:var(--warning);transform:scale(1.2)}
+.satisfaction-star.filled{color:var(--warning)}
+
+/* Progress Card */
+.progress-card{background:var(--bg-body);border:1px solid var(--border-color);border-radius:10px;padding:12px;margin:8px 0}
+.progress-card-title{font-size:12px;font-weight:700;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.milestone-item{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:11.5px}
+.milestone-dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--border-color);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;color:transparent;transition:var(--transition)}
+.milestone-dot.done{background:var(--success);border-color:var(--success);color:white}
+.milestone-dot.current{border-color:var(--primary);background:var(--primary-glow);color:var(--primary);animation:pulseDot 2s infinite}
+@keyframes pulseDot{0%,100%{box-shadow:0 0 0 0 rgba(13,148,136,.3)}50%{box-shadow:0 0 0 6px rgba(13,148,136,0)}}
+.milestone-line{width:2px;height:12px;background:var(--border-color);margin-left:8px}
+.milestone-line.done{background:var(--success)}
+
+/* ── Settings Panel ── */
+.chat-settings{background:var(--bg-card);border-radius:12px;border:1px solid var(--border-color);display:flex;flex-direction:column;overflow:hidden}
+.chat-settings-scroll{flex:1;overflow-y:auto;padding:14px}
+.setting-group{margin-bottom:16px}
+.setting-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);margin-bottom:6px}
+.setting-toggle{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-light);cursor:pointer}
+.setting-toggle:last-child{border-bottom:none}
+.setting-toggle-label{font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:6px;color:var(--text-secondary)}
+.toggle-switch{width:34px;height:18px;border-radius:9px;background:#CBD5E1;position:relative;cursor:pointer;transition:var(--transition);flex-shrink:0}
+.toggle-switch.on{background:var(--primary)}
+.toggle-switch::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:white;transition:var(--transition);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.toggle-switch.on::after{left:18px}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-light)}
+.stat-row:last-child{border-bottom:none}
+.stat-row-label{font-size:11.5px;color:var(--text-secondary)}
+.stat-row-value{font-size:12px;font-weight:700}
+
+/* ── Toast ── */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:300px;animation:toastIn .3s ease}
+.toast-item.removing{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.toast-msg{flex:1;font-size:12.5px;font-weight:500}
+.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:15px;padding:0}
+.toast-close:hover{color:var(--text-primary)}
+
+/* ── Modal ── */
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center}
+.modal-backdrop-custom.show{display:flex;animation:fadeIn .2s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:90%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:18px 22px 14px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.modal-body-custom{padding:18px 22px}
+.modal-close{width:30px;height:30px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:14px}
+.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+
+/* ── Image Lightbox ── */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:3000;display:none;align-items:center;justify-content:center;cursor:pointer}
+.lightbox.show{display:flex;animation:fadeIn .2s}
+.lightbox img{max-width:90%;max-height:85vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.lightbox-close{position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);border:none;color:white;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition)}
+.lightbox-close:hover{background:rgba(255,255,255,.25)}
+.lightbox-caption{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.8);font-size:13px;font-weight:500;background:rgba(0,0,0,.5);padding:8px 16px;border-radius:8px}
+
+/* Incoming message sound indicator */
+.incoming-pulse{animation:incomingPulse 1s ease}
+@keyframes incomingPulse{0%{box-shadow:0 0 0 0 rgba(13,148,136,.4)}70%{box-shadow:0 0 0 10px rgba(13,148,136,0)}100%{box-shadow:0 0 0 0 rgba(13,148,136,0)}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon active" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+<div class="main-panel">
+<header class="top-header">
+  <div class="d-flex align-items-center gap-3">
+    <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+    <nav class="header-menu d-none d-lg-block"><a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a></nav>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+    <div class="position-relative">
+      <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7)" onclick="toggleNotif()" id="notifBtn"><i class="bi bi-bell"></i><span class="notification-badge" id="notifCount">3</span></button>
+      <div class="notification-dropdown" id="notifDrop">
+        <div class="notification-header"><div style="font-size:13px;font-weight:700">Notifications</div><div class="notification-mark-all" onclick="markAllRead()">Mark all read</div></div>
+        <div id="notifList"></div>
+        <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notifications...','info');return false">View all</a></div>
+      </div>
+    </div>
+    <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+  </div>
+</header>
+<div class="sub-header"><i class="bi bi-house me-1" style="font-size:11px"></i><span>Home</span><span class="mx-2" style="color:var(--border-color)">/</span><span style="font-weight:600;color:var(--text-primary)">Customer Chatbot</span><span style="margin-left:auto;font-size:11px;color:var(--text-tertiary)" id="convCount">5 active conversations</span></div>
+<div class="content-container">
+<div class="chat-layout">
+
+  <!-- Customer List -->
+  <div class="chat-sidebar">
+    <div class="chat-sidebar-header">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:12.5px;font-weight:700">Conversations</span>
+        <span class="status-pill pill-success" style="font-size:9.5px" id="botStatusPill"><i class="bi bi-circle-fill me-1" style="font-size:5px"></i>Active</span>
+      </div>
+      <div style="position:relative"><i class="bi bi-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:11px"></i><input class="chat-sidebar-search" placeholder="Search customers..." id="custSearch" oninput="filterCustomers()"></div>
+    </div>
+    <div class="customer-list" id="customerList"></div>
+  </div>
+
+  <!-- Chat Main -->
+  <div class="chat-main" id="chatMain">
+    <div class="chat-header" id="chatHeader"></div>
+    <div class="chat-body" id="chatBody"></div>
+    <div class="chat-footer" id="chatFooter">
+      <div class="quick-actions" id="quickActions"></div>
+      <div class="chat-input-row" style="margin-top:6px">
+        <div class="chat-input-wrap">
+          <input class="chat-input" placeholder="Type your message..." id="chatInput" onkeydown="handleInputKey(event)" oninput="autoResize(this)">
+          <div class="chat-input-actions">
+            <button class="chat-input-action" title="Attach file" onclick="showToast('File attachment simulated — PDF sent','success')"><i class="bi bi-paperclip"></i></button>
+            <button class="chat-input-action" title="Send image" onclick="sendImage()"><i class="bi bi-image"></i></button>
+          </div>
+        </div>
+        <button class="chat-send" id="sendBtn" onclick="sendMessage()"><i class="bi bi-send-fill"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="chat-settings">
+    <div style="padding:12px 14px;border-bottom:1px solid var(--border-color);flex-shrink:0">
+      <div class="section-heading" style="margin-bottom:0;font-size:11px">Bot Configuration</div>
+    </div>
+    <div class="chat-settings-scroll">
+      <div class="setting-group">
+        <div class="setting-label">General</div>
+        <div class="setting-toggle" onclick="toggleSetting('status')">
+          <span class="setting-toggle-label"><i class="bi bi-power"></i> Bot Online</span>
+          <div class="toggle-switch on" id="toggle-status"></div>
+        </div>
+        <div class="setting-toggle">
+          <span class="setting-toggle-label"><i class="bi bi-translate"></i> Language</span>
+          <select style="border:1px solid var(--border-color);border-radius:6px;padding:3px 22px 3px 8px;font-size:11.5px;font-family:inherit;background:var(--bg-card);color:var(--text-primary);outline:none;cursor:pointer;appearance:none;background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;);background-repeat:no-repeat;background-position:right 6px center" id="langSelect" onchange="showToast('Language changed to: '+this.value,'info')"><option>English + Punjabi</option><option>English Only</option><option>Punjabi Only</option></select>
+        </div>
+        <div class="setting-toggle">
+          <span class="setting-toggle-label"><i class="bi bi-clock"></i> Response Delay</span>
+          <select style="border:1px solid var(--border-color);border-radius:6px;padding:3px 22px 3px 8px;font-size:11.5px;font-family:inherit;background:var(--bg-card);color:var(--text-primary);outline:none;cursor:pointer;appearance:none;background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;);background-repeat:no-repeat;background-position:right 6px center" id="delaySelect" onchange="showToast('Response delay set to '+this.value,'info')"><option>Instant (0.5s)</option><option selected>Realistic (1-2s)</option><option>Slow (3-4s)</option></select>
+        </div>
+      </div>
+      <div class="setting-group">
+        <div class="setting-label">Capabilities</div>
+        <div class="setting-toggle" onclick="toggleSetting('projectStatus')"><span class="setting-toggle-label"><i class="bi bi-building"></i> Project Status</span><div class="toggle-switch on" id="toggle-projectStatus"></div></div>
+        <div class="setting-toggle" onclick="toggleSetting('payments')"><span class="setting-toggle-label"><i class="bi bi-cash-stack"></i> Payment Info</span><div class="toggle-switch on" id="toggle-payments"></div></div>
+        <div class="setting-toggle" onclick="toggleSetting('tradieSched')"><span class="setting-toggle-label"><i class="bi bi-tools"></i> Tradie Schedules</span><div class="toggle-switch on" id="toggle-tradieSched"></div></div>
+        <div class="setting-toggle" onclick="toggleSetting('materialCat')"><span class="setting-toggle-label"><i class="bi bi-box-seam"></i> Material Catalogue</span><div class="toggle-switch" id="toggle-materialCat"></div></div>
+        <div class="setting-toggle" onclick="toggleSetting('variations')"><span class="setting-toggle-label"><i class="bi bi-arrow-rotate-right"></i> Variations</span><div class="toggle-switch on" id="toggle-variations"></div></div>
+        <div class="setting-toggle" onclick="toggleSetting('escalation')"><span class="setting-toggle-label"><i class="bi bi-person-raised-hand"></i> Escalation</span><div class="toggle-switch on" id="toggle-escalation"></div></div>
+        <div class="setting-toggle" onclick="toggleSetting('photos')"><span class="setting-toggle-label"><i class="bi bi-camera"></i> Site Photos</span><div class="toggle-switch on" id="toggle-photos"></div></div>
+      </div>
+      <div class="setting-group">
+        <div class="setting-label">Quick Triggers</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg-body);border-radius:5px;font-size:11px"><code style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:1px 5px;border-radius:3px;font-size:10px">status</code><span style="color:var(--text-tertiary)">→ Milestone progress</span></div>
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg-body);border-radius:5px;font-size:11px"><code style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:1px 5px;border-radius:3px;font-size:10px">payment</code><span style="color:var(--text-tertiary)">→ Bills & invoices</span></div>
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg-body);border-radius:5px;font-size:11px"><code style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:1px 5px;border-radius:3px;font-size:10px">when</code><span style="color:var(--text-tertiary)">→ Tradie schedule</span></div>
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg-body);border-radius:5px;font-size:11px"><code style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:1px 5px;border-radius:3px;font-size:10px">cost</code><span style="color:var(--text-tertiary)">→ Budget vs actual</span></div>
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg-body);border-radius:5px;font-size:11px"><code style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:1px 5px;border-radius:3px;font-size:10px">variation</code><span style="color:var(--text-tertiary)">→ Change requests</span></div>
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg-body);border-radius:5px;font-size:11px"><code style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:1px 5px;border-radius:3px;font-size:10px">photo</code><span style="color:var(--text-tertiary)">→ Latest site photos</span></div>
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg-body);border-radius:5px;font-size:11px"><code style="color:var(--primary);font-weight:600;background:var(--primary-light);padding:1px 5px;border-radius:3px;font-size:10px">material</code><span style="color:var(--text-tertiary)">→ Browse catalogue</span></div>
+        </div>
+      </div>
+      <div class="setting-group">
+        <div class="setting-label">Analytics (This Month)</div>
+        <div class="stat-row"><span class="stat-row-label">Conversations</span><span class="stat-row-value" id="statTotal">47</span></div>
+        <div class="stat-row"><span class="stat-row-label">Bot Resolved</span><span class="stat-row-value" style="color:var(--success)" id="statBot">38 (81%)</span></div>
+        <div class="stat-row"><span class="stat-row-label">Escalated</span><span class="stat-row-value" style="color:var(--warning)" id="statEsc">9 (19%)</span></div>
+        <div class="stat-row"><span class="stat-row-label">Avg Response</span><span class="stat-row-value" style="color:var(--primary)">&lt; 2 sec</span></div>
+        <div class="stat-row"><span class="stat-row-label">Satisfaction</span><span class="stat-row-value" style="color:var(--warning)"><i class="bi bi-star-fill" style="font-size:10px"></i> 4.6/5</span></div>
+        <div class="stat-row"><span class="stat-row-label">Top Query</span><span class="stat-row-value" style="color:var(--primary)">Status</span></div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-outline-custom" style="flex:1;justify-content:center;display:flex;align-items:center;gap:5px;font-size:11.5px;padding:6px 10px" onclick="exportChat()"><i class="bi bi-download"></i>Export</button>
+        <button class="btn-outline-custom" style="flex:1;justify-content:center;display:flex;align-items:center;gap:5px;font-size:11.5px;padding:6px 10px" onclick="clearChat()"><i class="bi bi-trash3"></i>Clear</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+</div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close"><i class="bi bi-x-lg"></i></button>
+  <img id="lightboxImg" src="" alt="">
+  <div class="lightbox-caption" id="lightboxCaption"></div>
+</div>
+
+<!-- Escalation Modal -->
+<div class="modal-backdrop-custom" id="escalModal">
+  <div class="modal-content-custom">
+    <div class="modal-header-custom"><h4 style="font-size:15px;font-weight:700">Escalate to Guri Singh</h4><button class="modal-close" onclick="closeModal('escalModal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body-custom" id="escalBody"></div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+const siteImages = [
+  {url:'https://picsum.photos/seed/penrith1/600/300.jpg',caption:'Penrith — Frame Stage Progress, 5 Jul 2025'},
+  {url:'https://picsum.photos/seed/penrith2/600/300.jpg',caption:'Penrith — Brickwork Ground Floor, 3 Jul 2025'},
+  {url:'https://picsum.photos/seed/parramatta1/600/300.jpg',caption:'Parramatta — Lockup Stage, External View'},
+  {url:'https://picsum.photos/seed/blacktown1/600/300.jpg',caption:'Blacktown — Slab Pour in Progress, 15 Jul 2025'},
+  {url:'https://picsum.photos/seed/castlehill1/600/300.jpg',caption:'Castle Hill — Design Concept, Front Elevation'},
+  {url:'https://picsum.photos/seed/liverpool1/600/300.jpg',caption:'Liverpool — Foundation Excavation, 10 Jul 2025'},
+];
+
+const customers = [
+  {id:1,name:"Harpreet Kaur",project:"Penrith Residence",stage:"Frame Stage",progress:65,color:"var(--primary)",initials:"HK",lastMsg:"Thanks! That's all for now.",time:"2:34 PM",unread:0,online:true,
+    data:{budget:485000,spent:312400,payments:[{stage:"Deposit",amount:26675,status:"Paid",date:"10 Feb 2025"},{stage:"Slab Stage",amount:53350,status:"Paid",date:"15 Mar 2025"},{stage:"Base Stage",amount:80025,status:"Paid",date:"28 Apr 2025"},{stage:"Frame Stage",amount:106700,status:"Pending",date:"Due 15 Jul 2025"}],milestones:[{name:"Site Preparation",status:"done"},{name:"Slab Lay",status:"done"},{name:"Base Stage",status:"done"},{name:"Frame Stage",status:"current",pct:65},{name:"Lockup Stage",status:"pending"},{name:"Fit-out",status:"pending"},{name:"Practical Completion",status:"pending"},{name:"Handover",status:"pending"}],nextTradie:{name:"Flow Right Plumbing",task:"First fix — water & waste lines, ground floor",date:"Started today, until 12 Jul"},variations:[{id:101,desc:"Kitchen countertop upgrade to Calacatta marble",amount:4500,status:"Approved",date:"20 Jun 2025"}],images:[siteImages[0],siteImages[1]],quotePending:false},
+    chat:[
+      {from:'system',text:'Conversation started — Penrith Residence'},
+      {from:'bot',text:'Sat Sri Akal! I\'m the BuildPro assistant for your Penrith Residence project. How can I help you today?',time:'2:20 PM'},
+      {from:'user',text:'Hi, can you tell me the status of my house?',time:'2:21 PM',read:true},
+      {from:'bot',type:'progress',text:'Your Penrith Residence is currently at Frame Stage (65% complete).',milestones:'penrith',time:'2:21 PM'},
+      {from:'bot',text:'Recent activity on site:\n\n• Frame inspection passed on 5 Jul\n• Brickwork completed on ground floor\n• Electrical rough-in started today\n• Plumber arriving this afternoon\n\n<b>Next milestone:</b> Lockup Stage (target: Sep 2025)',time:'2:21 PM'},
+      {from:'user',text:'Can I see photos from the site?',time:'2:22 PM',read:true},
+      {from:'bot',type:'images',images:[siteImages[0],siteImages[1]],time:'2:22 PM'},
+      {from:'bot',text:'These photos were uploaded by your site manager <b>Amrit Singh</b> this week. I can send you photos from any milestone — just ask!',time:'2:22 PM'},
+      {from:'user',text:'What about my payment status?',time:'2:28 PM',read:true},
+      {from:'bot',type:'payment',time:'2:28 PM'},
+      {from:'user',text:'When is the plumber coming?',time:'2:30 PM',read:true},
+      {from:'bot',text:'<b>Flow Right Plumbing</b> is starting <b>today!</b>\n\nThey\'ll be working on first fix — water and waste lines for the ground floor. Expected to continue until <b>12 Jul</b>.\n\nYour site manager Amrit will be on-site to coordinate.',time:'2:30 PM'},
+      {from:'user',text:'Thanks! That\'s all for now.',time:'2:34 PM',read:true},
+      {from:'bot',text:'Koi gall nai, Harpreet! Feel free to message anytime. Your dream home is coming along nicely! 🏗️',time:'2:34 PM'},
+    ]
+  },
+  {id:2,name:"David Chen",project:"Parramatta Home",stage:"Lockup Stage",progress:78,color:"var(--info)",initials:"DC",lastMsg:"I want to approve the kitchen variation",time:"1:15 PM",unread:3,online:true,
+    data:{budget:550000,spent:410000,payments:[{stage:"Deposit",amount:30250,status:"Paid",date:"1 Nov 2024"},{stage:"Slab",amount:60500,status:"Paid",date:"15 Dec 2024"},{stage:"Base",amount:90750,status:"Paid",date:"20 Feb 2025"},{stage:"Frame",amount:121000,status:"Paid",date:"10 Apr 2025"},{stage:"Lockup",amount:151250,status:"Partial",partialAmt:75625,date:"Partial paid 1 Jun 2025"}],milestones:[{name:"Site Prep",status:"done"},{name:"Slab",status:"done"},{name:"Base",status:"done"},{name:"Frame",status:"done"},{name:"Lockup",status:"current",pct:78},{name:"Fit-out",status:"pending"},{name:"Handover",status:"pending"}],nextTradie:{name:"Elite Interiors",task:"Fit-out — kitchen, bathrooms, flooring",date:"Starting 28 Jul 2025"},variations:[{id:201,desc:"Extended alfresco by 2m with additional footings",amount:5800,status:"Approved",date:"15 May 2025"},{id:202,desc:"Kitchen upgrade — stone benchtop + splashback",amount:3200,status:"Pending Approval",date:"Sent 10 Jul 2025",quoteNum:"VAR-2025-008"}],images:[siteImages[2]],quotePending:true},
+    chat:[
+      {from:'system',text:'Conversation started — Parramatta Home'},
+      {from:'bot',text:'Sat Sri Akal! I\'m the BuildPro assistant for your Parramatta Home. How can I help?',time:'12:50 PM'},
+      {from:'user',text:'Any variations on my project?',time:'12:51 PM',read:true},
+      {from:'bot',type:'variation',time:'12:51 PM'},
+      {from:'user',text:'Send me the kitchen variation quote',time:'1:00 PM',read:true},
+      {from:'bot',type:'quote',variationId:202,time:'1:00 PM'},
+      {from:'bot',text:'Please review the quote above. You can <b>Approve</b> or <b>Request Changes</b> directly here. Once approved, Guri will be notified and the fit-out team will be updated.',time:'1:01 PM'},
+      {from:'user',text:'I want to approve the kitchen variation',time:'1:15 PM',read:false},
+    ]
+  },
+  {id:3,name:"Sukhwinder Singh",project:"Blacktown Duplex",stage:"Slab Stage",progress:42,color:"var(--purple)",initials:"SS",lastMsg:"What's my total cost so far?",time:"11:40 AM",unread:1,online:false,
+    data:{budget:380000,spent:198600,payments:[{stage:"Deposit",amount:20900,status:"Paid",date:"15 Mar 2025"},{stage:"Slab Stage",amount:41800,status:"Paid",date:"10 May 2025"},{stage:"Base Stage",amount:62700,status:"Pending",date:"Due 25 Jul 2025"}],milestones:[{name:"Site Prep",status:"done"},{name:"Slab",status:"current",pct:42},{name:"Base",status:"pending"},{name:"Frame",status:"pending"},{name:"Lockup",status:"pending"},{name:"Handover",status:"pending"}],nextTradie:{name:"Concrete NSW Pro",task:"Slab completion — pour and cure",date:"Completion by 25 Jul 2025"},variations:[],images:[siteImages[3]],quotePending:false},
+    chat:[
+      {from:'system',text:'Conversation started — Blacktown Duplex'},
+      {from:'bot',text:'Sat Sri Akal! I\'m the BuildPro assistant for your Blacktown Duplex. How can I help?',time:'11:30 AM'},
+      {from:'user',text:'What\'s my total cost so far?',time:'11:40 AM',read:false},
+    ]
+  },
+  {id:4,name:"Rajesh Kumar",project:"Castle Hill Villa",stage:"Design Phase",progress:12,color:"var(--accent)",initials:"RK",lastMsg:"I want to change the kitchen layout",time:"Yesterday",unread:0,online:false,
+    data:{budget:620000,spent:45200,payments:[{stage:"Deposit",amount:34100,status:"Paid",date:"1 Jun 2025"}],milestones:[{name:"Design",status:"current",pct:12},{name:"Govt Approval",status:"pending"},{name:"Slab",status:"pending"},{name:"Frame",status:"pending"},{name:"Handover",status:"pending"}],nextTradie:{name:"Architect Mike Thompson",task:"Complete building sketches",date:"Expected by 25 Jul 2025"},variations:[],images:[siteImages[4]],quotePending:false},
+    chat:[
+      {from:'system',text:'Conversation started — Castle Hill Villa'},
+      {from:'bot',text:'Sat Sri Akal! I\'m the BuildPro assistant for your Castle Hill Villa. How can I help?',time:'Yesterday 3:10 PM'},
+      {from:'user',text:'I want to change the kitchen layout',time:'Yesterday 3:12 PM',read:true},
+      {from:'bot',text:'Noted! Since your project is in the <b>Design Phase</b>, this is the best time for changes. I\'ve escalated this to Guri and architect <b>Mike Thompson</b>. Revised plans should be ready in 5-7 working days.\n\nWould you like to browse the material catalogue for kitchen options?',time:'Yesterday 3:12 PM'},
+      {from:'user',text:'Yes please send the catalogue',time:'Yesterday 3:15 PM',read:true},
+      {from:'bot',text:'Sorry, the <b>Material Catalogue</b> feature is currently disabled by Guri. I can escalate this request — shall I?',time:'Yesterday 3:15 PM'},
+      {from:'user',text:'Yes escalate it',time:'Yesterday 3:16 PM',read:true},
+      {from:'bot',type:'escalated',text:'Escalation sent to Guri Singh. He\'ll receive a notification and get back to you within 24 hours.\n\nReference: <b>ESC-2025-034</b>\nCategory: Material Catalogue Access\nPriority: Normal',time:'Yesterday 3:16 PM'},
+    ]
+  },
+  {id:5,name:"Manjit Brar",project:"Liverpool Estate",stage:"Foundation",progress:18,color:"var(--success)",initials:"MB",lastMsg:"When will handover happen?",time:"2 days ago",unread:0,online:true,
+    data:{budget:720000,spent:89000,payments:[{stage:"Deposit",amount:39600,status:"Paid",date:"20 May 2025"},{stage:"Foundation",amount:79200,status:"Pending",date:"Due 20 Jul 2025"}],milestones:[{name:"Foundation",status:"current",pct:18},{name:"Slab",status:"pending"},{name:"Frame",status:"pending"},{name:"Lockup",status:"pending"},{name:"Fit-out",status:"pending"},{name:"Handover",status:"pending"}],nextTradie:{name:"Wagners Concrete",task:"Foundation pour — 80m² slab",date:"Scheduled 20 Jul 2025"},variations:[],images:[siteImages[5]],quotePending:false},
+    chat:[
+      {from:'system',text:'Conversation started — Liverpool Estate'},
+      {from:'bot',text:'Sat Sri Akal! I\'m the BuildPro assistant for your Liverpool Estate. How can I help?',time:'2 days ago 10:00 AM'},
+      {from:'user',text:'When will handover happen?',time:'2 days ago 10:05 AM',read:true},
+      {from:'bot',text:'Based on current progress, estimated handover for Liverpool Estate is <b>June 2026</b>.\n\nCurrent stage: Foundation (18%). Remaining milestones:\n\n• Foundation → Slab: Aug 2025\n• Slab → Frame: Oct 2025\n• Frame → Lockup: Jan 2026\n• Lockup → Fit-out: Mar 2026\n• Fit-out → Handover: <b>Jun 2026</b>\n\nThis estimate may shift with variations or weather delays.',time:'2 days ago 10:05 AM'},
+      {from:'user',text:'Show me latest photos',time:'2 days ago 10:08 AM',read:true},
+      {from:'bot',type:'images',images:[siteImages[5]],time:'2 days ago 10:08 AM'},
+      {from:'bot',text:'This was uploaded by site manager <b>Jasbir Kaur</b> on 10 Jul. Foundation excavation is well underway!',time:'2 days ago 10:08 PM'},
+    ]
+  },
+];
+
+let settings = {status:true,projectStatus:true,payments:true,tradieSched:true,materialCat:false,variations:true,escalation:true,photos:true};
+let activeCustomer = 1;
+let chatStats = {total:47,bot:38,esc:9};
+let isTyping = false;
+let incomingMsgTimers = [];
+
+const notifData = [
+  {id:1,icon:"bi-chat-dots",bg:"var(--primary-light)",color:"var(--primary)",msg:"David Chen wants to approve kitchen variation — 3 unread",time:"15 min ago",unread:true},
+  {id:2,icon:"bi-person-raised-hand",bg:"var(--warning-light)",color:"#D97706",msg:"Rajesh Kumar catalogue request escalated — awaiting Guri",time:"Yesterday",unread:true},
+  {id:3,icon:"bi-check-circle",bg:"var(--success-light)",color:"var(--success)",msg:"Harpreet Kaur resolved by bot — 13 messages, 4.8★ rating",time:"Yesterday",unread:true},
+];
+
+// ══════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════
+function updateClock(){const n=new Date();document.getElementById('liveClock').innerHTML=`<span>${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}</span> AEST`}
+setInterval(updateClock,1000);updateClock();
+
+function showToast(msg,type='info'){const c=document.getElementById('toastContainer'),cl={success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'},danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'},info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'},warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'}}[type]||{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'},t=document.createElement('div');t.className='toast-item';t.innerHTML=`<div class="toast-icon" style="background:${cl.bg};color:${cl.color}"><i class="bi ${cl.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;c.appendChild(t);setTimeout(()=>removeToast(t),4500)}
+function removeToast(el){if(!el||!el.parentElement)return;el.classList.add('removing');setTimeout(()=>el.remove(),250)}
+function escHtml(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function nl2br(t){return escHtml(t).replace(/\n/g,'<br>')}
+function nowTime(){const n=new Date();return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
+function handleInputKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+let notifs=JSON.parse(JSON.stringify(notifData));
+function renderNotifs(){const l=document.getElementById('notifList'),uc=notifs.filter(n=>n.unread).length,b=document.getElementById('notifCount');b.textContent=uc;b.style.display=uc>0?'flex':'none';l.innerHTML=notifs.map(n=>`<div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})"><div class="notif-icon" style="background:${n.bg};color:${n.color}"><i class="bi ${n.icon}"></i></div><div style="flex:1;min-width:0"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div><button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button></div>`).join('')}
+function toggleNotif(){document.getElementById('notifDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn');if(d&&!d.contains(e.target)&&!b.contains(e.target))d.classList.remove('show')});
+function readNotif(id){notifs.find(x=>x.id===id)&&(notifs.find(x=>x.id===id).unread=false);renderNotifs();if(id===1)switchCustomer(2);else showToast('Opening notification...','info')}
+function dismissNotif(id){const el=document.querySelector(`.notification-item[data-id="${id}"]`);if(el){el.classList.add('removing');setTimeout(()=>{notifs=notifs.filter(x=>x.id!==id);renderNotifs()},250)}}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('All notifications marked as read','success')}
+
+// ══════════════════════════════════════
+// CUSTOMER LIST
+// ══════════════════════════════════════
+function renderCustomerList(filter=''){
+  const filtered=customers.filter(c=>!filter||c.name.toLowerCase().includes(filter)||c.project.toLowerCase().includes(filter));
+  document.getElementById('customerList').innerHTML=filtered.map(c=>`
+    <div class="customer-item ${c.id===activeCustomer?'active':''}" onclick="switchCustomer(${c.id})" id="custItem${c.id}">
+      <div class="customer-avatar" style="background:${c.color}">${c.initials}${c.online?'<div class="online-dot"></div>':''}
+      </div>
+      <div class="customer-info">
+        <div class="customer-name">${c.name}</div>
+        <div class="customer-preview">${c.lastMsg}</div>
+        <div class="customer-meta"><span class="customer-time">${c.time}</span></div>
+      </div>
+      ${c.unread>0?`<div class="unread-badge">${c.unread}</div>`:''}
+    </div>
+  `).join('');
+}
+function filterCustomers(){renderCustomerList(document.getElementById('custSearch').value.toLowerCase().trim())}
+
+// ══════════════════════════════════════
+// SWITCH CUSTOMER
+// ══════════════════════════════════════
+function switchCustomer(id){
+  incomingMsgTimers.forEach(t=>clearTimeout(t));incomingMsgTimers=[];
+  activeCustomer=id;
+  const c=customers.find(x=>x.id===id);if(c)c.unread=0;
+  renderCustomerList(document.getElementById('custSearch').value.toLowerCase().trim());
+  renderChat();
+  scheduleIncomingMessages();
+}
+
+// ══════════════════════════════════════
+// RENDER CHAT
+// ══════════════════════════════════════
+function renderChat(){
+  const c=customers.find(x=>x.id===activeCustomer);if(!c)return;
+  // Header
+  document.getElementById('chatHeader').innerHTML=`
+    <div class="chat-header-info">
+      <div class="chat-header-avatar" style="background:${c.color}">${c.initials}</div>
+      <div>
+        <div class="chat-header-name">${c.name}</div>
+        <div class="chat-header-project">${c.project} — ${c.stage}</div>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="chat-header-status"><div class="chat-header-dot ${settings.status?'online':'offline'}"></div><span class="chat-header-status-text">${settings.status?'Bot Active':'Offline'}</span></div>
+      <button class="btn-icon" onclick="exportChat()" title="Export" style="width:28px;height:28px;font-size:12px"><i class="bi bi-download"></i></button>
+      <button class="btn-icon" onclick="clearChat()" title="Clear chat" style="width:28px;height:28px;font-size:12px"><i class="bi bi-trash3"></i></button>
+    </div>`;
+  // Body
+  const body=document.getElementById('chatBody');
+  body.innerHTML='';
+  c.chat.forEach((m,i)=>{
+    if(m.from==='system'){body.innerHTML+=`<div class="msg-system"><span class="msg-system-inner">${m.text}</span></div>`;return}
+    const isUser=m.from==='user';
+    const time=m.time||'';
+    let bubbleContent='';
+    if(m.type==='progress') bubbleContent=renderProgressCard(c);
+    else if(m.type==='images') bubbleContent=renderImageCards(m.images||[]);
+    else if(m.type==='payment') bubbleContent=renderPaymentCard(c);
+    else if(m.type==='variation') bubbleContent=renderVariationCard(c);
+    else if(m.type==='quote') bubbleContent=renderQuoteCard(c,m.variationId);
+    else if(m.type==='escalated') bubbleContent=nl2br(m.text);
+    else if(m.type==='satisfaction') bubbleContent=renderSatisfactionCard(c.id,i);
+    else if(m.rich) bubbleContent=m.text;
+    else bubbleContent=nl2br(m.text);
+
+    body.innerHTML+=`<div class="msg-row ${isUser?'user':'bot'}">
+      <div class="msg-avatar ${isUser?'human':'bot'}"><i class="bi ${isUser?'bi-person-fill':'bi-robot'}" style="font-size:12px"></i></div>
+      <div class="msg-content">
+        <div class="msg-bubble ${isUser?'user':'bot'}">${bubbleContent}</div>
+        <div class="msg-meta">
+          <span class="msg-time">${time}</span>
+          ${isUser?`<span class="msg-read"><i class="bi bi-check2-all"></i></span>`:''}
+        </div>
+        ${!isUser&&i>0?`<div class="msg-reactions">
+          <div class="msg-reaction" onclick="reactMsg(${c.id},${i},'👍')" title="Helpful">👍</div>
+          <div class="msg-reaction" onclick="reactMsg(${c.id},${i},'👎')" title="Not helpful">👎</div>
+        </div>`:''}
+      </div>
+    </div>`;
+  });
+  body.scrollTop=body.scrollHeight;
+  // Quick actions
+  document.getElementById('quickActions').innerHTML=[
+    {label:'Status',icon:'bi-building',msg:'What is my project status?'},
+    {label:'Payments',icon:'bi-cash-stack',msg:'Show my payment status'},
+    {label:'Tradie',icon:'bi-tools',msg:'When is the next tradie coming?'},
+    {label:'Cost',icon:'bi-calculator',msg:'What is my budget vs actual cost?'},
+    {label:'Variations',icon:'bi-arrow-rotate-right',msg:'Are there any variations on my project?'},
+    {label:'Photos',icon:'bi-camera',msg:'Can I see photos from the site?'},
+    {label:'Escalate',icon:'bi-person-raised-hand',msg:'I need to speak to Guri'},
+  ].map(a=>`<button class="quick-btn" onclick="sendQuick('${a.msg}')"><i class="bi ${a.icon}"></i>${a.label}</button>`).join('');
+  // Enable/disable
+  const input=document.getElementById('chatInput');
+  const sendBtn=document.getElementById('sendBtn');
+  input.disabled=!settings.status;sendBtn.disabled=!settings.status;
+  input.placeholder=settings.status?'Type your message...':'Bot is offline';
+}
+
+// ══════════════════════════════════════
+// RICH CARD RENDERERS
+// ══════════════════════════════════════
+function renderProgressCard(c){
+  const d=c.data;
+  let msHtml='';
+  d.milestones.forEach((m,i)=>{
+    const dotClass=m.status==='done'?'done':m.status==='current'?'current':'';
+    const icon=m.status==='done'?'<i class="bi bi-check"></i>':m.status==='current'?'<i class="bi bi-play-fill"></i>':'';
+    msHtml+=`<div class="milestone-item"><div class="milestone-dot ${dotClass}">${icon}</div><span style="${m.status==='pending'?'color:var(--text-tertiary)':''}">${m.name}${m.pct?' ('+m.pct+'%)':''}</span></div>`;
+    if(i<d.milestones.length-1) msHtml+=`<div class="milestone-line ${m.status==='done'?'done':''}"></div>`;
+  });
+  return `<div class="progress-card"><div class="progress-card-title"><span>${c.project} — Milestone Progress</span><span style="color:var(--primary);font-weight:800">${c.progress}%</span></div><div class="chat-progress"><div class="chat-progress-fill" style="width:${c.progress}%"></div></div><div style="margin-top:8px">${msHtml}</div></div>`;
+}
+
+function renderImageCards(images){
+  return images.map(img=>`<div class="img-card" onclick="openLightbox('${img.url}','${img.caption}')"><img src="${img.url}" alt="${img.caption}" loading="lazy"><div class="img-card-caption"><span>${img.caption.split('—')[0].trim()}</span><i class="bi bi-arrows-fullscreen" style="font-size:12px;color:var(--text-tertiary)"></i></div></div>`).join('');
+}
+
+function renderPaymentCard(c){
+  const d=c.data;
+  const rows=d.payments.map(p=>{
+    const statusHtml=p.status==='Paid'?`<span class="chat-pill" style="background:var(--success-light);color:var(--success)">Paid</span>`:
+      p.status==='Partial'?`<span class="chat-pill" style="background:var(--warning-light);color:#D97706">Partial</span>`:
+      `<span class="chat-pill" style="background:var(--danger-light);color:var(--danger)">Pending</span>`;
+    return `<tr><td>${p.stage}</td><td>$${p.amount.toLocaleString()}</td><td>${statusHtml}</td><td style="font-size:10px;color:var(--text-tertiary)">${p.date}</td></tr>`;
+  }).join('');
+  const paid=d.payments.filter(p=>p.status==='Paid').reduce((a,p)=>a+p.amount,0);
+  const partial=d.payments.find(p=>p.status==='Partial');
+  const partialAmt=partial?partial.partialAmt:0;
+  const totalPaid=paid+partialAmt;
+  const totalDue=d.payments.reduce((a,p)=>a+p.amount,0);
+  const pending=totalDue-totalPaid;
+  return `<div class="quote-card"><div class="quote-card-header"><div class="quote-card-header-title"><i class="bi bi-cash-stack" style="color:var(--primary)"></i> Payment Summary</div><span style="font-size:11px;color:var(--text-tertiary)">${c.project}</span></div><div class="quote-card-body"><table class="chat-table"><tr><th>Stage</th><th>Amount</th><th>Status</th><th>Date</th></tr>${rows}</table><div style="margin-top:8px;display:flex;justify-content:space-between;font-size:12px"><div>Total Paid: <b style="color:var(--success)">$${totalPaid.toLocaleString()}</b></div><div>Outstanding: <b style="color:${pending>0?'var(--danger)':'var(--success)'}">$${pending.toLocaleString()}</b></div></div></div>${pending>0?`<div class="quote-card-footer"><div class="quote-card-btn view" onclick="showToast('Opening payment portal...','info')"><i class="bi bi-credit-card"></i> Pay Now</div><div class="quote-card-btn reject" onclick="showToast('Downloading invoice PDF...','success')"><i class="bi bi-download"></i> Invoice</div></div>`:''}</div>`;
+}
+
+function renderVariationCard(c){
+  const d=c.data;
+  if(!d.variations.length) return 'There are currently <b>no variations</b> on your project. Want to request a change?';
+  const rows=d.variations.map(v=>{
+    const statusHtml=v.status==='Approved'?`<span class="chat-pill" style="background:var(--success-light);color:var(--success)">Approved</span>`:`<span class="chat-pill" style="background:var(--warning-light);color:#D97706">${v.status}</span>`;
+    return `<tr><td>${v.desc}</td><td>$${v.amount.toLocaleString()}</td><td>${statusHtml}</td></tr>`;
+  }).join('');
+  const total=d.variations.reduce((a,v)=>a+v.amount,0);
+  return `<div class="quote-card"><div class="quote-card-header"><div class="quote-card-header-title"><i class="bi bi-arrow-rotate-right" style="color:var(--warning)"></i> Variations (${d.variations.length})</div><span style="font-size:11px;font-weight:700;color:var(--warning)">+$${total.toLocaleString()}</span></div><div class="quote-card-body"><table class="chat-table"><tr><th>Description</th><th>Amount</th><th>Status</th></tr>${rows}</table></div></div>`;
+}
+
+function renderQuoteCard(c,variationId){
+  const v=c.data.variations.find(x=>x.id===variationId);if(!v)return '';
+  return `<div class="quote-card" id="quoteCard${variationId}">
+    <div class="quote-card-header">
+      <div class="quote-card-header-title"><i class="bi bi-file-earmark-text" style="color:var(--primary)"></i> Variation Quote</div>
+      <span class="status-pill pill-warning" style="font-size:9px">${v.quoteNum||'VAR-'+variationId}</span>
+    </div>
+    <div class="quote-card-body">
+      <div class="quote-card-row"><span class="quote-card-row-label">Description</span><span class="quote-card-row-value">${v.desc}</span></div>
+      <div class="quote-card-row"><span class="quote-card-row-label">Variation Cost</span><span class="quote-card-row-value" style="color:var(--danger)">+$${v.amount.toLocaleString()}</span></div>
+      <div class="quote-card-row"><span class="quote-card-row-label">Original Budget</span><span class="quote-card-row-value">$${c.data.budget.toLocaleString()}</span></div>
+      <div class="quote-card-row"><span class="quote-card-row-label">Revised Budget</span><span class="quote-card-row-value" style="color:var(--primary)">$${(c.data.budget+v.amount).toLocaleString()}</span></div>
+      <div class="quote-card-row"><span class="quote-card-row-label">Sent Date</span><span class="quote-card-row-value">${v.date}</span></div>
+      <div class="quote-card-row"><span class="quote-card-row-label">Status</span><span class="quote-card-row-value"><span class="chat-pill" style="background:var(--warning-light);color:#D97706">${v.status}</span></span></div>
+    </div>
+    <div class="quote-card-footer">
+      <div class="quote-card-btn approve" onclick="approveVariation(${c.id},${variationId})"><i class="bi bi-check-lg"></i> Approve</div>
+      <div class="quote-card-btn reject" onclick="rejectVariation(${c.id},${variationId})"><i class="bi bi-x-lg"></i> Reject</div>
+      <div class="quote-card-btn view" onclick="showToast('Downloading quote PDF...','success')"><i class="bi bi-download"></i></div>
+    </div>
+  </div>`;
+}
+
+function renderSatisfactionCard(custId,msgIdx){
+  return `<div class="satisfaction-card">
+    <div class="satisfaction-card-title">How was this conversation?</div>
+    <div class="satisfaction-stars" id="stars${custId}_${msgIdx}">
+      ${[1,2,3,4,5].map(i=>`<span class="satisfaction-star" onclick="rateSatisfaction(${custId},${msgIdx},${i})" data-star="${i}">&#9733;</span>`).join('')}
+    </div>
+    <div style="font-size:10px;color:var(--text-tertiary);margin-top:6px" id="ratingLabel${custId}_${msgIdx}">Tap to rate</div>
+  </div>`;
+}
+
+// ══════════════════════════════════════
+// INTERACTIVE ACTIONS
+// ══════════════════════════════════════
+function approveVariation(custId,varId){
+  const c=customers.find(x=>x.id===custId);if(!c)return;
+  const v=c.data.variations.find(x=>x.id===varId);if(!v)return;
+  v.status='Approved';
+  c.data.budget+=v.amount;
+  const card=document.getElementById('quoteCard'+varId);
+  if(card){card.style.borderColor='var(--success)';card.style.background='var(--success-light)';
+    card.querySelector('.quote-card-footer').innerHTML=`<div style="text-align:center;width:100%;color:var(--success);font-weight:700;font-size:12px"><i class="bi bi-check-circle me-1"></i> Approved — Guri has been notified</div>`;
+  }
+  c.chat.push({from:'bot',text:`Variation <b>${v.quoteNum||'VAR-'+varId}</b> has been approved! Your revised budget is now <b>$${c.data.budget.toLocaleString()}</b>.\n\nGuri and the fit-out team have been notified. The additional work will be scheduled accordingly.`,time:nowTime()});
+  renderChat();
+  showToast('Variation approved — '+v.desc,'success');
+  chatStats.bot++;updateStats();
+}
+
+function rejectVariation(custId,varId){
+  const c=customers.find(x=>x.id===custId);if(!c)return;
+  const v=c.data.variations.find(x=>x.id===varId);if(!v)return;
+  v.status='Rejected';
+  const card=document.getElementById('quoteCard'+varId);
+  if(card){card.style.borderColor='var(--danger)';card.style.background='var(--danger-light)';
+    card.querySelector('.quote-card-footer').innerHTML=`<div style="text-align:center;width:100%;color:var(--danger);font-weight:700;font-size:12px"><i class="bi bi-x-circle me-1"></i> Rejected — Guri has been notified</div>`;
+  }
+  c.chat.push({from:'bot',text:`Variation <b>${v.quoteNum||'VAR-'+varId}</b> has been rejected. Guri has been notified and will follow up with you to discuss alternatives.`,time:nowTime()});
+  renderChat();
+  showToast('Variation rejected','warning');
+  chatStats.esc++;updateStats();
+}
+
+function rateSatisfaction(custId,msgIdx,rating){
+  const container=document.getElementById('stars'+custId+'_'+msgIdx);if(!container)return;
+  container.querySelectorAll('.satisfaction-star').forEach(s=>{
+    const star=parseInt(s.dataset.star);
+    s.classList.toggle('filled',star<=rating);
+    s.classList.toggle('active',star<=rating);
+    s.style.pointerEvents='none';
+  });
+  const labels=['','Poor','Fair','Good','Very Good','Excellent'];
+  document.getElementById('ratingLabel'+custId+'_'+msgIdx).innerHTML=`<span style="color:var(--warning);font-weight:700">${labels[rating]}</span> — Thank you!`;
+  showToast(`Customer rated ${rating}/5 stars`,'success');
+}
+
+function reactMsg(custId,msgIdx,emoji){
+  const c=customers.find(x=>x.id===custId);if(!c)return;
+  const reactions=c.chat[msgIdx].reactions||(c.chat[msgIdx].reactions={});
+  reactions[emoji]=!reactions[emoji];
+  renderChat();
+  showToast(`Reaction ${emoji} ${reactions[emoji]?'added':'removed'}`,'info');
+}
+
+function openLightbox(url,caption){
+  document.getElementById('lightboxImg').src=url;
+  document.getElementById('lightboxCaption').textContent=caption;
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('show')}
+
+// ══════════════════════════════════════
+// SEND MESSAGE
+// ══════════════════════════════════════
+function sendMessage(){
+  const input=document.getElementById('chatInput');
+  const msg=input.value.trim();
+  if(!msg||isTyping||!settings.status)return;
+  const c=customers.find(x=>x.id===activeCustomer);if(!c)return;
+  c.chat.push({from:'user',text:msg,rich:false,time:nowTime(),read:true});
+  c.lastMsg=msg.substring(0,35)+(msg.length>35?'...':'');
+  c.time=nowTime();
+  input.value='';input.style.height='auto';
+  renderCustomerList(document.getElementById('custSearch').value.toLowerCase().trim());
+  renderChat();
+  showTyping();
+  const delaySel=document.getElementById('delaySelect').value;
+  const baseDelay=delaySel.includes('Instant')?400:delaySel.includes('Slow')?2500:900;
+  const delay=baseDelay+Math.random()*800;
+  setTimeout(()=>{
+    hideTyping();isTyping=false;
+    const response=generateResponse(msg,c);
+    response.time=nowTime();
+    c.chat.push(response);
+    const cleanText=response.text?response.text.replace(/<[^>]*>/g,''):'';
+    c.lastMsg=cleanText.substring(0,35)+(cleanText.length>35?'...':'');
+    c.time=nowTime();
+    chatStats.total++;if(response.escalated)chatStats.esc++;else chatStats.bot++;
+    updateStats();
+    renderCustomerList(document.getElementById('custSearch').value.toLowerCase().trim());
+    renderChat();
+    // Satisfaction after resolution
+    if(!response.escalated&&Math.random()>0.5){
+      setTimeout(()=>{
+        c.chat.push({from:'bot',type:'satisfaction',text:'',time:nowTime()});
+        renderChat();
+      },1500);
+    }
+  },delay);
+}
+
+function sendQuick(msg){document.getElementById('chatInput').value=msg;sendMessage()}
+
+function sendImage(){
+  const c=customers.find(x=>x.id===activeCustomer);if(!c)return;
+  const randomImg=siteImages[Math.floor(Math.random()*siteImages.length)];
+  c.chat.push({from:'user',type:'images',images:[{url:randomImg.url,caption:'Uploaded by customer — '+nowTime()}],time:nowTime(),read:true});
+  c.lastMsg='Sent a photo';c.time=nowTime();
+  renderCustomerList(document.getElementById('custSearch').value.toLowerCase().trim());
+  renderChat();
+  showTyping();
+  setTimeout(()=>{
+    hideTyping();
+    c.chat.push({from:'bot',text:'Thanks for the photo! I\'ve forwarded it to your site manager for review. Is there anything specific about this you\'d like to discuss?',time:nowTime()});
+    c.lastMsg='Thanks for the photo! I\'ve forwarded...';c.time=nowTime();
+    chatStats.bot++;updateStats();
+    renderCustomerList(document.getElementById('custSearch').value.toLowerCase().trim());
+    renderChat();
+  },1500);
+}
+
+function showTyping(){
+  isTyping=true;
+  const body=document.getElementById('chatBody');
+  if(document.getElementById('typingIndicator'))return;
+  const el=document.createElement('div');
+  el.className='typing-indicator';el.id='typingIndicator';
+  el.innerHTML=`<div class="msg-avatar bot"><i class="bi bi-robot" style="font-size:12px;color:white"></i></div><div class="typing-dots"><span></span><span></span><span></span></div>`;
+  body.appendChild(el);body.scrollTop=body.scrollHeight;
+}
+function hideTyping(){const el=document.getElementById('typingIndicator');if(el)el.remove()}
+
+// ══════════════════════════════════════
+// SIMULATED INCOMING MESSAGES
+// ══════════════════════════════════════
+function scheduleIncomingMessages(){
+  incomingMsgTimers.forEach(t=>clearTimeout(t));incomingMsgTimers=[];
+  const incomingByCustomer={
+    1:[{delay:25000,msg:'Just checking — is the frame inspection result available yet?',after:'frame check'}],
+    2:[{delay:15000,msg:'Also, can you tell me when the fit-out starts exactly?',after:'fitout query'}],
+    3:[{delay:20000,msg:'Is there any delay on the slab? The weather has been bad.',after:'slab delay'}],
+    5:[{delay:30000,msg:'Can you send me the foundation payment invoice?',after:'invoice request'}],
+  };
+  const msgs=incomingByCustomer[activeCustomer]||[];
+  msgs.forEach((m,i)=>{
+    const timer=setTimeout(()=>{
+      if(activeCustomer!==msgs[0]&&i===0)return;
+      const c=customers.find(x=>x.id===activeCustomer);if(!c||!settings.status)return;
+      // Show customer typing
+      const body=document.getElementById('chatBody');
+      const typingEl=document.createElement('div');
+      typingEl.className='customer-typing';typingEl.id='custTyping';
+      typingEl.innerHTML=`<div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0"><i class="bi bi-person-fill"></i></div><span>${c.name.split(' ')[0]} is typing...</span>`;
+      body.appendChild(typingEl);body.scrollTop=body.scrollHeight;
+      setTimeout(()=>{
+        const ct=document.getElementById('custTyping');if(ct)ct.remove();
+        c.chat.push({from:'user',text:m.msg,time:nowTime(),read:false});
+        c.lastMsg=m.msg.substring(0,35)+'...';c.time=nowTime();
+        renderCustomerList(document.getElementById('custSearch').value.toLowerCase().trim());
+        renderChat();
+        // Auto-respond
+        showTyping();
+        setTimeout(()=>{
+          hideTyping();
+          const resp=generateResponse(m.msg,c);
+          resp.time=nowTime();
+          c.chat.push(resp);
+          const ct2=resp.text?resp.text.replace(/<[^>]*>/g,''):'';
+          c.lastMsg=ct2.substring(0,35)+'...';c.time=nowTime();
+          chatStats.total++;if(resp.escalated)chatStats.esc++;else chatStats.bot++;
+          updateStats();
+          renderCustomerList(document.getElementById('custSearch').value.toLowerCase().trim());
+          renderChat();
+        },1200+Math.random()*800);
+      },2000+Math.random()*1500);
+    },m.delay);
+    incomingMsgTimers.push(timer);
+  });
+}
+
+// ══════════════════════════════════════
+// RESPONSE GENERATOR
+// ══════════════════════════════════════
+function generateResponse(msg,customer){
+  const lower=msg.toLowerCase();
+  const d=customer.data;
+
+  // Status / Progress
+  if((lower.includes('status')||lower.includes('progress')||lower.includes('stage')||lower.includes('how')||lower.includes('frame check'))&&!lower.includes('payment')&&!lower.includes('cost')){
+    if(!settings.projectStatus)return {from:'bot',text:"I'm sorry, Project Status is currently disabled. Please contact Guri for updates.",escalated:false};
+    return {from:'bot',type:'progress',text:'Your '+customer.project+' progress:',escalated:false};
+  }
+
+  // Payment
+  if(lower.includes('payment')||lower.includes('invoice')||lower.includes('paid')||lower.includes('bill')||lower.includes('owe')||lower.includes('invoice request')){
+    if(!settings.payments)return {from:'bot',text:"Payment Information is currently disabled. Please contact Guri directly.",escalated:false};
+    return {from:'bot',type:'payment',text:'',escalated:false};
+  }
+
+  // Photos
+  if(lower.includes('photo')||lower.includes('picture')||lower.includes('image')||lower.includes('see site')){
+    if(!settings.photos)return {from:'bot',text:"Site Photos are currently disabled. Contact your site manager for updates.",escalated:false};
+    const imgs=d.images.length?d.images:[siteImages[Math.floor(Math.random()*siteImages.length)]];
+    return {from:'bot',type:'images',images:imgs,escalated:false};
+  }
+
+  // When / Tradie
+  if(lower.includes('when')||lower.includes('schedule')||lower.includes('plumber')||lower.includes('tradie')||lower.includes('electrician')||lower.includes('coming')||lower.includes('fitout')||lower.includes('fit-out')){
+    if(!settings.tradieSched)return {from:'bot',text:"Tradie Schedule information is currently disabled.",escalated:false};
+    const t=d.nextTradie;
+    return {from:'bot',text:`<div style="background:var(--info-light);border:1px solid rgba(37,99,235,.15);border-radius:8px;padding:10px;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:var(--info);margin-bottom:4px"><i class="bi bi-tools me-1"></i> NEXT SCHEDULED</div><div style="font-size:13px;font-weight:700">${t.name}</div><div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${t.task}</div><div style="font-size:12px;margin-top:4px"><i class="bi bi-calendar3 me-1"></i>${t.date}</div></div>For the full schedule, contact your site manager or Guri.`,escalated:false};
+  }
+
+  // Cost / Budget
+  if(lower.includes('cost')||lower.includes('budget')||lower.includes('spend')||lower.includes('actual')||lower.includes('expensive')){
+    const pct=Math.round((d.spent/d.budget)*100);
+    const color=pct>70?'var(--danger)':pct>50?'var(--warning)':'var(--success)';
+    const label=pct<=55?'On track — looking good!':'Review recommended';
+    return {from:'bot',text:`<div class="quote-card"><div class="quote-card-header"><div class="quote-card-header-title"><i class="bi bi-calculator" style="color:var(--primary)"></i> Budget vs Actual</div><span style="font-size:11px;color:var(--text-tertiary)">${customer.project}</span></div><div class="quote-card-body"><div class="quote-card-row"><span class="quote-card-row-label">Original Budget</span><span class="quote-card-row-value">$${d.budget.toLocaleString()}</span></div><div class="quote-card-row"><span class="quote-card-row-label">Actual Spend</span><span class="quote-card-row-value">$${d.spent.toLocaleString()}</span></div><div class="quote-card-row"><span class="quote-card-row-label">Remaining</span><span class="quote-card-row-value" style="color:var(--success)">$${(d.budget-d.spent).toLocaleString()}</span></div></div></div><div class="chat-progress" style="margin-top:6px"><div class="chat-progress-fill" style="width:${pct}%;background:${color}"></div></div><div style="font-size:11px;color:${color};font-weight:600">${pct}% used at ${customer.progress}% progress — ${label}</div>`,escalated:false};
+  }
+
+  // Variation
+  if(lower.includes('variation')||lower.includes('change order')){
+    if(!settings.variations)return {from:'bot',text:"Variation information is currently disabled.",escalated:false};
+    if(!d.variations.length)return {from:'bot',text:'There are currently <b>no variations</b> on your project. Want to request a change? I can escalate it to Guri.',escalated:false};
+    return {from:'bot',type:'variation',text:'',escalated:false};
+  }
+
+  // Material
+  if(lower.includes('material')||lower.includes('catalogue')||lower.includes('brick')||lower.includes('tile')){
+    if(!settings.materialCat)return {from:'bot',text:'The <b>Material Catalogue</b> is currently disabled by Guri. I can escalate this access request — shall I?',escalated:false};
+    return {from:'bot',text:'You can access the Material Catalogue through your BuildPro portal. Categories include:\n\n• Bricks & Blocks\n• Tiles & Flooring\n• Concrete Slabs\n• Roofing\n• Windows & Doors\n• Paint & Finishes\n\nWant me to send a specific section to your email?',escalated:false};
+  }
+
+  // Delay / Weather
+  if(lower.includes('delay')||lower.includes('weather')||lower.includes('late')||lower.includes('overdue')){
+    return {from:'bot',text:'Based on current tracking, your project is <b>on schedule</b>. If weather or other factors cause delays, your site manager will log them and the milestone timeline will be automatically extended.\n\nIf you\'re concerned about a specific delay, I can escalate to Guri for a detailed update.',escalated:false};
+  }
+
+  // Handover / Completion
+  if(lower.includes('handover')||lower.includes('completion')||lower.includes('finish')||lower.includes('move in')){
+    const remaining=d.milestones.filter(m=>m.status==='pending'||m.status==='current').length;
+    return {from:'bot',text:`Estimated handover depends on remaining milestones. You're at <b>${customer.stage}</b> with <b>${remaining} milestone(s)</b> remaining.\n\nThis is an estimate and may shift with variations or delays. For a precise date, contact Guri directly.`,escalated:false};
+  }
+
+  // Escalate / Human
+  if(lower.includes('guri')||lower.includes('speak')||lower.includes('human')||lower.includes('complaint')||lower.includes('problem')||lower.includes('issue')||lower.includes('angry')){
+    if(!settings.escalation)return {from:'bot',text:'Escalation is currently disabled. Guri is not available right now.',escalated:false};
+    const ref='ESC-2025-'+String(35+Math.floor(Math.random()*100));
+    return {from:'bot',type:'escalated',text:`Escalation sent to <b>Guri Singh</b>. He'll respond within 24 hours.\n\nReference: <b>${ref}</b>\nPriority: Normal\nDirect: <b>0433 456 789</b>`,escalated:true};
+  }
+
+  // Greeting
+  if(lower.includes('hi')||lower.includes('hello')||lower.includes('sat sri')||lower.includes('hey')||lower.includes('sup')){
+    return {from:'bot',text:`Sat Sri Akal, ${customer.name.split(' ')[0]}! How can I help with your <b>${customer.project}</b> today?\n\nI can check status, payments, tradie schedules, costs, variations, or site photos.`,escalated:false};
+  }
+
+  // Thank you
+  if(lower.includes('thank')||lower.includes('shukriya')||lower.includes('thanks')||lower.includes('awesome')||lower.includes('great')){
+    return {from:'bot',text:'Koi gall nai! Your dream home is in good hands. Message anytime! 🏗️',escalated:false};
+  }
+
+  // Default
+  return {from:'bot',text:`I can help you with:\n\n• <b>Project Status</b> — type "status"\n• <b>Payments</b> — type "payment"\n• <b>Tradie Schedule</b> — type "when"\n• <b>Budget</b> — type "cost"\n• <b>Variations</b> — type "variation"\n• <b>Site Photos</b> — type "photo"\n• <b>Material Catalogue</b> — type "material"\n• <b>Talk to Guri</b> — type "I need to speak to Guri"\n\nOr just ask naturally!`,escalated:false};
+}
+
+// ══════════════════════════════════════
+// SETTINGS
+// ══════════════════════════════════════
+function toggleSetting(key){
+  settings[key]=!settings[key];
+  const el=document.getElementById('toggle-'+key);
+  if(el)el.classList.toggle('on',settings[key]);
+  if(key==='status'){
+    const pill=document.getElementById('botStatusPill');
+    pill.className=`status-pill ${settings.status?'pill-success':'pill-gray'}`;
+    pill.innerHTML=settings.status?'<i class="bi bi-circle-fill me-1" style="font-size:5px"></i>Active':'<i class="bi bi-circle me-1" style="font-size:5px"></i>Offline';
+    renderChat();
+  }
+  const name=key.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase());
+  showToast(`${name} ${settings[key]?'enabled':'disabled'}`,settings[key]?'success':'warning');
+}
+
+// ══════════════════════════════════════
+// STATS
+// ══════════════════════════════════════
+function updateStats(){
+  document.getElementById('statTotal').textContent=chatStats.total;
+  document.getElementById('statBot').textContent=`${chatStats.bot} (${Math.round((chatStats.bot/chatStats.total)*100)}%)`;
+  document.getElementById('statEsc').textContent=`${chatStats.esc} (${Math.round((chatStats.esc/chatStats.total)*100)}%)`;
+}
+
+// ══════════════════════════════════════
+// EXPORT / CLEAR
+// ══════════════════════════════════════
+function exportChat(){
+  const c=customers.find(x=>x.id===activeCustomer);if(!c)return;
+  let txt=`BuildPro Chat Export — ${c.name} — ${c.project}\nExported: ${new Date().toLocaleString()}\n${'='.repeat(50)}\n\n`;
+  c.chat.forEach(m=>{
+    const who=m.from==='bot'?'BuildPro Bot':m.from==='system'?'---':c.name;
+    const content=(m.text||'').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    if(m.type==='images') txt+=`[${who}] [Sent ${m.images?.length||0} image(s)]\n\n`;
+    else if(m.type==='satisfaction') txt+=`[${who}] [Satisfaction rating requested]\n\n`;
+    else txt+=`[${who}] ${content}\n\n`;
+  });
+  const blob=new Blob([txt],{type:'text/plain'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=`Chat_${c.name.replace(/\s/g,'_')}_${new Date().toISOString().slice(0,10)}.txt`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast(`Exported ${c.chat.length} messages`,'success');
+}
+
+function clearChat(){
+  const c=customers.find(x=>x.id===activeCustomer);if(!c)return;
+  c.chat=[{from:'system',text:'Chat cleared — New conversation started'}];
+  renderChat();
+  showToast('Chat cleared','info');
+}
+
+// ══════════════════════════════════════
+// MODAL
+// ══════════════════════════════════════
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-backdrop-custom').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'));closeLightbox()}});
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(()=>{
+  renderNotifs();renderCustomerList();renderChat();updateStats();
+  // Show unread prompt for David Chen
+  setTimeout(()=>{
+    const dc=customers.find(c=>c.id===2);
+    if(dc&&dc.unread>0){
+      document.getElementById('escalBody').innerHTML=`
+        <div style="text-align:center;margin-bottom:16px">
+          <div style="width:50px;height:50px;border-radius:50%;background:var(--info-light);color:var(--info);display:flex;align-items:center;justify-content:center;margin:0 auto 10px"><i class="bi bi-chat-dots" style="font-size:22px"></i></div>
+          <div style="font-size:15px;font-weight:700">Unread Messages</div>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">${dc.name} sent ${dc.unread} messages about approving a kitchen variation</div>
+        </div>
+        <div style="background:var(--bg-body);border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--text-secondary)">
+          <div style="font-weight:600;color:var(--text-primary);margin-bottom:4px">Latest message:</div>
+          "I want to approve the kitchen variation"
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="btn-primary-custom" onclick="closeModal('escalModal');switchCustomer(${dc.id})"><i class="bi bi-chat-dots me-1"></i>Open Chat</button>
+          <button class="btn-outline-custom" onclick="closeModal('escalModal')">Later</button>
+        </div>`;
+      document.getElementById('escalModal').classList.add('show');
+    }
+  },1800);
+  scheduleIncomingMessages();
+},100);
+</script>
+</body>
+</html>

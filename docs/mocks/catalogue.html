@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Material Catalogue - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.12);--accent:#E8730C;--accent-light:#FFF3E0;--success:#16A34A;--success-light:#DCFCE7;--danger:#DC2626;--danger-light:#FEE2E2;--warning:#F59E0B;--warning-light:#FEF9C3;--info:#2563EB;--info-light:#DBEAFE;--purple:#7C3AED;--purple-light:#EDE9FE;--bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;--text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;--border-color:#E2E8F0;--border-light:#F1F5F9;--shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);--sidebar-bg:#0F172A;--sidebar-width:64px;--transition:all .2s cubic-bezier(.4,0,.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}
+.wrapper{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}
+.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}
+.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}
+.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}
+.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}
+.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}
+.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}
+.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}
+@media(max-width:768px){.sidebar-tooltip{display:none}}
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}
+.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px}
+.header-menu a:hover{color:rgba(255,255,255,.9)}
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+.content-container{padding:20px;max-width:1560px;margin:0 auto;width:100%}
+.card-custom{background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);margin-bottom:16px;transition:var(--transition)}
+.card-custom:hover{box-shadow:var(--shadow-md)}
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.stat-value{font-size:26px;font-weight:800;line-height:1.2;color:var(--text-primary);margin-top:2px;letter-spacing:-.02em}
+.stat-desc{font-size:11.5px;color:var(--text-tertiary);margin-top:3px}
+.table-custom{width:100%;border-collapse:separate;border-spacing:0}
+.table-custom thead th{font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;letter-spacing:.04em;padding:10px 14px;border-bottom:1px solid var(--border-color);background:var(--bg-body);position:sticky;top:0;z-index:2}
+.table-custom td{font-size:13px;vertical-align:middle;padding:12px 14px;border-bottom:1px solid var(--border-light)}
+.table-custom tr:last-child td{border-bottom:none}
+.table-custom tbody tr{transition:background .15s}
+.table-custom tbody tr:hover td{background:var(--bg-hover)}
+.table-custom tbody tr.row-selected td{background:rgba(13,148,136,.04)}
+.table-custom tbody tr.row-flash td{animation:rowFlash .5s ease}
+@keyframes rowFlash{0%{background:rgba(13,148,136,.15)}100%{background:transparent}}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}
+.pill-success{background:rgba(22,163,74,.08);color:var(--success)}.pill-warning{background:rgba(245,158,11,.08);color:#D97706}.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}.pill-info{background:rgba(37,99,235,.08);color:var(--info)}.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white}
+.btn-primary-custom:disabled{background:var(--text-tertiary);transform:none;box-shadow:none;cursor:not-allowed}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-sm-custom{padding:5px 10px;font-size:11.5px;border-radius:6px}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.btn-danger-outline{background:var(--bg-card);color:var(--danger);border:1px solid rgba(220,38,38,.2);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.btn-danger-outline:hover{background:var(--danger-light);border-color:var(--danger)}
+.notification-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;background:var(--danger);border-radius:99px;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg)}
+.notification-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:360px;background:white;border-radius:10px;box-shadow:var(--shadow-lg);z-index:1001;display:none;border:1px solid var(--border-color);overflow:hidden}
+.notification-dropdown.show{display:block;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notification-header{padding:14px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.notification-mark-all{font-size:11.5px;color:var(--primary);cursor:pointer;font-weight:600}
+.notification-item{padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s;display:flex;align-items:flex-start;gap:10px}
+.notification-item:hover{background:var(--bg-hover)}
+.notification-item.unread{background:rgba(13,148,136,.03)}
+.notification-item.dismissing{animation:slideOut .25s ease forwards;overflow:hidden}
+@keyframes slideOut{to{opacity:0;max-height:0;padding-top:0;padding-bottom:0}}
+.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.notif-text{flex:1;min-width:0}.notif-msg{font-size:12.5px;line-height:1.4}.notif-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.notif-dismiss{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);cursor:pointer;opacity:0;transition:var(--transition);flex-shrink:0;font-size:10px;border:none;background:none}
+.notification-item:hover .notif-dismiss{opacity:1}
+.notif-dismiss:hover{background:var(--danger-light);color:var(--danger)}
+.notification-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--border-color)}
+.notification-view-all{font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600}
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}
+.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+.search-box{position:relative}
+.search-box input{width:200px;padding:6px 12px 6px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);font-family:inherit;outline:none}
+.search-box input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);width:260px}
+.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.cc{position:relative;height:220px}
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:320px;animation:toastIn .3s ease}
+.toast-item.removing{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.toast-msg{flex:1;font-size:13px;font-weight:500}
+.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;padding:0}
+.toast-close:hover{color:var(--text-primary)}
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center}
+.modal-backdrop-custom.show{display:flex;animation:fadeIn .2s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:90%;max-width:680px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}
+.modal-content-custom.sm{max-width:560px}
+.modal-content-custom.lg{max-width:820px}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:20px 24px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.modal-body-custom{padding:20px 24px}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:16px}
+.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+.form-label-custom{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary);margin-bottom:4px;display:block}
+.form-input-custom{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:7px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition)}
+.form-input-custom:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+select.form-input-custom{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}
+.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+.cat-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
+.cat-tab{padding:8px 16px;border:1px solid var(--border-color);background:var(--bg-card);border-radius:8px;font-size:12.5px;font-weight:600;color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+.cat-tab:hover{border-color:var(--primary);color:var(--primary)}
+.cat-tab.active{background:var(--primary);color:white;border-color:var(--primary)}
+.cat-tab .count{font-size:10px;background:rgba(255,255,255,.2);padding:1px 6px;border-radius:10px;font-weight:700}
+.cat-tab.active .count{background:rgba(255,255,255,.25)}
+.stock-filter{display:flex;gap:3px;background:var(--bg-body);border-radius:7px;padding:2px}
+.stock-btn{padding:5px 12px;border:none;background:none;font-size:11.5px;font-weight:600;color:var(--text-tertiary);cursor:pointer;border-radius:5px;transition:var(--transition);font-family:inherit}
+.stock-btn.active{background:var(--bg-card);color:var(--text-primary);box-shadow:var(--shadow-sm)}
+.stock-btn:hover:not(.active){color:var(--text-secondary)}
+.sort-btn{padding:5px 12px;border:1px solid var(--border-color);background:var(--bg-card);border-radius:7px;font-size:11.5px;font-weight:600;color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.sort-btn:hover{border-color:var(--primary);color:var(--primary)}
+.sort-btn.active{background:var(--primary-glow);border-color:var(--primary);color:var(--primary)}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}
+.detail-value{font-size:13px;font-weight:600}
+.selection-bar{position:fixed;bottom:0;left:var(--sidebar-width);right:0;background:var(--sidebar-bg);color:white;padding:0;z-index:900;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);box-shadow:0 -4px 20px rgba(0,0,0,.15)}
+.selection-bar.show{transform:translateY(0)}
+.sel-inner{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;max-width:1560px;margin:0 auto;gap:12px;flex-wrap:wrap}
+.sel-badge{position:absolute;top:-8px;right:-8px;min-width:20px;height:20px;background:var(--accent);border-radius:99px;font-size:10px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 2px 8px rgba(232,115,12,.4)}
+.qty-ctrl{display:inline-flex;align-items:center;border:1px solid var(--border-color);border-radius:6px;overflow:hidden}
+.qty-btn{width:28px;height:28px;border:none;background:var(--bg-body);cursor:pointer;font-size:14px;font-weight:700;color:var(--text-secondary);transition:var(--transition);display:flex;align-items:center;justify-content:center}
+.qty-btn:hover{background:var(--primary-glow);color:var(--primary)}
+.qty-val{width:36px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border-left:1px solid var(--border-color);border-right:1px solid var(--border-color);background:white}
+.out-of-stock-row td{opacity:.5}.out-of-stock-row:hover td{opacity:.7}
+.selected-indicator{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--primary-glow);color:var(--primary);animation:fadeIn .2s}
+.sel-chips{display:flex;gap:6px;flex-wrap:wrap;max-width:400px;overflow:hidden}
+.sel-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);white-space:nowrap;cursor:default;border:1px solid rgba(255,255,255,.08)}
+.sel-chip-remove{width:16px;height:16px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:rgba(255,255,255,.6);cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;transition:var(--transition)}
+.sel-chip-remove:hover{background:var(--danger);color:white}
+.view-toggle{display:flex;gap:2px;background:var(--bg-body);border-radius:7px;padding:2px}
+.view-btn{width:32px;height:28px;border:none;background:none;cursor:pointer;border-radius:5px;transition:var(--transition);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:13px}
+.view-btn.active{background:var(--bg-card);color:var(--primary);box-shadow:var(--shadow-sm)}
+.grid-view{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.mat-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:16px;transition:var(--transition);cursor:pointer;position:relative}
+.mat-card:hover{box-shadow:var(--shadow-md);border-color:var(--primary);transform:translateY(-2px)}
+.mat-card.is-selected{border-color:var(--primary);background:rgba(13,148,136,.02)}
+.mat-card.is-out{opacity:.55}.mat-card.is-out:hover{opacity:.7}
+.mat-card-img{height:100px;background:var(--bg-body);border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;border:1px solid var(--border-light)}
+.mat-card-name{font-size:13px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mat-card-supplier{font-size:11px;color:var(--text-tertiary);margin-bottom:8px}
+.mat-card-price{font-size:18px;font-weight:800;color:var(--primary);margin-bottom:8px}
+.mat-card-price span{font-size:12px;font-weight:400;color:var(--text-tertiary)}
+.mat-card-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.mat-card-meta-tag{font-size:10px;padding:2px 8px;border-radius:4px;background:var(--bg-body);color:var(--text-secondary);font-weight:500}
+.mat-card-actions{display:flex;gap:6px}
+.mat-card-sel-badge{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;animation:fadeIn .2s}
+.confirm-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;font-size:12px;color:var(--danger);font-weight:600;animation:fadeIn .15s}
+.confirm-bar button{padding:3px 10px;border-radius:5px;border:none;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:var(--transition)}
+.confirm-bar .confirm-yes{background:var(--danger);color:white}.confirm-bar .confirm-yes:hover{background:#B91C1C}
+.confirm-bar .confirm-no{background:white;color:var(--text-secondary);border:1px solid var(--border-color)}.confirm-bar .confirm-no:hover{background:var(--bg-body)}
+.calc-section{background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;padding:14px;margin-top:16px}
+.calc-input{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:7px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition)}
+.calc-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.related-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border-color);border-radius:8px;cursor:pointer;transition:var(--transition)}
+.related-card:hover{border-color:var(--primary);background:var(--primary-glow)}
+.supplier-card{padding:16px;border:1px solid var(--border-color);border-radius:10px;transition:var(--transition);cursor:pointer}
+.supplier-card:hover{border-color:var(--primary);box-shadow:var(--shadow-md)}
+.supplier-logo{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white;flex-shrink:0}
+.supplier-stat{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary)}
+.supplier-stat .num{font-size:14px;font-weight:800;color:var(--text-primary)}
+@media(max-width:992px){.detail-grid{grid-template-columns:1fr}.selection-bar{left:0}.sel-chips{max-width:200px}}
+@media(max-width:576px){.stat-grid{grid-template-columns:1fr}.content-container{padding:12px}.search-box input{width:150px}.search-box input:focus{width:180px}.cat-tabs{gap:3px}.cat-tab{padding:6px 10px;font-size:11px}.grid-view{grid-template-columns:1fr}.sel-chips{display:none}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon active" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+<div class="main-panel">
+<header class="top-header">
+  <div class="d-flex align-items-center gap-3">
+    <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+    <nav class="header-menu d-none d-lg-block"><a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a></nav>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+    <div class="position-relative">
+      <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7)" onclick="toggleNotif()" id="notifBtn"><i class="bi bi-bell"></i><span class="notification-badge" id="notifCount">3</span></button>
+      <div class="notification-dropdown" id="notifDrop">
+        <div class="notification-header"><div style="font-size:13px;font-weight:700">Notifications</div><div class="notification-mark-all" onclick="markAllRead()">Mark all read</div></div>
+        <div id="notifList"></div>
+        <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notifications...','info');return false">View all</a></div>
+      </div>
+    </div>
+    <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+  </div>
+</header>
+<div class="sub-header"><i class="bi bi-house me-1" style="font-size:11px"></i><span>Home</span><span class="mx-2" style="color:var(--border-color)">/</span><span style="font-weight:600;color:var(--text-primary)">Material Catalogue</span><span style="margin-left:auto;font-size:11px;color:var(--text-tertiary)" id="lastUpdated"></span></div>
+<div class="content-container" style="padding-bottom:80px">
+
+  <!-- Page Header -->
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h4 style="font-size:17px;font-weight:800;margin:0">Material Catalogue</h4>
+      <p style="color:var(--text-tertiary);margin:0;font-size:13px">Browse materials, manage stock, and generate variation quotes for customers</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn-outline-custom" onclick="printCatalogue()"><i class="bi bi-printer"></i>Print</button>
+      <button class="btn-outline-custom" onclick="exportCatalogue()"><i class="bi bi-download"></i>Export CSV</button>
+      <button class="btn-primary-custom" onclick="openAddModal()"><i class="bi bi-plus-lg"></i>Add Material</button>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="stat-grid">
+    <div class="card-custom" style="cursor:pointer" onclick="switchCat('All',document.querySelector('.cat-tab'))">
+      <div style="width:44px;height:44px;border-radius:11px;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:8px"><i class="bi bi-box-seam"></i></div>
+      <div class="stat-value" id="kpiTotal">0</div>
+      <div class="stat-desc">Total Materials</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer">
+      <div style="width:44px;height:44px;border-radius:11px;background:var(--info);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:8px"><i class="bi bi-tags"></i></div>
+      <div class="stat-value" id="kpiCats">0</div>
+      <div class="stat-desc">Categories</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer" onclick="setStockFilter('out',document.querySelectorAll('.stock-btn')[3])">
+      <div style="width:44px;height:44px;border-radius:11px;background:var(--danger);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:8px"><i class="bi bi-exclamation-triangle"></i></div>
+      <div class="stat-value" id="kpiOut">0</div>
+      <div class="stat-desc">Out of Stock</div>
+    </div>
+    <div class="card-custom">
+      <div style="width:44px;height:44px;border-radius:11px;background:var(--warning);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:8px"><i class="bi bi-clock"></i></div>
+      <div class="stat-value" id="kpiLead">0d</div>
+      <div class="stat-desc">Avg Lead Time</div>
+    </div>
+  </div>
+
+  <!-- Project Context -->
+  <div class="card-custom" style="background:linear-gradient(135deg,#F0FDFA,#CCFBF1);border-color:rgba(13,148,136,.12)">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-3">
+        <div style="width:36px;height:36px;border-radius:8px;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:16px"><i class="bi bi-building"></i></div>
+        <div>
+          <div style="font-size:12px;color:var(--text-tertiary);font-weight:600">Selecting materials for:</div>
+          <select class="form-input-custom" id="projectSelect" style="width:auto;margin-top:2px;padding:5px 32px 5px 10px;font-size:13px;font-weight:600;background:white" onchange="onProjectChange()">
+            <option value="1">Penrith Residence — Harpreet Kaur</option>
+            <option value="2">Castle Hill Villa — Rajesh Kumar</option>
+            <option value="3">Blacktown Duplex — Sukhwinder Singh</option>
+            <option value="4">Parramatta Home — David Chen</option>
+            <option value="5">Liverpool Estate — Manjit Brar</option>
+          </select>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;letter-spacing:.04em">Current Stage</div>
+          <div style="font-size:12px;font-weight:700;color:var(--primary)" id="projStage">Frame Stage</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;letter-spacing:.04em">Budget Remaining</div>
+          <div style="font-size:12px;font-weight:700;color:var(--success)" id="projBudget">$172,600</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Tabs -->
+  <div class="cat-tabs" id="catTabs"></div>
+
+  <!-- Filters Row -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <div class="search-box"><i class="bi bi-search"></i><input type="text" placeholder="Search materials, suppliers, colours..." id="matSearch" oninput="renderView()"></div>
+      <div class="stock-filter" id="stockFilter">
+        <button class="stock-btn active" onclick="setStockFilter('all',this)">All</button>
+        <button class="stock-btn" onclick="setStockFilter('instock',this)">In Stock</button>
+        <button class="stock-btn" onclick="setStockFilter('low',this)">Low Stock</button>
+        <button class="stock-btn" onclick="setStockFilter('out',this)">Out of Stock</button>
+      </div>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <button class="sort-btn" id="sortPriceBtn" onclick="toggleSort('price')"><i class="bi bi-arrow-down-short"></i>Price</button>
+      <button class="sort-btn" id="sortNameBtn" onclick="toggleSort('name')"><i class="bi bi-arrow-down-short"></i>Name</button>
+      <div class="view-toggle">
+        <button class="view-btn active" id="viewTable" onclick="setView('table')" title="Table view"><i class="bi bi-list-ul"></i></button>
+        <button class="view-btn" id="viewGrid" onclick="setView('grid')" title="Grid view"><i class="bi bi-grid-3x3-gap"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results count -->
+  <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between" id="resultsBar">
+    <span id="resultsCount">Showing 0 materials</span>
+    <span style="font-size:11px"><i class="bi bi-keyboard me-1"></i>Press <kbd style="padding:1px 5px;background:var(--bg-body);border:1px solid var(--border-color);border-radius:3px;font-size:10px;font-weight:700">/</kbd> to search</span>
+  </div>
+
+  <!-- Table View -->
+  <div class="card-custom" id="tableView" style="padding:0;overflow:hidden">
+    <div id="tableContainer" style="max-height:520px;overflow-y:auto"></div>
+    <div id="noResults" style="display:none;text-align:center;padding:50px 20px;color:var(--text-tertiary)">
+      <i class="bi bi-search" style="font-size:36px;display:block;margin-bottom:12px;opacity:.3"></i>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">No materials found</div>
+      <div style="font-size:12px">Try adjusting your search or filter criteria</div>
+    </div>
+  </div>
+
+  <!-- Grid View -->
+  <div id="gridView" style="display:none">
+    <div class="grid-view" id="gridContainer"></div>
+    <div id="noResultsGrid" style="display:none;text-align:center;padding:50px 20px;color:var(--text-tertiary)">
+      <i class="bi bi-search" style="font-size:36px;display:block;margin-bottom:12px;opacity:.3"></i>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">No materials found</div>
+      <div style="font-size:12px">Try adjusting your search or filter criteria</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="row g-3 mt-1">
+    <div class="col-lg-5">
+      <div class="card-custom">
+        <div class="section-heading">Price Range by Category</div>
+        <div class="cc"><canvas id="priceChart"></canvas></div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div class="card-custom">
+        <div class="section-heading">Stock Status Overview</div>
+        <div class="cc"><canvas id="stockChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Suppliers -->
+  <div class="card-custom">
+    <div class="section-heading">Top Suppliers <span style="font-size:10px;color:var(--text-tertiary);font-weight:500;text-transform:none;letter-spacing:0">Based on catalogue items</span></div>
+    <div class="row g-3" id="supplierGrid"></div>
+  </div>
+
+</div>
+
+<!-- Selection Bar -->
+<div class="selection-bar" id="selectionBar">
+  <div class="sel-inner">
+    <div class="d-flex align-items-center gap-3" style="min-width:0;flex:1">
+      <div style="position:relative;flex-shrink:0">
+        <div style="width:40px;height:40px;border-radius:10px;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-size:18px"><i class="bi bi-cart-check"></i></div>
+        <span class="sel-badge" id="selBadge">0</span>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:14px;font-weight:700"><span id="selCount">0</span> materials selected</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6)">Total: <span style="color:var(--accent);font-weight:700" id="selTotal">$0</span></div>
+      </div>
+      <div class="sel-chips" id="selChips"></div>
+    </div>
+    <div class="d-flex gap-2" style="flex-shrink:0">
+      <button class="btn-outline-custom" style="border-color:rgba(255,255,255,.2);color:white" onclick="openSelectionModal()"><i class="bi bi-eye"></i>Review</button>
+      <button style="background:var(--accent);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;transition:var(--transition);display:inline-flex;align-items:center;gap:4px" onclick="generateQuote()"><i class="bi bi-file-earmark-text"></i>Generate Quote</button>
+      <button class="btn-icon" style="background:rgba(255,255,255,.1);border-color:transparent;color:rgba(255,255,255,.6)" onclick="clearSelection()" title="Clear all"><i class="bi bi-trash3"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Material Detail Modal -->
+<div class="modal-backdrop-custom" id="detailModal">
+  <div class="modal-content-custom lg">
+    <div class="modal-header-custom"><h4 style="font-size:16px;font-weight:700" id="detailTitle">Material Details</h4><button class="modal-close" onclick="closeModal('detailModal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body-custom" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- Add Material Modal -->
+<div class="modal-backdrop-custom" id="addModal">
+  <div class="modal-content-custom sm">
+    <div class="modal-header-custom"><h4 style="font-size:16px;font-weight:700" id="addModalTitle">Add New Material</h4><button class="modal-close" onclick="closeModal('addModal');resetAddForm()"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body-custom" id="addModalBody"></div>
+  </div>
+</div>
+
+<!-- Edit Material Modal -->
+<div class="modal-backdrop-custom" id="editModal">
+  <div class="modal-content-custom sm">
+    <div class="modal-header-custom"><h4 style="font-size:16px;font-weight:700">Edit Material</h4><button class="modal-close" onclick="closeModal('editModal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body-custom" id="editModalBody"></div>
+  </div>
+</div>
+
+<!-- Selection Review Modal -->
+<div class="modal-backdrop-custom" id="selModal">
+  <div class="modal-content-custom lg">
+    <div class="modal-header-custom"><h4 style="font-size:16px;font-weight:700"><i class="bi bi-cart-check me-2" style="color:var(--accent)"></i>Material Selection Review</h4><button class="modal-close" onclick="closeModal('selModal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body-custom" id="selModalBody"></div>
+  </div>
+</div>
+
+<!-- Quote Preview Modal -->
+<div class="modal-backdrop-custom" id="quoteModal">
+  <div class="modal-content-custom lg">
+    <div class="modal-header-custom"><h4 style="font-size:16px;font-weight:700"><i class="bi bi-file-earmark-text me-2" style="color:var(--primary)"></i>Variation Quote Preview</h4><button class="modal-close" onclick="closeModal('quoteModal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body-custom" id="quoteModalBody"></div>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div class="modal-backdrop-custom" id="deleteModal">
+  <div class="modal-content-custom sm" style="max-width:420px">
+    <div class="modal-header-custom"><h4 style="font-size:16px;font-weight:700;color:var(--danger)"><i class="bi bi-exclamation-triangle me-2"></i>Delete Material</h4><button class="modal-close" onclick="closeModal('deleteModal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-body-custom" id="deleteModalBody"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+let materials = [
+  {id:1,cat:"Bricks",name:"Austral Bricks - Modern",supplier:"Austral Bricks NSW",colour:"Charcoal Smooth",size:"230x110x76mm",price:1250,unit:"per 1000",stock:"In Stock",lead:"3-5 days",notes:"Most popular choice for modern builds. Smooth face finish, consistent colour.",added:"2025-01-15",usedIn:["Penrith Residence","Blacktown Duplex"]},
+  {id:2,cat:"Bricks",name:"PGH Bricks - Element",supplier:"PGH Bricks",colour:"Redwood Blend",size:"230x110x76mm",price:1180,unit:"per 1000",stock:"In Stock",lead:"3-5 days",notes:"Warm redwood tone. Good for traditional Australian homes.",added:"2025-01-15",usedIn:["Castle Hill Villa"]},
+  {id:3,cat:"Bricks",name:"Austral Bricks - Vintage",supplier:"Austral Bricks NSW",colour:"Heritage Red",size:"230x110x76mm",price:1420,unit:"per 1000",stock:"Low Stock",lead:"7-10 days",notes:"Heritage style with textured face. Limited stock — order early.",added:"2025-02-10",usedIn:[]},
+  {id:4,cat:"Bricks",name:"Bristile - London Sand",supplier:"Bristile Bricks",colour:"London Sand",size:"230x110x76mm",price:1350,unit:"per 1000",stock:"In Stock",lead:"3-5 days",notes:"Cream/sand colour. Popular for Hampton-style facades.",added:"2025-03-05",usedIn:["Liverpool Estate"]},
+  {id:5,cat:"Bricks",name:"PGH Bricks - Designer",supplier:"PGH Bricks",colour:"White Wash",size:"230x110x76mm",price:1580,unit:"per 1000",stock:"Out of Stock",lead:"14-21 days",notes:"Premium white wash finish. Currently out of stock.",added:"2025-03-20",usedIn:[]},
+  {id:6,cat:"Tiles",name:"Beaumont Tiles - Nero",supplier:"Beaumont Tiles Penrith",colour:"Porcelain - Matte",size:"600x600mm",price:45,unit:"per sqm",stock:"In Stock",lead:"2-3 days",notes:"Dark porcelain tile. Suitable for indoor and outdoor use.",added:"2025-01-20",usedIn:["Penrith Residence"]},
+  {id:7,cat:"Tiles",name:"Beaumont - Oakwood",supplier:"Beaumont Tiles Castle Hill",colour:"Timber Look",size:"150x900mm",price:52,unit:"per sqm",stock:"In Stock",lead:"2-3 days",notes:"Popular timber-look plank tile. Low maintenance.",added:"2025-01-20",usedIn:["Blacktown Duplex","Parramatta Home"]},
+  {id:8,cat:"Tiles",name:"National Tiles - Statuario",supplier:"National Tiles",colour:"Marble Look - Glossy",size:"600x1200mm",price:78,unit:"per sqm",stock:"Low Stock",lead:"5-7 days",notes:"Premium marble-look large format tile. Low stock.",added:"2025-02-15",usedIn:["Castle Hill Villa"]},
+  {id:9,cat:"Tiles",name:"Beaumont - Arctic White",supplier:"Beaumont Tiles",colour:"Ceramic - Glossy",size:"300x600mm",price:28,unit:"per sqm",stock:"In Stock",lead:"2-3 days",notes:"Budget-friendly white wall tile. Bathrooms and laundries.",added:"2025-01-20",usedIn:["Liverpool Estate"]},
+  {id:10,cat:"Concrete Slabs",name:"Wagners - Standard Raft",supplier:"Wagners Concrete",colour:"Class S Concrete",size:"100mm thickness",price:85,unit:"per m\u00B2",stock:"In Stock",lead:"5-7 days",notes:"Standard raft slab for most residential sites. Class S soil.",added:"2025-01-10",usedIn:["Penrith Residence","Blacktown Duplex","Parramatta Home"]},
+  {id:11,cat:"Concrete Slabs",name:"Holcim - Stiffened Raft",supplier:"Holcim NSW",colour:"Class M Concrete",size:"100mm thickness",price:95,unit:"per m\u00B2",stock:"In Stock",lead:"5-7 days",notes:"Stiffened raft for reactive clay sites. Higher strength.",added:"2025-01-10",usedIn:["Castle Hill Villa"]},
+  {id:12,cat:"Concrete Slabs",name:"Boral - Waffle Raft",supplier:"Boral Concrete",colour:"Class S Concrete",size:"100mm thickness",price:78,unit:"per m\u00B2",stock:"In Stock",lead:"5-7 days",notes:"Cost-effective waffle raft. Good for flat stable sites.",added:"2025-02-01",usedIn:["Liverpool Estate"]},
+  {id:13,cat:"Concrete Slabs",name:"Hanson - Pod Slab",supplier:"Hanson Concrete",colour:"Class H Concrete",size:"100mm thickness",price:110,unit:"per m\u00B2",stock:"Low Stock",lead:"10-14 days",notes:"Heavy-duty pod slab for highly reactive sites. Premium.",added:"2025-03-01",usedIn:[]},
+  {id:14,cat:"Roofing",name:"Lysaght - Custom Orb",supplier:"Lysaght (BlueScope)",colour:"Surfmist",size:"0.42mm BMT",price:42,unit:"per m\u00B2",stock:"In Stock",lead:"3-5 days",notes:"Classic corrugated roofing. Most popular Colorbond colour.",added:"2025-01-25",usedIn:["Penrith Residence","Blacktown Duplex","Liverpool Estate"]},
+  {id:15,cat:"Roofing",name:"Lysaght - Trimdek",supplier:"Lysaght (BlueScope)",colour:"Woodland Grey",size:"0.42mm BMT",price:38,unit:"per m\u00B2",stock:"In Stock",lead:"3-5 days",notes:"Tray-style roofing with deeper profile. Modern look.",added:"2025-01-25",usedIn:["Parramatta Home"]},
+  {id:16,cat:"Roofing",name:"Bristile - Concrete Tile",supplier:"Bristile Roofing",colour:"Terracotta",size:"Standard profile",price:55,unit:"per m\u00B2",stock:"In Stock",lead:"5-7 days",notes:"Traditional concrete tile in terracotta. Very durable.",added:"2025-02-20",usedIn:["Castle Hill Villa"]},
+  {id:17,cat:"Windows & Doors",name:"AWS Windows - Awning",supplier:"Vantage Aluminium",colour:"Pearl White",size:"1200x900mm",price:480,unit:"per each",stock:"In Stock",lead:"10-14 days",notes:"Aluminium awning window. Opens outward, good ventilation.",added:"2025-02-05",usedIn:["Penrith Residence","Blacktown Duplex"]},
+  {id:18,cat:"Windows & Doors",name:"Vantage - Sliding",supplier:"Vantage Aluminium",colour:"Pearl White",size:"1800x1200mm",price:850,unit:"per each",stock:"In Stock",lead:"10-14 days",notes:"Large aluminium sliding window. Popular for living areas.",added:"2025-02-05",usedIn:["Parramatta Home","Liverpool Estate"]},
+  {id:19,cat:"Windows & Doors",name:"Stegbar - Bi-fold Door",supplier:"Stegbar",colour:"Woodland Grey",size:"3600x2100mm",price:3200,unit:"per each",stock:"Low Stock",lead:"21-28 days",notes:"Premium aluminium bi-fold door. Long lead time.",added:"2025-03-10",usedIn:["Castle Hill Villa"]},
+  {id:20,cat:"Paint",name:"Dulux Weathershield",supplier:"Dulux",colour:"Low Sheen (choose colour)",size:"10L tin",price:185,unit:"per 10L",stock:"In Stock",lead:"1-2 days",notes:"Exterior paint with 10-year guarantee. Resists flaking.",added:"2025-01-30",usedIn:["Penrith Residence","Blacktown Duplex","Parramatta Home","Castle Hill Villa","Liverpool Estate"]},
+  {id:21,cat:"Paint",name:"Dulux Wash&Wear",supplier:"Dulux",colour:"Low Sheen (choose colour)",size:"10L tin",price:165,unit:"per 10L",stock:"In Stock",lead:"1-2 days",notes:"Interior wall paint. Washable finish.",added:"2025-01-30",usedIn:["Penrith Residence","Blacktown Duplex"]},
+  {id:22,cat:"Paint",name:"Haymes Paint",supplier:"Haymes",colour:"Matte (choose colour)",size:"10L tin",price:140,unit:"per 10L",stock:"In Stock",lead:"1-2 days",notes:"Budget interior paint. Good coverage, matte finish.",added:"2025-02-28",usedIn:[]},
+  {id:23,cat:"Paint",name:"Taubmans Endure",supplier:"Taubmans",colour:"Semi Gloss (choose colour)",size:"10L tin",price:155,unit:"per 10L",stock:"In Stock",lead:"1-2 days",notes:"Interior semi-gloss. Best for trim and skirting.",added:"2025-03-15",usedIn:["Parramatta Home"]},
+];
+
+const catIcons = {"Bricks":"bi-bricks","Tiles":"bi-grid-3x3","Concrete Slabs":"bi-layers","Roofing":"bi-house-door","Windows & Doors":"bi-aspect-ratio","Paint":"bi-palette"};
+const catColors = {"Bricks":"#DC2626","Tiles":"#2563EB","Concrete Slabs":"#475569","Roofing":"#7C3AED","Windows & Doors":"#0D9488","Paint":"#E8730C"};
+const projectInfo = {
+  "1":{stage:"Frame Stage",budget:485000,spent:312400},
+  "2":{stage:"Design Phase",budget:620000,spent:45200},
+  "3":{stage:"Slab Stage",budget:380000,spent:198600},
+  "4":{stage:"Lockup Stage",budget:550000,spent:410000},
+  "5":{stage:"Foundation",budget:720000,spent:89000},
+};
+
+let selections = {};
+let currentCat = "All";
+let stockFilter = "all";
+let sortField = null;
+let sortAsc = true;
+let currentView = "table";
+let nextId = 24;
+let deleteTargetId = null;
+let editTargetId = null;
+
+const notifData = [
+  {id:1,icon:"bi-exclamation-triangle",bg:"var(--danger-light)",color:"var(--danger)",msg:"PGH Designer Bricks out of stock — Castle Hill project affected",time:"2 hrs ago",unread:true},
+  {id:2,icon:"bi-cart-check",bg:"var(--success-light)",color:"var(--success)",msg:"Simran Pannu selected 4 materials for Penrith — quote pending",time:"5 hrs ago",unread:true},
+  {id:3,icon:"bi-box-seam",bg:"var(--warning-light)",color:"#D97706",msg:"Low stock alert: Statuario tiles and Hanson Pod Slab",time:"Yesterday",unread:true},
+];
+
+// ══════════════════════════════════════
+// CLOCK & TIMESTAMP
+// ══════════════════════════════════════
+function updateClock(){const n=new Date();document.getElementById('liveClock').innerHTML=`<span>${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}</span> AEST`}
+setInterval(updateClock,1000);updateClock();
+let _sec=0;setInterval(()=>{_sec++;const el=document.getElementById('lastUpdated');if(!el)return;el.textContent=_sec<5?'Updated just now':_sec<60?`Updated ${_sec}s ago`:`Updated ${Math.floor(_sec/60)}m ago`},1000);
+
+// ══════════════════════════════════════
+// TOASTS
+// ══════════════════════════════════════
+function showToast(msg,type='info'){
+  const c=document.getElementById('toastContainer');
+  const cl={success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'},danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'},info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'},warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'}}[type]||{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'};
+  const t=document.createElement('div');t.className='toast-item';
+  t.innerHTML=`<div class="toast-icon" style="background:${cl.bg};color:${cl.color}"><i class="bi ${cl.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;
+  c.appendChild(t);setTimeout(()=>removeToast(t),4500);
+}
+function removeToast(el){if(!el||!el.parentElement)return;el.classList.add('removing');setTimeout(()=>el.remove(),250)}
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+let notifs=JSON.parse(JSON.stringify(notifData));
+function renderNotifs(){const l=document.getElementById('notifList'),uc=notifs.filter(n=>n.unread).length,b=document.getElementById('notifCount');b.textContent=uc;b.style.display=uc>0?'flex':'none';l.innerHTML=notifs.map(n=>`<div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})"><div class="notif-icon" style="background:${n.bg};color:${n.color}"><i class="bi ${n.icon}"></i></div><div class="notif-text"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div><button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button></div>`).join('')}
+function toggleNotif(){document.getElementById('notifDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn');if(d&&!d.contains(e.target)&&!b.contains(e.target))d.classList.remove('show')});
+function readNotif(id){const n=notifs.find(x=>x.id===id);if(n&&n.unread){n.unread=false;renderNotifs()}showToast('Opening: '+(n?n.msg.substring(0,50)+'...':''),'info')}
+function dismissNotif(id){const el=document.querySelector(`.notification-item[data-id="${id}"]`);if(el){el.classList.add('dismissing');setTimeout(()=>{notifs=notifs.filter(x=>x.id!==id);renderNotifs()},250)}}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('All notifications marked as read','success')}
+
+// ══════════════════════════════════════
+// KPIs
+// ══════════════════════════════════════
+function updateKPIs(){
+  const cats=[...new Set(materials.map(m=>m.cat))];
+  const outCount=materials.filter(m=>m.stock==='Out of Stock').length;
+  // Calculate avg lead time from "3-5 days" format
+  let totalLead=0,count=0;
+  materials.forEach(m=>{const match=m.lead.match(/(\d+)-(\d+)/);if(match){totalLead+=(parseInt(match[1])+parseInt(match[2]))/2;count++}});
+  const avgLead=count?(totalLead/count).toFixed(1):'0';
+  animateValue('kpiTotal',materials.length);
+  animateValue('kpiCats',cats.length);
+  animateValue('kpiOut',outCount);
+  document.getElementById('kpiLead').textContent=avgLead+'d';
+}
+function animateValue(id,target){
+  const el=document.getElementById(id);const start=parseInt(el.textContent)||0;const dur=600;const st=performance.now();
+  (function step(now){const p=Math.min((now-st)/dur,1),e=1-Math.pow(1-p,3);el.textContent=Math.round(start+(target-start)*e);if(p<1)requestAnimationFrame(step)})(st);
+}
+
+// ══════════════════════════════════════
+// PROJECT CONTEXT
+// ══════════════════════════════════════
+function onProjectChange(){
+  const info=projectInfo[document.getElementById('projectSelect').value];
+  if(info){
+    document.getElementById('projStage').textContent=info.stage;
+    const remaining=info.budget-info.spent;
+    document.getElementById('projBudget').textContent='$'+remaining.toLocaleString();
+    document.getElementById('projBudget').style.color=remaining<50000?'var(--danger)':'var(--success)';
+    showToast('Switched context to '+document.getElementById('projectSelect').value.split('—')[0].trim(),'info');
+  }
+}
+
+// ══════════════════════════════════════
+// CATEGORY TABS
+// ══════════════════════════════════════
+function renderCatTabs(){
+  const cats=[...new Set(materials.map(m=>m.cat))];
+  const allCount=materials.length;
+  let html=`<button class="cat-tab ${currentCat==='All'?'active':''}" onclick="switchCat('All',this)"><i class="bi bi-grid-fill"></i>All<span class="count">${allCount}</span></button>`;
+  html+=cats.map(c=>{
+    const count=materials.filter(m=>m.cat===c).length;
+    const icon=catIcons[c]||'bi-box';
+    return `<button class="cat-tab ${c===currentCat?'active':''}" onclick="switchCat('${c.replace(/'/g,"\\'")}',this)"><i class="bi ${icon}"></i>${c}<span class="count">${count}</span></button>`;
+  }).join('');
+  document.getElementById('catTabs').innerHTML=html;
+}
+function switchCat(cat,btn){
+  currentCat=cat;
+  document.querySelectorAll('.cat-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderView();
+}
+
+// ══════════════════════════════════════
+// FILTERS & SORT
+// ══════════════════════════════════════
+function setStockFilter(f,btn){
+  stockFilter=f;
+  document.querySelectorAll('.stock-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderView();
+}
+function toggleSort(field){
+  if(sortField===field){sortAsc=!sortAsc}else{sortField=field;sortAsc=true}
+  document.getElementById('sortPriceBtn').classList.toggle('active',sortField==='price');
+  document.getElementById('sortNameBtn').classList.toggle('active',sortField==='name');
+  document.getElementById('sortPriceBtn').innerHTML=`<i class="bi bi-arrow-${sortField==='price'?(sortAsc?'down':'up'):'down'}-short"></i>Price`;
+  document.getElementById('sortNameBtn').innerHTML=`<i class="bi bi-arrow-${sortField==='name'?(sortAsc?'down':'up'):'down'}-short"></i>Name`;
+  renderView();
+}
+function setView(v){
+  currentView=v;
+  document.getElementById('viewTable').classList.toggle('active',v==='table');
+  document.getElementById('viewGrid').classList.toggle('active',v==='grid');
+  document.getElementById('tableView').style.display=v==='table'?'block':'none';
+  document.getElementById('gridView').style.display=v==='grid'?'block':'none';
+  renderView();
+}
+
+// ══════════════════════════════════════
+// GET FILTERED DATA
+// ══════════════════════════════════════
+function getFiltered(){
+  const search=document.getElementById('matSearch').value.toLowerCase().trim();
+  let filtered=currentCat==='All'?[...materials]:materials.filter(m=>m.cat===currentCat);
+  if(stockFilter!=='all')filtered=filtered.filter(m=>stockFilter==='instock'?m.stock==='In Stock':stockFilter==='low'?m.stock==='Low Stock':m.stock==='Out of Stock');
+  if(search)filtered=filtered.filter(m=>m.name.toLowerCase().includes(search)||m.supplier.toLowerCase().includes(search)||m.colour.toLowerCase().includes(search)||m.size.toLowerCase().includes(search)||m.cat.toLowerCase().includes(search));
+  if(sortField==='price')filtered.sort((a,b)=>sortAsc?a.price-b.price:b.price-a.price);
+  else if(sortField==='name')filtered.sort((a,b)=>sortAsc?a.name.localeCompare(b.name):b.name.localeCompare(a.name));
+  return filtered;
+}
+
+// ══════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════
+function renderView(){
+  const filtered=getFiltered();
+  document.getElementById('resultsCount').textContent=`Showing ${filtered.length} material${filtered.length!==1?'s':''}`;
+  if(currentView==='table')renderTable(filtered);else renderGrid(filtered);
+}
+
+// ══════════════════════════════════════
+// TABLE VIEW
+// ══════════════════════════════════════
+function renderTable(filtered){
+  const c=document.getElementById('tableContainer'),nr=document.getElementById('noResults');
+  if(!filtered.length){c.innerHTML='';nr.style.display='block';return}
+  nr.style.display='none';
+  const stockPill=s=>s==='In Stock'?'pill-success':s==='Low Stock'?'pill-warning':'pill-danger';
+  c.innerHTML=`<table class="table-custom"><thead><tr><th>Product</th><th>Supplier</th><th>Colour / Type</th><th>Size</th><th>Unit Price</th><th>Stock</th><th>Lead Time</th><th>Actions</th></tr></thead><tbody>${filtered.map(m=>{
+    const isOut=m.stock==='Out of Stock',isSel=selections[m.id];
+    return `<tr class="${isOut?'out-of-stock-row':''} ${isSel?'row-selected':''}" id="row-${m.id}">
+      <td><div style="display:flex;align-items:center;gap:10px"><div style="width:36px;height:36px;border-radius:8px;background:${catColors[m.cat]||'var(--bg-body)'}15;color:${catColors[m.cat]||'var(--text-tertiary)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px"><i class="bi ${catIcons[m.cat]||'bi-box'}"></i></div><div style="min-width:0"><div style="font-weight:600;font-size:13px;color:var(--primary);cursor:pointer" onclick="openDetail(${m.id})">${m.name}</div><div style="font-size:10.5px;color:var(--text-tertiary)">${m.cat}${m.usedIn.length?' &middot; Used in '+m.usedIn.length+' project(s)':''}</div></div></div></td>
+      <td style="font-size:12px;color:var(--text-secondary);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.supplier}</td>
+      <td style="font-size:12px">${m.colour}</td>
+      <td style="font-size:12px;color:var(--text-secondary)">${m.size}</td>
+      <td style="font-weight:700;color:var(--primary);white-space:nowrap">$${m.price.toLocaleString()}<span style="font-weight:400;font-size:11px;color:var(--text-tertiary)"> /${m.unit}</span></td>
+      <td><span class="status-pill ${stockPill(m.stock)}">${m.stock}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary)">${m.lead}</td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        ${isOut?`<button class="btn-primary-custom btn-sm-custom" disabled title="Out of stock"><i class="bi bi-x-circle"></i></button>`:
+          isSel?`<div class="d-flex align-items-center gap-2"><div class="qty-ctrl"><button class="qty-btn" onclick="changeQty(${m.id},-1)">-</button><div class="qty-val">${isSel}</div><button class="qty-btn" onclick="changeQty(${m.id},1)">+</button></div><button class="btn-icon" style="width:26px;height:26px;border-color:rgba(220,38,38,.2);color:var(--danger)" onclick="removeSel(${m.id})" title="Remove"><i class="bi bi-x" style="font-size:11px"></i></button></div>`:
+          `<button class="btn-primary-custom btn-sm-custom" onclick="selectMat(${m.id})"><i class="bi bi-plus-circle"></i>Select</button>`}
+        <button class="btn-icon" style="width:26px;height:26px;margin-left:2px" onclick="openDetail(${m.id})" title="View details"><i class="bi bi-eye" style="font-size:11px"></i></button>
+        <button class="btn-icon" style="width:26px;height:26px" onclick="openEditModal(${m.id})" title="Edit"><i class="bi bi-pencil" style="font-size:11px"></i></button>
+        <button class="btn-icon" style="width:26px;height:26px;border-color:rgba(220,38,38,.15);color:var(--danger)" onclick="confirmDelete(${m.id})" title="Delete"><i class="bi bi-trash3" style="font-size:11px"></i></button>
+      </td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+// ══════════════════════════════════════
+// GRID VIEW
+// ══════════════════════════════════════
+function renderGrid(filtered){
+  const gc=document.getElementById('gridContainer'),nr=document.getElementById('noResultsGrid');
+  if(!filtered.length){gc.innerHTML='';nr.style.display='block';return}
+  nr.style.display='none';
+  const stockPill=s=>s==='In Stock'?'pill-success':s==='Low Stock'?'pill-warning':'pill-danger';
+  gc.innerHTML=filtered.map(m=>{
+    const isOut=m.stock==='Out of Stock',isSel=selections[m.id];
+    return `<div class="mat-card ${isOut?'is-out':''} ${isSel?'is-selected':''}" onclick="openDetail(${m.id})">
+      ${isSel?'<div class="mat-card-sel-badge"><i class="bi bi-check-lg"></i></div>':''}
+      <div class="mat-card-img"><i class="bi ${catIcons[m.cat]||'bi-box'}" style="font-size:32px;color:${catColors[m.cat]||'var(--text-tertiary)'};opacity:.4"></i></div>
+      <div class="mat-card-name">${m.name}</div>
+      <div class="mat-card-supplier">${m.supplier}</div>
+      <div class="mat-card-price">$${m.price.toLocaleString()} <span>/ ${m.unit}</span></div>
+      <div class="mat-card-meta">
+        <span class="mat-card-meta-tag">${m.colour}</span>
+        <span class="mat-card-meta-tag">${m.size}</span>
+        <span class="status-pill ${stockPill(m.stock)}" style="font-size:9px;padding:2px 7px">${m.stock}</span>
+      </div>
+      <div class="mat-card-actions" onclick="event.stopPropagation()">
+        ${isOut?`<button class="btn-primary-custom btn-sm-custom" disabled style="flex:1"><i class="bi bi-x-circle me-1"></i>Out of Stock</button>`:
+          isSel?`<div class="qty-ctrl"><button class="qty-btn" onclick="changeQty(${m.id},-1)">-</button><div class="qty-val">${isSel}</div><button class="qty-btn" onclick="changeQty(${m.id},1)">+</button></div><button class="btn-danger-outline btn-sm-custom" onclick="removeSel(${m.id})"><i class="bi bi-x"></i></button>`:
+          `<button class="btn-primary-custom btn-sm-custom" style="flex:1" onclick="selectMat(${m.id})"><i class="bi bi-plus-circle me-1"></i>Select</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+// SELECTION LOGIC
+// ══════════════════════════════════════
+function selectMat(id){
+  selections[id]=1;
+  const m=materials.find(x=>x.id===id);
+  showToast(`${m.name} added to selection`,'success');
+  flashRow(id);updateSelectionUI();renderView();
+}
+function removeSel(id){
+  const m=materials.find(x=>x.id===id);
+  delete selections[id];
+  showToast(`${m.name} removed`,'warning');
+  updateSelectionUI();renderView();
+}
+function changeQty(id,delta){
+  if(!selections[id])return;
+  selections[id]=Math.max(1,selections[id]+delta);
+  updateSelectionUI();renderView();
+}
+function clearSelection(){
+  if(!Object.keys(selections).length)return;
+  selections={};
+  showToast('All selections cleared','warning');
+  updateSelectionUI();renderView();
+}
+function updateSelectionUI(){
+  const keys=Object.keys(selections);
+  const count=keys.length;
+  let total=0;
+  keys.forEach(k=>{const m=materials.find(x=>x.id===parseInt(k));if(m)total+=m.price*selections[k]});
+  const bar=document.getElementById('selectionBar');
+  document.getElementById('selBadge').textContent=count;
+  document.getElementById('selCount').textContent=count;
+  document.getElementById('selTotal').textContent='$'+total.toLocaleString();
+  bar.classList.toggle('show',count>0);
+  // Render chips (max 4 visible)
+  const chipsEl=document.getElementById('selChips');
+  if(count>0){
+    const show=keys.slice(0,4);
+    chipsEl.innerHTML=show.map(k=>{const m=materials.find(x=>x.id===parseInt(k));if(!m)return'';return `<span class="sel-chip">${m.name.substring(0,18)}${m.name.length>18?'...':''} <span style="color:var(--accent);font-weight:800">x${selections[k]}</span> <button class="sel-chip-remove" onclick="event.stopPropagation();removeSel(${m.id})"><i class="bi bi-x"></i></button></span>`}).join('')+(count>4?`<span class="sel-chip" style="opacity:.6">+${count-4} more</span>`:'');
+  }else{chipsEl.innerHTML=''}
+}
+function flashRow(id){
+  setTimeout(()=>{const row=document.getElementById('row-'+id);if(row){row.classList.add('row-flash');setTimeout(()=>row.classList.remove('row-flash'),500)}},50);
+}
+
+// ══════════════════════════════════════
+// DETAIL MODAL
+// ══════════════════════════════════════
+function openDetail(id){
+  const m=materials.find(x=>x.id===id);if(!m)return;
+  document.getElementById('detailTitle').textContent=m.name;
+  const isSel=selections[m.id];
+  const sp=m.stock==='In Stock'?'pill-success':m.stock==='Low Stock'?'pill-warning':'pill-danger';
+  const related=materials.filter(x=>x.cat===m.cat&&x.id!==m.id).slice(0,3);
+  document.getElementById('detailBody').innerHTML=`
+    <div class="row g-3">
+      <div class="col-md-5">
+        <div style="height:200px;background:var(--bg-body);border:1px solid var(--border-color);border-radius:10px;display:flex;align-items:center;justify-content:center">
+          <div style="text-align:center;color:var(--text-tertiary)"><i class="bi ${catIcons[m.cat]||'bi-box'}" style="font-size:48px;display:block;margin-bottom:8px;color:${catColors[m.cat]};opacity:.35"></i><div style="font-size:12px">${m.cat} material preview</div></div>
+        </div>
+        ${m.stock==='Out of Stock'?`<div style="padding:10px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;margin-top:12px;font-size:12px;color:var(--danger)"><i class="bi bi-exclamation-triangle me-1"></i>Out of stock. Lead time of ${m.lead} from order date.</div>`:''}
+        ${m.stock==='Low Stock'?`<div style="padding:10px 14px;background:var(--warning-light);border:1px solid rgba(245,158,11,.15);border-radius:8px;margin-top:12px;font-size:12px;color:#D97706"><i class="bi bi-exclamation-circle me-1"></i>Low stock — order soon to avoid delays.</div>`:''}
+        <div style="margin-top:12px;padding:14px;background:var(--bg-body);border:1px solid var(--border-color);border-radius:10px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-tertiary);letter-spacing:.04em;margin-bottom:10px">Quick Price Calculator</div>
+          <div style="display:flex;gap:8px;align-items:end">
+            <div style="flex:1"><label style="font-size:10px;color:var(--text-tertiary);font-weight:600;display:block;margin-bottom:3px">Quantity (${m.unit})</label><input type="number" class="calc-input" id="calcQty" value="1" min="1" oninput="calcPrice(${m.id},${m.price})"></div>
+          </div>
+          <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:var(--text-secondary)">Estimated Cost:</span>
+            <span style="font-size:20px;font-weight:800;color:var(--primary)" id="calcResult">$${m.price.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-7">
+        <div class="detail-grid" style="margin-bottom:16px">
+          <div><div class="detail-label">Supplier</div><div class="detail-value">${m.supplier}</div></div>
+          <div><div class="detail-label">Category</div><div class="detail-value"><span style="display:inline-flex;align-items:center;gap:4px"><i class="bi ${catIcons[m.cat]}" style="color:${catColors[m.cat]};font-size:12px"></i>${m.cat}</span></div></div>
+          <div><div class="detail-label">Colour / Finish</div><div class="detail-value">${m.colour}</div></div>
+          <div><div class="detail-label">Size / Dimensions</div><div class="detail-value">${m.size}</div></div>
+          <div><div class="detail-label">Unit Price</div><div class="detail-value" style="color:var(--primary);font-size:16px">$${m.price.toLocaleString()} <span style="font-size:12px;color:var(--text-tertiary);font-weight:400">/ ${m.unit}</span></div></div>
+          <div><div class="detail-label">Stock Status</div><div><span class="status-pill ${sp}">${m.stock}</span></div></div>
+          <div><div class="detail-label">Lead Time</div><div class="detail-value">${m.lead}</div></div>
+          <div><div class="detail-label">Added to Catalogue</div><div class="detail-value">${m.added}</div></div>
+        </div>
+        <div style="margin-bottom:16px">
+          <div class="detail-label" style="margin-bottom:6px">Product Notes</div>
+          <div style="background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;color:var(--text-secondary)">${m.notes}</div>
+        </div>
+        ${m.usedIn.length?`<div style="margin-bottom:16px"><div class="detail-label" style="margin-bottom:6px">Used In Projects</div><div style="display:flex;gap:6px;flex-wrap:wrap">${m.usedIn.map(p=>`<span style="padding:4px 10px;background:var(--primary-glow);color:var(--primary);border-radius:6px;font-size:11px;font-weight:600"><i class="bi bi-building me-1"></i>${p}</span>`).join('')}</div></div>`:''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${isSel?`<div class="d-flex align-items-center gap-2 me-2"><span class="selected-indicator"><i class="bi bi-check-circle-fill"></i>Selected x${isSel}</span><div class="qty-ctrl"><button class="qty-btn" onclick="changeQty(${m.id},-1);openDetail(${m.id})">-</button><div class="qty-val">${isSel}</div><button class="qty-btn" onclick="changeQty(${m.id},1);openDetail(${m.id})">+</button></div></div><button class="btn-danger-outline btn-sm-custom" onclick="removeSel(${m.id});closeModal('detailModal')"><i class="bi bi-trash3 me-1"></i>Remove</button>`:
+            (m.stock!=='Out of Stock'?`<button class="btn-primary-custom" onclick="selectMat(${m.id});closeModal('detailModal')"><i class="bi bi-plus-circle me-1"></i>Add to Selection</button>`:'')}
+          <button class="btn-outline-custom" onclick="openEditModal(${m.id});closeModal('detailModal')"><i class="bi bi-pencil me-1"></i>Edit</button>
+          <button class="btn-outline-custom" onclick="showToast('Opening supplier page for ${m.supplier.replace(/'/g,"\\'")}...','info')"><i class="bi bi-box-arrow-up-right me-1"></i>Supplier</button>
+        </div>
+        ${related.length?`<div style="margin-top:20px"><div class="detail-label" style="margin-bottom:8px">Related Materials</div><div style="display:flex;flex-direction:column;gap:6px">${related.map(r=>`<div class="related-card" onclick="openDetail(${r.id})"><div style="width:32px;height:32px;border-radius:6px;background:${catColors[r.cat]||'var(--bg-body)'}15;color:${catColors[r.cat]};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px"><i class="bi ${catIcons[r.cat]}"></i></div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}</div><div style="font-size:11px;color:var(--text-tertiary)">${r.colour} &middot; ${r.size}</div></div><div style="font-weight:700;color:var(--primary);font-size:13px;white-space:nowrap">$${r.price.toLocaleString()}</div></div>`).join('')}</div></div>`:''}
+      </div>
+    </div>`;
+  document.getElementById('detailModal').classList.add('show');
+}
+function calcPrice(id,unitPrice){
+  const qty=parseInt(document.getElementById('calcQty').value)||0;
+  document.getElementById('calcResult').textContent='$'+(qty*unitPrice).toLocaleString();
+}
+
+// ══════════════════════════════════════
+// ADD MATERIAL
+// ══════════════════════════════════════
+function openAddModal(){
+  document.getElementById('addModalTitle').textContent='Add New Material';
+  const cats=[...new Set(materials.map(m=>m.cat))];
+  document.getElementById('addModalBody').innerHTML=buildFormHTML(cats,null);
+  document.getElementById('addModal').classList.add('show');
+}
+function buildFormHTML(cats,m){
+  const v=m||{cat:'',name:'',supplier:'',colour:'',size:'',price:'',unit:'per 1000',stock:'In Stock',lead:'',notes:''};
+  return `
+    <div class="mb-3"><label class="form-label-custom">Category</label><select class="form-input-custom" id="fCat">${cats.map(c=>`<option ${c===v.cat?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="mb-3"><label class="form-label-custom">Product Name *</label><input class="form-input-custom" id="fName" placeholder="e.g. Austral Bricks - Modern" value="${v.name}"></div>
+    <div class="mb-3"><label class="form-label-custom">Supplier *</label><input class="form-input-custom" id="fSupplier" placeholder="e.g. Austral Bricks NSW" value="${v.supplier}"></div>
+    <div class="row g-3 mb-3">
+      <div class="col-6"><label class="form-label-custom">Colour / Finish</label><input class="form-input-custom" id="fColour" placeholder="e.g. Charcoal" value="${v.colour}"></div>
+      <div class="col-6"><label class="form-label-custom">Size</label><input class="form-input-custom" id="fSize" placeholder="e.g. 230x110x76mm" value="${v.size}"></div>
+    </div>
+    <div class="row g-3 mb-3">
+      <div class="col-6"><label class="form-label-custom">Price ($) *</label><input class="form-input-custom" id="fPrice" type="number" placeholder="e.g. 1250" value="${v.price}"></div>
+      <div class="col-6"><label class="form-label-custom">Price Unit</label><select class="form-input-custom" id="fUnit"><option ${v.unit==='per 1000'?'selected':''}>per 1000</option><option ${v.unit==='per sqm'?'selected':''}>per sqm</option><option ${v.unit==="per m\u00B2"?'selected':''}>per m\u00B2</option><option ${v.unit==='per each'?'selected':''}>per each</option><option ${v.unit==='per 10L'?'selected':''}>per 10L</option></select></div>
+    </div>
+    <div class="row g-3 mb-3">
+      <div class="col-6"><label class="form-label-custom">Stock Status</label><select class="form-input-custom" id="fStock"><option ${v.stock==='In Stock'?'selected':''}>In Stock</option><option ${v.stock==='Low Stock'?'selected':''}>Low Stock</option><option ${v.stock==='Out of Stock'?'selected':''}>Out of Stock</option></select></div>
+      <div class="col-6"><label class="form-label-custom">Lead Time</label><input class="form-input-custom" id="fLead" placeholder="e.g. 3-5 days" value="${v.lead}"></div>
+    </div>
+    <div class="mb-3"><label class="form-label-custom">Notes</label><textarea class="form-input-custom" rows="2" id="fNotes" placeholder="Optional notes...">${v.notes}</textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-outline-custom" onclick="${m?'closeModal(\'editModal\')':'closeModal(\'addModal\');resetAddForm()'}">Cancel</button>
+      <button class="btn-primary-custom" onclick="${m?`confirmEdit(${m.id})`:'confirmAdd()'}"><i class="bi bi-check-lg me-1"></i>${m?'Save Changes':'Add Material'}</button>
+    </div>`;
+}
+function confirmAdd(){
+  const cat=document.getElementById('fCat').value,name=document.getElementById('fName').value.trim(),supplier=document.getElementById('fSupplier').value.trim(),colour=document.getElementById('fColour').value.trim(),size=document.getElementById('fSize').value.trim(),price=parseFloat(document.getElementById('fPrice').value),unit=document.getElementById('fUnit').value,stock=document.getElementById('fStock').value,lead=document.getElementById('fLead').value.trim(),notes=document.getElementById('fNotes').value.trim();
+  if(!name){showToast('Product Name is required','warning');document.getElementById('fName').focus();return}
+  if(!supplier){showToast('Supplier is required','warning');document.getElementById('fSupplier').focus();return}
+  if(!price||price<=0){showToast('Enter a valid price','warning');document.getElementById('fPrice').focus();return}
+  materials.push({id:nextId++,cat,name,supplier,colour:colour||'\u2014',size:size||'\u2014',price,unit,stock,lead:lead||'\u2014',notes:notes||'Custom added material.',added:new Date().toISOString().slice(0,10),usedIn:[]});
+  closeModal('addModal');resetAddForm();renderCatTabs();updateKPIs();initCharts();renderView();renderSuppliers();
+  showToast(`${name} added to ${cat} catalogue`,'success');
+}
+function resetAddForm(){}
+
+// ══════════════════════════════════════
+// EDIT MATERIAL
+// ══════════════════════════════════════
+function openEditModal(id){
+  const m=materials.find(x=>x.id===id);if(!m)return;
+  editTargetId=id;
+  const cats=[...new Set(materials.map(x=>x.cat))];
+  document.getElementById('editModalBody').innerHTML=buildFormHTML(cats,m);
+  document.getElementById('editModal').classList.add('show');
+}
+function confirmEdit(id){
+  const m=materials.find(x=>x.id===id);if(!m)return;
+  const cat=document.getElementById('fCat').value,name=document.getElementById('fName').value.trim(),supplier=document.getElementById('fSupplier').value.trim(),colour=document.getElementById('fColour').value.trim(),size=document.getElementById('fSize').value.trim(),price=parseFloat(document.getElementById('fPrice').value),unit=document.getElementById('fUnit').value,stock=document.getElementById('fStock').value,lead=document.getElementById('fLead').value.trim(),notes=document.getElementById('fNotes').value.trim();
+  if(!name){showToast('Product Name is required','warning');return}
+  if(!supplier){showToast('Supplier is required','warning');return}
+  if(!price||price<=0){showToast('Enter a valid price','warning');return}
+  Object.assign(m,{cat,name,supplier,colour:colour||'\u2014',size:size||'\u2014',price,unit,stock,lead:lead||'\u2014',notes:notes||m.notes});
+  closeModal('editModal');renderCatTabs();updateKPIs();initCharts();renderView();renderSuppliers();
+  showToast(`${name} updated successfully`,'success');
+}
+
+// ══════════════════════════════════════
+// DELETE MATERIAL
+// ══════════════════════════════════════
+function confirmDelete(id){
+  const m=materials.find(x=>x.id===id);if(!m)return;
+  deleteTargetId=id;
+  document.getElementById('deleteModalBody').innerHTML=`
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Are you sure you want to delete <b style="color:var(--text-primary)">${m.name}</b> from the catalogue?</p>
+    ${m.usedIn.length?`<div style="padding:10px 14px;background:var(--warning-light);border:1px solid rgba(245,158,11,.15);border-radius:8px;margin-bottom:16px;font-size:12px;color:#D97706"><i class="bi bi-exclamation-circle me-1"></i>This material is used in ${m.usedIn.length} project(s): ${m.usedIn.join(', ')}</div>`:''}
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-outline-custom" onclick="closeModal('deleteModal')">Cancel</button>
+      <button class="btn-danger-outline" onclick="executeDelete()"><i class="bi bi-trash3 me-1"></i>Delete Permanently</button>
+    </div>`;
+  document.getElementById('deleteModal').classList.add('show');
+}
+function executeDelete(){
+  const id=deleteTargetId;if(!id)return;
+  const m=materials.find(x=>x.id===id);
+  materials=materials.filter(x=>x.id!==id);
+  delete selections[id];
+  closeModal('deleteModal');deleteTargetId=null;
+  renderCatTabs();updateKPIs();initCharts();renderView();updateSelectionUI();renderSuppliers();
+  showToast(`${m?m.name:'Material'} deleted from catalogue`,'danger');
+}
+
+// ══════════════════════════════════════
+// EXPORT & PRINT
+// ══════════════════════════════════════
+function exportCatalogue(){
+  const h=['Category','Product','Supplier','Colour/Finish','Size','Price','Unit','Stock','Lead Time','Added','Used In'];
+  const rows=materials.map(m=>[m.cat,m.name,m.supplier,m.colour,m.size,m.price,m.unit,m.stock,m.lead,m.added,m.usedIn.join('; ')]);
+  let csv=h.join(',')+'\n'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='BuildPro_Catalogue_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast('Exported '+materials.length+' materials as CSV','success');
+}
+function printCatalogue(){window.print();showToast('Print dialog opened','info')}
+
+// ══════════════════════════════════════
+// SELECTION REVIEW MODAL
+// ══════════════════════════════════════
+function openSelectionModal(){
+  const keys=Object.keys(selections);
+  if(!keys.length){showToast('No materials selected yet','warning');return}
+  let total=0;
+  const rows=keys.map(k=>{const m=materials.find(x=>x.id===parseInt(k));if(!m)return'';const line=m.price*selections[k];total+=line;
+    return `<tr><td><div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:6px;background:${catColors[m.cat]||'var(--bg-body)'}15;color:${catColors[m.cat]};display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0"><i class="bi ${catIcons[m.cat]}"></i></div><span style="font-weight:600;font-size:13px">${m.name}</span></div></td><td style="font-size:12px;color:var(--text-secondary)">${m.cat}</td><td style="font-size:12px">${m.colour}</td><td style="font-size:12px">$${m.price.toLocaleString()} / ${m.unit}</td><td><div class="qty-ctrl"><button class="qty-btn" onclick="changeQty(${m.id},-1);openSelectionModal()">-</button><div class="qty-val">${selections[k]}</div><button class="qty-btn" onclick="changeQty(${m.id},1);openSelectionModal()">+</button></div></td><td style="font-weight:700;color:var(--primary)">$${line.toLocaleString()}</td><td><button class="btn-icon" style="width:26px;height:26px;border-color:rgba(220,38,38,.2);color:var(--danger)" onclick="removeSel(${m.id});openSelectionModal()"><i class="bi bi-x" style="font-size:11px"></i></button></td></tr>`}).join('');
+  const proj=document.getElementById('projectSelect').value;
+  document.getElementById('selModalBody').innerHTML=`
+    <div style="background:linear-gradient(135deg,#F0FDFA,#CCFBF1);border:1px solid rgba(13,148,136,.12);border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div><span style="font-size:11px;color:var(--text-tertiary);font-weight:600">PROJECT:</span> <span style="font-weight:700">${proj.split('\u2014')[0].trim()}</span></div>
+      <div><span style="font-size:11px;color:var(--text-tertiary);font-weight:600">CUSTOMER:</span> <span style="font-weight:600">${proj.split('\u2014')[1]?proj.split('\u2014')[1].trim():''}</span></div>
+      <div style="font-size:18px;font-weight:800;color:var(--primary)">$${total.toLocaleString()}</div>
+    </div>
+    <div style="overflow-x:auto;max-height:350px;overflow-y:auto"><table class="table-custom"><thead><tr><th>Material</th><th>Category</th><th>Finish</th><th>Unit Price</th><th>Qty</th><th>Line Total</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="text-align:right;margin-top:16px;padding-top:12px;border-top:2px solid var(--border-color)">
+      <span style="font-size:13px;color:var(--text-secondary)">Variation Total: </span><span style="font-size:22px;font-weight:800;color:var(--primary)">$${total.toLocaleString()}</span>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn-outline-custom" onclick="clearSelection();closeModal('selModal')"><i class="bi bi-trash3 me-1"></i>Clear All</button>
+      <button class="btn-primary-custom" onclick="closeModal('selModal');previewQuote()"><i class="bi bi-file-earmark-text me-1"></i>Preview Quote</button>
+    </div>`;
+  document.getElementById('selModal').classList.add('show');
+}
+
+// ══════════════════════════════════════
+// QUOTE PREVIEW
+// ══════════════════════════════════════
+function generateQuote(){previewQuote()}
+function previewQuote(){
+  const keys=Object.keys(selections);
+  if(!keys.length){showToast('No materials selected','warning');return}
+  let total=0;
+  const proj=document.getElementById('projectSelect').value;
+  const projName=proj.split('\u2014')[0].trim();
+  const custName=proj.split('\u2014')[1]?proj.split('\u2014')[1].trim():'';
+  const today=new Date().toLocaleDateString('en-AU',{day:'numeric',month:'long',year:'numeric'});
+  const quoteNo='VQ-'+String(Math.floor(Math.random()*9000)+1000);
+  const items=keys.map(k=>{const m=materials.find(x=>x.id===parseInt(k));if(!m)return null;const line=m.price*selections[k];total+=line;
+    return {name:m.name,cat:m.cat,colour:m.colour,price:m.price,unit:m.unit,qty:selections[k],line}}).filter(Boolean);
+  document.getElementById('quoteModalBody').innerHTML=`
+    <div style="border:2px solid var(--border-color);border-radius:10px;overflow:hidden">
+      <div style="background:var(--sidebar-bg);color:white;padding:24px;text-align:center">
+        <div style="font-size:20px;font-weight:800;letter-spacing:.02em">BuildPro NSW</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:4px">Licensed Builder &bull; ABN 12 345 678 901</div>
+      </div>
+      <div style="padding:24px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);font-weight:700;letter-spacing:.06em;margin-bottom:4px">VARIATION QUOTE</div>
+            <div style="font-size:18px;font-weight:800;color:var(--primary)">${quoteNo}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">Date: ${today}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;font-weight:600">Project: ${projName}</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Customer: ${custName}</div>
+            <div style="font-size:12px;color:var(--text-secondary)">Stage: Material Selection Variation</div>
+          </div>
+        </div>
+        <table class="table-custom" style="margin-bottom:0">
+          <thead><tr><th>#</th><th>Material</th><th>Category</th><th>Finish</th><th>Unit Price</th><th>Qty</th><th>Total</th></tr></thead>
+          <tbody>${items.map((it,i)=>`<tr><td style="font-weight:600;color:var(--text-tertiary)">${i+1}</td><td style="font-weight:600">${it.name}</td><td style="font-size:12px;color:var(--text-secondary)">${it.cat}</td><td style="font-size:12px">${it.colour}</td><td>$${it.price.toLocaleString()} / ${it.unit}</td><td style="text-align:center;font-weight:700">${it.qty}</td><td style="font-weight:700;color:var(--primary)">$${it.line.toLocaleString()}</td></tr>`).join('')}</tbody>
+        </table>
+        <div style="border-top:2px solid var(--border-color);margin-top:0;padding-top:16px;display:flex;justify-content:flex-end">
+          <div style="width:250px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-secondary);margin-bottom:6px"><span>Subtotal</span><span>$${total.toLocaleString()}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-secondary);margin-bottom:6px"><span>GST (10%)</span><span>$${Math.round(total*0.1).toLocaleString()}</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:var(--text-primary);padding-top:8px;border-top:2px solid var(--primary)"><span>Total incl. GST</span><span style="color:var(--primary)">$${Math.round(total*1.1).toLocaleString()}</span></div>
+          </div>
+        </div>
+        <div style="margin-top:20px;padding:14px;background:var(--bg-body);border-radius:8px;font-size:12px;color:var(--text-secondary);line-height:1.6">
+          <strong>Terms:</strong> This variation quote is valid for 14 days from issue date. Approval constitutes acceptance of the variation scope and pricing. Payment terms as per master building contract. Material lead times are estimates and may vary based on supplier availability.
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn-outline-custom" onclick="closeModal('quoteModal')"><i class="bi bi-x-lg me-1"></i>Close</button>
+      <button class="btn-outline-custom" onclick="printCatalogue()"><i class="bi bi-printer me-1"></i>Print Quote</button>
+      <button class="btn-primary-custom" onclick="sendQuote('${quoteNo}')"><i class="bi bi-envelope me-1"></i>Send to Customer</button>
+    </div>`;
+  document.getElementById('quoteModal').classList.add('show');
+}
+function sendQuote(no){
+  closeModal('quoteModal');
+  const proj=document.getElementById('projectSelect').value;
+  const cust=proj.split('\u2014')[1]?proj.split('\u2014')[1].trim():'customer';
+  selections={};updateSelectionUI();renderView();
+  showToast(`Quote ${no} sent to ${cust} via email with approval button`,'success');
+}
+
+// ══════════════════════════════════════
+// SUPPLIERS
+// ══════════════════════════════════════
+function renderSuppliers(){
+  const supplierMap={};
+  materials.forEach(m=>{if(!supplierMap[m.supplier])supplierMap[m.supplier]={name:m.supplier,count:0,cats:new Set(),avgPrice:0,totalPrice:0};supplierMap[m.supplier].count++;supplierMap[m.supplier].cats.add(m.cat);supplierMap[m.supplier].totalPrice+=m.price});
+  const suppliers=Object.values(supplierMap).sort((a,b)=>b.count-a.count).slice(0,6);
+  const colors=['var(--primary)','var(--info)','var(--accent)','var(--purple)','var(--danger)','var(--success)'];
+  document.getElementById('supplierGrid').innerHTML=suppliers.map((s,i)=>`
+    <div class="col-lg-4 col-md-6">
+      <div class="supplier-card" onclick="showToast('Opening ${s.name.replace(/'/g,"\\'")} details...','info')">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <div class="supplier-logo" style="background:${colors[i%colors.length]}">${s.name.charAt(0)}</div>
+          <div style="min-width:0"><div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div><div style="font-size:11px;color:var(--text-tertiary)">${[...s.cats].join(', ')}</div></div>
+        </div>
+        <div class="d-flex gap-3">
+          <div class="supplier-stat"><span class="num">${s.count}</span>materials</div>
+          <div class="supplier-stat"><span class="num">$${Math.round(s.totalPrice/s.count).toLocaleString()}</span>avg price</div>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════
+let priceChartInst,stockChartInst;
+function initCharts(){
+  const def={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11,family:'Inter'},color:'#64748B',padding:10,usePointStyle:true,pointStyleWidth:8}}}},gc='#F1F5F9';
+  const cats=[...new Set(materials.map(m=>m.cat))];
+  const shortCats=cats.map(c=>c.length>12?c.substring(0,12)+'\u2026':c);
+  if(priceChartInst)priceChartInst.destroy();
+  if(stockChartInst)stockChartInst.destroy();
+  priceChartInst=new Chart(document.getElementById('priceChart').getContext('2d'),{type:'bar',data:{labels:shortCats,datasets:[
+    {label:'Min Price',data:cats.map(c=>{const items=materials.filter(m=>m.cat===c);return items.length?Math.min(...items.map(i=>i.price)):0}),backgroundColor:'rgba(13,148,136,.15)',borderColor:'#0D9488',borderWidth:1.5,borderRadius:4,barPercentage:.45},
+    {label:'Avg Price',data:cats.map(c=>{const items=materials.filter(m=>m.cat===c);return items.length?Math.round(items.reduce((a,i)=>a+i.price,0)/items.length):0}),backgroundColor:'rgba(13,148,136,.4)',borderColor:'#0D9488',borderWidth:1.5,borderRadius:4,barPercentage:.45},
+    {label:'Max Price',data:cats.map(c=>{const items=materials.filter(m=>m.cat===c);return items.length?Math.max(...items.map(i=>i.price)):0}),backgroundColor:'rgba(13,148,136,.75)',borderColor:'#0D9488',borderWidth:1.5,borderRadius:4,barPercentage:.45}
+  ]},options:{...def,plugins:{...def.plugins,legend:{position:'top',labels:{...def.plugins.legend.labels,padding:12}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#94A3B8'}},y:{beginAtZero:true,grid:{color:gc},ticks:{font:{size:10},color:'#94A3B8'}}}}});
+  stockChartInst=new Chart(document.getElementById('stockChart').getContext('2d'),{type:'bar',data:{labels:shortCats,datasets:[
+    {label:'In Stock',data:cats.map(c=>materials.filter(m=>m.cat===c&&m.stock==='In Stock').length),backgroundColor:'rgba(22,163,74,.55)',borderRadius:4,barPercentage:.6},
+    {label:'Low Stock',data:cats.map(c=>materials.filter(m=>m.cat===c&&m.stock==='Low Stock').length),backgroundColor:'rgba(245,158,11,.55)',borderRadius:4,barPercentage:.6},
+    {label:'Out of Stock',data:cats.map(c=>materials.filter(m=>m.cat===c&&m.stock==='Out of Stock').length),backgroundColor:'rgba(220,38,38,.55)',borderRadius:4,barPercentage:.6}
+  ]},options:{...def,plugins:{...def.plugins,legend:{position:'top',labels:{...def.plugins.legend.labels,padding:12}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10},color:'#94A3B8'}},y:{stacked:true,beginAtZero:true,grid:{color:gc},ticks:{font:{size:10},color:'#94A3B8',stepSize:1}}}}});
+}
+
+// ══════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-backdrop-custom').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'))});
+
+// ══════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ══════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){
+    e.preventDefault();document.getElementById('matSearch').focus();
+  }
+});
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(()=>{
+  updateKPIs();initCharts();renderCatTabs();renderView();renderNotifs();updateSelectionUI();renderSuppliers();
+  onProjectChange();
+},100);
+</script>
+</body>
+</html>

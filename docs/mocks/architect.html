@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architect Coordination - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.12);--accent:#E8730C;--accent-light:#FFF3E0;--success:#16A34A;--success-light:#DCFCE7;--danger:#DC2626;--danger-light:#FEE2E2;--warning:#F59E0B;--warning-light:#FEF9C3;--info:#2563EB;--info-light:#DBEAFE;--purple:#7C3AED;--purple-light:#EDE9FE;--bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;--text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;--border-color:#E2E8F0;--border-light:#F1F5F9;--shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);--sidebar-bg:#0F172A;--sidebar-width:64px;--transition:all .2s cubic-bezier(.4,0,.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}
+.wrapper{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}@media(max-width:768px){.sidebar-tooltip{display:none}}
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px}.header-menu a:hover{color:rgba(255,255,255,.9)}.header-menu a.active{color:white}.header-menu a.active::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+.content-container{padding:20px;max-width:1560px;margin:0 auto;width:100%}
+.card-custom{background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);margin-bottom:16px;transition:var(--transition)}.card-custom:hover{box-shadow:var(--shadow-md)}
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.stat-value{font-size:26px;font-weight:800;line-height:1.2;color:var(--text-primary);margin-top:2px;letter-spacing:-.02em}.stat-desc{font-size:11.5px;color:var(--text-tertiary);margin-top:3px}
+.trend-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px}.trend-up{color:var(--success);background:rgba(22,163,74,.08)}.trend-down{color:var(--danger);background:rgba(220,38,38,.08)}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}.pill-success{background:rgba(22,163,74,.08);color:var(--success)}.pill-warning{background:rgba(245,158,11,.08);color:#D97706}.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}.pill-info{background:rgba(37,99,235,.08);color:var(--info)}.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit}.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-sm-custom{padding:5px 10px;font-size:11.5px;border-radius:6px}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.btn-danger-outline{background:var(--bg-card);color:var(--danger);border:1px solid rgba(220,38,38,.2);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}.btn-danger-outline:hover{background:var(--danger-light);border-color:var(--danger)}
+.progress-bar-custom{height:7px;background:#E2E8F0;border-radius:4px;overflow:hidden}.progress-fill-custom{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.notification-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;background:var(--danger);border-radius:99px;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg)}
+.notification-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:380px;background:white;border-radius:10px;box-shadow:var(--shadow-lg);z-index:1001;display:none;border:1px solid var(--border-color);overflow:hidden;max-height:440px;display:none;flex-direction:column}.notification-dropdown.show{display:flex;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notification-header{padding:14px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.notification-mark-all{font-size:11.5px;color:var(--primary);cursor:pointer;font-weight:600;transition:var(--transition)}.notification-mark-all:hover{color:var(--primary-dark)}
+.notification-list{overflow-y:auto;flex:1}
+.notification-item{padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s;display:flex;align-items:flex-start;gap:10px}.notification-item:hover{background:var(--bg-hover)}.notification-item.unread{background:rgba(13,148,136,.03)}.notification-item.dismissing{animation:slideOut .25s ease forwards;overflow:hidden}
+@keyframes slideOut{to{opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin:0}}
+.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.notif-text{flex:1;min-width:0}.notif-msg{font-size:12.5px;line-height:1.4}.notif-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.notif-dismiss{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);cursor:pointer;opacity:0;transition:var(--transition);flex-shrink:0;font-size:10px;border:none;background:none}.notification-item:hover .notif-dismiss{opacity:1}.notif-dismiss:hover{background:var(--danger-light);color:var(--danger)}
+.notification-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--border-color);flex-shrink:0}.notification-view-all{font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600}
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}@media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.cc{position:relative;height:250px}
+.search-box{position:relative}.search-box input{width:220px;padding:6px 12px 6px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);font-family:inherit;outline:none}.search-box input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);width:280px}.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px}
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:320px;animation:toastIn .3s ease}.toast-item.removing{animation:toastOut .25s ease forwards}@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.toast-msg{flex:1;font-size:13px;font-weight:500}.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;padding:0}.toast-close:hover{color:var(--text-primary)}
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center}.modal-backdrop-custom.show{display:flex;animation:fadeIn .2s}@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:90%;max-width:740px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}.modal-content-custom.sm{max-width:540px}.modal-content-custom.lg{max-width:860px}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:20px 24px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}.modal-body-custom{padding:20px 24px}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:16px}.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}.detail-value{font-size:13px;font-weight:600}
+.filter-tabs{display:flex;gap:4px;background:var(--bg-body);border-radius:8px;padding:3px;width:fit-content}.filter-tab{padding:6px 14px;border:none;background:none;font-size:12px;font-weight:600;color:var(--text-tertiary);cursor:pointer;border-radius:6px;transition:var(--transition);font-family:inherit}.filter-tab.active{background:var(--bg-card);color:var(--text-primary);box-shadow:var(--shadow-sm)}.filter-tab:hover:not(.active){color:var(--text-secondary)}
+.followup-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}.dot-success{background:var(--success);box-shadow:0 0 0 2px var(--success)}.dot-pending{background:var(--warning);box-shadow:0 0 0 2px var(--warning)}.dot-overdue{background:var(--danger);box-shadow:0 0 0 2px var(--danger);animation:pulseDot 2s infinite}.dot-upcoming{background:var(--info);box-shadow:0 0 0 2px var(--info)}@keyframes pulseDot{0%,100%{box-shadow:0 0 0 2px var(--danger)}50%{box-shadow:0 0 0 5px rgba(220,38,38,.2)}}
+.email-preview{background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;padding:16px;font-size:13px;line-height:1.7;color:var(--text-secondary)}.email-preview b{color:var(--text-primary)}.email-var{display:inline-block;background:var(--warning-light);color:#D97706;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;margin:0 2px}
+.form-label-custom{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary);margin-bottom:4px;display:block}.form-input-custom{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:7px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition)}.form-input-custom:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}select.form-input-custom{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+.action-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-card);font-size:11px;font-weight:600;cursor:pointer;transition:var(--transition);color:var(--text-secondary);font-family:inherit;display:inline-flex;align-items:center;gap:4px}.action-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}.action-btn.call:hover{border-color:var(--info);color:var(--info);background:var(--info-light)}.action-btn.urgent{border-color:rgba(220,38,38,.2);color:var(--danger)}.action-btn.urgent:hover{background:var(--danger-light);border-color:var(--danger)}
+.overdue-row td{background:rgba(220,38,38,.02)!important}.overdue-row:hover td{background:rgba(220,38,38,.05)!important}
+.sync-indicator{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-tertiary)}.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--success);animation:syncPulse 2s infinite}@keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.4}}
+.activity-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);animation:fadeSlideIn .3s ease}.activity-item:last-child{border-bottom:none}@keyframes fadeSlideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.activity-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px}
+.activity-text{flex:1;min-width:0;font-size:12.5px;line-height:1.4;color:var(--text-secondary)}.activity-text strong{color:var(--text-primary);font-weight:600}
+.activity-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.history-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-light);position:relative}.history-item:last-child{border-bottom:none}.history-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;position:relative;z-index:1}.history-line{position:absolute;left:3px;top:18px;bottom:-10px;width:2px;background:var(--border-color)}.history-item:last-child .history-line{display:none}
+.countdown{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}
+.tab-bar{display:flex;border-bottom:2px solid var(--border-color);margin-bottom:16px;gap:0}.tab-btn{padding:10px 18px;border:none;background:none;font-size:12.5px;font-weight:600;color:var(--text-tertiary);cursor:pointer;transition:var(--transition);font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-2px;position:relative}.tab-btn:hover{color:var(--text-secondary)}.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+.sketch-upload-zone{border:2px dashed var(--border-color);border-radius:10px;padding:30px;text-align:center;cursor:pointer;transition:var(--transition);background:var(--bg-body)}.sketch-upload-zone:hover{border-color:var(--primary);background:var(--primary-glow)}.sketch-upload-zone.dragover{border-color:var(--primary);background:var(--primary-light);transform:scale(1.01)}
+.sketch-file{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;margin-top:8px;animation:fadeSlideIn .3s ease}
+.badge-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;font-size:9.5px;font-weight:700;padding:0 5px}
+.row-flash{animation:rowFlash .6s ease}@keyframes rowFlash{0%{background:rgba(13,148,136,.1)}100%{background:transparent}}
+.inline-status{position:relative;display:inline-block}.inline-status select{appearance:none;border:1px solid var(--border-color);border-radius:6px;padding:3px 22px 3px 8px;font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);outline:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}.inline-status select:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-glow)}
+.quick-note-input{width:100%;padding:6px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:12px;font-family:inherit;outline:none;transition:var(--transition);resize:none}.quick-note-input:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-glow)}
+@media(max-width:992px){.detail-grid{grid-template-columns:1fr}}@media(max-width:576px){.stat-grid{grid-template-columns:1fr}.content-container{padding:12px}.search-box input{width:160px}.search-box input:focus{width:200px}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon active" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+<div class="main-panel">
+<header class="top-header">
+  <div class="d-flex align-items-center gap-3">
+    <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+    <nav class="header-menu d-none d-lg-block"><a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a></nav>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+    <div class="position-relative">
+      <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7)" onclick="toggleNotif()" id="notifBtn"><i class="bi bi-bell"></i><span class="notification-badge" id="notifCount">5</span></button>
+      <div class="notification-dropdown" id="notifDrop">
+        <div class="notification-header"><div style="font-size:13px;font-weight:700">Notifications</div><div class="notification-mark-all" onclick="markAllRead()">Mark all read</div></div>
+        <div class="notification-list" id="notifList"></div>
+        <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notification center...','info');return false">View all</a></div>
+      </div>
+    </div>
+    <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+  </div>
+</header>
+<div class="sub-header">
+  <i class="bi bi-house me-1" style="font-size:11px"></i><span>Home</span><span class="mx-2" style="color:var(--border-color)">/</span><span style="font-weight:600;color:var(--text-primary)">Architect Coordination</span>
+  <div class="sync-indicator" style="margin-left:auto" id="syncStatus"><span class="sync-dot"></span>Live — synced <span id="syncTime">just now</span></div>
+</div>
+<div class="content-container">
+
+  <!-- Page Header -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+      <h4 style="font-size:17px;font-weight:800;margin:0">Architect Coordination</h4>
+      <p style="color:var(--text-tertiary);margin:0;font-size:13px">Alternate-day follow-ups, sketch tracking & design phase management</p>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn-outline-custom" onclick="refreshData()"><i class="bi bi-arrow-clockwise me-1" id="refreshSpin"></i>Sync</button>
+      <button class="btn-outline-custom" onclick="sendBulkReminder()"><i class="bi bi-send me-1"></i>Send All Reminders</button>
+      <button class="btn-primary-custom" onclick="openAssignModal()"><i class="bi bi-plus-lg me-1"></i>Assign Architect</button>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="stat-grid">
+    <div class="card-custom" style="cursor:pointer" onclick="filterTable('all',null)">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div style="width:44px;height:44px;border-radius:11px;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:20px"><i class="bi bi-pencil-square"></i></div>
+        <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>1</span>
+      </div>
+      <div class="stat-value" id="kpiArchitects">5</div>
+      <div class="stat-desc">Active Architects</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer" onclick="filterTable('today',null)">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div style="width:44px;height:44px;border-radius:11px;background:var(--warning);color:white;display:flex;align-items:center;justify-content:center;font-size:20px"><i class="bi bi-calendar-check"></i></div>
+        <span class="status-pill pill-warning" style="font-size:10px" id="kpiTodayBadge">Due today</span>
+      </div>
+      <div class="stat-value" id="kpiToday">3</div>
+      <div class="stat-desc">Follow-ups Today</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer" onclick="filterTable('overdue',null)">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div style="width:44px;height:44px;border-radius:11px;background:var(--danger);color:white;display:flex;align-items:center;justify-content:center;font-size:20px"><i class="bi bi-exclamation-triangle"></i></div>
+        <span class="status-pill pill-danger" style="font-size:10px" id="kpiOverdueBadge">Needs attention</span>
+      </div>
+      <div class="stat-value" id="kpiOverdue">2</div>
+      <div class="stat-desc">Overdue Responses</div>
+    </div>
+    <div class="card-custom">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div style="width:44px;height:44px;border-radius:11px;background:var(--success);color:white;display:flex;align-items:center;justify-content:center;font-size:20px"><i class="bi bi-graph-up"></i></div>
+        <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>4%</span>
+      </div>
+      <div class="stat-value" id="kpiResponse">92%</div>
+      <div class="stat-desc">Avg Response Rate</div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="row g-3 mb-3">
+    <div class="col-lg-7">
+      <div class="card-custom">
+        <div class="section-heading">Architect Response Time (Avg Days per Follow-up)</div>
+        <div class="cc"><canvas id="responseChart"></canvas></div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card-custom">
+        <div class="section-heading">Design Phase Distribution</div>
+        <div class="cc"><canvas id="phaseChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Table -->
+  <div class="card-custom">
+    <div class="section-heading">
+      Architect Assignments & Follow-up Tracker
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="search-box"><i class="bi bi-search"></i><input type="text" placeholder="Search architect, project..." id="archSearch" oninput="searchTable()"></div>
+        <div class="filter-tabs" id="filterTabs">
+          <button class="filter-tab active" onclick="filterTable('all',this)">All <span class="badge-count" style="background:var(--bg-body);color:var(--text-tertiary)" id="countAll">9</span></button>
+          <button class="filter-tab" onclick="filterTable('today',this)">Today <span class="badge-count" style="background:var(--warning-light);color:#D97706" id="countToday">3</span></button>
+          <button class="filter-tab" onclick="filterTable('overdue',this)">Overdue <span class="badge-count" style="background:var(--danger-light);color:var(--danger)" id="countOverdue">2</span></button>
+          <button class="filter-tab" onclick="filterTable('upcoming',this)">Upcoming <span class="badge-count" style="background:var(--info-light);color:var(--info)" id="countUpcoming">4</span></button>
+        </div>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="table-custom arch-table" id="archTable">
+        <thead><tr><th style="width:18%">Architect</th><th style="width:15%">Project</th><th style="width:12%">Phase</th><th style="width:15%">Sketch Progress</th><th style="width:12%">Last Contact</th><th style="width:13%">Next Follow-up</th><th style="width:8%">Follow-ups</th><th style="width:10%">Status</th><th style="width:12%">Actions</th></tr></thead>
+        <tbody id="archBody"></tbody>
+      </table>
+    </div>
+    <div id="noResults" style="display:none;text-align:center;padding:30px;color:var(--text-tertiary);font-size:13px"><i class="bi bi-search" style="font-size:24px;display:block;margin-bottom:8px"></i>No assignments match your filter.</div>
+  </div>
+
+  <!-- Bottom Row -->
+  <div class="row g-3">
+    <!-- Left Column: Activity + Email -->
+    <div class="col-lg-6">
+      <!-- Live Activity Feed -->
+      <div class="card-custom">
+        <div class="section-heading">
+          Live Activity Feed
+          <div class="sync-indicator"><span class="sync-dot"></span>Real-time</div>
+        </div>
+        <div id="activityFeed" style="max-height:280px;overflow-y:auto;padding-right:4px"></div>
+      </div>
+      <!-- Email Composer -->
+      <div class="card-custom">
+        <div class="section-heading">Follow-up Email Composer</div>
+        <div class="mb-3">
+          <label class="form-label-custom">Select Assignment</label>
+          <select class="form-input-custom" id="emailAssignment" onchange="fillEmailTemplate()">
+            <option value="">-- Choose architect + project --</option>
+          </select>
+        </div>
+        <div class="mb-3" id="emailSubjectRow" style="display:none">
+          <label class="form-label-custom">Subject</label>
+          <input type="text" class="form-input-custom" id="emailSubject" placeholder="Email subject...">
+        </div>
+        <div id="emailPreviewArea" style="display:none">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span style="font-size:11px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Preview</span>
+            <div class="d-flex gap-2">
+              <button class="action-btn" onclick="copyEmail()"><i class="bi bi-clipboard"></i> Copy</button>
+              <button class="btn-primary-custom btn-sm-custom" onclick="sendFollowupEmail()" id="sendEmailBtn"><i class="bi bi-send me-1"></i>Send Email</button>
+            </div>
+          </div>
+          <div class="email-preview" id="emailPreview"></div>
+        </div>
+        <div id="emailPlaceholder" style="text-align:center;padding:40px 20px;color:var(--text-tertiary)">
+          <i class="bi bi-envelope" style="font-size:28px;display:block;margin-bottom:8px;opacity:.4"></i>
+          Select an assignment above to generate a personalized follow-up email
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Schedule + Countdown -->
+    <div class="col-lg-6">
+      <div class="card-custom">
+        <div class="section-heading">
+          Upcoming Follow-up Countdown
+          <span style="font-size:11px;color:var(--text-tertiary);text-transform:none;font-weight:500">Auto-reminds on due date</span>
+        </div>
+        <div id="countdownPanel" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+      </div>
+      <div class="card-custom">
+        <div class="section-heading">Alternate-Day Follow-up Calendar</div>
+        <div id="scheduleTimeline" style="max-height:340px;overflow-y:auto;padding-right:4px"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Architect Detail Modal -->
+<div class="modal-backdrop-custom" id="archDetailModal">
+  <div class="modal-content-custom lg">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700" id="archModalTitle">Architect Details</h4><p style="font-size:12px;color:var(--text-tertiary)" id="archModalSub"></p></div>
+      <button class="modal-close" onclick="closeModal('archDetailModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="archModalBody"></div>
+  </div>
+</div>
+
+<!-- Assign Architect Modal -->
+<div class="modal-backdrop-custom" id="assignModal">
+  <div class="modal-content-custom sm">
+    <div class="modal-header-custom">
+      <h4 style="font-size:16px;font-weight:700">Assign Architect to Project</h4>
+      <button class="modal-close" onclick="closeModal('assignModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="mb-3"><label class="form-label-custom">Select Architect</label><select class="form-input-custom" id="assignArch"><option value="">Choose architect...</option><option value="Mike Thompson|ArchStudio NSW">Mike Thompson — ArchStudio NSW</option><option value="Sarah Mitchell|SM Designs">Sarah Mitchell — SM Designs</option><option value="David Lee|Lee & Partners">David Lee — Lee & Partners</option><option value="Lisa Chen|Chen Architecture">Lisa Chen — Chen Architecture</option><option value="James Park|Park Architects">James Park — Park Architects</option></select></div>
+      <div class="mb-3"><label class="form-label-custom">Select Project</label><select class="form-input-custom" id="assignProj"><option value="">Choose project...</option><option>Penrith Residence</option><option>Castle Hill Villa</option><option>Blacktown Duplex</option><option>Parramatta Home</option><option>Liverpool Estate</option><option>Chatswood Apartment</option><option>Ryde Townhouse</option><option>Auburn Townhouse</option><option>Hornsby Garden Home</option></select></div>
+      <div class="mb-3"><label class="form-label-custom">Design Phase</label><select class="form-input-custom" id="assignPhase"><option>Concept Design</option><option>Design Development</option><option>Construction Documentation</option><option>As-Built Drawings</option><option>DA Submission</option></select></div>
+      <div class="mb-3"><label class="form-label-custom">Priority</label><select class="form-input-custom" id="assignPriority"><option>Normal</option><option>High</option><option>Urgent</option></select></div>
+      <div class="mb-3"><label class="form-label-custom">Notes</label><textarea class="form-input-custom" rows="3" placeholder="Any special instructions for the architect..." id="assignNotes"></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn-outline-custom" onclick="closeModal('assignModal')">Cancel</button><button class="btn-primary-custom" onclick="confirmAssign()"><i class="bi bi-check-lg me-1"></i>Assign & Notify</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Reschedule Modal -->
+<div class="modal-backdrop-custom" id="rescheduleModal">
+  <div class="modal-content-custom sm">
+    <div class="modal-header-custom">
+      <h4 style="font-size:16px;font-weight:700">Reschedule Follow-up</h4>
+      <button class="modal-close" onclick="closeModal('rescheduleModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="mb-3"><label class="form-label-custom">Architect</label><div style="font-size:13px;font-weight:600" id="reschArch">—</div></div>
+      <div class="mb-3"><label class="form-label-custom">Project</label><div style="font-size:13px;font-weight:600" id="reschProj">—</div></div>
+      <div class="mb-3"><label class="form-label-custom">New Follow-up Date</label><input type="date" class="form-input-custom" id="reschDate"></div>
+      <div class="mb-3"><label class="form-label-custom">Reason for Reschedule</label><textarea class="form-input-custom" rows="2" placeholder="Optional reason..." id="reschReason"></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn-outline-custom" onclick="closeModal('rescheduleModal')">Cancel</button><button class="btn-primary-custom" onclick="confirmReschedule()"><i class="bi bi-calendar-check me-1"></i>Reschedule</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════════
+let assignments = [
+  { id:1, architect:"Mike Thompson", company:"ArchStudio NSW", project:"Penrith Residence", phase:"Construction Docs", sketchProgress:85, lastContact:"03 Jul 2025", lastContactDate:new Date(2025,6,3), nextFollowupDate:new Date(2025,6,5), followupCount:6, status:"On Track", filterKey:"today", phone:"+61 400 111 222", email:"mike@archstudio.com.au", notes:"Construction docs nearly complete. Need structural engineer sign-off by 10 Jul. Sketch revision uploaded on 02 Jul — minor facade changes.", responseRate:95, avgDays:1.8, variations:0, priority:"Normal",
+    history:[
+      {date:"04 Jul 2025, 10:30 AM",action:"Follow-up email sent",detail:"Requested construction doc status update",type:"email"},
+      {date:"03 Jul 2025, 2:15 PM",action:"Sketch revision uploaded",detail:"Minor facade changes — west elevation amended",type:"upload"},
+      {date:"01 Jul 2025, 9:00 AM",action:"Follow-up call",detail:"Mike confirmed docs 75% done, on track for 10 Jul",type:"call"},
+      {date:"29 Jun 2025, 11:00 AM",action:"Follow-up email sent",detail:"Routine alternate-day check",type:"email"},
+      {date:"27 Jun 2025, 3:45 PM",action:"Initial sketch set received",detail:"12 pages, structural layout + elevations",type:"upload"},
+      {date:"25 Jun 2025, 10:00 AM",action:"Assigned to project",detail:"Guri assigned Mike to Penrith Residence",type:"assign"},
+    ]},
+  { id:2, architect:"Mike Thompson", company:"ArchStudio NSW", project:"Castle Hill Villa", phase:"Design Development", sketchProgress:40, lastContact:"30 Jun 2025", lastContactDate:new Date(2025,5,30), nextFollowupDate:new Date(2025,6,2), followupCount:3, status:"No Response", filterKey:"overdue", phone:"+61 400 111 222", email:"mike@archstudio.com.au", notes:"No response since 30 Jun. Client wants modern farmhouse style — architect proposed contemporary instead. Needs clarification call URGENT.", responseRate:95, avgDays:1.8, variations:1, priority:"Urgent",
+    history:[
+      {date:"02 Jul 2025, 9:30 AM",action:"Follow-up email sent — NO RESPONSE",detail:"Requested design direction clarification",type:"email"},
+      {date:"30 Jun 2025, 11:00 AM",action:"Client feedback forwarded",detail:"Harpreet wants farmhouse style, not contemporary",type:"email"},
+      {date:"28 Jun 2025, 2:00 PM",action:"Initial design concept received",detail:"Contemporary style proposed — client disagrees",type:"upload"},
+      {date:"26 Jun 2025, 10:00 AM",action:"Assigned to project",detail:"Design Development phase",type:"assign"},
+    ]},
+  { id:3, architect:"Sarah Mitchell", company:"SM Designs", project:"Blacktown Duplex", phase:"Sketch Complete", sketchProgress:100, lastContact:"02 Jul 2025", lastContactDate:new Date(2025,6,2), nextFollowupDate:new Date(2025,6,6), followupCount:8, status:"Sketches Received", filterKey:"upcoming", phone:"+61 411 333 444", email:"sarah@smdesigns.com.au", notes:"Full sketch set uploaded. Variation found: extended balcony on Unit A — $3,200 variation quote sent to customer. Awaiting sign-off.", responseRate:88, avgDays:2.1, variations:1, priority:"Normal",
+    history:[
+      {date:"04 Jul 2025, 9:00 AM",action:"Variation quote sent to customer",detail:"$3,200 for extended balcony Unit A",type:"email"},
+      {date:"02 Jul 2025, 3:30 PM",action:"Complete sketch set uploaded",detail:"18 pages — full duplex design with variations",type:"upload"},
+      {date:"30 Jun 2025, 10:15 AM",action:"Follow-up call",detail:"Sarah confirmed upload by 02 Jul",type:"call"},
+      {date:"28 Jun 2025, 9:00 AM",action:"Follow-up email sent",detail:"Routine check on sketch progress",type:"email"},
+      {date:"26 Jun 2025, 11:30 AM",action:"Follow-up call",detail:"Sketches 80% complete, on track",type:"call"},
+    ]},
+  { id:4, architect:"David Lee", company:"Lee & Partners", project:"Parramatta Home", phase:"As-Built Drawings", sketchProgress:70, lastContact:"04 Jul 2025", lastContactDate:new Date(2025,6,4), nextFollowupDate:new Date(2025,6,5), followupCount:5, status:"On Track", filterKey:"today", phone:"+61 422 555 666", email:"david@leepartners.com.au", notes:"As-built drawings 70% done. Need final measurements from site manager Amrit Singh for plumbing rough-in locations.", responseRate:90, avgDays:2.0, variations:0, priority:"High",
+    history:[
+      {date:"04 Jul 2025, 4:00 PM",action:"Follow-up email sent",detail:"Requested plumbing measurement details",type:"email"},
+      {date:"02 Jul 2025, 10:30 AM",action:"Follow-up call",detail:"David needs Amrit to confirm plumbing locations on-site",type:"call"},
+      {date:"30 Jun 2025, 9:00 AM",action:"Partial upload received",detail:"As-built 50% — ground floor complete",type:"upload"},
+      {date:"28 Jun 2025, 2:00 PM",action:"Follow-up email sent",detail:"As-built drawing progress check",type:"email"},
+    ]},
+  { id:5, architect:"Lisa Chen", company:"Chen Architecture", project:"Liverpool Estate", phase:"Design Development", sketchProgress:55, lastContact:"02 Jul 2025", lastContactDate:new Date(2025,6,2), nextFollowupDate:new Date(2025,6,6), followupCount:2, status:"Responded", filterKey:"upcoming", phone:"+61 433 777 888", email:"lisa@chenarch.com.au", notes:"Responded with initial floor plan options. Client choosing between Option A (open plan) and Option B (traditional rooms). Waiting for client decision.", responseRate:92, avgDays:1.5, variations:0, priority:"Normal",
+    history:[
+      {date:"04 Jul 2025, 11:00 AM",action:"Reminder sent to client",detail:"Requested floor plan choice by 06 Jul",type:"email"},
+      {date:"02 Jul 2025, 3:00 PM",action:"Lisa responded with floor plans",detail:"Two options sent — open plan vs traditional",type:"email"},
+      {date:"30 Jun 2025, 9:30 AM",action:"Follow-up email sent",detail:"Checking on design development progress",type:"email"},
+      {date:"28 Jun 2025, 10:00 AM",action:"Assigned to project",detail:"Design Development phase start",type:"assign"},
+    ]},
+  { id:6, architect:"Lisa Chen", company:"Chen Architecture", project:"Chatswood Apartment", phase:"DA Resubmission", sketchProgress:30, lastContact:"28 Jun 2025", lastContactDate:new Date(2025,5,28), nextFollowupDate:new Date(2025,5,30), followupCount:4, status:"URGENT — DA Refused", filterKey:"overdue", phone:"+61 433 777 888", email:"lisa@chenarch.com.au", notes:"DA was refused by council on 25 Jun. Reason: overshadowing neighbour. Need amended plans URGENT. Resubmission deadline: 18 Jul. Customer informed.", responseRate:92, avgDays:1.5, variations:0, priority:"Urgent",
+    history:[
+      {date:"02 Jul 2025, 8:30 AM",action:"Escalation email sent",detail:"Third follow-up — no response 4 days",type:"email"},
+      {date:"30 Jun 2025, 9:00 AM",action:"Follow-up call — voicemail",detail:"Left message about DA resubmission urgency",type:"call"},
+      {date:"28 Jun 2025, 10:30 AM",action:"Follow-up email sent",detail:"Urgent: DA refused, need amended plans",type:"email"},
+      {date:"25 Jun 2025, 4:00 PM",action:"DA refusal received",detail:"Council refused — overshadowing neighbour",type:"email"},
+    ]},
+  { id:7, architect:"James Park", company:"Park Architects", project:"Ryde Townhouse", phase:"Construction Docs", sketchProgress:60, lastContact:"01 Jul 2025", lastContactDate:new Date(2025,6,1), nextFollowupDate:new Date(2025,6,7), followupCount:3, status:"On Track", filterKey:"upcoming", phone:"+61 444 999 000", email:"james@parkarch.com.au", notes:"Construction documentation in progress. 60% complete. No issues so far. Next scheduled check on 07 Jul.", responseRate:85, avgDays:2.5, variations:0, priority:"Normal",
+    history:[
+      {date:"01 Jul 2025, 11:00 AM",action:"Follow-up email sent",detail:"Routine progress check — 60% confirmed",type:"email"},
+      {date:"29 Jun 2025, 10:00 AM",action:"Follow-up call",detail:"James confirmed on track, no blockers",type:"call"},
+      {date:"27 Jun 2025, 9:30 AM",action:"Partial upload received",detail:"Construction docs 40% — framing details",type:"upload"},
+    ]},
+  { id:8, architect:"James Park", company:"Park Architects", project:"Auburn Townhouse", phase:"Concept Design", sketchProgress:15, lastContact:"30 Jun 2025", lastContactDate:new Date(2025,5,30), nextFollowupDate:new Date(2025,6,6), followupCount:1, status:"Pending Client Brief", filterKey:"upcoming", phone:"+61 444 999 000", email:"james@parkarch.com.au", notes:"Waiting for Guri to provide client brief and requirements. Cannot start design until brief received. Follow up with Guri first.", responseRate:85, avgDays:2.5, variations:0, priority:"High",
+    history:[
+      {date:"30 Jun 2025, 9:00 AM",action:"Follow-up sent to Guri",detail:"Reminder: client brief still needed",type:"email"},
+      {date:"28 Jun 2025, 10:00 AM",action:"Assigned to project",detail:"Concept Design phase — awaiting brief",type:"assign"},
+    ]},
+  { id:9, architect:"Mike Thompson", company:"ArchStudio NSW", project:"Hornsby Garden Home", phase:"Concept Design", sketchProgress:10, lastContact:"04 Jul 2025", lastContactDate:new Date(2025,6,4), nextFollowupDate:new Date(2025,6,8), followupCount:1, status:"On Track", filterKey:"upcoming", phone:"+61 400 111 222", email:"mike@archstudio.com.au", notes:"New assignment. Initial site visit done. Concept ideas discussed. First sketch draft expected by 08 Jul.", responseRate:95, avgDays:1.8, variations:0, priority:"Normal",
+    history:[
+      {date:"04 Jul 2025, 2:00 PM",action:"Initial site visit completed",detail:"Met client on-site, discussed concept ideas",type:"call"},
+      {date:"03 Jul 2025, 9:00 AM",action:"Assigned to project",detail:"New project — Hornsby Garden Home",type:"assign"},
+    ]},
+];
+
+const notifData = [
+  { id:1, icon:"bi-exclamation-triangle", bg:"var(--danger-light)", color:"var(--danger)", msg:"Lisa Chen — Chatswood DA refused, 5 days overdue on response", time:"Just now", unread:true },
+  { id:2, icon:"bi-exclamation-triangle", bg:"var(--danger-light)", color:"var(--danger)", msg:"Mike Thompson — Castle Hill no response for 3 days", time:"1 hr ago", unread:true },
+  { id:3, icon:"bi-pencil-square", bg:"var(--primary-light)", color:"var(--primary)", msg:"Alternate-day reminder: 3 follow-ups due today", time:"2 hrs ago", unread:true },
+  { id:4, icon:"bi-check-circle", bg:"var(--success-light)", color:"var(--success)", msg:"Sarah Mitchell uploaded complete sketches — Blacktown Duplex", time:"4 hrs ago", unread:true },
+  { id:5, icon:"bi-arrow-rotate-right", bg:"var(--warning-light)", color:"#D97706", msg:"Variation detected: Blacktown balcony extension — $3,200", time:"5 hrs ago", unread:false },
+  { id:6, icon:"bi-envelope", bg:"var(--info-light)", color:"var(--info)", msg:"Follow-up email sent to David Lee — Parramatta as-built", time:"Yesterday", unread:false },
+];
+
+let activityLog = [
+  { id:1, icon:"bi-upload", bg:"var(--success-light)", color:"var(--success)", text:'<strong>Sarah Mitchell</strong> uploaded complete sketch set — <strong>Blacktown Duplex</strong>', time:"2 hrs ago" },
+  { id:2, icon:"bi-envelope", bg:"var(--info-light)", color:"var(--info)", text:'Follow-up email sent to <strong>David Lee</strong> — Parramatta as-built drawings', time:"3 hrs ago" },
+  { id:3, icon:"bi-exclamation-triangle", bg:"var(--danger-light)", color:"var(--danger)", text:'<strong>Lisa Chen</strong> — Chatswood DA refusal, now 5 days overdue', time:"4 hrs ago" },
+  { id:4, icon:"bi-telephone", bg:"var(--primary-light)", color:"var(--primary)", text:'Call logged with <strong>Mike Thompson</strong> — Penrith construction docs update', time:"5 hrs ago" },
+  { id:5, icon:"bi-arrow-rotate-right", bg:"var(--warning-light)", color:"#D97706", text:'Variation detected: <strong>Blacktown Duplex</strong> balcony extension — $3,200', time:"6 hrs ago" },
+  { id:6, icon:"bi-plus-circle", bg:"var(--primary-light)", color:"var(--primary)", text:'<strong>Mike Thompson</strong> assigned to Hornsby Garden Home', time:"Yesterday" },
+];
+
+const scheduleData = [
+  { date:"Today (05 Jul)", isToday:true, items:[
+    { id:2, architect:"Mike Thompson", project:"Castle Hill Villa", type:"overdue", label:"Follow-up #3 — OVERDUE by 3 days" },
+    { id:1, architect:"Mike Thompson", project:"Penrith Residence", type:"today", label:"Routine sketch check" },
+    { id:4, architect:"David Lee", project:"Parramatta Home", type:"today", label:"As-built progress review" },
+  ]},
+  { date:"06 Jul", isToday:false, items:[
+    { id:8, architect:"James Park", project:"Auburn Townhouse", type:"upcoming", label:"Follow-up #2 — check brief status" },
+    { id:3, architect:"Sarah Mitchell", project:"Blacktown Duplex", type:"upcoming", label:"Final sketch review + variation sign-off" },
+    { id:5, architect:"Lisa Chen", project:"Liverpool Estate", type:"upcoming", label:"Floor plan decision follow-up" },
+  ]},
+  { date:"07 Jul", isToday:false, items:[
+    { id:7, architect:"James Park", project:"Ryde Townhouse", type:"upcoming", label:"Construction docs progress check" },
+  ]},
+  { date:"08 Jul", isToday:false, items:[
+    { id:9, architect:"Mike Thompson", project:"Hornsby Garden Home", type:"upcoming", label:"First concept sketch expected" },
+  ]},
+  { date:"09 Jul", isToday:false, items:[
+    { id:6, architect:"Lisa Chen", project:"Chatswood Apartment", type:"overdue", label:"Follow-up #4 — URGENT DA resubmission" },
+    { id:2, architect:"Mike Thompson", project:"Castle Hill Villa", type:"overdue", label:"Follow-up #4 — ESCALATE if no response" },
+  ]},
+];
+
+let rescheduleTargetId = null;
+
+// ══════════════════════════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════════════════════════
+function updateClock(){const n=new Date();document.getElementById('liveClock').innerHTML=`<span>${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}</span> AEST`}
+setInterval(updateClock,1000);updateClock();
+
+// ══════════════════════════════════════════════════════════════
+// SYNC TIMER
+// ══════════════════════════════════════════════════════════════
+let syncSec = 0;
+setInterval(()=>{syncSec++;const el=document.getElementById('syncTime');if(syncSec<5)el.textContent='just now';else if(syncSec<60)el.textContent=syncSec+'s ago';else el.textContent=Math.floor(syncSec/60)+'m ago'},1000);
+function resetSync(){syncSec=0;document.getElementById('syncTime').textContent='just now'}
+
+// ══════════════════════════════════════════════════════════════
+// TOASTS
+// ══════════════════════════════════════════════════════════════
+function showToast(msg,type='info'){const c=document.getElementById('toastContainer'),colors={success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'},danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'},info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'},warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'}},cl=colors[type]||colors.info,t=document.createElement('div');t.className='toast-item';t.innerHTML=`<div class="toast-icon" style="background:${cl.bg};color:${cl.color}"><i class="bi ${cl.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;c.appendChild(t);setTimeout(()=>removeToast(t),4500)}
+function removeToast(el){if(!el||!el.parentElement)return;el.classList.add('removing');setTimeout(()=>el.remove(),250)}
+
+// ══════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════════════════════════════
+let notifs=JSON.parse(JSON.stringify(notifData));
+function renderNotifs(){const l=document.getElementById('notifList'),uc=notifs.filter(n=>n.unread).length,b=document.getElementById('notifCount');b.textContent=uc;b.style.display=uc>0?'flex':'none';l.innerHTML=notifs.map(n=>`<div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})"><div class="notif-icon" style="background:${n.bg};color:${n.color}"><i class="bi ${n.icon}"></i></div><div class="notif-text"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div><button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button></div>`).join('')}
+function toggleNotif(){document.getElementById('notifDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn');if(d&&!d.contains(e.target)&&!b.contains(e.target))d.classList.remove('show')});
+function readNotif(id){const n=notifs.find(x=>x.id===id);if(n&&n.unread){n.unread=false;renderNotifs()}showToast('Opening: '+(n?n.msg.substring(0,50)+'...':''),'info')}
+function dismissNotif(id){const el=document.querySelector(`.notification-item[data-id="${id}"]`);if(el){el.classList.add('dismissing');setTimeout(()=>{notifs=notifs.filter(x=>x.id!==id);renderNotifs()},250)}}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('All notifications marked as read','success')}
+function addNotif(icon,bg,color,msg){notifs.unshift({id:Date.now(),icon,bg,color,msg,time:'Just now',unread:true});renderNotifs()}
+
+// ══════════════════════════════════════════════════════════════
+// KPI UPDATES
+// ══════════════════════════════════════════════════════════════
+function updateKPIs(){
+  const uniqueArchs = [...new Set(assignments.map(a=>a.architect))];
+  const todayCount = assignments.filter(a=>a.filterKey==='today').length;
+  const overdueCount = assignments.filter(a=>a.filterKey==='overdue').length;
+  const avgResp = assignments.length ? Math.round(assignments.reduce((s,a)=>s+a.responseRate,0)/assignments.length) : 0;
+  document.getElementById('kpiArchitects').textContent = uniqueArchs.length;
+  document.getElementById('kpiToday').textContent = todayCount;
+  document.getElementById('kpiOverdue').textContent = overdueCount;
+  document.getElementById('kpiResponse').textContent = avgResp + '%';
+  document.getElementById('countAll').textContent = assignments.length;
+  document.getElementById('countToday').textContent = todayCount;
+  document.getElementById('countOverdue').textContent = overdueCount;
+  document.getElementById('countUpcoming').textContent = assignments.filter(a=>a.filterKey==='upcoming').length;
+  if(todayCount===0) document.getElementById('kpiTodayBadge').textContent='All done!';
+  if(overdueCount===0) document.getElementById('kpiOverdueBadge').textContent='Clear';
+}
+
+// ══════════════════════════════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════════════════════════════
+let responseChart, phaseChart;
+function initCharts(){
+  const def={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11,family:'Inter'},color:'#64748B',padding:12,usePointStyle:true,pointStyleWidth:8}}}},gc='#F1F5F9';
+  responseChart=new Chart(document.getElementById('responseChart').getContext('2d'),{type:'bar',data:{labels:['Mike Thompson','Sarah Mitchell','David Lee','Lisa Chen','James Park'],datasets:[{label:'Avg Response (Days)',data:[1.8,2.1,2.0,1.5,2.5],backgroundColor:['#0D9488','#16A34A','#2563EB','#7C3AED','#E8730C'],borderRadius:6,barPercentage:.5}]},options:{...def,plugins:{...def.plugins,legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10.5},color:'#94A3B8'}},y:{beginAtZero:true,max:4,grid:{color:gc},ticks:{font:{size:11},color:'#94A3B8',callback:v=>v+'d'}}}}});
+  const phaseCounts={};assignments.forEach(a=>{phaseCounts[a.phase]=(phaseCounts[a.phase]||0)+1});
+  phaseChart=new Chart(document.getElementById('phaseChart').getContext('2d'),{type:'doughnut',data:{labels:Object.keys(phaseCounts),datasets:[{data:Object.values(phaseCounts),backgroundColor:['#0D9488','#16A34A','#2563EB','#E8730C','#7C3AED','#DC2626','#F59E0B','#94A3B8'],borderWidth:0,hoverOffset:6}]},options:{...def,cutout:'60%',plugins:{...def.plugins,legend:{position:'bottom',labels:{...def.plugins.legend.labels,padding:8,font:{size:10.5}}}}}});
+}
+function updatePhaseChart(){const pc={};assignments.forEach(a=>{pc[a.phase]=(pc[a.phase]||0)+1});phaseChart.data.labels=Object.keys(pc);phaseChart.data.datasets[0].data=Object.values(pc);phaseChart.update('active')}
+
+// ══════════════════════════════════════════════════════════════
+// TABLE RENDERING
+// ══════════════════════════════════════════════════════════════
+let currentFilter='all';
+function renderTable(filter,search){
+  if(filter!==undefined && filter!==null) currentFilter=filter;
+  const srch=search!==undefined?search:document.getElementById('archSearch').value.toLowerCase().trim();
+  const filtered=assignments.filter(a=>{
+    const mf=currentFilter==='all'||a.filterKey===currentFilter;
+    const ms=!srch||a.architect.toLowerCase().includes(srch)||a.project.toLowerCase().includes(srch)||a.phase.toLowerCase().includes(srch)||a.company.toLowerCase().includes(srch)||a.status.toLowerCase().includes(srch);
+    return mf&&ms;
+  });
+  const body=document.getElementById('archBody'),nr=document.getElementById('noResults');
+  if(!filtered.length){body.innerHTML='';nr.style.display='block';return}
+  nr.style.display='none';
+  body.innerHTML=filtered.map(a=>{
+    const isO=a.filterKey==='overdue';
+    const pC=a.sketchProgress>=80?'var(--success)':a.sketchProgress>=50?'var(--primary)':a.sketchProgress>=25?'#D97706':'var(--danger)';
+    const sC=a.filterKey==='overdue'?'pill-danger':a.filterKey==='today'?'pill-warning':a.filterKey==='upcoming'?'pill-info':'pill-success';
+    const sLabel=a.filterKey==='overdue'?'Overdue':a.filterKey==='today'?'Today':a.filterKey==='upcoming'?'Upcoming':'On Track';
+    const nextLabel=a.filterKey==='overdue'?`<span class="status-pill pill-danger" style="font-size:10px">Overdue</span>`:a.filterKey==='today'?`<span class="status-pill pill-warning" style="font-size:10px">Today</span>`:`<span style="font-size:12px;color:var(--text-secondary)">${formatDate(a.nextFollowupDate)}</span>`;
+    const initials=a.architect.split(' ').map(w=>w[0]).join('');
+    const avatarBg=a.filterKey==='overdue'?'var(--danger-light)':a.filterKey==='today'?'var(--warning-light)':'var(--primary-light)';
+    const avatarColor=a.filterKey==='overdue'?'var(--danger)':a.filterKey==='today'?'#D97706':'var(--primary)';
+    return `<tr class="${isO?'overdue-row':''}" id="row-${a.id}" onclick="openArchDetail(${a.id})">
+      <td><div style="display:flex;align-items:center;gap:8px"><div style="width:32px;height:32px;border-radius:8px;background:${avatarBg};color:${avatarColor};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${initials}</div><div><div style="font-weight:600;font-size:13px">${a.architect}</div><div style="font-size:10.5px;color:var(--text-tertiary)">${a.company}</div></div></div></td>
+      <td style="font-size:13px;font-weight:500">${a.project}</td>
+      <td><span style="font-size:12px">${a.phase}</span></td>
+      <td style="min-width:120px"><div class="d-flex align-items-center gap-2"><div class="progress-bar-custom" style="flex:1"><div class="progress-fill-custom" style="width:${a.sketchProgress}%;background:${pC}"></div></div><span style="font-size:11px;font-weight:700;color:${pC};min-width:28px;text-align:right">${a.sketchProgress}%</span></div></td>
+      <td style="font-size:12px;color:var(--text-secondary)">${a.lastContact}</td>
+      <td>${nextLabel}</td>
+      <td style="text-align:center"><span style="font-size:13px;font-weight:700;color:${a.followupCount>=4?'var(--danger)':a.followupCount>=2?'#D97706':'var(--text-primary)'}">${a.followupCount}</span></td>
+      <td><span class="status-pill ${sC}">${a.status}</span></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        <button class="action-btn" onclick="quickEmail(${a.id})" title="Send follow-up email"><i class="bi bi-envelope"></i></button>
+        <button class="action-btn call" onclick="quickCall(${a.id})" title="Call architect"><i class="bi bi-telephone"></i></button>
+        <button class="action-btn" onclick="openRescheduleModal(${a.id})" title="Reschedule"><i class="bi bi-calendar-plus"></i></button>
+        ${isO?`<button class="action-btn urgent" onclick="escalateArch(${a.id})" title="Escalate"><i class="bi bi-exclamation-octagon"></i></button>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+function filterTable(filter,btn){
+  if(btn){document.querySelectorAll('#filterTabs .filter-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active')}
+  renderTable(filter);
+}
+function searchTable(){renderTable(currentFilter)}
+function formatDate(d){if(!d)return'—';const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return d.getDate()+' '+months[d.getMonth()]}
+function flashRow(id){const el=document.getElementById('row-'+id);if(el){el.classList.add('row-flash');setTimeout(()=>el.classList.remove('row-flash'),700)}}
+
+// ══════════════════════════════════════════════════════════════
+// ARCHITECT DETAIL MODAL
+// ══════════════════════════════════════════════════════════════
+function openArchDetail(id){
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  document.getElementById('archModalTitle').textContent=a.architect;
+  document.getElementById('archModalSub').textContent=a.company+' — '+a.project;
+  const isO=a.filterKey==='overdue';
+  const pC=a.sketchProgress>=80?'var(--success)':a.sketchProgress>=50?'var(--primary)':a.sketchProgress>=25?'#D97706':'var(--danger)';
+  const typeIcon={email:'bi-envelope',call:'bi-telephone',upload:'bi-cloud-upload',assign:'bi-plus-circle'};
+  const typeColor={email:'var(--info)',call:'var(--primary)',upload:'var(--success)',assign:'var(--purple)'};
+  document.getElementById('archModalBody').innerHTML=`
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchDetailTab('overview',this)">Overview</button>
+      <button class="tab-btn" onclick="switchDetailTab('history',this)">Follow-up History <span class="badge-count" style="background:var(--primary-light);color:var(--primary);margin-left:4px">${a.history.length}</span></button>
+      <button class="tab-btn" onclick="switchDetailTab('upload',this)">Sketch Upload</button>
+      <button class="tab-btn" onclick="switchDetailTab('notes',this)">Notes</button>
+    </div>
+    <div id="detailTabOverview">
+      <div class="detail-grid" style="margin-bottom:20px">
+        <div><div class="detail-label">Project</div><div class="detail-value">${a.project}</div></div>
+        <div><div class="detail-label">Design Phase</div><div class="detail-value">${a.phase}</div></div>
+        <div><div class="detail-label">Phone</div><div class="detail-value">${a.phone}</div></div>
+        <div><div class="detail-label">Email</div><div class="detail-value" style="color:var(--primary)">${a.email}</div></div>
+        <div><div class="detail-label">Response Rate</div><div class="detail-value" style="color:${a.responseRate>=90?'var(--success)':'#D97706'}">${a.responseRate}%</div></div>
+        <div><div class="detail-label">Avg Response Time</div><div class="detail-value">${a.avgDays} days</div></div>
+        <div><div class="detail-label">Follow-ups Done</div><div class="detail-value" style="color:${a.followupCount>=4?'var(--danger)':a.followupCount>=2?'#D97706':'var(--text-primary)'}">${a.followupCount}</div></div>
+        <div><div class="detail-label">Priority</div><div class="detail-value"><span class="status-pill ${a.priority==='Urgent'?'pill-danger':a.priority==='High'?'pill-warning':'pill-gray'}">${a.priority}</span></div></div>
+        <div><div class="detail-label">Last Contact</div><div class="detail-value">${a.lastContact}</div></div>
+        <div><div class="detail-label">Next Follow-up</div><div class="detail-value" style="color:${isO?'var(--danger)':'var(--text-primary)'};font-weight:${isO?'700':'600'}">${formatDate(a.nextFollowupDate)}${isO?' — OVERDUE':''}</div></div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:12px;font-weight:600">Sketch Upload Progress</span><span style="font-size:12px;font-weight:700;color:var(--primary)">${a.sketchProgress}%</span></div>
+        <div class="progress-bar-custom" style="height:10px"><div class="progress-fill-custom" style="width:${a.sketchProgress}%;background:${pC}"></div></div>
+        ${a.sketchProgress===100?'<div style="font-size:11px;color:var(--success);margin-top:4px"><i class="bi bi-check-circle me-1"></i>Complete sketch set uploaded — ready for next stage</div>':''}
+      </div>
+      ${a.variations>0?`<div style="padding:10px 14px;background:var(--warning-light);border:1px solid rgba(245,158,11,.15);border-radius:8px;margin-bottom:16px;font-size:12px;color:#D97706"><i class="bi bi-arrow-rotate-right me-1"></i><strong>${a.variations} variation(s)</strong> detected from sketches — quote adjustment required</div>`:''}
+      ${isO?`<div style="padding:10px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--danger)"><i class="bi bi-exclamation-triangle me-1"></i><strong>OVERDUE.</strong> Consider escalating or calling directly.</div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-primary-custom" onclick="quickEmail(${a.id});closeModal('archDetailModal')"><i class="bi bi-envelope me-1"></i>Send Follow-up</button>
+        <button class="btn-outline-custom" onclick="quickCall(${a.id});closeModal('archDetailModal')"><i class="bi bi-telephone me-1"></i>Call Now</button>
+        <button class="btn-outline-custom" onclick="openRescheduleModal(${a.id});closeModal('archDetailModal')"><i class="bi bi-calendar-plus me-1"></i>Reschedule</button>
+        ${isO?`<button class="btn-danger-outline" onclick="escalateArch(${a.id});closeModal('archDetailModal')"><i class="bi bi-exclamation-octagon me-1"></i>Escalate</button>`:''}
+      </div>
+    </div>
+    <div id="detailTabHistory" style="display:none">
+      <div style="max-height:350px;overflow-y:auto;padding-right:4px">
+        ${a.history.map((h,i)=>`<div class="history-item"><div class="history-dot" style="background:${typeColor[h.type]||'var(--primary)'}"></div>${i<a.history.length-1?'<div class="history-line"></div>':''}<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text-primary)">${h.action}</div><div style="font-size:11.5px;color:var(--text-secondary);margin-top:1px">${h.detail}</div><div style="font-size:10.5px;color:var(--text-tertiary);margin-top:2px"><i class="bi ${typeIcon[h.type]||'bi-circle'} me-1"></i>${h.date}</div></div></div>`).join('')}
+      </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border-color)">
+        <div class="detail-label" style="margin-bottom:6px">Log New Activity</div>
+        <div class="d-flex gap-2">
+          <select class="form-input-custom" style="width:auto;flex-shrink:0" id="logType-${a.id}"><option value="call">Call</option><option value="email">Email</option><option value="upload">Upload</option><option value="note">Note</option></select>
+          <input type="text" class="form-input-custom" placeholder="Describe the activity..." id="logDesc-${a.id}" style="flex:1">
+          <button class="btn-primary-custom btn-sm-custom" onclick="logActivity(${a.id})"><i class="bi bi-plus"></i> Log</button>
+        </div>
+      </div>
+    </div>
+    <div id="detailTabUpload" style="display:none">
+      <div class="sketch-upload-zone" id="uploadZone-${a.id}" onclick="simulateUpload(${a.id})" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="event.preventDefault();this.classList.remove('dragover');simulateUpload(${a.id})">
+        <i class="bi bi-cloud-upload" style="font-size:32px;color:var(--primary);display:block;margin-bottom:8px"></i>
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Drop sketch files here or click to upload</div>
+        <div style="font-size:12px;color:var(--text-tertiary)">PDF, DWG, JPG up to 50MB each</div>
+      </div>
+      <div id="uploadFiles-${a.id}" style="margin-top:12px"></div>
+      ${a.sketchProgress>0?`<div style="margin-top:12px"><div class="detail-label" style="margin-bottom:8px">Previously Uploaded Files</div>${generateFakeFiles(a)}</div>`:''}
+    </div>
+    <div id="detailTabNotes" style="display:none">
+      <div style="background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;padding:14px;font-size:13px;line-height:1.7;color:var(--text-secondary);margin-bottom:16px">${a.notes}</div>
+      <div class="detail-label" style="margin-bottom:6px">Add Note</div>
+      <textarea class="quick-note-input" rows="3" placeholder="Type your note here..." id="addNote-${a.id}"></textarea>
+      <div style="margin-top:8px;display:flex;justify-content:flex-end"><button class="btn-primary-custom btn-sm-custom" onclick="saveNote(${a.id})"><i class="bi bi-save me-1"></i>Save Note</button></div>
+    </div>
+  `;
+  document.getElementById('archDetailModal').classList.add('show');
+}
+function switchDetailTab(tab,btn){
+  btn.parentElement.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+  ['overview','history','upload','notes'].forEach(t=>{const el=document.getElementById('detailTab'+t.charAt(0).toUpperCase()+t.slice(1));if(el)el.style.display=t===tab?'block':'none'});
+}
+function generateFakeFiles(a){
+  const files=[
+    {name:`${a.project.replace(/\s/g,'_')}_Floor_Plan.pdf`,size:'2.4 MB',date:'02 Jul 2025'},
+    {name:`${a.project.replace(/\s/g,'_')}_Elevation.pdf`,size:'1.8 MB',date:'02 Jul 2025'},
+    {name:`${a.project.replace(/\s/g,'_')}_Structural.dwg`,size:'5.1 MB',date:'28 Jun 2025'},
+  ];
+  return files.map(f=>`<div class="sketch-file"><i class="bi bi-file-earmark-pdf" style="font-size:18px;color:var(--danger)"></i><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div><div style="font-size:10.5px;color:var(--text-tertiary)">${f.size} — ${f.date}</div></div><button class="action-btn" onclick="showToast('Downloading ${f.name}...','info')"><i class="bi bi-download"></i></button></div>`).join('');
+}
+function simulateUpload(aid){
+  const zone=document.getElementById('uploadZone-'+aid);if(!zone)return;
+  const a=assignments.find(x=>x.id===aid);
+  zone.innerHTML='<div style="padding:10px"><div class="progress-bar-custom" style="height:6px;margin-bottom:6px"><div class="progress-fill-custom" style="width:0%;background:var(--primary);transition:width 2s" id="uploadProg-'+aid+'"></div></div><div style="font-size:12px;color:var(--text-tertiary)">Uploading...</div></div>';
+  setTimeout(()=>{const p=document.getElementById('uploadProg-'+aid);if(p)p.style.width='100%'},50);
+  setTimeout(()=>{
+    const fname=a?a.project.replace(/\s/g,'_')+'_Revision.pdf':'Upload.pdf';
+    const files=document.getElementById('uploadFiles-'+aid);
+    if(files)files.innerHTML=`<div class="sketch-file"><i class="bi bi-file-earmark-check" style="font-size:18px;color:var(--success)"></i><div style="flex:1"><div style="font-size:12px;font-weight:600">${fname}</div><div style="font-size:10.5px;color:var(--success)">Upload complete — 3.2 MB</div></div><span class="status-pill pill-success" style="font-size:9px">Uploaded</span></div>`+files.innerHTML;
+    zone.innerHTML='<i class="bi bi-cloud-upload" style="font-size:32px;color:var(--primary);display:block;margin-bottom:8px"></i><div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Drop sketch files here or click to upload</div><div style="font-size:12px;color:var(--text-tertiary)">PDF, DWG, JPG up to 50MB each</div>';
+    showToast(`Sketch file uploaded for ${a?a.project:'project'}`,'success');
+    if(a){a.sketchProgress=Math.min(100,a.sketchProgress+5);addActivity('bi-upload','var(--success-light)','var(--success)',`<strong>You</strong> uploaded a sketch revision — <strong>${a.project}</strong>`)}
+  },2200);
+}
+function logActivity(id){
+  const type=document.getElementById('logType-'+id).value;
+  const desc=document.getElementById('logDesc-'+id).value.trim();
+  if(!desc){showToast('Please enter a description','warning');return}
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  const now=new Date();
+  const dateStr=now.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+' '+now.getFullYear()+', '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const actionLabels={call:'Call logged',email:'Email sent',upload:'File uploaded',note:'Note added'};
+  a.history.unshift({date:dateStr,action:actionLabels[type]||'Activity logged',detail:desc,type:type==='note'?'email':type});
+  a.followupCount++;a.lastContact='Today';a.lastContactDate=new Date();
+  if(a.filterKey==='overdue'){a.filterKey='today';a.status='Responded'}
+  document.getElementById('logDesc-'+id).value='';
+  showToast(`Activity logged: ${actionLabels[type]} for ${a.architect}`,'success');
+  addActivity(type==='call'?'bi-telephone':type==='email'?'bi-envelope':type==='upload'?'bi-cloud-upload':'bi-journal',type==='call'?'var(--primary-light)':type==='email'?'var(--info-light)':type==='upload'?'var(--success-light)':'var(--warning-light)',type==='call'?'var(--primary)':type==='email'?'var(--info)':type==='upload'?'var(--success)':'#D97706',`<strong>You</strong> logged a ${type} — <strong>${a.architect}</strong> (${a.project})`);
+  renderTable();updateKPIs();flashRow(id);
+  openArchDetail(id);
+}
+function saveNote(id){
+  const note=document.getElementById('addNote-'+id).value.trim();
+  if(!note){showToast('Please enter a note','warning');return}
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  a.notes+=(a.notes?' | ':'')+note;
+  document.getElementById('addNote-'+id).value='';
+  showToast(`Note saved for ${a.architect} — ${a.project}`,'success');
+}
+
+// ══════════════════════════════════════════════════════════════
+// TABLE ACTIONS
+// ══════════════════════════════════════════════════════════════
+function quickEmail(id){
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  document.getElementById('emailAssignment').value=id;
+  fillEmailTemplate();
+  document.getElementById('emailAssignment').scrollIntoView({behavior:'smooth',block:'center'});
+  showToast(`Preparing follow-up email for ${a.architect} — ${a.project}`,'info');
+}
+function quickCall(id){
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  showToast(`Calling ${a.architect} at ${a.phone}...`,'info');
+  setTimeout(()=>{
+    a.followupCount++;a.lastContact='Today';a.lastContactDate=new Date();
+    if(a.filterKey==='overdue'){a.filterKey='today';a.status='Responded'}
+    renderTable();updateKPIs();flashRow(id);
+    addActivity('bi-telephone','var(--primary-light)','var(--primary)',`<strong>You</strong> called <strong>${a.architect}</strong> — ${a.project}`);
+    showToast(`Call with ${a.architect} completed — follow-up logged`,'success');
+  },1500);
+}
+function escalateArch(id){
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  a.priority='Urgent';a.followupCount++;
+  showToast(`ESCALATED: ${a.architect} — ${a.project}. Flagged for urgent resolution.`,'danger');
+  addNotif('bi-exclamation-octagon','var(--danger-light)','var(--danger)',`ESCALATED: ${a.architect} — ${a.project} flagged urgent`);
+  addActivity('bi-exclamation-octagon','var(--danger-light)','var(--danger)',`<strong>You</strong> escalated <strong>${a.architect}</strong> — ${a.project}`);
+  renderTable();updateKPIs();flashRow(id);
+}
+function markResponded(id){
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  a.filterKey='upcoming';a.status='Responded';a.lastContact='Today';a.lastContactDate=new Date();
+  const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+2);a.nextFollowupDate=tomorrow;
+  renderTable();updateKPIs();flashRow(id);
+  showToast(`${a.architect} marked as responded — next follow-up in 2 days`,'success');
+  addActivity('bi-check-circle','var(--success-light)','var(--success)',`<strong>${a.architect}</strong> responded — ${a.project}`);
+}
+function markComplete(id){
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  a.sketchProgress=100;a.status='Sketches Received';a.filterKey='upcoming';
+  renderTable();updateKPIs();updatePhaseChart();flashRow(id);
+  showToast(`Sketch upload marked COMPLETE for ${a.architect} — ${a.project}`,'success');
+  addActivity('bi-check-circle','var(--success-light)','var(--success)',`Sketch set <strong>COMPLETE</strong> — <strong>${a.architect}</strong> (${a.project})`);
+  addNotif('bi-check-circle','var(--success-light)','var(--success)',`${a.architect} — complete sketches received for ${a.project}`);
+}
+
+// ══════════════════════════════════════════════════════════════
+// RESCHEDULE MODAL
+// ══════════════════════════════════════════════════════════════
+function openRescheduleModal(id){
+  rescheduleTargetId=id;
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  document.getElementById('reschArch').textContent=a.architect;
+  document.getElementById('reschProj').textContent=a.project;
+  const d=new Date();d.setDate(d.getDate()+2);
+  document.getElementById('reschDate').value=d.toISOString().split('T')[0];
+  document.getElementById('reschReason').value='';
+  document.getElementById('rescheduleModal').classList.add('show');
+}
+function confirmReschedule(){
+  if(!rescheduleTargetId)return;
+  const dateVal=document.getElementById('reschDate').value;
+  const reason=document.getElementById('reschReason').value;
+  if(!dateVal){showToast('Please select a date','warning');return}
+  const a=assignments.find(x=>x.id===rescheduleTargetId);if(!a)return;
+  const parts=dateVal.split('-');a.nextFollowupDate=new Date(parts[0],parts[1]-1,parts[2]);
+  a.filterKey='upcoming';a.status='Rescheduled';
+  const now=new Date();a.history.unshift({date:now.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+' '+now.getFullYear()+', '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),action:'Follow-up rescheduled',detail:reason||'No reason provided — new date: '+dateStr(dateVal),type:'email'});
+  closeModal('rescheduleModal');
+  renderTable();updateKPIs();flashRow(rescheduleTargetId);
+  showToast(`Follow-up rescheduled to ${dateStr(dateVal)} for ${a.architect}`,'success');
+  addActivity('bi-calendar-plus','var(--info-light)','var(--info)',`<strong>You</strong> rescheduled follow-up — <strong>${a.architect}</strong> to ${dateStr(dateVal)}`);
+  rescheduleTargetId=null;
+}
+function dateStr(v){const p=v.split('-');const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(p[2])+' '+m[parseInt(p[1])-1]+' '+p[0]}
+
+// ══════════════════════════════════════════════════════════════
+// EMAIL COMPOSER
+// ══════════════════════════════════════════════════════════════
+function populateEmailSelect(){
+  const sel=document.getElementById('emailAssignment');sel.innerHTML='<option value="">-- Choose architect + project --</option>';
+  assignments.forEach(a=>{const o=document.createElement('option');o.value=a.id;o.textContent=`${a.architect} — ${a.project} [${a.phase}]`;sel.appendChild(o)});
+}
+function fillEmailTemplate(){
+  const id=parseInt(document.getElementById('emailAssignment').value);
+  const pa=document.getElementById('emailPreviewArea'),ph=document.getElementById('emailPlaceholder'),sr=document.getElementById('emailSubjectRow');
+  if(!id){pa.style.display='none';ph.style.display='block';sr.style.display='none';return}
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  pa.style.display='block';ph.style.display='none';sr.style.display='block';
+  const urg=a.filterKey==='overdue'?'<span class="email-var">URGENT</span> ':'';
+  document.getElementById('emailSubject').value=(a.filterKey==='overdue'?'URGENT: ':'')+'Follow-up: '+a.project+' — '+a.phase+' Documents';
+  const fuNote=a.followupCount>=3?'<p style="color:var(--danger);font-weight:600">This is follow-up #'+a.followupCount+' — please respond as soon as possible to avoid project delays.</p>':'';
+  document.getElementById('emailPreview').innerHTML=`
+    <p><b>Subject:</b> ${urg}${a.project} — ${a.phase} Documents</p>
+    <hr style="border-color:var(--border-color);margin:10px 0">
+    <p>Hi <span class="email-var">${a.architect}</span>,</p>
+    <p>Hope you're well. Following up on the <b>${a.phase}</b> stage for <b>${a.project}</b>.</p>
+    <p>${a.sketchProgress<100?'We currently need the <b>complete sketch/drawing set</b> uploaded to our portal. Current progress shows <b>'+a.sketchProgress+'%</b> complete.':a.sketchProgress===100?'Thank you for uploading the complete sketch set. We are now reviewing the drawings and will confirm next steps shortly.':''} ${a.variations>0?'<b>Note:</b> We noticed potential variations from the original scope that may require a quote adjustment.':''}</p>
+    ${fuNote}
+    <p>Could you please provide an update on progress? If there are any blockers or delays, let us know so we can adjust the construction timeline accordingly.</p>
+    <p>Regards,<br><b>Guri Singh</b><br>BuildPro Construction | NSW<br>${a.phone}</p>`;
+}
+function sendFollowupEmail(){
+  const id=parseInt(document.getElementById('emailAssignment').value);
+  const a=assignments.find(x=>x.id===id);if(!a)return;
+  const btn=document.getElementById('sendEmailBtn');
+  btn.innerHTML='<i class="bi bi-hourglass-split me-1"></i>Sending...';btn.disabled=true;
+  setTimeout(()=>{
+    a.followupCount++;a.lastContact='Today';a.lastContactDate=new Date();
+    if(a.filterKey==='overdue'){a.filterKey='today';a.status='Responded'}
+    const now=new Date();a.history.unshift({date:now.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+' '+now.getFullYear()+', '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),action:'Follow-up email sent',detail:'Subject: '+document.getElementById('emailSubject').value,type:'email'});
+    btn.innerHTML='<i class="bi bi-send me-1"></i>Send Email';btn.disabled=false;
+    showToast(`Follow-up email sent to ${a.architect} (${a.email})`,'success');
+    addActivity('bi-envelope','var(--info-light)','var(--info)',`<strong>You</strong> sent a follow-up email — <strong>${a.architect}</strong> (${a.project})`);
+    addNotif('bi-envelope','var(--info-light)','var(--info)',`Email sent to ${a.architect} — ${a.project}`);
+    renderTable();updateKPIs();flashRow(id);
+  },1200);
+}
+function copyEmail(){
+  const preview=document.getElementById('emailPreview');if(!preview)return;
+  const text=preview.innerText;
+  navigator.clipboard.writeText(text).then(()=>showToast('Email content copied to clipboard','success')).catch(()=>showToast('Email content copied','success'));
+}
+
+// ══════════════════════════════════════════════════════════════
+// ACTIVITY FEED
+// ══════════════════════════════════════════════════════════════
+function renderActivityFeed(){
+  const el=document.getElementById('activityFeed');
+  el.innerHTML=activityLog.slice(0,8).map(a=>`<div class="activity-item"><div class="activity-icon" style="background:${a.bg};color:${a.color}"><i class="bi ${a.icon}"></i></div><div><div class="activity-text">${a.text}</div><div class="activity-time">${a.time}</div></div></div>`).join('');
+}
+function addActivity(icon,bg,color,text){
+  activityLog.unshift({id:Date.now(),icon,bg,color,text,time:'Just now'});
+  renderActivityFeed();
+}
+
+// ══════════════════════════════════════════════════════════════
+// COUNTDOWN PANEL
+// ══════════════════════════════════════════════════════════════
+function renderCountdowns(){
+  const now=new Date();
+  const sorted=[...assignments].filter(a=>a.filterKey!=='upcoming'||true).sort((a,b)=>a.nextFollowupDate-b.nextFollowupDate).slice(0,6);
+  document.getElementById('countdownPanel').innerHTML=sorted.map(a=>{
+    const diff=Math.max(0,a.nextFollowupDate-now);
+    const days=Math.floor(diff/(1000*60*60*24));
+    const hrs=Math.floor((diff%(1000*60*60*24))/(1000*60*60));
+    const isO=a.filterKey==='overdue';const isT=a.filterKey==='today';
+    const borderColor=isO?'rgba(220,38,38,.15)':isT?'rgba(245,158,11,.15)':'var(--border-color)';
+    const bgColor=isO?'var(--danger-light)':isT?'var(--warning-light)':'var(--bg-body)';
+    const timeColor=isO?'var(--danger)':isT?'#D97706':'var(--text-primary)';
+    return `<div style="padding:12px;background:${bgColor};border:1px solid ${borderColor};border-radius:8px;cursor:pointer;transition:var(--transition)" onclick="openArchDetail(${a.id})" onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='none'">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65%">${a.architect.split(' ')[0]}</div>
+        <span class="status-pill ${isO?'pill-danger':isT?'pill-warning':'pill-info'}" style="font-size:9px">${isO?'Overdue':isT?'Today':'Upcoming'}</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--text-tertiary);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.project}</div>
+      <div class="countdown" style="color:${timeColor};font-size:${isO?'14':'13'}px;font-weight:${isO?'800':'700'}">${isO?Math.abs(days)+'d OVERDUE':days===0?hrs+'h remaining':days+'d '+hrs+'h'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// SCHEDULE TIMELINE
+// ══════════════════════════════════════════════════════════════
+function renderSchedule(){
+  document.getElementById('scheduleTimeline').innerHTML=scheduleData.map(group=>`
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:${group.isToday?'#D97706':'var(--text-secondary)'};margin-bottom:8px;${group.isToday?'':'text-transform:uppercase;letter-spacing:.04em'}">
+        ${group.isToday?'<i class="bi bi-circle-fill me-1" style="font-size:6px;color:#D97706"></i>':''}${group.date}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;padding-left:${group.isToday?'0':'12px'};border-left:${group.isToday?'none':'2px solid var(--border-color)'};margin-left:${group.isToday?'0':'6px'}">
+        ${group.items.map(item=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-body);border-radius:8px;border:1px solid ${item.type==='overdue'?'rgba(220,38,38,.12)':'var(--border-light)'};cursor:pointer;transition:var(--transition)" onclick="openArchDetail(${item.id})" onmouseover="this.style.borderColor='${item.type==='overdue'?'rgba(220,38,38,.25)':'var(--border-color)'}'" onmouseout="this.style.borderColor='${item.type==='overdue'?'rgba(220,38,38,.12)':'var(--border-light)'}'">
+            <div class="followup-dot dot-${item.type}"></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12.5px;font-weight:600">${item.architect} <span style="color:var(--text-tertiary);font-weight:400">— ${item.project}</span></div>
+              <div style="font-size:11px;color:${item.type==='overdue'?'var(--danger)':item.type==='today'?'#D97706':'var(--text-tertiary)'}">${item.label}</div>
+            </div>
+            ${item.type==='overdue'?'<i class="bi bi-exclamation-triangle" style="color:var(--danger);font-size:13px"></i>':''}
+            <button class="action-btn" style="font-size:10px" onclick="event.stopPropagation();markResponded(${item.id})"><i class="bi bi-check2"></i></button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// ASSIGN MODAL
+// ══════════════════════════════════════════════════════════════
+function openAssignModal(){document.getElementById('assignModal').classList.add('show')}
+function confirmAssign(){
+  const archVal=document.getElementById('assignArch').value,proj=document.getElementById('assignProj').value,phase=document.getElementById('assignPhase').value,priority=document.getElementById('assignPriority').value,notes=document.getElementById('assignNotes').value;
+  if(!archVal||!proj){showToast('Please select both architect and project','warning');return}
+  const [archName,archCompany]=archVal.split('|');
+  const now=new Date();const next=new Date();next.setDate(now.getDate()+2);
+  assignments.push({id:Date.now(),architect:archName.trim(),company:(archCompany||'').trim(),project:proj,phase:phase,sketchProgress:0,lastContact:'Today',lastContactDate:now,nextFollowupDate:next,followupCount:0,status:'On Track',filterKey:'upcoming',phone:'—',email:'—',notes:notes||'New assignment. Awaiting initial design concepts.',responseRate:0,avgDays:0,variations:0,priority:priority,
+    history:[{date:now.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+' '+now.getFullYear()+', '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0'),action:'Assigned to project',detail:`${phase} phase — Priority: ${priority}`,type:'assign'}]
+  });
+  closeModal('assignModal');
+  renderTable();updateKPIs();updatePhaseChart();populateEmailSelect();renderCountdowns();
+  showToast(`${archName.trim()} assigned to ${proj} — ${phase} phase`,'success');
+  addActivity('bi-plus-circle','var(--primary-light)','var(--primary)',`<strong>You</strong> assigned <strong>${archName.trim()}</strong> to <strong>${proj}</strong>`);
+  addNotif('bi-plus-circle','var(--primary-light)','var(--primary)',`${archName.trim()} assigned to ${proj} — ${phase}`);
+  document.getElementById('assignArch').value='';document.getElementById('assignProj').value='';document.getElementById('assignNotes').value='';
+}
+
+// ══════════════════════════════════════════════════════════════
+// BULK REMINDER
+// ══════════════════════════════════════════════════════════════
+function sendBulkReminder(){
+  const overdue=assignments.filter(a=>a.filterKey==='overdue');
+  const today=assignments.filter(a=>a.filterKey==='today');
+  const total=overdue.length+today.length;
+  if(total===0){showToast('No reminders needed — all follow-ups are upcoming or completed','info');return}
+  overdue.forEach(a=>{a.followupCount++;a.history.unshift({date:'Today',action:'Bulk reminder sent',detail:'Automated overdue follow-up',type:'email'})});
+  today.forEach(a=>{a.followupCount++;a.history.unshift({date:'Today',action:'Bulk reminder sent',detail:'Scheduled follow-up reminder',type:'email'})});
+  renderTable();updateKPIs();
+  showToast(`Bulk reminders sent to ${total} architects (${overdue.length} overdue, ${today.length} today)`,'success');
+  addActivity('bi-send','var(--info-light)','var(--info)',`<strong>You</strong> sent bulk reminders — <strong>${total}</strong> architects notified`);
+  addNotif('bi-send','var(--info-light)','var(--info)',`Bulk reminders sent to ${total} architects`);
+}
+
+// ══════════════════════════════════════════════════════════════
+// REFRESH
+// ══════════════════════════════════════════════════════════════
+function refreshData(){
+  const icon=document.getElementById('refreshSpin');
+  icon.style.animation='spin .6s ease';setTimeout(()=>icon.style.animation='',600);
+  resetSync();
+  renderTable();updateKPIs();renderCountdowns();renderActivityFeed();
+  showToast('Data synced — all assignments up to date','success');
+}
+const spinStyle=document.createElement('style');spinStyle.textContent='@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}';document.head.appendChild(spinStyle);
+
+// ══════════════════════════════════════════════════════════════
+// SIMULATED REAL-TIME EVENTS
+// ══════════════════════════════════════════════════════════════
+const simulatedEvents=[
+  {delay:25000,fn:()=>{addActivity('bi-clock','var(--warning-light)','#D97706','<strong>Auto-reminder</strong> — Castle Hill Villa follow-up is 3 days overdue');addNotif('bi-clock','var(--warning-light)','#D97706','Auto-reminder: Castle Hill Villa follow-up overdue by 3 days')}},
+  {delay:55000,fn:()=>{addActivity('bi-envelope-open','var(--success-light)','var(--success)','<strong>David Lee</strong> opened your follow-up email — Parramatta Home')}},
+  {delay:90000,fn:()=>{addActivity('bi-cloud-upload','var(--primary-light)','var(--primary)','<strong>James Park</strong> uploaded construction doc revision — Ryde Townhouse');addNotif('bi-cloud-upload','var(--primary-light)','var(--primary)','James Park uploaded new docs for Ryde Townhouse')}},
+  {delay:130000,fn:()=>{addActivity('bi-telephone-inbound','var(--success-light)','var(--success)','<strong>Lisa Chen</strong> called back regarding Chatswood DA resubmission')}},
+];
+simulatedEvents.forEach(ev=>setTimeout(ev.fn,ev.delay));
+
+// ══════════════════════════════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════════════════════════════
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-backdrop-custom').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'))});
+
+// ══════════════════════════════════════════════════════════════
+// COUNTDOWN AUTO-REFRESH
+// ══════════════════════════════════════════════════════════════
+setInterval(renderCountdowns,60000);
+
+// ══════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════
+setTimeout(()=>{
+  initCharts();renderNotifs();renderTable();renderSchedule();populateEmailSelect();renderActivityFeed();renderCountdowns();updateKPIs();
+},100);
+</script>
+</body>
+</html>

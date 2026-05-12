@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Milestones & Schedule - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.15);--accent:#E8730C;--accent-light:#FFF3E0;--success:#16A34A;--success-light:#DCFCE7;--danger:#DC2626;--danger-light:#FEE2E2;--warning:#F59E0B;--warning-light:#FEF9C3;--info:#2563EB;--info-light:#DBEAFE;--purple:#7C3AED;--purple-light:#EDE9FE;--bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;--text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;--border-color:#E2E8F0;--border-light:#F1F5F9;--shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);--sidebar-bg:#0F172A;--sidebar-width:64px;--transition:all .2s cubic-bezier(.4,0,.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#94A3B8}
+.wrapper{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}
+.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}
+.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}
+.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}
+.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}
+.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}
+.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}
+.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}
+@media(max-width:768px){.sidebar-tooltip{display:none}}
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}
+.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px;letter-spacing:.01em}
+.header-menu a:hover{color:rgba(255,255,255,.9)}
+.header-menu a.active{color:white}
+.header-menu a.active::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+.content-container{padding:20px;max-width:1560px;margin:0 auto;width:100%}
+.card-custom{background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);margin-bottom:16px;transition:var(--transition)}
+.card-custom:hover{box-shadow:var(--shadow-md)}
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.stat-value{font-size:26px;font-weight:800;line-height:1.2;color:var(--text-primary);margin-top:2px;letter-spacing:-.02em}
+.stat-desc{font-size:11.5px;color:var(--text-tertiary);margin-top:3px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;flex-shrink:0}
+.trend-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.02em}
+.trend-up{color:var(--success);background:rgba(22,163,74,.08)}
+.trend-down{color:var(--danger);background:rgba(220,38,38,.08)}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}
+.pill-success{background:rgba(22,163,74,.08);color:var(--success)}
+.pill-warning{background:rgba(245,158,11,.08);color:#D97706}
+.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}
+.pill-info{background:rgba(37,99,235,.08);color:var(--info)}
+.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}
+.pill-primary{background:var(--primary-glow);color:var(--primary)}
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white;text-decoration:none}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-sm-custom{padding:5px 10px;font-size:11.5px;border-radius:6px}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.btn-danger-outline{background:var(--bg-card);color:var(--danger);border:1px solid rgba(220,38,38,.2);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-danger-outline:hover{background:var(--danger-light);border-color:var(--danger)}
+.table-custom{width:100%;border-collapse:separate;border-spacing:0}
+.table-custom thead th{font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;letter-spacing:.04em;padding:10px 14px;border-bottom:1px solid var(--border-color);background:var(--bg-body)}
+.table-custom td{font-size:13px;vertical-align:middle;padding:12px 14px;border-bottom:1px solid var(--border-light)}
+.table-custom tr:last-child td{border-bottom:none}
+.table-custom tbody tr{transition:background .15s;cursor:pointer}
+.table-custom tbody tr:hover td{background:var(--bg-hover)}
+.progress-bar-custom{height:7px;background:#E2E8F0;border-radius:4px;overflow:hidden}
+.progress-fill-custom{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.search-box{position:relative}
+.search-box input{width:220px;padding:6px 12px 6px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);font-family:inherit;outline:none}
+.search-box input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);width:280px}
+.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px}
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}
+.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}
+.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+.notification-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;background:var(--danger);border-radius:99px;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg)}
+.notification-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:360px;background:white;border-radius:10px;box-shadow:var(--shadow-lg);z-index:1001;display:none;border:1px solid var(--border-color);overflow:hidden}
+.notification-dropdown.show{display:block;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notification-header{padding:14px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.notification-mark-all{font-size:11.5px;color:var(--primary);cursor:pointer;font-weight:600;transition:var(--transition)}
+.notification-item{padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s;display:flex;align-items:flex-start;gap:10px}
+.notification-item:hover{background:var(--bg-hover)}
+.notification-item.unread{background:rgba(13,148,136,.03)}
+.notification-item.dismissing{animation:slideOut .25s ease forwards;overflow:hidden}
+@keyframes slideOut{to{opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin:0}}
+.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.notif-text{flex:1;min-width:0}
+.notif-msg{font-size:12.5px;line-height:1.4;color:var(--text-primary)}
+.notif-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.notif-dismiss{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);cursor:pointer;opacity:0;transition:var(--transition);flex-shrink:0;font-size:10px;border:none;background:none}
+.notification-item:hover .notif-dismiss{opacity:1}
+.notif-dismiss:hover{background:var(--danger-light);color:var(--danger)}
+.notification-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--border-color)}
+.notification-view-all{font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600}
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:300px;animation:toastIn .3s ease}
+.toast-item.removing{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.toast-msg{flex:1;font-size:13px;font-weight:500}
+.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;padding:0;line-height:1}
+.toast-close:hover{color:var(--text-primary)}
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center;animation:fadeIn .2s}
+.modal-backdrop-custom.show{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:90%;max-width:820px;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:20px 24px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg-card);z-index:1;border-radius:14px 14px 0 0}
+.modal-body-custom{padding:20px 24px}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:16px}
+.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}
+.detail-value{font-size:13px;font-weight:600}
+.cc{position:relative;height:260px}
+.ticker-bar{background:var(--bg-card);border-top:1px solid var(--border-color);padding:8px 20px;display:flex;align-items:center;gap:12px;overflow:hidden;flex-shrink:0}
+.ticker-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--primary);background:var(--primary-glow);padding:3px 8px;border-radius:4px;white-space:nowrap}
+.ticker-scroll{flex:1;overflow:hidden;position:relative;height:20px}
+.ticker-track{display:flex;gap:40px;animation:tickerScroll 45s linear infinite;white-space:nowrap;position:absolute}
+@keyframes tickerScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.ticker-item{font-size:11.5px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:6px}
+.ticker-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+@media(max-width:576px){.stat-grid{grid-template-columns:1fr}.content-container{padding:12px}.search-box input{width:160px}.search-box input:focus{width:200px}.detail-grid{grid-template-columns:1fr}}
+
+/* Page-specific: Filter Pills */
+.filter-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.filter-pill{padding:6px 14px;border-radius:99px;border:1px solid var(--border-color);background:var(--bg-card);font-size:12px;font-weight:600;color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.filter-pill:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.filter-pill.active{background:var(--primary);color:white;border-color:var(--primary)}
+.filter-pill .count{font-size:10px;background:rgba(255,255,255,.2);padding:1px 6px;border-radius:99px;font-weight:700}
+.filter-pill:not(.active) .count{background:var(--bg-body);color:var(--text-tertiary)}
+
+/* View Toggle */
+.view-toggle{display:flex;gap:2px;background:var(--bg-body);border-radius:8px;padding:3px}
+.view-btn{padding:6px 12px;border:none;background:none;font-size:12px;font-weight:600;color:var(--text-tertiary);cursor:pointer;border-radius:6px;transition:var(--transition);font-family:inherit;display:flex;align-items:center;gap:5px}
+.view-btn.active{background:var(--bg-card);color:var(--text-primary);box-shadow:var(--shadow-sm)}
+.view-btn:hover:not(.active){color:var(--text-secondary)}
+
+/* Gantt Chart */
+.gantt-container{overflow-x:auto;padding-bottom:10px}
+.gantt-chart{min-width:900px}
+.gantt-header{display:flex;align-items:stretch;border-bottom:2px solid var(--border-color);margin-bottom:0}
+.gantt-project-col{width:220px;min-width:220px;padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-tertiary);background:var(--bg-body);border-right:1px solid var(--border-color)}
+.gantt-timeline-header{flex:1;display:flex;position:relative}
+.gantt-month{flex:1;text-align:center;padding:10px 0;font-size:11px;font-weight:600;color:var(--text-tertiary);border-left:1px solid var(--border-light);position:relative}
+.gantt-month:first-child{border-left:none}
+.gantt-row{display:flex;align-items:stretch;border-bottom:1px solid var(--border-light);transition:background .15s;cursor:pointer;min-height:48px}
+.gantt-row:hover{background:var(--bg-hover)}
+.gantt-row-label{width:220px;min-width:220px;padding:10px 14px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid var(--border-color);background:var(--bg-card)}
+.gantt-row-label .proj-name{font-size:12.5px;font-weight:600;color:var(--text-primary);line-height:1.3}
+.gantt-row-label .proj-stage{font-size:10.5px;color:var(--text-tertiary)}
+.gantt-bar-area{flex:1;position:relative;padding:12px 0}
+.gantt-bar{position:absolute;height:24px;top:50%;transform:translateY(-50%);border-radius:6px;display:flex;overflow:hidden;transition:all .3s}
+.gantt-segment{height:100%;position:relative;transition:width .5s}
+.gantt-segment.done{background:var(--success)}
+.gantt-segment.active{background:var(--primary);animation:activePulse 2s infinite}
+.gantt-segment.upcoming{background:#E2E8F0}
+.gantt-segment.delayed{background:var(--danger)}
+@keyframes activePulse{0%,100%{opacity:1}50%{opacity:.7}}
+.gantt-today-line{position:absolute;top:0;bottom:0;width:2px;background:var(--danger);z-index:5;opacity:.7}
+.gantt-today-line::before{content:'Today';position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--danger);white-space:nowrap}
+.gantt-tooltip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--sidebar-bg);color:white;padding:8px 12px;border-radius:8px;font-size:11px;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:10;pointer-events:none;box-shadow:var(--shadow-lg)}
+.gantt-bar:hover .gantt-tooltip{opacity:1;visibility:visible}
+.gantt-bar:hover{transform:translateY(-50%) scale(1.02);box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:6}
+
+/* Milestone list in modal */
+.ms-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--border-light);margin-bottom:8px;transition:var(--transition);position:relative}
+.ms-item:hover{background:var(--bg-hover);border-color:var(--border-color)}
+.ms-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:white;border:2px solid}
+.ms-dot.done{background:var(--success);border-color:var(--success)}
+.ms-dot.active{background:var(--primary);border-color:var(--primary);animation:dotPulse 2s infinite}
+.ms-dot.upcoming{background:white;border-color:#CBD5E1}
+.ms-dot.delayed{background:var(--danger);border-color:var(--danger)}
+@keyframes dotPulse{0%,100%{box-shadow:0 0 0 0 rgba(13,148,136,.3)}50%{box-shadow:0 0 0 6px rgba(13,148,136,0)}}
+.ms-connector{position:absolute;left:26px;top:26px;bottom:-8px;width:2px;background:var(--border-color)}
+.ms-item:last-child .ms-connector{display:none}
+.ms-info{flex:1;min-width:0}
+.ms-name{font-size:13px;font-weight:600}
+.ms-dates{font-size:11px;color:var(--text-tertiary);margin-top:1px}
+.ms-tradie{font-size:11px;color:var(--info);margin-top:2px}
+.ms-status{flex-shrink:0}
+
+/* Action panel in modal */
+.action-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.action-card{padding:14px;border-radius:10px;border:1px solid var(--border-color);cursor:pointer;transition:var(--transition);text-align:center}
+.action-card:hover{border-color:var(--primary);background:var(--primary-glow);transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.action-card .action-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;font-size:18px}
+.action-card .action-label{font-size:12px;font-weight:600;color:var(--text-primary)}
+
+/* Critical pulse */
+@keyframes criticalPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.15)}50%{box-shadow:0 0 0 8px rgba(220,38,38,0)}}
+.critical-row{animation:criticalPulse 3s infinite}
+
+/* Mini bar in table */
+.mini-gantt{height:8px;border-radius:4px;overflow:hidden;display:flex;background:#E2E8F0;min-width:100px}
+.mini-gantt .seg{height:100%}
+
+/* Confirm modal */
+.confirm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border-color)}
+
+/* Sub tabs in modal */
+.sub-tabs{display:flex;gap:2px;background:var(--bg-body);border-radius:8px;padding:3px;margin-bottom:16px}
+.sub-tab{padding:6px 14px;border:none;background:none;font-size:12px;font-weight:600;color:var(--text-tertiary);cursor:pointer;border-radius:6px;transition:var(--transition);font-family:inherit}
+.sub-tab.active{background:var(--bg-card);color:var(--text-primary);box-shadow:var(--shadow-sm)}
+.sub-tab:hover:not(.active){color:var(--text-secondary)}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon active" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+
+<div class="main-panel">
+<header class="top-header">
+  <div class="d-flex align-items-center gap-3">
+    <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+    <nav class="header-menu d-none d-lg-block">
+      <a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html" class="active">Milestones</a><a href="financials.html">Financials</a>
+    </nav>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+    <div class="position-relative">
+      <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7);" onclick="toggleNotif()" id="notifBtn">
+        <i class="bi bi-bell"></i>
+        <span class="notification-badge" id="notifCount">3</span>
+      </button>
+      <div class="notification-dropdown" id="notifDrop">
+        <div class="notification-header"><div style="font-size:13px;font-weight:700;">Notifications</div><div class="notification-mark-all" onclick="markAllRead()">Mark all read</div></div>
+        <div id="notifList"></div>
+        <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notification center...','info');return false;">View all notifications</a></div>
+      </div>
+    </div>
+    <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+  </div>
+</header>
+
+<div class="sub-header">
+  <i class="bi bi-house me-1" style="font-size:11px;"></i><span>Home</span>
+  <span class="mx-2" style="color:var(--border-color);">/</span>
+  <span style="font-weight:600;color:var(--text-primary);">Milestones & Schedule</span>
+  <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);" id="lastUpdated">Updated just now</span>
+</div>
+
+<div class="content-container">
+
+  <!-- Header -->
+  <div class="card-custom" style="background:linear-gradient(135deg,#F0FDFA 0%,#CCFBF1 50%,#D1FAE5 100%);border:1px solid rgba(13,148,136,.12);position:relative;overflow:hidden;">
+    <div style="position:absolute;right:-20px;top:-20px;width:160px;height:160px;border-radius:50%;background:rgba(13,148,136,.06);"></div>
+    <div class="row align-items-center">
+      <div class="col-md-7">
+        <h3 style="font-size:17px;font-weight:800;margin-bottom:4px;color:var(--text-primary);">Project Schedule Tracker</h3>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:0;">Real-time milestone tracking across all active projects — on time, slow, or critical.</p>
+      </div>
+      <div class="col-md-5 text-md-end mt-2 mt-md-0 d-flex gap-2 justify-content-md-end flex-wrap">
+        <button class="btn-primary-custom" onclick="openAdjustModal()"><i class="bi bi-sliders me-1"></i>Adjust Schedule</button>
+        <button class="btn-outline-custom" onclick="exportSchedule()"><i class="bi bi-download me-1"></i>Export</button>
+        <button class="btn-outline-custom" onclick="refreshPage()"><i class="bi bi-arrow-clockwise" id="refreshIcon"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-grid">
+    <div class="card-custom" style="cursor:pointer;" onclick="setFilter('on-time')">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="stat-icon" style="background:var(--success);"><i class="bi bi-check-circle"></i></div>
+        <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>2</span>
+      </div>
+      <div class="stat-value" data-count="8">0</div>
+      <div class="stat-desc">On Schedule</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer;" onclick="setFilter('slow')">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="stat-icon" style="background:var(--warning);"><i class="bi bi-exclamation-triangle"></i></div>
+        <span class="trend-badge trend-down"><i class="bi bi-arrow-down-short"></i>1</span>
+      </div>
+      <div class="stat-value" data-count="4">0</div>
+      <div class="stat-desc">Running Slow</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer;" onclick="setFilter('ahead')">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="stat-icon" style="background:var(--primary);"><i class="bi bi-arrow-up-circle"></i></div>
+      </div>
+      <div class="stat-value" data-count="2">0</div>
+      <div class="stat-desc">Ahead of Schedule</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer;position:relative;" onclick="setFilter('critical')">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="stat-icon" style="background:var(--danger);"><i class="bi bi-x-circle"></i></div>
+        <span class="trend-badge trend-down"><i class="bi bi-arrow-up-short"></i>1</span>
+      </div>
+      <div class="stat-value" data-count="2">0</div>
+      <div class="stat-desc">Critical Delay</div>
+    </div>
+  </div>
+
+  <!-- Filter Bar + View Toggle -->
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="filter-bar" id="filterBar">
+      <button class="filter-pill active" data-filter="all" onclick="setFilter('all')">All <span class="count">16</span></button>
+      <button class="filter-pill" data-filter="on-time" onclick="setFilter('on-time')">On Time <span class="count">8</span></button>
+      <button class="filter-pill" data-filter="slow" onclick="setFilter('slow')">Running Slow <span class="count">4</span></button>
+      <button class="filter-pill" data-filter="ahead" onclick="setFilter('ahead')">Ahead <span class="count">2</span></button>
+      <button class="filter-pill" data-filter="critical" onclick="setFilter('critical')">Critical <span class="count">2</span></button>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search projects..." id="searchInput" oninput="applyFilters()">
+      </div>
+      <div class="view-toggle">
+        <button class="view-btn active" onclick="switchView('table',this)"><i class="bi bi-table"></i> Table</button>
+        <button class="view-btn" onclick="switchView('gantt',this)"><i class="bi bi-bar-chart-steps"></i> Gantt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div id="tableView">
+    <div class="card-custom">
+      <div class="section-heading">
+        All Projects Schedule
+        <span style="font-size:11px;color:var(--text-tertiary);font-weight:500;" id="resultCount">16 projects</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="table-custom" id="scheduleTable">
+          <thead>
+            <tr>
+              <th style="width:18%;">Project</th>
+              <th style="width:10%;">Client</th>
+              <th style="width:10%;">Manager</th>
+              <th style="width:9%;">Stage</th>
+              <th style="width:9%;">Start</th>
+              <th style="width:9%;">Target</th>
+              <th style="width:12%;">Progress</th>
+              <th style="width:12%;">Milestone Bar</th>
+              <th style="width:6%;">Status</th>
+              <th style="width:5%;"></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div id="noResults" style="display:none;text-align:center;padding:40px;color:var(--text-tertiary);">
+        <i class="bi bi-search" style="font-size:28px;display:block;margin-bottom:10px;"></i>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px;">No projects found</div>
+        <div style="font-size:12px;">Try adjusting your filters or search query.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GANTT VIEW -->
+  <div id="ganttView" style="display:none;">
+    <div class="card-custom">
+      <div class="section-heading">Gantt Chart — Project Timeline</div>
+      <div class="gantt-container" id="ganttContainer"></div>
+    </div>
+  </div>
+
+  <!-- Bottom Row -->
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card-custom">
+        <div class="section-heading">
+          Delayed Projects — Action Required
+          <span class="status-pill pill-danger" style="font-size:10px;">6 items</span>
+        </div>
+        <table class="table-custom">
+          <thead><tr><th>Project</th><th>Delay</th><th>Reason</th><th>Action</th></tr></thead>
+          <tbody id="delayBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card-custom">
+        <div class="section-heading">Expected vs Actual Progress</div>
+        <div class="cc"><canvas id="scheduleChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Live Ticker -->
+<div class="ticker-bar">
+  <div class="ticker-label"><i class="bi bi-broadcast me-1"></i>Live</div>
+  <div class="ticker-scroll"><div class="ticker-track" id="tickerTrack"></div></div>
+</div>
+
+</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Project Detail Modal -->
+<div class="modal-backdrop-custom" id="projectModal">
+  <div class="modal-content-custom">
+    <div class="modal-header-custom">
+      <div>
+        <h4 style="font-size:16px;font-weight:700;margin-bottom:2px;" id="pmTitle"></h4>
+        <p style="font-size:12px;color:var(--text-tertiary);" id="pmSubtitle"></p>
+      </div>
+      <button class="modal-close" onclick="closeModal('projectModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="pmBody"></div>
+  </div>
+</div>
+
+<!-- Adjust Schedule Modal -->
+<div class="modal-backdrop-custom" id="adjustModal">
+  <div class="modal-content-custom" style="max-width:520px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Adjust Project Schedule</h4></div>
+      <button class="modal-close" onclick="closeModal('adjustModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div style="margin-bottom:14px;">
+        <label class="detail-label" style="display:block;margin-bottom:6px;">Select Project</label>
+        <select id="adjustProject" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:var(--bg-card);" onchange="onAdjustProjectChange()"></select>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="detail-label" style="display:block;margin-bottom:6px;">Adjustment Type</label>
+        <select id="adjustType" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:var(--bg-card);">
+          <option value="extend">Extend Timeline</option>
+          <option value="compress">Compress Timeline</option>
+          <option value="delay-specific">Delay Specific Milestone</option>
+          <option value="pause">Pause Project</option>
+        </select>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="detail-label" style="display:block;margin-bottom:6px;">Duration (days)</label>
+        <input type="number" id="adjustDays" value="14" min="1" max="180" style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;outline:none;" onfocus="this.style.borderColor='var(--primary)';this.style.boxShadow='0 0 0 3px var(--primary-glow)'" onblur="this.style.borderColor='var(--border-color)';this.style.boxShadow='none'">
+      </div>
+      <div style="margin-bottom:14px;">
+        <label class="detail-label" style="display:block;margin-bottom:6px;">Reason</label>
+        <textarea id="adjustReason" rows="3" placeholder="e.g., Weather delays, material shortage, client variation..." style="width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical;" onfocus="this.style.borderColor='var(--primary)';this.style.boxShadow='0 0 0 3px var(--primary-glow)'" onblur="this.style.borderColor='var(--border-color)';this.style.boxShadow='none'"></textarea>
+      </div>
+      <div style="padding:12px;background:var(--warning-light);border:1px solid rgba(245,158,11,.15);border-radius:8px;font-size:12px;color:#92400E;" id="adjustPreview">
+        <i class="bi bi-info-circle me-1"></i> Select a project to see impact preview.
+      </div>
+      <div class="confirm-actions">
+        <button class="btn-outline-custom" onclick="closeModal('adjustModal')">Cancel</button>
+        <button class="btn-primary-custom" onclick="applyAdjustment()"><i class="bi bi-check-lg me-1"></i>Apply Adjustment</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Action Modal -->
+<div class="modal-backdrop-custom" id="confirmModal">
+  <div class="modal-content-custom" style="max-width:440px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="confirmTitle">Confirm Action</h4></div>
+      <button class="modal-close" onclick="closeModal('confirmModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;" id="confirmMsg"></p>
+      <div class="confirm-actions">
+        <button class="btn-outline-custom" onclick="closeModal('confirmModal')">Cancel</button>
+        <button class="btn-primary-custom" id="confirmBtn" onclick="confirmAction()">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+const projects = [
+  { id:1, name:"Penrith Residence", customer:"Harpreet Kaur", phone:"+61 412 345 678", location:"Penrith, NSW", manager:"Amrit Singh", type:"4BR Modern Home", stage:"Frame Stage", start:"2025-02-10", target:"2026-01-20", budget:485000, spent:312400, status:"on-time", expectedPct:65, actualPct:65, delayDays:0, delayReason:null,
+    milestones:[
+      {name:"Site Preparation",start:"Feb 10",end:"Feb 23",status:"done",tradie:null,photo:true},
+      {name:"Foundation",start:"Feb 24",end:"Mar 16",status:"done",tradie:"Concreting Bros",photo:true},
+      {name:"Slab",start:"Mar 17",end:"Mar 30",status:"done",tradie:"Concreting Bros",photo:true},
+      {name:"Frame",start:"Mar 31",end:"May 4",status:"active",tradie:"SteelFrame NSW",photo:false},
+      {name:"Lockup",start:"May 5",end:"May 25",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Rough-In (Plumbing/Electrical)",start:"May 26",end:"Jun 22",status:"upcoming",tradie:"Sparky Pro / PlumbMaster",photo:false},
+      {name:"Plasterboard",start:"Jun 23",end:"Jul 6",status:"upcoming",tradie:"PlasterPro NSW",photo:false},
+      {name:"Fit-Out",start:"Jul 7",end:"Aug 17",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Practical Completion",start:"Aug 18",end:"Aug 25",status:"upcoming",tradie:null,photo:false},
+      {name:"Handover",start:"Aug 26",end:"Sep 2",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] },
+  { id:2, name:"Castle Hill Villa", customer:"Rajesh Kumar", phone:"+61 403 222 111", location:"Castle Hill, NSW", manager:"Deepak Sharma", type:"5BR Luxury Home", stage:"Design Phase", start:"2025-04-01", target:"2026-03-15", budget:620000, spent:45200, status:"slow", expectedPct:30, actualPct:12, delayDays:28, delayReason:"Architect delayed — plans not finalized",
+    milestones:[
+      {name:"Client Requirements",start:"Apr 1",end:"Apr 10",status:"done",tradie:null,photo:true},
+      {name:"Initial Quotation",start:"Apr 11",end:"Apr 18",status:"done",tradie:null,photo:true},
+      {name:"Architectural Design",start:"Apr 19",end:"Jun 1",status:"delayed",tradie:"Mike Thompson (Architect)",photo:false},
+      {name:"Council Submission (DA)",start:"Jun 2",end:"Jul 15",status:"upcoming",tradie:null,photo:false},
+      {name:"Certification",start:"Jul 16",end:"Aug 15",status:"upcoming",tradie:"CertPro NSW",photo:false},
+      {name:"Site Preparation",start:"Aug 16",end:"Sep 1",status:"upcoming",tradie:null,photo:false},
+      {name:"Foundation",start:"Sep 2",end:"Sep 30",status:"upcoming",tradie:"Concreting Bros",photo:false},
+      {name:"Slab",start:"Oct 1",end:"Oct 20",status:"upcoming",tradie:"Concreting Bros",photo:false},
+      {name:"Frame",start:"Oct 21",end:"Dec 15",status:"upcoming",tradie:"SteelFrame NSW",photo:false},
+      {name:"Remaining Construction",start:"Dec 16",end:"Mar 15",status:"upcoming",tradie:"Various",photo:false}
+    ], variations:[] },
+  { id:3, name:"Blacktown Duplex", customer:"Sukhwinder Singh", phone:"+61 455 678 901", location:"Blacktown, NSW", manager:"Gurpreet Mann", type:"Duplex Construction", stage:"Slab Stage", start:"2025-03-15", target:"2026-02-28", budget:380000, spent:198600, status:"ahead", expectedPct:38, actualPct:42, delayDays:-12, delayReason:null,
+    milestones:[
+      {name:"Site Preparation",start:"Mar 15",end:"Mar 28",status:"done",tradie:null,photo:true},
+      {name:"Foundation",start:"Mar 29",end:"Apr 20",status:"done",tradie:"Concreting Bros",photo:true},
+      {name:"Slab",start:"Apr 21",end:"May 11",status:"active",tradie:"Concreting Bros",photo:false},
+      {name:"Frame",start:"May 12",end:"Jul 6",status:"upcoming",tradie:"SteelFrame NSW",photo:false},
+      {name:"Lockup",start:"Jul 7",end:"Jul 28",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Rough-In",start:"Jul 29",end:"Aug 25",status:"upcoming",tradie:"Sparky Pro",photo:false},
+      {name:"Plasterboard",start:"Aug 26",end:"Sep 8",status:"upcoming",tradie:"PlasterPro",photo:false},
+      {name:"Fit-Out",start:"Sep 9",end:"Nov 2",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Completion & Handover",start:"Nov 3",end:"Feb 28",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] },
+  { id:4, name:"Parramatta Home", customer:"David Chen", phone:"+61 422 111 333", location:"Parramatta, NSW", manager:"Amrit Singh", type:"4BR + Granny Flat", stage:"Lockup Stage", start:"2024-11-01", target:"2025-09-30", budget:550000, spent:410000, status:"on-time", expectedPct:78, actualPct:78, delayDays:0, delayReason:null,
+    milestones:[
+      {name:"Site Prep & Foundation",start:"Nov 1",end:"Dec 1",status:"done",tradie:null,photo:true},
+      {name:"Slab",start:"Dec 2",end:"Dec 22",status:"done",tradie:"Concreting Bros",photo:true},
+      {name:"Frame",start:"Dec 23",end:"Feb 28",status:"done",tradie:"SteelFrame NSW",photo:true},
+      {name:"Lockup",start:"Mar 1",end:"Mar 28",status:"active",tradie:"Various",photo:false},
+      {name:"Rough-In",start:"Mar 29",end:"Apr 30",status:"upcoming",tradie:"Sparky Pro / PlumbMaster",photo:false},
+      {name:"Plasterboard",start:"May 1",end:"May 20",status:"upcoming",tradie:"PlasterPro NSW",photo:false},
+      {name:"Fit-Out",start:"May 21",end:"Jul 25",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Granny Flat Construction",start:"Jul 26",end:"Sep 10",status:"upcoming",tradie:"Various",photo:false},
+      {name:"PC & Handover",start:"Sep 11",end:"Sep 30",status:"upcoming",tradie:null,photo:false}
+    ], variations:[{desc:"Kitchen upgrade — stone benchtops",amount:4500,date:"2025-06-10",status:"pending"}] },
+  { id:5, name:"Liverpool Estate", customer:"Manjit Brar", phone:"+61 488 999 222", location:"Liverpool, NSW", manager:"Jasbir Kaur", type:"6BR Double Storey", stage:"Foundation", start:"2025-05-20", target:"2026-07-01", budget:720000, spent:89000, status:"on-time", expectedPct:18, actualPct:18, delayDays:0, delayReason:null,
+    milestones:[
+      {name:"Site Preparation",start:"May 20",end:"Jun 5",status:"done",tradie:null,photo:true},
+      {name:"Foundation",start:"Jun 6",end:"Jul 10",status:"active",tradie:"Concreting Bros",photo:false},
+      {name:"Slab (Ground Floor)",start:"Jul 11",end:"Jul 30",status:"upcoming",tradie:"Concreting Bros",photo:false},
+      {name:"Frame (Ground Floor)",start:"Jul 31",end:"Sep 10",status:"upcoming",tradie:"SteelFrame NSW",photo:false},
+      {name:"First Floor Slab",start:"Sep 11",end:"Sep 25",status:"upcoming",tradie:"Concreting Bros",photo:false},
+      {name:"Frame (First Floor)",start:"Sep 26",end:"Nov 20",status:"upcoming",tradie:"SteelFrame NSW",photo:false},
+      {name:"Lockup & Rough-In",start:"Nov 21",end:"Jan 15",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Plasterboard & Fit-Out",start:"Jan 16",end:"Apr 30",status:"upcoming",tradie:"Various",photo:false},
+      {name:"PC & Handover",start:"May 1",end:"Jul 1",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] },
+  { id:6, name:"Chatswood Apartment", customer:"Wei Zhang", phone:"+61 411 555 777", location:"Chatswood, NSW", manager:"Deepak Sharma", type:"3BR Apartment Reno", stage:"Govt Approval", start:"2025-04-10", target:"2025-12-15", budget:890000, spent:32000, status:"critical", expectedPct:25, actualPct:5, delayDays:70, delayReason:"DA refused by council — full redesign required",
+    milestones:[
+      {name:"Initial Design",start:"Apr 10",end:"May 5",status:"done",tradie:null,photo:true},
+      {name:"DA Submission (1st)",start:"May 6",end:"May 15",status:"done",tradie:null,photo:true},
+      {name:"DA Refused — Redesign",start:"May 16",end:"Jul 20",status:"delayed",tradie:"Mike Thompson (Architect)",photo:false},
+      {name:"DA Submission (2nd)",start:"Jul 21",end:"Aug 1",status:"upcoming",tradie:null,photo:false},
+      {name:"Council Approval",start:"Aug 2",end:"Sep 30",status:"upcoming",tradie:null,photo:false},
+      {name:"Certification",start:"Oct 1",end:"Oct 31",status:"upcoming",tradie:"CertPro NSW",photo:false},
+      {name:"Demolition & Site Prep",start:"Nov 1",end:"Nov 20",status:"upcoming",tradie:null,photo:false},
+      {name:"Construction",start:"Nov 21",end:"Dec 15",status:"upcoming",tradie:"Various",photo:false}
+    ], variations:[] },
+  { id:7, name:"Ryde Townhouse", customer:"Simran Gill", phone:"+61 499 888 333", location:"Ryde, NSW", manager:"Ravinder Pal", type:"3BR Townhouse", stage:"Frame Stage", start:"2025-01-15", target:"2025-11-30", budget:340000, spent:215000, status:"ahead", expectedPct:52, actualPct:55, delayDays:-10, delayReason:null,
+    milestones:[
+      {name:"Site Preparation",start:"Jan 15",end:"Jan 28",status:"done",tradie:null,photo:true},
+      {name:"Foundation",start:"Jan 29",end:"Feb 20",status:"done",tradie:"Concreting Bros",photo:true},
+      {name:"Slab",start:"Feb 21",end:"Mar 10",status:"done",tradie:"Concreting Bros",photo:true},
+      {name:"Frame",start:"Mar 11",end:"May 5",status:"active",tradie:"SteelFrame NSW",photo:false},
+      {name:"Lockup",start:"May 6",end:"May 28",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Rough-In",start:"May 29",end:"Jun 25",status:"upcoming",tradie:"Sparky Pro",photo:false},
+      {name:"Plaster & Fit-Out",start:"Jun 26",end:"Sep 15",status:"upcoming",tradie:"Various",photo:false},
+      {name:"PC & Handover",start:"Sep 16",end:"Nov 30",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] },
+  { id:8, name:"Hornsby Garden Home", customer:"James Wilson", phone:"+61 477 111 555", location:"Hornsby, NSW", manager:"Harjot Bassi", type:"4BR Garden Home", stage:"Site Prep", start:"2025-06-15", target:"2026-06-01", budget:460000, spent:28000, status:"on-time", expectedPct:8, actualPct:8, delayDays:0, delayReason:null,
+    milestones:[
+      {name:"Site Preparation",start:"Jun 15",end:"Jul 5",status:"active",tradie:null,photo:false},
+      {name:"Foundation",start:"Jul 6",end:"Aug 3",status:"upcoming",tradie:"Concreting Bros",photo:false},
+      {name:"Slab",start:"Aug 4",end:"Aug 25",status:"upcoming",tradie:"Concreting Bros",photo:false},
+      {name:"Frame",start:"Aug 26",end:"Oct 25",status:"upcoming",tradie:"SteelFrame NSW",photo:false},
+      {name:"Lockup",start:"Oct 26",end:"Nov 20",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Rough-In",start:"Nov 21",end:"Dec 20",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Plaster & Fit-Out",start:"Dec 21",end:"Mar 20",status:"upcoming",tradie:"Various",photo:false},
+      {name:"PC & Handover",start:"Mar 21",end:"Jun 1",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] },
+  { id:9, name:"Auburn Townhouse", customer:"Priya Sharma", phone:"+61 466 333 888", location:"Auburn, NSW", manager:"Amrit Singh", type:"3BR Townhouse", stage:"Design Phase", start:"2025-05-01", target:"2026-04-30", budget:390000, spent:22000, status:"slow", expectedPct:18, actualPct:5, delayDays:21, delayReason:"Client changed scope — awaiting new quote approval",
+    milestones:[
+      {name:"Initial Consultation",start:"May 1",end:"May 8",status:"done",tradie:null,photo:true},
+      {name:"Requirements & Quotation",start:"May 9",end:"May 20",status:"done",tradie:null,photo:true},
+      {name:"Scope Change — New Quote",start:"May 21",end:"Jun 15",status:"delayed",tradie:null,photo:false},
+      {name:"Quote Approval",start:"Jun 16",end:"Jun 25",status:"upcoming",tradie:null,photo:false},
+      {name:"Architectural Design",start:"Jun 26",end:"Aug 20",status:"upcoming",tradie:"Mike Thompson",photo:false},
+      {name:"DA & Certification",start:"Aug 21",end:"Oct 20",status:"upcoming",tradie:null,photo:false},
+      {name:"Construction",start:"Oct 21",end:"Apr 30",status:"upcoming",tradie:"Various",photo:false}
+    ], variations:[{desc:"Added theatre room + extended garage",amount:28000,date:"2025-05-20",status:"sent"}] },
+  { id:10, name:"Mount Druitt Duplex", customer:"Baljit Sandhu", phone:"+61 444 777 222", location:"Mount Druitt, NSW", manager:"Gurpreet Mann", type:"Duplex", stage:"Slab Stage", start:"2025-02-20", target:"2026-01-15", budget:365000, spent:185000, status:"on-time", expectedPct:60, actualPct:60, delayDays:0, delayReason:null,
+    milestones:[
+      {name:"Site Prep",start:"Feb 20",end:"Mar 5",status:"done",tradie:null,photo:true},
+      {name:"Foundation",start:"Mar 6",end:"Mar 28",status:"done",tradie:"Concreting Bros",photo:true},
+      {name:"Slab",start:"Mar 29",end:"Apr 18",status:"active",tradie:"Concreting Bros",photo:false},
+      {name:"Frame",start:"Apr 19",end:"Jun 15",status:"upcoming",tradie:"SteelFrame NSW",photo:false},
+      {name:"Lockup",start:"Jun 16",end:"Jul 10",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Rough-In",start:"Jul 11",end:"Aug 8",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Plaster & Fit-Out",start:"Aug 9",end:"Oct 30",status:"upcoming",tradie:"Various",photo:false},
+      {name:"PC & Handover",start:"Oct 31",end:"Jan 15",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] },
+  { id:11, name:"Kellyville Residence", customer:"Gurdev Singh", phone:"+61 433 222 999", location:"Kellyville, NSW", manager:"Deepak Sharma", type:"5BR Home", stage:"Rough-In", start:"2024-12-01", target:"2025-10-15", budget:580000, spent:420000, status:"on-time", expectedPct:82, actualPct:82, delayDays:0, delayReason:null,
+    milestones:[
+      {name:"Site Prep to Slab",start:"Dec 1",end:"Jan 15",status:"done",tradie:null,photo:true},
+      {name:"Frame",start:"Jan 16",end:"Mar 20",status:"done",tradie:"SteelFrame NSW",photo:true},
+      {name:"Lockup",start:"Mar 21",end:"Apr 15",status:"done",tradie:"Various",photo:true},
+      {name:"Rough-In",start:"Apr 16",end:"May 25",status:"active",tradie:"Sparky Pro / PlumbMaster",photo:false},
+      {name:"Plasterboard",start:"May 26",end:"Jun 10",status:"upcoming",tradie:"PlasterPro NSW",photo:false},
+      {name:"Fit-Out",start:"Jun 11",end:"Aug 25",status:"upcoming",tradie:"Various",photo:false},
+      {name:"PC & Handover",start:"Aug 26",end:"Oct 15",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] },
+  { id:12, name:"Wentworthville Home", customer:"Amandeep Kaur", phone:"+61 455 111 666", location:"Wentworthville, NSW", manager:"Jasbir Kaur", type:"4BR Home", stage:"Fit-Out", start:"2024-10-01", target:"2025-08-20", budget:475000, spent:445000, status:"on-time", expectedPct:90, actualPct:90, delayDays:0, delayReason:null,
+    milestones:[
+      {name:"Site Prep to Frame",start:"Oct 1",end:"Jan 10",status:"done",tradie:null,photo:true},
+      {name:"Lockup to Rough-In",start:"Jan 11",end:"Mar 15",status:"done",tradie:"Various",photo:true},
+      {name:"Plasterboard",start:"Mar 16",end:"Apr 5",status:"done",tradie:"PlasterPro",photo:true},
+      {name:"Fit-Out",start:"Apr 6",end:"Jul 10",status:"active",tradie:"Various",photo:false},
+      {name:"Practical Completion",start:"Jul 11",end:"Jul 25",status:"upcoming",tradie:null,photo:false},
+      {name:"Handover",start:"Jul 26",end:"Aug 20",status:"upcoming",tradie:null,photo:false}
+    ], variations:[{desc:"Bathroom tile upgrade",amount:3200,date:"2025-03-10",status:"approved"}] },
+  { id:13, name:"Bankstown Renovation", customer:"Rajveer Dhillon", phone:"+61 488 444 111", location:"Bankstown, NSW", manager:"Harjot Bassi", type:"Full Home Renovation", stage:"Frame Stage", start:"2025-03-01", target:"2025-12-01", budget:285000, spent:145000, status:"slow", expectedPct:50, actualPct:40, delayDays:18, delayReason:"Material delivery delays — steel frames 2 weeks late",
+    milestones:[
+      {name:"Demolition",start:"Mar 1",end:"Mar 15",status:"done",tradie:null,photo:true},
+      {name:"Structural Work",start:"Mar 16",end:"Apr 15",status:"done",tradie:"SteelFrame NSW",photo:true},
+      {name:"Frame",start:"Apr 16",end:"Jun 5",status:"delayed",tradie:"SteelFrame NSW",photo:false},
+      {name:"Rough-In",start:"Jun 6",end:"Jul 5",status:"upcoming",tradie:"Sparky Pro",photo:false},
+      {name:"Plasterboard",start:"Jul 6",end:"Jul 25",status:"upcoming",tradie:"PlasterPro",photo:false},
+      {name:"Fit-Out",start:"Jul 26",end:"Oct 5",status:"upcoming",tradie:"Various",photo:false},
+      {name:"PC & Handover",start:"Oct 6",end:"Dec 1",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] },
+  { id:14, name:"Quakers Hill Project", customer:"Navjot Randhawa", phone:"+61 422 888 555", location:"Quakers Hill, NSW", manager:"Ravinder Pal", type:"4BR Home", stage:"Foundation", start:"2025-06-01", target:"2026-05-15", budget:450000, spent:52000, status:"on-time", expectedPct:12, actualPct:12, delayDays:0, delayReason:null,
+    milestones:[
+      {name:"Site Preparation",start:"Jun 1",end:"Jun 18",status:"done",tradie:null,photo:true},
+      {name:"Foundation",start:"Jun 19",end:"Jul 22",status:"active",tradie:"Concreting Bros",photo:false},
+      {name:"Slab",start:"Jul 23",end:"Aug 12",status:"upcoming",tradie:"Concreting Bros",photo:false},
+      {name:"Frame",start:"Aug 13",end:"Oct 15",status:"upcoming",tradie:"SteelFrame NSW",photo:false},
+      {name:"Lockup to PC",start:"Oct 16",end:"May 15",status:"upcoming",tradie:"Various",photo:false}
+    ], variations:[] },
+  { id:15, name:"Bossley Park Home", customer:"Kulwant Bajwa", phone:"+61 466 555 333", location:"Bossley Park, NSW", manager:"Gurpreet Mann", type:"5BR Home", stage:"DA Submission", start:"2025-05-15", target:"2026-06-01", budget:510000, spent:18000, status:"critical", expectedPct:15, actualPct:3, delayDays:45, delayReason:"Council returned DA — additional heritage report needed",
+    milestones:[
+      {name:"Client Consultation",start:"May 15",end:"May 25",status:"done",tradie:null,photo:true},
+      {name:"Design & Quotation",start:"May 26",end:"Jun 15",status:"done",tradie:null,photo:true},
+      {name:"DA Preparation",start:"Jun 16",end:"Jul 5",status:"delayed",tradie:"Mike Thompson",photo:false},
+      {name:"DA Submission",start:"Jul 6",end:"Jul 15",status:"upcoming",tradie:null,photo:false},
+      {name:"Council Approval",start:"Jul 16",end:"Sep 30",status:"upcoming",tradie:null,photo:false},
+      {name:"Construction",start:"Oct 1",end:"Jun 1",status:"upcoming",tradie:"Various",photo:false}
+    ], variations:[] },
+  { id:16, name:"Fairfield Duplex", customer:"Jaswinder Thind", phone:"+61 477 222 888", location:"Fairfield, NSW", manager:"Amrit Singh", type:"Duplex", stage:"Slab Stage", start:"2025-04-01", target:"2026-03-01", budget:375000, spent:168000, status:"slow", expectedPct:45, actualPct:35, delayDays:15, delayReason:"Rain delays during foundation — 2 weeks lost",
+    milestones:[
+      {name:"Site Prep",start:"Apr 1",end:"Apr 18",status:"done",tradie:null,photo:true},
+      {name:"Foundation",start:"Apr 19",end:"May 20",status:"done",tradie:"Concreting Bros",photo:true},
+      {name:"Slab",start:"May 21",end:"Jun 15",status:"active",tradie:"Concreting Bros",photo:false},
+      {name:"Frame",start:"Jun 16",end:"Aug 15",status:"upcoming",tradie:"SteelFrame NSW",photo:false},
+      {name:"Lockup to Rough-In",start:"Aug 16",end:"Sep 30",status:"upcoming",tradie:"Various",photo:false},
+      {name:"Plaster & Fit-Out",start:"Oct 1",end:"Jan 15",status:"upcoming",tradie:"Various",photo:false},
+      {name:"PC & Handover",start:"Jan 16",end:"Mar 1",status:"upcoming",tradie:null,photo:false}
+    ], variations:[] }
+];
+
+const notifData = [
+  {id:1,icon:"bi-exclamation-triangle",bg:"var(--danger-light)",color:"var(--danger)",msg:"Chatswood Apartment — DA refused, 70 days behind schedule",time:"Just now",unread:true},
+  {id:2,icon:"bi-clock-history",bg:"var(--warning-light)",color:"#D97706",msg:"Bankstown Renovation — steel frames delayed 2 weeks",time:"30 min ago",unread:true},
+  {id:3,icon:"bi-tools",bg:"var(--info-light)",color:"var(--info)",msg:"Slab Tradie 1-week warning — Penrith site, due May 5",time:"1 hr ago",unread:true},
+  {id:4,icon:"bi-camera",bg:"var(--purple-light)",color:"var(--purple)",msg:"Foundation photo uploaded — Liverpool Estate by Jasbir Kaur",time:"2 hrs ago",unread:false},
+  {id:5,icon:"bi-check-circle",bg:"var(--success-light)",color:"var(--success)",msg:"Kellyville Rough-In started on schedule",time:"3 hrs ago",unread:false},
+];
+
+const tickerItems = [
+  {text:"Penrith Residence — Frame Stage 68% complete",color:"var(--success)"},
+  {text:"Chatswood Apartment — CRITICAL: DA redesign in progress",color:"var(--danger)"},
+  {text:"Blacktown Duplex — 4 days ahead of schedule",color:"var(--primary)"},
+  {text:"Slab tradie confirmed for Liverpool — Jul 11",color:"var(--info)"},
+  {text:"Auburn Townhouse — awaiting scope change quote approval",color:"var(--warning)"},
+  {text:"Bossley Park — heritage report requested from council",color:"var(--danger)"},
+  {text:"Wentworthville Home — Fit-Out 72% done",color:"var(--success)"},
+  {text:"Castle Hill Villa — Architect follow-up scheduled tomorrow",color:"var(--warning)"},
+];
+
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+let currentFilter = 'all';
+let currentView = 'table';
+let notifs = JSON.parse(JSON.stringify(notifData));
+let pendingConfirm = null;
+
+// ══════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════
+function updateClock(){
+  const n=new Date(),h=String(n.getHours()).padStart(2,'0'),m=String(n.getMinutes()).padStart(2,'0'),s=String(n.getSeconds()).padStart(2,'0');
+  document.getElementById('liveClock').innerHTML=`<span>${h}:${m}:${s}</span> AEST`;
+}
+setInterval(updateClock,1000);updateClock();
+
+// ══════════════════════════════════════
+// COUNTERS
+// ══════════════════════════════════════
+function animateCounters(){
+  document.querySelectorAll('.stat-value[data-count]').forEach(el=>{
+    const t=parseInt(el.dataset.count),dur=1000,st=performance.now();
+    (function step(now){const p=Math.min((now-st)/dur,1),e=1-Math.pow(1-p,3);el.textContent=Math.round(e*t);if(p<1)requestAnimationFrame(step)})(st);
+  });
+}
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+function renderNotifs(){
+  const l=document.getElementById('notifList'),uc=notifs.filter(n=>n.unread).length,b=document.getElementById('notifCount');
+  b.textContent=uc;b.style.display=uc>0?'flex':'none';
+  l.innerHTML=notifs.map(n=>`<div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})"><div class="notif-icon" style="background:${n.bg};color:${n.color};"><i class="bi ${n.icon}"></i></div><div class="notif-text"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div><button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button></div>`).join('');
+}
+function toggleNotif(){document.getElementById('notifDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn');if(d&&!d.contains(e.target)&&!b.contains(e.target))d.classList.remove('show')});
+function readNotif(id){const n=notifs.find(x=>x.id===id);if(n&&n.unread){n.unread=false;renderNotifs()}showToast('Opening: '+(n?n.msg.substring(0,50)+'...':''),'info')}
+function dismissNotif(id){const el=document.querySelector(`.notification-item[data-id="${id}"]`);if(el){el.classList.add('dismissing');setTimeout(()=>{notifs=notifs.filter(x=>x.id!==id);renderNotifs()},250)}}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('All notifications marked as read','success')}
+
+// ══════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════
+function showToast(msg,type='info'){
+  const c=document.getElementById('toastContainer'),cols={success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'},danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'},info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'},warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'}};
+  const cl=cols[type]||cols.info,t=document.createElement('div');t.className='toast-item';
+  t.innerHTML=`<div class="toast-icon" style="background:${cl.bg};color:${cl.color};"><i class="bi ${cl.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;
+  c.appendChild(t);setTimeout(()=>removeToast(t),4500);
+}
+function removeToast(el){if(!el||!el.parentElement)return;el.classList.add('removing');setTimeout(()=>el.remove(),250)}
+
+// ══════════════════════════════════════
+// FILTERS
+// ══════════════════════════════════════
+function setFilter(f){
+  currentFilter=f;
+  document.querySelectorAll('.filter-pill').forEach(p=>{p.classList.toggle('active',p.dataset.filter===f)});
+  applyFilters();
+}
+
+function applyFilters(){
+  const q=document.getElementById('searchInput').value.toLowerCase().trim();
+  let filtered=projects.filter(p=>{
+    const matchFilter=currentFilter==='all'||p.status===currentFilter;
+    const matchSearch=!q||p.name.toLowerCase().includes(q)||p.customer.toLowerCase().includes(q)||p.manager.toLowerCase().includes(q)||p.location.toLowerCase().includes(q)||p.stage.toLowerCase().includes(q);
+    return matchFilter&&matchSearch;
+  });
+  renderTable(filtered);
+  renderGantt(filtered);
+  document.getElementById('resultCount').textContent=filtered.length+' project'+(filtered.length!==1?'s':'');
+  document.getElementById('noResults').style.display=filtered.length===0?'block':'none';
+  document.querySelector('#tableView .table-custom').style.display=filtered.length===0?'none':'';
+}
+
+// ══════════════════════════════════════
+// STATUS HELPERS
+// ══════════════════════════════════════
+function statusPill(s){
+  const m={onTime:{cls:'pill-success',icon:'bi-check-circle',label:'On Time'},ahead:{cls:'pill-primary',icon:'bi-arrow-up-circle',label:'Ahead'},slow:{cls:'pill-warning',icon:'bi-arrow-down',label:'Slow'},critical:{cls:'pill-danger',icon:'bi-exclamation-octagon',label:'Critical'}};
+  const x=m[s]||m.onTime;return `<span class="status-pill ${x.cls}"><i class="bi ${x.icon} me-1"></i>${x.label}</span>`;
+}
+function progressColor(p){return p>=60?'var(--success)':p>=30?'var(--primary)':p>=15?'#D97706':'var(--danger)'}
+function diffText(exp,act){
+  const d=act-exp;
+  if(Math.abs(d)<=2)return `<span style="color:var(--text-tertiary)">${exp}% expected / ${act}% actual</span>`;
+  if(d>0)return `<span style="color:var(--success)">${exp}% expected / ${act}% actual <i class="bi bi-arrow-up-short"></i></span>`;
+  return `<span style="color:var(--danger)">${exp}% expected / ${act}% actual <i class="bi bi-arrow-down-short"></i></span>`;
+}
+
+// ══════════════════════════════════════
+// TABLE RENDER
+// ══════════════════════════════════════
+function renderTable(data){
+  document.getElementById('tableBody').innerHTML=data.map(p=>{
+    const done=p.milestones.filter(m=>m.status==='done').length,total=p.milestones.length;
+    const activeM=p.milestones.find(m=>m.status==='active');
+    const msBar=p.milestones.map(m=>{const c=m.status==='done'?'var(--success)':m.status==='active'?'var(--primary)':m.status==='delayed'?'var(--danger)':'#E2E8F0';const w=Math.round(100/total);return `<div class="seg" style="width:${w}%;background:${c};" title="${m.name}: ${m.status}"></div>`}).join('');
+    return `<tr class="${p.status==='critical'?'critical-row':''}" onclick="openProjectModal(${p.id})">
+      <td><b style="color:var(--primary);font-size:13px;">${p.name}</b><div style="font-size:10.5px;color:var(--text-tertiary);margin-top:1px;">${p.type} — ${p.location}</div></td>
+      <td>${p.customer}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${p.manager}</td>
+      <td><span style="font-size:12px;">${p.stage}</span>${activeM&&activeM.tradie?`<div style="font-size:10px;color:var(--info);margin-top:1px;"><i class="bi bi-tools me-1"></i>${activeM.tradie}</div>`:''}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${formatDate(p.start)}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${formatDate(p.target)}</td>
+      <td>
+        <div class="d-flex align-items-center gap-2">
+          <div class="progress-bar-custom" style="flex:1;"><div class="progress-fill-custom" style="width:${p.actualPct}%;background:${progressColor(p.actualPct)};"></div></div>
+          <span style="font-size:11px;font-weight:700;color:${progressColor(p.actualPct)};min-width:28px;text-align:right;">${p.actualPct}%</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:3px;">${diffText(p.expectedPct,p.actualPct)}</div>
+      </td>
+      <td><div class="mini-gantt">${msBar}</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:3px;">${done}/${total} milestones</div></td>
+      <td>${statusPill(p.status)}</td>
+      <td><button class="btn-icon" onclick="event.stopPropagation();openProjectModal(${p.id})" title="View Details"><i class="bi bi-three-dots-vertical"></i></button></td>
+    </tr>`;
+  }).join('');
+}
+
+function formatDate(d){const dt=new Date(d);return dt.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}
+
+// ══════════════════════════════════════
+// GANTT RENDER
+// ══════════════════════════════════════
+function renderGantt(data){
+  if(data.length===0){document.getElementById('ganttContainer').innerHTML='<div style="text-align:center;padding:40px;color:var(--text-tertiary);">No projects to display.</div>';return}
+  const months=['Jan 25','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan 26','Feb','Mar','Apr','May','Jun'];
+  const monthCount=months.length;
+  let html=`<div class="gantt-chart"><div class="gantt-header"><div class="gantt-project-col">Project</div><div class="gantt-timeline-header">${months.map(m=>`<div class="gantt-month">${m}</div>`).join('')}</div></div>`;
+  const now=new Date();
+  const todayPct=((now.getMonth()+now.getFullYear()*12)-(0+2025*12))/(monthCount)*100;
+
+  data.forEach(p=>{
+    const pStart=new Date(p.start),pEnd=new Date(p.target);
+    const startPct=Math.max(0,((pStart.getMonth()+pStart.getFullYear()*12)-(0+2025*12))/(monthCount)*100);
+    const endPct=Math.min(100,((pEnd.getMonth()+pEnd.getFullYear()*12)-(0+2025*12))/(monthCount)*100);
+    const width=endPct-startPct;
+    if(width<=0)return;
+
+    let segments='';
+    const msCount=p.milestones.length;
+    p.milestones.forEach((m,i)=>{
+      const w=Math.round(100/msCount);
+      let bg='#E2E8F0';
+      if(m.status==='done')bg='var(--success)';
+      else if(m.status==='active')bg='var(--primary)';
+      else if(m.status==='delayed')bg='var(--danger)';
+      segments+=`<div class="gantt-segment ${m.status}" style="width:${w}%;" title="${m.name}"></div>`;
+    });
+
+    html+=`<div class="gantt-row" onclick="openProjectModal(${p.id})">
+      <div class="gantt-row-label"><div class="proj-name">${p.name}</div><div class="proj-stage">${p.stage} — ${p.actualPct}%</div></div>
+      <div class="gantt-bar-area">
+        <div class="gantt-bar" style="left:${startPct}%;width:${width}%;">${segments}<div class="gantt-tooltip">${p.name}: ${p.milestones.filter(m=>m.status==='done').length}/${msCount} done — ${p.actualPct}%</div></div>
+      </div>
+    </div>`;
+  });
+
+  html+=`</div>`;
+  document.getElementById('ganttContainer').innerHTML=html;
+
+  // Add today line
+  setTimeout(()=>{
+    const bars=document.querySelectorAll('.gantt-bar-area');
+    bars.forEach(bar=>{
+      const line=document.createElement('div');
+      line.className='gantt-today-line';
+      line.style.left=Math.min(Math.max(todayPct,0),100)+'%';
+      bar.appendChild(line);
+    });
+  },50);
+}
+
+// ══════════════════════════════════════
+// VIEW TOGGLE
+// ══════════════════════════════════════
+function switchView(v,btn){
+  currentView=v;
+  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tableView').style.display=v==='table'?'block':'none';
+  document.getElementById('ganttView').style.display=v==='gantt'?'block':'none';
+  if(v==='gantt')applyFilters();
+}
+
+// ══════════════════════════════════════
+// DELAY TABLE
+// ══════════════════════════════════════
+function renderDelayTable(){
+  const delayed=projects.filter(p=>p.status==='slow'||p.status==='critical').sort((a,b)=>b.delayDays-a.delayDays);
+  document.getElementById('delayBody').innerHTML=delayed.map(p=>{
+    const pill=p.status==='critical'?'pill-danger':'pill-warning';
+    const delayLabel=p.delayDays>30?`~${Math.round(p.delayDays/7)} weeks behind`:`~${p.delayDays} days behind`;
+    return `<tr>
+      <td><b style="font-size:13px;">${p.name}</b><div style="font-size:10.5px;color:var(--text-tertiary);">${p.customer}</div></td>
+      <td><span class="status-pill ${pill}">${delayLabel}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary);max-width:200px;">${p.delayReason||'Unknown'}</td>
+      <td>
+        <div class="d-flex gap-1">
+          <button class="btn-primary-custom btn-sm-custom" onclick="openProjectModal(${p.id})"><i class="bi bi-eye me-1"></i>Review</button>
+          <button class="btn-outline-custom btn-sm-custom" onclick="escalateProject(${p.id})"><i class="bi bi-arrow-up-right me-1"></i>Escalate</button>
+          <button class="btn-outline-custom btn-sm-custom" onclick="sendReminder(${p.id})"><i class="bi bi-bell me-1"></i>Remind</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+// PROJECT MODAL
+// ══════════════════════════════════════
+let currentModalTab='milestones';
+function openProjectModal(id){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  currentModalTab='milestones';
+  document.getElementById('pmTitle').textContent=p.name;
+  document.getElementById('pmSubtitle').textContent=p.type+' — '+p.location+' — '+p.customer;
+  renderModalContent(p);
+  document.getElementById('projectModal').classList.add('show');
+}
+function renderModalContent(p){
+  const done=p.milestones.filter(m=>m.status==='done').length,total=p.milestones.length;
+  const spent=((p.spent/p.budget)*100).toFixed(1);
+  const nextMs=p.milestones.find(m=>m.status==='upcoming');
+  const activeMs=p.milestones.find(m=>m.status==='active');
+  const delayedMs=p.milestones.filter(m=>m.status==='delayed');
+
+  let tabContent='';
+  if(currentModalTab==='milestones'){
+    tabContent=`<div style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:12px;font-weight:600;">Overall Milestone Progress</span>
+        <span style="font-size:12px;font-weight:700;color:var(--primary);">${done}/${total} completed</span>
+      </div>
+      <div class="progress-bar-custom" style="height:10px;"><div class="progress-fill-custom" style="width:${(done/total*100).toFixed(0)}%;background:var(--primary);"></div></div>
+    </div>
+    <div id="msList">${p.milestones.map((m,i)=>{
+      const dotCls=m.status==='done'?'done':m.status==='active'?'active':m.status==='delayed'?'delayed':'upcoming';
+      const icon=m.status==='done'?'<i class="bi bi-check"></i>':m.status==='active'?'<i class="bi bi-play-fill"></i>':m.status==='delayed'?'<i class="bi bi-exclamation"></i>':'';
+      const stPill=m.status==='done'?'<span class="status-pill pill-success" style="font-size:9px;">Done</span>':m.status==='active'?'<span class="status-pill pill-primary" style="font-size:9px;">In Progress</span>':m.status==='delayed'?'<span class="status-pill pill-danger" style="font-size:9px;">Delayed</span>':'<span class="status-pill pill-gray" style="font-size:9px;">Upcoming</span>';
+      return `<div class="ms-item" onclick="milestoneAction(${p.id},${i},'${m.status}')" style="cursor:pointer;">
+        <div class="ms-dot ${dotCls}">${icon}</div>
+        ${i<p.milestones.length-1?'<div class="ms-connector"></div>':''}
+        <div class="ms-info">
+          <div class="ms-name">${m.name}</div>
+          <div class="ms-dates"><i class="bi bi-calendar3 me-1"></i>${m.start} — ${m.end}</div>
+          ${m.tradie?`<div class="ms-tradie"><i class="bi bi-tools me-1"></i>${m.tradie}</div>`:''}
+          ${m.photo&&m.status==='done'?`<div style="font-size:10px;color:var(--success);margin-top:2px;"><i class="bi bi-camera-fill me-1"></i>Photo uploaded</div>`:''}
+        </div>
+        <div class="ms-status">${stPill}</div>
+      </div>`;
+    }).join('')}</div>`;
+  } else if(currentModalTab==='details'){
+    tabContent=`<div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-item"><div class="detail-label">Customer</div><div class="detail-value">${p.customer}</div></div>
+      <div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${p.phone}</div></div>
+      <div class="detail-item"><div class="detail-label">Site Manager</div><div class="detail-value">${p.manager}</div></div>
+      <div class="detail-item"><div class="detail-label">Current Stage</div><div class="detail-value">${p.stage}</div></div>
+      <div class="detail-item"><div class="detail-label">Start Date</div><div class="detail-value">${formatDate(p.start)}</div></div>
+      <div class="detail-item"><div class="detail-label">Target Completion</div><div class="detail-value">${formatDate(p.target)}</div></div>
+      <div class="detail-item"><div class="detail-label">Budget</div><div class="detail-value" style="color:var(--primary);">$${p.budget.toLocaleString()}</div></div>
+      <div class="detail-item"><div class="detail-label">Spent So Far</div><div class="detail-value" style="color:${p.spent>p.budget*0.8?'var(--danger)':'var(--text-primary)'};">$${p.spent.toLocaleString()} <span style="font-size:11px;color:var(--text-tertiary);">(${spent}%)</span></div></div>
+    </div>
+    ${p.delayDays!==0?`<div style="padding:12px 14px;background:${p.delayDays>0?'var(--danger-light)':'var(--success-light)'};border:1px solid ${p.delayDays>0?'rgba(220,38,38,.15)':'rgba(22,163,74,.15)'};border-radius:8px;margin-bottom:16px;font-size:12px;color:${p.delayDays>0?'var(--danger)':'var(--success)'};">
+      <i class="bi ${p.delayDays>0?'bi-exclamation-triangle':'bi-arrow-up-circle'} me-1"></i>
+      ${p.delayDays>0?`${p.delayDays} days behind schedule — ${p.delayReason}`:`${Math.abs(p.delayDays)} days ahead of schedule`}
+    </div>`:''}
+    ${p.variations.length>0?`<div style="margin-bottom:16px;"><div class="detail-label" style="margin-bottom:8px;">Variations</div>
+      ${p.variations.map(v=>`<div style="padding:10px 14px;background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;margin-bottom:6px;font-size:12px;">
+        <div style="font-weight:600;">${v.desc}</div>
+        <div style="color:var(--text-tertiary);margin-top:2px;">$${v.amount.toLocaleString()} — ${formatDate(v.date)} — <span class="status-pill ${v.status==='approved'?'pill-success':v.status==='pending'?'pill-warning':'pill-info'}" style="font-size:9px;">${v.status}</span></div>
+      </div>`).join('')}</div>`:'<div style="padding:16px;text-align:center;color:var(--text-tertiary);font-size:12px;background:var(--bg-body);border-radius:8px;margin-bottom:16px;"><i class="bi bi-inbox" style="font-size:20px;display:block;margin-bottom:6px;"></i>No variations logged</div>'}`;
+  } else if(currentModalTab==='actions'){
+    tabContent=`<div class="action-grid">
+      <div class="action-card" onclick="modalAction('adjust','${p.name}')">
+        <div class="action-icon" style="background:var(--warning-light);color:#D97706;"><i class="bi bi-sliders"></i></div>
+        <div class="action-label">Adjust Schedule</div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">Extend or compress timeline</div>
+      </div>
+      <div class="action-card" onclick="modalAction('notify-tradie','${p.name}')">
+        <div class="action-icon" style="background:var(--info-light);color:var(--info);"><i class="bi bi-person-plus"></i></div>
+        <div class="action-label">Notify Tradie</div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">Send reminder to assigned tradie</div>
+      </div>
+      <div class="action-card" onclick="modalAction('notify-client','${p.name}')">
+        <div class="action-icon" style="background:var(--primary-light);color:var(--primary);"><i class="bi bi-chat-dots"></i></div>
+        <div class="action-label">Update Client</div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">Send progress update email</div>
+      </div>
+      <div class="action-card" onclick="modalAction('notify-manager','${p.name}')">
+        <div class="action-icon" style="background:var(--purple-light);color:var(--purple);"><i class="bi bi-person-badge"></i></div>
+        <div class="action-label">Message Manager</div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">Send instructions to ${p.manager}</div>
+      </div>
+      <div class="action-card" onclick="modalAction('log-delay','${p.name}')">
+        <div class="action-icon" style="background:var(--danger-light);color:var(--danger);"><i class="bi bi-clock-history"></i></div>
+        <div class="action-label">Log Delay</div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">Record delay with reason</div>
+      </div>
+      <div class="action-card" onclick="modalAction('request-photo','${p.name}')">
+        <div class="action-icon" style="background:var(--success-light);color:var(--success);"><i class="bi bi-camera"></i></div>
+        <div class="action-label">Request Photo</div>
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:4px;">Ask manager for site photos</div>
+      </div>
+    </div>
+    ${activeMs?`<div style="margin-top:16px;padding:12px 14px;background:var(--primary-glow);border:1px solid rgba(13,148,136,.15);border-radius:8px;">
+      <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:4px;"><i class="bi bi-broadcast me-1"></i>Active Milestone</div>
+      <div style="font-size:13px;">${activeMs.name}</div>
+      <div style="font-size:11px;color:var(--text-secondary);">${activeMs.start} — ${activeMs.end}</div>
+      ${activeMs.tradie?`<div style="font-size:11px;color:var(--info);margin-top:2px;">Tradie: ${activeMs.tradie}</div>`:''}
+    </div>`:''}
+    ${nextMs?`<div style="margin-top:8px;padding:12px 14px;background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:4px;"><i class="bi bi-arrow-right me-1"></i>Next Milestone</div>
+      <div style="font-size:13px;">${nextMs.name}</div>
+      <div style="font-size:11px;color:var(--text-tertiary);">${nextMs.start} — ${nextMs.end}</div>
+      ${nextMs.tradie?`<div style="font-size:11px;color:var(--warning);margin-top:2px;"><i class="bi bi-bell me-1"></i>Tradie ${nextMs.tradie} needs to be notified 1 week before</div>`:''}
+    </div>`:''}
+    ${delayedMs.length>0?`<div style="margin-top:8px;padding:12px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;">
+      <div style="font-size:12px;font-weight:700;color:var(--danger);margin-bottom:4px;"><i class="bi bi-exclamation-triangle me-1"></i>Delayed Milestones (${delayedMs.length})</div>
+      ${delayedMs.map(m=>`<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">• ${m.name}${m.tradie?' — '+m.tradie:''}</div>`).join('')}
+    </div>`:''}`;
+  }
+
+  document.getElementById('pmBody').innerHTML=`
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div class="d-flex align-items-center gap-3">
+        ${statusPill(p.status)}
+        <span style="font-size:12px;color:var(--text-tertiary);">${p.actualPct}% complete</span>
+      </div>
+      <div class="sub-tabs">
+        <button class="sub-tab ${currentModalTab==='milestones'?'active':''}" onclick="switchModalTab('milestones',${p.id})">Milestones</button>
+        <button class="sub-tab ${currentModalTab==='details'?'active':''}" onclick="switchModalTab('details',${p.id})">Details</button>
+        <button class="sub-tab ${currentModalTab==='actions'?'active':''}" onclick="switchModalTab('actions',${p.id})">Actions</button>
+      </div>
+    </div>
+    ${tabContent}
+  `;
+}
+
+function switchModalTab(tab,id){
+  currentModalTab=tab;
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  renderModalContent(p);
+}
+
+function milestoneAction(projId,msIdx,status){
+  const p=projects.find(x=>x.id===projId);if(!p)return;
+  const m=p.milestones[msIdx];
+  if(status==='done'){
+    showToast(`${m.name} — Photo evidence available. Completed on ${m.end}.`,'success');
+  }else if(status==='active'){
+    showToast(`${m.name} — In progress. Tradie: ${m.tradie||'Not assigned'}. Due: ${m.end}`,'info');
+  }else if(status==='delayed'){
+    showToast(`${m.name} — DELAYED. Action needed immediately. Reason logged.`,'danger');
+  }else{
+    showToast(`${m.name} — Upcoming. Starts ${m.start}. Tradie: ${m.tradie||'TBD'}`,'info');
+  }
+}
+
+function modalAction(action,projName){
+  const msgs={
+    'adjust':`Opening schedule adjustment for ${projName}...`,
+    'notify-tradie':`Reminder sent to tradie for ${projName} — next milestone.`,
+    'notify-client':`Progress update email queued for ${projName} client.`,
+    'notify-manager':`Message sent to site manager for ${projName}.`,
+    'log-delay':`Opening delay log form for ${projName}...`,
+    'request-photo':`Photo request sent to site manager for ${projName}.`
+  };
+  const types={'adjust':'warning','notify-tradie':'info','notify-client':'success','notify-manager':'info','log-delay':'danger','request-photo':'success'};
+  if(action==='adjust'){closeModal('projectModal');openAdjustModal();return}
+  showToast(msgs[action]||'Action triggered',types[action]||'info');
+}
+
+// ══════════════════════════════════════
+// DELAY ACTIONS
+// ══════════════════════════════════════
+function escalateProject(id){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  pendingConfirm={type:'escalate',id};
+  document.getElementById('confirmTitle').textContent='Escalate Project';
+  document.getElementById('confirmMsg').innerHTML=`Are you sure you want to escalate <b>${p.name}</b>? This will notify the site manager (${p.manager}) and mark the project as high priority. A notification will also be sent to the client about the revised timeline.`;
+  document.getElementById('confirmBtn').innerHTML='<i class="bi bi-arrow-up-right me-1"></i>Escalate Now';
+  document.getElementById('confirmBtn').style.background='var(--danger)';
+  document.getElementById('confirmModal').classList.add('show');
+}
+function sendReminder(id){
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  const tradie=p.milestones.find(m=>m.status==='active'||m.status==='delayed');
+  showToast(`Reminder sent to ${tradie&&tradie.tradie?tradie.tradie:'assigned tradie'} for ${p.name}. SMS + Email delivered.`,'success');
+}
+
+function confirmAction(){
+  if(!pendingConfirm)return;
+  if(pendingConfirm.type==='escalate'){
+    const p=projects.find(x=>x.id===pendingConfirm.id);
+    showToast(`${p?p.name:'Project'} escalated successfully. Manager and client notified.`,'success');
+  }
+  closeModal('confirmModal');pendingConfirm=null;
+}
+
+// ══════════════════════════════════════
+// ADJUST SCHEDULE MODAL
+// ══════════════════════════════════════
+function openAdjustModal(){
+  const sel=document.getElementById('adjustProject');
+  sel.innerHTML=projects.map(p=>`<option value="${p.id}">${p.name} — ${p.customer}</option>`).join('');
+  onAdjustProjectChange();
+  document.getElementById('adjustModal').classList.add('show');
+}
+function onAdjustProjectChange(){
+  const id=parseInt(document.getElementById('adjustProject').value);
+  const p=projects.find(x=>x.id===id);
+  const days=parseInt(document.getElementById('adjustDays').value)||14;
+  const type=document.getElementById('adjustType').value;
+  if(!p)return;
+  const labels={extend:'extended',compress:'compressed','delay-specific':'milestone delayed',pause:'paused'};
+  const newTarget=new Date(p.target);
+  if(type==='extend')newTarget.setDate(newTarget.getDate()+days);
+  else if(type==='compress')newTarget.setDate(newTarget.getDate()-days);
+  const cl=type==='extend'||type==='delay-specific'?'var(--danger)':type==='compress'?'var(--success)':'var(--warning)';
+  document.getElementById('adjustPreview').style.background=type==='compress'?'var(--success-light)':'var(--warning-light)';
+  document.getElementById('adjustPreview').style.borderColor=type==='compress'?'rgba(22,163,74,.15)':'rgba(245,158,11,.15)';
+  document.getElementById('adjustPreview').style.color=type==='compress'?'#065F46':'#92400E';
+  document.getElementById('adjustPreview').innerHTML=`<i class="bi bi-info-circle me-1"></i> ${p.name} will be <b>${labels[type]}</b> by ${days} days. Current target: ${formatDate(p.target)} → New target: <b style="color:${cl}">${formatDate(newTarget.toISOString())}</b>. ${p.milestones.filter(m=>m.status==='upcoming').length} upcoming milestones will be affected.`;
+}
+function applyAdjustment(){
+  const id=parseInt(document.getElementById('adjustProject').value);
+  const p=projects.find(x=>x.id===id);if(!p)return;
+  const days=parseInt(document.getElementById('adjustDays').value)||14;
+  const reason=document.getElementById('adjustReason').value.trim();
+  if(!reason){showToast('Please provide a reason for the schedule adjustment.','warning');return}
+  const type=document.getElementById('adjustType').value;
+  closeModal('adjustModal');
+  if(type==='extend'){
+    const nt=new Date(p.target);nt.setDate(nt.getDate()+days);p.target=nt.toISOString().split('T')[0];
+    p.delayDays+=days;if(p.status==='on-time'&&p.delayDays>14)p.status='slow';
+    if(p.status==='on-time'&&p.delayDays>30)p.status='critical';
+    showToast(`${p.name} timeline extended by ${days} days. New target: ${formatDate(p.target)}. All upcoming milestones shifted.`,'warning');
+  }else if(type==='compress'){
+    showToast(`${p.name} timeline compressed by ${days} days. Manager ${p.manager} notified to accelerate.`,'success');
+  }else if(type==='delay-specific'){
+    showToast(`${p.name} — specific milestone delayed by ${days} days. Downstream milestones will auto-adjust.`,'warning');
+  }else{
+    showToast(`${p.name} paused. All tradie notifications suspended until resumed.`,'warning');
+  }
+  document.getElementById('adjustReason').value='';
+  applyFilters();renderDelayTable();updateFilterCounts();
+}
+
+// ══════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════
+function exportSchedule(){
+  const hdr=['Project','Client','Manager','Stage','Start','Target','Expected%','Actual%','Status','Delay Days','Delay Reason'];
+  const rows=projects.map(p=>[p.name,p.customer,p.manager,p.stage,p.start,p.target,p.expectedPct,p.actualPct,p.status,p.delayDays,p.delayReason||'']);
+  let csv=hdr.join(',')+'\n'+rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='BuildPro_Schedule_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast('Schedule exported as CSV — '+projects.length+' projects','success');
+}
+
+// ══════════════════════════════════════
+// REFRESH
+// ══════════════════════════════════════
+function refreshPage(){
+  const icon=document.getElementById('refreshIcon');icon.style.animation='spin .6s ease';
+  setTimeout(()=>icon.style.animation='',600);
+  showToast('Schedule data refreshed','success');
+  document.getElementById('lastUpdated').textContent='Updated just now';
+  animateCounters();
+}
+
+// ══════════════════════════════════════
+// UPDATE FILTER COUNTS
+// ══════════════════════════════════════
+function updateFilterCounts(){
+  const counts={all:projects.length,onTime:0,slow:0,ahead:0,critical:0};
+  projects.forEach(p=>{if(p.status==='on-time')counts.onTime++;else if(p.status==='slow')counts.slow++;else if(p.status==='ahead')counts.ahead++;else if(p.status==='critical')counts.critical++});
+  document.querySelectorAll('.filter-pill').forEach(pill=>{
+    const f=pill.dataset.filter;const c=counts[f]||0;
+    const span=pill.querySelector('.count');if(span)span.textContent=c;
+  });
+  // Update stat cards
+  const cards=document.querySelectorAll('.stat-value[data-count]');
+  if(cards[0])cards[0].textContent=counts.onTime;
+  if(cards[1])cards[1].textContent=counts.slow;
+  if(cards[2])cards[2].textContent=counts.ahead;
+  if(cards[3])cards[3].textContent=counts.critical;
+}
+
+// ══════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-backdrop-custom').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'))});
+
+// ══════════════════════════════════════
+// TICKER
+// ══════════════════════════════════════
+function renderTicker(){
+  const items=tickerItems.map(t=>`<span class="ticker-item"><span class="ticker-dot" style="background:${t.color};"></span>${t.text}</span>`).join('');
+  document.getElementById('tickerTrack').innerHTML=items+items;
+}
+
+// ══════════════════════════════════════
+// CHART
+// ══════════════════════════════════════
+let scheduleChart;
+function initChart(){
+  const ctx=document.getElementById('scheduleChart').getContext('2d');
+  const filtered=projects.filter(p=>p.status==='slow'||p.status==='critical'||p.status==='ahead'||p.actualPct!==p.expectedPct);
+  const labels=filtered.map(p=>p.name.length>15?p.name.substring(0,15)+'…':p.name);
+  scheduleChart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:labels,
+      datasets:[
+        {label:'Expected %',data:filtered.map(p=>p.expectedPct),backgroundColor:'rgba(13,148,136,.2)',borderColor:'#0D9488',borderWidth:1.5,borderRadius:4,barPercentage:.45},
+        {label:'Actual %',data:filtered.map(p=>p.actualPct),backgroundColor:filtered.map(p=>p.status==='critical'?'rgba(220,38,38,.7)':p.status==='slow'?'rgba(245,158,11,.7)':p.status==='ahead'?'rgba(13,148,136,.7)':'rgba(22,163,74,.7)'),borderRadius:4,barPercentage:.45}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{position:'top',labels:{font:{size:11,family:'Inter'},color:'#64748B',padding:12,usePointStyle:true,pointStyleWidth:8}}},scales:{x:{beginAtZero:true,max:100,grid:{color:'#F1F5F9'},ticks:{font:{size:11},color:'#94A3B8',callback:v=>v+'%'}},y:{grid:{display:false},ticks:{font:{size:11},color:'#64748B'}}}}
+  });
+}
+
+// ══════════════════════════════════════
+// AUTO TIMESTAMP
+// ══════════════════════════════════════
+let updateSec=0;
+setInterval(()=>{updateSec++;const el=document.getElementById('lastUpdated');if(updateSec<60)el.textContent='Updated just now';else if(updateSec<120)el.textContent='Updated 1 min ago';else el.textContent='Updated '+Math.floor(updateSec/60)+' min ago'},1000);
+
+// Simulate live updates
+setInterval(()=>{
+  const msgs=[
+    'Frame progress updated — Penrith Residence +2%',
+    'Foundation concrete pour started — Liverpool Estate',
+    'Slab tradie confirmed for Ryde Townhouse — Jul 11',
+    'Photo uploaded — Quakers Hill site preparation',
+    'Rough-In plumbing started — Kellyville Residence',
+    'Council update received — Chatswood DA status: Under Review',
+    'Material delivery tracked — Steel frames arriving Monday',
+    'Worker attendance synced — 54/56 checked in today'
+  ];
+  const types=['success','info','info','success','success','warning','info','success'];
+  const i=Math.floor(Math.random()*msgs.length);
+  // Don't actually show toasts for background updates, just update ticker occasionally
+},15000);
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+const spinStyle=document.createElement('style');
+spinStyle.textContent='@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}';
+document.head.appendChild(spinStyle);
+
+setTimeout(()=>{
+  animateCounters();
+  renderNotifs();
+  applyFilters();
+  renderDelayTable();
+  renderTicker();
+  initChart();
+  updateFilterCounts();
+
+  // Listen for adjust type/days changes
+  document.getElementById('adjustType').addEventListener('change',onAdjustProjectChange);
+  document.getElementById('adjustDays').addEventListener('input',onAdjustProjectChange);
+},100);
+</script>
+</body>
+</html>

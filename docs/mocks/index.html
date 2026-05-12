@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BuildPro - Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #0D9488;
+  --primary-dark: #0F766E;
+  --primary-light: #CCFBF1;
+  --primary-glow: rgba(13,148,136,.15);
+  --accent: #E8730C;
+  --accent-light: #FFF3E0;
+  --success: #16A34A;
+  --success-light: #DCFCE7;
+  --danger: #DC2626;
+  --danger-light: #FEE2E2;
+  --warning: #F59E0B;
+  --warning-light: #FEF9C3;
+  --info: #2563EB;
+  --info-light: #DBEAFE;
+  --purple: #7C3AED;
+  --purple-light: #EDE9FE;
+  --bg-body: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F8FAFC;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #94A3B8;
+  --border-color: #E2E8F0;
+  --border-light: #F1F5F9;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,.1);
+  --sidebar-bg: #0F172A;
+  --sidebar-width: 64px;
+  --transition: all .2s cubic-bezier(.4,0,.2,1);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg-body); font-family:'Inter',sans-serif; font-size:14px; color:var(--text-primary); overflow-x:hidden; line-height:1.5; }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#CBD5E1; border-radius:4px; }
+::-webkit-scrollbar-thumb:hover { background:#94A3B8; }
+
+.wrapper { display:flex; min-height:100vh; }
+
+/* ── Sidebar ── */
+.sidebar { width:var(--sidebar-width); background:var(--sidebar-bg); display:flex; flex-direction:column; align-items:center; padding-top:16px; flex-shrink:0; z-index:1000; box-shadow:4px 0 24px rgba(0,0,0,.12); }
+.sidebar-icon { color:#64748B; font-size:19px; height:42px; width:42px; display:flex; align-items:center; justify-content:center; margin-bottom:4px; cursor:pointer; border-radius:10px; transition:var(--transition); position:relative; }
+.sidebar-icon:hover { color:#F1F5F9; background:rgba(255,255,255,.06); }
+.sidebar-icon.active { color:var(--primary); background:rgba(13,148,136,.15); }
+.sidebar-icon.active::before { content:''; position:absolute; left:-16px; height:20px; width:3px; background:var(--primary); border-radius:0 3px 3px 0; }
+.sidebar-brand { color:var(--primary); font-size:22px; margin-bottom:20px; }
+.sidebar-tooltip { position:absolute; left:calc(100% + 10px); top:50%; transform:translateY(-50%); background:var(--sidebar-bg); color:#F1F5F9; padding:5px 11px; border-radius:6px; font-size:11px; font-weight:500; white-space:nowrap; opacity:0; visibility:hidden; transition:var(--transition); z-index:1001; pointer-events:none; box-shadow:var(--shadow-lg); }
+.sidebar-tooltip::before { content:''; position:absolute; right:100%; top:50%; transform:translateY(-50%); border:5px solid transparent; border-right-color:var(--sidebar-bg); }
+.sidebar-icon:hover .sidebar-tooltip { opacity:1; visibility:visible; left:calc(100% + 14px); }
+@media(max-width:768px) { .sidebar-tooltip { display:none; } }
+
+/* ── Main Panel ── */
+.main-panel { flex-grow:1; display:flex; flex-direction:column; width:calc(100% - var(--sidebar-width)); min-width:0; }
+
+/* ── Top Header ── */
+.top-header { height:54px; background:var(--sidebar-bg); display:flex; align-items:center; justify-content:space-between; padding:0 20px; color:white; flex-shrink:0; }
+.header-menu a { color:rgba(255,255,255,.55); text-decoration:none; margin-right:20px; font-size:12.5px; font-weight:500; transition:var(--transition); position:relative; padding-bottom:16px; letter-spacing:.01em; }
+.header-menu a:hover { color:rgba(255,255,255,.9); }
+.header-menu a.active { color:white; }
+.header-menu a.active::after { content:''; position:absolute; bottom:0; left:0; width:100%; height:2px; background:var(--primary); border-radius:2px 2px 0 0; }
+
+/* ── Sub Header ── */
+.sub-header { background:var(--bg-card); padding:10px 20px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; font-size:12px; color:var(--text-secondary); flex-shrink:0; }
+
+/* ── Content ── */
+.content-container { padding:20px; max-width:1560px; margin:0 auto; width:100%; }
+
+/* ── Cards ── */
+.card-custom { background:var(--bg-card); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm); border:1px solid var(--border-color); margin-bottom:16px; transition:var(--transition); }
+.card-custom:hover { box-shadow:var(--shadow-md); }
+
+/* ── Section Headings ── */
+.section-heading { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:16px; color:var(--text-secondary); display:flex; align-items:center; justify-content:space-between; }
+
+/* ── Stats ── */
+.stat-value { font-size:26px; font-weight:800; line-height:1.2; color:var(--text-primary); margin-top:2px; letter-spacing:-.02em; }
+.stat-desc { font-size:11.5px; color:var(--text-tertiary); margin-top:3px; }
+.stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
+@media(max-width:1200px) { .stat-grid { grid-template-columns:repeat(2,1fr); } }
+.stat-icon { width:44px; height:44px; border-radius:11px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px; flex-shrink:0; }
+
+/* ── Badges ── */
+.trend-badge { display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; letter-spacing:.02em; }
+.trend-up { color:var(--success); background:rgba(22,163,74,.08); }
+.trend-down { color:var(--danger); background:rgba(220,38,38,.08); }
+.status-pill { display:inline-flex; align-items:center; padding:3px 10px; border-radius:99px; font-size:10.5px; font-weight:600; line-height:1.5; }
+.pill-success { background:rgba(22,163,74,.08); color:var(--success); }
+.pill-warning { background:rgba(245,158,11,.08); color:#D97706; }
+.pill-danger { background:rgba(220,38,38,.08); color:var(--danger); }
+.pill-info { background:rgba(37,99,235,.08); color:var(--info); }
+.pill-gray { background:rgba(148,163,184,.1); color:var(--text-secondary); }
+
+/* ── Buttons ── */
+.btn-primary-custom { background:var(--primary); color:white; border:none; padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:600; transition:var(--transition); cursor:pointer; font-family:inherit; }
+.btn-primary-custom:hover { background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 4px 12px rgba(13,148,136,.3); color:white; text-decoration:none; }
+.btn-outline-custom { background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:500; transition:var(--transition); cursor:pointer; font-family:inherit; }
+.btn-outline-custom:hover { background:var(--bg-hover); border-color:var(--primary); color:var(--primary); }
+.btn-sm-custom { padding:5px 10px; font-size:11.5px; border-radius:6px; }
+.btn-icon { width:32px; height:32px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-secondary); cursor:pointer; transition:var(--transition); font-size:14px; }
+.btn-icon:hover { border-color:var(--primary); color:var(--primary); background:var(--primary-glow); }
+
+/* ── Tables ── */
+.table-custom { width:100%; border-collapse:separate; border-spacing:0; }
+.table-custom thead th { font-size:11px; text-transform:uppercase; color:var(--text-tertiary); font-weight:600; letter-spacing:.04em; padding:10px 14px; border-bottom:1px solid var(--border-color); background:var(--bg-body); }
+.table-custom td { font-size:13px; vertical-align:middle; padding:12px 14px; border-bottom:1px solid var(--border-light); }
+.table-custom tr:last-child td { border-bottom:none; }
+.table-custom tbody tr { transition:background .15s; cursor:pointer; }
+.table-custom tbody tr:hover td { background:var(--bg-hover); }
+
+/* ── Progress ── */
+.progress-bar-custom { height:7px; background:#E2E8F0; border-radius:4px; overflow:hidden; }
+.progress-fill-custom { height:100%; border-radius:4px; transition:width .8s cubic-bezier(.4,0,.2,1); }
+
+/* ── Notifications ── */
+.notification-badge { position:absolute; top:0; right:0; min-width:16px; height:16px; background:var(--danger); border-radius:99px; font-size:9px; font-weight:700; color:white; display:flex; align-items:center; justify-content:center; padding:0 4px; border:2px solid var(--sidebar-bg); }
+.notification-dropdown { position:absolute; top:calc(100% + 8px); right:0; width:360px; background:white; border-radius:10px; box-shadow:var(--shadow-lg); z-index:1001; display:none; border:1px solid var(--border-color); overflow:hidden; }
+.notification-dropdown.show { display:block; animation:slideDown .2s ease; }
+@keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+.notification-header { padding:14px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; }
+.notification-mark-all { font-size:11.5px; color:var(--primary); cursor:pointer; font-weight:600; transition:var(--transition); }
+.notification-mark-all:hover { color:var(--primary-dark); }
+.notification-item { padding:12px 16px; border-bottom:1px solid var(--border-light); cursor:pointer; transition:background .15s; display:flex; align-items:flex-start; gap:10px; }
+.notification-item:hover { background:var(--bg-hover); }
+.notification-item.unread { background:rgba(13,148,136,.03); }
+.notification-item.dismissing { animation:slideOut .25s ease forwards; overflow:hidden; }
+@keyframes slideOut { to { opacity:0; max-height:0; padding-top:0; padding-bottom:0; margin:0; } }
+.notif-icon { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:14px; }
+.notif-text { flex:1; min-width:0; }
+.notif-msg { font-size:12.5px; line-height:1.4; color:var(--text-primary); }
+.notif-time { font-size:10.5px; color:var(--text-tertiary); margin-top:2px; }
+.notif-dismiss { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); cursor:pointer; opacity:0; transition:var(--transition); flex-shrink:0; font-size:10px; border:none; background:none; }
+.notification-item:hover .notif-dismiss { opacity:1; }
+.notif-dismiss:hover { background:var(--danger-light); color:var(--danger); }
+.notification-footer { padding:10px 16px; text-align:center; border-top:1px solid var(--border-color); }
+.notification-view-all { font-size:12.5px; color:var(--primary); text-decoration:none; font-weight:600; }
+
+/* ── User Pill ── */
+.up { display:flex; align-items:center; gap:8px; padding:4px 10px 4px 4px; border-radius:10px; background:rgba(255,255,255,.07); cursor:pointer; transition:var(--transition); }
+.up:hover { background:rgba(255,255,255,.12); }
+.ua { width:30px; height:30px; border-radius:8px; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:11px; }
+.ui span { font-size:12.5px; font-weight:600; display:block; color:white; line-height:1.2; }
+
+/* ── Timeline ── */
+.tl-custom { position:relative; padding-left:28px; }
+.tl-custom::before { content:''; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--border-color); border-radius:1px; }
+.ti-custom { position:relative; padding-bottom:20px; }
+.ti-custom::before { content:''; position:absolute; left:-23px; top:5px; width:10px; height:10px; border-radius:50%; background:var(--primary); border:2px solid white; box-shadow:0 0 0 2px var(--primary); z-index:1; }
+.ti-custom.urgent::before { background:var(--danger); box-shadow:0 0 0 2px var(--danger); animation:pulse-dot 2s infinite; }
+.ti-custom.done::before { background:var(--success); box-shadow:0 0 0 2px var(--success); }
+.ti-custom:last-child { padding-bottom:0; }
+@keyframes pulse-dot { 0%,100% { box-shadow:0 0 0 2px var(--danger); } 50% { box-shadow:0 0 0 5px rgba(220,38,38,.2); } }
+
+/* ── Chart Containers ── */
+.cc { position:relative; height:260px; }
+
+/* ── Search ── */
+.search-box { position:relative; }
+.search-box input { width:220px; padding:6px 12px 6px 32px; border:1px solid var(--border-color); border-radius:8px; font-size:12.5px; background:var(--bg-card); color:var(--text-primary); transition:var(--transition); font-family:inherit; outline:none; }
+.search-box input:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-glow); width:280px; }
+.search-box i { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); font-size:13px; }
+
+/* ── Period Selector ── */
+.period-selector { display:flex; gap:2px; background:var(--bg-body); border-radius:8px; padding:3px; }
+.period-btn { padding:5px 12px; border:none; background:none; font-size:11.5px; font-weight:600; color:var(--text-tertiary); cursor:pointer; border-radius:6px; transition:var(--transition); font-family:inherit; }
+.period-btn.active { background:var(--bg-card); color:var(--text-primary); box-shadow:var(--shadow-sm); }
+.period-btn:hover:not(.active) { color:var(--text-secondary); }
+
+/* ── Toast ── */
+.toast-container { position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+.toast-item { background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:14px 18px; box-shadow:var(--shadow-lg); display:flex; align-items:center; gap:10px; min-width:300px; animation:toastIn .3s ease; }
+.toast-item.removing { animation:toastOut .25s ease forwards; }
+@keyframes toastIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+@keyframes toastOut { to { opacity:0; transform:translateX(40px); } }
+.toast-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+.toast-msg { flex:1; font-size:13px; font-weight:500; }
+.toast-close { background:none; border:none; color:var(--text-tertiary); cursor:pointer; font-size:16px; padding:0; line-height:1; }
+.toast-close:hover { color:var(--text-primary); }
+
+/* ── Modal ── */
+.modal-backdrop-custom { position:fixed; inset:0; background:rgba(15,23,42,.5); backdrop-filter:blur(4px); z-index:2000; display:none; align-items:center; justify-content:center; animation:fadeIn .2s; }
+.modal-backdrop-custom.show { display:flex; }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+.modal-content-custom { background:var(--bg-card); border-radius:14px; width:90%; max-width:680px; max-height:85vh; overflow-y:auto; box-shadow:var(--shadow-lg); animation:modalIn .25s ease; border:1px solid var(--border-color); }
+@keyframes modalIn { from { opacity:0; transform:scale(.96) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+.modal-header-custom { padding:20px 24px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; }
+.modal-body-custom { padding:20px 24px; }
+.modal-close { width:32px; height:32px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); transition:var(--transition); font-size:16px; }
+.modal-close:hover { background:var(--danger-light); color:var(--danger); border-color:transparent; }
+
+/* ── Live Ticker ── */
+.ticker-bar { background:var(--bg-card); border-top:1px solid var(--border-color); padding:8px 20px; display:flex; align-items:center; gap:12px; overflow:hidden; flex-shrink:0; }
+.ticker-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--primary); background:var(--primary-glow); padding:3px 8px; border-radius:4px; white-space:nowrap; }
+.ticker-scroll { flex:1; overflow:hidden; position:relative; height:20px; }
+.ticker-track { display:flex; gap:40px; animation:tickerScroll 40s linear infinite; white-space:nowrap; position:absolute; }
+@keyframes tickerScroll { 0% { transform:translateX(0); } 100% { transform:translateX(-50%); } }
+.ticker-item { font-size:11.5px; color:var(--text-secondary); display:inline-flex; align-items:center; gap:6px; }
+.ticker-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+
+/* ── Live Clock ── */
+.live-clock { font-size:12px; color:rgba(255,255,255,.6); font-weight:500; font-variant-numeric:tabular-nums; }
+.live-clock span { color:rgba(255,255,255,.9); font-weight:600; }
+
+/* ── Follow-up Actions ── */
+.fu-actions { display:flex; gap:4px; margin-top:6px; }
+.fu-btn { padding:3px 8px; border-radius:5px; border:1px solid var(--border-color); background:var(--bg-card); font-size:10.5px; font-weight:600; cursor:pointer; transition:var(--transition); color:var(--text-secondary); font-family:inherit; display:inline-flex; align-items:center; gap:3px; }
+.fu-btn:hover { border-color:var(--primary); color:var(--primary); background:var(--primary-glow); }
+.fu-btn.danger:hover { border-color:var(--danger); color:var(--danger); background:var(--danger-light); }
+
+/* ── Detail Grid ── */
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.detail-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-tertiary); font-weight:600; margin-bottom:2px; }
+.detail-value { font-size:13px; font-weight:600; }
+
+/* ── Responsive ── */
+@media(max-width:992px) {
+  .stat-grid { grid-template-columns:repeat(2,1fr); }
+  .detail-grid { grid-template-columns:1fr; }
+}
+@media(max-width:576px) {
+  .stat-grid { grid-template-columns:1fr; }
+  .content-container { padding:12px; }
+  .search-box input { width:160px; }
+  .search-box input:focus { width:200px; }
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon active" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+
+<!-- Main Panel -->
+<div class="main-panel">
+
+  <!-- Top Header -->
+  <header class="top-header">
+    <div class="d-flex align-items-center gap-3">
+      <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+      <nav class="header-menu d-none d-lg-block">
+        <a href="index.html" class="active">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a>
+      </nav>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+      <div class="position-relative">
+        <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7);" onclick="toggleNotif()" id="notifBtn">
+          <i class="bi bi-bell"></i>
+          <span class="notification-badge" id="notifCount">4</span>
+        </button>
+        <div class="notification-dropdown" id="notifDrop">
+          <div class="notification-header">
+            <div style="font-size:13px;font-weight:700;">Notifications</div>
+            <div class="notification-mark-all" onclick="markAllRead()">Mark all read</div>
+          </div>
+          <div id="notifList"></div>
+          <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening full notification center...','info');return false;">View all notifications</a></div>
+        </div>
+      </div>
+      <div class="up">
+        <div class="ua">GS</div>
+        <div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Breadcrumb -->
+  <div class="sub-header">
+    <i class="bi bi-house me-1" style="font-size:11px;"></i><span>Home</span>
+    <span class="mx-2" style="color:var(--border-color);">/</span>
+    <span style="font-weight:600;color:var(--text-primary);">Dashboard</span>
+    <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);" id="lastUpdated">Updated just now</span>
+  </div>
+
+  <!-- Content -->
+  <div class="content-container">
+
+    <!-- Greeting Banner -->
+    <div class="card-custom" style="background:linear-gradient(135deg,#F0FDFA 0%,#CCFBF1 50%,#D1FAE5 100%);border:1px solid rgba(13,148,136,.12);position:relative;overflow:hidden;">
+      <div style="position:absolute;right:-20px;top:-20px;width:160px;height:160px;border-radius:50%;background:rgba(13,148,136,.06);"></div>
+      <div style="position:absolute;right:60px;bottom:-30px;width:100px;height:100px;border-radius:50%;background:rgba(13,148,136,.04);"></div>
+      <div class="row align-items-center">
+        <div class="col-md-7">
+          <h3 style="font-size:17px;font-weight:800;margin-bottom:4px;color:var(--text-primary);">Sat Sri Akal, Guri!</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:0;">47 new leads this month, 14 active projects across NSW. 3 follow-ups due today.</p>
+        </div>
+        <div class="col-md-5 text-md-end mt-2 mt-md-0 d-flex gap-2 justify-content-md-end">
+          <button class="btn-primary-custom" onclick="showToast('Opening new lead form...','success')"><i class="bi bi-plus-lg me-1"></i>Add Lead</button>
+          <button class="btn-outline-custom" onclick="exportCSV()"><i class="bi bi-download me-1"></i>Export</button>
+          <button class="btn-outline-custom" onclick="refreshDashboard()"><i class="bi bi-arrow-clockwise" id="refreshIcon"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Row 1 -->
+    <div class="stat-grid">
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening Leads & Marketing page...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--primary);"><i class="bi bi-person-plus"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>18%</span>
+        </div>
+        <div class="stat-value" data-count="47">0</div>
+        <div class="stat-desc">New Leads This Month</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening converted leads report...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--success);"><i class="bi bi-check-circle"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>12%</span>
+        </div>
+        <div class="stat-value" data-count="23">0</div>
+        <div class="stat-desc">Leads Converted <span style="color:var(--text-tertiary);">(48.9%)</span></div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening financial reports...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--accent);"><i class="bi bi-cash-stack"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>8%</span>
+        </div>
+        <div class="stat-value" data-count="2400" data-prefix="$" data-suffix="K" data-divide="1">0</div>
+        <div class="stat-desc">Revenue This Quarter</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening P&L statement...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--danger);"><i class="bi bi-graph-up-arrow"></i></div>
+          <span class="trend-badge trend-down"><i class="bi bi-arrow-down-short"></i>3%</span>
+        </div>
+        <div class="stat-value" data-count="186" data-prefix="$" data-suffix="K" data-divide="1">0</div>
+        <div class="stat-desc">Net Profit (Q4)</div>
+      </div>
+    </div>
+
+    <!-- KPI Row 2 -->
+    <div class="stat-grid">
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening Active Projects page...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--info);"><i class="bi bi-building"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>2</span>
+        </div>
+        <div class="stat-value" data-count="14">0</div>
+        <div class="stat-desc">Active Projects</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening Site Managers page...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--purple);"><i class="bi bi-person-badge"></i></div>
+        </div>
+        <div class="stat-value" data-count="6">0</div>
+        <div class="stat-desc">Site Managers Active</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening Workers & QR Attendance page...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--warning);"><i class="bi bi-people"></i></div>
+        </div>
+        <div class="stat-value" data-count="56">0</div>
+        <div class="stat-desc">Workers Tracked (GPS)</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening Estimation vs Actual report...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:#0F766E;"><i class="bi bi-calculator"></i></div>
+        </div>
+        <div class="stat-value">$3.1M <span style="font-size:13px;color:var(--text-tertiary);font-weight:500;">vs $2.9M actual</span></div>
+        <div class="stat-desc">Estimation vs Actual (All Projects)</div>
+      </div>
+    </div>
+
+    <!-- Charts Row 1 -->
+    <div class="row g-3 mb-3">
+      <div class="col-lg-8">
+        <div class="card-custom">
+          <div class="section-heading">
+            Leads & Revenue Overview
+            <div class="d-flex align-items-center gap-2">
+              <div class="period-selector">
+                <button class="period-btn" onclick="switchPeriod('6m',this)">6M</button>
+                <button class="period-btn active" onclick="switchPeriod('12m',this)">12M</button>
+                <button class="period-btn" onclick="switchPeriod('ytd',this)">YTD</button>
+              </div>
+            </div>
+          </div>
+          <div class="cc"><canvas id="leadsChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card-custom">
+          <div class="section-heading">Conversion Breakdown</div>
+          <div class="cc"><canvas id="convChart"></canvas></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">
+            <div style="text-align:center;padding:6px;background:rgba(22,163,74,.06);border-radius:6px;"><div style="font-size:18px;font-weight:800;color:var(--success);">48.9%</div><div style="font-size:10px;color:var(--text-tertiary);">Conversion Rate</div></div>
+            <div style="text-align:center;padding:6px;background:rgba(220,38,38,.06);border-radius:6px;"><div style="font-size:18px;font-weight:800;color:var(--danger);">12.8%</div><div style="font-size:10px;color:var(--text-tertiary);">Loss Rate</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Row 2 -->
+    <div class="row g-3 mb-3">
+      <div class="col-lg-5">
+        <div class="card-custom">
+          <div class="section-heading">Non-Conversion Reasons</div>
+          <div class="cc"><canvas id="reasonChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-lg-7">
+        <div class="card-custom">
+          <div class="section-heading">Estimation vs Actual Cost by Project</div>
+          <div class="cc"><canvas id="costChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Projects Table -->
+    <div class="card-custom">
+      <div class="section-heading">
+        Active Projects Overview
+        <div class="d-flex align-items-center gap-2">
+          <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Search projects..." id="projectSearch" oninput="filterProjects()">
+          </div>
+          <button class="btn-primary-custom btn-sm-custom" onclick="showToast('Opening full Projects page...','info')">View All</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="table-custom" id="projectTable">
+          <thead>
+            <tr>
+              <th>Project</th><th>Customer</th><th>Site Manager</th><th>Stage</th><th>Budget</th><th>Actual</th><th>Progress</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="projectBody"></tbody>
+        </table>
+      </div>
+      <div id="noResults" style="display:none;text-align:center;padding:30px;color:var(--text-tertiary);font-size:13px;">
+        <i class="bi bi-search" style="font-size:24px;display:block;margin-bottom:8px;"></i>No projects match your search.
+      </div>
+    </div>
+
+    <!-- Bottom Row -->
+    <div class="row g-3">
+      <!-- Follow-ups -->
+      <div class="col-lg-5">
+        <div class="card-custom">
+          <div class="section-heading">
+            Follow-ups Due Today
+            <span class="status-pill pill-danger" style="font-size:10px;">3 pending</span>
+          </div>
+          <div class="tl-custom" id="followupList"></div>
+        </div>
+      </div>
+
+      <!-- Site Manager Performance -->
+      <div class="col-lg-7">
+        <div class="card-custom">
+          <div class="section-heading">
+            Site Manager Performance
+            <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Opening Site Managers page...','info')">Manage</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="table-custom">
+              <thead>
+                <tr><th>Manager</th><th>Projects</th><th>On-Time</th><th>Worker Hrs/Wk</th><th>Milestones</th><th>Rating</th></tr>
+              </thead>
+              <tbody id="smBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Live Ticker -->
+  <div class="ticker-bar">
+    <div class="ticker-label"><i class="bi bi-broadcast me-1"></i>Live</div>
+    <div class="ticker-scroll">
+      <div class="ticker-track" id="tickerTrack"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Project Detail Modal -->
+<div class="modal-backdrop-custom" id="projectModal">
+  <div class="modal-content-custom">
+    <div class="modal-header-custom">
+      <div>
+        <h4 style="font-size:16px;font-weight:700;margin-bottom:2px;" id="modalTitle">Project Details</h4>
+        <p style="font-size:12px;color:var(--text-tertiary);" id="modalSubtitle"></p>
+      </div>
+      <button class="modal-close" onclick="closeModal('projectModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- Follow-up Detail Modal -->
+<div class="modal-backdrop-custom" id="followupModal">
+  <div class="modal-content-custom" style="max-width:520px;">
+    <div class="modal-header-custom">
+      <div>
+        <h4 style="font-size:16px;font-weight:700;" id="fuModalTitle">Follow-up Details</h4>
+      </div>
+      <button class="modal-close" onclick="closeModal('followupModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="fuModalBody"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+const projectData = [
+  { id:1, name:"Penrith Residence", customer:"Harpreet Kaur", phone:"+61 412 345 678", location:"Penrith, NSW", manager:"Amrit Singh", stage:"Frame Stage", budget:485000, actual:312400, progress:65, status:"On Track", statusClass:"pill-success", type:"4BR Modern Home", start:"2025-02-10", estEnd:"2025-11-20", milestones:{done:4,total:10} },
+  { id:2, name:"Castle Hill Villa", customer:"Rajesh Kumar", phone:"+61 403 222 111", location:"Castle Hill, NSW", manager:"Deepak Sharma", stage:"Design Phase", budget:620000, actual:45200, progress:12, status:"Pending Quote", statusClass:"pill-warning", type:"5BR Luxury Home", start:"2025-06-01", estEnd:"2026-04-15", milestones:{done:1,total:10} },
+  { id:3, name:"Blacktown Duplex", customer:"Sukhwinder Singh", phone:"+61 455 678 901", location:"Blacktown, NSW", manager:"Gurpreet Mann", stage:"Slab Stage", budget:380000, actual:198600, progress:42, status:"On Track", statusClass:"pill-success", type:"Duplex Construction", start:"2025-03-15", estEnd:"2025-12-30", milestones:{done:3,total:10} },
+  { id:4, name:"Parramatta Home", customer:"David Chen", phone:"+61 422 111 333", location:"Parramatta, NSW", manager:"Amrit Singh", stage:"Lockup Stage", budget:550000, actual:410000, progress:78, status:"Variation Pending", statusClass:"pill-info", type:"4BR + Granny Flat", start:"2024-11-01", estEnd:"2025-08-30", milestones:{done:7,total:10} },
+  { id:5, name:"Liverpool Estate", customer:"Manjit Brar", phone:"+61 488 999 222", location:"Liverpool, NSW", manager:"Jasbir Kaur", stage:"Foundation", budget:720000, actual:89000, progress:18, status:"On Track", statusClass:"pill-success", type:"6BR Double Storey", start:"2025-05-20", estEnd:"2026-06-01", milestones:{done:1,total:11} },
+  { id:6, name:"Chatswood Apartment", customer:"Wei Zhang", phone:"+61 411 555 777", location:"Chatswood, NSW", manager:"Deepak Sharma", stage:"Govt Approval", budget:890000, actual:32000, progress:5, status:"Delayed", statusClass:"pill-danger", type:"3BR Apartment Reno", start:"2025-04-10", estEnd:"2025-12-15", milestones:{done:0,total:8} },
+];
+
+const followupData = [
+  { id:1, name:"Rajesh Kumar", project:"Castle Hill Villa", time:"2:00 PM", urgent:true, notes:"Comparing with other builders, needs 5% discount discussion. Last call: discussed timeline advantage. He seemed interested but price-sensitive.", phone:"+61 403 222 111", status:"Pending" },
+  { id:2, name:"Priya Sharma", project:"Auburn Residence", time:"3:30 PM", urgent:true, notes:"Send revised floor plan options email. She wants open-plan living with optional theatre room. Quote $420K ready.", phone:"+61 466 333 888", status:"Pending" },
+  { id:3, name:"James Wilson", project:"Hornsby New Build", time:"5:00 PM", urgent:false, notes:"Initial consultation — Google Ads lead. Wants 4BR home, land already purchased at Hornsby Heights. Budget ~$500K.", phone:"+61 477 111 555", status:"Pending" },
+];
+
+const siteManagers = [
+  { name:"Amrit Singh", projects:3, onTime:92, hours:156, milestones:"12/20", rating:4.5, avatar:"AS", color:"var(--primary)" },
+  { name:"Deepak Sharma", projects:2, onTime:88, hours:132, milestones:"7/18", rating:4.2, avatar:"DS", color:"var(--info)" },
+  { name:"Gurpreet Mann", projects:4, onTime:95, hours:168, milestones:"15/40", rating:4.8, avatar:"GM", color:"var(--success)" },
+  { name:"Jasbir Kaur", projects:3, onTime:90, hours:144, milestones:"9/30", rating:4.3, avatar:"JK", color:"var(--purple)" },
+  { name:"Ravinder Pal", projects:1, onTime:97, hours:72, milestones:"5/10", rating:4.9, avatar:"RP", color:"var(--accent)" },
+  { name:"Harjot Bassi", projects:1, onTime:85, hours:68, milestones:"4/10", rating:3.9, avatar:"HB", color:"var(--warning)" },
+];
+
+const notificationData = [
+  { id:1, icon:"bi-check-circle", bg:"var(--success-light)", color:"var(--success)", msg:"Harpreet Kaur approved Penrith quotation — $485K confirmed", time:"5 min ago", unread:true },
+  { id:2, icon:"bi-exclamation-triangle", bg:"var(--warning-light)", color:"#D97706", msg:"Follow-up due now: Rajesh Kumar — Castle Hill Villa", time:"Just now", unread:true },
+  { id:3, icon:"bi-pencil-square", bg:"var(--info-light)", color:"var(--info)", msg:"Architect reminder sent to Mike Thompson — Kellyville sketches", time:"2 hrs ago", unread:true },
+  { id:4, icon:"bi-tools", bg:"var(--danger-light)", color:"var(--danger)", msg:"Slab Tradie 1-week warning — Parramatta site, due 22 Jul", time:"3 hrs ago", unread:true },
+  { id:5, icon:"bi-camera", bg:"var(--purple-light)", color:"var(--purple)", msg:"Brickwork milestone photo uploaded — Blacktown by Gurpreet Mann", time:"4 hrs ago", unread:false },
+  { id:6, icon:"bi-cash", bg:"var(--success-light)", color:"var(--success)", msg:"Payment received $48,500 — Parramatta progress invoice #INV-041", time:"5 hrs ago", unread:false },
+  { id:7, icon:"bi-clock-history", bg:"var(--danger-light)", color:"var(--danger)", msg:"Timeline delay detected: Chatswood — 12 days overdue on Govt Approval", time:"Yesterday", unread:false },
+  { id:8, icon:"bi-arrow-rotate-right", bg:"var(--warning-light)", color:"#D97706", msg:"Variation quote sent: Parramatta kitchen upgrade — $4,500", time:"Yesterday", unread:false },
+];
+
+const tickerItems = [
+  { text:"New lead captured: Jaswinder Singh — Blacktown duplex enquiry", color:"var(--primary)" },
+  { text:"Brickwork 65% complete — Penrith site", color:"var(--success)" },
+  { text:"Follow-up reminder: Priya Sharma at 3:30 PM today", color:"var(--warning)" },
+  { text:"Slab tradie confirmed for Parramatta — 22 Jul", color:"var(--info)" },
+  { text:"Architect sketches 80% complete — Castle Hill", color:"var(--purple)" },
+  { text:"Worker attendance: 53/56 checked in today", color:"var(--success)" },
+  { text:"Certification submission ready — Liverpool Estate", color:"var(--primary)" },
+  { text:"Quote approved: Harpreet Kaur — Penrith $485K", color:"var(--success)" },
+];
+
+const chartPeriods = {
+  '6m': { labels:['Jan','Feb','Mar','Apr','May','Jun'], leads:[35,40,38,42,44,47], converted:[20,22,19,21,23,23], revenue:[180,195,185,210,225,240] },
+  '12m': { labels:['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'], leads:[28,30,32,34,28,32,35,40,38,42,44,47], converted:[14,15,16,17,15,18,20,22,19,21,23,23], revenue:[140,150,160,170,145,165,180,195,185,210,225,240] },
+  'ytd': { labels:['Jan','Feb','Mar','Apr','May','Jun'], leads:[35,40,38,42,44,47], converted:[20,22,19,21,23,23], revenue:[180,195,185,210,225,240] },
+};
+
+// ══════════════════════════════════════
+// LIVE CLOCK
+// ══════════════════════════════════════
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('liveClock').innerHTML = `<span>${h}:${m}:${s}</span> AEST`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ══════════════════════════════════════
+// ANIMATED COUNTERS
+// ══════════════════════════════════════
+function animateCounters() {
+  document.querySelectorAll('.stat-value[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count);
+    const prefix = el.dataset.prefix || '';
+    const suffix = el.dataset.suffix || '';
+    const divide = parseFloat(el.dataset.divide) || 1;
+    const duration = 1200;
+    const start = performance.now();
+    function step(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(eased * target);
+      el.textContent = prefix + (divide > 1 ? (current / divide).toFixed(1) : current) + suffix;
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+let notifs = JSON.parse(JSON.stringify(notificationData));
+
+function renderNotifs() {
+  const list = document.getElementById('notifList');
+  const unreadCount = notifs.filter(n => n.unread).length;
+  const badge = document.getElementById('notifCount');
+  badge.textContent = unreadCount;
+  badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+  list.innerHTML = notifs.map(n => `
+    <div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})">
+      <div class="notif-icon" style="background:${n.bg};color:${n.color};"><i class="bi ${n.icon}"></i></div>
+      <div class="notif-text">
+        <div class="notif-msg">${n.msg}</div>
+        <div class="notif-time">${n.time}</div>
+      </div>
+      <button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button>
+    </div>
+  `).join('');
+}
+
+function toggleNotif() {
+  document.getElementById('notifDrop').classList.toggle('show');
+}
+document.addEventListener('click', e => {
+  const drop = document.getElementById('notifDrop');
+  const btn = document.getElementById('notifBtn');
+  if (drop && !drop.contains(e.target) && !btn.contains(e.target)) drop.classList.remove('show');
+});
+
+function readNotif(id) {
+  const n = notifs.find(x => x.id === id);
+  if (n && n.unread) { n.unread = false; renderNotifs(); }
+  showToast('Opening: ' + (n ? n.msg.substring(0,40) + '...' : ''), 'info');
+}
+
+function dismissNotif(id) {
+  const el = document.querySelector(`.notification-item[data-id="${id}"]`);
+  if (el) {
+    el.classList.add('dismissing');
+    setTimeout(() => { notifs = notifs.filter(x => x.id !== id); renderNotifs(); }, 250);
+  }
+}
+
+function markAllRead() {
+  notifs.forEach(n => n.unread = false);
+  renderNotifs();
+  showToast('All notifications marked as read', 'success');
+}
+
+// ══════════════════════════════════════
+// TOAST SYSTEM
+// ══════════════════════════════════════
+function showToast(msg, type='info') {
+  const container = document.getElementById('toastContainer');
+  const colors = { success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'}, danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'}, info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'}, warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'} };
+  const c = colors[type] || colors.info;
+  const toast = document.createElement('div');
+  toast.className = 'toast-item';
+  toast.innerHTML = `<div class="toast-icon" style="background:${c.bg};color:${c.color};"><i class="bi ${c.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;
+  container.appendChild(toast);
+  setTimeout(() => removeToast(toast), 4000);
+}
+function removeToast(el) {
+  if (!el || !el.parentElement) return;
+  el.classList.add('removing');
+  setTimeout(() => el.remove(), 250);
+}
+
+// ══════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════
+let leadsChart, convChart, reasonChart, costChart;
+
+function initCharts() {
+  const defaults = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ labels:{ font:{size:11,family:'Inter'}, color:'#64748B', padding:12, usePointStyle:true, pointStyleWidth:8 } } } };
+  const gridColor = '#F1F5F9';
+
+  leadsChart = new Chart(document.getElementById('leadsChart').getContext('2d'), {
+    type:'bar',
+    data:{
+      labels:chartPeriods['12m'].labels,
+      datasets:[
+        { label:'New Leads', data:chartPeriods['12m'].leads, backgroundColor:'#0D9488', borderRadius:5, barPercentage:.35, categoryPercentage:.7 },
+        { label:'Converted', data:chartPeriods['12m'].converted, backgroundColor:'#16A34A', borderRadius:5, barPercentage:.35, categoryPercentage:.7 },
+        { label:'Revenue ($K)', data:chartPeriods['12m'].revenue, type:'line', borderColor:'#E8730C', backgroundColor:'rgba(232,115,12,.08)', borderWidth:2.5, pointRadius:3, pointBackgroundColor:'#E8730C', tension:.3, fill:true, yAxisID:'y1' }
+      ]
+    },
+    options:{...defaults, interaction:{mode:'index',intersect:false}, scales:{
+      x:{grid:{display:false},ticks:{font:{size:11},color:'#94A3B8'}},
+      y:{beginAtZero:true,position:'left',grid:{color:gridColor},ticks:{font:{size:11},color:'#94A3B8'}},
+      y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},ticks:{font:{size:11},color:'#E8730C',callback:v=>'$'+v+'K'}}
+    }}
+  });
+
+  convChart = new Chart(document.getElementById('convChart').getContext('2d'), {
+    type:'doughnut',
+    data:{ labels:['Converted (49%)','Pending (28%)','Lost (13%)','Nurture (10%)'], datasets:[{ data:[23,13,6,5], backgroundColor:['#16A34A','#F59E0B','#DC2626','#0D9488'], borderWidth:0, hoverOffset:6 }] },
+    options:{...defaults, cutout:'68%', plugins:{...defaults.plugins, legend:{position:'bottom',labels:{...defaults.plugins.legend.labels,padding:10,font:{size:10.5}}}}}
+  });
+
+  reasonChart = new Chart(document.getElementById('reasonChart').getContext('2d'), {
+    type:'doughnut',
+    data:{ labels:['Budget Constraints','Chose Competitor','Delayed Decision','Location Changed','Not Ready'], datasets:[{ data:[3,1,1,1,1], backgroundColor:['#DC2626','#F59E0B','#0D9488','#7C3AED','#94A3B8'], borderWidth:0, hoverOffset:6 }] },
+    options:{...defaults, cutout:'55%', plugins:{...defaults.plugins, legend:{position:'right',labels:{...defaults.plugins.legend.labels,padding:8,font:{size:10.5}}}}}
+  });
+
+  costChart = new Chart(document.getElementById('costChart').getContext('2d'), {
+    type:'bar',
+    data:{
+      labels:['Penrith','Blacktown','Parramatta','Liverpool','Chatswood'],
+      datasets:[
+        { label:'Estimated ($K)', data:[485,380,550,720,890], backgroundColor:'#0D9488', borderRadius:5, barPercentage:.4 },
+        { label:'Actual ($K)', data:[312,199,410,89,32], backgroundColor:'#16A34A', borderRadius:5, barPercentage:.4 }
+      ]
+    },
+    options:{...defaults, scales:{
+      x:{grid:{display:false},ticks:{font:{size:10.5},color:'#94A3B8'}},
+      y:{beginAtZero:true,grid:{color:gridColor},ticks:{font:{size:11},color:'#94A3B8',callback:v=>'$'+v+'K'}}
+    }}
+  });
+}
+
+function switchPeriod(period, btn) {
+  btn.parentElement.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const d = chartPeriods[period];
+  leadsChart.data.labels = d.labels;
+  leadsChart.data.datasets[0].data = d.leads;
+  leadsChart.data.datasets[1].data = d.converted;
+  leadsChart.data.datasets[2].data = d.revenue;
+  leadsChart.update('active');
+}
+
+// ══════════════════════════════════════
+// PROJECTS TABLE
+// ══════════════════════════════════════
+function renderProjects(filter='') {
+  const filtered = projectData.filter(p =>
+    !filter || p.name.toLowerCase().includes(filter) || p.customer.toLowerCase().includes(filter) || p.stage.toLowerCase().includes(filter) || p.manager.toLowerCase().includes(filter) || p.location.toLowerCase().includes(filter)
+  );
+  const body = document.getElementById('projectBody');
+  const noRes = document.getElementById('noResults');
+  if (filtered.length === 0) { body.innerHTML = ''; noRes.style.display = 'block'; return; }
+  noRes.style.display = 'none';
+  body.innerHTML = filtered.map(p => {
+    const overBudget = p.actual > p.budget * 0.5;
+    const pColor = p.progress >= 60 ? 'var(--success)' : p.progress >= 30 ? 'var(--primary)' : p.progress >= 15 ? '#D97706' : 'var(--danger)';
+    return `<tr onclick="openProjectModal(${p.id})">
+      <td><b style="color:var(--primary);font-size:13px;">${p.name}</b><div style="font-size:10.5px;color:var(--text-tertiary);margin-top:1px;">${p.type}</div></td>
+      <td>${p.customer}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${p.manager}</td>
+      <td><span style="font-size:12px;">${p.stage}</span></td>
+      <td style="font-weight:600;">$${(p.budget/1000).toFixed(0)}K</td>
+      <td style="font-weight:600;color:${overBudget?'var(--danger)':'var(--text-secondary)'};">$${(p.actual/1000).toFixed(0)}K</td>
+      <td style="min-width:130px;">
+        <div class="d-flex align-items-center gap-2">
+          <div class="progress-bar-custom" style="flex:1;"><div class="progress-fill-custom" style="width:${p.progress}%;background:${pColor};"></div></div>
+          <span style="font-size:11px;font-weight:700;color:${pColor};min-width:28px;text-align:right;">${p.progress}%</span>
+        </div>
+      </td>
+      <td><span class="status-pill ${p.statusClass}">${p.status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterProjects() {
+  renderProjects(document.getElementById('projectSearch').value.toLowerCase().trim());
+}
+
+// ══════════════════════════════════════
+// PROJECT MODAL
+// ══════════════════════════════════════
+function openProjectModal(id) {
+  const p = projectData.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('modalTitle').textContent = p.name;
+  document.getElementById('modalSubtitle').textContent = p.type + ' — ' + p.location;
+  const spent = ((p.actual / p.budget) * 100).toFixed(1);
+  const overBudget = p.actual > p.budget;
+  document.getElementById('modalBody').innerHTML = `
+    <div class="detail-grid" style="margin-bottom:20px;">
+      <div class="detail-item"><div class="detail-label">Customer</div><div class="detail-value">${p.customer}</div></div>
+      <div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${p.phone}</div></div>
+      <div class="detail-item"><div class="detail-label">Site Manager</div><div class="detail-value">${p.manager}</div></div>
+      <div class="detail-item"><div class="detail-label">Current Stage</div><div class="detail-value">${p.stage}</div></div>
+      <div class="detail-item"><div class="detail-label">Start Date</div><div class="detail-value">${p.start}</div></div>
+      <div class="detail-item"><div class="detail-label">Est. Completion</div><div class="detail-value">${p.estEnd}</div></div>
+      <div class="detail-item"><div class="detail-label">Budget</div><div class="detail-value" style="color:var(--primary);">$${p.budget.toLocaleString()}</div></div>
+      <div class="detail-item"><div class="detail-label">Spent So Far</div><div class="detail-value" style="color:${overBudget?'var(--danger)':'var(--text-primary)'};">$${p.actual.toLocaleString()} <span style="font-size:11px;color:var(--text-tertiary);">(${spent}%)</span></div></div>
+    </div>
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:12px;font-weight:600;">Overall Progress</span>
+        <span style="font-size:12px;font-weight:700;color:var(--primary);">${p.progress}%</span>
+      </div>
+      <div class="progress-bar-custom" style="height:10px;"><div class="progress-fill-custom" style="width:${p.progress}%;background:var(--primary);"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;">
+        <span style="font-size:10px;color:var(--text-tertiary);">Milestones: ${p.milestones.done} / ${p.milestones.total} completed</span>
+        <span class="status-pill ${p.statusClass}">${p.status}</span>
+      </div>
+    </div>
+    ${overBudget ? `<div style="padding:10px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--danger);"><i class="bi bi-exclamation-triangle me-1"></i> Actual spend exceeds 50% of budget at only ${p.progress}% progress. Review cost allocation.</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-primary-custom" onclick="showToast('Opening project detail page for ${p.name}...','info');closeModal('projectModal')"><i class="bi bi-arrow-right me-1"></i>Open Full Project</button>
+      <button class="btn-outline-custom" onclick="showToast('Opening milestones for ${p.name}...','info')"><i class="bi bi-calendar-check me-1"></i>Milestones</button>
+      <button class="btn-outline-custom" onclick="showToast('Opening financials for ${p.name}...','info')"><i class="bi bi-cash-stack me-1"></i>Financials</button>
+      <button class="btn-outline-custom" onclick="showToast('Opening customer chat with ${p.customer}...','info')"><i class="bi bi-chat-dots me-1"></i>Message Customer</button>
+    </div>
+  `;
+  document.getElementById('projectModal').classList.add('show');
+}
+
+// ══════════════════════════════════════
+// FOLLOW-UPS
+// ══════════════════════════════════════
+function renderFollowups() {
+  document.getElementById('followupList').innerHTML = followupData.map(f => `
+    <div class="ti-custom ${f.urgent?'urgent':''}" onclick="openFollowupModal(${f.id})" style="cursor:pointer;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <h4 style="font-size:13px;font-weight:700;margin-bottom:2px;">${f.name} <span style="font-weight:400;color:var(--text-tertiary);font-size:11px;">— ${f.project}</span></h4>
+        ${f.urgent ? '<span class="status-pill pill-danger" style="font-size:9px;">Due Now</span>' : ''}
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:0;">${f.notes.substring(0, 80)}...</p>
+      <p style="color:${f.urgent?'var(--danger)':'var(--text-tertiary)'};font-weight:600;margin-top:4px;font-size:11.5px;"><i class="bi bi-clock me-1"></i>${f.time}</p>
+    </div>
+  `).join('');
+}
+
+function openFollowupModal(id) {
+  const f = followupData.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('fuModalTitle').textContent = f.name + ' — ' + f.project;
+  document.getElementById('fuModalBody').innerHTML = `
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${f.phone}</div></div>
+      <div class="detail-item"><div class="detail-label">Scheduled Time</div><div class="detail-value" style="color:var(--danger);font-weight:700;">${f.time} Today</div></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="detail-label" style="margin-bottom:6px;">Call Notes from Last Conversation</div>
+      <div style="background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;padding:14px;font-size:13px;line-height:1.6;color:var(--text-secondary);">${f.notes}</div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="detail-label" style="margin-bottom:6px;">Status</div>
+      <span class="status-pill pill-warning">${f.status}</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-primary-custom" onclick="completeFollowup(${f.id},'Called')"><i class="bi bi-telephone me-1"></i>Mark as Called</button>
+      <button class="btn-outline-custom" onclick="completeFollowup(${f.id},'Rescheduled')"><i class="bi bi-calendar-plus me-1"></i>Reschedule</button>
+      <button class="btn-outline-custom" onclick="completeFollowup(${f.id},'Skipped')"><i class="bi bi-skip-forward me-1"></i>Skip</button>
+      <button class="btn-outline-custom" style="border-color:rgba(220,38,38,.2);color:var(--danger);" onclick="completeFollowup(${f.id},'Lost')"><i class="bi bi-x-circle me-1"></i>Mark Lost</button>
+    </div>
+  `;
+  document.getElementById('followupModal').classList.add('show');
+}
+
+function completeFollowup(id, action) {
+  const f = followupData.find(x => x.id === id);
+  closeModal('followupModal');
+  if (action === 'Called') {
+    showToast(`Follow-up with ${f.name} marked as completed — Called`, 'success');
+    const el = document.querySelector(`.ti-custom[onclick="openFollowupModal(${id})"]`);
+    if (el) { el.classList.remove('urgent'); el.classList.add('done'); }
+  } else if (action === 'Rescheduled') {
+    showToast(`Follow-up with ${f.name} rescheduled — reminder set`, 'warning');
+  } else if (action === 'Skipped') {
+    showToast(`Follow-up with ${f.name} skipped`, 'info');
+  } else if (action === 'Lost') {
+    showToast(`${f.name} marked as lost lead — reason logged`, 'danger');
+    const el = document.querySelector(`.ti-custom[onclick="openFollowupModal(${id})"]`);
+    if (el) { el.style.opacity = '0.4'; el.style.pointerEvents = 'none'; }
+  }
+}
+
+// ══════════════════════════════════════
+// SITE MANAGERS
+// ══════════════════════════════════════
+function renderSiteManagers() {
+  document.getElementById('smBody').innerHTML = siteManagers.map(m => {
+    const stars = '&#9733;'.repeat(Math.floor(m.rating)) + (m.rating % 1 >= 0.5 ? '&#9734;' : '');
+    return `<tr onclick="showToast('Opening ${m.name}\\'s performance dashboard...','info')">
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:30px;height:30px;border-radius:8px;background:${m.color};color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">${m.avatar}</div>
+          <span style="font-weight:600;">${m.name}</span>
+        </div>
+      </td>
+      <td style="text-align:center;">${m.projects}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="progress-bar-custom" style="width:60px;"><div class="progress-fill-custom" style="width:${m.onTime}%;background:${m.onTime>=90?'var(--success)':m.onTime>=85?'#D97706':'var(--danger)'};"></div></div>
+          <span style="font-size:12px;font-weight:600;color:${m.onTime>=90?'var(--success)':m.onTime>=85?'#D97706':'var(--danger)'};">${m.onTime}%</span>
+        </div>
+      </td>
+      <td style="font-size:12px;color:var(--text-secondary);">${m.hours} hrs</td>
+      <td style="font-size:12px;">${m.milestones}</td>
+      <td><span style="color:var(--warning);font-size:12px;letter-spacing:1px;">${stars}</span> <span style="font-size:11px;color:var(--text-tertiary);">${m.rating}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+// LIVE TICKER
+// ══════════════════════════════════════
+function renderTicker() {
+  const items = tickerItems.map(t => `<span class="ticker-item"><span class="ticker-dot" style="background:${t.color};"></span>${t.text}</span>`).join('');
+  document.getElementById('tickerTrack').innerHTML = items + items; // Duplicate for seamless loop
+}
+
+// ══════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-backdrop-custom').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop-custom.show').forEach(m => m.classList.remove('show'));
+});
+
+// ══════════════════════════════════════
+// EXPORT CSV
+// ══════════════════════════════════════
+function exportCSV() {
+  const headers = ['Project','Customer','Location','Site Manager','Stage','Budget','Actual','Progress','Status'];
+  const rows = projectData.map(p => [p.name, p.customer, p.location, p.manager, p.stage, p.budget, p.actual, p.progress+'%', p.status]);
+  let csv = headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'BuildPro_Dashboard_Export_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Dashboard exported as CSV successfully', 'success');
+}
+
+// ══════════════════════════════════════
+// REFRESH
+// ══════════════════════════════════════
+function refreshDashboard() {
+  const icon = document.getElementById('refreshIcon');
+  icon.style.animation = 'spin .6s ease';
+  setTimeout(() => icon.style.animation = '', 600);
+  showToast('Dashboard data refreshed', 'success');
+  document.getElementById('lastUpdated').textContent = 'Updated just now';
+  animateCounters();
+}
+
+// Add spin keyframe dynamically
+const spinStyle = document.createElement('style');
+spinStyle.textContent = '@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }';
+document.head.appendChild(spinStyle);
+
+// ══════════════════════════════════════
+// AUTO-UPDATE TIMESTAMP
+// ══════════════════════════════════════
+let updateSeconds = 0;
+setInterval(() => {
+  updateSeconds++;
+  const el = document.getElementById('lastUpdated');
+  if (updateSeconds < 60) el.textContent = 'Updated just now';
+  else if (updateSeconds < 120) el.textContent = 'Updated 1 min ago';
+  else el.textContent = 'Updated ' + Math.floor(updateSeconds/60) + ' min ago';
+}, 1000);
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(() => {
+  animateCounters();
+  initCharts();
+  renderNotifs();
+  renderProjects();
+  renderFollowups();
+  renderSiteManagers();
+  renderTicker();
+}, 100);
+</script>
+</body>
+</html>

@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Site Managers - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #0D9488;
+  --primary-dark: #0F766E;
+  --primary-light: #CCFBF1;
+  --primary-glow: rgba(13,148,136,.15);
+  --accent: #E8730C;
+  --accent-light: #FFF3E0;
+  --success: #16A34A;
+  --success-light: #DCFCE7;
+  --danger: #DC2626;
+  --danger-light: #FEE2E2;
+  --warning: #F59E0B;
+  --warning-light: #FEF9C3;
+  --info: #2563EB;
+  --info-light: #DBEAFE;
+  --purple: #7C3AED;
+  --purple-light: #EDE9FE;
+  --bg-body: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-hover: #F8FAFC;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #94A3B8;
+  --border-color: #E2E8F0;
+  --border-light: #F1F5F9;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,.1);
+  --sidebar-bg: #0F172A;
+  --sidebar-width: 64px;
+  --transition: all .2s cubic-bezier(.4,0,.2,1);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg-body); font-family:'Inter',sans-serif; font-size:14px; color:var(--text-primary); overflow-x:hidden; line-height:1.5; }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#CBD5E1; border-radius:4px; }
+::-webkit-scrollbar-thumb:hover { background:#94A3B8; }
+.wrapper { display:flex; min-height:100vh; }
+
+.sidebar { width:var(--sidebar-width); background:var(--sidebar-bg); display:flex; flex-direction:column; align-items:center; padding-top:16px; flex-shrink:0; z-index:1000; box-shadow:4px 0 24px rgba(0,0,0,.12); }
+.sidebar-icon { color:#64748B; font-size:19px; height:42px; width:42px; display:flex; align-items:center; justify-content:center; margin-bottom:4px; cursor:pointer; border-radius:10px; transition:var(--transition); position:relative; }
+.sidebar-icon:hover { color:#F1F5F9; background:rgba(255,255,255,.06); }
+.sidebar-icon.active { color:var(--primary); background:rgba(13,148,136,.15); }
+.sidebar-icon.active::before { content:''; position:absolute; left:-16px; height:20px; width:3px; background:var(--primary); border-radius:0 3px 3px 0; }
+.sidebar-brand { color:var(--primary); font-size:22px; margin-bottom:20px; }
+.sidebar-tooltip { position:absolute; left:calc(100% + 10px); top:50%; transform:translateY(-50%); background:var(--sidebar-bg); color:#F1F5F9; padding:5px 11px; border-radius:6px; font-size:11px; font-weight:500; white-space:nowrap; opacity:0; visibility:hidden; transition:var(--transition); z-index:1001; pointer-events:none; box-shadow:var(--shadow-lg); }
+.sidebar-tooltip::before { content:''; position:absolute; right:100%; top:50%; transform:translateY(-50%); border:5px solid transparent; border-right-color:var(--sidebar-bg); }
+.sidebar-icon:hover .sidebar-tooltip { opacity:1; visibility:visible; left:calc(100% + 14px); }
+@media(max-width:768px) { .sidebar-tooltip { display:none; } }
+
+.main-panel { flex-grow:1; display:flex; flex-direction:column; width:calc(100% - var(--sidebar-width)); min-width:0; }
+
+.top-header { height:54px; background:var(--sidebar-bg); display:flex; align-items:center; justify-content:space-between; padding:0 20px; color:white; flex-shrink:0; }
+.header-menu a { color:rgba(255,255,255,.55); text-decoration:none; margin-right:20px; font-size:12.5px; font-weight:500; transition:var(--transition); position:relative; padding-bottom:16px; letter-spacing:.01em; }
+.header-menu a:hover { color:rgba(255,255,255,.9); }
+.header-menu a.active { color:white; }
+.header-menu a.active::after { content:''; position:absolute; bottom:0; left:0; width:100%; height:2px; background:var(--primary); border-radius:2px 2px 0 0; }
+
+.sub-header { background:var(--bg-card); padding:10px 20px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; font-size:12px; color:var(--text-secondary); flex-shrink:0; }
+
+.content-container { padding:20px; max-width:1560px; margin:0 auto; width:100%; }
+
+.card-custom { background:var(--bg-card); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm); border:1px solid var(--border-color); margin-bottom:16px; transition:var(--transition); }
+.card-custom:hover { box-shadow:var(--shadow-md); }
+
+.section-heading { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:16px; color:var(--text-secondary); display:flex; align-items:center; justify-content:space-between; }
+
+.stat-value { font-size:26px; font-weight:800; line-height:1.2; color:var(--text-primary); margin-top:2px; letter-spacing:-.02em; }
+.stat-desc { font-size:11.5px; color:var(--text-tertiary); margin-top:3px; }
+.stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
+@media(max-width:1200px) { .stat-grid { grid-template-columns:repeat(2,1fr); } }
+.stat-icon { width:44px; height:44px; border-radius:11px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px; flex-shrink:0; }
+
+.trend-badge { display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; letter-spacing:.02em; }
+.trend-up { color:var(--success); background:rgba(22,163,74,.08); }
+.trend-down { color:var(--danger); background:rgba(220,38,38,.08); }
+.status-pill { display:inline-flex; align-items:center; padding:3px 10px; border-radius:99px; font-size:10.5px; font-weight:600; line-height:1.5; }
+.pill-success { background:rgba(22,163,74,.08); color:var(--success); }
+.pill-warning { background:rgba(245,158,11,.08); color:#D97706; }
+.pill-danger { background:rgba(220,38,38,.08); color:var(--danger); }
+.pill-info { background:rgba(37,99,235,.08); color:var(--info); }
+.pill-gray { background:rgba(148,163,184,.1); color:var(--text-secondary); }
+
+.btn-primary-custom { background:var(--primary); color:white; border:none; padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:600; transition:var(--transition); cursor:pointer; font-family:inherit; }
+.btn-primary-custom:hover { background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 4px 12px rgba(13,148,136,.3); color:white; text-decoration:none; }
+.btn-outline-custom { background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:500; transition:var(--transition); cursor:pointer; font-family:inherit; }
+.btn-outline-custom:hover { background:var(--bg-hover); border-color:var(--primary); color:var(--primary); }
+.btn-sm-custom { padding:5px 10px; font-size:11.5px; border-radius:6px; }
+.btn-icon { width:32px; height:32px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-secondary); cursor:pointer; transition:var(--transition); font-size:14px; }
+.btn-icon:hover { border-color:var(--primary); color:var(--primary); background:var(--primary-glow); }
+.btn-danger-custom { background:var(--danger); color:white; border:none; padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:600; transition:var(--transition); cursor:pointer; font-family:inherit; }
+.btn-danger-custom:hover { background:#B91C1C; transform:translateY(-1px); box-shadow:0 4px 12px rgba(220,38,38,.3); color:white; }
+
+.table-custom { width:100%; border-collapse:separate; border-spacing:0; }
+.table-custom thead th { font-size:11px; text-transform:uppercase; color:var(--text-tertiary); font-weight:600; letter-spacing:.04em; padding:10px 14px; border-bottom:1px solid var(--border-color); background:var(--bg-body); }
+.table-custom td { font-size:13px; vertical-align:middle; padding:12px 14px; border-bottom:1px solid var(--border-light); }
+.table-custom tr:last-child td { border-bottom:none; }
+.table-custom tbody tr { transition:background .15s; cursor:pointer; }
+.table-custom tbody tr:hover td { background:var(--bg-hover); }
+
+.progress-bar-custom { height:7px; background:#E2E8F0; border-radius:4px; overflow:hidden; }
+.progress-fill-custom { height:100%; border-radius:4px; transition:width .8s cubic-bezier(.4,0,.2,1); }
+
+.notification-badge { position:absolute; top:0; right:0; min-width:16px; height:16px; background:var(--danger); border-radius:99px; font-size:9px; font-weight:700; color:white; display:flex; align-items:center; justify-content:center; padding:0 4px; border:2px solid var(--sidebar-bg); }
+.notification-dropdown { position:absolute; top:calc(100% + 8px); right:0; width:360px; background:white; border-radius:10px; box-shadow:var(--shadow-lg); z-index:1001; display:none; border:1px solid var(--border-color); overflow:hidden; }
+.notification-dropdown.show { display:block; animation:slideDown .2s ease; }
+@keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+.notification-header { padding:14px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; }
+.notification-mark-all { font-size:11.5px; color:var(--primary); cursor:pointer; font-weight:600; transition:var(--transition); }
+.notification-item { padding:12px 16px; border-bottom:1px solid var(--border-light); cursor:pointer; transition:background .15s; display:flex; align-items:flex-start; gap:10px; }
+.notification-item:hover { background:var(--bg-hover); }
+.notification-item.unread { background:rgba(13,148,136,.03); }
+.notif-icon { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:14px; }
+.notif-text { flex:1; min-width:0; }
+.notif-msg { font-size:12.5px; line-height:1.4; color:var(--text-primary); }
+.notif-time { font-size:10.5px; color:var(--text-tertiary); margin-top:2px; }
+.notif-dismiss { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); cursor:pointer; opacity:0; transition:var(--transition); flex-shrink:0; font-size:10px; border:none; background:none; }
+.notification-item:hover .notif-dismiss { opacity:1; }
+.notif-dismiss:hover { background:var(--danger-light); color:var(--danger); }
+.notification-footer { padding:10px 16px; text-align:center; border-top:1px solid var(--border-color); }
+
+.up { display:flex; align-items:center; gap:8px; padding:4px 10px 4px 4px; border-radius:10px; background:rgba(255,255,255,.07); cursor:pointer; transition:var(--transition); }
+.up:hover { background:rgba(255,255,255,.12); }
+.ua { width:30px; height:30px; border-radius:8px; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:11px; }
+.ui span { font-size:12.5px; font-weight:600; display:block; color:white; line-height:1.2; }
+
+.live-clock { font-size:12px; color:rgba(255,255,255,.6); font-weight:500; font-variant-numeric:tabular-nums; }
+.live-clock span { color:rgba(255,255,255,.9); font-weight:600; }
+
+.search-box { position:relative; }
+.search-box input { width:200px; padding:6px 12px 6px 32px; border:1px solid var(--border-color); border-radius:8px; font-size:12.5px; background:var(--bg-card); color:var(--text-primary); transition:var(--transition); font-family:inherit; outline:none; }
+.search-box input:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-glow); width:260px; }
+.search-box i { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); font-size:13px; }
+
+.toast-container { position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+.toast-item { background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:14px 18px; box-shadow:var(--shadow-lg); display:flex; align-items:center; gap:10px; min-width:300px; animation:toastIn .3s ease; }
+.toast-item.removing { animation:toastOut .25s ease forwards; }
+@keyframes toastIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+@keyframes toastOut { to { opacity:0; transform:translateX(40px); } }
+.toast-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+.toast-msg { flex:1; font-size:13px; font-weight:500; }
+.toast-close { background:none; border:none; color:var(--text-tertiary); cursor:pointer; font-size:16px; padding:0; line-height:1; }
+.toast-close:hover { color:var(--text-primary); }
+
+.modal-backdrop-custom { position:fixed; inset:0; background:rgba(15,23,42,.5); backdrop-filter:blur(4px); z-index:2000; display:none; align-items:center; justify-content:center; animation:fadeIn .2s; }
+.modal-backdrop-custom.show { display:flex; }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+.modal-content-custom { background:var(--bg-card); border-radius:14px; width:90%; max-width:700px; max-height:85vh; overflow-y:auto; box-shadow:var(--shadow-lg); animation:modalIn .25s ease; border:1px solid var(--border-color); }
+@keyframes modalIn { from { opacity:0; transform:scale(.96) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+.modal-header-custom { padding:20px 24px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; }
+.modal-body-custom { padding:20px 24px; }
+.modal-footer-custom { padding:16px 24px 20px; border-top:1px solid var(--border-color); display:flex; justify-content:flex-end; gap:8px; }
+.modal-close { width:32px; height:32px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); transition:var(--transition); font-size:16px; }
+.modal-close:hover { background:var(--danger-light); color:var(--danger); border-color:transparent; }
+
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.detail-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-tertiary); font-weight:600; margin-bottom:2px; }
+.detail-value { font-size:13px; font-weight:600; }
+
+.cc { position:relative; height:260px; }
+
+/* Tabs */
+.tab-nav { display:flex; border-bottom:2px solid var(--border-color); margin-bottom:20px; gap:0; }
+.tab-btn { padding:10px 18px; background:none; border:none; font-size:13px; font-weight:600; color:var(--text-tertiary); cursor:pointer; position:relative; transition:var(--transition); font-family:inherit; display:flex; align-items:center; gap:6px; }
+.tab-btn:hover { color:var(--primary); }
+.tab-btn.active { color:var(--primary); }
+.tab-btn.active::after { content:''; position:absolute; bottom:-2px; left:0; width:100%; height:2px; background:var(--primary); border-radius:2px 2px 0 0; }
+.tab-btn .tab-count { background:var(--bg-body); color:var(--text-tertiary); font-size:10px; font-weight:700; padding:1px 6px; border-radius:99px; }
+.tab-btn.active .tab-count { background:var(--primary-glow); color:var(--primary); }
+.tab-content { display:none; }
+.tab-content.active { display:block; animation:fadeIn .25s ease; }
+
+/* Manager Cards */
+.manager-card { border:2px solid var(--border-color); border-radius:14px; padding:20px; background:var(--bg-card); transition:var(--transition); cursor:pointer; position:relative; overflow:hidden; }
+.manager-card:hover { border-color:var(--primary); box-shadow:0 8px 30px rgba(13,148,136,.1); transform:translateY(-2px); }
+.manager-card.selected { border-color:var(--primary); background:linear-gradient(135deg,rgba(13,148,136,.02),rgba(13,148,136,.05)); }
+.manager-avatar { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px; font-weight:800; flex-shrink:0; }
+.manager-status-dot { width:10px; height:10px; border-radius:50%; border:2px solid white; position:absolute; top:16px; right:16px; }
+.manager-status-dot.online { background:var(--success); animation:pulse-green 2s infinite; }
+.manager-status-dot.offline { background:var(--text-tertiary); }
+@keyframes pulse-green { 0%,100% { box-shadow:0 0 0 0 rgba(22,163,74,.4); } 50% { box-shadow:0 0 0 4px rgba(22,163,74,0); } }
+
+/* GPS Pulse */
+.gps-pulse { width:12px; height:12px; border-radius:50%; background:var(--success); position:relative; display:inline-block; }
+.gps-pulse::after { content:''; position:absolute; inset:-4px; border-radius:50%; border:2px solid var(--success); animation:gps-ping 1.5s infinite; }
+@keyframes gps-ping { 0% { transform:scale(1); opacity:.8; } 100% { transform:scale(2); opacity:0; } }
+
+/* QR Code */
+.qr-display { width:180px; height:180px; background:white; border:2px solid var(--border-color); border-radius:12px; display:flex; align-items:center; justify-content:center; position:relative; margin:0 auto; }
+.qr-grid { display:grid; grid-template-columns:repeat(15,1fr); grid-template-rows:repeat(15,1fr); gap:0; width:150px; height:150px; }
+.qr-cell { background:var(--sidebar-bg); border-radius:1px; }
+.qr-cell.white { background:white; }
+
+/* Map Simulation */
+.map-container { height:400px; background:linear-gradient(145deg,#E8F4F8,#D4ECF7,#E2EEF4); border-radius:12px; position:relative; overflow:hidden; border:1px solid var(--border-color); }
+.map-pin { position:absolute; cursor:pointer; transition:var(--transition); z-index:2; }
+.map-pin:hover { transform:scale(1.3); z-index:10; }
+.map-pin-dot { width:14px; height:14px; border-radius:50%; border:3px solid white; box-shadow:0 2px 8px rgba(0,0,0,.2); }
+.map-pin-label { position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:var(--sidebar-bg); color:white; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:600; white-space:nowrap; opacity:0; transition:var(--transition); pointer-events:none; }
+.map-pin:hover .map-pin-label { opacity:1; }
+.map-pin-count { position:absolute; top:-4px; right:-4px; background:var(--primary); color:white; font-size:8px; font-weight:700; width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white; }
+.map-road { position:absolute; background:rgba(255,255,255,.6); border-radius:2px; }
+.map-water { position:absolute; background:rgba(59,130,246,.1); border-radius:40%; }
+
+/* Worker Row Live */
+.worker-live-indicator { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
+.worker-live-indicator.on-site { background:var(--success); animation:pulse-green 2s infinite; }
+.worker-live-indicator.checked-out { background:var(--text-tertiary); }
+.worker-live-indicator.no-gps { background:var(--danger); }
+
+/* Select & Input */
+.form-select-custom { padding:6px 12px; border:1px solid var(--border-color); border-radius:7px; font-size:12.5px; background:var(--bg-card); color:var(--text-primary); font-family:inherit; outline:none; transition:var(--transition); cursor:pointer; }
+.form-select-custom:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-glow); }
+
+/* Responsive */
+@media(max-width:992px) { .detail-grid { grid-template-columns:1fr; } }
+@media(max-width:576px) { .stat-grid { grid-template-columns:1fr; } .content-container { padding:12px; } .tab-btn { padding:8px 12px; font-size:12px; } }
+
+@keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+@keyframes slideOut { to { opacity:0; max-height:0; padding-top:0; padding-bottom:0; margin:0; } }
+.notification-item.dismissing { animation:slideOut .25s ease forwards; overflow:hidden; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<!-- Sidebar (exact match index.html) -->
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon active" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px" onclick="showToast('Logged out successfully','info')"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+
+<!-- Main Panel -->
+<div class="main-panel">
+
+  <!-- Top Header (exact match index.html) -->
+  <header class="top-header">
+    <div class="d-flex align-items-center gap-3">
+      <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+      <nav class="header-menu d-none d-lg-block">
+        <a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a>
+      </nav>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+      <div class="position-relative">
+        <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7);" onclick="toggleNotif()" id="notifBtn">
+          <i class="bi bi-bell"></i>
+          <span class="notification-badge" id="notifCount">3</span>
+        </button>
+        <div class="notification-dropdown" id="notifDrop">
+          <div class="notification-header">
+            <div style="font-size:13px;font-weight:700;">Notifications</div>
+            <div class="notification-mark-all" onclick="markAllRead()">Mark all read</div>
+          </div>
+          <div id="notifList"></div>
+          <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening full notification center...','info');return false;" style="font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600;">View all notifications</a></div>
+        </div>
+      </div>
+      <div class="up">
+        <div class="ua">GS</div>
+        <div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Breadcrumb -->
+  <div class="sub-header">
+    <i class="bi bi-house me-1" style="font-size:11px;"></i><span>Home</span>
+    <span class="mx-2" style="color:var(--border-color);">/</span>
+    <span style="font-weight:600;color:var(--text-primary);">Site Managers</span>
+    <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);" id="lastUpdated">Updated just now</span>
+  </div>
+
+  <!-- Content -->
+  <div class="content-container">
+
+    <!-- Page Header -->
+    <div class="card-custom" style="background:linear-gradient(135deg,#F0FDFA 0%,#CCFBF1 50%,#E0F2FE 100%);border:1px solid rgba(13,148,136,.12);position:relative;overflow:hidden;">
+      <div style="position:absolute;right:-20px;top:-20px;width:160px;height:160px;border-radius:50%;background:rgba(13,148,136,.06);"></div>
+      <div style="position:absolute;right:80px;bottom:-40px;width:120px;height:120px;border-radius:50%;background:rgba(37,99,235,.04);"></div>
+      <div class="row align-items-center">
+        <div class="col-md-7">
+          <h3 style="font-size:17px;font-weight:800;margin-bottom:4px;">Site Manager Command Centre</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:0;">GPS tracking, QR attendance, worker billing, and real-time site monitoring across NSW</p>
+        </div>
+        <div class="col-md-5 text-md-end mt-2 mt-md-0 d-flex gap-2 justify-content-md-end flex-wrap">
+          <button class="btn-primary-custom" onclick="openQRModal()"><i class="bi bi-qr-code me-1"></i>Generate QR Code</button>
+          <button class="btn-outline-custom" onclick="simulateCheckin()"><i class="bi bi-geo-alt me-1"></i>Simulate Check-In</button>
+          <button class="btn-outline-custom" onclick="exportAttendance()"><i class="bi bi-download me-1"></i>Export Report</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="stat-grid">
+      <div class="card-custom" style="cursor:pointer;" onclick="switchTab('managers')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--primary);"><i class="bi bi-person-badge"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>1</span>
+        </div>
+        <div class="stat-value" data-count="6">0</div>
+        <div class="stat-desc">Active Site Managers</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="switchTab('workers')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--success);"><i class="bi bi-people"></i></div>
+          <span class="status-pill pill-success" style="font-size:10px;margin-top:2px;"><span class="gps-pulse" style="width:6px;height:6px;margin-right:3px;"></span>LIVE</span>
+        </div>
+        <div class="stat-value"><span data-count="53">0</span><span style="font-size:16px;color:var(--text-tertiary);font-weight:500;"> / 56</span></div>
+        <div class="stat-desc">Workers On-Site Now</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="switchTab('workers')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--accent);"><i class="bi bi-clock-history"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>5%</span>
+        </div>
+        <div class="stat-value" data-count="412">0</div>
+        <div class="stat-desc">Total Hours Today</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="switchTab('billing')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--danger);"><i class="bi bi-cash-coin"></i></div>
+          <span class="trend-badge trend-down"><i class="bi bi-arrow-down-short"></i>2%</span>
+        </div>
+        <div class="stat-value" data-count="14820" data-prefix="$" data-divide="1">0</div>
+        <div class="stat-desc">Today's Billable Amount</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="managers" onclick="switchTab('managers')"><i class="bi bi-person-badge"></i>Managers <span class="tab-count">6</span></button>
+      <button class="tab-btn" data-tab="workers" onclick="switchTab('workers')"><i class="bi bi-people"></i>Workers <span class="tab-count">56</span></button>
+      <button class="tab-btn" data-tab="qrcodes" onclick="switchTab('qrcodes')"><i class="bi bi-qr-code"></i>QR Codes <span class="tab-count">14</span></button>
+      <button class="tab-btn" data-tab="gpsmap" onclick="switchTab('gpsmap')"><i class="bi bi-geo-alt"></i>GPS Map</button>
+      <button class="tab-btn" data-tab="performance" onclick="switchTab('performance')"><i class="bi bi-graph-up"></i>Performance</button>
+      <button class="tab-btn" data-tab="billing" onclick="switchTab('billing')"><i class="bi bi-receipt"></i>Billing</button>
+    </div>
+
+    <!-- ═══ TAB: MANAGERS ═══ -->
+    <div class="tab-content active" id="tab-managers">
+      <div class="row g-3" id="managerGrid"></div>
+    </div>
+
+    <!-- ═══ TAB: WORKERS ═══ -->
+    <div class="tab-content" id="tab-workers">
+      <div class="card-custom">
+        <div class="section-heading">
+          Worker Attendance — Live Tracking
+          <div class="d-flex align-items-center gap-2">
+            <select class="form-select-custom" id="workerSiteFilter" onchange="renderWorkers()">
+              <option value="all">All Sites</option>
+              <option value="Penrith">Penrith</option>
+              <option value="Castle Hill">Castle Hill</option>
+              <option value="Blacktown">Blacktown</option>
+              <option value="Parramatta">Parramatta</option>
+              <option value="Liverpool">Liverpool</option>
+              <option value="Chatswood">Chatswood</option>
+            </select>
+            <select class="form-select-custom" id="workerStatusFilter" onchange="renderWorkers()">
+              <option value="all">All Status</option>
+              <option value="on-site">On-Site</option>
+              <option value="checked-out">Checked Out</option>
+              <option value="no-gps">No GPS</option>
+            </select>
+            <div class="search-box">
+              <i class="bi bi-search"></i>
+              <input type="text" placeholder="Search worker..." id="workerSearch" oninput="renderWorkers()">
+            </div>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom">
+            <thead>
+              <tr>
+                <th>Status</th><th>Worker</th><th>Trade</th><th>Site</th><th>Manager</th><th>Check-In</th><th>Check-Out</th><th>Hours</th><th>GPS</th><th>Rate</th><th>Billable</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="workerBody"></tbody>
+          </table>
+        </div>
+        <div id="workerNoResults" style="display:none;text-align:center;padding:30px;color:var(--text-tertiary);font-size:13px;">
+          <i class="bi bi-search" style="font-size:24px;display:block;margin-bottom:8px;"></i>No workers match your filters.
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border-color);">
+          <div style="font-size:12px;color:var(--text-tertiary);" id="workerSummary">Showing 0 workers</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-primary-custom btn-sm-custom" onclick="simulateCheckin()"><i class="bi bi-geo-alt me-1"></i>Simulate Check-In</button>
+            <button class="btn-outline-custom btn-sm-custom" onclick="simulateCheckout()"><i class="bi bi-box-arrow-right me-1"></i>Simulate Check-Out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: QR CODES ═══ -->
+    <div class="tab-content" id="tab-qrcodes">
+      <div class="card-custom">
+        <div class="section-heading">
+          QR Code Management — Per Site
+          <div class="d-flex align-items-center gap-2">
+            <div class="search-box">
+              <i class="bi bi-search"></i>
+              <input type="text" placeholder="Search site..." id="qrSearch" oninput="renderQRCodes()">
+            </div>
+            <button class="btn-primary-custom btn-sm-custom" onclick="openQRModal()"><i class="bi bi-plus-lg me-1"></i>Generate New</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom">
+            <thead>
+              <tr><th>Site</th><th>QR Code</th><th>QR ID</th><th>Manager</th><th>Generated</th><th>Scans Today</th><th>Total Scans</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="qrBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: GPS MAP ═══ -->
+    <div class="tab-content" id="tab-gpsmap">
+      <div class="row g-3">
+        <div class="col-lg-8">
+          <div class="card-custom" style="padding:0;overflow:hidden;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+              <div class="section-heading" style="margin:0;"><i class="bi bi-geo-alt-fill me-2" style="color:var(--danger);"></i>Live NSW Site Map</div>
+              <div class="d-flex align-items-center gap-2">
+                <span style="font-size:11px;color:var(--success);"><span class="gps-pulse" style="width:6px;height:6px;"></span> 14 sites live</span>
+                <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Opening full Google Maps integration...','info')"><i class="bi bi-fullscreen me-1"></i>Fullscreen</button>
+              </div>
+            </div>
+            <div class="map-container" id="mapContainer">
+              <!-- Roads -->
+              <div class="map-road" style="width:100%;height:3px;top:45%;left:0;"></div>
+              <div class="map-road" style="width:3px;height:100%;top:0;left:40%;"></div>
+              <div class="map-road" style="width:70%;height:2px;top:25%;left:15%;transform:rotate(-8deg);"></div>
+              <div class="map-road" style="width:2px;height:60%;top:20%;left:65%;transform:rotate(5deg);"></div>
+              <div class="map-road" style="width:80%;height:2px;top:70%;left:10%;transform:rotate(3deg);"></div>
+              <div class="map-road" style="width:2px;height:50%;top:35%;left:20%;"></div>
+              <div class="map-road" style="width:50%;height:2px;top:15%;left:30%;"></div>
+              <!-- Water -->
+              <div class="map-water" style="width:80px;height:60px;bottom:10px;right:20px;"></div>
+              <!-- Pins generated by JS -->
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="card-custom">
+            <div class="section-heading">Site List</div>
+            <div id="siteListPanel" style="max-height:440px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: PERFORMANCE ═══ -->
+    <div class="tab-content" id="tab-performance">
+      <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+          <div class="card-custom">
+            <div class="section-heading">On-Time Delivery Rate</div>
+            <div class="cc"><canvas id="onTimeChart"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="card-custom">
+            <div class="section-heading">Worker Hours Distribution</div>
+            <div class="cc"><canvas id="hoursChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-lg-5">
+          <div class="card-custom">
+            <div class="section-heading">Milestone Completion by Manager</div>
+            <div class="cc"><canvas id="milestoneChart"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-7">
+          <div class="card-custom">
+            <div class="section-heading">Weekly Performance Trends</div>
+            <div class="cc"><canvas id="trendChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB: BILLING ═══ -->
+    <div class="tab-content" id="tab-billing">
+      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="card-custom">
+          <div class="detail-label">This Week Total</div>
+          <div class="stat-value" style="color:var(--primary);">$68,420</div>
+          <div class="stat-desc">Across 14 sites, 56 workers</div>
+        </div>
+        <div class="card-custom">
+          <div class="detail-label">This Month (Running)</div>
+          <div class="stat-value" style="color:var(--accent);">$247,180</div>
+          <div class="stat-desc">Projected: $312,000 by month end</div>
+        </div>
+        <div class="card-custom">
+          <div class="detail-label">GPS Disputes (This Month)</div>
+          <div class="stat-value" style="color:var(--danger);">3</div>
+          <div class="stat-desc">2 resolved, 1 pending review</div>
+        </div>
+      </div>
+      <div class="card-custom">
+        <div class="section-heading">
+          Weekly Billing Breakdown
+          <div class="d-flex align-items-center gap-2">
+            <select class="form-select-custom" id="billingSiteFilter" onchange="renderBilling()">
+              <option value="all">All Sites</option>
+              <option value="Penrith">Penrith</option>
+              <option value="Castle Hill">Castle Hill</option>
+              <option value="Blacktown">Blacktown</option>
+              <option value="Parramatta">Parramatta</option>
+              <option value="Liverpool">Liverpool</option>
+              <option value="Chatswood">Chatswood</option>
+            </select>
+            <button class="btn-primary-custom btn-sm-custom" onclick="exportAttendance()"><i class="bi bi-file-earmark-excel me-1"></i>Export CSV</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom">
+            <thead>
+              <tr><th>Worker</th><th>Trade</th><th>Site</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Total Hrs</th><th>Rate</th><th>Amount</th></tr>
+            </thead>
+            <tbody id="billingBody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:2px solid var(--border-color);">
+          <div style="font-size:12px;color:var(--text-tertiary);" id="billingSummary"></div>
+          <div style="font-size:16px;font-weight:800;color:var(--primary);" id="billingTotal">$0.00</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- QR Generation Modal -->
+<div class="modal-backdrop-custom" id="qrModal">
+  <div class="modal-content-custom" style="max-width:520px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Generate QR Code</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;">Create a unique QR code for site worker check-in</p></div>
+      <button class="modal-close" onclick="closeModal('qrModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div style="margin-bottom:16px;">
+        <label class="detail-label" style="display:block;margin-bottom:6px;">Select Site</label>
+        <select class="form-select-custom" id="qrSiteSelect" style="width:100%;padding:10px 14px;">
+          <option value="">Choose a site...</option>
+          <option>Penrith Residence</option>
+          <option>Castle Hill Villa</option>
+          <option>Blacktown Duplex</option>
+          <option>Parramatta Home</option>
+          <option>Liverpool Estate</option>
+          <option>Chatswood Apartment</option>
+          <option>Hornsby New Build</option>
+          <option>Auburn Residence</option>
+          <option>Ryde Extension</option>
+          <option>Kellyville Project</option>
+          <option>Mount Druitt Home</option>
+          <option>Westmead Dual Occ</option>
+          <option>Wentworthville Reno</option>
+          <option>Quakers Hill Development</option>
+        </select>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label class="detail-label" style="display:block;margin-bottom:6px;">Assign Site Manager</label>
+        <select class="form-select-custom" id="qrManagerSelect" style="width:100%;padding:10px 14px;">
+          <option value="">Choose manager...</option>
+          <option>Amrit Singh</option>
+          <option>Deepak Sharma</option>
+          <option>Gurpreet Mann</option>
+          <option>Jasbir Kaur</option>
+          <option>Ravinder Pal</option>
+          <option>Harjot Bassi</option>
+        </select>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label class="detail-label" style="display:block;margin-bottom:6px;">Notes (Optional)</label>
+        <input type="text" class="form-select-custom" id="qrNotes" style="width:100%;padding:10px 14px;" placeholder="E.g. Main entrance gate, side fence...">
+      </div>
+      <div id="qrPreview" style="display:none;text-align:center;padding:20px;background:var(--bg-body);border-radius:10px;border:1px dashed var(--border-color);margin-bottom:0;">
+        <div class="qr-display" id="qrDisplay" style="margin-bottom:12px;"></div>
+        <div style="font-size:13px;font-weight:700;color:var(--text-primary);" id="qrLabel"></div>
+        <div style="font-size:11px;color:var(--text-tertiary);" id="qrIdLabel"></div>
+      </div>
+    </div>
+    <div class="modal-footer-custom">
+      <button class="btn-outline-custom" onclick="closeModal('qrModal')">Cancel</button>
+      <button class="btn-outline-custom" onclick="generateQRPreview()"><i class="bi bi-eye me-1"></i>Preview</button>
+      <button class="btn-primary-custom" onclick="generateAndSaveQR()"><i class="bi bi-qr-code me-1"></i>Generate & Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manager Detail Modal -->
+<div class="modal-backdrop-custom" id="managerModal">
+  <div class="modal-content-custom" style="max-width:720px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="mgrModalTitle">Manager Details</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;" id="mgrModalSub"></p></div>
+      <button class="modal-close" onclick="closeModal('managerModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="mgrModalBody"></div>
+  </div>
+</div>
+
+<!-- Worker Detail Modal -->
+<div class="modal-backdrop-custom" id="workerModal">
+  <div class="modal-content-custom" style="max-width:600px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="wrkModalTitle">Worker Details</h4></div>
+      <button class="modal-close" onclick="closeModal('workerModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="wrkModalBody"></div>
+  </div>
+</div>
+
+<!-- Check-In Simulation Modal -->
+<div class="modal-backdrop-custom" id="checkinModal">
+  <div class="modal-content-custom" style="max-width:480px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;"><i class="bi bi-geo-alt me-2" style="color:var(--success);"></i>GPS Check-In Simulation</h4></div>
+      <button class="modal-close" onclick="closeModal('checkinModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="checkinBody"></div>
+  </div>
+</div>
+
+<!-- QR Print Modal -->
+<div class="modal-backdrop-custom" id="qrPrintModal">
+  <div class="modal-content-custom" style="max-width:500px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;"><i class="bi bi-printer me-2"></i>Print QR Code</h4></div>
+      <button class="modal-close" onclick="closeModal('qrPrintModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="qrPrintBody"></div>
+    <div class="modal-footer-custom">
+      <button class="btn-outline-custom" onclick="closeModal('qrPrintModal')">Close</button>
+      <button class="btn-primary-custom" onclick="doPrintQR()"><i class="bi bi-printer me-1"></i>Send to Printer</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+const managers = [
+  { id:1, name:"Amrit Singh", avatar:"AS", phone:"0433 456 789", color:"var(--primary)", online:true, projects:3, sites:["Penrith","Parramatta","Hornsby"], onTime:92, hours:156, milestones:"12/20", rating:4.5, workers:12, joinDate:"2022-03-15", totalMilestones:20, completedMilestones:12 },
+  { id:2, name:"Deepak Sharma", avatar:"DS", phone:"0422 567 890", color:"var(--info)", online:true, projects:2, sites:["Castle Hill","Chatswood"], onTime:88, hours:132, milestones:"7/18", rating:4.2, workers:8, joinDate:"2023-01-10", totalMilestones:18, completedMilestones:7 },
+  { id:3, name:"Gurpreet Mann", avatar:"GM", phone:"0411 678 901", color:"var(--success)", online:true, projects:4, sites:["Blacktown","Auburn","Liverpool","Penrith"], onTime:95, hours:168, milestones:"15/40", rating:4.8, workers:16, joinDate:"2021-08-20", totalMilestones:40, completedMilestones:15 },
+  { id:4, name:"Jasbir Kaur", avatar:"JK", phone:"0444 789 012", color:"var(--purple)", online:true, projects:3, sites:["Liverpool","Blacktown","Ryde"], onTime:90, hours:144, milestones:"9/30", rating:4.3, workers:10, joinDate:"2023-06-01", totalMilestones:30, completedMilestones:9 },
+  { id:5, name:"Ravinder Pal", avatar:"RP", phone:"0455 890 123", color:"var(--accent)", online:false, projects:1, sites:["Ryde"], onTime:97, hours:72, milestones:"5/10", rating:4.9, workers:4, joinDate:"2024-02-15", totalMilestones:10, completedMilestones:5 },
+  { id:6, name:"Harjot Bassi", avatar:"HB", phone:"0466 901 234", color:"var(--warning)", online:true, projects:1, sites:["Hornsby"], onTime:85, hours:68, milestones:"4/10", rating:3.9, workers:6, joinDate:"2024-09-01", totalMilestones:10, completedMilestones:4 },
+];
+
+const workers = [
+  { id:1, name:"Gurmeet Singh", trade:"Carpenter", site:"Penrith", manager:"Amrit Singh", checkIn:"6:45 AM", checkOut:"2:45 PM", hours:8.0, gps:true, status:"on-site", rate:40 },
+  { id:2, name:"Harpreet Gill", trade:"Carpenter", site:"Penrith", manager:"Amrit Singh", checkIn:"6:50 AM", checkOut:"2:50 PM", hours:8.0, gps:true, status:"on-site", rate:40 },
+  { id:3, name:"Jatinder Sidhu", trade:"Electrician", site:"Penrith", manager:"Amrit Singh", checkIn:"7:05 AM", checkOut:null, hours:7.5, gps:true, status:"on-site", rate:50 },
+  { id:4, name:"Manjit Brar Jr", trade:"Labourer", site:"Penrith", manager:"Amrit Singh", checkIn:"6:30 AM", checkOut:"2:30 PM", hours:8.0, gps:true, status:"checked-out", rate:30 },
+  { id:5, name:"Sandeep Gill", trade:"Bricklayer", site:"Blacktown", manager:"Gurpreet Mann", checkIn:"6:40 AM", checkOut:null, hours:7.8, gps:true, status:"on-site", rate:45 },
+  { id:6, name:"Raj Brar", trade:"Bricklayer", site:"Parramatta", manager:"Amrit Singh", checkIn:"6:35 AM", checkOut:null, hours:7.9, gps:true, status:"on-site", rate:45 },
+  { id:7, name:"Hardeep Johal", trade:"Carpenter", site:"Liverpool", manager:"Jasbir Kaur", checkIn:"6:50 AM", checkOut:null, hours:7.6, gps:true, status:"on-site", rate:40 },
+  { id:8, name:"Navdeep Sandhu", trade:"Labourer", site:"Chatswood", manager:"Deepak Sharma", checkIn:"7:00 AM", checkOut:"3:00 PM", hours:8.0, gps:true, status:"checked-out", rate:30 },
+  { id:9, name:"Baljit Kaur", trade:"Plumber", site:"Castle Hill", manager:"Deepak Sharma", checkIn:"6:55 AM", checkOut:null, hours:7.4, gps:true, status:"on-site", rate:48 },
+  { id:10, name:"Sukhdev Sharma", trade:"Labourer", site:"Blacktown", manager:"Gurpreet Mann", checkIn:"6:30 AM", checkOut:null, hours:7.9, gps:true, status:"on-site", rate:30 },
+  { id:11, name:"Gurinder Pal", trade:"Electrician", site:"Blacktown", manager:"Gurpreet Mann", checkIn:"7:10 AM", checkOut:null, hours:7.2, gps:true, status:"on-site", rate:50 },
+  { id:12, name:"Amarjit Dhillon", trade:"Carpenter", site:"Auburn", manager:"Gurpreet Mann", checkIn:"6:45 AM", checkOut:null, hours:7.7, gps:true, status:"on-site", rate:40 },
+  { id:13, name:"Jaswinder Takhar", trade:"Labourer", site:"Liverpool", manager:"Jasbir Kaur", checkIn:"6:40 AM", checkOut:null, hours:7.8, gps:false, status:"no-gps", rate:30 },
+  { id:14, name:"Parwinder Kaur", trade:"Plasterer", site:"Parramatta", manager:"Amrit Singh", checkIn:"6:50 AM", checkOut:null, hours:7.5, gps:true, status:"on-site", rate:44 },
+  { id:15, name:"Kuldeep Singh", trade:"Bricklayer", site:"Ryde", manager:"Ravinder Pal", checkIn:"7:00 AM", checkOut:"3:00 PM", hours:8.0, gps:true, status:"checked-out", rate:45 },
+  { id:16, name:"Mandeep Grewal", trade:"Labourer", site:"Ryde", manager:"Ravinder Pal", checkIn:"6:45 AM", checkOut:null, hours:7.6, gps:true, status:"on-site", rate:30 },
+  { id:17, name:"Harpal Sandhu", trade:"Carpenter", site:"Hornsby", manager:"Harjot Bassi", checkIn:"7:00 AM", checkOut:null, hours:7.3, gps:true, status:"on-site", rate:40 },
+  { id:18, name:"Ranjit Dhillon", trade:"Electrician", site:"Hornsby", manager:"Harjot Bassi", checkIn:"7:15 AM", checkOut:null, hours:7.0, gps:true, status:"on-site", rate:50 },
+  { id:19, name:"Paramjit Bhatia", trade:"Labourer", site:"Hornsby", manager:"Harjot Bassi", checkIn:"6:35 AM", checkOut:"2:35 PM", hours:8.0, gps:true, status:"checked-out", rate:30 },
+  { id:20, name:"Baljinder Mann", trade:"Plumber", site:"Hornsby", manager:"Harjot Bassi", checkIn:"6:50 AM", checkOut:null, hours:7.4, gps:false, status:"no-gps", rate:48 },
+];
+
+const qrCodes = [
+  { id:"QR-PEN-001", site:"Penrith Residence", manager:"Amrit Singh", generated:"15 Sep 2025", scansToday:8, totalScans:342, active:true },
+  { id:"QR-CH-002", site:"Castle Hill Villa", manager:"Deepak Sharma", generated:"01 Nov 2025", scansToday:3, totalScans:98, active:true },
+  { id:"QR-BT-003", site:"Blacktown Duplex", manager:"Gurpreet Mann", generated:"01 Dec 2025", scansToday:10, totalScans:456, active:true },
+  { id:"QR-PAR-004", site:"Parramatta Home", manager:"Amrit Singh", generated:"15 Aug 2025", scansToday:12, totalScans:520, active:true },
+  { id:"QR-LIV-005", site:"Liverpool Estate", manager:"Jasbir Kaur", generated:"01 Nov 2025", scansToday:6, totalScans:178, active:true },
+  { id:"QR-CHA-006", site:"Chatswood Apartment", manager:"Deepak Sharma", generated:"15 Oct 2025", scansToday:2, totalScans:67, active:true },
+  { id:"QR-HOR-007", site:"Hornsby New Build", manager:"Harjot Bassi", generated:"20 Dec 2025", scansToday:5, totalScans:85, active:true },
+  { id:"QR-AUB-008", site:"Auburn Residence", manager:"Gurpreet Mann", generated:"05 Jan 2026", scansToday:4, totalScans:42, active:true },
+  { id:"QR-RYD-009", site:"Ryde Extension", manager:"Ravinder Pal", generated:"10 Jan 2026", scansToday:3, totalScans:31, active:true },
+  { id:"QR-KEL-010", site:"Kellyville Project", manager:"Gurpreet Mann", generated:"12 Jan 2026", scansToday:0, totalScans:0, active:false },
+  { id:"QR-MD-011", site:"Mount Druitt Home", manager:"Jasbir Kaur", generated:"14 Jan 2026", scansToday:0, totalScans:0, active:false },
+  { id:"QR-WM-012", site:"Westmead Dual Occ", manager:"Amrit Singh", generated:"15 Jan 2026", scansToday:0, totalScans:0, active:false },
+  { id:"QR-WV-013", site:"Wentworthville Reno", manager:"Deepak Sharma", generated:"16 Jan 2026", scansToday:0, totalScans:0, active:false },
+  { id:"QR-QH-014", site:"Quakers Hill Dev", manager:"Jasbir Kaur", generated:"17 Jan 2026", scansToday:0, totalScans:0, active:false },
+];
+
+const mapSites = [
+  { name:"Penrith Residence", x:15, y:55, workers:8, color:"var(--primary)" },
+  { name:"Castle Hill Villa", x:55, y:18, workers:3, color:"var(--info)" },
+  { name:"Blacktown Duplex", x:35, y:40, workers:10, color:"var(--success)" },
+  { name:"Parramatta Home", x:48, y:38, workers:12, color:"var(--accent)" },
+  { name:"Liverpool Estate", x:22, y:72, workers:6, color:"var(--purple)" },
+  { name:"Chatswood Apartment", x:78, y:22, workers:2, color:"var(--warning)" },
+  { name:"Hornsby New Build", x:80, y:12, workers:6, color:"var(--danger)" },
+  { name:"Auburn Residence", x:42, y:52, workers:4, color:"#0D9488" },
+  { name:"Ryde Extension", x:68, y:32, workers:4, color:"#7C3AED" },
+  { name:"Kellyville Project", x:52, y:15, workers:0, color:"#94A3B8" },
+  { name:"Mount Druitt Home", x:12, y:65, workers:0, color:"#94A3B8" },
+  { name:"Westmead Dual Occ", x:45, y:42, workers:0, color:"#94A3B8" },
+  { name:"Wentworthville Reno", x:38, y:48, workers:0, color:"#94A3B8" },
+  { name:"Quakers Hill Dev", x:28, y:50, workers:0, color:"#94A3B8" },
+];
+
+const notifications = [
+  { id:1, icon:"bi-geo-alt-fill", bg:"var(--success-light)", color:"var(--success)", msg:"Jaswinder Takhar checked in WITHOUT GPS verification — Liverpool site", time:"Just now", unread:true },
+  { id:2, icon:"bi-exclamation-triangle", bg:"var(--danger-light)", color:"var(--danger)", msg:"Baljinder Mann — GPS not detected at Hornsby site (2nd time this week)", time:"5 min ago", unread:true },
+  { id:3, icon:"bi-clock", bg:"var(--warning-light)", color:"#D97706", msg:"Kuldeep Singh checked out from Ryde — 8.0 hrs logged, billable $360", time:"12 min ago", unread:true },
+];
+
+let perfChartsInit = false;
+
+// ══════════════════════════════════════
+// LIVE CLOCK
+// ══════════════════════════════════════
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('liveClock').innerHTML = `<span>${h}:${m}:${s}</span> AEST`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ══════════════════════════════════════
+// ANIMATED COUNTERS
+// ══════════════════════════════════════
+function animateCounters() {
+  document.querySelectorAll('.stat-value[data-count]').forEach(el => {
+    const target = parseInt(el.dataset.count);
+    const prefix = el.dataset.prefix || '';
+    const divide = parseFloat(el.dataset.divide) || 1;
+    const duration = 1200;
+    const start = performance.now();
+    function step(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(eased * target);
+      el.textContent = prefix + (divide > 1 ? (current / divide).toFixed(1) : current.toLocaleString());
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+// ══════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════
+function showToast(msg, type='info') {
+  const container = document.getElementById('toastContainer');
+  const colors = { success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'}, danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'}, info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'}, warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'} };
+  const c = colors[type] || colors.info;
+  const toast = document.createElement('div');
+  toast.className = 'toast-item';
+  toast.innerHTML = `<div class="toast-icon" style="background:${c.bg};color:${c.color};"><i class="bi ${c.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;
+  container.appendChild(toast);
+  setTimeout(() => removeToast(toast), 4500);
+}
+function removeToast(el) { if (!el || !el.parentElement) return; el.classList.add('removing'); setTimeout(() => el.remove(), 250); }
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+let notifs = JSON.parse(JSON.stringify(notifications));
+function renderNotifs() {
+  const list = document.getElementById('notifList');
+  const unreadCount = notifs.filter(n => n.unread).length;
+  const badge = document.getElementById('notifCount');
+  badge.textContent = unreadCount;
+  badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+  list.innerHTML = notifs.map(n => `
+    <div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})">
+      <div class="notif-icon" style="background:${n.bg};color:${n.color};"><i class="bi ${n.icon}"></i></div>
+      <div class="notif-text"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div>
+      <button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button>
+    </div>
+  `).join('');
+}
+function toggleNotif() { document.getElementById('notifDrop').classList.toggle('show'); }
+document.addEventListener('click', e => { const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn'); if(d&&!d.contains(e.target)&&!b.contains(e.target)) d.classList.remove('show'); });
+function readNotif(id) { const n=notifs.find(x=>x.id===id); if(n&&n.unread){n.unread=false;renderNotifs();} showToast('Opening notification...','info'); }
+function dismissNotif(id) { const el=document.querySelector(`.notification-item[data-id="${id}"]`); if(el){el.classList.add('dismissing');setTimeout(()=>{notifs=notifs.filter(x=>x.id!==id);renderNotifs();},250);} }
+function markAllRead() { notifs.forEach(n=>n.unread=false); renderNotifs(); showToast('All notifications marked as read','success'); }
+
+// ══════════════════════════════════════
+// TABS
+// ══════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + tab));
+  if (tab === 'performance' && !perfChartsInit) { setTimeout(initPerfCharts, 100); perfChartsInit = true; }
+  if (tab === 'gpsmap') renderMap();
+  if (tab === 'billing') renderBilling();
+}
+
+// ══════════════════════════════════════
+// MANAGER CARDS
+// ══════════════════════════════════════
+function renderManagers() {
+  document.getElementById('managerGrid').innerHTML = managers.map(m => {
+    const stars = '&#9733;'.repeat(Math.floor(m.rating)) + (m.rating % 1 >= 0.5 ? '&#9734;' : '');
+    const onTimeColor = m.onTime >= 95 ? 'var(--success)' : m.onTime >= 88 ? '#D97706' : 'var(--danger)';
+    return `
+    <div class="col-xl-4 col-lg-6 col-md-6">
+      <div class="manager-card" onclick="openManagerModal(${m.id})">
+        <div class="manager-status-dot ${m.online?'online':'offline'}"></div>
+        <div class="d-flex align-items-start gap-3 mb-3">
+          <div class="manager-avatar" style="background:${m.color};">${m.avatar}</div>
+          <div style="flex:1;min-width:0;">
+            <h5 style="font-size:14px;font-weight:700;margin:0;">${m.name}</h5>
+            <div style="font-size:11px;color:var(--text-tertiary);">${m.phone}</div>
+            <div style="font-size:11px;color:${m.online?'var(--success)':'var(--text-tertiary)'};font-weight:600;margin-top:1px;">${m.online?'<i class="bi bi-circle-fill me-1" style="font-size:6px;"></i>Online':'Offline'}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div style="background:var(--bg-body);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Projects</div>
+            <div style="font-size:15px;font-weight:800;">${m.projects}</div>
+          </div>
+          <div style="background:var(--bg-body);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Workers</div>
+            <div style="font-size:15px;font-weight:800;">${m.workers}</div>
+          </div>
+          <div style="background:var(--bg-body);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;">On-Time</div>
+            <div style="font-size:15px;font-weight:800;color:${onTimeColor};">${m.onTime}%</div>
+          </div>
+          <div style="background:var(--bg-body);border-radius:8px;padding:8px 10px;">
+            <div style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;">Hrs/Wk</div>
+            <div style="font-size:15px;font-weight:800;">${m.hours}</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:11px;color:var(--text-tertiary);">Sites: ${m.sites.join(', ')}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div class="progress-bar-custom" style="width:80px;"><div class="progress-fill-custom" style="width:${(m.completedMilestones/m.totalMilestones)*100}%;background:${m.color};"></div></div>
+            <span style="font-size:11px;font-weight:600;">${m.milestones}</span>
+          </div>
+          <span style="color:var(--warning);font-size:11px;letter-spacing:1px;">${stars}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openManagerModal(id) {
+  const m = managers.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('mgrModalTitle').textContent = m.name;
+  document.getElementById('mgrModalSub').textContent = 'Site Manager since ' + m.joinDate;
+  const onTimeColor = m.onTime >= 95 ? 'var(--success)' : m.onTime >= 88 ? '#D97706' : 'var(--danger)';
+  const mgrWorkers = workers.filter(w => w.manager === m.name);
+  const onSiteCount = mgrWorkers.filter(w => w.status === 'on-site').length;
+  const gpsIssueCount = mgrWorkers.filter(w => !w.gps).length;
+  document.getElementById('mgrModalBody').innerHTML = `
+    <div class="detail-grid" style="margin-bottom:20px;">
+      <div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${m.phone}</div></div>
+      <div class="detail-item"><div class="detail-label">Status</div><div class="detail-value" style="color:${m.online?'var(--success)':'var(--text-tertiary)'};">${m.online?'<i class="bi bi-circle-fill me-1" style="font-size:6px;"></i>Online':'Offline'}</div></div>
+      <div class="detail-item"><div class="detail-label">Projects</div><div class="detail-value">${m.projects}</div></div>
+      <div class="detail-item"><div class="detail-label">Workers</div><div class="detail-value">${m.workers} <span style="font-size:11px;color:var(--success);">(${onSiteCount} on-site)</span></div></div>
+      <div class="detail-item"><div class="detail-label">Sites</div><div class="detail-value">${m.sites.join(', ')}</div></div>
+      <div class="detail-item"><div class="detail-label">Hours/Week</div><div class="detail-value">${m.hours} hrs</div></div>
+      <div class="detail-item"><div class="detail-label">On-Time Rate</div><div class="detail-value" style="color:${onTimeColor};">${m.onTime}%</div></div>
+      <div class="detail-item"><div class="detail-label">Rating</div><div class="detail-value" style="color:var(--warning);">&#9733; ${m.rating} / 5.0</div></div>
+    </div>
+    ${gpsIssueCount > 0 ? `<div style="padding:10px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--danger);"><i class="bi bi-exclamation-triangle me-1"></i> ${gpsIssueCount} worker(s) have GPS issues — review required</div>` : ''}
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:12px;font-weight:600;">Milestone Progress</span>
+        <span style="font-size:12px;font-weight:700;color:var(--primary);">${m.completedMilestones} / ${m.totalMilestones} (${Math.round((m.completedMilestones/m.totalMilestones)*100)}%)</span>
+      </div>
+      <div class="progress-bar-custom" style="height:10px;"><div class="progress-fill-custom" style="width:${(m.completedMilestones/m.totalMilestones)*100}%;background:${m.color};"></div></div>
+    </div>
+    <div style="margin-bottom:0;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">Assigned Workers</div>
+      <div style="max-height:160px;overflow-y:auto;">
+        <table class="table-custom" style="font-size:12px;">
+          <thead><tr><th>Name</th><th>Trade</th><th>Site</th><th>Status</th><th>GPS</th></tr></thead>
+          <tbody>${mgrWorkers.map(w => `<tr><td style="font-weight:600;">${w.name}</td><td>${w.trade}</td><td>${w.site}</td><td><span class="worker-live-indicator ${w.status}"></span>${w.status==='on-site'?'On Site':w.status==='checked-out'?'Left':'No GPS'}</td><td>${w.gps?'<span class="status-pill pill-success" style="font-size:9px;"><i class="bi bi-geo me-1"></i>OK</span>':'<span class="status-pill pill-danger" style="font-size:9px;"><i class="bi bi-geo-alt me-1"></i>FAIL</span>'}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-primary-custom" onclick="showToast('Calling ${m.name} at ${m.phone}...','info');closeModal('managerModal')"><i class="bi bi-telephone me-1"></i>Call Manager</button>
+      <button class="btn-outline-custom" onclick="showToast('Opening ${m.name}\\'s full performance report...','info')"><i class="bi bi-bar-chart me-1"></i>Full Report</button>
+      <button class="btn-outline-custom" onclick="showToast('Messaging ${m.name}...','info')"><i class="bi bi-chat-dots me-1"></i>Message</button>
+    </div>
+  `;
+  document.getElementById('managerModal').classList.add('show');
+}
+
+// ══════════════════════════════════════
+// WORKERS TABLE
+// ══════════════════════════════════════
+function renderWorkers() {
+  const siteFilter = document.getElementById('workerSiteFilter').value;
+  const statusFilter = document.getElementById('workerStatusFilter').value;
+  const search = document.getElementById('workerSearch').value.toLowerCase().trim();
+  let filtered = workers.filter(w => {
+    if (siteFilter !== 'all' && w.site !== siteFilter) return false;
+    if (statusFilter !== 'all' && w.status !== statusFilter) return false;
+    if (search && !w.name.toLowerCase().includes(search) && !w.trade.toLowerCase().includes(search) && !w.site.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const body = document.getElementById('workerBody');
+  const noRes = document.getElementById('workerNoResults');
+  if (filtered.length === 0) { body.innerHTML = ''; noRes.style.display = 'block'; document.getElementById('workerSummary').textContent = 'No workers found'; return; }
+  noRes.style.display = 'none';
+  const onSite = filtered.filter(w => w.status === 'on-site').length;
+  const totalBillable = filtered.reduce((s, w) => s + (w.hours * w.rate), 0);
+  document.getElementById('workerSummary').textContent = `Showing ${filtered.length} workers — ${onSite} on-site, $${totalBillable.toLocaleString()} billable today`;
+  body.innerHTML = filtered.map(w => {
+    const billable = w.hours * w.rate;
+    return `<tr onclick="openWorkerModal(${w.id})">
+      <td><span class="worker-live-indicator ${w.status}"></span></td>
+      <td><b style="font-size:13px;">${w.name}</b></td>
+      <td style="font-size:12px;color:var(--text-secondary);">${w.trade}</td>
+      <td style="font-size:12px;">${w.site}</td>
+      <td style="font-size:12px;color:var(--text-tertiary);">${w.manager.split(' ')[0]}</td>
+      <td style="font-size:12px;font-weight:600;">${w.checkIn}</td>
+      <td style="font-size:12px;font-weight:500;color:${w.checkOut?'var(--text-secondary)':'var(--success)'};">${w.checkOut || '<span style="font-size:10px;background:var(--success-light);color:var(--success);padding:2px 6px;border-radius:4px;">LIVE</span>'}</td>
+      <td style="font-weight:600;">${w.hours}${w.checkOut?'':'+'}</td>
+      <td>${w.gps ? '<span class="status-pill pill-success" style="font-size:9px;"><i class="bi bi-geo me-1"></i>Yes</span>' : '<span class="status-pill pill-danger" style="font-size:9px;"><i class="bi bi-geo-alt me-1"></i>No</span>'}</td>
+      <td style="font-size:12px;">$${w.rate}/hr</td>
+      <td style="font-weight:700;color:var(--primary);">$${billable.toFixed(2)}</td>
+      <td>
+        <div style="display:flex;gap:4px;">
+          ${w.status === 'on-site' ? `<button class="btn-icon" style="width:28px;height:28px;font-size:12px;" onclick="event.stopPropagation();checkoutWorker(${w.id})" title="Check Out"><i class="bi bi-box-arrow-right"></i></button>` : ''}
+          ${!w.gps ? `<button class="btn-icon" style="width:28px;height:28px;font-size:12px;border-color:var(--danger);color:var(--danger);" onclick="event.stopPropagation();flagGPS(${w.id})" title="Flag GPS Issue"><i class="bi bi-flag"></i></button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openWorkerModal(id) {
+  const w = workers.find(x => x.id === id);
+  if (!w) return;
+  document.getElementById('wrkModalTitle').textContent = w.name;
+  const billable = w.hours * w.rate;
+  document.getElementById('wrkModalBody').innerHTML = `
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-item"><div class="detail-label">Trade</div><div class="detail-value">${w.trade}</div></div>
+      <div class="detail-item"><div class="detail-label">Hourly Rate</div><div class="detail-value" style="color:var(--primary);">$${w.rate}/hr</div></div>
+      <div class="detail-item"><div class="detail-label">Site</div><div class="detail-value">${w.site}</div></div>
+      <div class="detail-item"><div class="detail-label">Manager</div><div class="detail-value">${w.manager}</div></div>
+      <div class="detail-item"><div class="detail-label">Check-In</div><div class="detail-value">${w.checkIn}</div></div>
+      <div class="detail-item"><div class="detail-label">Check-Out</div><div class="detail-value">${w.checkOut || 'Still on site'}</div></div>
+      <div class="detail-item"><div class="detail-label">Hours Today</div><div class="detail-value" style="font-weight:800;">${w.hours} hrs</div></div>
+      <div class="detail-item"><div class="detail-label">Billable Today</div><div class="detail-value" style="color:var(--primary);font-weight:800;">$${billable.toFixed(2)}</div></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="detail-label" style="margin-bottom:6px;">GPS Verification</div>
+      ${w.gps ? `<div style="padding:10px 14px;background:var(--success-light);border:1px solid rgba(22,163,74,.15);border-radius:8px;font-size:12px;color:var(--success);"><i class="bi bi-geo-alt-fill me-1"></i> GPS verified at check-in — Location matched site perimeter (${w.site})</div>` : `<div style="padding:10px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;font-size:12px;color:var(--danger);"><i class="bi bi-geo-alt me-1"></i> GPS NOT verified — Worker was outside site perimeter or GPS disabled. Manual review needed.</div>`}
+    </div>
+    <div style="margin-bottom:0;">
+      <div class="detail-label" style="margin-bottom:6px;">This Week's History</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">
+        ${['Mon','Tue','Wed','Thu','Fri'].map((d,i) => {
+          const hrs = i < 4 ? (7 + Math.random()*1.2).toFixed(1) : w.hours.toFixed(1);
+          const isToday = i === 4;
+          return `<div style="text-align:center;padding:8px;background:${isToday?'var(--primary-glow)':'var(--bg-body)'};border-radius:8px;${isToday?'border:1px solid rgba(13,148,136,.2);':''}">
+            <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">${d}</div>
+            <div style="font-size:14px;font-weight:700;color:${isToday?'var(--primary)':'var(--text-primary)'};">${hrs}</div>
+            <div style="font-size:9px;color:var(--text-tertiary);">hrs</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;">
+      ${w.status === 'on-site' ? `<button class="btn-danger-custom" onclick="checkoutWorker(${w.id});closeModal('workerModal')"><i class="bi bi-box-arrow-right me-1"></i>Check Out Now</button>` : ''}
+      <button class="btn-outline-custom" onclick="showToast('Opening full attendance history for ${w.name}...','info')"><i class="bi bi-clock-history me-1"></i>Full History</button>
+      ${!w.gps ? `<button class="btn-outline-custom" style="border-color:var(--danger);color:var(--danger);" onclick="flagGPS(${w.id});closeModal('workerModal')"><i class="bi bi-flag me-1"></i>Flag GPS Issue</button>` : ''}
+    </div>
+  `;
+  document.getElementById('workerModal').classList.add('show');
+}
+
+function checkoutWorker(id) {
+  const w = workers.find(x => x.id === id);
+  if (!w || w.status !== 'on-site') return;
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  w.checkOut = `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+  w.status = 'checked-out';
+  w.hours = parseFloat((w.hours + 0.1).toFixed(1));
+  renderWorkers();
+  showToast(`${w.name} checked out at ${w.checkOut} — ${w.hours} hrs logged, $${(w.hours*w.rate).toFixed(2)} billable`, 'success');
+}
+
+function flagGPS(id) {
+  const w = workers.find(x => x.id === id);
+  if (!w) return;
+  showToast(`GPS issue flagged for ${w.name} at ${w.site} — notification sent to ${w.manager}`, 'danger');
+}
+
+function simulateCheckin() {
+  const names = ["Iqbal Singh","Balwinder Kaur","Daljit Sandhu","Gurmail Mann","Sukhwant Dhillon"];
+  const trades = ["Carpenter","Labourer","Electrician","Bricklayer","Plumber"];
+  const sites = ["Penrith","Blacktown","Parramatta","Liverpool","Castle Hill"];
+  const mgrs = ["Amrit Singh","Gurpreet Mann","Amrit Singh","Jasbir Kaur","Deepak Sharma"];
+  const idx = Math.floor(Math.random()*5);
+  const now = new Date();
+  const h = 6 + Math.floor(Math.random()*2);
+  const m = Math.floor(Math.random()*30);
+  const name = names[idx];
+  const existing = workers.find(w => w.name === name);
+  if (existing) { existing.status = 'on-site'; existing.checkIn = `${h}:${String(m).padStart(2,'0')} AM`; existing.checkOut = null; existing.gps = true; renderWorkers(); }
+  else {
+    const newW = { id:workers.length+1, name, trade:trades[idx], site:sites[idx], manager:mgrs[idx], checkIn:`${h}:${String(m).padStart(2,'0')} AM`, checkOut:null, hours:0, gps:true, status:'on-site', rate:[40,30,50,45,48][idx] };
+    workers.push(newW);
+    renderWorkers();
+  }
+  const gpsLat = (-33.8 + Math.random()*0.1).toFixed(4);
+  const gpsLng = (151.0 + Math.random()*0.1).toFixed(4);
+  document.getElementById('checkinBody').innerHTML = `
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="width:64px;height:64px;border-radius:50%;background:var(--success-light);color:var(--success);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px;"><i class="bi bi-geo-alt-fill"></i></div>
+      <h5 style="font-size:15px;font-weight:700;margin:0;">Check-In Successful</h5>
+      <p style="font-size:12px;color:var(--text-tertiary);margin:4px 0 0;">GPS Verified at ${sites[idx]} site</p>
+    </div>
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div class="detail-item"><div class="detail-label">Worker</div><div class="detail-value">${name}</div></div>
+      <div class="detail-item"><div class="detail-label">Trade</div><div class="detail-value">${trades[idx]}</div></div>
+      <div class="detail-item"><div class="detail-label">Site</div><div class="detail-value">${sites[idx]}</div></div>
+      <div class="detail-item"><div class="detail-label">Time</div><div class="detail-value">${h}:${String(m).padStart(2,'0')} AM</div></div>
+      <div class="detail-item"><div class="detail-label">GPS Coordinates</div><div class="detail-value" style="font-size:11px;">${gpsLat}, ${gpsLng}</div></div>
+      <div class="detail-item"><div class="detail-label">GPS Status</div><div class="detail-value" style="color:var(--success);"><i class="bi bi-check-circle me-1"></i>Within Perimeter</div></div>
+    </div>
+    <div style="padding:10px 14px;background:var(--success-light);border:1px solid rgba(22,163,74,.15);border-radius:8px;font-size:12px;color:var(--success);text-align:center;"><i class="bi bi-shield-check me-1"></i> Location verified within 50m of site QR code placement</div>
+  `;
+  document.getElementById('checkinModal').classList.add('show');
+  showToast(`${name} checked in at ${sites[idx]} — GPS verified`, 'success');
+}
+
+function simulateCheckout() {
+  const onSite = workers.filter(w => w.status === 'on-site');
+  if (onSite.length === 0) { showToast('No workers currently on-site to check out', 'warning'); return; }
+  const w = onSite[Math.floor(Math.random() * onSite.length)];
+  checkoutWorker(w.id);
+}
+
+// ══════════════════════════════════════
+// QR CODES
+// ══════════════════════════════════════
+function generateQRPattern(seed) {
+  let cells = [];
+  for (let i = 0; i < 225; i++) {
+    const row = Math.floor(i / 15), col = i % 15;
+    const isFinder = (row < 3 && col < 3) || (row < 3 && col > 11) || (row > 11 && col < 3);
+    const isFinderBorder = isFinder && ((row === 0 || row === 2 || col === 0 || col === 2 || (row === 1 && col === 1) || (row >= 12 && row <= 14 && col >= 12 && col <= 14 && row !== 13 && col !== 13) || (row === 13 && col === 13)));
+    if (isFinderBorder || (isFinder && row === 1 && col === 1) || (row >= 12 && row <= 14 && col >= 12 && col <= 14 && (row === 13 && col === 13))) { cells.push(true); }
+    else if (isFinder) { cells.push(false); }
+    else { cells.push(((seed * (i + 1) * 7 + 13) % 5) < 2); }
+  }
+  return cells;
+}
+
+function renderQRHTML(seed, size) {
+  const cells = generateQRPattern(seed);
+  return `<div class="qr-grid" style="width:${size}px;height:${size}px;">${cells.map(c => `<div class="qr-cell${c?'':' white'}"></div>`).join('')}</div>`;
+}
+
+function renderQRCodes() {
+  const search = document.getElementById('qrSearch').value.toLowerCase().trim();
+  const filtered = qrCodes.filter(q => !search || q.site.toLowerCase().includes(search) || q.id.toLowerCase().includes(search) || q.manager.toLowerCase().includes(search));
+  document.getElementById('qrBody').innerHTML = filtered.map(q => `
+    <tr onclick="openQRPrint(${qrCodes.indexOf(q)})">
+      <td><b style="font-size:13px;">${q.site}</b></td>
+      <td><div style="width:36px;height:36px;border:2px solid var(--border-color);border-radius:6px;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;background:white;">${renderQRHTML(q.id.charCodeAt(3)*100+q.id.charCodeAt(4)*10+q.id.charCodeAt(5), 32)}</div></td>
+      <td><code style="font-size:11px;background:var(--bg-body);padding:3px 8px;border-radius:4px;">${q.id}</code></td>
+      <td style="font-size:12px;">${q.manager}</td>
+      <td style="font-size:12px;color:var(--text-tertiary);">${q.generated}</td>
+      <td style="font-weight:700;color:${q.scansToday>0?'var(--primary)':'var(--text-tertiary)'};">${q.scansToday}</td>
+      <td style="font-weight:600;">${q.totalScans}</td>
+      <td>${q.active ? '<span class="status-pill pill-success"><i class="bi bi-circle-fill me-1" style="font-size:6px;"></i>Active</span>' : '<span class="status-pill pill-gray"><i class="bi bi-circle me-1" style="font-size:6px;"></span>Inactive</span>'}</td>
+      <td>
+        <div style="display:flex;gap:4px;" onclick="event.stopPropagation();">
+          <button class="btn-icon" style="width:28px;height:28px;font-size:12px;" onclick="openQRPrint(${qrCodes.indexOf(q)})" title="Print"><i class="bi bi-printer"></i></button>
+          <button class="btn-icon" style="width:28px;height:28px;font-size:12px;" onclick="toggleQR(${qrCodes.indexOf(q)})" title="${q.active?'Deactivate':'Activate'}"><i class="bi bi-${q.active?'pause':'play'}"></i></button>
+          <button class="btn-icon" style="width:28px;height:28px;font-size:12px;border-color:var(--danger);color:var(--danger);" onclick="deleteQR(${qrCodes.indexOf(q)})" title="Delete"><i class="bi bi-trash"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function toggleQR(idx) {
+  qrCodes[idx].active = !qrCodes[idx].active;
+  renderQRCodes();
+  showToast(`${qrCodes[idx].site} QR ${qrCodes[idx].active ? 'activated' : 'deactivated'}`, qrCodes[idx].active ? 'success' : 'warning');
+}
+
+function deleteQR(idx) {
+  const name = qrCodes[idx].site;
+  qrCodes.splice(idx, 1);
+  renderQRCodes();
+  showToast(`${name} QR code deleted`, 'danger');
+}
+
+function openQRModal() { document.getElementById('qrPreview').style.display = 'none'; document.getElementById('qrSiteSelect').value = ''; document.getElementById('qrManagerSelect').value = ''; document.getElementById('qrNotes').value = ''; document.getElementById('qrModal').classList.add('show'); }
+
+function generateQRPreview() {
+  const site = document.getElementById('qrSiteSelect').value;
+  const mgr = document.getElementById('qrManagerSelect').value;
+  if (!site) { showToast('Please select a site first', 'warning'); return; }
+  const seed = site.split('').reduce((a,c) => a + c.charCodeAt(0), 0) * 137;
+  const id = 'QR-' + site.substring(0,3).toUpperCase().replace(/\s/g,'') + '-' + String(qrCodes.length + 1).padStart(3,'0');
+  document.getElementById('qrDisplay').innerHTML = renderQRHTML(seed, 150);
+  document.getElementById('qrLabel').textContent = site;
+  document.getElementById('qrIdLabel').textContent = id + (mgr ? ' — ' + mgr : '');
+  document.getElementById('qrPreview').style.display = 'block';
+}
+
+function generateAndSaveQR() {
+  const site = document.getElementById('qrSiteSelect').value;
+  const mgr = document.getElementById('qrManagerSelect').value;
+  if (!site) { showToast('Please select a site', 'warning'); return; }
+  const id = 'QR-' + site.substring(0,3).toUpperCase().replace(/\s/g,'') + '-' + String(qrCodes.length + 1).padStart(3,'0');
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
+  qrCodes.unshift({ id, site, manager: mgr || 'Unassigned', generated: dateStr, scansToday: 0, totalScans: 0, active: true });
+  renderQRCodes();
+  closeModal('qrModal');
+  showToast(`QR code ${id} generated for ${site}`, 'success');
+}
+
+function openQRPrint(idx) {
+  const q = qrCodes[idx];
+  const seed = q.id.charCodeAt(3)*100+q.id.charCodeAt(4)*10+q.id.charCodeAt(5);
+  document.getElementById('qrPrintBody').innerHTML = `
+    <div style="text-align:center;padding:20px;border:2px dashed var(--border-color);border-radius:12px;background:var(--bg-body);">
+      <div class="qr-display" style="margin-bottom:16px;border-color:var(--sidebar-bg);border-width:3px;">${renderQRHTML(seed, 150)}</div>
+      <h5 style="font-size:15px;font-weight:800;margin:0 0 4px;">${q.site}</h5>
+      <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:4px;"><code>${q.id}</code></div>
+      <div style="font-size:12px;color:var(--text-secondary);">Manager: ${q.manager}</div>
+      <div style="margin-top:12px;padding:8px;background:white;border:1px solid var(--border-color);border-radius:6px;font-size:11px;color:var(--text-tertiary);">
+        <i class="bi bi-info-circle me-1"></i> Scan this QR code at site entrance to record attendance with GPS verification
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-tertiary);">Generated: ${q.generated} | BuildPro NSW</div>
+    </div>
+  `;
+  document.getElementById('qrPrintModal').classList.add('show');
+}
+
+function doPrintQR() {
+  closeModal('qrPrintModal');
+  showToast('QR code sent to printer — place at site entrance', 'success');
+}
+
+// ══════════════════════════════════════
+// GPS MAP
+// ══════════════════════════════════════
+function renderMap() {
+  const container = document.getElementById('mapContainer');
+  container.querySelectorAll('.map-pin').forEach(p => p.remove());
+  mapSites.forEach(s => {
+    const pin = document.createElement('div');
+    pin.className = 'map-pin';
+    pin.style.left = s.x + '%';
+    pin.style.top = s.y + '%';
+    pin.innerHTML = `
+      <div class="map-pin-dot" style="background:${s.color};"></div>
+      ${s.workers > 0 ? `<div class="map-pin-count">${s.workers}</div>` : ''}
+      <div class="map-pin-label">${s.name}${s.workers > 0 ? ' — ' + s.workers + ' workers' : ' (Inactive)'}</div>
+    `;
+    pin.onclick = () => showToast(`${s.name}: ${s.workers} workers ${s.workers > 0 ? 'on-site' : '— site inactive'}`, s.workers > 0 ? 'info' : 'warning');
+    container.appendChild(pin);
+  });
+  // Site list
+  document.getElementById('siteListPanel').innerHTML = mapSites.map(s => `
+    <div style="padding:10px 12px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;gap:10px;cursor:pointer;transition:var(--transition);" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''" onclick="showToast('${s.name}: ${s.workers} workers','${s.workers>0?'info':'warning'}')">
+      <div style="width:10px;height:10px;border-radius:50%;background:${s.color};flex-shrink:0;${s.workers>0?'box-shadow:0 0 0 3px '+s.color+'33;':''}"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.name}</div>
+        <div style="font-size:10.5px;color:var(--text-tertiary);">${s.workers > 0 ? s.workers + ' workers on-site' : 'Inactive'}</div>
+      </div>
+      ${s.workers > 0 ? '<span class="gps-pulse" style="width:6px;height:6px;"></span>' : ''}
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════
+// PERFORMANCE CHARTS
+// ══════════════════════════════════════
+function initPerfCharts() {
+  const gridColor = '#F1F5F9';
+  const defaults = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ labels:{ font:{size:11,family:'Inter'}, color:'#64748B', padding:12, usePointStyle:true, pointStyleWidth:8 } } } };
+
+  new Chart(document.getElementById('onTimeChart').getContext('2d'), {
+    type:'bar',
+    data:{
+      labels:managers.map(m => m.name.split(' ')[0]),
+      datasets:[{ label:'On-Time %', data:managers.map(m => m.onTime), backgroundColor:managers.map(m => m.onTime >= 95 ? '#16A34A' : m.onTime >= 88 ? '#F59E0B' : '#DC2626'), borderRadius:6, barPercentage:.5 }]
+    },
+    options:{...defaults, indexAxis:'y', scales:{ x:{beginAtZero:true,max:100,grid:{color:gridColor},ticks:{font:{size:11},callback:v=>v+'%'}}, y:{grid:{display:false},ticks:{font:{size:11,weight:'600'}}} }}
+  });
+
+  new Chart(document.getElementById('hoursChart').getContext('2d'), {
+    type:'doughnut',
+    data:{ labels:['Carpenters','Labourers','Electricians','Bricklayers','Plumbers','Plasterers'], datasets:[{ data:[4,4,3,2,2,1], backgroundColor:['#0D9488','#16A34A','#2563EB','#E8730C','#7C3AED','#F59E0B'], borderWidth:0, hoverOffset:8 }] },
+    options:{...defaults, cutout:'60%', plugins:{...defaults.plugins, legend:{position:'right',labels:{...defaults.plugins.legend.labels,padding:8,font:{size:10.5}}}}}
+  });
+
+  new Chart(document.getElementById('milestoneChart').getContext('2d'), {
+    type:'bar',
+    data:{
+      labels:managers.map(m => m.name.split(' ')[0]),
+      datasets:[
+        { label:'Completed', data:managers.map(m => m.completedMilestones), backgroundColor:'#16A34A', borderRadius:4, barPercentage:.4 },
+        { label:'Remaining', data:managers.map(m => m.totalMilestones - m.completedMilestones), backgroundColor:'#E2E8F0', borderRadius:4, barPercentage:.4 }
+      ]
+    },
+    options:{...defaults, scales:{ x:{stacked:true,grid:{display:false},ticks:{font:{size:11}}}, y:{stacked:true,grid:{color:gridColor},ticks:{font:{size:11}}} }}
+  });
+
+  new Chart(document.getElementById('trendChart').getContext('2d'), {
+    type:'line',
+    data:{
+      labels:['Wk 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6','Wk 7','Wk 8'],
+      datasets:[
+        { label:'Avg On-Time %', data:[89,91,88,93,90,92,94,91], borderColor:'#0D9488', backgroundColor:'rgba(13,148,136,.08)', borderWidth:2.5, pointRadius:4, pointBackgroundColor:'#0D9488', tension:.3, fill:true },
+        { label:'Worker Hours (x10)', data:[38,42,40,45,43,44,46,44], borderColor:'#E8730C', backgroundColor:'rgba(232,115,12,.05)', borderWidth:2, pointRadius:3, pointBackgroundColor:'#E8730C', tension:.3, fill:true, borderDash:[5,3] },
+      ]
+    },
+    options:{...defaults, interaction:{mode:'index',intersect:false}, scales:{ x:{grid:{display:false},ticks:{font:{size:11}}}, y:{grid:{color:gridColor},ticks:{font:{size:11}}} }}
+  });
+}
+
+// ══════════════════════════════════════
+// BILLING
+// ══════════════════════════════════════
+function renderBilling() {
+  const siteFilter = document.getElementById('billingSiteFilter').value;
+  const filtered = workers.filter(w => !siteFilter || w.site === siteFilter);
+  let totalAmount = 0;
+  document.getElementById('billingBody').innerHTML = filtered.map(w => {
+    const days = [7.5, 8.0, 7.8, w.hours, 0, 0, 0];
+    const totalHrs = days.slice(0, 5).reduce((a,b) => a+b, 0);
+    const amount = totalHrs * w.rate;
+    totalAmount += amount;
+    return `<tr>
+      <td><b style="font-size:12px;">${w.name}</b></td>
+      <td style="font-size:12px;">${w.trade}</td>
+      <td style="font-size:12px;">${w.site}</td>
+      ${days.map((d,i) => `<td style="font-size:12px;text-align:center;${i===3?'font-weight:700;color:var(--primary);':''}">${d > 0 ? d.toFixed(1) : '-'}</td>`).join('')}
+      <td style="font-weight:700;">${totalHrs.toFixed(1)}</td>
+      <td style="font-size:12px;">$${w.rate}</td>
+      <td style="font-weight:700;color:var(--primary);">$${amount.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('billingSummary').textContent = `${filtered.length} workers × 5 days`;
+  document.getElementById('billingTotal').textContent = '$' + totalAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+// ══════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════
+function exportAttendance() {
+  const headers = ['Worker','Trade','Site','Manager','Check-In','Check-Out','Hours','GPS','Rate','Billable'];
+  const rows = workers.map(w => [w.name, w.trade, w.site, w.manager, w.checkIn, w.checkOut||'On Site', w.hours, w.gps?'Yes':'No', w.rate, (w.hours*w.rate).toFixed(2)]);
+  let csv = headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'BuildPro_Attendance_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Attendance report exported as CSV', 'success');
+}
+
+// ══════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal-backdrop-custom').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop-custom.show').forEach(m => m.classList.remove('show'));
+});
+
+// ══════════════════════════════════════
+// AUTO-UPDATE TIMESTAMP
+// ══════════════════════════════════════
+let updateSeconds = 0;
+setInterval(() => {
+  updateSeconds++;
+  const el = document.getElementById('lastUpdated');
+  if (updateSeconds < 60) el.textContent = 'Updated just now';
+  else if (updateSeconds < 120) el.textContent = 'Updated 1 min ago';
+  else el.textContent = 'Updated ' + Math.floor(updateSeconds/60) + ' min ago';
+}, 1000);
+
+// Simulate live hours update for on-site workers
+setInterval(() => {
+  workers.forEach(w => {
+    if (w.status === 'on-site') w.hours = parseFloat((w.hours + 0.01).toFixed(2));
+  });
+  if (document.getElementById('tab-workers').classList.contains('active')) renderWorkers();
+}, 60000);
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(() => {
+  animateCounters();
+  renderNotifs();
+  renderManagers();
+  renderWorkers();
+  renderQRCodes();
+  renderMap();
+  renderBilling();
+}, 100);
+</script>
+</body>
+</html>

@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penrith Residence - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary: #0D9488; --primary-dark: #0F766E; --primary-light: #CCFBF1; --primary-glow: rgba(13,148,136,.15);
+  --accent: #E8730C; --accent-light: #FFF3E0;
+  --success: #16A34A; --success-light: #DCFCE7;
+  --danger: #DC2626; --danger-light: #FEE2E2;
+  --warning: #F59E0B; --warning-light: #FEF9C3;
+  --info: #2563EB; --info-light: #DBEAFE;
+  --purple: #7C3AED; --purple-light: #EDE9FE;
+  --bg-body: #F1F5F9; --bg-card: #FFFFFF; --bg-hover: #F8FAFC;
+  --text-primary: #0F172A; --text-secondary: #475569; --text-tertiary: #94A3B8;
+  --border-color: #E2E8F0; --border-light: #F1F5F9;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.04); --shadow-md: 0 4px 12px rgba(0,0,0,.06); --shadow-lg: 0 12px 40px rgba(0,0,0,.1);
+  --sidebar-bg: #0F172A; --sidebar-width: 64px;
+  --transition: all .2s cubic-bezier(.4,0,.2,1);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg-body); font-family:'Inter',sans-serif; font-size:14px; color:var(--text-primary); overflow-x:hidden; line-height:1.5; }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#CBD5E1; border-radius:4px; }
+::-webkit-scrollbar-thumb:hover { background:#94A3B8; }
+.wrapper { display:flex; min-height:100vh; }
+
+/* ── Sidebar (synced with index.html) ── */
+.sidebar { width:var(--sidebar-width); background:var(--sidebar-bg); display:flex; flex-direction:column; align-items:center; padding-top:16px; flex-shrink:0; z-index:1000; box-shadow:4px 0 24px rgba(0,0,0,.12); }
+.sidebar-icon { color:#64748B; font-size:19px; height:42px; width:42px; display:flex; align-items:center; justify-content:center; margin-bottom:4px; cursor:pointer; border-radius:10px; transition:var(--transition); position:relative; }
+.sidebar-icon:hover { color:#F1F5F9; background:rgba(255,255,255,.06); }
+.sidebar-icon.active { color:var(--primary); background:rgba(13,148,136,.15); }
+.sidebar-icon.active::before { content:''; position:absolute; left:-16px; height:20px; width:3px; background:var(--primary); border-radius:0 3px 3px 0; }
+.sidebar-brand { color:var(--primary); font-size:22px; margin-bottom:20px; }
+.sidebar-tooltip { position:absolute; left:calc(100% + 10px); top:50%; transform:translateY(-50%); background:var(--sidebar-bg); color:#F1F5F9; padding:5px 11px; border-radius:6px; font-size:11px; font-weight:500; white-space:nowrap; opacity:0; visibility:hidden; transition:var(--transition); z-index:1001; pointer-events:none; box-shadow:var(--shadow-lg); }
+.sidebar-tooltip::before { content:''; position:absolute; right:100%; top:50%; transform:translateY(-50%); border:5px solid transparent; border-right-color:var(--sidebar-bg); }
+.sidebar-icon:hover .sidebar-tooltip { opacity:1; visibility:visible; left:calc(100% + 14px); }
+@media(max-width:768px) { .sidebar-tooltip { display:none; } }
+
+/* ── Main Panel ── */
+.main-panel { flex-grow:1; display:flex; flex-direction:column; width:calc(100% - var(--sidebar-width)); min-width:0; }
+
+/* ── Top Header (synced) ── */
+.top-header { height:54px; background:var(--sidebar-bg); display:flex; align-items:center; justify-content:space-between; padding:0 20px; color:white; flex-shrink:0; }
+.header-menu a { color:rgba(255,255,255,.55); text-decoration:none; margin-right:20px; font-size:12.5px; font-weight:500; transition:var(--transition); position:relative; padding-bottom:16px; letter-spacing:.01em; }
+.header-menu a:hover { color:rgba(255,255,255,.9); }
+.header-menu a.active { color:white; }
+.header-menu a.active::after { content:''; position:absolute; bottom:0; left:0; width:100%; height:2px; background:var(--primary); border-radius:2px 2px 0 0; }
+
+/* ── Sub Header ── */
+.sub-header { background:var(--bg-card); padding:10px 20px; border-bottom:1px solid var(--border-color); display:flex; align-items:center; font-size:12px; color:var(--text-secondary); flex-shrink:0; }
+
+/* ── Content ── */
+.content-container { padding:20px; max-width:1560px; margin:0 auto; width:100%; }
+
+/* ── Shared Components ── */
+.card-custom { background:var(--bg-card); border-radius:12px; padding:20px; box-shadow:var(--shadow-sm); border:1px solid var(--border-color); margin-bottom:16px; transition:var(--transition); }
+.card-custom:hover { box-shadow:var(--shadow-md); }
+.section-heading { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:16px; color:var(--text-secondary); display:flex; align-items:center; justify-content:space-between; }
+.stat-value { font-size:26px; font-weight:800; line-height:1.2; color:var(--text-primary); margin-top:2px; letter-spacing:-.02em; }
+.stat-desc { font-size:11.5px; color:var(--text-tertiary); margin-top:3px; }
+.stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
+@media(max-width:1200px) { .stat-grid { grid-template-columns:repeat(2,1fr); } }
+.stat-icon { width:44px; height:44px; border-radius:11px; display:flex; align-items:center; justify-content:center; color:white; font-size:20px; flex-shrink:0; }
+.trend-badge { display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; letter-spacing:.02em; }
+.trend-up { color:var(--success); background:rgba(22,163,74,.08); }
+.trend-down { color:var(--danger); background:rgba(220,38,38,.08); }
+.status-pill { display:inline-flex; align-items:center; padding:3px 10px; border-radius:99px; font-size:10.5px; font-weight:600; line-height:1.5; }
+.pill-success { background:rgba(22,163,74,.08); color:var(--success); }
+.pill-warning { background:rgba(245,158,11,.08); color:#D97706; }
+.pill-danger { background:rgba(220,38,38,.08); color:var(--danger); }
+.pill-info { background:rgba(37,99,235,.08); color:var(--info); }
+.pill-gray { background:rgba(148,163,184,.1); color:var(--text-secondary); }
+.pill-purple { background:rgba(124,58,237,.08); color:var(--purple); }
+.btn-primary-custom { background:var(--primary); color:white; border:none; padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:600; transition:var(--transition); cursor:pointer; font-family:inherit; }
+.btn-primary-custom:hover { background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 4px 12px rgba(13,148,136,.3); color:white; text-decoration:none; }
+.btn-outline-custom { background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:500; transition:var(--transition); cursor:pointer; font-family:inherit; }
+.btn-outline-custom:hover { background:var(--bg-hover); border-color:var(--primary); color:var(--primary); }
+.btn-sm-custom { padding:5px 10px; font-size:11.5px; border-radius:6px; }
+.btn-icon { width:32px; height:32px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-secondary); cursor:pointer; transition:var(--transition); font-size:14px; }
+.btn-icon:hover { border-color:var(--primary); color:var(--primary); background:var(--primary-glow); }
+.btn-danger-custom { background:var(--danger); color:white; border:none; padding:7px 14px; border-radius:7px; font-size:12.5px; font-weight:600; transition:var(--transition); cursor:pointer; font-family:inherit; }
+.btn-danger-custom:hover { background:#B91C1C; transform:translateY(-1px); color:white; }
+.table-custom { width:100%; border-collapse:separate; border-spacing:0; }
+.table-custom thead th { font-size:11px; text-transform:uppercase; color:var(--text-tertiary); font-weight:600; letter-spacing:.04em; padding:10px 14px; border-bottom:1px solid var(--border-color); background:var(--bg-body); white-space:nowrap; }
+.table-custom td { font-size:13px; vertical-align:middle; padding:12px 14px; border-bottom:1px solid var(--border-light); }
+.table-custom tr:last-child td { border-bottom:none; }
+.table-custom tbody tr { transition:background .15s; cursor:pointer; }
+.table-custom tbody tr:hover td { background:var(--bg-hover); }
+.progress-bar-custom { height:7px; background:#E2E8F0; border-radius:4px; overflow:hidden; }
+.progress-fill-custom { height:100%; border-radius:4px; transition:width .8s cubic-bezier(.4,0,.2,1); }
+.search-box { position:relative; }
+.search-box input { width:220px; padding:6px 12px 6px 32px; border:1px solid var(--border-color); border-radius:8px; font-size:12.5px; background:var(--bg-card); color:var(--text-primary); transition:var(--transition); font-family:inherit; outline:none; }
+.search-box input:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-glow); width:280px; }
+.search-box i { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); font-size:13px; }
+
+/* ── Notifications (synced) ── */
+.notification-badge { position:absolute; top:0; right:0; min-width:16px; height:16px; background:var(--danger); border-radius:99px; font-size:9px; font-weight:700; color:white; display:flex; align-items:center; justify-content:center; padding:0 4px; border:2px solid var(--sidebar-bg); }
+.notification-dropdown { position:absolute; top:calc(100% + 8px); right:0; width:360px; background:white; border-radius:10px; box-shadow:var(--shadow-lg); z-index:1001; display:none; border:1px solid var(--border-color); overflow:hidden; }
+.notification-dropdown.show { display:block; animation:slideDown .2s ease; }
+@keyframes slideDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+.notification-header { padding:14px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; }
+.notification-mark-all { font-size:11.5px; color:var(--primary); cursor:pointer; font-weight:600; }
+.notification-item { padding:12px 16px; border-bottom:1px solid var(--border-light); cursor:pointer; transition:background .15s; display:flex; align-items:flex-start; gap:10px; }
+.notification-item:hover { background:var(--bg-hover); }
+.notification-item.unread { background:rgba(13,148,136,.03); }
+.notification-item.dismissing { animation:slideOut .25s ease forwards; overflow:hidden; }
+@keyframes slideOut { to { opacity:0; max-height:0; padding-top:0; padding-bottom:0; margin:0; } }
+.notif-icon { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:14px; }
+.notif-text { flex:1; min-width:0; }
+.notif-msg { font-size:12.5px; line-height:1.4; color:var(--text-primary); }
+.notif-time { font-size:10.5px; color:var(--text-tertiary); margin-top:2px; }
+.notif-dismiss { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); cursor:pointer; opacity:0; transition:var(--transition); flex-shrink:0; font-size:10px; border:none; background:none; }
+.notification-item:hover .notif-dismiss { opacity:1; }
+.notif-dismiss:hover { background:var(--danger-light); color:var(--danger); }
+.notification-footer { padding:10px 16px; text-align:center; border-top:1px solid var(--border-color); }
+.notification-view-all { font-size:12.5px; color:var(--primary); text-decoration:none; font-weight:600; }
+
+/* ── User Pill ── */
+.up { display:flex; align-items:center; gap:8px; padding:4px 10px 4px 4px; border-radius:10px; background:rgba(255,255,255,.07); cursor:pointer; transition:var(--transition); }
+.up:hover { background:rgba(255,255,255,.12); }
+.ua { width:30px; height:30px; border-radius:8px; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:11px; }
+.ui span { font-size:12.5px; font-weight:600; display:block; color:white; line-height:1.2; }
+.live-clock { font-size:12px; color:rgba(255,255,255,.6); font-weight:500; font-variant-numeric:tabular-nums; }
+.live-clock span { color:rgba(255,255,255,.9); font-weight:600; }
+
+/* ── Toast ── */
+.toast-container { position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+.toast-item { background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; padding:14px 18px; box-shadow:var(--shadow-lg); display:flex; align-items:center; gap:10px; min-width:300px; animation:toastIn .3s ease; }
+.toast-item.removing { animation:toastOut .25s ease forwards; }
+@keyframes toastIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+@keyframes toastOut { to { opacity:0; transform:translateX(40px); } }
+.toast-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+.toast-msg { flex:1; font-size:13px; font-weight:500; }
+.toast-close { background:none; border:none; color:var(--text-tertiary); cursor:pointer; font-size:16px; padding:0; line-height:1; }
+.toast-close:hover { color:var(--text-primary); }
+
+/* ── Modal ── */
+.modal-backdrop-custom { position:fixed; inset:0; background:rgba(15,23,42,.5); backdrop-filter:blur(4px); z-index:2000; display:none; align-items:center; justify-content:center; }
+.modal-backdrop-custom.show { display:flex; animation:fadeIn .2s; }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+.modal-content-custom { background:var(--bg-card); border-radius:14px; width:90%; max-width:680px; max-height:85vh; overflow-y:auto; box-shadow:var(--shadow-lg); animation:modalIn .25s ease; border:1px solid var(--border-color); }
+@keyframes modalIn { from { opacity:0; transform:scale(.96) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+.modal-header-custom { padding:20px 24px 16px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; }
+.modal-body-custom { padding:20px 24px; }
+.modal-close { width:32px; height:32px; border-radius:8px; border:1px solid var(--border-color); background:var(--bg-card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); transition:var(--transition); font-size:16px; }
+.modal-close:hover { background:var(--danger-light); color:var(--danger); border-color:transparent; }
+
+/* ── Project Header ── */
+.proj-header { background:linear-gradient(135deg,#0D9488 0%,#0F766E 60%,#115E59 100%); color:white; border-radius:12px; padding:24px 28px; margin-bottom:16px; position:relative; overflow:hidden; }
+.proj-header::before { content:''; position:absolute; right:-40px; top:-40px; width:200px; height:200px; border-radius:50%; background:rgba(255,255,255,.04); }
+.proj-header::after { content:''; position:absolute; right:80px; bottom:-60px; width:140px; height:140px; border-radius:50%; background:rgba(255,255,255,.03); }
+.proj-header .back-link { color:rgba(255,255,255,.7); text-decoration:none; font-size:12.5px; font-weight:500; transition:var(--transition); display:inline-flex; align-items:center; gap:4px; margin-bottom:8px; }
+.proj-header .back-link:hover { color:white; }
+
+/* ── Detail Tabs ── */
+.detail-tabs { display:flex; border-bottom:2px solid var(--border-color); margin-bottom:20px; gap:0; overflow-x:auto; scrollbar-width:none; }
+.detail-tabs::-webkit-scrollbar { display:none; }
+.detail-tab { padding:11px 18px; background:none; border:none; font-size:12.5px; font-weight:500; color:var(--text-tertiary); cursor:pointer; position:relative; transition:var(--transition); white-space:nowrap; font-family:inherit; }
+.detail-tab:hover { color:var(--primary); }
+.detail-tab.active { color:var(--primary); font-weight:700; }
+.detail-tab.active::after { content:''; position:absolute; bottom:-2px; left:0; width:100%; height:2px; background:var(--primary); border-radius:2px 2px 0 0; }
+.detail-tab .tab-count { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; border-radius:99px; font-size:10px; font-weight:700; margin-left:5px; padding:0 5px; }
+
+/* ── Timeline ── */
+.tl-custom { position:relative; padding-left:28px; }
+.tl-custom::before { content:''; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--border-color); border-radius:1px; }
+.ti-custom { position:relative; padding-bottom:20px; }
+.ti-custom::before { content:''; position:absolute; left:-23px; top:5px; width:10px; height:10px; border-radius:50%; background:var(--primary); border:2px solid white; box-shadow:0 0 0 2px var(--primary); z-index:1; }
+.ti-custom.done::before { background:var(--success); box-shadow:0 0 0 2px var(--success); }
+.ti-custom.active::before { background:var(--warning); box-shadow:0 0 0 2px var(--warning); animation:pulse-dot 2s infinite; }
+.ti-custom.upcoming::before { background:var(--border-color); box-shadow:0 0 0 2px var(--border-color); }
+.ti-custom:last-child { padding-bottom:0; }
+@keyframes pulse-dot { 0%,100% { box-shadow:0 0 0 2px var(--warning); } 50% { box-shadow:0 0 0 5px rgba(245,158,11,.2); } }
+
+/* ── Milestone Card ── */
+.ms-card { border:1px solid var(--border-color); border-radius:10px; padding:16px; margin-bottom:12px; transition:var(--transition); position:relative; overflow:hidden; }
+.ms-card:hover { box-shadow:var(--shadow-md); }
+.ms-card.ms-done { border-left:3px solid var(--success); }
+.ms-card.ms-active { border-left:3px solid var(--warning); background:rgba(245,158,11,.02); }
+.ms-card.ms-upcoming { border-left:3px solid var(--border-color); opacity:.75; }
+.ms-card .ms-photo-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:10px; }
+.ms-card .ms-photo { aspect-ratio:4/3; border-radius:6px; background:var(--bg-body); display:flex; align-items:center; justify-content:center; color:var(--text-tertiary); font-size:11px; cursor:pointer; transition:var(--transition); border:1px solid var(--border-light); overflow:hidden; }
+.ms-card .ms-photo:hover { border-color:var(--primary); color:var(--primary); }
+.ms-card .ms-photo img { width:100%; height:100%; object-fit:cover; }
+
+/* ── Tradie Reminder Card ── */
+.tradie-remind { background:var(--warning-light); border:1px solid rgba(245,158,11,.2); border-radius:10px; padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; gap:12px; }
+.tradie-remind .tr-icon { width:40px; height:40px; border-radius:10px; background:rgba(245,158,11,.15); display:flex; align-items:center; justify-content:center; color:#D97706; font-size:18px; flex-shrink:0; }
+
+/* ── Worker GPS Sim ── */
+.gps-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:4px; }
+.gps-active { background:var(--success); box-shadow:0 0 0 3px rgba(22,163,74,.2); animation:gps-pulse 2s infinite; }
+.gps-inactive { background:var(--text-tertiary); }
+@keyframes gps-pulse { 0%,100% { box-shadow:0 0 0 3px rgba(22,163,74,.2); } 50% { box-shadow:0 0 0 6px rgba(22,163,74,.08); } }
+
+/* ── Variation Delay Bar ── */
+.delay-bar { height:24px; background:var(--bg-body); border-radius:6px; position:relative; overflow:hidden; display:flex; }
+.delay-planned { background:var(--primary); height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600; color:white; transition:width .6s; }
+.delay-actual { background:var(--danger); height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600; color:white; transition:width .6s; }
+.delay-gap { background:var(--warning); height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600; color:white; transition:width .6s; }
+
+/* ── Form Elements ── */
+.form-label-custom { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-tertiary); font-weight:600; margin-bottom:5px; display:block; }
+.form-input-custom { width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:7px; font-size:13px; font-family:inherit; color:var(--text-primary); transition:var(--transition); outline:none; background:var(--bg-card); }
+.form-input-custom:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-glow); }
+textarea.form-input-custom { resize:vertical; min-height:80px; }
+select.form-input-custom { cursor:pointer; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:30px; }
+
+/* ── Chat Bubble ── */
+.chat-bubble { max-width:80%; padding:10px 14px; border-radius:12px; font-size:13px; line-height:1.5; margin-bottom:8px; }
+.chat-incoming { background:var(--bg-body); color:var(--text-primary); border-bottom-left-radius:4px; align-self:flex-start; }
+.chat-outgoing { background:var(--primary); color:white; border-bottom-right-radius:4px; align-self:flex-end; }
+
+/* ── Detail Grid ── */
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.detail-item .detail-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-tertiary); font-weight:600; margin-bottom:2px; }
+.detail-item .detail-value { font-size:13px; font-weight:600; }
+
+/* ── Responsive ── */
+@media(max-width:992px) { .stat-grid { grid-template-columns:repeat(2,1fr); } .detail-grid { grid-template-columns:1fr; } }
+@media(max-width:576px) { .stat-grid { grid-template-columns:1fr; } .content-container { padding:12px; } .search-box input { width:160px; } .search-box input:focus { width:200px; } .proj-header { padding:16px; } }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<!-- Sidebar (synced) -->
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon active" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+
+<!-- Main Panel -->
+<div class="main-panel">
+
+  <!-- Top Header (synced) -->
+  <header class="top-header">
+    <div class="d-flex align-items-center gap-3">
+      <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+      <nav class="header-menu d-none d-lg-block">
+        <a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html" class="active">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a>
+      </nav>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+      <div class="position-relative">
+        <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7);" onclick="toggleNotif()" id="notifBtn">
+          <i class="bi bi-bell"></i>
+          <span class="notification-badge" id="notifCount">3</span>
+        </button>
+        <div class="notification-dropdown" id="notifDrop">
+          <div class="notification-header">
+            <div style="font-size:13px;font-weight:700;">Notifications</div>
+            <div class="notification-mark-all" onclick="markAllRead()">Mark all read</div>
+          </div>
+          <div id="notifList"></div>
+          <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notification center...','info');return false;">View all notifications</a></div>
+        </div>
+      </div>
+      <div class="up">
+        <div class="ua">GS</div>
+        <div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Breadcrumb -->
+  <div class="sub-header">
+    <i class="bi bi-house me-1" style="font-size:11px;"></i><a href="index.html" style="color:var(--text-secondary);text-decoration:none;">Home</a>
+    <span class="mx-2" style="color:var(--border-color);">/</span>
+    <a href="projects.html" style="color:var(--text-secondary);text-decoration:none;">Projects</a>
+    <span class="mx-2" style="color:var(--border-color);">/</span>
+    <span style="font-weight:600;color:var(--text-primary);">Penrith Residence</span>
+    <span id="projectIdDisplay" style="margin-left:auto;font-size:11px;color:var(--text-tertiary);"></span>
+    <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);" id="lastUpdated">Updated just now</span>
+  </div>
+
+  <!-- Content -->
+  <div class="content-container">
+
+    <!-- Project Header -->
+    <div class="proj-header">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3" style="position:relative;z-index:1;">
+        <div>
+          <a href="projects.html" class="back-link"><i class="bi bi-arrow-left"></i> Back to All Projects</a>
+          <div class="d-flex align-items-center gap-3 mt-1 flex-wrap">
+            <h2 style="font-size:22px;font-weight:800;margin:0;">Penrith Residence</h2>
+            <span class="status-pill pill-success" style="font-size:11px;padding:4px 12px;background:rgba(255,255,255,.15);color:white;"><i class="bi bi-check-circle me-1"></i>On Track</span>
+          </div>
+          <p style="opacity:.85;margin:4px 0 0;font-size:13px;"><i class="bi bi-geo-alt me-1"></i>42 Railway St, Penrith NSW 2750 &nbsp;|&nbsp; <i class="bi bi-person me-1"></i>Harpreet Kaur &nbsp;|&nbsp; <i class="bi bi-telephone me-1"></i>0445 678 123</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn-outline-custom" style="border-color:rgba(255,255,255,.3);color:white;" onclick="showToast('Opening WhatsApp group chat...','info')"><i class="bi bi-whatsapp me-1"></i>WhatsApp</button>
+          <button class="btn-outline-custom" style="border-color:rgba(255,255,255,.3);color:white;" onclick="openModal('messageModal')"><i class="bi bi-envelope me-1"></i>Message Client</button>
+          <button class="btn-primary-custom" style="background:white;color:var(--primary);font-weight:700;" onclick="showToast('Opening print preview...','info')"><i class="bi bi-printer me-1"></i>Print</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="stat-grid">
+      <div class="card-custom">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--primary);"><i class="bi bi-wallet2"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>On Budget</span>
+        </div>
+        <div class="stat-value">$485,000</div>
+        <div class="stat-desc">Total Contract Value</div>
+      </div>
+      <div class="card-custom">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--accent);"><i class="bi bi-receipt"></i></div>
+          <span style="font-size:11px;font-weight:700;color:var(--text-tertiary);">64.4%</span>
+        </div>
+        <div class="stat-value">$312,400</div>
+        <div class="stat-desc">Spent to Date</div>
+      </div>
+      <div class="card-custom">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--success);"><i class="bi bi-piggy-bank"></i></div>
+        </div>
+        <div class="stat-value">$172,600</div>
+        <div class="stat-desc">Remaining Budget</div>
+      </div>
+      <div class="card-custom">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--info);"><i class="bi bi-people"></i></div>
+          <span class="status-pill pill-success" style="font-size:9px;">Live</span>
+        </div>
+        <div class="stat-value" id="workerCount">8</div>
+        <div class="stat-desc">Workers On Site Now <span style="color:var(--success);">&#9679; GPS Active</span></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="detail-tabs" id="projTabs">
+      <button class="detail-tab active" onclick="showTab('overview',this)"><i class="bi bi-grid me-1"></i>Overview</button>
+      <button class="detail-tab" onclick="showTab('milestones',this)"><i class="bi bi-calendar-check me-1"></i>Milestones <span class="tab-count" style="background:var(--warning-light);color:#D97706;">2</span></button>
+      <button class="detail-tab" onclick="showTab('materials',this)"><i class="bi bi-box-seam me-1"></i>Materials</button>
+      <button class="detail-tab" onclick="showTab('payments',this)"><i class="bi bi-credit-card me-1"></i>Payments</button>
+      <button class="detail-tab" onclick="showTab('updates',this)"><i class="bi bi-camera me-1"></i>Site Updates <span class="tab-count" style="background:var(--primary-glow);color:var(--primary);">4</span></button>
+      <button class="detail-tab" onclick="showTab('tradies',this)"><i class="bi bi-tools me-1"></i>Tradies <span class="tab-count" style="background:var(--danger-light);color:var(--danger);">!</span></button>
+      <button class="detail-tab" onclick="showTab('workers',this)"><i class="bi bi-qr-code me-1"></i>Workers & QR</button>
+      <button class="detail-tab" onclick="showTab('quotations',this)"><i class="bi bi-file-text me-1"></i>Quotes</button>
+      <button class="detail-tab" onclick="showTab('variations',this)"><i class="bi bi-arrow-repeat me-1"></i>Variations <span class="tab-count" style="background:var(--warning-light);color:#D97706;">2</span></button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: OVERVIEW -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-overview" class="tab-panel">
+      <div class="row g-3">
+        <div class="col-lg-4">
+          <div class="card-custom">
+            <div class="section-heading">Project Details</div>
+            <div class="detail-grid">
+              <div class="detail-item"><div class="detail-label">Contract Value</div><div class="detail-value" style="color:var(--primary);font-size:15px;">$485,000</div></div>
+              <div class="detail-item"><div class="detail-label">Including Variations</div><div class="detail-value" style="color:var(--accent);font-size:15px;">$494,700</div></div>
+              <div class="detail-item"><div class="detail-label">Start Date</div><div class="detail-value">10 Feb 2025</div></div>
+              <div class="detail-item"><div class="detail-label">Expected Completion</div><div class="detail-value">20 Nov 2025</div></div>
+              <div class="detail-item"><div class="detail-label">Site Manager</div><div class="detail-value">Amrit Singh <span style="font-size:11px;color:var(--text-tertiary);">0433 456 789</span></div></div>
+              <div class="detail-item"><div class="detail-label">Architect</div><div class="detail-value">Mike Thompson</div></div>
+              <div class="detail-item"><div class="detail-label">Building Type</div><div class="detail-value">Double Storey 4BR + Study</div></div>
+              <div class="detail-item"><div class="detail-label">Lot Size</div><div class="detail-value">620 sqm</div></div>
+              <div class="detail-item"><div class="detail-label">Council</div><div class="detail-value">Penrith City Council</div></div>
+              <div class="detail-item"><div class="detail-label">Certifier</div><div class="detail-value">SafeBuild Certifiers NSW</div></div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Opening customer portfolio view...','info')"><i class="bi bi-eye me-1"></i>Client Portfolio</button>
+              <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Opening architectural drawings...','info')"><i class="bi bi-image me-1"></i>Drawings</button>
+              <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Downloading council approval PDF...','success')"><i class="bi bi-file-earmark-pdf me-1"></i>DA Approval</button>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="card-custom">
+            <div class="section-heading">
+              Budget Burn-Down
+              <div class="d-flex gap-2">
+                <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Exporting budget report to PDF...','success')"><i class="bi bi-download me-1"></i>Export</button>
+              </div>
+            </div>
+            <div style="position:relative;height:240px;"><canvas id="burndownChart"></canvas></div>
+          </div>
+          <div class="card-custom">
+            <div class="section-heading">Recent Activity</div>
+            <div class="tl-custom" id="activityTimeline"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: MILESTONES -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-milestones" class="tab-panel" style="display:none;">
+      <div class="row g-3">
+        <div class="col-lg-8">
+          <div class="card-custom">
+            <div class="section-heading">
+              Project Milestones
+              <div class="d-flex gap-2 align-items-center">
+                <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text-tertiary);">
+                  <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--success);margin-right:3px;"></span>Done</span>
+                  <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warning);margin-right:3px;"></span>Active</span>
+                  <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--border-color);margin-right:3px;"></span>Upcoming</span>
+                </div>
+              </div>
+            </div>
+            <div id="milestoneList"></div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="card-custom" style="background:linear-gradient(135deg,#FEF9C3,#FFF3E0);border-color:rgba(245,158,11,.2);">
+            <div class="section-heading" style="color:#D97706;"><i class="bi bi-bell me-1"></i>Upcoming Tradie Alerts</div>
+            <div id="tradieAlerts"></div>
+          </div>
+          <div class="card-custom">
+            <div class="section-heading">Milestone Summary</div>
+            <div style="position:relative;height:200px;"><canvas id="milestoneChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: MATERIALS -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-materials" class="tab-panel" style="display:none;">
+      <div class="card-custom">
+        <div class="section-heading">
+          Selected Materials from Catalogue
+          <div class="d-flex gap-2">
+            <div class="search-box"><i class="bi bi-search"></i><input type="text" placeholder="Search materials..." id="matSearch" oninput="filterMaterials()"></div>
+            <button class="btn-primary-custom btn-sm-custom" onclick="openModal('addMaterialModal')"><i class="bi bi-plus me-1"></i>Add Material</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom" id="materialsTable">
+            <thead><tr><th>Category</th><th>Product</th><th>Specification</th><th>Qty</th><th>Unit Cost</th><th>Total</th><th>Ordered</th><th>Delivered</th><th>Action</th></tr></thead>
+            <tbody id="materialsBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;padding:12px 16px;background:var(--bg-body);border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;"><b>Total Materials Cost:</b> <span style="font-size:16px;font-weight:800;color:var(--primary);">$90,060</span></div>
+          <div style="display:flex;gap:6px;">
+            <span class="status-pill pill-success"><i class="bi bi-check-circle me-1"></i>5 Delivered</span>
+            <span class="status-pill pill-warning"><i class="bi bi-clock me-1"></i>1 Partial</span>
+            <span class="status-pill pill-gray"><i class="bi bi-dash-circle me-1"></i>2 Pending</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: PAYMENTS -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-payments" class="tab-panel" style="display:none;">
+      <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="card-custom" style="text-align:center;"><div class="stat-desc">Total Billed</div><div class="stat-value" style="font-size:22px;">$312,400</div></div></div>
+        <div class="col-md-3"><div class="card-custom" style="text-align:center;"><div class="stat-desc">Cleared</div><div class="stat-value" style="font-size:22px;color:var(--success);">$159,050</div></div></div>
+        <div class="col-md-3"><div class="card-custom" style="text-align:center;"><div class="stat-desc">Outstanding</div><div class="stat-value" style="font-size:22px;color:var(--danger);">$153,350</div></div></div>
+        <div class="col-md-3"><div class="card-custom" style="text-align:center;"><div class="stat-desc">Remaining Contract</div><div class="stat-value" style="font-size:22px;">$172,600</div></div></div>
+      </div>
+      <div class="card-custom">
+        <div class="section-heading">
+          Invoice History
+          <div class="d-flex gap-2">
+            <button class="btn-primary-custom btn-sm-custom" onclick="openModal('sendInvoiceModal')"><i class="bi bi-send me-1"></i>Send Invoice</button>
+            <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Exporting payment history to CSV...','success')"><i class="bi bi-download me-1"></i>Export</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom"><thead><tr><th>Invoice</th><th>Milestone</th><th>Amount</th><th>GST</th><th>Total</th><th>Date Sent</th><th>Date Paid</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="paymentsBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: SITE UPDATES -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-updates" class="tab-panel" style="display:none;">
+      <div class="card-custom">
+        <div class="section-heading">
+          Site Manager Updates
+          <button class="btn-primary-custom btn-sm-custom" onclick="openModal('addUpdateModal')"><i class="bi bi-plus me-1"></i>Add Update</button>
+        </div>
+        <div id="updatesList"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: TRADIES -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-tradies" class="tab-panel" style="display:none;">
+      <div class="card-custom" style="background:var(--danger-light);border-color:rgba(220,38,38,.15);margin-bottom:16px;">
+        <div class="d-flex align-items-center gap-3">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(220,38,38,.1);display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:20px;"><i class="bi bi-exclamation-triangle"></i></div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--danger);">2 Tradies Need Attention</div>
+            <div style="font-size:12px;color:var(--text-secondary);">Roofer confirmation pending. Plasterer yet to be connected for Feb milestone.</div>
+          </div>
+          <button class="btn-danger-custom btn-sm-custom" style="margin-left:auto;" onclick="sendAllTradieReminders()"><i class="bi bi-send me-1"></i>Send All Reminders</button>
+        </div>
+      </div>
+      <div class="card-custom">
+        <div class="section-heading">
+          Tradie Coordination Board
+          <div class="d-flex gap-2">
+            <button class="btn-primary-custom btn-sm-custom" onclick="openModal('addTradieModal')"><i class="bi bi-plus me-1"></i>Add Tradie</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom"><thead><tr><th>Trade</th><th>Company</th><th>Contact</th><th>Needed For</th><th>Scheduled</th><th>1-Week Reminder</th><th>Confirmed</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="tradieBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: WORKERS & QR -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-workers" class="tab-panel" style="display:none;">
+      <div class="row g-3">
+        <div class="col-lg-4">
+          <div class="card-custom" style="text-align:center;">
+            <div class="section-heading">Site QR Code</div>
+            <div style="padding:20px;background:white;border:2px dashed var(--border-color);border-radius:12px;margin-bottom:12px;">
+              <svg viewBox="0 0 200 200" width="180" height="180" style="margin:0 auto;display:block;">
+                <rect x="10" y="10" width="50" height="50" rx="4" fill="#0F172A"/>
+                <rect x="16" y="16" width="38" height="38" rx="2" fill="white"/>
+                <rect x="22" y="22" width="26" height="26" rx="2" fill="#0F172A"/>
+                <rect x="140" y="10" width="50" height="50" rx="4" fill="#0F172A"/>
+                <rect x="146" y="16" width="38" height="38" rx="2" fill="white"/>
+                <rect x="152" y="22" width="26" height="26" rx="2" fill="#0F172A"/>
+                <rect x="10" y="140" width="50" height="50" rx="4" fill="#0F172A"/>
+                <rect x="16" y="146" width="38" height="38" rx="2" fill="white"/>
+                <rect x="22" y="152" width="26" height="26" rx="2" fill="#0F172A"/>
+                <rect x="70" y="10" width="8" height="8" fill="#0F172A"/><rect x="86" y="10" width="8" height="8" fill="#0F172A"/>
+                <rect x="102" y="10" width="8" height="8" fill="#0F172A"/><rect x="118" y="10" width="8" height="8" fill="#0F172A"/>
+                <rect x="70" y="26" width="8" height="8" fill="#0F172A"/><rect x="102" y="26" width="8" height="8" fill="#0F172A"/>
+                <rect x="70" y="42" width="8" height="8" fill="#0F172A"/><rect x="86" y="42" width="8" height="8" fill="#0F172A"/>
+                <rect x="118" y="42" width="8" height="8" fill="#0F172A"/>
+                <rect x="10" y="70" width="8" height="8" fill="#0F172A"/><rect x="26" y="70" width="8" height="8" fill="#0F172A"/>
+                <rect x="42" y="70" width="8" height="8" fill="#0F172A"/><rect x="70" y="70" width="8" height="8" fill="#0F172A"/>
+                <rect x="86" y="70" width="8" height="8" fill="#0F172A"/><rect x="102" y="70" width="8" height="8" fill="#0F172A"/>
+                <rect x="140" y="70" width="8" height="8" fill="#0F172A"/><rect x="156" y="70" width="8" height="8" fill="#0F172A"/>
+                <rect x="182" y="70" width="8" height="8" fill="#0F172A"/>
+                <rect x="10" y="86" width="8" height="8" fill="#0F172A"/><rect x="42" y="86" width="8" height="8" fill="#0F172A"/>
+                <rect x="86" y="86" width="8" height="8" fill="#0F172A"/><rect x="118" y="86" width="8" height="8" fill="#0F172A"/>
+                <rect x="140" y="86" width="8" height="8" fill="#0F172A"/><rect x="182" y="86" width="8" height="8" fill="#0F172A"/>
+                <rect x="10" y="102" width="8" height="8" fill="#0F172A"/><rect x="26" y="102" width="8" height="8" fill="#0F172A"/>
+                <rect x="70" y="102" width="8" height="8" fill="#0F172A"/><rect x="102" y="102" width="8" height="8" fill="#0F172A"/>
+                <rect x="118" y="102" width="8" height="8" fill="#0F172A"/><rect x="156" y="102" width="8" height="8" fill="#0F172A"/>
+                <rect x="26" y="118" width="8" height="8" fill="#0F172A"/><rect x="42" y="118" width="8" height="8" fill="#0F172A"/>
+                <rect x="70" y="118" width="8" height="8" fill="#0F172A"/><rect x="86" y="118" width="8" height="8" fill="#0F172A"/>
+                <rect x="140" y="118" width="8" height="8" fill="#0F172A"/><rect x="182" y="118" width="8" height="8" fill="#0F172A"/>
+                <rect x="70" y="140" width="8" height="8" fill="#0F172A"/><rect x="86" y="140" width="8" height="8" fill="#0F172A"/>
+                <rect x="102" y="140" width="8" height="8" fill="#0F172A"/><rect x="140" y="140" width="8" height="8" fill="#0F172A"/>
+                <rect x="156" y="140" width="8" height="8" fill="#0F172A"/><rect x="182" y="140" width="8" height="8" fill="#0F172A"/>
+                <rect x="70" y="156" width="8" height="8" fill="#0F172A"/><rect x="118" y="156" width="8" height="8" fill="#0F172A"/>
+                <rect x="140" y="156" width="8" height="8" fill="#0F172A"/><rect x="182" y="156" width="8" height="8" fill="#0F172A"/>
+                <rect x="70" y="182" width="8" height="8" fill="#0F172A"/><rect x="86" y="182" width="8" height="8" fill="#0F172A"/>
+                <rect x="102" y="182" width="8" height="8" fill="#0F172A"/><rect x="118" y="182" width="8" height="8" fill="#0F172A"/>
+                <rect x="140" y="182" width="8" height="8" fill="#0F172A"/><rect x="156" y="182" width="8" height="8" fill="#0F172A"/>
+                <rect x="182" y="182" width="8" height="8" fill="#0F172A"/>
+              </svg>
+            </div>
+            <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;"><b>ID:</b> QR-PROJ-001-PENRITH</div>
+            <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;"><b>Site:</b> 42 Railway St, Penrith</div>
+            <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;"><b>Created:</b> 10 Feb 2025</div>
+            <div style="display:flex;gap:6px;justify-content:center;">
+              <button class="btn-primary-custom btn-sm-custom" onclick="showToast('Downloading QR code as PNG...','success')"><i class="bi bi-download me-1"></i>Download</button>
+              <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Opening QR print page...','info')"><i class="bi bi-printer me-1"></i>Print</button>
+              <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Regenerating QR code...','warning')"><i class="bi bi-arrow-repeat me-1"></i>Regenerate</button>
+            </div>
+          </div>
+          <div class="card-custom">
+            <div class="section-heading">Today's Summary</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div style="background:var(--bg-body);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--primary);">8</div><div style="font-size:10px;color:var(--text-tertiary);">Checked In</div></div>
+              <div style="background:var(--bg-body);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--success);">6</div><div style="font-size:10px;color:var(--text-tertiary);">Checked Out</div></div>
+              <div style="background:var(--bg-body);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--warning);">2</div><div style="font-size:10px;color:var(--text-tertiary);">Still On Site</div></div>
+              <div style="background:var(--bg-body);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--info);">63.0</div><div style="font-size:10px;color:var(--text-tertiary);">Total Hours</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="card-custom">
+            <div class="section-heading">
+              Worker Attendance & GPS Tracking
+              <div class="d-flex gap-2">
+                <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Exporting attendance report...','success')"><i class="bi bi-download me-1"></i>Export</button>
+                <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Opening weekly timesheet...','info')"><i class="bi bi-calendar-week me-1"></i>Weekly</button>
+              </div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="table-custom"><thead><tr><th>Worker</th><th>Trade</th><th>GPS</th><th>Check-In</th><th>Check-Out</th><th>Hours</th><th>Billing</th><th>Status</th></tr></thead>
+              <tbody id="workersBody"></tbody></table>
+            </div>
+            <div style="margin-top:12px;padding:12px 16px;background:var(--bg-body);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:13px;"><b>Total Worker Hours Today:</b> <span style="font-weight:800;color:var(--primary);">63.0 hrs</span></div>
+              <div style="font-size:13px;"><b>Est. Daily Labour Cost:</b> <span style="font-weight:800;color:var(--accent);">$1,890</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: QUOTATIONS -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-quotations" class="tab-panel" style="display:none;">
+      <div class="card-custom">
+        <div class="section-heading">
+          Project Quotations
+          <button class="btn-primary-custom btn-sm-custom" onclick="openModal('createQuoteModal')"><i class="bi bi-plus me-1"></i>Create Quote</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom"><thead><tr><th>Quote #</th><th>Type</th><th>Date Created</th><th>Description</th><th>Amount</th><th>GST</th><th>Total</th><th>Sent</th><th>Approved</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="quotesBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: VARIATIONS -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="tab-variations" class="tab-panel" style="display:none;">
+      <div class="card-custom" style="background:var(--danger-light);border-color:rgba(220,38,38,.15);margin-bottom:16px;">
+        <div class="d-flex align-items-center gap-3">
+          <div style="width:40px;height:40px;border-radius:10px;background:rgba(220,38,38,.1);display:flex;align-items:center;justify-content:center;color:var(--danger);font-size:20px;"><i class="bi bi-clock-history"></i></div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;color:var(--danger);">Timeline Impact Detected</div>
+            <div style="font-size:12px;color:var(--text-secondary);">V-001 (Tile Upgrade) added 5 days to timeline. Customer replied 3 days late. Total delay: <b>8 days</b>. All subsequent milestones extended by 8 days.</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <div class="delay-bar">
+            <div class="delay-planned" style="width:45%;">Original Plan</div>
+            <div class="delay-gap" style="width:8%;">+8d Delay</div>
+            <div class="delay-actual" style="width:47%;">Adjusted Timeline</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-tertiary);margin-top:4px;">
+            <span>10 Feb 2025</span><span>Original End: 20 Nov</span><span>New End: 28 Nov</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-custom">
+        <div class="section-heading">
+          Variation Log
+          <button class="btn-primary-custom btn-sm-custom" onclick="openModal('addVariationModal')"><i class="bi bi-plus me-1"></i>Add Variation</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="table-custom"><thead><tr><th>Var #</th><th>Date Sent</th><th>Reply Date</th><th>Delay</th><th>Description</th><th>Reason</th><th>Cost Impact</th><th>New Total</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="variationsBody"></tbody></table>
+        </div>
+        <div style="margin-top:12px;padding:12px 16px;background:var(--bg-body);border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;"><b>Original Quote:</b> $485,000 &rarr; <b>With Variations:</b> <span style="font-size:16px;font-weight:800;color:var(--accent);">$494,700</span></div>
+          <div style="font-size:13px;"><b>Total Variation Cost:</b> <span style="font-weight:800;color:var(--danger);">+$9,700</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Modal: Add Site Update -->
+<div class="modal-backdrop-custom" id="addUpdateModal">
+  <div class="modal-content-custom" style="max-width:600px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Add Site Update</h4><p style="font-size:12px;color:var(--text-tertiary);">This will notify Guri and Harpreet Kaur</p></div>
+      <button class="modal-close" onclick="closeModal('addUpdateModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Milestone</label><select class="form-input-custom"><option>Frame Stage</option><option>Lockup Stage</option><option>Fixing Stage</option></select></div>
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Update Title</label><input type="text" class="form-input-custom" placeholder="e.g. Frame inspection passed" id="updateTitleInput"></div>
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Description</label><textarea class="form-input-custom" placeholder="Describe the progress, issues, next steps..." id="updateDescInput"></textarea></div>
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Attach Photos (required for milestone completion)</label>
+        <div style="border:2px dashed var(--border-color);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:var(--transition);" onclick="simulateUpload()" id="uploadZone">
+          <i class="bi bi-cloud-arrow-up" style="font-size:28px;color:var(--text-tertiary);display:block;margin-bottom:6px;"></i>
+          <span style="font-size:12px;color:var(--text-tertiary);" id="uploadText">Click to upload photos (max 5)</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn-outline-custom" onclick="closeModal('addUpdateModal')">Cancel</button>
+        <button class="btn-primary-custom" onclick="submitUpdate()"><i class="bi bi-send me-1"></i>Post Update & Notify</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Variation -->
+<div class="modal-backdrop-custom" id="addVariationModal">
+  <div class="modal-content-custom" style="max-width:600px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Create Variation</h4><p style="font-size:12px;color:var(--text-tertiary);">This will generate a new quote and notify the customer</p></div>
+      <button class="modal-close" onclick="closeModal('addVariationModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Variation Description</label><input type="text" class="form-input-custom" placeholder="e.g. Upgrade kitchen benchtop to quartz" id="varDescInput"></div>
+      <div class="row g-3" style="margin-bottom:14px;">
+        <div class="col-6"><label class="form-label-custom">Reason</label><select class="form-input-custom"><option>Client Request</option><option>Site Condition</option><option>Design Change</option><option>Council Requirement</option><option>Material Unavailable</option></select></div>
+        <div class="col-6"><label class="form-label-custom">Cost Impact ($)</label><input type="number" class="form-input-custom" placeholder="0.00" id="varCostInput"></div>
+      </div>
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Notes</label><textarea class="form-input-custom" placeholder="Additional details about this variation..."></textarea></div>
+      <div style="padding:10px 14px;background:var(--warning-light);border-radius:8px;font-size:12px;color:#92400E;margin-bottom:14px;"><i class="bi bi-info-circle me-1"></i> A new quote will be created with this variation. The timeline will be automatically adjusted based on the customer's reply date.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn-outline-custom" onclick="closeModal('addVariationModal')">Cancel</button>
+        <button class="btn-primary-custom" onclick="submitVariation()"><i class="bi bi-file-earmark-plus me-1"></i>Create Variation & Send Quote</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Send Invoice -->
+<div class="modal-backdrop-custom" id="sendInvoiceModal">
+  <div class="modal-content-custom" style="max-width:500px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Send Invoice</h4></div>
+      <button class="modal-close" onclick="closeModal('sendInvoiceModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Milestone</label><select class="form-input-custom"><option>Frame Stage - $97,000 (20%)</option><option>Lockup Stage - $97,000 (20%)</option></select></div>
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Send To</label><input type="email" class="form-input-custom" value="harpreet.kaur@email.com" readonly></div>
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Message</label><textarea class="form-input-custom">Hi Harpreet, please find attached the progress invoice for the Frame Stage completion. Kindly process at your earliest convenience. Regards, Guri Singh - BuildPro</textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn-outline-custom" onclick="closeModal('sendInvoiceModal')">Cancel</button>
+        <button class="btn-primary-custom" onclick="sendInvoice()"><i class="bi bi-send me-1"></i>Send Invoice</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Message Client -->
+<div class="modal-backdrop-custom" id="messageModal">
+  <div class="modal-content-custom" style="max-width:500px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Message Harpreet Kaur</h4><p style="font-size:12px;color:var(--text-tertiary);">0445 678 123</p></div>
+      <button class="modal-close" onclick="closeModal('messageModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;max-height:200px;overflow-y:auto;" id="chatMessages">
+        <div class="chat-bubble chat-incoming">Hi Guri, how is the frame work going?</div>
+        <div class="chat-bubble chat-outgoing">Hi Harpreet! Frame is almost done. We should complete by next week. I'll send you photos today.</div>
+        <div class="chat-bubble chat-incoming">That's great! Also, I was thinking about upgrading the tiles. Can you send me options?</div>
+        <div class="chat-bubble chat-outgoing">Sure! I'll send a variation quote with premium tile options by tomorrow morning.</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" class="form-input-custom" placeholder="Type a message..." id="chatInput" onkeydown="if(event.key==='Enter')sendChatMessage()">
+        <button class="btn-primary-custom" onclick="sendChatMessage()" style="flex-shrink:0;"><i class="bi bi-send"></i></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Create Quote -->
+<div class="modal-backdrop-custom" id="createQuoteModal">
+  <div class="modal-content-custom" style="max-width:600px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Create New Quote</h4></div>
+      <button class="modal-close" onclick="closeModal('createQuoteModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Quote Type</label><select class="form-input-custom"><option>Initial Build Quote</option><option>Variation Quote</option><option>Revised Quote</option></select></div>
+      <div style="margin-bottom:14px;"><label class="form-label-custom">Description</label><input type="text" class="form-input-custom" placeholder="e.g. Full build - Penrith Residence"></div>
+      <div class="row g-3" style="margin-bottom:14px;">
+        <div class="col-6"><label class="form-label-custom">Amount (ex GST)</label><input type="number" class="form-input-custom" placeholder="0.00"></div>
+        <div class="col-6"><label class="form-label-custom">GST (10%)</label><input type="number" class="form-input-custom" placeholder="Auto-calculated" readonly></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn-outline-custom" onclick="closeModal('createQuoteModal')">Cancel</button>
+        <button class="btn-primary-custom" onclick="showToast('Quote created and sent to harpreet.kaur@email.com with approval button','success');closeModal('createQuoteModal')"><i class="bi bi-file-earmark-plus me-1"></i>Create & Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Material -->
+<div class="modal-backdrop-custom" id="addMaterialModal">
+  <div class="modal-content-custom" style="max-width:550px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Add Material</h4></div>
+      <button class="modal-close" onclick="closeModal('addMaterialModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="row g-3" style="margin-bottom:14px;">
+        <div class="col-6"><label class="form-label-custom">Category</label><select class="form-input-custom"><option>Bricks</option><option>Slab</option><option>Tiles</option><option>Roofing</option><option>Paint</option><option>Windows</option><option>Doors</option><option>Kitchen</option><option>Plumbing</option><option>Electrical</option></select></div>
+        <div class="col-6"><label class="form-label-custom">Product Name</label><input type="text" class="form-input-custom" placeholder="e.g. Austral Charcoal"></div>
+      </div>
+      <div class="row g-3" style="margin-bottom:14px;">
+        <div class="col-6"><label class="form-label-custom">Specification</label><input type="text" class="form-input-custom" placeholder="e.g. 230x110x76mm"></div>
+        <div class="col-6"><label class="form-label-custom">Quantity</label><input type="text" class="form-input-custom" placeholder="e.g. 12000"></div>
+      </div>
+      <div class="row g-3" style="margin-bottom:14px;">
+        <div class="col-6"><label class="form-label-custom">Unit Cost</label><input type="text" class="form-input-custom" placeholder="e.g. $1.25/ea"></div>
+        <div class="col-6"><label class="form-label-custom">Total Cost</label><input type="text" class="form-input-custom" placeholder="Auto-calculated" readonly></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn-outline-custom" onclick="closeModal('addMaterialModal')">Cancel</button>
+        <button class="btn-primary-custom" onclick="showToast('Material added to project catalogue','success');closeModal('addMaterialModal')"><i class="bi bi-plus me-1"></i>Add Material</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Tradie -->
+<div class="modal-backdrop-custom" id="addTradieModal">
+  <div class="modal-content-custom" style="max-width:550px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Add Tradie</h4></div>
+      <button class="modal-close" onclick="closeModal('addTradieModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="row g-3" style="margin-bottom:14px;">
+        <div class="col-6"><label class="form-label-custom">Trade Type</label><select class="form-input-custom"><option>Bricklayer</option><option>Electrician</option><option>Plumber</option><option>Roofer</option><option>Plasterer</option><option>Tiler</option><option>Painter</option><option>Kitchen Installer</option><option>Flooring</option><option>Concreter</option></select></div>
+        <div class="col-6"><label class="form-label-custom">Company Name</label><input type="text" class="form-input-custom" placeholder="e.g. NSW Spark Solutions"></div>
+      </div>
+      <div class="row g-3" style="margin-bottom:14px;">
+        <div class="col-6"><label class="form-label-custom">Contact Number</label><input type="text" class="form-input-custom" placeholder="e.g. 0444 333 444"></div>
+        <div class="col-6"><label class="form-label-custom">Needed For Milestone</label><select class="form-input-custom"><option>Frame Stage</option><option>Lockup Stage</option><option>Fixing Stage</option><option>Practical Completion</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn-outline-custom" onclick="closeModal('addTradieModal')">Cancel</button>
+        <button class="btn-primary-custom" onclick="showToast('Tradie added and reminder scheduled for 1 week before milestone','success');closeModal('addTradieModal')"><i class="bi bi-plus me-1"></i>Add Tradie</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Photo Viewer -->
+<div class="modal-backdrop-custom" id="photoModal">
+  <div class="modal-content-custom" style="max-width:700px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;" id="photoModalTitle">Site Photo</h4></div>
+      <button class="modal-close" onclick="closeModal('photoModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" style="text-align:center;">
+      <img id="photoModalImg" src="" style="width:100%;max-height:500px;object-fit:cover;border-radius:8px;" alt="Site photo">
+      <p style="font-size:12px;color:var(--text-tertiary);margin-top:8px;" id="photoModalCaption"></p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+const notifData = [
+  { id:1, icon:'bi-camera', bg:'var(--purple-light)', color:'var(--purple)', msg:'Brickwork milestone photo uploaded by Amrit Singh — Penrith', time:'30 min ago', unread:true },
+  { id:2, icon:'bi-exclamation-triangle', bg:'var(--danger-light)', color:'var(--danger)', msg:'Roofer Top Roof Co not confirmed for 20 Jan — 1 week reminder sent', time:'1 hr ago', unread:true },
+  { id:3, icon:'bi-arrow-repeat', bg:'var(--warning-light)', color:'#D97706', msg:'Variation V-001 awaiting Harpreet Kaur approval — 2 days sent', time:'3 hrs ago', unread:true },
+  { id:4, icon:'bi-check-circle', bg:'var(--success-light)', color:'var(--success)', msg:'Payment $80,025 cleared — Base Stage invoice INV-003', time:'Yesterday', unread:false },
+  { id:5, icon:'bi-people', bg:'var(--info-light)', color:'var(--info)', msg:'8 workers checked in at Penrith site via QR scan', time:'Yesterday', unread:false },
+];
+
+const activityData = [
+  { title:'Frame Inspection Passed', desc:'Certifier signed off frame inspection. All clear for roof installation. Electrical rough-in 80% complete on ground floor.', time:'5 Jan 2026, 2:30 PM', by:'Amrit Singh', type:'done' },
+  { title:'Brickwork Completed — Ground Floor External', desc:'All external brickwork on ground floor finished by Raj Singh. Internal partitions started.', time:'3 Jan 2026, 4:00 PM', by:'Amrit Singh', type:'done' },
+  { title:'Electrical Rough-in In Progress', desc:'NSW Spark Solutions team on site — Day 2 of 5 for ground floor rough-in.', time:'3 Jan 2026, 10:00 AM', by:'Amrit Singh', type:'done' },
+  { title:'Plumbing First Fix Started', desc:'Flow Right Plumbing commenced first fix — water and waste lines on ground floor.', time:'2 Jan 2026, 8:00 AM', by:'Amrit Singh', type:'done' },
+  { title:'New Year — Work Resumed', desc:'Team back from break. 8 workers on site. Frame continuing on upper floor.', time:'2 Jan 2026, 8:00 AM', by:'Amrit Singh', type:'done' },
+  { title:'Variation Quote Sent — Tile Upgrade', desc:'V-001 sent to Harpreet Kaur: Upgrade to Beaumont Nero Porcelain tiles. +$8,500.', time:'28 Dec 2025, 11:00 AM', by:'Guri Singh', type:'done' },
+];
+
+const milestones = [
+  { id:1, name:'Slab Down', target:'15 Oct 2025', actual:'12 Oct 2025', status:'done', payment:'$48,500 (10%)', paid:true, photos:4, tradie:'Concreter — Punjab Concreting', nextTradie:null },
+  { id:2, name:'Base Stage (Frame)', target:'15 Dec 2025', actual:'18 Dec 2025', status:'done', payment:'$72,750 (15%)', paid:true, photos:3, tradie:'Carpenter — Gurmeet Singh', nextTradie:null },
+  { id:3, name:'Frame Stage Complete', target:'15 Feb 2026', actual:null, status:'active', payment:'$97,000 (20%)', paid:false, photos:2, tradie:'Carpenter — Gurmeet Singh', nextTradie:{name:'Roofer — Top Roof Co', date:'20 Jan 2026', confirmed:false} },
+  { id:4, name:'Lockup Stage', target:'15 Apr 2026', actual:null, status:'upcoming', payment:'$97,000 (20%)', paid:false, photos:0, tradie:null, nextTradie:{name:'Plasterer — Smooth Walls', date:'3 Feb 2026', confirmed:false} },
+  { id:5, name:'Fixing Stage', target:'15 Jun 2026', actual:null, status:'upcoming', payment:'$97,000 (20%)', paid:false, photos:0, tradie:null, nextTradie:{name:'Tiler — Precision Tiling', date:'20 Feb 2026', confirmed:false} },
+  { id:6, name:'Practical Completion', target:'28 Nov 2026', actual:null, status:'upcoming', payment:'$72,750 (15%)', paid:false, photos:0, tradie:null, nextTradie:{name:'Painter — Colour Masters', date:'15 Mar 2026', confirmed:false} },
+];
+
+const materials = [
+  { cat:'Bricks', prod:'Austral — Charcoal Smooth', spec:'230x110x76mm', qty:'12,000', unit:'$1.25/ea', total:'$15,000', ordered:'Yes', delivered:'Yes' },
+  { cat:'Slab', prod:'Wagners Raft Slab', spec:'Class S, 100mm', qty:'185 m²', unit:'$85/m²', total:'$15,725', ordered:'Yes', delivered:'Yes' },
+  { cat:'Tiles', prod:'Beaumont Nero Porcelain', spec:'600x600mm Matte', qty:'145 m²', unit:'$45/m²', total:'$6,525', ordered:'Yes', delivered:'Partial' },
+  { cat:'Roofing', prod:'Lysaght Custom Orb', spec:'Colorbond Surfmist', qty:'210 m²', unit:'$42/m²', total:'$8,820', ordered:'Pending', delivered:'No' },
+  { cat:'Paint', prod:'Dulux Wash&Wear', spec:'Interior Low Sheen', qty:'60 L', unit:'$165/10L', total:'$990', ordered:'Not Yet', delivered:'No' },
+  { cat:'Windows', prod:'Vantage Aluminium', spec:'Mixed sizes (14 units)', qty:'14', unit:'Avg $650', total:'$9,100', ordered:'Yes', delivered:'Yes' },
+  { cat:'Doors', prod:'Stegbar Bi-fold', spec:'3600x2100mm', qty:'2', unit:'$3,200', total:'$6,400', ordered:'Yes', delivered:'Yes' },
+  { cat:'Kitchen', prod:'Custom Kitchen Package', spec:'2-pac white + stone bench', qty:'1 pkg', unit:'Lump sum', total:'$28,500', ordered:'Not Yet', delivered:'No' },
+];
+
+const payments = [
+  { inv:'INV-001', ms:'Deposit', amt:'$24,250', gst:'$2,425', total:'$26,675', sent:'15 Sep 2025', paid:'16 Sep 2025', status:'Cleared' },
+  { inv:'INV-002', ms:'Slab Down', amt:'$48,500', gst:'$4,850', total:'$53,350', sent:'12 Oct 2025', paid:'14 Oct 2025', status:'Cleared' },
+  { inv:'INV-003', ms:'Base Stage', amt:'$72,750', gst:'$7,275', total:'$80,025', sent:'18 Dec 2025', paid:'22 Dec 2025', status:'Cleared' },
+  { inv:'INV-004', ms:'Frame Stage', amt:'$97,000', gst:'$9,700', total:'$106,700', sent:'—', paid:'—', status:'Pending' },
+];
+
+const updates = [
+  { title:'Frame Inspection Passed', desc:'Passed frame inspection today. Certifier signed off. Ready for roof installation next week. All electrical rough-in on ground floor 80% done. Photos attached showing frame from all 4 sides.', by:'Amrit Singh', time:'5 Jan 2026, 2:30 PM', photos:3 },
+  { title:'Brickwork Complete — Ground Floor External', desc:'All external brickwork on ground floor finished by Raj Singh Bricklaying. Internal partition brickwork started. 2 bricklayers on site. Should finish internal walls by Friday.', by:'Amrit Singh', time:'3 Jan 2026, 4:00 PM', photos:5 },
+  { title:'Electrical Team Started Rough-in', desc:'NSW Spark Solutions team commenced rough-in on ground floor. Estimated 5 days to complete. Plumber starting first fix tomorrow morning.', by:'Amrit Singh', time:'3 Jan 2026, 10:00 AM', photos:2 },
+  { title:'New Year — Work Resumed', desc:'Team back from break. 8 workers on site today via QR check-in. Frame work continuing on upper floor. Concrete pump arriving Thursday for balcony slab pour.', by:'Amrit Singh', time:'2 Jan 2026, 8:00 AM', photos:2 },
+];
+
+const tradies = [
+  { trade:'Bricklayer', company:'Raj Singh Bricklaying', contact:'0433 111 222', needed:'Slab Stage', scheduled:'Completed', reminder:'—', confirmed:'Yes', status:'Completed' },
+  { trade:'Electrician', company:'NSW Spark Solutions', contact:'0444 333 444', needed:'Frame Stage', scheduled:'2-7 Jan', reminder:'Sent 26 Dec', confirmed:'Yes', status:'On Site' },
+  { trade:'Plumber', company:'Flow Right Plumbing', contact:'0455 555 666', needed:'Frame Stage', scheduled:'5-12 Jan', reminder:'Sent 29 Dec', confirmed:'Yes', status:'On Site' },
+  { trade:'Roofer', company:'Top Roof Co', contact:'0466 777 888', needed:'Frame Stage', scheduled:'20 Jan', reminder:'Sent 13 Jan', confirmed:'Pending', status:'Needs Attention' },
+  { trade:'Plasterer', company:'Smooth Walls Plaster', contact:'0477 999 000', needed:'Lockup Stage', scheduled:'3 Feb', reminder:'Due 27 Jan', confirmed:'Not Yet', status:'Yet to Connect' },
+  { trade:'Tiler', company:'Precision Tiling', contact:'0488 111 333', needed:'Fixing Stage', scheduled:'20 Feb', reminder:'Due 13 Feb', confirmed:'Not Yet', status:'Scheduled' },
+  { trade:'Painter', company:'Colour Masters', contact:'0499 222 444', needed:'Fixing Stage', scheduled:'15 Mar', reminder:'Due 8 Mar', confirmed:'Not Yet', status:'Scheduled' },
+  { trade:'Kitchen Installer', company:'Elite Kitchens NSW', contact:'0411 333 555', needed:'Fixing Stage', scheduled:'1 Apr', reminder:'Due 25 Mar', confirmed:'Not Yet', status:'Scheduled' },
+];
+
+const workers = [
+  { name:'Gurmeet Singh', trade:'Carpenter', gps:true, checkIn:'6:45 AM', checkOut:'2:45 PM', hours:8.0, rate:35, status:'Completed' },
+  { name:'Harpreet Gill', trade:'Carpenter', gps:true, checkIn:'6:50 AM', checkOut:'2:50 PM', hours:8.0, rate:35, status:'Completed' },
+  { name:'Kulwinder Dhillon', trade:'Electrician', gps:true, checkIn:'7:00 AM', checkOut:'3:00 PM', hours:8.0, rate:45, status:'Completed' },
+  { name:'Jatinder Sidhu', trade:'Electrician', gps:true, checkIn:'7:05 AM', checkOut:'—', hours:7.5, rate:45, status:'On Site' },
+  { name:'Manjit Brar Jr', trade:'Labourer', gps:true, checkIn:'6:30 AM', checkOut:'2:30 PM', hours:8.0, rate:28, status:'Completed' },
+  { name:'Sukhwinder Sandhu', trade:'Labourer', gps:true, checkIn:'6:35 AM', checkOut:'—', hours:7.5, rate:28, status:'On Site' },
+  { name:'Raj Brar', trade:'Bricklayer', gps:true, checkIn:'6:40 AM', checkOut:'2:40 PM', hours:8.0, rate:38, status:'Completed' },
+  { name:'Davinder Johal', trade:'Bricklayer', gps:true, checkIn:'6:45 AM', checkOut:'2:45 PM', hours:8.0, rate:38, status:'Completed' },
+];
+
+const quotes = [
+  { id:'QT-2025-001', type:'Initial', date:'20 Jan 2025', desc:'Full Build — Penrith Residence 4BR Double Storey', amt:'$440,909', gst:'$44,091', total:'$485,000', sent:'20 Jan', approved:'22 Jan', status:'Approved' },
+  { id:'QT-2025-V01', type:'Variation', date:'28 Dec 2025', desc:'V-001: Upgrade to premium Beaumont Nero Porcelain tiles', amt:'$7,727', gst:'$773', total:'$8,500', sent:'28 Dec', approved:'—', status:'Pending Approval' },
+  { id:'QT-2025-V02', type:'Variation', date:'30 Dec 2025', desc:'V-002: Additional 12 power points throughout house', amt:'$1,091', gst:'$109', total:'$1,200', sent:'30 Dec', approved:'—', status:'Pending Approval' },
+];
+
+const variations = [
+  { id:'V-001', sent:'28 Dec 2025', reply:'—', delay:'—', desc:'Upgrade to premium Beaumont Nero Porcelain tiles (145 m²)', reason:'Client Request', cost:'+$8,500', newTotal:'$493,500', status:'Awaiting Approval' },
+  { id:'V-002', sent:'30 Dec 2025', reply:'—', delay:'—', desc:'Additional 12 power points — 4 in kitchen, 4 in living, 2 per bathroom', reason:'Client Request', cost:'+$1,200', newTotal:'$494,700', status:'Awaiting Approval' },
+];
+
+// ══════════════════════════════════════
+// LIVE CLOCK
+// ══════════════════════════════════════
+function updateClock() {
+  const now = new Date();
+  document.getElementById('liveClock').innerHTML = `<span>${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}</span> AEST`;
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ══════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════
+function showToast(msg, type='info') {
+  const c = { success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'}, danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'}, info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'}, warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'} };
+  const s = c[type]||c.info;
+  const t = document.createElement('div');
+  t.className = 'toast-item';
+  t.innerHTML = `<div class="toast-icon" style="background:${s.bg};color:${s.color};"><i class="bi ${s.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => removeToast(t), 4500);
+}
+function removeToast(el) { if(!el||!el.parentElement)return; el.classList.add('removing'); setTimeout(()=>el.remove(),250); }
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+let notifs = JSON.parse(JSON.stringify(notifData));
+function renderNotifs() {
+  const uc = notifs.filter(n=>n.unread).length;
+  const badge = document.getElementById('notifCount');
+  badge.textContent = uc; badge.style.display = uc>0?'flex':'none';
+  document.getElementById('notifList').innerHTML = notifs.map(n=>`
+    <div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})">
+      <div class="notif-icon" style="background:${n.bg};color:${n.color};"><i class="bi ${n.icon}"></i></div>
+      <div class="notif-text"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div>
+      <button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button>
+    </div>
+  `).join('');
+}
+function toggleNotif(){document.getElementById('notifDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn');if(d&&!d.contains(e.target)&&!b.contains(e.target))d.classList.remove('show')});
+function readNotif(id){const n=notifs.find(x=>x.id===id);if(n&&n.unread){n.unread=false;renderNotifs()}showToast('Opening: '+(n?n.msg.substring(0,45)+'...':''),'info')}
+function dismissNotif(id){const el=document.querySelector(`.notification-item[data-id="${id}"]`);if(el){el.classList.add('dismissing');// Read project ID from URL
+  const params = new URLSearchParams(window.location.search);
+  const projectId = parseInt(params.get('id')) || 1;
+  document.getElementById('projectIdDisplay').textContent = 'Project ID: ' + projectId;
+
+setTimeout(()=>{notifs=notifs.filter(x=>x.id!==id);renderNotifs()},250)}}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('All notifications marked as read','success')}
+
+// ══════════════════════════════════════
+// TABS
+// ══════════════════════════════════════
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.detail-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).style.display='block';
+  if(btn) btn.classList.add('active');
+}
+
+// ══════════════════════════════════════
+// MODALS
+// ══════════════════════════════════════
+function openModal(id){document.getElementById(id).classList.add('show')}
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-backdrop-custom').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'))});
+
+// ══════════════════════════════════════
+// BURNDOWN CHART
+// ══════════════════════════════════════
+function initBurndown() {
+  new Chart(document.getElementById('burndownChart').getContext('2d'), {
+    type:'line',
+    data:{
+      labels:['Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],
+      datasets:[
+        { label:'Budget ($K)', data:[485,485,485,485,485,485,485,485,485,485,485,485], borderColor:'#E2E8F0', borderDash:[5,5], borderWidth:2, pointRadius:0, fill:false, tension:0 },
+        { label:'Planned Spend ($K)', data:[24,48,97,145,194,243,291,339,388,437,460,485], borderColor:'var(--primary)', borderWidth:2, pointRadius:3, pointBackgroundColor:'var(--primary)', tension:.3, fill:false },
+        { label:'Actual Spend ($K)', data:[24,49,99,148,194,243,290,312,312,312,312,312], borderColor:'var(--accent)', borderWidth:2.5, pointRadius:4, pointBackgroundColor:'var(--accent)', tension:.3, fill:{target:'origin',above:'rgba(232,115,12,.06)'} }
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11,family:'Inter'},color:'#64748B',usePointStyle:true,padding:12}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#94A3B8'}},y:{beginAtZero:true,grid:{color:'#F1F5F9'},ticks:{font:{size:10},color:'#94A3B8',callback:v=>'$'+v+'K'}}},interaction:{mode:'index',intersect:false}}
+  });
+}
+
+// ══════════════════════════════════════
+// MILESTONE CHART
+// ══════════════════════════════════════
+function initMilestoneChart() {
+  new Chart(document.getElementById('milestoneChart').getContext('2d'), {
+    type:'doughnut',
+    data:{ labels:['Completed','In Progress','Upcoming'], datasets:[{ data:[2,1,3], backgroundColor:['#16A34A','#F59E0B','#E2E8F0'], borderWidth:0, hoverOffset:6 }] },
+    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{font:{size:11,family:'Inter'},color:'#64748B',padding:10,usePointStyle:true}}}}
+  });
+}
+
+// ══════════════════════════════════════
+// RENDER: ACTIVITY TIMELINE
+// ══════════════════════════════════════
+function renderActivity() {
+  document.getElementById('activityTimeline').innerHTML = activityData.map(a=>`
+    <div class="ti-custom ${a.type}">
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:2px;">${a.title}</h4>
+      <p style="font-size:12.5px;color:var(--text-secondary);margin-bottom:0;">${a.desc}</p>
+      <small style="color:var(--text-tertiary);">${a.by} — ${a.time}</small>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════
+// RENDER: MILESTONES
+// ══════════════════════════════════════
+function renderMilestones() {
+  document.getElementById('milestoneList').innerHTML = milestones.map(m=>{
+    const statusMap = { done:{pill:'pill-success',text:m.actual?'Completed ('+dayDiff(m.target,m.actual)+')':'Completed'}, active:{pill:'pill-warning',text:'In Progress'}, upcoming:{pill:'pill-gray',text:'Upcoming'} };
+    const s = statusMap[m.status];
+    const photoHTML = m.photos > 0 ? `<div class="ms-photo-grid">${Array.from({length:Math.min(m.photos,4)},(_,i)=>`<div class="ms-photo" onclick="viewPhoto('${m.name} — Photo ${i+1}','https://picsum.photos/seed/penrith${m.id}${i}/400/300')"><i class="bi bi-image"></i></div>`).join('')}${m.photos>4?`<div class="ms-photo">+${m.photos-4}</div>`:''}</div>` : '';
+    const tradieAlert = m.nextTradie ? `<div class="tradie-remind" style="margin-top:10px;padding:10px 12px;"><div class="tr-icon" style="width:32px;height:32px;font-size:14px;"><i class="bi bi-tools"></i></div><div style="flex:1;"><div style="font-size:12px;font-weight:600;">Next: ${m.nextTradie.name}</div><div style="font-size:11px;color:var(--text-secondary);">Scheduled ${m.nextTradie.date} ${m.nextTradie.confirmed?'':'— Not confirmed!'}</div></div><button class="btn-outline-custom btn-sm-custom" onclick="event.stopPropagation();showToast('Reminder sent to ${m.nextTradie.name}','success')"><i class="bi bi-bell me-1"></i>Remind</button></div>` : '';
+    return `<div class="ms-card ms-${m.status}">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:10px;color:var(--text-tertiary);font-weight:700;">#${m.id}</span>
+            <b style="font-size:14px;">${m.name}</b>
+            <span class="status-pill ${s.pill}">${s.text}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-secondary);display:flex;gap:16px;flex-wrap:wrap;">
+            <span><i class="bi bi-calendar me-1"></i>Target: ${m.target}</span>
+            ${m.actual?`<span><i class="bi bi-check2-circle me-1" style="color:var(--success)"></i>Actual: ${m.actual}</span>`:''}
+            <span><i class="bi bi-cash me-1"></i>${m.payment}</span>
+            ${m.tradie?`<span><i class="bi bi-person me-1"></i>${m.tradie}</span>`:''}
+          </div>
+        </div>
+        <div class="d-flex gap-1">
+          ${m.status==='active'?`<button class="btn-primary-custom btn-sm-custom" onclick="openModal('addUpdateModal')"><i class="bi bi-camera me-1"></i>Add Photo</button>`:''}
+          ${!m.paid&&m.status==='done'?`<button class="btn-outline-custom btn-sm-custom" onclick="openModal('sendInvoiceModal')"><i class="bi bi-send me-1"></i>Invoice</button>`:''}
+        </div>
+      </div>
+      ${photoHTML}
+      ${tradieAlert}
+    </div>`;
+  }).join('');
+
+  // Tradie alerts sidebar
+  const alerts = milestones.filter(m=>m.nextTradie&&!m.nextTradie.confirmed);
+  document.getElementById('tradieAlerts').innerHTML = alerts.length ? alerts.map(m=>`
+    <div class="tradie-remind">
+      <div class="tr-icon"><i class="bi bi-tools"></i></div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;">${m.nextTradie.name}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Needed for: ${m.name} — ${m.nextTradie.date}</div>
+      </div>
+      <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Reminder sent to ${m.nextTradie.name} for ${m.name}','success')"><i class="bi bi-bell"></i></button>
+    </div>
+  `).join('') : '<div style="font-size:12px;color:var(--success);text-align:center;padding:20px;"><i class="bi bi-check-circle" style="font-size:24px;display:block;margin-bottom:6px;"></i>All tradies confirmed!</div>';
+}
+
+function dayDiff(a,b) {
+  const d1=new Date(a),d2=new Date(b);
+  const diff=Math.round((d2-d1)/(1000*60*60*24));
+  return diff<0?Math.abs(diff)+' days early':diff+' days late';
+}
+
+// ══════════════════════════════════════
+// RENDER: MATERIALS
+// ══════════════════════════════════════
+function renderMaterials(filter='') {
+  const f = materials.filter(m=>!filter||m.cat.toLowerCase().includes(filter)||m.prod.toLowerCase().includes(filter)||m.spec.toLowerCase().includes(filter));
+  const pill = t => ({'Yes':'pill-success','Partial':'pill-warning','No':'pill-gray','Pending':'pill-warning','Not Yet':'pill-gray'}[t]||'pill-gray');
+  document.getElementById('materialsBody').innerHTML = f.map(m=>`
+    <tr>
+      <td><b>${m.cat}</b></td>
+      <td>${m.prod}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${m.spec}</td>
+      <td>${m.qty}</td>
+      <td>${m.unit}</td>
+      <td style="font-weight:700;">${m.total}</td>
+      <td><span class="status-pill ${pill(m.ordered)}">${m.ordered}</span></td>
+      <td><span class="status-pill ${pill(m.delivered)}">${m.delivered}</span></td>
+      <td><button class="btn-icon" onclick="showToast('Editing ${m.prod}...','info')"><i class="bi bi-pencil"></i></button></td>
+    </tr>
+  `).join('');
+}
+function filterMaterials() { renderMaterials(document.getElementById('matSearch').value.toLowerCase().trim()); }
+
+// ══════════════════════════════════════
+// RENDER: PAYMENTS
+// ══════════════════════════════════════
+function renderPayments() {
+  const pill = s => ({'Cleared':'pill-success','Pending':'pill-warning','Overdue':'pill-danger'}[s]||'pill-gray');
+  document.getElementById('paymentsBody').innerHTML = payments.map(p=>`
+    <tr>
+      <td><b>${p.inv}</b></td>
+      <td>${p.ms}</td>
+      <td>${p.amt}</td>
+      <td>${p.gst}</td>
+      <td style="font-weight:700;">${p.total}</td>
+      <td>${p.sent}</td>
+      <td>${p.paid}</td>
+      <td><span class="status-pill ${pill(p.status)}">${p.status}</span></td>
+      <td>
+        <div class="d-flex gap-1">
+          ${p.status==='Pending'?`<button class="btn-icon" title="Send reminder" onclick="showToast('Payment reminder sent to Harpreet Kaur for ${p.inv}','success')"><i class="bi bi-bell"></i></button>`:''}
+          <button class="btn-icon" title="Download PDF" onclick="showToast('Downloading ${p.inv} PDF...','success')"><i class="bi bi-download"></i></button>
+          <button class="btn-icon" title="View" onclick="showToast('Opening ${p.inv} details...','info')"><i class="bi bi-eye"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ══════════════════════════════════════
+// RENDER: UPDATES
+// ══════════════════════════════════════
+function renderUpdates() {
+  document.getElementById('updatesList').innerHTML = updates.map(u=>{
+    const photosHTML = u.photos > 0 ? `<div class="ms-photo-grid" style="margin-top:10px;">${Array.from({length:Math.min(u.photos,4)},(_,i)=>`<div class="ms-photo" onclick="viewPhoto('${u.title} — Photo ${i+1}','https://picsum.photos/seed/update${u.time.slice(0,6)}${i}/400/300')"><i class="bi bi-image"></i></div>`).join('')}</div>` : '';
+    return `<div class="ms-card ms-done">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <h4 style="font-size:14px;font-weight:700;margin-bottom:2px;">${u.title}</h4>
+          <p style="font-size:13px;color:var(--text-secondary);margin:0;">${u.desc}</p>
+          <small style="color:var(--text-tertiary);"><i class="bi bi-person me-1"></i>${u.by} — ${u.time} &nbsp;|&nbsp; <i class="bi bi-image me-1"></i>${u.photos} photos</small>
+        </div>
+        <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Notified: Guri + Harpreet Kaur about this update','info')"><i class="bi bi-bell me-1"></i>Notify</button>
+      </div>
+      ${photosHTML}
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+// RENDER: TRADIES
+// ══════════════════════════════════════
+function renderTradie() {
+  const pill = s => ({'Completed':'pill-success','On Site':'pill-success','Needs Attention':'pill-danger','Yet to Connect':'pill-gray','Scheduled':'pill-info'}[s]||'pill-gray');
+  const remindPill = r => ({'—':'pill-gray','Sent 26 Dec':'pill-success','Sent 29 Dec':'pill-success','Sent 13 Jan':'pill-success','Due 27 Jan':'pill-warning','Due 13 Feb':'pill-gray','Due 8 Mar':'pill-gray','Due 25 Mar':'pill-gray'}[r]||'pill-gray');
+  document.getElementById('tradieBody').innerHTML = tradies.map(t=>`
+    <tr>
+      <td><b>${t.trade}</b></td>
+      <td>${t.company}</td>
+      <td style="font-size:12px;">${t.contact}</td>
+      <td style="font-size:12px;">${t.needed}</td>
+      <td style="font-size:12px;">${t.scheduled}</td>
+      <td><span class="status-pill ${remindPill(t.reminder)}" style="font-size:10px;">${t.reminder}</span></td>
+      <td>${t.confirmed==='Yes'?'<i class="bi bi-check-circle" style="color:var(--success);font-size:16px;"></i>':'<i class="bi bi-x-circle" style="color:var(--text-tertiary);font-size:16px;"></i>'}</td>
+      <td><span class="status-pill ${pill(t.status)}">${t.status}</span></td>
+      <td>
+        <div class="d-flex gap-1">
+          ${t.status!=='Completed'?`<button class="btn-icon" title="Send reminder" onclick="showToast('Reminder sent to ${t.company} (${t.contact})','success')"><i class="bi bi-bell"></i></button>`:''}
+          <button class="btn-icon" title="Call" onclick="showToast('Calling ${t.contact}...','info')"><i class="bi bi-telephone"></i></button>
+          <button class="btn-icon" title="Edit" onclick="showToast('Editing ${t.company}...','info')"><i class="bi bi-pencil"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function sendAllTradieReminders() {
+  showToast('Reminders sent to all unconfirmed tradies: Top Roof Co, Smooth Walls Plaster','success');
+}
+
+// ══════════════════════════════════════
+// RENDER: WORKERS
+// ══════════════════════════════════════
+function renderWorkers() {
+  const pill = s => ({'Completed':'pill-success','On Site':'pill-warning'}[s]||'pill-gray');
+  document.getElementById('workersBody').innerHTML = workers.map(w=>`
+    <tr>
+      <td><b>${w.name}</b></td>
+      <td style="font-size:12px;">${w.trade}</td>
+      <td><span class="gps-dot ${w.gps?'gps-active':'gps-inactive'}"></span><span style="font-size:11px;color:${w.gps?'var(--success)':'var(--text-tertiary)'};">${w.gps?'Verified':'—'}</span></td>
+      <td style="font-size:12px;font-variant-numeric:tabular-nums;">${w.checkIn}</td>
+      <td style="font-size:12px;font-variant-numeric:tabular-nums;">${w.checkOut}</td>
+      <td style="font-weight:700;font-variant-numeric:tabular-nums;">${w.hours.toFixed(1)}</td>
+      <td style="font-weight:600;color:var(--accent);">$${(w.hours*w.rate).toFixed(0)}</td>
+      <td><span class="status-pill ${pill(w.status)}">${w.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ══════════════════════════════════════
+// RENDER: QUOTES
+// ══════════════════════════════════════
+function renderQuotes() {
+  const pill = s => ({'Approved':'pill-success','Pending Approval':'pill-warning','Rejected':'pill-danger'}[s]||'pill-gray');
+  document.getElementById('quotesBody').innerHTML = quotes.map(q=>`
+    <tr>
+      <td><b>${q.id}</b></td>
+      <td><span class="status-pill ${q.type==='Variation'?'pill-info':'pill-purple'}">${q.type}</span></td>
+      <td style="font-size:12px;">${q.date}</td>
+      <td style="font-size:12px;max-width:200px;">${q.desc}</td>
+      <td>${q.amt}</td>
+      <td style="font-size:12px;color:var(--text-tertiary);">${q.gst}</td>
+      <td style="font-weight:700;">${q.total}</td>
+      <td>${q.sent}</td>
+      <td>${q.approved}</td>
+      <td><span class="status-pill ${pill(q.status)}">${q.status}</span></td>
+      <td>
+        <div class="d-flex gap-1">
+          <button class="btn-icon" title="View" onclick="showToast('Opening ${q.id} preview...','info')"><i class="bi bi-eye"></i></button>
+          <button class="btn-icon" title="Resend" onclick="showToast('Quote ${q.id} resent to harpreet.kaur@email.com','success')"><i class="bi bi-send"></i></button>
+          <button class="btn-icon" title="Download" onclick="showToast('Downloading ${q.id} PDF...','success')"><i class="bi bi-download"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ══════════════════════════════════════
+// RENDER: VARIATIONS
+// ══════════════════════════════════════
+function renderVariations() {
+  const pill = s => ({'Approved':'pill-success','Awaiting Approval':'pill-warning','Rejected':'pill-danger'}[s]||'pill-gray');
+  document.getElementById('variationsBody').innerHTML = variations.map(v=>`
+    <tr>
+      <td><b>${v.id}</b></td>
+      <td style="font-size:12px;">${v.sent}</td>
+      <td style="font-size:12px;">${v.reply}</td>
+      <td style="font-size:12px;font-weight:600;color:${v.delay==='—'?'var(--text-tertiary)':'var(--danger)'};">${v.delay}</td>
+      <td style="font-size:12px;max-width:220px;">${v.desc}</td>
+      <td style="font-size:12px;">${v.reason}</td>
+      <td style="font-weight:700;color:var(--danger);">${v.cost}</td>
+      <td style="font-weight:700;">${v.newTotal}</td>
+      <td><span class="status-pill ${pill(v.status)}">${v.status}</span></td>
+      <td>
+        <div class="d-flex gap-1">
+          <button class="btn-icon" title="Send reminder" onclick="showToast('Approval reminder sent to Harpreet Kaur for ${v.id}','warning')"><i class="bi bi-bell"></i></button>
+          <button class="btn-icon" title="View quote" onclick="showToast('Opening variation quote ${v.id}...','info')"><i class="bi bi-eye"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ══════════════════════════════════════
+// ACTIONS
+// ══════════════════════════════════════
+function submitUpdate() {
+  const title = document.getElementById('updateTitleInput').value;
+  const desc = document.getElementById('updateDescInput').value;
+  if(!title||!desc) { showToast('Please fill in the title and description','warning'); return; }
+  updates.unshift({ title, desc, by:'Amrit Singh', time:'Just now', photos:0 });
+  activityData.unshift({ title, desc, time:'Just now', by:'Amrit Singh', type:'done' });
+  renderUpdates(); renderActivity();
+  document.getElementById('updateTitleInput').value='';
+  document.getElementById('updateDescInput').value='';
+  document.getElementById('uploadText').textContent='Click to upload photos (max 5)';
+  closeModal('addUpdateModal');
+  showToast('Site update posted! Notifications sent to Guri Singh and Harpreet Kaur','success');
+}
+
+function submitVariation() {
+  const desc = document.getElementById('varDescInput').value;
+  const cost = document.getElementById('varCostInput').value;
+  if(!desc||!cost) { showToast('Please fill in description and cost','warning'); return; }
+  const newId = 'V-00'+(variations.length+1);
+  const lastTotal = variations.length?parseFloat(variations[variations.length-1].newTotal.replace(/[$,]/g,'')):485000;
+  const newTotal = lastTotal + parseFloat(cost);
+  variations.push({ id:newId, sent:'Just now', reply:'—', delay:'—', desc, reason:'Client Request', cost:'+$'+parseFloat(cost).toLocaleString(), newTotal:'$'+newTotal.toLocaleString(), status:'Awaiting Approval' });
+  quotes.push({ id:'QT-2025-V0'+(quotes.length-1), type:'Variation', date:'Just now', desc, amt:'$'+(parseFloat(cost)/1.1).toFixed(0), gst:'$'+(parseFloat(cost)*0.1/1.1).toFixed(0), total:'$'+parseFloat(cost).toLocaleString(), sent:'Just now', approved:'—', status:'Pending Approval' });
+  renderVariations(); renderQuotes();
+  document.getElementById('varDescInput').value='';
+  document.getElementById('varCostInput').value='';
+  closeModal('addVariationModal');
+  showToast(`Variation ${newId} created! Quote sent to Harpreet Kaur with approval button & upload section`,'success');
+}
+
+function sendInvoice() {
+  closeModal('sendInvoiceModal');
+  showToast('Invoice INV-004 sent to harpreet.kaur@email.com with payment link','success');
+}
+
+function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if(!msg) return;
+  const container = document.getElementById('chatMessages');
+  container.innerHTML += `<div class="chat-bubble chat-outgoing">${msg}</div>`;
+  input.value='';
+  container.scrollTop = container.scrollHeight;
+  // Simulate reply
+  setTimeout(()=>{
+    const replies = ['Thanks Guri, that sounds good!','Okay, let me think about it.','Can you send me some photos?','When can we meet on site?','Great, looking forward to it!'];
+    container.innerHTML += `<div class="chat-bubble chat-incoming">${replies[Math.floor(Math.random()*replies.length)]}</div>`;
+    container.scrollTop = container.scrollHeight;
+  }, 1500);
+}
+
+function simulateUpload() {
+  const zone = document.getElementById('uploadZone');
+  const text = document.getElementById('uploadText');
+  zone.style.borderColor = 'var(--primary)';
+  zone.style.background = 'var(--primary-glow)';
+  text.textContent = 'Uploading...';
+  text.style.color = 'var(--primary)';
+  setTimeout(()=>{
+    text.textContent = '3 photos uploaded successfully';
+    text.style.color = 'var(--success)';
+    zone.style.borderColor = 'var(--success)';
+    zone.style.background = 'var(--success-light)';
+    showToast('3 photos uploaded and attached to update','success');
+  }, 1200);
+}
+
+function viewPhoto(title, src) {
+  document.getElementById('photoModalTitle').textContent = title;
+  document.getElementById('photoModalImg').src = src;
+  document.getElementById('photoModalCaption').textContent = '42 Railway St, Penrith NSW — ' + title;
+  openModal('photoModal');
+}
+
+// ══════════════════════════════════════
+// AUTO-UPDATE TIMESTAMP
+// ══════════════════════════════════════
+let updateSec = 0;
+setInterval(()=>{
+  updateSec++;
+  const el = document.getElementById('lastUpdated');
+  if(updateSec<60) el.textContent='Updated just now';
+  else if(updateSec<120) el.textContent='Updated 1 min ago';
+  else el.textContent='Updated '+Math.floor(updateSec/60)+' min ago';
+}, 1000);
+
+// ══════════════════════════════════════
+// LIVE WORKER COUNT SIMULATION
+// ══════════════════════════════════════
+setInterval(()=>{
+  const el = document.getElementById('workerCount');
+  if(el) {
+    const v = parseInt(el.textContent);
+    const nv = Math.max(6, Math.min(10, v + (Math.random()>0.7?1:0)*(Math.random()>0.5?1:-1)));
+    if(nv!==v) el.textContent = nv;
+  }
+}, 8000);
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(()=>{
+  renderNotifs();
+  initBurndown();
+  initMilestoneChart();
+  renderActivity();
+  renderMilestones();
+  renderMaterials();
+  renderPayments();
+  renderUpdates();
+  renderTradie();
+  renderWorkers();
+  renderQuotes();
+  renderVariations();
+}, 100);
+</script>
+</body>
+</html>

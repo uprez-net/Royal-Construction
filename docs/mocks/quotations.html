@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quotations - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.12);
+  --accent:#E8730C;--accent-light:#FFF3E0;
+  --success:#16A34A;--success-light:#DCFCE7;
+  --danger:#DC2626;--danger-light:#FEE2E2;
+  --warning:#F59E0B;--warning-light:#FEF9C3;
+  --info:#2563EB;--info-light:#DBEAFE;
+  --purple:#7C3AED;--purple-light:#EDE9FE;
+  --bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;
+  --text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;
+  --border-color:#E2E8F0;--border-light:#F1F5F9;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);
+  --sidebar-bg:#0F172A;--sidebar-width:64px;
+  --transition:all .2s cubic-bezier(.4,0,.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#94A3B8}
+.wrapper{display:flex;min-height:100vh}
+
+/* ── Sidebar (exact match from index) ── */
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}
+.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}
+.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}
+.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}
+.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}
+.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}
+.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}
+.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}
+@media(max-width:768px){.sidebar-tooltip{display:none}}
+
+/* ── Main Panel ── */
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+
+/* ── Top Header (exact match) ── */
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}
+.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px;letter-spacing:.01em}
+.header-menu a:hover{color:rgba(255,255,255,.9)}
+.header-menu a.active{color:white}
+.header-menu a.active::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+
+/* ── Sub Header ── */
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+
+/* ── Content ── */
+.content-container{padding:20px;max-width:1560px;margin:0 auto;width:100%}
+
+/* ── Cards ── */
+.card-custom{background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);margin-bottom:16px;transition:var(--transition)}
+.card-custom:hover{box-shadow:var(--shadow-md)}
+
+/* ── Section Headings ── */
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+
+/* ── Stats ── */
+.stat-value{font-size:26px;font-weight:800;line-height:1.2;color:var(--text-primary);margin-top:2px;letter-spacing:-.02em}
+.stat-desc{font-size:11.5px;color:var(--text-tertiary);margin-top:3px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;flex-shrink:0}
+
+/* ── Badges ── */
+.trend-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.02em}
+.trend-up{color:var(--success);background:rgba(22,163,74,.08)}
+.trend-down{color:var(--danger);background:rgba(220,38,38,.08)}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}
+.pill-success{background:rgba(22,163,74,.08);color:var(--success)}
+.pill-warning{background:rgba(245,158,11,.08);color:#D97706}
+.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}
+.pill-info{background:rgba(37,99,235,.08);color:var(--info)}
+.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}
+.pill-purple{background:var(--purple-light);color:var(--purple)}
+
+/* ── Buttons ── */
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white;text-decoration:none}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-sm-custom{padding:5px 10px;font-size:11.5px;border-radius:6px}
+.btn-danger-custom{background:var(--danger);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-danger-custom:hover{background:#B91C1C;transform:translateY(-1px);box-shadow:0 4px 12px rgba(220,38,38,.3);color:white}
+.btn-warning-custom{background:var(--warning);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-warning-custom:hover{background:#D97706;transform:translateY(-1px);color:white}
+.btn-success-custom{background:var(--success);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-success-custom:hover{background:#15803D;transform:translateY(-1px);color:white}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+
+/* ── Tables ── */
+.table-custom{width:100%;border-collapse:separate;border-spacing:0}
+.table-custom thead th{font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;letter-spacing:.04em;padding:10px 14px;border-bottom:1px solid var(--border-color);background:var(--bg-body)}
+.table-custom td{font-size:13px;vertical-align:middle;padding:12px 14px;border-bottom:1px solid var(--border-light)}
+.table-custom tr:last-child td{border-bottom:none}
+.table-custom tbody tr{transition:background .15s;cursor:pointer}
+.table-custom tbody tr:hover td{background:var(--bg-hover)}
+
+/* ── Progress ── */
+.progress-bar-custom{height:7px;background:#E2E8F0;border-radius:4px;overflow:hidden}
+.progress-fill-custom{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+
+/* ── Notifications ── */
+.notification-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;background:var(--danger);border-radius:99px;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg)}
+.notification-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:360px;background:white;border-radius:10px;box-shadow:var(--shadow-lg);z-index:1001;display:none;border:1px solid var(--border-color);overflow:hidden}
+.notification-dropdown.show{display:block;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notification-header{padding:14px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.notification-mark-all{font-size:11.5px;color:var(--primary);cursor:pointer;font-weight:600}
+.notification-item{padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s;display:flex;align-items:flex-start;gap:10px}
+.notification-item:hover{background:var(--bg-hover)}
+.notification-item.unread{background:rgba(13,148,136,.03)}
+.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.notif-text{flex:1;min-width:0}
+.notif-msg{font-size:12.5px;line-height:1.4;color:var(--text-primary)}
+.notif-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.notif-dismiss{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);cursor:pointer;opacity:0;transition:var(--transition);flex-shrink:0;font-size:10px;border:none;background:none}
+.notification-item:hover .notif-dismiss{opacity:1}
+.notif-dismiss:hover{background:var(--danger-light);color:var(--danger)}
+.notification-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--border-color)}
+.notification-view-all{font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600}
+
+/* ── User Pill ── */
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}
+.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+
+/* ── Search ── */
+.search-box{position:relative}
+.search-box input{width:200px;padding:6px 12px 6px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);font-family:inherit;outline:none}
+.search-box input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);width:260px}
+.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px}
+
+/* ── Toast ── */
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:320px;animation:toastIn .3s ease}
+.toast-item.removing{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.toast-msg{flex:1;font-size:13px;font-weight:500}
+.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;padding:0;line-height:1}
+.toast-close:hover{color:var(--text-primary)}
+
+/* ── Modal ── */
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center}
+.modal-backdrop-custom.show{display:flex;animation:fadeIn .2s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}
+.modal-content-custom.md{max-width:680px}
+.modal-content-custom.lg{max-width:880px}
+.modal-content-custom.xl{max-width:1050px}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:20px 24px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg-card);z-index:1;border-radius:14px 14px 0 0}
+.modal-body-custom{padding:20px 24px}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:16px}
+.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+
+/* ── Form Controls ── */
+.form-input{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text-primary);background:var(--bg-card);transition:var(--transition);outline:none}
+.form-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.form-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary);margin-bottom:4px;display:block}
+.form-group{margin-bottom:14px}
+.form-select-custom{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text-primary);background:var(--bg-card);transition:var(--transition);outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394A3B8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.form-select-custom:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+
+/* ── Detail Grid ── */
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}
+.detail-value{font-size:13px;font-weight:600}
+
+/* ── Timeline ── */
+.tl-custom{position:relative;padding-left:28px}
+.tl-custom::before{content:'';position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--border-color);border-radius:1px}
+.ti-custom{position:relative;padding-bottom:18px}
+.ti-custom::before{content:'';position:absolute;left:-23px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--primary);border:2px solid white;box-shadow:0 0 0 2px var(--primary);z-index:1}
+.ti-custom.done::before{background:var(--success);box-shadow:0 0 0 2px var(--success)}
+.ti-custom.warn::before{background:var(--warning);box-shadow:0 0 0 2px var(--warning)}
+.ti-custom.danger::before{background:var(--danger);box-shadow:0 0 0 2px var(--danger)}
+.ti-custom:last-child{padding-bottom:0}
+
+/* ── Quote Doc Preview ── */
+.quote-doc{background:white;border:1px solid var(--border-color);border-radius:10px;overflow:hidden}
+.quote-doc-header{background:linear-gradient(135deg,var(--primary-dark),var(--primary));color:white;padding:24px 32px;display:flex;justify-content:space-between;align-items:flex-start}
+.quote-doc-body{padding:24px 32px}
+.quote-line-items{width:100%;border-collapse:collapse}
+.quote-line-items th{font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;letter-spacing:.03em;padding:10px 12px;border-bottom:2px solid var(--border-color);text-align:left}
+.quote-line-items td{font-size:13px;padding:10px 12px;border-bottom:1px solid var(--border-light)}
+.quote-line-items tr:last-child td{border-bottom:none}
+.quote-total-row td{font-weight:700;border-top:2px solid var(--text-primary);border-bottom:none !important;font-size:14px}
+.quote-signature-area{border:2px dashed var(--border-color);border-radius:8px;padding:24px;text-align:center;margin-top:16px;background:var(--bg-body);min-height:100px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;transition:var(--transition)}
+.quote-signature-area:hover{border-color:var(--primary);background:var(--primary-glow)}
+.quote-signature-area.signed{border-color:var(--success);border-style:solid;background:var(--success-light)}
+
+/* ── Upload Zone ── */
+.upload-zone{border:2px dashed var(--border-color);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:var(--transition);background:var(--bg-body)}
+.upload-zone:hover{border-color:var(--primary);background:var(--primary-glow)}
+.upload-zone.dragging{border-color:var(--primary);background:var(--primary-light);transform:scale(1.01)}
+.upload-zone.uploaded{border-color:var(--success);border-style:solid;background:var(--success-light)}
+
+/* ── Filter Tabs ── */
+.filter-tabs{display:flex;gap:4px;background:var(--bg-body);border-radius:8px;padding:3px}
+.filter-tab{padding:5px 14px;border:none;background:none;font-size:11.5px;font-weight:600;color:var(--text-tertiary);cursor:pointer;border-radius:6px;transition:var(--transition);font-family:inherit}
+.filter-tab.active{background:var(--bg-card);color:var(--text-primary);box-shadow:var(--shadow-sm)}
+.filter-tab:hover:not(.active){color:var(--text-secondary)}
+
+/* ── Live Clock ── */
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}
+.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+
+/* ── Checkbox ── */
+.checkbox-custom{width:18px;height:18px;border-radius:5px;border:2px solid var(--border-color);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:var(--transition);flex-shrink:0;background:var(--bg-card)}
+.checkbox-custom.checked{background:var(--primary);border-color:var(--primary);color:white}
+.checkbox-custom.checked::after{content:'\F272';font-family:'bootstrap-icons';font-size:11px}
+
+/* ── Pagination ── */
+.pagination-custom{display:flex;gap:4px;align-items:center}
+.page-btn{width:32px;height:32px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition);font-family:inherit}
+.page-btn:hover{border-color:var(--primary);color:var(--primary)}
+.page-btn.active{background:var(--primary);border-color:var(--primary);color:white}
+.page-btn.disabled{opacity:.4;pointer-events:none}
+
+/* ── Responsive ── */
+@media(max-width:992px){.stat-grid{grid-template-columns:repeat(2,1fr)}.detail-grid{grid-template-columns:1fr}}
+@media(max-width:576px){.stat-grid{grid-template-columns:1fr}.content-container{padding:12px}.search-box input{width:140px}.search-box input:focus{width:180px}.modal-content-custom{width:96%;margin:8px}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<!-- Sidebar (exact match) -->
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon active" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+
+<!-- Main Panel -->
+<div class="main-panel">
+
+  <!-- Top Header (exact match) -->
+  <header class="top-header">
+    <div class="d-flex align-items-center gap-3">
+      <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+      <nav class="header-menu d-none d-lg-block">
+        <a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html" class="active">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a>
+      </nav>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+      <div class="position-relative">
+        <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7);" onclick="toggleNotif()" id="notifBtn">
+          <i class="bi bi-bell"></i>
+          <span class="notification-badge" id="notifCount">5</span>
+        </button>
+        <div class="notification-dropdown" id="notifDrop">
+          <div class="notification-header">
+            <div style="font-size:13px;font-weight:700;">Notifications</div>
+            <div class="notification-mark-all" onclick="markAllRead()">Mark all read</div>
+          </div>
+          <div id="notifList"></div>
+          <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening full notification center...','info');return false;">View all notifications</a></div>
+        </div>
+      </div>
+      <div class="up">
+        <div class="ua">GS</div>
+        <div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Breadcrumb -->
+  <div class="sub-header">
+    <i class="bi bi-house me-1" style="font-size:11px;"></i><span>Home</span>
+    <span class="mx-2" style="color:var(--border-color);">/</span>
+    <span style="font-weight:600;color:var(--text-primary);">Quotations</span>
+    <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);" id="lastUpdated">Updated just now</span>
+  </div>
+
+  <!-- Content -->
+  <div class="content-container">
+
+    <!-- Page Header -->
+    <div class="card-custom" style="background:linear-gradient(135deg,#F0FDFA 0%,#CCFBF1 50%,#FEF9C3 100%);border:1px solid rgba(13,148,136,.12);position:relative;overflow:hidden;">
+      <div style="position:absolute;right:-20px;top:-20px;width:160px;height:160px;border-radius:50%;background:rgba(13,148,136,.06);"></div>
+      <div class="row align-items-center">
+        <div class="col-md-7">
+          <h3 style="font-size:17px;font-weight:800;margin-bottom:4px;">Quotation Management</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:0;">Create, send, track approvals, and manage variations for all building quotes.</p>
+        </div>
+        <div class="col-md-5 text-md-end mt-2 mt-md-0 d-flex gap-2 justify-content-md-end flex-wrap">
+          <button class="btn-primary-custom" onclick="openCreateQuoteModal()"><i class="bi bi-plus-lg me-1"></i>Create Quote</button>
+          <button class="btn-outline-custom" onclick="showToast('Exporting all quotations as CSV...','success')"><i class="bi bi-download me-1"></i>Export</button>
+          <button class="btn-outline-custom" onclick="showToast('Printing quotation report...','info')"><i class="bi bi-printer me-1"></i>Print</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="stat-grid">
+      <div class="card-custom" style="cursor:pointer;" onclick="filterByStatus('all')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--primary);"><i class="bi bi-file-earmark-text"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>12%</span>
+        </div>
+        <div class="stat-value" data-count="34">0</div>
+        <div class="stat-desc">Total Quotes Created</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="filterByStatus('Approved')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--success);"><i class="bi bi-check-circle"></i></div>
+          <span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>8%</span>
+        </div>
+        <div class="stat-value" data-count="21">0</div>
+        <div class="stat-desc">Approved Quotes</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="filterByStatus('Pending')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--warning);"><i class="bi bi-hourglass-split"></i></div>
+        </div>
+        <div class="stat-value" data-count="8">0</div>
+        <div class="stat-desc">Awaiting Approval</div>
+      </div>
+      <div class="card-custom" style="cursor:pointer;" onclick="showToast('Opening variations tracker...','info')">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="stat-icon" style="background:var(--accent);"><i class="bi bi-arrow-repeat"></i></div>
+        </div>
+        <div class="stat-value" data-count="6">0</div>
+        <div class="stat-desc">Active Variations</div>
+      </div>
+    </div>
+
+    <!-- Filter + Search Row -->
+    <div class="card-custom">
+      <div class="section-heading">
+        All Quotations
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <div class="filter-tabs" id="statusFilter">
+            <button class="filter-tab active" onclick="filterByStatus('all',this)">All (34)</button>
+            <button class="filter-tab" onclick="filterByStatus('Pending',this)">Pending (8)</button>
+            <button class="filter-tab" onclick="filterByStatus('Approved',this)">Approved (21)</button>
+            <button class="filter-tab" onclick="filterByStatus('Rejected',this)">Rejected (3)</button>
+            <button class="filter-tab" onclick="filterByStatus('Sent',this)">Sent (2)</button>
+          </div>
+          <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Search quotes..." id="quoteSearch" oninput="searchQuotes()">
+          </div>
+          <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Opening advanced filter panel...','info')"><i class="bi bi-funnel me-1"></i>Filter</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div style="overflow-x:auto;">
+        <table class="table-custom" id="quoteTable">
+          <thead>
+            <tr>
+              <th style="width:30px;"><div class="checkbox-custom" onclick="toggleAllCheckboxes(this)"></div></th>
+              <th>Quote #</th>
+              <th>Customer</th>
+              <th>Project</th>
+              <th>Type</th>
+              <th>Amount (ex GST)</th>
+              <th>GST</th>
+              <th>Total (inc GST)</th>
+              <th>Variations</th>
+              <th>Sent Date</th>
+              <th>Status</th>
+              <th style="width:100px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="quoteBody"></tbody>
+        </table>
+      </div>
+      <div id="noResults" style="display:none;text-align:center;padding:40px;color:var(--text-tertiary);">
+        <i class="bi bi-search" style="font-size:28px;display:block;margin-bottom:8px;"></i>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px;">No quotations found</div>
+        <div style="font-size:12px;">Try adjusting your search or filter criteria.</div>
+      </div>
+
+      <!-- Bulk Actions Bar (hidden by default) -->
+      <div id="bulkBar" style="display:none;margin-top:12px;padding:10px 16px;background:var(--primary-light);border:1px solid rgba(13,148,136,.2);border-radius:8px;display:none;align-items:center;gap:12px;">
+        <span style="font-size:12px;font-weight:600;color:var(--primary);"><span id="bulkCount">0</span> selected</span>
+        <button class="btn-primary-custom btn-sm-custom" onclick="bulkSend()"><i class="bi bi-send me-1"></i>Send</button>
+        <button class="btn-outline-custom btn-sm-custom" onclick="bulkExport()"><i class="bi bi-download me-1"></i>Export</button>
+        <button class="btn-outline-custom btn-sm-custom" style="border-color:rgba(220,38,38,.3);color:var(--danger);" onclick="bulkDelete()"><i class="bi bi-trash me-1"></i>Delete</button>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);cursor:pointer;" onclick="clearSelection()">Clear selection</span>
+      </div>
+
+      <!-- Pagination -->
+      <div class="d-flex justify-content-between align-items-center mt-3">
+        <small style="font-size:12px;color:var(--text-tertiary);" id="paginationInfo">Showing 1-8 of 34 quotations</small>
+        <div class="pagination-custom" id="paginationCustom"></div>
+      </div>
+    </div>
+
+    <!-- Bottom Row: Variations + Chart -->
+    <div class="row g-3">
+      <!-- Pending Variations -->
+      <div class="col-lg-7">
+        <div class="card-custom">
+          <div class="section-heading">
+            Pending Variations
+            <span class="status-pill pill-warning" style="font-size:10px;">6 active</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="table-custom" id="varTable">
+              <thead>
+                <tr><th>Var #</th><th>Project</th><th>Customer</th><th>Description</th><th>Cost Impact</th><th>Sent Date</th><th>Days Pending</th><th>Status</th><th>Action</th></tr>
+              </thead>
+              <tbody id="varBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- Chart + Rate -->
+      <div class="col-lg-5">
+        <div class="card-custom">
+          <div class="section-heading">Quote Performance</div>
+          <div style="position:relative;height:220px;"><canvas id="quoteChart"></canvas></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;">
+            <div style="text-align:center;padding:10px 6px;background:var(--success-light);border-radius:8px;">
+              <div style="font-size:20px;font-weight:800;color:var(--success);">61.8%</div>
+              <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;">Approval Rate</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:var(--danger-light);border-radius:8px;">
+              <div style="font-size:20px;font-weight:800;color:var(--danger);">8.8%</div>
+              <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;">Rejection Rate</div>
+            </div>
+            <div style="text-align:center;padding:10px 6px;background:var(--warning-light);border-radius:8px;">
+              <div style="font-size:20px;font-weight:800;color:#D97706;">2.1d</div>
+              <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px;">Avg Approval Time</div>
+            </div>
+          </div>
+        </div>
+        <div class="card-custom">
+          <div class="section-heading">Quote Value by Status</div>
+          <div style="position:relative;height:180px;"><canvas id="valueChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delay Tracker -->
+    <div class="card-custom">
+      <div class="section-heading">
+        Delay Tracker — Variation Response Times
+        <span class="status-pill pill-danger" style="font-size:10px;">2 delayed</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="table-custom">
+          <thead><tr><th>Var #</th><th>Project</th><th>Customer</th><th>Var Sent Date</th><th>Customer Reply</th><th>Days Taken</th><th>SLA (5 days)</th><th>Delay Impact</th></tr></thead>
+          <tbody id="delayBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Create Quote Modal -->
+<div class="modal-backdrop-custom" id="createQuoteModal">
+  <div class="modal-content-custom lg">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Create New Quotation</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;">Fill in project details and line items to generate a quote.</p></div>
+      <button class="modal-close" onclick="closeModal('createQuoteModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="row g-3">
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Customer Name</label><input class="form-input" id="cqCustomer" placeholder="e.g. Harpreet Kaur"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Phone / Email</label><input class="form-input" id="cqContact" placeholder="+61 4XX XXX XXX"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Project Name</label><input class="form-input" id="cqProject" placeholder="e.g. Penrith Residence"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Project Location</label><input class="form-input" id="cqLocation" placeholder="e.g. Penrith, NSW"></div></div>
+        <div class="col-md-4"><div class="form-group"><label class="form-label">Build Type</label><select class="form-select-custom" id="cqType"><option>4BR Modern Home</option><option>5BR Luxury Home</option><option>Duplex Construction</option><option>4BR + Granny Flat</option><option>6BR Double Storey</option><option>3BR Apartment Reno</option><option>Custom</option></select></div></div>
+        <div class="col-md-4"><div class="form-group"><label class="form-label">Valid Until</label><input class="form-input" type="date" id="cqValid"></div></div>
+        <div class="col-md-4"><div class="form-group"><label class="form-label">Payment Terms</label><select class="form-select-custom" id="cqTerms"><option>Progress Payments (5 stages)</option><option>50/50 Split</option><option>30/40/30</option><option>Custom</option></select></div></div>
+      </div>
+
+      <!-- Line Items -->
+      <div style="margin-top:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+        <label class="form-label" style="margin-bottom:0;">Line Items</label>
+        <button class="btn-outline-custom btn-sm-custom" onclick="addLineItem()"><i class="bi bi-plus me-1"></i>Add Item</button>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--border-color);border-radius:8px;">
+        <table class="table-custom" id="lineItemTable" style="margin-bottom:0;">
+          <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Unit Price</th><th>Total</th><th style="width:40px;"></th></tr></thead>
+          <tbody id="lineItemBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Totals -->
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+        <div style="width:300px;background:var(--bg-body);border-radius:8px;padding:14px;border:1px solid var(--border-color);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;"><span style="color:var(--text-secondary);">Subtotal (ex GST)</span><span style="font-weight:600;" id="cqSubtotal">$0.00</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;"><span style="color:var(--text-secondary);">GST (10%)</span><span style="font-weight:600;" id="cqGst">$0.00</span></div>
+          <div style="height:1px;background:var(--border-color);margin:8px 0;"></div>
+          <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;"><span>Total (inc GST)</span><span style="color:var(--primary);" id="cqTotal">$0.00</span></div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="form-group" style="margin-top:14px;"><label class="form-label">Notes / Terms</label><textarea class="form-input" rows="3" id="cqNotes" placeholder="Additional terms, conditions, or notes for the customer...">This quotation is valid for 30 days from the date of issue. All prices include standard specifications as discussed. Variations to scope will be quoted separately.</textarea></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn-outline-custom" onclick="closeModal('createQuoteModal')">Cancel</button>
+        <button class="btn-outline-custom" onclick="saveDraftQuote()"><i class="bi bi-file-earmark me-1"></i>Save as Draft</button>
+        <button class="btn-primary-custom" onclick="createAndSendQuote()"><i class="bi bi-send me-1"></i>Create & Send via Email</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View Quote Modal -->
+<div class="modal-backdrop-custom" id="viewQuoteModal">
+  <div class="modal-content-custom xl">
+    <div class="modal-header-custom">
+      <div>
+        <h4 style="font-size:16px;font-weight:700;" id="vqTitle">Quote Details</h4>
+        <p style="font-size:12px;color:var(--text-tertiary);margin:0;" id="vqSubtitle"></p>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn-icon" title="Print" onclick="showToast('Sending to printer...','info')"><i class="bi bi-printer"></i></button>
+        <button class="btn-icon" title="Download PDF" onclick="showToast('Downloading PDF...','success')"><i class="bi bi-file-earmark-pdf"></i></button>
+        <button class="modal-close" onclick="closeModal('viewQuoteModal')"><i class="bi bi-x-lg"></i></button>
+      </div>
+    </div>
+    <div class="modal-body-custom" id="vqBody"></div>
+  </div>
+</div>
+
+<!-- Variation Modal -->
+<div class="modal-backdrop-custom" id="variationModal">
+  <div class="modal-content-custom md">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Create Variation</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;" id="varModalSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('variationModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="form-group"><label class="form-label">Variation Description</label><textarea class="form-input" rows="3" id="varDescription" placeholder="Describe the change..."></textarea></div>
+      <div class="row g-3">
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Cost Impact (+/-)</label><input class="form-input" type="number" id="varCost" placeholder="e.g. 8500"></div></div>
+        <div class="col-md-6"><div class="form-group"><label class="form-label">Timeline Impact (days)</label><input class="form-input" type="number" id="varDays" placeholder="e.g. 3"></div></div>
+      </div>
+      <div class="form-group"><label class="form-label">Reason</label><select class="form-select-custom" id="varReason"><option>Customer Request</option><option>Design Change</option><option>Site Condition</option><option>Material Upgrade</option><option>Council Requirement</option><option>Other</option></select></div>
+      <div class="form-group"><label class="form-label">Internal Notes</label><textarea class="form-input" rows="2" id="varNotes" placeholder="Internal notes not shown to customer..."></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn-outline-custom" onclick="closeModal('variationModal')">Cancel</button>
+        <button class="btn-primary-custom" onclick="submitVariation()"><i class="bi bi-send me-1"></i>Create & Send Variation</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Signed Copy Modal -->
+<div class="modal-backdrop-custom" id="uploadModal">
+  <div class="modal-content-custom md">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Upload Signed Copy</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;" id="uploadSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('uploadModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()" ondragover="event.preventDefault();this.classList.add('dragging')" ondragleave="this.classList.remove('dragging')" ondrop="handleDrop(event)">
+        <i class="bi bi-cloud-arrow-up" style="font-size:36px;color:var(--primary);display:block;margin-bottom:8px;"></i>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Drag & drop signed copy here</div>
+        <div style="font-size:12px;color:var(--text-tertiary);">or click to browse — PDF, JPG, PNG (max 10MB)</div>
+        <input type="file" id="fileInput" style="display:none;" accept=".pdf,.jpg,.jpeg,.png" onchange="handleFileSelect(event)">
+      </div>
+      <div id="uploadedFileInfo" style="display:none;margin-top:12px;padding:12px 16px;background:var(--success-light);border:1px solid rgba(22,163,74,.2);border-radius:8px;">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bi bi-file-earmark-check" style="font-size:24px;color:var(--success);"></i>
+          <div style="flex:1;"><div style="font-size:13px;font-weight:600;" id="uploadedFileName">file.pdf</div><div style="font-size:11px;color:var(--text-tertiary);" id="uploadedFileSize">2.4 MB</div></div>
+          <button class="btn-icon" onclick="removeUploadedFile()" title="Remove"><i class="bi bi-x"></i></button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn-outline-custom" onclick="closeModal('uploadModal')">Cancel</button>
+        <button class="btn-success-custom" id="confirmUploadBtn" onclick="confirmUpload()" disabled style="opacity:.5;"><i class="bi bi-check-lg me-1"></i>Confirm & Mark Approved</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Email Preview Modal -->
+<div class="modal-backdrop-custom" id="emailModal">
+  <div class="modal-content-custom md">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Email Preview</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;" id="emailSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('emailModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom" id="emailBody"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+let quotes = [
+  { id:1, num:"QT-2025-001", customer:"Harpreet Kaur", phone:"+61 412 345 678", email:"harpreet.kaur@email.com", project:"Penrith Residence", location:"Penrith, NSW", type:"4BR Modern Home", exGst:440909, gst:44091, total:485000, status:"Pending", sent:"2025-01-02", valid:"2025-02-01", terms:"Progress Payments (5 stages)", variations:2, signed:false, signedFile:null,
+    lineItems:[{desc:"Site Preparation & Excavation",qty:1,unit:"Lump Sum",price:35000,total:35000},{desc:"Concrete Slab (100mm)",qty:180,unit:"m²",price:120,total:21600},{desc:"Frame — Timber (MGP10)",qty:1,unit:"Lump Sum",price:68000,total:68000},{desc:"Brick Veneer — Austral Bricks",qty:1,unit:"Lump Sum",price:42000,total:42000},{desc:"Roof — Colorbond Steel",qty:1,unit:"Lump Sum",price:38000,total:38000},{desc:"Internal Plastering",qty:1,unit:"Lump Sum",price:28000,total:28000},{desc:"Kitchen — Standard Package",qty:1,unit:"Lump Sum",price:35000,total:35000},{desc:"Bathroom Fit-out x2",qty:2,unit:"Each",price:18000,total:36000},{desc:"Electrical — Full Fit-out",qty:1,unit:"Lump Sum",price:32000,total:32000},{desc:"Plumbing — Full Fit-out",qty:1,unit:"Lump Sum",price:28000,total:28000},{desc:"Painting — Interior & Exterior",qty:1,unit:"Lump Sum",price:22000,total:22000},{desc:"Landscaping — Front & Back",qty:1,unit:"Lump Sum",price:15000,total:15000},{desc:"Driveway & Pathways",qty:1,unit:"Lump Sum",price:12000,total:12000},{desc:"Site Cleanup & Handover",qty:1,unit:"Lump Sum",price:8931,total:8931}],
+    notes:"This quotation is valid for 30 days from the date of issue. All prices include standard specifications as discussed.",
+    history:[{date:"2025-01-02",action:"Quote created and sent via email",by:"Guri Singh",type:"create"},{date:"2025-01-03",action:"Follow-up call — customer reviewing",by:"Guri Singh",type:"call"},{date:"2025-01-05",action:"Variation V-001: Premium tiles upgrade requested",by:"Guri Singh",type:"variation"},{date:"2025-01-05",action:"Variation V-002: Extra power points (12) requested",by:"Guri Singh",type:"variation"}]
+  },
+  { id:2, num:"QT-2025-002", customer:"Rajesh Kumar", phone:"+61 403 222 111", email:"rajesh.k@email.com", project:"Castle Hill Villa", location:"Castle Hill, NSW", type:"5BR Luxury Home", exGst:563636, gst:56364, total:620000, status:"Pending", sent:"2025-01-03", valid:"2025-02-02", terms:"Progress Payments (5 stages)", variations:0, signed:false, signedFile:null,
+    lineItems:[{desc:"Site Preparation & Excavation",qty:1,unit:"Lump Sum",price:45000,total:45000},{desc:"Concrete Slab (150mm) — Double Storey",qty:220,unit:"m²",price:150,total:33000},{desc:"Frame — Steel Portal",qty:1,unit:"Lump Sum",price:95000,total:95000},{desc:"Brick Veneer — Premium Selection",qty:1,unit:"Lump Sum",price:58000,total:58000},{desc:"Roof — Slate Look Colorbond",qty:1,unit:"Lump Sum",price:52000,total:52000},{desc:"Internal Plastering — 2 Storey",qty:1,unit:"Lump Sum",price:38000,total:38000},{desc:"Kitchen — Premium Package",qty:1,unit:"Lump Sum",price:52000,total:52000},{desc:"Bathroom Fit-out x3",qty:3,unit:"Each",price:22000,total:66000},{desc:"Electrical — Smart Home Ready",qty:1,unit:"Lump Sum",price:42000,total:42000},{desc:"Plumbing — Full Fit-out",qty:1,unit:"Lump Sum",price:35000,total:35000},{desc:"Painting — Premium Finish",qty:1,unit:"Lump Sum",price:32000,total:32000},{desc:"Landscaping — Premium Design",qty:1,unit:"Lump Sum",price:28000,total:28000},{desc:"Double Garage — Automated",qty:1,unit:"Lump Sum",price:22636,total:22636}],
+    notes:"Premium specification build. Customer comparing with 2 other builders.",
+    history:[{date:"2025-01-03",action:"Quote created and sent via email",by:"Guri Singh",type:"create"},{date:"2025-01-04",action:"Customer called — asking about discount options",by:"Guri Singh",type:"call"}]
+  },
+  { id:3, num:"QT-2025-003", customer:"Sukhwinder Singh", phone:"+61 455 678 901", email:"sukhwinder.s@email.com", project:"Blacktown Duplex", location:"Blacktown, NSW", type:"Duplex Construction", exGst:345455, gst:34545, total:380000, status:"Approved", sent:"2024-12-28", valid:"2025-01-27", terms:"Progress Payments (5 stages)", variations:1, signed:true, signedFile:"Blacktown_Duplex_Signed.pdf",
+    lineItems:[{desc:"Site Preparation — Dual Lot",qty:1,unit:"Lump Sum",price:28000,total:28000},{desc:"Concrete Slab x2",qty:280,unit:"m²",price:110,total:30800},{desc:"Frame — Timber x2",qty:1,unit:"Lump Sum",price:56000,total:56000},{desc:"Brick Veneer x2",qty:1,unit:"Lump Sum",price:38000,total:38000},{desc:"Roofing x2",qty:1,unit:"Lump Sum",price:32000,total:32000},{desc:"Internal Fit-out x2",qty:1,unit:"Lump Sum",price:72000,total:72000},{desc:"Kitchen Standard x2",qty:2,unit:"Each",price:22000,total:44000},{desc:"Bathroom x4",qty:4,unit:"Each",price:12000,total:48000},{desc:"Electrical & Plumbing x2",qty:1,unit:"Lump Sum",price:48000,total:48000},{desc:"Painting & Landscaping",qty:1,unit:"Lump Sum",price:28655,total:28655}],
+    notes:"Approved with Variation V-003 (driveway extension). Signed copy received.",
+    history:[{date:"2024-12-28",action:"Quote created and sent",by:"Guri Singh",type:"create"},{date:"2024-12-30",action:"Variation V-003: Driveway extension — +$4,800",by:"Guri Singh",type:"variation"},{date:"2025-01-02",action:"Customer approved variation",by:"System",type:"approval"},{date:"2025-01-03",action:"Signed copy uploaded — Blacktown_Duplex_Signed.pdf",by:"Guri Singh",type:"signed"}]
+  },
+  { id:4, num:"QT-2025-004", customer:"David Chen", phone:"+61 422 111 333", email:"david.chen@email.com", project:"Parramatta Home", location:"Parramatta, NSW", type:"4BR + Granny Flat", exGst:500000, gst:50000, total:550000, status:"Approved", sent:"2024-12-26", valid:"2025-01-25", terms:"Progress Payments (5 stages)", variations:1, signed:true, signedFile:"Parramatta_Signed.pdf",
+    lineItems:[{desc:"Site Preparation",qty:1,unit:"Lump Sum",price:32000,total:32000},{desc:"Main House Slab",qty:160,unit:"m²",price:125,total:20000},{desc:"Granny Flat Slab",qty:60,unit:"m²",price:125,total:7500},{desc:"Frame — Main House",qty:1,unit:"Lump Sum",price:62000,total:62000},{desc:"Frame — Granny Flat",qty:1,unit:"Lump Sum",price:28000,total:28000},{desc:"Brickwork",qty:1,unit:"Lump Sum",price:45000,total:45000},{desc:"Roofing",qty:1,unit:"Lump Sum",price:36000,total:36000},{desc:"Kitchens x2",qty:2,unit:"Each",price:28000,total:56000},{desc:"Bathrooms x3",qty:3,unit:"Each",price:16000,total:48000},{desc:"Electrical & Plumbing",qty:1,unit:"Lump Sum",price:65000,total:65000},{desc:"Painting & Finishing",qty:1,unit:"Lump Sum",price:28000,total:28000},{desc:"Landscaping & Driveway",qty:1,unit:"Lump Sum",price:22500,total:22500}],
+    notes:"Includes separate granny flat with own kitchen and bathroom. Variation V-004 (kitchen island) was rejected.",
+    history:[{date:"2024-12-26",action:"Quote created and sent",by:"Guri Singh",type:"create"},{date:"2024-12-29",action:"Variation V-004: Kitchen island upgrade — +$6,200",by:"Guri Singh",type:"variation"},{date:"2025-01-01",action:"Customer rejected variation V-004",by:"System",type:"reject"},{date:"2025-01-02",action:"Customer approved base quote",by:"System",type:"approval"},{date:"2025-01-03",action:"Signed copy uploaded",by:"Guri Singh",type:"signed"}]
+  },
+  { id:5, num:"QT-2025-005", customer:"Manjit Brar", phone:"+61 488 999 222", email:"manjit.brar@email.com", project:"Liverpool Estate", location:"Liverpool, NSW", type:"6BR Double Storey", exGst:654545, gst:65455, total:720000, status:"Approved", sent:"2024-12-22", valid:"2025-01-21", terms:"Progress Payments (5 stages)", variations:0, signed:true, signedFile:"Liverpool_Signed.pdf",
+    lineItems:[{desc:"Full Construction — 6BR Double Storey",qty:1,unit:"Lump Sum",price:654545,total:654545}],
+    notes:"Large double-storey project. No variations. Payment on schedule.",
+    history:[{date:"2024-12-22",action:"Quote created and sent",by:"Guri Singh",type:"create"},{date:"2024-12-24",action:"Customer approved — no changes requested",by:"System",type:"approval"},{date:"2024-12-25",action:"Signed copy uploaded",by:"Guri Singh",type:"signed"}]
+  },
+  { id:6, num:"QT-2025-006", customer:"Wei Zhang", phone:"+61 411 555 777", email:"wei.zhang@email.com", project:"Chatswood Apartment", location:"Chatswood, NSW", type:"3BR Apartment Reno", exGst:809091, gst:80909, total:890000, status:"Pending", sent:"2025-01-04", valid:"2025-02-03", terms:"30/40/30", variations:0, signed:false, signedFile:null,
+    lineItems:[{desc:"Demolition & Strip-out",qty:1,unit:"Lump Sum",price:45000,total:45000},{desc:"Structural Modifications",qty:1,unit:"Lump Sum",price:120000,total:120000},{desc:"New Kitchen — Premium",qty:1,unit:"Lump Sum",price:85000,total:85000},{desc:"Bathroom Reno x2",qty:2,unit:"Each",price:35000,total:70000},{desc:"Flooring — Timber Throughout",qty:140,unit:"m²",price:180,total:25200},{desc:"Electrical Rewire",qty:1,unit:"Lump Sum",price:48000,total:48000},{desc:"Plumbing Reroute",qty:1,unit:"Lump Sum",price:38000,total:38000},{desc:"HVAC Installation",qty:1,unit:"Lump Sum",price:32000,total:32000},{desc:"Painting & Finishing",qty:1,unit:"Lump Sum",price:28000,total:28000},{desc:"Joinery & Built-ins",qty:1,unit:"Lump Sum",price:55000,total:55000},{desc:"Balcony Upgrade",qty:1,unit:"Lump Sum",price:42000,total:42000},{desc:"Project Management & Contingency",qty:1,unit:"Lump Sum",price:320891,total:320891}],
+    notes:"High-end apartment renovation in Chatswood. Customer wants premium finishes throughout. Currently waiting on government approval before proceeding.",
+    history:[{date:"2025-01-04",action:"Quote created and sent via email",by:"Guri Singh",type:"create"}]
+  },
+  { id:7, num:"QT-2025-007", customer:"Simran Gill", phone:"+61 466 777 888", email:"simran.gill@email.com", project:"Ryde Townhouse", location:"Ryde, NSW", type:"4BR Modern Home", exGst:420000, gst:42000, total:462000, status:"Rejected", sent:"2024-12-18", valid:"2025-01-17", terms:"Progress Payments (5 stages)", variations:3, signed:false, signedFile:null,
+    lineItems:[{desc:"Full Construction — 4BR Townhouse",qty:1,unit:"Lump Sum",price:420000,total:420000}],
+    notes:"Rejected after 3 variations. Customer chose a competitor with lower pricing.",
+    history:[{date:"2024-12-18",action:"Quote created and sent",by:"Guri Singh",type:"create"},{date:"2024-12-20",action:"Variation V-006: Window upgrade",by:"Guri Singh",type:"variation"},{date:"2024-12-22",action:"Variation V-007: Flooring change",by:"Guri Singh",type:"variation"},{date:"2024-12-24",action:"Variation V-008: Landscaping addition",by:"Guri Singh",type:"variation"},{date:"2024-12-28",action:"Customer rejected — going with competitor",by:"System",type:"reject"}]
+  },
+  { id:8, num:"QT-2025-008", customer:"Gurmail Sidhu", phone:"+61 477 333 444", email:"gurmail.s@email.com", project:"Liverpool Home", location:"Liverpool, NSW", type:"4BR Modern Home", exGst:380000, gst:38000, total:418000, status:"Pending", sent:"2025-01-05", valid:"2025-02-04", terms:"Progress Payments (5 stages)", variations:1, signed:false, signedFile:null,
+    lineItems:[{desc:"Full Construction — 4BR Standard",qty:1,unit:"Lump Sum",price:380000,total:380000}],
+    notes:"Customer requested variation for upgraded insulation. Awaiting response.",
+    history:[{date:"2025-01-05",action:"Quote created and sent",by:"Guri Singh",type:"create"},{date:"2025-01-06",action:"Variation V-009: Upgraded insulation — +$3,200",by:"Guri Singh",type:"variation"}]
+  }
+];
+
+let variations = [
+  { id:1, num:"V-001", projectId:1, project:"Penrith Residence", customer:"Harpreet Kaur", desc:"Upgrade to premium porcelain tiles — 60x60cm Italian range throughout ground floor", cost:8500, days:2, reason:"Material Upgrade", sent:"2025-01-05", reply:null, status:"Awaiting Approval", notes:"Customer requested after seeing display home samples" },
+  { id:2, num:"V-002", projectId:1, project:"Penrith Residence", customer:"Harpreet Kaur", desc:"Additional 12 power points — includes kitchen island, outdoor area, and garage", cost:1200, days:0, reason:"Customer Request", sent:"2025-01-05", reply:null, status:"Awaiting Approval", notes:"Discussed during site visit" },
+  { id:3, num:"V-003", projectId:3, project:"Blacktown Duplex", customer:"Sukhwinder Singh", desc:"Driveway extension — additional 8m concrete driveway for rear parking access", cost:4800, days:1, reason:"Customer Request", sent:"2024-12-30", reply:"2025-01-02", status:"Approved", notes:"Approved without changes" },
+  { id:4, num:"V-004", projectId:4, project:"Parramatta Home", customer:"David Chen", desc:"Kitchen island upgrade — 2.4m waterfall edge with quartz countertop", cost:6200, days:3, reason:"Material Upgrade", sent:"2024-12-29", reply:"2025-01-01", status:"Rejected", notes:"Customer felt price too high, decided against" },
+  { id:5, num:"V-005", projectId:5, project:"Liverpool Estate", customer:"Manjit Brar", desc:"Additional balcony — 12m² entertainer's balcony off master bedroom", cost:12000, days:5, reason:"Customer Request", sent:"2025-01-06", reply:null, status:"Awaiting Approval", notes:"Customer requested after seeing architect sketches" },
+  { id:6, num:"V-006", projectId:8, project:"Liverpool Home", customer:"Gurmail Sidhu", desc:"Upgraded insulation — R6.0 ceiling and R2.5 wall insulation throughout", cost:3200, days:1, reason:"Material Upgrade", sent:"2025-01-06", reply:null, status:"Awaiting Approval", notes:"For energy efficiency compliance" }
+];
+
+let currentFilter = 'all';
+let currentSearch = '';
+let selectedQuotes = new Set();
+let currentViewQuoteId = null;
+let currentVariationQuoteId = null;
+let uploadedFile = null;
+let lineItemCounter = 0;
+
+const notifData = [
+  { id:1, icon:"bi-file-earmark-text", bg:"var(--warning-light)", color:"#D97706", msg:"Harpreet Kaur quotation QT-2025-001 — 8 days pending approval", time:"30 min ago", unread:true },
+  { id:2, icon:"bi-arrow-repeat", bg:"var(--accent-light)", color:"var(--accent)", msg:"Variation V-001 sent to Harpreet Kaur — premium tiles", time:"2 hrs ago", unread:true },
+  { id:3, icon:"bi-check-circle", bg:"var(--success-light)", color:"var(--success)", msg:"Sukhwinder Singh signed Blacktown Duplex quote — V-003 approved", time:"5 hrs ago", unread:true },
+  { id:4, icon:"bi-clock-history", bg:"var(--danger-light)", color:"var(--danger)", msg:"Penrith variations V-001 & V-002 — 4 days no response", time:"Yesterday", unread:true },
+  { id:5, icon:"bi-send", bg:"var(--info-light)", color:"var(--info)", msg:"Quote QT-2025-008 sent to Gurmail Sidhu via email", time:"Yesterday", unread:true },
+];
+
+// ══════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════
+function updateClock(){
+  const n=new Date(),h=String(n.getHours()).padStart(2,'0'),m=String(n.getMinutes()).padStart(2,'0'),s=String(n.getSeconds()).padStart(2,'0');
+  document.getElementById('liveClock').innerHTML=`<span>${h}:${m}:${s}</span> AEST`;
+}
+setInterval(updateClock,1000);updateClock();
+
+// ══════════════════════════════════════
+// COUNTERS
+// ══════════════════════════════════════
+function animateCounters(){
+  document.querySelectorAll('.stat-value[data-count]').forEach(el=>{
+    const t=parseInt(el.dataset.count),dur=1200,start=performance.now();
+    (function step(now){const p=Math.min((now-start)/dur,1),e=1-Math.pow(1-p,3);el.textContent=Math.round(e*t);if(p<1)requestAnimationFrame(step)})(start);
+  });
+}
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+let notifs=JSON.parse(JSON.stringify(notifData));
+function renderNotifs(){
+  const list=document.getElementById('notifList'),uc=notifs.filter(n=>n.unread).length,badge=document.getElementById('notifCount');
+  badge.textContent=uc;badge.style.display=uc>0?'flex':'none';
+  list.innerHTML=notifs.map(n=>`
+    <div class="notification-item ${n.unread?'unread':''}" onclick="readNotif(${n.id})">
+      <div class="notif-icon" style="background:${n.bg};color:${n.color};"><i class="bi ${n.icon}"></i></div>
+      <div class="notif-text"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div>
+      <button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button>
+    </div>
+  `).join('');
+}
+function toggleNotif(){document.getElementById('notifDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn');if(d&&!d.contains(e.target)&&!b.contains(e.target))d.classList.remove('show')});
+function readNotif(id){const n=notifs.find(x=>x.id===id);if(n&&n.unread){n.unread=false;renderNotifs()}showToast('Opening: '+(n?n.msg.substring(0,45)+'...':''),'info')}
+function dismissNotif(id){notifs=notifs.filter(x=>x.id!==id);renderNotifs()}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('All notifications marked as read','success')}
+
+// ══════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════
+function showToast(msg,type='info'){
+  const c=document.getElementById('toastContainer'),cols={success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'},danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'},info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'},warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'}};
+  const cl=cols[type]||cols.info,t=document.createElement('div');t.className='toast-item';
+  t.innerHTML=`<div class="toast-icon" style="background:${cl.bg};color:${cl.color};"><i class="bi ${cl.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="this.parentElement.classList.add('removing');setTimeout(()=>this.parentElement.remove(),250)"><i class="bi bi-x"></i></button>`;
+  c.appendChild(t);setTimeout(()=>{t.classList.add('removing');setTimeout(()=>t.remove(),250)},4500);
+}
+
+// ══════════════════════════════════════
+// MODALS
+// ══════════════════════════════════════
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-backdrop-custom').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'))});
+
+// ══════════════════════════════════════
+// FORMAT HELPERS
+// ══════════════════════════════════════
+function fmt$(n){return '$'+n.toLocaleString('en-AU')}
+function fmtDate(d){if(!d)return '—';const p=new Date(d+'T00:00:00');return p.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}
+function daysBetween(d1,d2){if(!d1||!d2)return null;return Math.ceil((new Date(d2)-new Date(d1))/(1000*60*60*24))}
+function daysAgo(d){if(!d)return null;return Math.ceil((new Date()-new Date(d+'T00:00:00'))/(1000*60*60*24))}
+
+// ══════════════════════════════════════
+// STATUS HELPERS
+// ══════════════════════════════════════
+function statusPill(s){
+  const map={Pending:'pill-warning',Approved:'pill-success',Rejected:'pill-danger',Sent:'pill-info',Draft:'pill-gray'};
+  return `<span class="status-pill ${map[s]||'pill-gray'}">${s}</span>`;
+}
+function varStatusPill(s){
+  const map={'Awaiting Approval':'pill-warning',Approved:'pill-success',Rejected:'pill-danger'};
+  return `<span class="status-pill ${map[s]||'pill-gray'}">${s}</span>`;
+}
+
+// ══════════════════════════════════════
+// RENDER QUOTES TABLE
+// ══════════════════════════════════════
+function renderQuotes(){
+  let filtered=quotes;
+  if(currentFilter!=='all')filtered=filtered.filter(q=>q.status===currentFilter);
+  if(currentSearch)filtered=filtered.filter(q=>q.num.toLowerCase().includes(currentSearch)||q.customer.toLowerCase().includes(currentSearch)||q.project.toLowerCase().includes(currentSearch)||q.type.toLowerCase().includes(currentSearch));
+
+  const body=document.getElementById('quoteBody'),noRes=document.getElementById('noResults');
+  if(!filtered.length){body.innerHTML='';noRes.style.display='block';document.getElementById('paginationInfo').textContent='No quotations found';return;}
+  noRes.style.display='none';
+
+  body.innerHTML=filtered.map(q=>{
+    const checked=selectedQuotes.has(q.id);
+    return `<tr>
+      <td><div class="checkbox-custom ${checked?'checked':''}" onclick="event.stopPropagation();toggleCheckbox(${q.id},this)"></div></td>
+      <td><a href="quote-details.html?id=${q.id}" style="color:var(--info);font-size:12px;font-weight:700;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${q.num}</a></td>
+      <td><div style="font-weight:600;">${q.customer}</div><div style="font-size:11px;color:var(--text-tertiary);">${q.email}</div></td>
+      <td><div>${q.project}</div><div style="font-size:11px;color:var(--text-tertiary);">${q.location}</div></td>
+      <td style="font-size:12px;color:var(--text-secondary);">${q.type}</td>
+      <td style="font-weight:600;">${fmt$(q.exGst)}</td>
+      <td style="color:var(--text-tertiary);">${fmt$(q.gst)}</td>
+      <td style="font-weight:700;">${fmt$(q.total)}</td>
+      <td><span style="font-weight:600;color:${q.variations>0?'var(--accent)':'var(--text-tertiary)'};">${q.variations}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary);">${fmtDate(q.sent)}</td>
+      <td>${statusPill(q.status)}</td>
+      <td>
+        <div class="d-flex gap-1">
+          <button class="btn-icon" title="View Quote" onclick="event.stopPropagation();openViewQuote(${q.id})"><i class="bi bi-eye"></i></button>
+          ${q.status==='Pending'||q.status==='Sent'?`<button class="btn-icon" title="Send Reminder" onclick="event.stopPropagation();sendReminder(${q.id})"><i class="bi bi-bell"></i></button>`:''}
+          ${q.status!=='Rejected'?`<button class="btn-icon" title="Add Variation" onclick="event.stopPropagation();openVariationModal(${q.id})" style="color:var(--accent);border-color:rgba(232,115,12,.3);"><i class="bi bi-plus-circle"></i></button>`:''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('paginationInfo').textContent=`Showing 1-${filtered.length} of ${quotes.length} quotations`;
+  updateBulkBar();
+}
+
+function filterByStatus(status,btn){
+  currentFilter=status;
+  document.querySelectorAll('#statusFilter .filter-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  else document.querySelector(`#statusFilter .filter-tab:nth-child(${status==='all'?1:status==='Pending'?2:status==='Approved'?3:status==='Rejected'?4:5})`).classList.add('active');
+  renderQuotes();
+}
+function searchQuotes(){currentSearch=document.getElementById('quoteSearch').value.toLowerCase().trim();renderQuotes()}
+
+// ══════════════════════════════════════
+// CHECKBOX / BULK
+// ══════════════════════════════════════
+function toggleCheckbox(id,el){
+  if(selectedQuotes.has(id)){selectedQuotes.delete(id);el.classList.remove('checked')}else{selectedQuotes.add(id);el.classList.add('checked')}
+  updateBulkBar();
+}
+function toggleAllCheckboxes(el){
+  const filtered=getFilteredQuotes();
+  if(selectedQuotes.size===filtered.length){selectedQuotes.clear();el.classList.remove('checked')}else{filtered.forEach(q=>selectedQuotes.add(q.id));el.classList.add('checked')}
+  renderQuotes();
+}
+function getFilteredQuotes(){let f=quotes;if(currentFilter!=='all')f=f.filter(q=>q.status===currentFilter);if(currentSearch)f=f.filter(q=>q.num.toLowerCase().includes(currentSearch)||q.customer.toLowerCase().includes(currentSearch)||q.project.toLowerCase().includes(currentSearch));return f}
+function updateBulkBar(){
+  const bar=document.getElementById('bulkBar'),cnt=document.getElementById('bulkCount');
+  if(selectedQuotes.size>0){bar.style.display='flex';cnt.textContent=selectedQuotes.size}else{bar.style.display='none'}
+}
+function clearSelection(){selectedQuotes.clear();renderQuotes()}
+function bulkSend(){showToast(`Sending ${selectedQuotes.size} quotations via email...`,'success');selectedQuotes.forEach(id=>{const q=quotes.find(x=>x.id===id);if(q&&(q.status==='Draft'||q.status==='Pending'))q.status='Sent'});setTimeout(()=>{selectedQuotes.clear();renderQuotes()},500)}
+function bulkExport(){showToast(`Exporting ${selectedQuotes.size} quotations as CSV...`,'success')}
+function bulkDelete(){showToast(`Deleting ${selectedQuotes.size} quotations...`,'danger');quotes=quotes.filter(q=>!selectedQuotes.has(q.id));selectedQuotes.clear();renderQuotes();updateFilterCounts()}
+
+function updateFilterCounts(){
+  const all=quotes.length,pen=quotes.filter(q=>q.status==='Pending').length,app=quotes.filter(q=>q.status==='Approved').length,rej=quotes.filter(q=>q.status==='Rejected').length,sent=quotes.filter(q=>q.status==='Sent').length;
+  document.querySelectorAll('#statusFilter .filter-tab').forEach(b=>{
+    const txt=b.textContent.trim();
+    if(txt.startsWith('All'))b.textContent=`All (${all})`;
+    else if(txt.startsWith('Pending'))b.textContent=`Pending (${pen})`;
+    else if(txt.startsWith('Approved'))b.textContent=`Approved (${app})`;
+    else if(txt.startsWith('Rejected'))b.textContent=`Rejected (${rej})`;
+    else if(txt.startsWith('Sent'))b.textContent=`Sent (${sent})`;
+  });
+}
+
+// ══════════════════════════════════════
+// CREATE QUOTE
+// ══════════════════════════════════════
+function openCreateQuoteModal(){
+  document.getElementById('cqCustomer').value='';
+  document.getElementById('cqContact').value='';
+  document.getElementById('cqProject').value='';
+  document.getElementById('cqLocation').value='';
+  document.getElementById('cqType').selectedIndex=0;
+  const d=new Date();d.setDate(d.getDate()+30);
+  document.getElementById('cqValid').value=d.toISOString().split('T')[0];
+  document.getElementById('cqTerms').selectedIndex=0;
+  document.getElementById('cqNotes').value='This quotation is valid for 30 days from the date of issue. All prices include standard specifications as discussed. Variations to scope will be quoted separately.';
+  lineItemCounter=0;
+  document.getElementById('lineItemBody').innerHTML='';
+  addLineItem();addLineItem();addLineItem();
+  calcLineTotals();
+  document.getElementById('createQuoteModal').classList.add('show');
+}
+
+function addLineItem(){
+  lineItemCounter++;
+  const id=lineItemCounter;
+  const row=document.createElement('tr');
+  row.id='liRow_'+id;
+  row.innerHTML=`<td><input class="form-input" style="min-width:180px;" placeholder="Item description" oninput="calcLineTotals()"></td>
+    <td><input class="form-input" type="number" style="width:70px;" value="1" min="1" oninput="calcLineTotals()"></td>
+    <td><select class="form-select-custom" style="width:100px;"><option>Lump Sum</option><option>m²</option><option>Each</option><option>Linear m</option><option>hr</option></select></td>
+    <td><input class="form-input" type="number" style="width:110px;" placeholder="0.00" oninput="calcLineTotals()"></td>
+    <td style="font-weight:600;min-width:100px;" class="li-total">$0.00</td>
+    <td><button class="btn-icon" style="border-color:rgba(220,38,38,.3);color:var(--danger);" onclick="removeLineItem(${id})"><i class="bi bi-trash"></i></button></td>`;
+  document.getElementById('lineItemBody').appendChild(row);
+}
+
+function removeLineItem(id){
+  const row=document.getElementById('liRow_'+id);
+  if(row){row.style.animation='toastOut .2s ease forwards';setTimeout(()=>{row.remove();calcLineTotals()},200)}
+}
+
+function calcLineTotals(){
+  let subtotal=0;
+  document.querySelectorAll('#lineItemBody tr').forEach(row=>{
+    const inputs=row.querySelectorAll('input');
+    const qty=parseFloat(inputs[1]?.value)||0,price=parseFloat(inputs[2]?.value)||0;
+    const total=qty*price;subtotal+=total;
+    row.querySelector('.li-total').textContent=fmt$(total);
+  });
+  const gst=Math.round(subtotal*0.1),total=subtotal+gst;
+  document.getElementById('cqSubtotal').textContent=fmt$(subtotal);
+  document.getElementById('cqGst').textContent=fmt$(gst);
+  document.getElementById('cqTotal').textContent=fmt$(total);
+}
+
+function saveDraftQuote(){
+  const cust=document.getElementById('cqCustomer').value.trim();
+  if(!cust){showToast('Please enter customer name','warning');return}
+  const num='QT-2025-'+String(quotes.length+1).padStart(3,'0');
+  const subtotal=parseFloat(document.getElementById('cqSubtotal').textContent.replace(/[$,]/g,''))||0;
+  const gst=Math.round(subtotal*0.1),total=subtotal+gst;
+  quotes.unshift({id:quotes.length+1,num,customer:cust,phone:document.getElementById('cqContact').value,project:document.getElementById('cqProject').value||'Untitled Project',location:document.getElementById('cqLocation').value||'NSW',type:document.getElementById('cqType').value,exGst:Math.round(subtotal),gst,total,status:'Draft',sent:null,valid:document.getElementById('cqValid').value,terms:document.getElementById('cqTerms').value,variations:0,signed:false,signedFile:null,lineItems:[],notes:document.getElementById('cqNotes').value,history:[{date:new Date().toISOString().split('T')[0],action:'Quote saved as draft',by:'Guri Singh',type:'create'}]});
+  closeModal('createQuoteModal');renderQuotes();updateFilterCounts();showToast(`Draft ${num} saved for ${cust}`,'success');
+}
+
+function createAndSendQuote(){
+  const cust=document.getElementById('cqCustomer').value.trim();
+  if(!cust){showToast('Please enter customer name','warning');return}
+  const num='QT-2025-'+String(quotes.length+1).padStart(3,'0');
+  const subtotal=parseFloat(document.getElementById('cqSubtotal').textContent.replace(/[$,]/g,''))||0;
+  const gst=Math.round(subtotal*0.1),total=subtotal+gst;
+  const today=new Date().toISOString().split('T')[0];
+  quotes.unshift({id:quotes.length+1,num,customer:cust,phone:document.getElementById('cqContact').value,email:document.getElementById('cqContact').value,project:document.getElementById('cqProject').value||'Untitled Project',location:document.getElementById('cqLocation').value||'NSW',type:document.getElementById('cqType').value,exGst:Math.round(subtotal),gst,total,status:'Sent',sent:today,valid:document.getElementById('cqValid').value,terms:document.getElementById('cqTerms').value,variations:0,signed:false,signedFile:null,lineItems:[],notes:document.getElementById('cqNotes').value,history:[{date:today,action:'Quote created and sent via email',by:'Guri Singh',type:'create'}]});
+  closeModal('createQuoteModal');renderQuotes();updateFilterCounts();
+  showToast(`Quote ${num} created and sent to ${cust} via email`,'success');
+  // Show email preview
+  setTimeout(()=>previewEmail(quotes[0]),600);
+}
+
+// ══════════════════════════════════════
+// VIEW QUOTE
+// ══════════════════════════════════════
+function openViewQuote(id){
+  currentViewQuoteId=id;
+  const q=quotes.find(x=>x.id===id);if(!q)return;
+  document.getElementById('vqTitle').textContent=q.num+' — '+q.project;
+  document.getElementById('vqSubtitle').textContent=q.customer+' | '+q.location+' | '+q.type;
+
+  const hasItems=q.lineItems&&q.lineItems.length>0;
+  const itemsHtml=hasItems?q.lineItems.map(li=>`<tr><td>${li.desc}</td><td style="text-align:center;">${li.qty}</td><td>${li.unit}</td><td style="text-align:right;">${fmt$(li.price)}</td><td style="text-align:right;font-weight:600;">${fmt$(li.total)}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text-tertiary);padding:20px;">No line items — lump sum quote</td></tr>';
+
+  const historyHtml=q.history.slice().reverse().map(h=>{
+    const iconMap={create:'bi-plus-circle',call:'bi-telephone',variation:'bi-arrow-repeat',approval:'bi-check-circle',reject:'bi-x-circle',signed:'bi-pen',send:'bi-send'};
+    const colorMap={create:'var(--primary)',call:'var(--info)',variation:'var(--accent)',approval:'var(--success)',reject:'var(--danger)',signed:'var(--success)',send:'var(--info)'};
+    const typeClass=h.type==='approval'?'done':h.type==='reject'?'danger':h.type==='variation'?'warn':'';
+    return `<div class="ti-custom ${typeClass}"><div style="font-size:13px;font-weight:600;margin-bottom:2px;">${h.action}</div><div style="font-size:11px;color:var(--text-tertiary);"><i class="bi bi-clock me-1"></i>${fmtDate(h.date)} &middot; ${h.by}</div></div>`;
+  }).join('');
+
+  const qVars=variations.filter(v=>v.projectId===q.id);
+
+  document.getElementById('vqBody').innerHTML=`
+    <!-- Quote Document -->
+    <div class="quote-doc" style="margin-bottom:20px;">
+      <div class="quote-doc-header">
+        <div>
+          <div style="font-size:20px;font-weight:800;margin-bottom:4px;">BuildPro</div>
+          <div style="font-size:12px;opacity:.8;">ABN 12 345 678 901 &middot; Licensed Builder #BC12345</div>
+          <div style="font-size:12px;opacity:.8;">Sydney, NSW 2000 &middot; info@buildpro.com.au</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:18px;font-weight:800;">QUOTATION</div>
+          <div style="font-size:14px;font-weight:600;margin-top:2px;">${q.num}</div>
+          <div style="font-size:12px;opacity:.8;margin-top:4px;">Date: ${fmtDate(q.sent||new Date().toISOString().split('T')[0])}</div>
+          <div style="font-size:12px;opacity:.8;">Valid Until: ${fmtDate(q.valid)}</div>
+        </div>
+      </div>
+      <div class="quote-doc-body">
+        <div class="row" style="margin-bottom:20px;">
+          <div class="col-md-6">
+            <div style="font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;margin-bottom:4px;">Bill To</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:2px;">${q.customer}</div>
+            <div style="font-size:13px;color:var(--text-secondary);">${q.phone}</div>
+            <div style="font-size:13px;color:var(--text-secondary);">${q.email}</div>
+          </div>
+          <div class="col-md-6">
+            <div style="font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;margin-bottom:4px;">Project Details</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:2px;">${q.project}</div>
+            <div style="font-size:13px;color:var(--text-secondary);">${q.location}</div>
+            <div style="font-size:13px;color:var(--text-secondary);">${q.type}</div>
+          </div>
+        </div>
+        <table class="quote-line-items">
+          <thead><tr><th style="width:40%;">Description</th><th style="width:10%;text-align:center;">Qty</th><th style="width:15%;">Unit</th><th style="width:15%;text-align:right;">Unit Price</th><th style="width:20%;text-align:right;">Total</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+          <tfoot>
+            <tr><td colspan="4" style="text-align:right;font-weight:600;padding-right:12px;">Subtotal (ex GST)</td><td style="text-align:right;font-weight:600;">${fmt$(q.exGst)}</td></tr>
+            <tr><td colspan="4" style="text-align:right;font-weight:600;padding-right:12px;">GST (10%)</td><td style="text-align:right;font-weight:600;">${fmt$(q.gst)}</td></tr>
+            <tr class="quote-total-row"><td colspan="4" style="text-align:right;padding-right:12px;">TOTAL (inc GST)</td><td style="text-align:right;color:var(--primary);">${fmt$(q.total)}</td></tr>
+          </tfoot>
+        </table>
+        <div style="margin-top:16px;padding:12px;background:var(--bg-body);border-radius:6px;font-size:12px;color:var(--text-secondary);line-height:1.6;"><b>Payment Terms:</b> ${q.terms}</div>
+        <div style="margin-top:8px;font-size:12px;color:var(--text-secondary);line-height:1.6;">${q.notes}</div>
+
+        <!-- Signature Area -->
+        <div class="quote-signature-area ${q.signed?'signed':''}" id="sigArea_${q.id}" ${q.status!=='Approved'&&!q.signed?`onclick="openUploadModal(${q.id})"`:''}">
+          ${q.signed?`
+            <i class="bi bi-pen-check" style="font-size:28px;color:var(--success);"></i>
+            <div style="font-size:14px;font-weight:700;color:var(--success);">Signed Copy Received</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${q.signedFile}</div>
+          `:`
+            <i class="bi bi-cloud-arrow-up" style="font-size:28px;color:var(--text-tertiary);"></i>
+            <div style="font-size:13px;font-weight:600;color:var(--text-tertiary);">Awaiting Signed Copy</div>
+            <div style="font-size:11px;color:var(--text-tertiary);">Click to upload customer's signed approval</div>
+          `}
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+      ${q.status==='Pending'||q.status==='Sent'?`
+        <button class="btn-success-custom" onclick="simulateApprove(${q.id})"><i class="bi bi-check-circle me-1"></i>Mark as Approved</button>
+        <button class="btn-danger-custom" onclick="simulateReject(${q.id})"><i class="bi bi-x-circle me-1"></i>Mark as Rejected</button>
+      `:''}
+      ${!q.signed&&q.status!=='Rejected'?`
+        <button class="btn-warning-custom" onclick="openUploadModal(${q.id})"><i class="bi bi-upload me-1"></i>Upload Signed Copy</button>
+      `:''}
+      <button class="btn-primary-custom" onclick="previewEmail(quotes.find(x=>x.id===${q.id}))"><i class="bi bi-envelope me-1"></i>Preview Email</button>
+      <button class="btn-outline-custom" onclick="openVariationModal(${q.id})"><i class="bi bi-plus-circle me-1"></i>Add Variation</button>
+      <button class="btn-outline-custom" onclick="showToast('Downloading PDF for ${q.num}...','success')"><i class="bi bi-file-earmark-pdf me-1"></i>Download PDF</button>
+      <button class="btn-outline-custom" onclick="showToast('Printing ${q.num}...','info')"><i class="bi bi-printer me-1"></i>Print</button>
+    </div>
+
+    <!-- Variations for this quote -->
+    ${qVars.length>0?`
+    <div class="card-custom" style="margin-bottom:16px;">
+      <div class="section-heading">Variations for this Quote <span class="status-pill pill-purple" style="font-size:10px;">${qVars.length}</span></div>
+      <table class="table-custom">
+        <thead><tr><th>Var #</th><th>Description</th><th>Cost</th><th>Days</th><th>Sent</th><th>Reply</th><th>Status</th></tr></thead>
+        <tbody>${qVars.map(v=>`<tr>
+          <td><b>${v.num}</b></td>
+          <td>${v.desc}</td>
+          <td style="font-weight:600;color:${v.cost>0?'var(--danger)':'var(--success)'};">${v.cost>0?'+':''}${fmt$(v.cost)}</td>
+          <td>${v.days>0?'+'+v.days+' days':'—'}</td>
+          <td>${fmtDate(v.sent)}</td>
+          <td>${fmtDate(v.reply)||'—'}</td>
+          <td>${varStatusPill(v.status)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`:''}
+
+    <!-- History Timeline -->
+    <div class="card-custom">
+      <div class="section-heading">Quote History</div>
+      <div class="tl-custom">${historyHtml}</div>
+    </div>
+  `;
+  document.getElementById('viewQuoteModal').classList.add('show');
+}
+
+// ══════════════════════════════════════
+// SIMULATE APPROVE / REJECT
+// ══════════════════════════════════════
+function simulateApprove(id){
+  const q=quotes.find(x=>x.id===id);if(!q)return;
+  q.status='Approved';const today=new Date().toISOString().split('T')[0];
+  q.history.push({date:today,action:'Customer approved quotation — '+q.num,by:'System',type:'approval'});
+  closeModal('viewQuoteModal');renderQuotes();updateFilterCounts();
+  showToast(`${q.customer} approved ${q.num} — ${fmt$(q.total)}`,'success');
+  setTimeout(()=>openViewQuote(id),400);
+}
+function simulateReject(id){
+  const q=quotes.find(x=>x.id===id);if(!q)return;
+  q.status='Rejected';const today=new Date().toISOString().split('T')[0];
+  q.history.push({date:today,action:'Customer rejected quotation — '+q.num,by:'System',type:'reject'});
+  closeModal('viewQuoteModal');renderQuotes();updateFilterCounts();
+  showToast(`${q.customer} rejected ${q.num}`,'danger');
+  setTimeout(()=>openViewQuote(id),400);
+}
+
+// ══════════════════════════════════════
+// SEND REMINDER
+// ══════════════════════════════════════
+function sendReminder(id){
+  const q=quotes.find(x=>x.id===id);if(!q)return;
+  showToast(`Reminder email sent to ${q.customer} for ${q.num}`,'info');
+  q.history.push({date:new Date().toISOString().split('T')[0],action:'Approval reminder sent via email',by:'Guri Singh',type:'send'});
+  if(currentViewQuoteId===id)openViewQuote(id);
+}
+
+// ══════════════════════════════════════
+// VARIATIONS
+// ══════════════════════════════════════
+function openVariationModal(quoteId){
+  currentVariationQuoteId=quoteId;
+  const q=quotes.find(x=>x.id===quoteId);if(!q)return;
+  document.getElementById('varModalSubtitle').textContent=q.num+' — '+q.project;
+  document.getElementById('varDescription').value='';
+  document.getElementById('varCost').value='';
+  document.getElementById('varDays').value='0';
+  document.getElementById('varReason').selectedIndex=0;
+  document.getElementById('varNotes').value='';
+  document.getElementById('variationModal').classList.add('show');
+}
+
+function submitVariation(){
+  const desc=document.getElementById('varDescription').value.trim();
+  const cost=parseFloat(document.getElementById('varCost').value)||0;
+  if(!desc){showToast('Please enter variation description','warning');return}
+  const q=quotes.find(x=>x.id===currentVariationQuoteId);if(!q)return;
+  const today=new Date().toISOString().split('T')[0];
+  const vId=variations.length+1;
+  const vNum='V-'+String(vId).padStart(3,'0');
+  variations.push({id:vId,num:vNum,projectId:q.id,project:q.project,customer:q.customer,desc,cost,days:parseInt(document.getElementById('varDays').value)||0,reason:document.getElementById('varReason').value,sent:today,reply:null,status:'Awaiting Approval',notes:document.getElementById('varNotes').value});
+  q.variations++;
+  q.history.push({date:today,action:`Variation ${vNum}: ${desc.substring(0,60)} — ${cost>0?'+':''}${fmt$(cost)}`,by:'Guri Singh',type:'variation'});
+  closeModal('variationModal');renderQuotes();renderVariations();renderDelayTracker();
+  showToast(`Variation ${vNum} created and sent to ${q.customer} — ${cost>0?'+':''}${fmt$(cost)}`,'success');
+  if(currentViewQuoteId===q.id)openViewQuote(q.id);
+}
+
+// ══════════════════════════════════════
+// UPLOAD SIGNED COPY
+// ══════════════════════════════════════
+let uploadTargetId=null;
+function openUploadModal(quoteId){
+  uploadTargetId=quoteId;
+  uploadedFile=null;
+  const q=quotes.find(x=>x.id===quoteId);if(!q)return;
+  document.getElementById('uploadSubtitle').textContent=q.num+' — '+q.customer;
+  document.getElementById('uploadZone').classList.remove('uploaded');
+  document.getElementById('uploadedFileInfo').style.display='none';
+  document.getElementById('confirmUploadBtn').disabled=true;
+  document.getElementById('confirmUploadBtn').style.opacity='.5';
+  document.getElementById('fileInput').value='';
+  document.getElementById('uploadModal').classList.add('show');
+}
+
+function handleDrop(e){
+  e.preventDefault();e.currentTarget.classList.remove('dragging');
+  const f=e.dataTransfer.files[0];if(f)processFile(f);
+}
+function handleFileSelect(e){const f=e.target.files[0];if(f)processFile(f)}
+function processFile(f){
+  if(f.size>10*1024*1024){showToast('File too large. Maximum 10MB.','danger');return}
+  uploadedFile=f;
+  document.getElementById('uploadZone').classList.add('uploaded');
+  document.getElementById('uploadedFileInfo').style.display='block';
+  document.getElementById('uploadedFileName').textContent=f.name;
+  document.getElementById('uploadedFileSize').textContent=(f.size/1024/1024).toFixed(2)+' MB';
+  document.getElementById('confirmUploadBtn').disabled=false;
+  document.getElementById('confirmUploadBtn').style.opacity='1';
+}
+function removeUploadedFile(){
+  uploadedFile=null;document.getElementById('uploadZone').classList.remove('uploaded');
+  document.getElementById('uploadedFileInfo').style.display='none';
+  document.getElementById('confirmUploadBtn').disabled=true;
+  document.getElementById('confirmUploadBtn').style.opacity='.5';
+  document.getElementById('fileInput').value='';
+}
+function confirmUpload(){
+  if(!uploadedFile||!uploadTargetId)return;
+  const q=quotes.find(x=>x.id===uploadTargetId);if(!q)return;
+  const today=new Date().toISOString().split('T')[0];
+  q.signed=true;q.signedFile=uploadedFile.name;q.status='Approved';
+  q.history.push({date:today,action:`Signed copy uploaded — ${uploadedFile.name}`,by:'Guri Singh',type:'signed'});
+  q.history.push({date:today,action:`Quotation marked as approved`,by:'System',type:'approval'});
+  closeModal('uploadModal');renderQuotes();updateFilterCounts();
+  showToast(`Signed copy "${uploadedFile.name}" uploaded. ${q.num} marked as approved.`,'success');
+  if(currentViewQuoteId===q.id)openViewQuote(q.id);
+}
+
+// ══════════════════════════════════════
+// EMAIL PREVIEW
+// ══════════════════════════════════════
+function previewEmail(q){
+  if(!q)return;
+  document.getElementById('emailSubtitle').textContent='To: '+q.customer+' <'+q.email+'>';
+  document.getElementById('emailBody').innerHTML=`
+    <div style="border:1px solid var(--border-color);border-radius:10px;overflow:hidden;">
+      <div style="background:var(--bg-body);padding:12px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">From</div>
+          <div style="font-size:13px;font-weight:600;">Guri Singh &lt;guri@buildpro.com.au&gt;</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;">Subject</div>
+          <div style="font-size:13px;font-weight:600;color:var(--primary);">Your Quotation ${q.num} — ${q.project}</div>
+        </div>
+      </div>
+      <div style="padding:20px 24px;font-size:13px;line-height:1.7;color:var(--text-secondary);">
+        <p>Dear ${q.customer},</p>
+        <p>Thank you for choosing <b style="color:var(--text-primary);">BuildPro</b> for your building project. Please find attached your formal quotation for:</p>
+        <div style="background:var(--primary-light);border:1px solid rgba(13,148,136,.15);border-radius:8px;padding:14px 16px;margin:12px 0;">
+          <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px;">${q.project}</div>
+          <div style="font-size:12px;">${q.location} &middot; ${q.type}</div>
+        </div>
+        <div style="background:var(--bg-body);border:1px solid var(--border-color);border-radius:8px;padding:14px 16px;margin:12px 0;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>Subtotal (ex GST)</span><b>${fmt$(q.exGst)}</b></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>GST (10%)</span><b>${fmt$(q.gst)}</b></div>
+          <div style="height:1px;background:var(--border-color);margin:8px 0;"></div>
+          <div style="display:flex;justify-content:space-between;font-size:16px;"><span style="font-weight:700;">Total (inc GST)</span><b style="color:var(--primary);">${fmt$(q.total)}</b></div>
+        </div>
+        <p><b>Next Steps:</b></p>
+        <ol style="padding-left:20px;margin-bottom:12px;">
+          <li>Review the attached quotation document in detail</li>
+          <li>If you wish to proceed, sign the approval section on the last page</li>
+          <li>Upload the signed copy using the link below or reply to this email</li>
+          <li>Any variations to scope can be discussed — we'll provide updated quotes</li>
+        </ol>
+        <p style="margin-bottom:8px;">This quotation is valid until <b>${fmtDate(q.valid)}</b>.</p>
+        <p style="margin-bottom:0;">Warm regards,<br><b style="color:var(--text-primary);">Guri Singh</b><br>BuildPro &middot; Licensed Builder #BC12345<br>Ph: +61 400 000 000 &middot; Sydney, NSW</p>
+      </div>
+      <div style="padding:12px 24px;border-top:1px solid var(--border-color);background:var(--bg-body);display:flex;gap:8px;">
+        <button class="btn-primary-custom" onclick="showToast('Email sent to ${q.customer} successfully','success');closeModal('emailModal')"><i class="bi bi-send me-1"></i>Send Email</button>
+        <button class="btn-outline-custom" onclick="showToast('Email saved as draft','info')"><i class="bi bi-file-earmark me-1"></i>Save Draft</button>
+        <button class="btn-outline-custom" onclick="showToast('Quotation PDF attached','info')"><i class="bi bi-paperclip me-1"></i>Attach PDF</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('emailModal').classList.add('show');
+}
+
+// ══════════════════════════════════════
+// RENDER VARIATIONS TABLE
+// ══════════════════════════════════════
+function renderVariations(){
+  const pending=variations.filter(v=>v.status==='Awaiting Approval');
+  document.getElementById('varBody').innerHTML=pending.map(v=>{
+    const days=daysAgo(v.sent);
+    return `<tr>
+      <td><b>${v.num}</b></td>
+      <td>${v.project}</td>
+      <td>${v.customer}</td>
+      <td style="max-width:200px;"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${v.desc}">${v.desc}</div></td>
+      <td style="font-weight:600;color:${v.cost>0?'var(--danger)':'var(--success)'};">${v.cost>0?'+':''}${fmt$(v.cost)}</td>
+      <td>${fmtDate(v.sent)}</td>
+      <td><span style="font-weight:600;color:${days>5?'var(--danger)':days>3?'var(--warning)':'var(--text-secondary)'};">${days}d</span></td>
+      <td>${varStatusPill(v.status)}</td>
+      <td>
+        <div class="d-flex gap-1">
+          <button class="btn-icon" title="Send Reminder" onclick="showToast('Reminder sent for ${v.num}','info')"><i class="bi bi-bell"></i></button>
+          <button class="btn-icon" title="Approve" onclick="approveVariation(${v.id})" style="color:var(--success);border-color:rgba(22,163,74,.3);"><i class="bi bi-check-lg"></i></button>
+          <button class="btn-icon" title="Reject" onclick="rejectVariation(${v.id})" style="color:var(--danger);border-color:rgba(220,38,38,.3);"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function approveVariation(id){
+  const v=variations.find(x=>x.id===id);if(!v)return;
+  v.status='Approved';v.reply=new Date().toISOString().split('T')[0];
+  const q=quotes.find(x=>x.id===v.projectId);
+  if(q){q.exGst+=v.cost;q.gst=Math.round(q.exGst*0.1);q.total=q.exGst+q.gst;q.history.push({date:v.reply,action:`Variation ${v.num} approved — ${v.cost>0?'+':''}${fmt$(v.cost)}`,by:'System',type:'approval'})}
+  renderQuotes();renderVariations();renderDelayTracker();
+  showToast(`Variation ${v.num} approved by ${v.customer}. Quote total updated to ${fmt$(q?q.total:0)}`,'success');
+  if(currentViewQuoteId===v.projectId)openViewQuote(v.projectId);
+}
+function rejectVariation(id){
+  const v=variations.find(x=>x.id===id);if(!v)return;
+  v.status='Rejected';v.reply=new Date().toISOString().split('T')[0];
+  const q=quotes.find(x=>x.id===v.projectId);
+  if(q)q.history.push({date:v.reply,action:`Variation ${v.num} rejected`,by:'System',type:'reject'});
+  renderQuotes();renderVariations();renderDelayTracker();
+  showToast(`Variation ${v.num} rejected by ${v.customer}`,'danger');
+  if(currentViewQuoteId===v.projectId)openViewQuote(v.projectId);
+}
+
+// ══════════════════════════════════════
+// DELAY TRACKER
+// ══════════════════════════════════════
+function renderDelayTracker(){
+  const allVars=variations.filter(v=>v.status==='Awaiting Approval');
+  document.getElementById('delayBody').innerHTML=allVars.map(v=>{
+    const days=daysAgo(v.sent);
+    const delayed=days>5;
+    return `<tr style="${delayed?'background:var(--danger-light);':''}">
+      <td><b>${v.num}</b></td>
+      <td>${v.project}</td>
+      <td>${v.customer}</td>
+      <td>${fmtDate(v.sent)}</td>
+      <td style="color:var(--text-tertiary);">Awaiting</td>
+      <td style="font-weight:700;color:${delayed?'var(--danger)':'var(--warning)'};">${days} days</td>
+      <td>${delayed?'<span class="status-pill pill-danger">BREACHED</span>':'<span class="status-pill pill-warning">Within SLA</span>'}</td>
+      <td>${delayed?`<span style="font-size:12px;color:var(--danger);font-weight:600;">+${days-5} days overdue — milestone timeline extended</span>`:'<span style="font-size:12px;color:var(--text-tertiary);">No impact yet</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════
+function initCharts(){
+  const grid='#F1F5F9';
+  new Chart(document.getElementById('quoteChart').getContext('2d'),{
+    type:'bar',
+    data:{labels:['Oct','Nov','Dec','Jan'],datasets:[
+      {label:'Sent',data:[8,10,9,8],backgroundColor:'#0D9488',borderRadius:5,barPercentage:.35},
+      {label:'Approved',data:[5,6,5,3],backgroundColor:'#16A34A',borderRadius:5,barPercentage:.35},
+      {label:'Rejected',data:[2,1,2,1],backgroundColor:'#DC2626',borderRadius:5,barPercentage:.35}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11,family:'Inter'},color:'#64748B',padding:12,usePointStyle:true,pointStyleWidth:8}}},scales:{x:{grid:{display:false},ticks:{font:{size:11},color:'#94A3B8'}},y:{beginAtZero:true,grid:{color:grid},ticks:{font:{size:11},color:'#94A3B8',stepSize:2}}}}
+  });
+
+  new Chart(document.getElementById('valueChart').getContext('2d'),{
+    type:'doughnut',
+    data:{labels:['Approved ($2.6M)','Pending ($2.0M)','Rejected ($462K)','Sent ($890K)'],datasets:[{data:[2600000,2005000,462000,890000],backgroundColor:['#16A34A','#F59E0B','#DC2626','#2563EB'],borderWidth:0,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{font:{size:10.5,family:'Inter'},color:'#64748B',padding:8,usePointStyle:true,pointStyleWidth:8}}}}
+  });
+}
+
+// ══════════════════════════════════════
+// AUTO UPDATE TIMESTAMP
+// ══════════════════════════════════════
+let updateSec=0;
+setInterval(()=>{updateSec++;const el=document.getElementById('lastUpdated');if(updateSec<60)el.textContent='Updated just now';else el.textContent='Updated '+Math.floor(updateSec/60)+' min ago';},1000);
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(()=>{
+  animateCounters();
+  renderNotifs();
+  renderQuotes();         // <--- Added: Loads the main table
+  renderVariations();     // <--- Added: Loads the variations table
+  renderDelayTracker();   // <--- Added: Loads the delay tracker table
+  initCharts();           // <--- Added: Renders the charts immediately
+}, 100);
+
+</script>
+</body>
+</html>

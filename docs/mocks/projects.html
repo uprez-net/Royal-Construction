@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Active Projects - BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.15);--accent:#E8730C;--accent-light:#FFF3E0;--success:#16A34A;--success-light:#DCFCE7;--danger:#DC2626;--danger-light:#FEE2E2;--warning:#F59E0B;--warning-light:#FEF9C3;--info:#2563EB;--info-light:#DBEAFE;--purple:#7C3AED;--purple-light:#EDE9FE;--bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;--text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;--border-color:#E2E8F0;--border-light:#F1F5F9;--shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);--sidebar-bg:#0F172A;--sidebar-width:64px;--transition:all .2s cubic-bezier(.4,0,.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#94A3B8}
+.wrapper{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}
+.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}
+.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}
+.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}
+.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}
+.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}
+.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}
+.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}
+@media(max-width:768px){.sidebar-tooltip{display:none}}
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}
+.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px;letter-spacing:.01em}
+.header-menu a:hover{color:rgba(255,255,255,.9)}
+.header-menu a.active{color:white}
+.header-menu a.active::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+.content-container{padding:20px;max-width:1560px;margin:0 auto;width:100%}
+.card-custom{background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);margin-bottom:16px;transition:var(--transition)}
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.stat-value{font-size:26px;font-weight:800;line-height:1.2;color:var(--text-primary);margin-top:2px;letter-spacing:-.02em}
+.stat-desc{font-size:11.5px;color:var(--text-tertiary);margin-top:3px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:1200px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;flex-shrink:0}
+.trend-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.02em}
+.trend-up{color:var(--success);background:rgba(22,163,74,.08)}
+.trend-down{color:var(--danger);background:rgba(220,38,38,.08)}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}
+.pill-success{background:rgba(22,163,74,.08);color:var(--success)}
+.pill-warning{background:rgba(245,158,11,.08);color:#D97706}
+.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}
+.pill-info{background:rgba(37,99,235,.08);color:var(--info)}
+.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}
+.pill-purple{background:rgba(124,58,237,.08);color:var(--purple)}
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white;text-decoration:none}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-sm-custom{padding:5px 10px;font-size:11.5px;border-radius:6px}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.btn-icon.active-view{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.btn-danger-custom{background:var(--danger);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit}
+.btn-danger-custom:hover{background:#B91C1C;transform:translateY(-1px);color:white}
+.btn-details{background:var(--primary);color:white;border:none;padding:6px 14px;border-radius:7px;font-size:12px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;text-decoration:none}
+.btn-details:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.25);color:white}
+.progress-bar-custom{height:7px;background:#E2E8F0;border-radius:4px;overflow:hidden}
+.progress-fill-custom{height:100%;border-radius:4px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.search-box{position:relative}
+.search-box input{width:220px;padding:6px 12px 6px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);font-family:inherit;outline:none}
+.search-box input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);width:280px}
+.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px}
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}
+.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+.notification-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;background:var(--danger);border-radius:99px;font-size:9px;font-weight:700;color:white;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg)}
+.notification-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:360px;background:white;border-radius:10px;box-shadow:var(--shadow-lg);z-index:1001;display:none;border:1px solid var(--border-color);overflow:hidden}
+.notification-dropdown.show{display:block;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.notification-header{padding:14px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.notification-mark-all{font-size:11.5px;color:var(--primary);cursor:pointer;font-weight:600}
+.notification-item{padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s;display:flex;align-items:flex-start;gap:10px}
+.notification-item:hover{background:var(--bg-hover)}
+.notification-item.unread{background:rgba(13,148,136,.03)}
+.notification-item.dismissing{animation:slideOut .25s ease forwards;overflow:hidden}
+@keyframes slideOut{to{opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin:0}}
+.notif-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.notif-text{flex:1;min-width:0}
+.notif-msg{font-size:12.5px;line-height:1.4;color:var(--text-primary)}
+.notif-time{font-size:10.5px;color:var(--text-tertiary);margin-top:2px}
+.notif-dismiss{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);cursor:pointer;opacity:0;transition:var(--transition);flex-shrink:0;font-size:10px;border:none;background:none}
+.notification-item:hover .notif-dismiss{opacity:1}
+.notif-dismiss:hover{background:var(--danger-light);color:var(--danger)}
+.notification-footer{padding:10px 16px;text-align:center;border-top:1px solid var(--border-color)}
+.notification-view-all{font-size:12.5px;color:var(--primary);text-decoration:none;font-weight:600}
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}
+.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:300px;animation:toastIn .3s ease}
+.toast-item.removing{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.toast-msg{flex:1;font-size:13px;font-weight:500}
+.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;padding:0;line-height:1}
+.toast-close:hover{color:var(--text-primary)}
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center;animation:fadeIn .2s}
+.modal-backdrop-custom.show{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:90%;max-width:820px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:20px 24px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg-card);z-index:10;border-radius:14px 14px 0 0}
+.modal-body-custom{padding:20px 24px}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:16px}
+.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+.ticker-bar{background:var(--bg-card);border-top:1px solid var(--border-color);padding:8px 20px;display:flex;align-items:center;gap:12px;overflow:hidden;flex-shrink:0}
+.ticker-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--primary);background:var(--primary-glow);padding:3px 8px;border-radius:4px;white-space:nowrap}
+.ticker-scroll{flex:1;overflow:hidden;position:relative;height:20px}
+.ticker-track{display:flex;gap:40px;animation:tickerScroll 45s linear infinite;white-space:nowrap;position:absolute}
+@keyframes tickerScroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.ticker-item{font-size:11.5px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:6px}
+.ticker-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}
+.detail-value{font-size:13px;font-weight:600}
+.project-card{background:var(--bg-card);border-radius:12px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);transition:var(--transition);cursor:pointer;overflow:hidden;position:relative}
+.project-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-3px)}
+.project-card .card-stripe{height:4px;width:100%}
+.project-card .card-body-inner{padding:18px 20px}
+.project-card .card-footer-bar{padding:12px 20px;border-top:1px solid var(--border-light);background:var(--bg-hover);display:flex;align-items:center;justify-content:space-between}
+.filter-pills{display:flex;gap:6px;flex-wrap:wrap}
+.filter-pill{padding:5px 14px;border-radius:99px;border:1px solid var(--border-color);background:var(--bg-card);font-size:12px;font-weight:600;color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-family:inherit}
+.filter-pill:hover{border-color:var(--primary);color:var(--primary)}
+.filter-pill.active{background:var(--primary);color:white;border-color:var(--primary)}
+.modal-tabs{display:flex;border-bottom:1px solid var(--border-color);padding:0 24px;background:var(--bg-card);position:sticky;top:73px;z-index:9}
+.modal-tab{padding:12px 18px;background:none;border:none;font-size:13px;font-weight:500;color:var(--text-tertiary);cursor:pointer;position:relative;transition:var(--transition);font-family:inherit}
+.modal-tab:hover{color:var(--text-primary)}
+.modal-tab.active{color:var(--primary);font-weight:600}
+.modal-tab.active::after{content:'';position:absolute;bottom:-1px;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+.ms-row{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border-light)}
+.ms-row:last-child{border-bottom:none}
+.ms-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px}
+.ms-info{flex:1;min-width:0}
+.req-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:10.5px;font-weight:600;background:var(--bg-body);color:var(--text-secondary);border:1px solid var(--border-color)}
+.list-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 120px 100px 100px 90px;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border-light);transition:background .15s;cursor:pointer;gap:8px}
+.list-row:hover{background:var(--bg-hover)}
+.list-row:last-child{border-bottom:none}
+.list-header{background:var(--bg-body);cursor:default;font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;letter-spacing:.04em}
+.list-header:hover{background:var(--bg-body)}
+.form-input{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition)}
+.form-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.form-label{font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;display:block}
+.form-select-custom{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;background:var(--bg-card);cursor:pointer;transition:var(--transition);appearance:auto}
+.form-select-custom:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.sort-dropdown{position:relative}
+.sort-btn{padding:6px 12px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card);font-size:12.5px;font-weight:500;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;gap:6px;transition:var(--transition);font-family:inherit}
+.sort-btn:hover{border-color:var(--primary);color:var(--primary)}
+.sort-menu{position:absolute;top:calc(100% + 4px);right:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:var(--shadow-lg);min-width:180px;z-index:100;display:none;overflow:hidden}
+.sort-menu.show{display:block;animation:slideDown .15s ease}
+.sort-option{padding:9px 14px;font-size:12.5px;color:var(--text-secondary);cursor:pointer;transition:background .12s;display:flex;align-items:center;gap:8px}
+.sort-option:hover{background:var(--bg-hover);color:var(--text-primary)}
+.sort-option.active{color:var(--primary);font-weight:600}
+.sort-option.active i{color:var(--primary)}
+.card-hover-zone{transition:var(--transition)}
+.card-hover-zone:hover{background:rgba(13,148,136,.04);border-radius:0 0 12px 12px}
+@media(max-width:992px){.detail-grid{grid-template-columns:1fr}.list-row{grid-template-columns:1fr 1fr;gap:4px}}
+@media(max-width:576px){.stat-grid{grid-template-columns:1fr}.content-container{padding:12px}.search-box input{width:160px}.search-box input:focus{width:200px}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon active" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon" onclick="location.href='tradie.html'"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Coordination</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+<div class="main-panel">
+<header class="top-header">
+  <div class="d-flex align-items-center gap-3">
+    <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+    <nav class="header-menu d-none d-lg-block">
+      <a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html" class="active">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a>
+    </nav>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+    <div class="position-relative">
+      <button class="btn-icon" style="background:rgba(255,255,255,.07);border-color:transparent;color:rgba(255,255,255,.7);" onclick="toggleNotif()" id="notifBtn"><i class="bi bi-bell"></i><span class="notification-badge" id="notifCount">5</span></button>
+      <div class="notification-dropdown" id="notifDrop">
+        <div class="notification-header"><div style="font-size:13px;font-weight:700;">Notifications</div><div class="notification-mark-all" onclick="markAllRead()">Mark all read</div></div>
+        <div id="notifList"></div>
+        <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening full notification center...','info');return false;">View all notifications</a></div>
+      </div>
+    </div>
+    <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+  </div>
+</header>
+<div class="sub-header">
+  <i class="bi bi-house me-1" style="font-size:11px;"></i><span>Home</span>
+  <span class="mx-2" style="color:var(--border-color);">/</span>
+  <span style="font-weight:600;color:var(--text-primary);">Active Projects</span>
+  <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);" id="lastUpdated">Updated just now</span>
+</div>
+<div class="content-container">
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h4 style="font-size:17px;font-weight:800;margin:0;">Active Projects</h4>
+      <p style="font-size:13px;color:var(--text-tertiary);margin:0;">Manage all construction projects across NSW — click card for quick view, or hit Details for full page</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn-outline-custom" onclick="exportCSV()"><i class="bi bi-download me-1"></i>Export</button>
+      <button class="btn-primary-custom" onclick="openNewProjectModal()"><i class="bi bi-plus-lg me-1"></i>New Project</button>
+    </div>
+  </div>
+  <div class="stat-grid">
+    <div class="card-custom" style="cursor:pointer;" onclick="setFilter('all')">
+      <div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--info);"><i class="bi bi-building"></i></div><span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>2</span></div>
+      <div class="stat-value" data-count="14">0</div><div class="stat-desc">Total Active Projects</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer;" onclick="setFilter('On Track')">
+      <div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--success);"><i class="bi bi-check-circle"></i></div></div>
+      <div class="stat-value" data-count="8">0</div><div class="stat-desc">On Track</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer;" onclick="setFilter('Needs Attention')">
+      <div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--warning);"><i class="bi bi-exclamation-triangle"></i></div></div>
+      <div class="stat-value" data-count="4">0</div><div class="stat-desc">Needs Attention</div>
+    </div>
+    <div class="card-custom" style="cursor:pointer;" onclick="setFilter('Delayed')">
+      <div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--danger);"><i class="bi bi-x-circle"></i></div></div>
+      <div class="stat-value" data-count="2">0</div><div class="stat-desc">Delayed</div>
+    </div>
+  </div>
+  <div class="card-custom" style="padding:14px 18px;">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div class="filter-pills" id="filterPills">
+          <button class="filter-pill active" onclick="setFilter('all',this)">All (14)</button>
+          <button class="filter-pill" onclick="setFilter('On Track',this)">On Track (8)</button>
+          <button class="filter-pill" onclick="setFilter('Needs Attention',this)">Needs Attention (4)</button>
+          <button class="filter-pill" onclick="setFilter('Delayed',this)">Delayed (2)</button>
+          <button class="filter-pill" onclick="setFilter('Variation Pending',this)">Variation (2)</button>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <div class="search-box"><i class="bi bi-search"></i><input type="text" placeholder="Search projects, clients..." id="searchInput" oninput="applyFilters()"></div>
+        <div class="sort-dropdown">
+          <button class="sort-btn" onclick="toggleSort()"><i class="bi bi-sort-down"></i> Sort</button>
+          <div class="sort-menu" id="sortMenu">
+            <div class="sort-option active" onclick="setSort('name',this)"><i class="bi bi-check-lg"></i> Name A-Z</div>
+            <div class="sort-option" onclick="setSort('progress',this)"><i></i> Progress (High-Low)</div>
+            <div class="sort-option" onclick="setSort('budget',this)"><i></i> Budget (High-Low)</div>
+            <div class="sort-option" onclick="setSort('start',this)"><i></i> Start Date (Newest)</div>
+            <div class="sort-option" onclick="setSort('spent',this)"><i></i> Spent (High-Low)</div>
+          </div>
+        </div>
+        <button class="btn-icon active-view" id="gridViewBtn" onclick="setView('grid')"><i class="bi bi-grid-3x3-gap"></i></button>
+        <button class="btn-icon" id="listViewBtn" onclick="setView('list')"><i class="bi bi-list-ul"></i></button>
+      </div>
+    </div>
+  </div>
+  <div id="gridView" class="row g-3"></div>
+  <div id="listView" class="card-custom" style="display:none;padding:0;overflow:hidden;">
+    <div class="list-row list-header">
+      <div>Project</div><div>Client</div><div>Site Manager</div><div>Stage</div><div>Budget</div><div>Spent</div><div>Progress</div><div>Action</div>
+    </div>
+    <div id="listBody"></div>
+  </div>
+  <div id="emptyState" style="display:none;text-align:center;padding:60px 20px;">
+    <i class="bi bi-search" style="font-size:40px;color:var(--text-tertiary);display:block;margin-bottom:12px;"></i>
+    <h5 style="font-size:16px;font-weight:700;margin-bottom:4px;">No projects found</h5>
+    <p style="font-size:13px;color:var(--text-tertiary);margin-bottom:16px;">Try adjusting your filters or search terms</p>
+    <button class="btn-outline-custom" onclick="clearFilters()"><i class="bi bi-x-circle me-1"></i>Clear Filters</button>
+  </div>
+  <div style="text-align:center;padding:8px;font-size:12px;color:var(--text-tertiary);" id="projectCount"></div>
+</div>
+<div class="ticker-bar">
+  <div class="ticker-label"><i class="bi bi-broadcast me-1"></i>Live</div>
+  <div class="ticker-scroll"><div class="ticker-track" id="tickerTrack"></div></div>
+</div>
+</div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Project Detail Modal (quick view on card click) -->
+<div class="modal-backdrop-custom" id="projectModal">
+  <div class="modal-content-custom">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;margin-bottom:2px;" id="pmTitle">Project Details</h4><p style="font-size:12px;color:var(--text-tertiary);" id="pmSubtitle"></p></div>
+      <button class="modal-close" onclick="closeModal('projectModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-tabs" id="pmTabs">
+      <button class="modal-tab active" onclick="switchTab('overview',this)">Overview</button>
+      <button class="modal-tab" onclick="switchTab('customer',this)">Customer Portfolio</button>
+      <button class="modal-tab" onclick="switchTab('milestones',this)">Milestones</button>
+      <button class="modal-tab" onclick="switchTab('financials',this)">Financials</button>
+      <button class="modal-tab" onclick="switchTab('team',this)">Team</button>
+    </div>
+    <div class="modal-body-custom" id="pmBody"></div>
+  </div>
+</div>
+
+<!-- New Project Modal -->
+<div class="modal-backdrop-custom" id="newProjectModal">
+  <div class="modal-content-custom" style="max-width:640px;">
+    <div class="modal-header-custom">
+      <div><h4 style="font-size:16px;font-weight:700;">Create New Project</h4><p style="font-size:12px;color:var(--text-tertiary);">Add a new construction project to BuildPro</p></div>
+      <button class="modal-close" onclick="closeModal('newProjectModal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body-custom">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label">Project Name *</label><input class="form-input" id="npName" placeholder="e.g. Penrith Residence"></div>
+        <div class="col-md-6"><label class="form-label">Property Type *</label><select class="form-select-custom" id="npType"><option value="">Select type...</option><option>4BR Modern Home</option><option>5BR Luxury Home</option><option>Duplex Construction</option><option>4BR + Granny Flat</option><option>6BR Double Storey</option><option>3BR Apartment Reno</option><option>Townhouse</option><option>Custom Build</option></select></div>
+        <div class="col-md-6"><label class="form-label">Customer Name *</label><input class="form-input" id="npCustomer" placeholder="e.g. Harpreet Kaur"></div>
+        <div class="col-md-6"><label class="form-label">Customer Phone *</label><input class="form-input" id="npPhone" placeholder="+61 4XX XXX XXX"></div>
+        <div class="col-md-6"><label class="form-label">Customer Email</label><input class="form-input" id="npEmail" placeholder="email@example.com" type="email"></div>
+        <div class="col-md-6"><label class="form-label">Site Location *</label><input class="form-input" id="npLocation" placeholder="e.g. Penrith, NSW 2750"></div>
+        <div class="col-md-6"><label class="form-label">Site Manager *</label><select class="form-select-custom" id="npManager"><option value="">Assign manager...</option><option>Amrit Singh</option><option>Deepak Sharma</option><option>Gurpreet Mann</option><option>Jasbir Kaur</option><option>Ravinder Pal</option><option>Harjot Bassi</option></select></div>
+        <div class="col-md-6"><label class="form-label">Budget (AUD) *</label><input class="form-input" id="npBudget" placeholder="e.g. 485000" type="number"></div>
+        <div class="col-md-6"><label class="form-label">Start Date *</label><input class="form-input" id="npStart" type="date"></div>
+        <div class="col-md-6"><label class="form-label">Est. Completion</label><input class="form-input" id="npEnd" type="date"></div>
+        <div class="col-12"><label class="form-label">Special Requirements / Notes</label><textarea class="form-input" id="npNotes" rows="3" placeholder="Any specific customer requirements, site conditions, etc."></textarea></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border-color);">
+        <button class="btn-outline-custom" onclick="closeModal('newProjectModal')">Cancel</button>
+        <button class="btn-outline-custom" onclick="saveAsDraft()"><i class="bi bi-file-earmark me-1"></i>Save Draft</button>
+        <button class="btn-primary-custom" onclick="createProject()"><i class="bi bi-check-lg me-1"></i>Create Project</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ══════════════════════════════════════
+// PROJECT DATA
+// ══════════════════════════════════════
+const projects=[
+  {id:1,name:"Penrith Residence",customer:"Harpreet Kaur",phone:"+61 445 678 123",email:"harpreet.kaur@email.com",location:"Penrith, NSW 2750",manager:"Amrit Singh",stage:"Frame Stage",budget:485000,spent:312400,progress:65,status:"On Track",statusClass:"pill-success",stripeColor:"var(--success)",type:"4BR Modern Home",start:"2025-02-10",estEnd:"2025-11-20",milestones:{done:4,total:10},requirements:["4 bedrooms with built-in robes","2 bathrooms + 1 ensuite","Open-plan kitchen/living","Double garage","Alfresco with ceiling fans","900mm cooktop + wall oven","Stone benchtops (kitchen)","Split system A/C throughout","6.5 star energy rating","NBN connectivity points"],milestones_list:[{name:"Site Preparation & Foundation",status:"done",date:"2025-02-15",photo:true,tradie:"Excavation — Singh Earthworks"},{name:"Slab Pour & Cure",status:"done",date:"2025-03-20",photo:true,tradie:"Concrete — ReadyMix NSW"},{name:"Frame Erection",status:"done",date:"2025-05-10",photo:true,tradie:"Framing — Tims Framing Co"},{name:"Brickwork External",status:"done",date:"2025-06-25",photo:true,tradie:"Bricklayer — Bal Bricklaying"},{name:"Roof Installation",status:"current",date:"2025-07-28",photo:false,tradie:"Roofer — Apex Roofing NSW"},{name:"Rough-in Plumbing & Electrical",status:"pending",date:"2025-08-20",photo:false,tradie:"Plumber — FlowFix Plumbing"},{name:"Internal Lining & Plastering",status:"pending",date:"2025-09-10",photo:false,tradie:"Plasterer — SmoothWall Pro"},{name:"Kitchen & Bathroom Fit-out",status:"pending",date:"2025-09-30",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Painting & Finishing",status:"pending",date:"2025-10-20",photo:false,tradie:"Painter — BrushMasters"},{name:"Practical Completion & Handover",status:"pending",date:"2025-11-15",photo:false,tradie:null}],variations:[{desc:"Kitchen island upgrade to waterfall edge",amount:4500,date:"2025-05-15",status:"Approved"},{desc:"Add underfloor heating to master ensuite",amount:2800,date:"2025-06-10",status:"Pending"}],workers:[{name:"Baljinder Singh",hours:38,role:"Carpenter"},{name:"Mandeep Kaur",hours:36,role:"Labourer"},{name:"Rajpal Dhaliwal",hours:40,role:"Bricklayer"},{name:"Sukhdev Sharma",hours:34,role:"Plumber"},{name:"Gurjit Bassi",hours:38,role:"Electrician"}],invoices:[{id:"INV-041",desc:"Frame stage progress payment",amount:97000,date:"2025-05-12",status:"Paid"},{id:"INV-042",desc:"Brickwork completion",amount:48500,date:"2025-06-28",status:"Paid"},{id:"INV-043",desc:"Roof installation deposit",amount:35000,date:"2025-07-20",status:"Pending"}]},
+  {id:2,name:"Castle Hill Villa",customer:"Rajesh Kumar",phone:"+61 434 567 890",email:"rajesh.k@email.com",location:"Castle Hill, NSW 2154",manager:"Deepak Sharma",stage:"Design Phase",budget:620000,spent:45200,progress:12,status:"Pending Quote",statusClass:"pill-warning",stripeColor:"var(--warning)",type:"5BR Luxury Home",start:"2025-06-01",estEnd:"2026-04-15",milestones:{done:1,total:10},requirements:["5 bedrooms + study room","3 bathrooms + 2 ensuites","Gourmet kitchen with butler pantry","Theatre room","Double garage with internal access","Swimming pool (optional)","Solar panel system","Ducted air conditioning","Smart home wiring","Premium stone finishes throughout"],milestones_list:[{name:"Architectural Design Finalisation",status:"done",date:"2025-06-10",photo:false,tradie:"Architect — Mike Thompson"},{name:"Council DA Submission",status:"current",date:"2025-07-01",photo:false,tradie:null},{name:"DA Approval & Conditions",status:"pending",date:"2025-08-15",photo:false,tradie:null},{name:"Certification & Compliance",status:"pending",date:"2025-09-01",photo:false,tradie:null},{name:"Site Preparation",status:"pending",date:"2025-09-20",photo:false,tradie:null},{name:"Foundation & Slab",status:"pending",date:"2025-10-15",photo:false,tradie:null},{name:"Frame & Roof",status:"pending",date:"2025-12-01",photo:false,tradie:null},{name:"Lock-up",status:"pending",date:"2026-01-15",photo:false,tradie:null},{name:"Fit-out & Finishes",status:"pending",date:"2026-03-01",photo:false,tradie:null},{name:"Handover",status:"pending",date:"2026-04-10",photo:false,tradie:null}],variations:[],workers:[],invoices:[{id:"INV-050",desc:"Architect design fee deposit",amount:25000,date:"2025-06-05",status:"Paid"},{id:"INV-051",desc:"DA preparation & lodgement",amount:20200,date:"2025-06-25",status:"Paid"}]},
+  {id:3,name:"Blacktown Duplex",customer:"Sukhwinder Singh",phone:"+61 412 789 456",email:"sukh.singh@email.com",location:"Blacktown, NSW 2148",manager:"Gurpreet Mann",stage:"Slab Stage",budget:380000,spent:198600,progress:42,status:"On Track",statusClass:"pill-success",stripeColor:"var(--success)",type:"Duplex Construction",start:"2025-03-15",estEnd:"2025-12-30",milestones:{done:3,total:10},requirements:["Duplex — 2 x 3BR units","Separate driveways","Individual metering","Matching facade design","Open-plan living areas","2 bathrooms per unit","Single garage per unit","Landscaping front & rear","Separate letterboxes","Fire rating between units"],milestones_list:[{name:"Demolition & Site Clear",status:"done",date:"2025-03-20",photo:true,tradie:"Demo — ClearSite NSW"},{name:"Earthworks & Footings",status:"done",date:"2025-04-25",photo:true,tradie:"Excavation — DigDeep Co"},{name:"Slab Pour (Both Units)",status:"done",date:"2025-06-05",photo:true,tradie:"Concrete — ReadyMix NSW"},{name:"Frame Erection",status:"current",date:"2025-07-15",photo:false,tradie:"Framing — Tims Framing Co"},{name:"Brickwork",status:"pending",date:"2025-08-20",photo:false,tradie:"Bricklayer — Bal Bricklaying"},{name:"Roofing",status:"pending",date:"2025-09-10",photo:false,tradie:"Roofer — Apex Roofing NSW"},{name:"Plumbing & Electrical Rough-in",status:"pending",date:"2025-10-01",photo:false,tradie:"Plumber — FlowFix"},{name:"Internal Fit-out",status:"pending",date:"2025-11-01",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Painting & Landscaping",status:"pending",date:"2025-12-01",photo:false,tradie:"Painter — BrushMasters"},{name:"Final Inspection & Handover",status:"pending",date:"2025-12-25",photo:false,tradie:null}],variations:[{desc:"Upgrade to Colorbond roof (both units)",amount:6800,date:"2025-05-20",status:"Approved"}],workers:[{name:"Jaswinder Gill",hours:40,role:"Carpenter"},{name:"Amrit Pal",hours:38,role:"Labourer"},{name:"Paramjit Singh",hours:42,role:"Concreter"},{name:"Harpreet Mann",hours:36,role:"Labourer"}],invoices:[{id:"INV-035",desc:"Site preparation & earthworks",amount:57000,date:"2025-04-28",status:"Paid"},{id:"INV-036",desc:"Slab completion payment",amount:76000,date:"2025-06-08",status:"Paid"},{id:"INV-037",desc:"Frame stage deposit",amount:38000,date:"2025-07-10",status:"Pending"}]},
+  {id:4,name:"Parramatta Home",customer:"David Chen",phone:"+61 434 901 234",email:"david.chen@email.com",location:"Parramatta, NSW 2150",manager:"Amrit Singh",stage:"Lockup Stage",budget:550000,spent:410000,progress:78,status:"Variation Pending",statusClass:"pill-info",stripeColor:"var(--info)",type:"4BR + Granny Flat",start:"2024-11-01",estEnd:"2025-08-30",milestones:{done:7,total:10},requirements:["4 bedroom main house","Separate 1BR granny flat","Granny flat with kitchenette","Shared laundry access","Main house open-plan","Ducted A/C main house","Split system granny flat","Side-by-side parking","Separate utilities metering","Wheelchair ramp to granny flat"],milestones_list:[{name:"Foundation & Slab",status:"done",date:"2024-11-20",photo:true,tradie:"Concrete — ReadyMix NSW"},{name:"Frame — Main House",status:"done",date:"2025-01-15",photo:true,tradie:"Framing — Tims Framing Co"},{name:"Frame — Granny Flat",status:"done",date:"2025-01-30",photo:true,tradie:"Framing — Tims Framing Co"},{name:"Brickwork Complete",status:"done",date:"2025-03-10",photo:true,tradie:"Bricklayer — Bal Bricklaying"},{name:"Roof Installation",status:"done",date:"2025-04-05",photo:true,tradie:"Roofer — Apex Roofing"},{name:"Lock-up Stage",status:"done",date:"2025-05-15",photo:true,tradie:null},{name:"Plumbing & Electrical Rough-in",status:"done",date:"2025-06-10",photo:true,tradie:"Plumber — FlowFix"},{name:"Plastering & Lining",status:"current",date:"2025-07-15",photo:false,tradie:"Plasterer — SmoothWall Pro"},{name:"Kitchen & Bathroom Fit-out",status:"pending",date:"2025-07-30",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Final Handover",status:"pending",date:"2025-08-25",photo:false,tradie:null}],variations:[{desc:"Kitchen upgrade — Caesarstone island bench",amount:5200,date:"2025-06-20",status:"Pending Approval"},{desc:"Granny flat wheelchair modifications",amount:3800,date:"2025-07-05",status:"Pending Approval"}],workers:[{name:"Baljinder Singh",hours:38,role:"Carpenter"},{name:"Gurjit Bassi",hours:40,role:"Electrician"},{name:"Sukhdev Sharma",hours:36,role:"Plumber"},{name:"Mandeep Kaur",hours:34,role:"Labourer"},{name:"Kuldeep Singh",hours:38,role:"Plasterer"},{name:"Navjot Grewal",hours:32,role:"Painter"}],invoices:[{id:"INV-028",desc:"Lock-up stage payment",amount:110000,date:"2025-05-18",status:"Paid"},{id:"INV-029",desc:"Rough-in completion",amount:82500,date:"2025-06-12",status:"Paid"},{id:"INV-030",desc:"Plastering progress",amount:55000,date:"2025-07-10",status:"Pending"}]},
+  {id:5,name:"Liverpool Estate",customer:"Manjit Brar",phone:"+61 456 234 789",email:"manjit.brar@email.com",location:"Liverpool, NSW 2170",manager:"Jasbir Kaur",stage:"Foundation",budget:720000,spent:89000,progress:18,status:"On Track",statusClass:"pill-success",stripeColor:"var(--success)",type:"6BR Double Storey",start:"2025-05-20",estEnd:"2026-06-01",milestones:{done:1,total:11},requirements:["6 bedrooms over 2 storeys","Home office / study","Butler pantry off kitchen","2 living areas","3 bathrooms + 2 ensuites","Theatre room","Triple garage","Ducted vacuum system","Solar + battery system","Premium landscaping + driveway"],milestones_list:[{name:"Site Preparation",status:"done",date:"2025-05-25",photo:true,tradie:"Excavation — DigDeep Co"},{name:"Foundation Pour",status:"current",date:"2025-07-10",photo:false,tradie:"Concrete — ReadyMix NSW"},{name:"Ground Floor Slab",status:"pending",date:"2025-08-01",photo:false,tradie:"Concrete — ReadyMix NSW"},{name:"Ground Floor Frame",status:"pending",date:"2025-09-01",photo:false,tradie:"Framing — Tims Framing Co"},{name:"First Floor Frame",status:"pending",date:"2025-10-01",photo:false,tradie:"Framing — Tims Framing Co"},{name:"Roof Structure",status:"pending",date:"2025-11-01",photo:false,tradie:"Roofer — Apex Roofing"},{name:"Brickwork",status:"pending",date:"2025-12-15",photo:false,tradie:"Bricklayer — Bal Bricklaying"},{name:"Lock-up",status:"pending",date:"2026-01-30",photo:false,tradie:null},{name:"Rough-in Services",status:"pending",date:"2026-02-28",photo:false,tradie:"Plumber — FlowFix"},{name:"Internal Fit-out",status:"pending",date:"2026-04-15",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Handover",status:"pending",date:"2026-05-28",photo:false,tradie:null}],variations:[],workers:[{name:"Paramjit Singh",hours:40,role:"Concreter"},{name:"Harpreet Mann",hours:38,role:"Labourer"},{name:"Amrit Pal",hours:36,role:"Labourer"}],invoices:[{id:"INV-052",desc:"Site preparation & earthworks",amount:45000,date:"2025-05-30",status:"Paid"},{id:"INV-053",desc:"Foundation excavation deposit",amount:44000,date:"2025-06-25",status:"Paid"}]},
+  {id:6,name:"Chatswood Apartment",customer:"Wei Zhang",phone:"+61 456 123 789",email:"wei.zhang@email.com",location:"Chatswood, NSW 2067",manager:"Deepak Sharma",stage:"Govt Approval",budget:890000,spent:32000,progress:5,status:"Delayed",statusClass:"pill-danger",stripeColor:"var(--danger)",type:"3BR Apartment Reno",start:"2025-04-10",estEnd:"2025-12-15",milestones:{done:0,total:8},requirements:["Complete apartment gut & renovate","3 bedrooms with new layout","Open-plan kitchen/living","Luxury bathroom with rain shower","European laundry concealed","Engineered timber flooring throughout","Custom joinery throughout","Feature lighting design","New electrical board & wiring","Balcony makeover with decking"],milestones_list:[{name:"Design & Floor Plan",status:"done",date:"2025-04-20",photo:false,tradie:"Architect — Mike Thompson"},{name:"Strata Approval",status:"done",date:"2025-05-10",photo:false,tradie:null},{name:"Council / CDC Approval",status:"current",date:"2025-06-15",photo:false,tradie:null},{name:"Demolition & Strip-out",status:"pending",date:"2025-07-20",photo:false,tradie:"Demo — ClearSite NSW"},{name:"Structural Modifications",status:"pending",date:"2025-08-15",photo:false,tradie:"Structural — SolidBase Eng"},{name:"Plumbing & Electrical Rewire",status:"pending",date:"2025-09-10",photo:false,tradie:"Plumber — FlowFix"},{name:"Fit-out & Joinery",status:"pending",date:"2025-10-20",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Final Touches & Handover",status:"pending",date:"2025-12-05",photo:false,tradie:null}],variations:[],workers:[],invoices:[{id:"INV-044",desc:"Design fee — full apartment renovation",amount:18000,date:"2025-04-22",status:"Paid"},{id:"INV-045",desc:"Strata & council submission fees",amount:14000,date:"2025-05-15",status:"Paid"}]},
+  {id:7,name:"Ryde Townhouse",customer:"Simran Gill",phone:"+61 456 789 012",email:"simran.gill@email.com",location:"Ryde, NSW 2112",manager:"Ravinder Pal",stage:"Frame Stage",budget:462000,spent:245000,progress:55,status:"On Track",statusClass:"pill-success",stripeColor:"var(--success)",type:"Townhouse",start:"2025-01-15",estEnd:"2025-10-30",milestones:{done:4,total:9},requirements:["3 storey townhouse","3 bedrooms + study nook","2.5 bathrooms","Courtyard with privacy screens","Single garage + car space","Stone kitchen with island","Engineered oak flooring","Split system per level","Video intercom system","Rainwater tank"],milestones_list:[{name:"Foundation & Slab",status:"done",date:"2025-02-01",photo:true,tradie:"Concrete — ReadyMix NSW"},{name:"Ground Floor Frame",status:"done",date:"2025-03-15",photo:true,tradie:"Framing — Tims Framing Co"},{name:"First & Second Floor Frame",status:"done",date:"2025-05-01",photo:true,tradie:"Framing — Tims Framing Co"},{name:"Brick Veneer",status:"done",date:"2025-06-10",photo:true,tradie:"Bricklayer — Bal Bricklaying"},{name:"Roof & Gutters",status:"current",date:"2025-07-10",photo:false,tradie:"Roofer — Apex Roofing"},{name:"Lock-up",status:"pending",date:"2025-08-01",photo:false,tradie:null},{name:"Services Rough-in",status:"pending",date:"2025-08-25",photo:false,tradie:"Plumber — FlowFix"},{name:"Fit-out & Finishes",status:"pending",date:"2025-09-20",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Handover",status:"pending",date:"2025-10-25",photo:false,tradie:null}],variations:[{desc:"Upgrade to composite decking (courtyard)",amount:3200,date:"2025-04-20",status:"Approved"}],workers:[{name:"Baljinder Singh",hours:38,role:"Carpenter"},{name:"Rajpal Dhaliwal",hours:40,role:"Bricklayer"},{name:"Mandeep Kaur",hours:36,role:"Labourer"},{name:"Kuldeep Singh",hours:34,role:"Plasterer"}],invoices:[{id:"INV-038",desc:"Frame stage payment",amount:92400,date:"2025-05-05",status:"Paid"},{id:"INV-039",desc:"Brickwork completion",amount:46200,date:"2025-06-12",status:"Paid"},{id:"INV-040",desc:"Roofing deposit",amount:28000,date:"2025-07-05",status:"Pending"}]},
+  {id:8,name:"Hornsby Garden Home",customer:"James Wilson",phone:"+61 421 345 678",email:"james.w@email.com",location:"Hornsby, NSW 2077",manager:"Harjot Bassi",stage:"Site Prep",budget:410000,spent:18500,progress:8,status:"On Track",statusClass:"pill-success",stripeColor:"var(--success)",type:"4BR Modern Home",start:"2025-07-01",estEnd:"2026-05-15",milestones:{done:0,total:10},requirements:["4 bedrooms","2 bathrooms + ensuite","Gourmet kitchen","Living + rumpus room","Double garage","Outdoor entertaining area","Garden shed","Rainwater tank","6 star energy rating","NBN & antenna points"],milestones_list:[{name:"Site Preparation",status:"current",date:"2025-07-10",photo:false,tradie:"Excavation — DigDeep Co"},{name:"Foundation",status:"pending",date:"2025-08-01",photo:false,tradie:"Concrete — ReadyMix NSW"},{name:"Slab",status:"pending",date:"2025-09-01",photo:false,tradie:"Concrete — ReadyMix NSW"},{name:"Frame",status:"pending",date:"2025-10-01",photo:false,tradie:"Framing — Tims Framing Co"},{name:"Brickwork",status:"pending",date:"2025-11-15",photo:false,tradie:"Bricklayer — Bal Bricklaying"},{name:"Roof",status:"pending",date:"2025-12-20",photo:false,tradie:"Roofer — Apex Roofing"},{name:"Lock-up",status:"pending",date:"2026-01-30",photo:false,tradie:null},{name:"Services",status:"pending",date:"2026-02-28",photo:false,tradie:"Plumber — FlowFix"},{name:"Fit-out",status:"pending",date:"2026-04-01",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Handover",status:"pending",date:"2026-05-10",photo:false,tradie:null}],variations:[],workers:[{name:"Harpreet Mann",hours:20,role:"Labourer"}],invoices:[{id:"INV-055",desc:"Site preparation deposit",amount:18500,date:"2025-07-03",status:"Pending"}]},
+  {id:9,name:"Auburn Townhouse",customer:"Priya Sharma",phone:"+61 445 678 901",email:"priya.sharma@email.com",location:"Auburn, NSW 2144",manager:"Gurpreet Mann",stage:"Design Phase",budget:385000,spent:12000,progress:5,status:"Awaiting Plans",statusClass:"pill-warning",stripeColor:"var(--warning)",type:"Townhouse",start:"2025-06-15",estEnd:"2026-03-30",milestones:{done:0,total:9},requirements:["3 bedroom townhouse","Open plan living/dining","Modern kitchen with pantry","1.5 bathrooms","Courtyard garden","Single lock-up garage","Split system A/C","Engineered timber floors","Built-in robes all bedrooms","Security system"],milestones_list:[{name:"Design Brief & Concept",status:"current",date:"2025-07-01",photo:false,tradie:"Architect — Mike Thompson"},{name:"Final Floor Plans",status:"pending",date:"2025-07-20",photo:false,tradie:"Architect — Mike Thompson"},{name:"DA Submission",status:"pending",date:"2025-08-10",photo:false,tradie:null},{name:"DA Approval",status:"pending",date:"2025-09-20",photo:false,tradie:null},{name:"Certification",status:"pending",date:"2025-10-10",photo:false,tradie:null},{name:"Site Prep & Foundation",status:"pending",date:"2025-11-01",photo:false,tradie:"Excavation — DigDeep Co"},{name:"Frame & Lock-up",status:"pending",date:"2026-01-15",photo:false,tradie:"Framing — Tims Framing Co"},{name:"Fit-out",status:"pending",date:"2026-02-20",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Handover",status:"pending",date:"2026-03-25",photo:false,tradie:null}],variations:[],workers:[],invoices:[{id:"INV-056",desc:"Design concept fee deposit",amount:12000,date:"2025-06-20",status:"Paid"}]},
+  {id:10,name:"Kellyville Renovation",customer:"Amandeep Kooner",phone:"+61 478 345 678",email:"amandeep.k@email.com",location:"Kellyville, NSW 2155",manager:"Amrit Singh",stage:"Fit-out Stage",budget:210000,spent:168000,progress:82,status:"On Track",statusClass:"pill-success",stripeColor:"var(--success)",type:"Full Home Renovation",start:"2025-01-20",estEnd:"2025-08-15",milestones:{done:6,total:8},requirements:["Full kitchen renovation","2 bathroom renovations","New flooring throughout","Repaint interior/exterior","New electrical & lighting","Remove wall between kitchen & living","New ceiling roses & cornices","Replace all windows","Replace front door & garage door","Landscaping front yard"],milestones_list:[{name:"Demolition & Strip-out",status:"done",date:"2025-01-28",photo:true,tradie:"Demo — ClearSite NSW"},{name:"Structural Wall Removal",status:"done",date:"2025-02-20",photo:true,tradie:"Structural — SolidBase Eng"},{name:"Plumbing & Electrical Rework",status:"done",date:"2025-03-25",photo:true,tradie:"Plumber — FlowFix"},{name:"New Windows & Doors",status:"done",date:"2025-04-15",photo:true,tradie:"Windows — ClearView Glazing"},{name:"Plastering & Flooring",status:"done",date:"2025-05-20",photo:true,tradie:"Plasterer — SmoothWall Pro"},{name:"Kitchen Installation",status:"done",date:"2025-06-25",photo:true,tradie:"Cabinet Maker — KitchNest"},{name:"Bathroom Fit-out",status:"current",date:"2025-07-20",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Painting & Landscaping",status:"pending",date:"2025-08-10",photo:false,tradie:"Painter — BrushMasters"}],variations:[{desc:"Additional power points — outdoor area",amount:1800,date:"2025-03-10",status:"Approved"}],workers:[{name:"Gurjit Bassi",hours:40,role:"Electrician"},{name:"Sukhdev Sharma",hours:38,role:"Plumber"},{name:"Kuldeep Singh",hours:36,role:"Plasterer"},{name:"Navjot Grewal",hours:34,role:"Painter"}],invoices:[{id:"INV-031",desc:"Rough-in completion",amount:42000,date:"2025-03-28",status:"Paid"},{id:"INV-032",desc:"Windows & doors supply & install",amount:35000,date:"2025-04-18",status:"Paid"},{id:"INV-033",desc:"Kitchen installation",amount:52500,date:"2025-06-28",status:"Paid"},{id:"INV-034",desc:"Bathroom fit-out progress",amount:38500,date:"2025-07-15",status:"Pending"}]},
+  {id:11,name:"Mount Druitt Granny Flat",customer:"Jaswinder Dhillon",phone:"+61 467 890 123",email:"jas.dhillon@email.com",location:"Mount Druitt, NSW 2770",manager:"Ravinder Pal",stage:"Lockup Stage",budget:145000,spent:118000,progress:85,status:"On Track",statusClass:"pill-success",stripeColor:"var(--success)",type:"Granny Flat",start:"2025-02-01",estEnd:"2025-07-30",milestones:{done:6,total:7},requirements:["2 bedroom granny flat","Open-plan kitchen/living","1 bathroom + laundry combo","Split system A/C","Separate electricity meter","Wheelchair accessible bathroom","Porch with ramp","Small courtyard","Built-in robes","Off-street parking space"],milestones_list:[{name:"Slab",status:"done",date:"2025-02-15",photo:true,tradie:"Concrete — ReadyMix NSW"},{name:"Frame",status:"done",date:"2025-03-10",photo:true,tradie:"Framing — Tims Framing Co"},{name:"Brickwork",status:"done",date:"2025-04-05",photo:true,tradie:"Bricklayer — Bal Bricklaying"},{name:"Roof",status:"done",date:"2025-04-25",photo:true,tradie:"Roofer — Apex Roofing"},{name:"Lock-up",status:"done",date:"2025-05-10",photo:true,tradie:null},{name:"Plumbing & Electrical",status:"done",date:"2025-06-05",photo:true,tradie:"Plumber — FlowFix"},{name:"Fit-out & Handover",status:"current",date:"2025-07-25",photo:false,tradie:"Cabinet Maker — KitchNest"}],variations:[],workers:[{name:"Baljinder Singh",hours:32,role:"Carpenter"},{name:"Harpreet Mann",hours:30,role:"Labourer"}],invoices:[{id:"INV-025",desc:"Lock-up payment",amount:43500,date:"2025-05-12",status:"Paid"},{id:"INV-026",desc:"Services rough-in",amount:29000,date:"2025-06-08",status:"Paid"},{id:"INV-027",desc:"Fit-out progress",amount:45500,date:"2025-07-10",status:"Pending"}]},
+  {id:12,name:"Berala Duplex",customer:"Gurpreet Sidhu",phone:"+61 488 123 456",email:"g.sidhu@email.com",location:"Berala, NSW 2141",manager:"Deepak Sharma",stage:"Slab Stage",budget:395000,spent:165000,progress:38,status:"Needs Attention",statusClass:"pill-warning",stripeColor:"var(--warning)",type:"Duplex Construction",start:"2025-04-01",estEnd:"2026-01-15",milestones:{done:2,total:10},requirements:["Duplex — 2 x 4BR units","Separate entrances","Individual laundries","Open-plan living","2 bathrooms per unit","Single garage each","Matching facades","Landscaping included","Separate utility connections","Fire-rated party wall"],milestones_list:[{name:"Demolition & Clear",status:"done",date:"2025-04-10",photo:true,tradie:"Demo — ClearSite NSW"},{name:"Earthworks & Slab",status:"done",date:"2025-06-01",photo:true,tradie:"Concrete — ReadyMix NSW"},{name:"Frame — Unit A",status:"current",date:"2025-07-15",photo:false,tradie:"Framing — Tims Framing Co"},{name:"Frame — Unit B",status:"pending",date:"2025-08-01",photo:false,tradie:"Framing — Tims Framing Co"},{name:"Brickwork",status:"pending",date:"2025-09-01",photo:false,tradie:"Bricklayer — Bal Bricklaying"},{name:"Roofing",status:"pending",date:"2025-10-01",photo:false,tradie:"Roofer — Apex Roofing"},{name:"Lock-up Both Units",status:"pending",date:"2025-11-01",photo:false,tradie:null},{name:"Services Rough-in",status:"pending",date:"2025-11-20",photo:false,tradie:"Plumber — FlowFix"},{name:"Internal Fit-out",status:"pending",date:"2025-12-15",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Handover",status:"pending",date:"2026-01-10",photo:false,tradie:null}],variations:[{desc:"Additional drainage works — council requirement",amount:7500,date:"2025-05-15",status:"Approved"}],workers:[{name:"Jaswinder Gill",hours:36,role:"Carpenter"},{name:"Amrit Pal",hours:34,role:"Labourer"},{name:"Paramjit Singh",hours:38,role:"Concreter"}],invoices:[{id:"INV-046",desc:"Earthworks & slab",amount:79000,date:"2025-06-05",status:"Paid"},{id:"INV-047",desc:"Frame deposit — Unit A",amount:39500,date:"2025-07-08",status:"Pending"},{id:"INV-048",desc:"Drainage variation",amount:7500,date:"2025-07-08",status:"Overdue"}]},
+  {id:13,name:"Quakers Hill Extension",customer:"Balraj Sandhu",phone:"+61 499 567 890",email:"balraj.s@email.com",location:"Quakers Hill, NSW 2763",manager:"Jasbir Kaur",stage:"Frame Stage",budget:185000,spent:78000,progress:45,status:"Needs Attention",statusClass:"pill-warning",stripeColor:"var(--warning)",type:"Home Extension",start:"2025-05-01",estEnd:"2025-11-30",milestones:{done:3,total:8},requirements:["Rear extension — 40sqm","New master bedroom with WIR","New ensuite bathroom","Extended living area","Skylight in new living area","Connect to existing HVAC","New sliding door to backyard","Match existing brickwork","Ceiling insulation upgrade","Updated smoke alarms"],milestones_list:[{name:"Demolition — Rear Wall",status:"done",date:"2025-05-10",photo:true,tradie:"Demo — ClearSite NSW"},{name:"Foundation for Extension",status:"done",date:"2025-06-01",photo:true,tradie:"Concrete — ReadyMix NSW"},{name:"Frame Erection",status:"done",date:"2025-07-01",photo:true,tradie:"Framing — Tims Framing Co"},{name:"Roof Tie-in",status:"current",date:"2025-07-25",photo:false,tradie:"Roofer — Apex Roofing"},{name:"Brickwork Match",status:"pending",date:"2025-08-20",photo:false,tradie:"Bricklayer — Bal Bricklaying"},{name:"Services Connection",status:"pending",date:"2025-09-15",photo:false,tradie:"Plumber — FlowFix"},{name:"Internal Fit-out",status:"pending",date:"2025-10-20",photo:false,tradie:"Cabinet Maker — KitchNest"},{name:"Final Handover",status:"pending",date:"2025-11-25",photo:false,tradie:null}],variations:[{desc:"Skylight upgrade — Velux solar powered",amount:2200,date:"2025-06-15",status:"Approved"},{desc:"Additional power points — extension",amount:950,date:"2025-07-01",status:"Pending"}],workers:[{name:"Baljinder Singh",hours:34,role:"Carpenter"},{name:"Mandeep Kaur",hours:32,role:"Labourer"}],invoices:[{id:"INV-057",desc:"Foundation payment",amount:37000,date:"2025-06-05",status:"Paid"},{id:"INV-058",desc:"Frame completion",amount:37000,date:"2025-07-05",status:"Pending"}]},
+  {id:14,name:"Seven Hills New Build",customer:"Kulwant Bains",phone:"+61 477 234 567",email:"kulwant.b@email.com",location:"Seven Hills, NSW 2147",manager:"Harjot Bassi",stage:"Design Phase",budget:520000,spent:8000,progress:3,status:"Delayed",statusClass:"pill-danger",stripeColor:"var(--danger)",type:"4BR Modern Home",start:"2025-06-20",estEnd:"2026-05-01",milestones:{done:0,total:10},requirements:["4 bedroom modern home","2 bathrooms + ensuite","Walk-in pantry","Theatre room","Double garage","Alfresco area","Ducted A/C","Solar panels","Smart home provisions","Landscaping & driveway"],milestones_list:[{name:"Design Brief",status:"current",date:"2025-07-05",photo:false,tradie:"Architect — Mike Thompson"},{name:"Final Plans",status:"pending",date:"2025-07-25",photo:false,tradie:"Architect — Mike Thompson"},{name:"DA Submission",status:"pending",date:"2025-08-15",photo:false,tradie:null},{name:"DA Approval",status:"pending",date:"2025-10-01",photo:false,tradie:null},{name:"Certification",status:"pending",date:"2025-10-20",photo:false,tradie:null},{name:"Site Prep & Foundation",status:"pending",date:"2025-11-15",photo:false,tradie:"Excavation — DigDeep Co"},{name:"Slab",status:"pending",date:"2025-12-15",photo:false,tradie:"Concrete — ReadyMix NSW"},{name:"Frame & Roof",status:"pending",date:"2026-02-01",photo:false,tradie:"Framing — Tims Framing Co"},{name:"Lock-up & Fit-out",status:"pending",date:"2026-03-15",photo:false,tradie:null},{name:"Handover",status:"pending",date:"2026-04-25",photo:false,tradie:null}],variations:[],workers:[],invoices:[{id:"INV-059",desc:"Design brief deposit",amount:8000,date:"2025-06-25",status:"Paid"}]}
+];
+
+const notifData=[
+  {id:1,icon:"bi-check-circle",bg:"var(--success-light)",color:"var(--success)",msg:"Harpreet Kaur approved Penrith quotation — $485K confirmed",time:"5 min ago",unread:true},
+  {id:2,icon:"bi-exclamation-triangle",bg:"var(--warning-light)",color:"#D97706",msg:"Berala Duplex — Invoice #INV-048 is overdue ($7,500)",time:"15 min ago",unread:true},
+  {id:3,icon:"bi-camera",bg:"var(--info-light)",color:"var(--info)",msg:"Brickwork photo uploaded — Penrith Residence by Amrit Singh",time:"1 hr ago",unread:true},
+  {id:4,icon:"bi-tools",bg:"var(--danger-light)",color:"var(--danger)",msg:"Slab Tradie 1-week warning — Parramatta, due 22 Jul",time:"2 hrs ago",unread:true},
+  {id:5,icon:"bi-clock-history",bg:"var(--danger-light)",color:"var(--danger)",msg:"Chatswood — 12 days overdue on Govt Approval stage",time:"3 hrs ago",unread:true},
+  {id:6,icon:"bi-pencil-square",bg:"var(--purple-light)",color:"var(--purple)",msg:"Architect reminder sent — Castle Hill sketches pending",time:"4 hrs ago",unread:false},
+  {id:7,icon:"bi-cash",bg:"var(--success-light)",color:"var(--success)",msg:"Payment received $92,400 — Ryde Townhouse frame stage",time:"5 hrs ago",unread:false},
+  {id:8,icon:"bi-person-check",bg:"var(--primary-light)",color:"var(--primary)",msg:"Worker check-in: 53/56 workers scanned QR today",time:"6 hrs ago",unread:false}
+];
+
+const tickerItems=[
+  {text:"New project created: Seven Hills New Build — Kulwant Bains",color:"var(--primary)"},
+  {text:"Frame stage 65% complete — Penrith Residence",color:"var(--success)"},
+  {text:"Invoice overdue: Berala Duplex — $7,500 drainage variation",color:"var(--danger)"},
+  {text:"Architect sketches due tomorrow — Castle Hill Villa",color:"var(--warning)"},
+  {text:"Slab tradie confirmed for Parramatta — 22 Jul",color:"var(--info)"},
+  {text:"Worker attendance: 53/56 checked in across all sites",color:"var(--success)"},
+  {text:"Variation pending approval: Parramatta kitchen upgrade — $5,200",color:"var(--warning)"},
+  {text:"Kellyville Renovation bathroom fit-out in progress",color:"var(--purple)"},
+  {text:"Chatswood CDC approval delayed — 12 days overdue",color:"var(--danger)"},
+  {text:"Mount Druitt Granny Flat — handover expected 25 Jul",color:"var(--success)"}
+];
+
+// ══════════════════════════════════════
+// STATE
+// ══════════════════════════════════════
+let currentFilter='all',currentSort='name',currentView='grid',currentModalTab='overview',currentModalProject=null;
+let notifs=JSON.parse(JSON.stringify(notifData));
+
+// ══════════════════════════════════════
+// LIVE CLOCK
+// ══════════════════════════════════════
+function updateClock(){const n=new Date();document.getElementById('liveClock').innerHTML=`<span>${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}</span> AEST`}
+setInterval(updateClock,1000);updateClock();
+
+// ══════════════════════════════════════
+// ANIMATED COUNTERS
+// ══════════════════════════════════════
+function animateCounters(){document.querySelectorAll('.stat-value[data-count]').forEach(el=>{const t=parseInt(el.dataset.count),s=performance.now();(function step(n){const p=Math.min((n-s)/1000,1);el.textContent=Math.round((1-Math.pow(1-p,3))*t);if(p<1)requestAnimationFrame(step)})(s)})}
+
+// ══════════════════════════════════════
+// NOTIFICATIONS
+// ══════════════════════════════════════
+function renderNotifs(){const l=document.getElementById('notifList'),uc=notifs.filter(n=>n.unread).length,b=document.getElementById('notifCount');b.textContent=uc;b.style.display=uc>0?'flex':'none';l.innerHTML=notifs.map(n=>`<div class="notification-item ${n.unread?'unread':''}" data-id="${n.id}" onclick="readNotif(${n.id})"><div class="notif-icon" style="background:${n.bg};color:${n.color};"><i class="bi ${n.icon}"></i></div><div class="notif-text"><div class="notif-msg">${n.msg}</div><div class="notif-time">${n.time}</div></div><button class="notif-dismiss" onclick="event.stopPropagation();dismissNotif(${n.id})"><i class="bi bi-x"></i></button></div>`).join('')}
+function toggleNotif(){document.getElementById('notifDrop').classList.toggle('show')}
+document.addEventListener('click',e=>{const d=document.getElementById('notifDrop'),b=document.getElementById('notifBtn');if(d&&!d.contains(e.target)&&!b.contains(e.target))d.classList.remove('show')});
+function readNotif(id){const n=notifs.find(x=>x.id===id);if(n&&n.unread){n.unread=false;renderNotifs()}showToast('Opening: '+(n?n.msg.substring(0,45)+'...':''),'info')}
+function dismissNotif(id){const el=document.querySelector(`.notification-item[data-id="${id}"]`);if(el){el.classList.add('dismissing');setTimeout(()=>{notifs=notifs.filter(x=>x.id!==id);renderNotifs()},250)}}
+function markAllRead(){notifs.forEach(n=>n.unread=false);renderNotifs();showToast('All notifications marked as read','success')}
+
+// ══════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════
+function showToast(msg,type='info'){const c=document.getElementById('toastContainer'),cols={success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle'},danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle'},info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle'},warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle'}},co=cols[type]||cols.info,t=document.createElement('div');t.className='toast-item';t.innerHTML=`<div class="toast-icon" style="background:${co.bg};color:${co.color};"><i class="bi ${co.icon}"></i></div><div class="toast-msg">${msg}</div><button class="toast-close" onclick="removeToast(this.parentElement)"><i class="bi bi-x"></i></button>`;c.appendChild(t);setTimeout(()=>removeToast(t),4000)}
+function removeToast(el){if(!el||!el.parentElement)return;el.classList.add('removing');setTimeout(()=>el.remove(),250)}
+
+// ══════════════════════════════════════
+// TICKER
+// ══════════════════════════════════════
+function renderTicker(){const i=tickerItems.map(t=>`<span class="ticker-item"><span class="ticker-dot" style="background:${t.color};"></span>${t.text}</span>`).join('');document.getElementById('tickerTrack').innerHTML=i+i}
+
+// ══════════════════════════════════════
+// FILTERING, SORTING, VIEW
+// ══════════════════════════════════════
+function setFilter(f,btn){currentFilter=f;document.querySelectorAll('.filter-pill').forEach(p=>p.classList.remove('active'));(btn||document.querySelector('.filter-pill')).classList.add('active');applyFilters()}
+function clearFilters(){currentFilter='all';document.getElementById('searchInput').value='';document.querySelectorAll('.filter-pill').forEach(p=>p.classList.remove('active'));document.querySelector('.filter-pill').classList.add('active');applyFilters()}
+function getFilteredSorted(){let l=[...projects];if(currentFilter!=='all')l=l.filter(p=>p.status===currentFilter);const q=document.getElementById('searchInput').value.toLowerCase().trim();if(q)l=l.filter(p=>p.name.toLowerCase().includes(q)||p.customer.toLowerCase().includes(q)||p.manager.toLowerCase().includes(q)||p.location.toLowerCase().includes(q)||p.type.toLowerCase().includes(q)||p.stage.toLowerCase().includes(q));switch(currentSort){case'name':l.sort((a,b)=>a.name.localeCompare(b.name));break;case'progress':l.sort((a,b)=>b.progress-a.progress);break;case'budget':l.sort((a,b)=>b.budget-a.budget);break;case'start':l.sort((a,b)=>new Date(b.start)-new Date(a.start));break;case'spent':l.sort((a,b)=>b.spent-a.spent);break}return l}
+function applyFilters(){renderProjects()}
+function toggleSort(){document.getElementById('sortMenu').classList.toggle('show')}
+document.addEventListener('click',e=>{const m=document.getElementById('sortMenu');if(m&&!m.closest('.sort-dropdown').contains(e.target))m.classList.remove('show')});
+function setSort(s,el){currentSort=s;document.querySelectorAll('.sort-option').forEach(o=>{o.classList.remove('active');o.querySelector('i').className=''});el.classList.add('active');el.querySelector('i').className='bi bi-check-lg';document.getElementById('sortMenu').classList.remove('show');applyFilters()}
+function setView(v){currentView=v;document.getElementById('gridViewBtn').classList.toggle('active-view',v==='grid');document.getElementById('listViewBtn').classList.toggle('active-view',v==='list');document.getElementById('gridView').style.display=v==='grid'?'grid':'none';document.getElementById('listView').style.display=v==='list'?'block':'none';applyFilters()}
+
+// ══════════════════════════════════════
+// RENDER PROJECTS — with Details button
+// ══════════════════════════════════════
+function renderProjects(){
+  const list=getFilteredSorted(),empty=document.getElementById('emptyState'),count=document.getElementById('projectCount');
+  if(list.length===0){empty.style.display='block';count.style.display='none';document.getElementById('gridView').innerHTML='';document.getElementById('listBody').innerHTML='';return}
+  empty.style.display='none';count.style.display='block';count.textContent=`Showing ${list.length} of ${projects.length} projects`;
+
+  // Grid View — each card has a Details button in footer
+  document.getElementById('gridView').innerHTML=list.map(p=>{
+    const sp=((p.spent/p.budget)*100).toFixed(0);
+    const pc=p.progress>=60?'var(--success)':p.progress>=30?'var(--primary)':p.progress>=15?'#D97706':'var(--danger)';
+    const dd=getDelayDays(p);
+    return `
+    <div class="col-md-6 col-xl-4">
+      <div class="project-card" onclick="openProjectModal(${p.id})">
+        <div class="card-stripe" style="background:${p.stripeColor}"></div>
+        <div class="card-body-inner">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div><h5 style="font-size:15px;font-weight:700;color:var(--primary);margin:0;line-height:1.3;">${p.name}</h5><small style="color:var(--text-tertiary);"><i class="bi bi-geo-alt me-1"></i>${p.location}</small></div>
+            <span class="status-pill ${p.statusClass}">${p.status}</span>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6"><small style="color:var(--text-tertiary);">Client</small><div style="font-size:13px;font-weight:600;">${p.customer}</div><small style="color:var(--text-tertiary);font-size:11px;">${p.phone}</small></div>
+            <div class="col-6"><small style="color:var(--text-tertiary);">Site Manager</small><div style="font-size:13px;font-weight:600;">${p.manager}</div><small style="color:var(--text-tertiary);font-size:11px;">${p.type}</small></div>
+          </div>
+          <div class="d-flex justify-content-between mb-1"><small style="color:var(--text-tertiary);">${p.stage}</small><small style="font-weight:700;color:${pc};">${p.progress}%</small></div>
+          <div class="progress-bar-custom"><div class="progress-fill-custom" style="width:${p.progress}%;background:${pc};"></div></div>
+          ${dd>0?`<div style="margin-top:6px;font-size:11px;color:var(--danger);font-weight:600;"><i class="bi bi-exclamation-triangle me-1"></i>${dd} days behind schedule</div>`:''}
+        </div>
+        <div class="card-footer-bar">
+          <div class="d-flex gap-3">
+            <div><small style="color:var(--text-tertiary);">Budget</small><div style="font-size:14px;font-weight:700;">$${(p.budget/1000).toFixed(0)}K</div></div>
+            <div style="text-align:center;"><small style="color:var(--text-tertiary);">Spent</small><div style="font-size:14px;font-weight:700;color:${sp>80?'var(--danger)':'var(--text-primary)'};">$${(p.spent/1000).toFixed(0)}K</div></div>
+            <div style="text-align:right;"><small style="color:var(--text-tertiary);">Milestones</small><div style="font-size:14px;font-weight:700;">${p.milestones.done}/${p.milestones.total}</div></div>
+          </div>
+          <a href="project-detail.html?id=${p.id}" class="btn-details" onclick="event.stopPropagation()"><i class="bi bi-arrow-right-circle"></i> Details</a>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // List View — each row has a Details button in last column
+  document.getElementById('listBody').innerHTML=list.map(p=>{
+    const pc=p.progress>=60?'var(--success)':p.progress>=30?'var(--primary)':p.progress>=15?'#D97706':'var(--danger)';
+    return `
+    <div class="list-row" onclick="openProjectModal(${p.id})">
+      <div><b style="color:var(--primary);font-size:13px;">${p.name}</b><div style="font-size:10.5px;color:var(--text-tertiary);">${p.type}</div></div>
+      <div>${p.customer}</div>
+      <div style="font-size:12px;color:var(--text-secondary);">${p.manager}</div>
+      <div style="font-size:12px;">${p.stage}</div>
+      <div style="font-weight:600;">$${(p.budget/1000).toFixed(0)}K</div>
+      <div style="font-weight:600;color:${p.spent/p.budget>.5?'var(--danger)':'var(--text-secondary)'};">$${(p.spent/1000).toFixed(0)}K</div>
+      <div><div class="d-flex align-items-center gap-2"><div class="progress-bar-custom" style="flex:1;"><div class="progress-fill-custom" style="width:${p.progress}%;background:${pc};"></div></div><span style="font-size:11px;font-weight:700;color:${pc};">${p.progress}%</span></div></div>
+      <div><a href="project-detail.html?id=${p.id}" class="btn-details btn-sm-custom" onclick="event.stopPropagation()"><i class="bi bi-arrow-right-circle"></i> Details</a></div>
+    </div>`;
+  }).join('');
+}
+
+function getDelayDays(p){if(p.status==='On Track')return 0;const d=p.milestones_list.filter(m=>m.status==='done');if(d.length===0)return 0;const diff=Math.floor((new Date()-new Date(d[d.length-1].date))/(1000*60*60*24))-30;return diff>0?diff:0}
+
+// ══════════════════════════════════════
+// PROJECT DETAIL MODAL (quick view)
+// ══════════════════════════════════════
+function openProjectModal(id){currentModalProject=projects.find(x=>x.id===id);if(!currentModalProject)return;currentModalTab='overview';document.querySelectorAll('.modal-tab').forEach(t=>t.classList.remove('active'));document.querySelector('.modal-tab').classList.add('active');renderModalContent();document.getElementById('projectModal').classList.add('show')}
+function switchTab(tab,el){currentModalTab=tab;document.querySelectorAll('.modal-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');renderModalContent()}
+function renderModalContent(){const p=currentModalProject,b=document.getElementById('pmBody');switch(currentModalTab){case'overview':b.innerHTML=renderOverviewTab(p);break;case'customer':b.innerHTML=renderCustomerTab(p);break;case'milestones':b.innerHTML=renderMilestonesTab(p);break;case'financials':b.innerHTML=renderFinancialsTab(p);break;case'team':b.innerHTML=renderTeamTab(p);break}}
+
+function renderOverviewTab(p){
+  const sp=((p.spent/p.budget)*100).toFixed(1),pc=p.progress>=60?'var(--success)':p.progress>=30?'var(--primary)':p.progress>=15?'#D97706':'var(--danger)',ob=p.spent/p.budget>0.8;
+  return `
+    <div class="detail-grid" style="margin-bottom:20px;">
+      <div class="detail-item"><div class="detail-label">Customer</div><div class="detail-value">${p.customer}</div></div>
+      <div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${p.phone}</div></div>
+      <div class="detail-item"><div class="detail-label">Email</div><div class="detail-value">${p.email}</div></div>
+      <div class="detail-item"><div class="detail-label">Location</div><div class="detail-value">${p.location}</div></div>
+      <div class="detail-item"><div class="detail-label">Site Manager</div><div class="detail-value">${p.manager}</div></div>
+      <div class="detail-item"><div class="detail-label">Current Stage</div><div class="detail-value" style="color:var(--primary);">${p.stage}</div></div>
+      <div class="detail-item"><div class="detail-label">Start Date</div><div class="detail-value">${formatDate(p.start)}</div></div>
+      <div class="detail-item"><div class="detail-label">Est. Completion</div><div class="detail-value">${formatDate(p.estEnd)}</div></div>
+    </div>
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span style="font-size:13px;font-weight:600;">Overall Progress</span><span style="font-size:14px;font-weight:800;color:${pc};">${p.progress}%</span></div>
+      <div class="progress-bar-custom" style="height:12px;"><div class="progress-fill-custom" style="width:${p.progress}%;background:${pc};"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;"><span style="font-size:11px;color:var(--text-tertiary);">Milestones: ${p.milestones.done} / ${p.milestones.total}</span><span class="status-pill ${p.statusClass}">${p.status}</span></div>
+    </div>
+    <div class="row g-3" style="margin-bottom:20px;">
+      <div class="col-4 text-center" style="padding:16px;background:var(--bg-body);border-radius:10px;"><div style="font-size:20px;font-weight:800;color:var(--primary);">$${(p.budget/1000).toFixed(0)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Budget</div></div>
+      <div class="col-4 text-center" style="padding:16px;background:var(--bg-body);border-radius:10px;"><div style="font-size:20px;font-weight:800;color:${ob?'var(--danger)':'var(--text-primary)'};">$${(p.spent/1000).toFixed(0)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Spent (${sp}%)</div></div>
+      <div class="col-4 text-center" style="padding:16px;background:var(--bg-body);border-radius:10px;"><div style="font-size:20px;font-weight:800;color:var(--success);">$${((p.budget-p.spent)/1000).toFixed(0)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Remaining</div></div>
+    </div>
+    ${ob?`<div style="padding:10px 14px;background:var(--danger-light);border:1px solid rgba(220,38,38,.15);border-radius:8px;margin-bottom:16px;font-size:12px;color:var(--danger);display:flex;align-items:center;gap:8px;"><i class="bi bi-exclamation-triangle" style="font-size:16px;"></i><span>Spend is at ${sp}% of budget with only ${p.progress}% progress.</span></div>`:''}
+    ${p.variations.length>0?`<div style="margin-bottom:16px;"><div class="detail-label" style="margin-bottom:8px;">Variations (${p.variations.length})</div>${p.variations.map(v=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg-body);border-radius:8px;margin-bottom:6px;border-left:3px solid ${v.status==='Approved'?'var(--success)':'var(--warning)'};"><div><div style="font-size:13px;font-weight:500;">${v.desc}</div><div style="font-size:11px;color:var(--text-tertiary);">${formatDate(v.date)}</div></div><div style="text-align:right;"><div style="font-size:14px;font-weight:700;">$${v.amount.toLocaleString()}</div><span class="status-pill ${v.status==='Approved'?'pill-success':'pill-warning'}" style="font-size:9px;">${v.status}</span></div></div>`).join('')}</div>`:''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a href="project-detail.html?id=${p.id}" class="btn-primary-custom" onclick="closeModal('projectModal')"><i class="bi bi-arrow-right-circle me-1"></i>Open Full Details</a>
+      <button class="btn-outline-custom" onclick="showToast('Opening milestones for ${p.name}...','info');switchTab(document.querySelectorAll('.modal-tab')[2],document.querySelectorAll('.modal-tab')[2])"><i class="bi bi-calendar-check me-1"></i>Milestones</button>
+      <button class="btn-outline-custom" onclick="showToast('Calling ${p.customer} at ${p.phone}...','info')"><i class="bi bi-telephone me-1"></i>Call Client</button>
+      <button class="btn-outline-custom" onclick="showToast('Opening ${p.location} in Maps...','info')"><i class="bi bi-geo-alt me-1"></i>Directions</button>
+    </div>`;
+}
+
+function renderCustomerTab(p){
+  return `
+    <div style="display:flex;align-items:center;gap:16px;padding:20px;background:var(--bg-body);border-radius:12px;margin-bottom:20px;">
+      <div style="width:56px;height:56px;border-radius:14px;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;">${p.customer.split(' ').map(n=>n[0]).join('')}</div>
+      <div><h4 style="font-size:16px;font-weight:700;margin:0;">${p.customer}</h4><p style="font-size:12px;color:var(--text-tertiary);margin:0;">Client since ${formatDate(p.start)} — ${p.type}</p></div>
+    </div>
+    <div class="detail-grid" style="margin-bottom:20px;">
+      <div class="detail-item"><div class="detail-label">Phone</div><div class="detail-value">${p.phone}</div></div>
+      <div class="detail-item"><div class="detail-label">Email</div><div class="detail-value">${p.email}</div></div>
+      <div class="detail-item"><div class="detail-label">Site Address</div><div class="detail-value">${p.location}</div></div>
+      <div class="detail-item"><div class="detail-label">Project Value</div><div class="detail-value" style="color:var(--primary);">$${p.budget.toLocaleString()}</div></div>
+    </div>
+    <div style="margin-bottom:20px;"><div class="detail-label" style="margin-bottom:10px;">Customer Requirements (${p.requirements.length})</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${p.requirements.map(r=>`<span class="req-tag"><i class="bi bi-check2" style="color:var(--success);font-size:11px;"></i>${r}</span>`).join('')}</div></div>
+    <div style="padding:14px 18px;background:var(--primary-glow);border:1px solid rgba(13,148,136,.12);border-radius:10px;margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:6px;"><i class="bi bi-info-circle me-1"></i>Portfolio Notes</div>
+      <p style="font-size:13px;color:var(--text-secondary);margin:0;line-height:1.6;">Client has been provided the BuildPro platform link for requirement submission. All selections from catalogue have been recorded. ${p.variations.length>0?p.variations.length+' variation(s) raised during construction.':'No variations raised yet.'} ${p.status==='Delayed'?'Client has been notified of timeline delay.':''}</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-primary-custom" onclick="showToast('Opening email composer...','success')"><i class="bi bi-envelope me-1"></i>Send Email</button>
+      <button class="btn-outline-custom" onclick="showToast('Calling ${p.customer}...','info')"><i class="bi bi-telephone me-1"></i>Call Now</button>
+      <button class="btn-outline-custom" onclick="showToast('Opening WhatsApp...','success')"><i class="bi bi-whatsapp me-1"></i>WhatsApp</button>
+      <button class="btn-outline-custom" onclick="showToast('Generating portfolio PDF...','info')"><i class="bi bi-file-earmark-pdf me-1"></i>Export Portfolio</button>
+    </div>`;
+}
+
+function renderMilestonesTab(p){
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div><span style="font-size:13px;font-weight:700;">${p.milestones.done} of ${p.milestones.total} milestones completed</span><div style="font-size:11px;color:var(--text-tertiary);">Each milestone requires photo upload from site manager</div></div>
+      <button class="btn-primary-custom btn-sm-custom" onclick="showToast('Generating milestone timeline PDF...','info')"><i class="bi bi-download me-1"></i>Export</button>
+    </div>
+    <div class="progress-bar-custom" style="height:8px;margin-bottom:20px;"><div class="progress-fill-custom" style="width:${(p.milestones.done/p.milestones.total*100)}%;background:var(--primary);"></div></div>
+    ${p.milestones_list.map((m,i)=>{
+      const ic=m.status==='done'?'bi-check-lg':m.status==='current'?'bi-play-fill':'bi-dash',bg=m.status==='done'?'var(--success)':m.status==='current'?'var(--primary)':'var(--border-color)',fg=m.status==='done'?'white':m.status==='current'?'white':'var(--text-tertiary)',last=i===p.milestones_list.length-1;
+      return `<div class="ms-row" style="border-bottom:${last?'none':'1px solid var(--border-light)'};"><div class="ms-dot" style="background:${bg};color:${fg};${m.status==='current'?'box-shadow:0 0 0 4px var(--primary-glow);':''}"><i class="bi ${ic}"></i></div><div class="ms-info"><div style="font-size:13px;font-weight:${m.status==='current'?'700':'500'};color:${m.status==='current'?'var(--primary)':'var(--text-primary)'};">${m.name}</div><div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;"><i class="bi bi-calendar3 me-1"></i>${formatDate(m.date)}${m.tradie?`<span style="margin-left:8px;"><i class="bi bi-tools me-1"></i>${m.tradie}</span>`:''}</div></div><div style="display:flex;align-items:center;gap:6px;">${m.photo?`<span class="status-pill pill-success" style="font-size:9px;"><i class="bi bi-camera me-1"></i>Photo</span>`:''}${m.status==='current'?`<button class="btn-primary-custom btn-sm-custom" onclick="event.stopPropagation();showToast('Opening photo upload for: ${m.name}...','info')"><i class="bi bi-camera me-1"></i>Upload</button>`:''}${m.status==='pending'&&m.tradie?`<button class="btn-outline-custom btn-sm-custom" onclick="event.stopPropagation();showToast('Sending 1-week reminder to ${m.tradie}...','warning')"><i class="bi bi-bell me-1"></i>Remind</button>`:''}</div></div>`}).join('')}`;
+}
+
+function renderFinancialsTab(p){
+  const tv=p.variations.reduce((s,v)=>s+v.amount,0),pi=p.invoices.filter(i=>i.status==='Paid').reduce((s,i)=>s+i.amount,0),pni=p.invoices.filter(i=>i.status==='Pending').reduce((s,i)=>s+i.amount,0),oi=p.invoices.filter(i=>i.status==='Overdue').reduce((s,i)=>s+i.amount,0);
+  return `
+    <div class="row g-3" style="margin-bottom:20px;">
+      <div class="col-3 text-center" style="padding:14px;background:var(--bg-body);border-radius:10px;"><div style="font-size:18px;font-weight:800;color:var(--primary);">$${(p.budget/1000).toFixed(0)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Total Budget</div></div>
+      <div class="col-3 text-center" style="padding:14px;background:var(--bg-body);border-radius:10px;"><div style="font-size:18px;font-weight:800;color:var(--text-primary);">$${(p.spent/1000).toFixed(0)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Actual Spend</div></div>
+      <div class="col-3 text-center" style="padding:14px;background:var(--bg-body);border-radius:10px;"><div style="font-size:18px;font-weight:800;color:var(--success);">$${((p.budget-p.spent)/1000).toFixed(0)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Est. Profit</div></div>
+      <div class="col-3 text-center" style="padding:14px;background:var(--bg-body);border-radius:10px;"><div style="font-size:18px;font-weight:800;color:var(--warning);">$${(tv/1000).toFixed(1)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Variations</div></div>
+    </div>
+    <div class="row g-3" style="margin-bottom:20px;">
+      <div class="col-4 text-center" style="padding:12px;background:var(--success-light);border-radius:10px;"><div style="font-size:16px;font-weight:800;color:var(--success);">$${(pi/1000).toFixed(0)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Paid</div></div>
+      <div class="col-4 text-center" style="padding:12px;background:var(--warning-light);border-radius:10px;"><div style="font-size:16px;font-weight:800;color:#D97706;">$${(pni/1000).toFixed(0)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Pending</div></div>
+      <div class="col-4 text-center" style="padding:12px;background:var(--danger-light);border-radius:10px;"><div style="font-size:16px;font-weight:800;color:var(--danger);">$${(oi/1000).toFixed(1)}K</div><div style="font-size:10px;color:var(--text-tertiary);">Overdue</div></div>
+    </div>
+    <div style="margin-bottom:20px;"><div class="detail-label" style="margin-bottom:10px;">Invoice History (${p.invoices.length})</div><div style="overflow-x:auto;"><table class="table-custom"><thead><tr><th>Invoice</th><th>Description</th><th>Amount</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>${p.invoices.map(inv=>`<tr><td style="font-weight:600;color:var(--primary);">${inv.id}</td><td>${inv.desc}</td><td style="font-weight:700;">$${inv.amount.toLocaleString()}</td><td>${formatDate(inv.date)}</td><td><span class="status-pill ${inv.status==='Paid'?'pill-success':inv.status==='Pending'?'pill-warning':'pill-danger'}">${inv.status}</span></td><td><button class="btn-outline-custom btn-sm-custom" onclick="event.stopPropagation();showToast('Opening ${inv.id}...','info')"><i class="bi bi-eye"></i></button></td></tr>`).join('')}</tbody></table></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-primary-custom" onclick="showToast('Creating new invoice...','success')"><i class="bi bi-plus-lg me-1"></i>New Invoice</button>
+      <button class="btn-outline-custom" onclick="showToast('Sending payment reminder to ${p.customer}...','warning')"><i class="bi bi-bell me-1"></i>Send Reminder</button>
+      <button class="btn-outline-custom" onclick="showToast('Exporting P&L report...','info')"><i class="bi bi-file-earmark-arrow-down me-1"></i>Export P&L</button>
+    </div>`;
+}
+
+function renderTeamTab(p){
+  const th=p.workers.reduce((s,w)=>s+w.hours,0);
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div><span style="font-size:13px;font-weight:700;">${p.workers.length} workers assigned</span><div style="font-size:11px;color:var(--text-tertiary);">GPS-tracked via site QR code</div></div>
+      <div style="display:flex;gap:6px;"><button class="btn-outline-custom btn-sm-custom" onclick="showToast('Generating QR code for ${p.location}...','success')"><i class="bi bi-qr-code me-1"></i>Regenerate QR</button><button class="btn-primary-custom btn-sm-custom" onclick="showToast('Opening worker assignment...','info')"><i class="bi bi-plus-lg me-1"></i>Add Worker</button></div>
+    </div>
+    <div style="padding:14px 18px;background:var(--primary-glow);border:1px solid rgba(13,148,136,.12);border-radius:10px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">
+      <i class="bi bi-qr-code" style="font-size:28px;color:var(--primary);"></i>
+      <div><div style="font-size:13px;font-weight:600;">Site QR Code — ${p.location}</div><div style="font-size:11px;color:var(--text-tertiary);">Workers scan on arrival for GPS-verified attendance. Total this week: <b>${th} hrs</b></div></div>
+    </div>
+    ${p.workers.length>0?`<div style="overflow-x:auto;"><table class="table-custom"><thead><tr><th>Worker</th><th>Role</th><th>Hours/Week</th><th>Status</th><th>Actions</th></tr></thead><tbody>${p.workers.map(w=>`<tr><td><div style="display:flex;align-items:center;gap:8px;"><div style="width:28px;height:28px;border-radius:7px;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;">${w.name.split(' ').map(n=>n[0]).join('')}</div><span style="font-weight:600;">${w.name}</span></div></td><td style="color:var(--text-secondary);">${w.role}</td><td><span style="font-weight:600;">${w.hours} hrs</span></td><td><span class="status-pill pill-success"><i class="bi bi-geo-alt me-1" style="font-size:9px;"></i>Checked In</span></td><td><button class="btn-outline-custom btn-sm-custom" onclick="event.stopPropagation();showToast('Opening attendance for ${w.name}...','info')"><i class="bi bi-clock-history me-1"></i>History</button></td></tr>`).join('')}</tbody></table></div>`:`<div style="text-align:center;padding:40px;color:var(--text-tertiary);"><i class="bi bi-people" style="font-size:32px;display:block;margin-bottom:8px;"></i>No workers assigned yet. Project is in ${p.stage}.</div>`}
+    <div style="margin-top:16px;padding:14px 18px;background:var(--bg-body);border-radius:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;"><i class="bi bi-person-badge me-1"></i>Site Manager: ${p.manager}</div>
+      <div style="font-size:12px;color:var(--text-secondary);">Responsible for milestone photo uploads, tradie coordination, and daily site updates.</div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Messaging ${p.manager}...','success')"><i class="bi bi-chat-dots me-1"></i>Message</button>
+        <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Calling ${p.manager}...','info')"><i class="bi bi-telephone me-1"></i>Call</button>
+        <button class="btn-outline-custom btn-sm-custom" onclick="showToast('Viewing performance...','info')"><i class="bi bi-graph-up me-1"></i>Performance</button>
+      </div>
+    </div>`;
+}
+
+function formatDate(d){if(!d)return'—';return new Date(d+'T00:00:00').toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}
+
+// ══════════════════════════════════════
+// NEW PROJECT MODAL
+// ══════════════════════════════════════
+function openNewProjectModal(){document.getElementById('newProjectModal').classList.add('show')}
+function createProject(){
+  const name=document.getElementById('npName').value.trim(),customer=document.getElementById('npCustomer').value.trim(),phone=document.getElementById('npPhone').value.trim(),location=document.getElementById('npLocation').value.trim(),manager=document.getElementById('npManager').value,budget=document.getElementById('npBudget').value,start=document.getElementById('npStart').value,type=document.getElementById('npType').value,errors=[];
+  if(!name)errors.push('Project name');if(!customer)errors.push('Customer');if(!phone)errors.push('Phone');if(!location)errors.push('Location');if(!manager)errors.push('Manager');if(!budget)errors.push('Budget');if(!start)errors.push('Start date');if(!type)errors.push('Type');
+  if(errors.length>0){showToast('Please fill in: '+errors.join(', '),'danger');return}
+  projects.unshift({id:projects.length+1,name,customer,phone,email:document.getElementById('npEmail').value||'—',location,manager,stage:"Design Phase",budget:parseInt(budget),spent:0,progress:0,status:"On Track",statusClass:"pill-success",stripeColor:"var(--success)",type,start,estEnd:document.getElementById('npEnd').value||'—',milestones:{done:0,total:10},requirements:document.getElementById('npNotes').value?document.getElementById('npNotes').value.split('\n').filter(l=>l.trim()):["To be confirmed"],milestones_list:[{name:"Design Brief",status:"current",date:start,photo:false,tradie:"Architect — Mike Thompson"},{name:"Final Plans",status:"pending",date:"—",photo:false,tradie:null},{name:"DA Submission",status:"pending",date:"—",photo:false,tradie:null},{name:"DA Approval",status:"pending",date:"—",photo:false,tradie:null},{name:"Certification",status:"pending",date:"—",photo:false,tradie:null},{name:"Site Prep",status:"pending",date:"—",photo:false,tradie:null},{name:"Foundation",status:"pending",date:"—",photo:false,tradie:null},{name:"Frame",status:"pending",date:"—",photo:false,tradie:null},{name:"Fit-out",status:"pending",date:"—",photo:false,tradie:null},{name:"Handover",status:"pending",date:"—",photo:false,tradie:null}],variations:[],workers:[],invoices:[]});
+  closeModal('newProjectModal');clearForm();applyFilters();updateStatCounts();showToast(`Project "${name}" created — ${customer} notified`,'success');
+}
+function saveAsDraft(){const n=document.getElementById('npName').value.trim()||'Untitled Project';closeModal('newProjectModal');clearForm();showToast(`Draft saved: "${n}"`,'warning')}
+function clearForm(){['npName','npCustomer','npPhone','npEmail','npLocation','npBudget','npStart','npEnd','npNotes'].forEach(id=>document.getElementById(id).value='');['npType','npManager'].forEach(id=>document.getElementById(id).selectedIndex=0)}
+function updateStatCounts(){
+  const t=projects.length,ot=projects.filter(p=>p.status==='On Track').length,na=projects.filter(p=>p.status==='Needs Attention'||p.status==='Pending Quote'||p.status==='Awaiting Plans'||p.status==='Variation Pending').length,dl=projects.filter(p=>p.status==='Delayed').length;
+  const c=document.querySelectorAll('.stat-value[data-count]');c[0].dataset.count=t;c[0].textContent=t;c[1].dataset.count=ot;c[1].textContent=ot;c[2].dataset.count=na;c[2].textContent=na;c[3].dataset.count=dl;c[3].textContent=dl;
+  const pills=document.querySelectorAll('.filter-pill');pills[0].textContent=`All (${t})`;pills[1].textContent=`On Track (${ot})`;pills[2].textContent=`Needs Attention (${na})`;pills[3].textContent=`Delayed (${dl})`;pills[4].textContent=`Variation (${projects.filter(p=>p.status==='Variation Pending').length})`;
+}
+
+// ══════════════════════════════════════
+// EXPORT CSV
+// ══════════════════════════════════════
+function exportCSV(){const h=['Project','Customer','Location','Manager','Type','Stage','Budget','Spent','Progress','Status','Start','Est.End'],r=projects.map(p=>[p.name,p.customer,p.location,p.manager,p.type,p.stage,p.budget,p.spent,p.progress+'%',p.status,p.start,p.estEnd]);let csv=h.join(',')+'\n'+r.map(x=>x.join(',')).join('\n');const b=new Blob([csv],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='BuildPro_Projects_'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);showToast('Projects exported as CSV','success')}
+
+// ══════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.modal-backdrop-custom').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-backdrop-custom.show').forEach(m=>m.classList.remove('show'))});
+
+// ══════════════════════════════════════
+// AUTO UPDATE TIMESTAMP
+// ══════════════════════════════════════
+let updateSec=0;setInterval(()=>{updateSec++;const el=document.getElementById('lastUpdated');if(updateSec<60)el.textContent='Updated just now';else el.textContent='Updated '+Math.floor(updateSec/60)+' min ago';},1000);
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+setTimeout(()=>{animateCounters();renderNotifs();renderProjects();renderTicker()},100);
+</script>
+</body>
+</html>
