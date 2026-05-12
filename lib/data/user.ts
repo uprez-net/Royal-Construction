@@ -60,9 +60,7 @@ export async function updateUser(clerkId: string, updates: Partial<{ name: strin
     try {
         // Remove undefined fields
         const filteredUpdates = Object.fromEntries(
-            Object.entries(updates).filter(
-                ([_, value]) => value !== undefined
-            )
+            Object.entries(updates).filter(([, value]) => value !== undefined)
         );
         
         const user = await prisma.user.update({

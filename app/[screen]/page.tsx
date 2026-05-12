@@ -6,10 +6,13 @@ import { auth } from "@clerk/nextjs/server";
 
 export default async function ScreenPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ screen: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { screen } = await params;
+  const resolvedSearchParams = await searchParams;
   const user = await auth();
   const Screen = screenRegistry[screen];
 
@@ -24,7 +27,7 @@ export default async function ScreenPage({
       description="Converted from the original HTML mockups into a shared, composable Next.js screen architecture."
       isSignedIn={user.isAuthenticated}
     >
-      {Screen()}
+      {Screen({ searchParams: resolvedSearchParams })}
     </AppShell>
   );
 }

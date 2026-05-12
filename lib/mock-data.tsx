@@ -26,6 +26,9 @@ import { StatusPill } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ProjectCard } from "@/components/project/project-card"
+import { ProjectDetailIndex } from "@/components/projects/project-detail-index"
+import { ProjectsScreen } from "@/components/projects/projects-screen"
+import { TradiesScreen } from "@/components/tradies/tradies-screen"
 
 export type NavItem = {
   slug: string
@@ -89,7 +92,7 @@ export const tickerItems = [
   "Worker attendance: 53/56 checked in today",
 ]
 
-export const screenRegistry: Record<string, () => ReactNode> = {
+export const screenRegistry: Record<string, (props?: { searchParams?: Record<string, string | string[] | undefined> }) => ReactNode> = {
   dashboard: () => (
     <div className="grid gap-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -118,15 +121,7 @@ export const screenRegistry: Record<string, () => ReactNode> = {
       </div>
     </div>
   ),
-  projects: () => (
-    <SectionCard title="Active projects" description="Grid, list, and modal detail views all use the same project data shape.">
-      <div className="grid gap-4 lg:grid-cols-3">
-        {dashboardProjects.map((project) => (
-          <ProjectCard key={project.name} {...project} />
-        ))}
-      </div>
-    </SectionCard>
-  ),
+  projects: (props) => <ProjectsScreen searchParams={props?.searchParams} />,
   leads: () => (
     <SectionCard title="Lead pipeline" description="This board structure scales from static mockups to real pipeline state.">
       <div className="grid gap-4 xl:grid-cols-4">
@@ -226,7 +221,7 @@ export const screenRegistry: Record<string, () => ReactNode> = {
   ),
   architect: () => <SimpleListScreen title="Architect coordination" items={["Sketch pending", "Follow-up due", "Revised concept uploaded"]} />,
   government: () => <SimpleListScreen title="Government & certifiers" items={["DA lodged", "Council follow-up", "Compliance review"]} />,
-  tradie: () => <SimpleListScreen title="Tradie coordination" items={["Roster updated", "Call logged", "GPS check-in complete"]} />,
+  tradie: (props) => <TradiesScreen searchParams={props?.searchParams} />,
   sitemanager: () => <SimpleListScreen title="Site managers" items={["On-site status", "QR check-in", "Daily summary sent"]} />,
   financials: () => (
     <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
@@ -274,32 +269,7 @@ export const screenRegistry: Record<string, () => ReactNode> = {
       </SectionCard>
     </div>
   ),
-  "project-detail": () => (
-    <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-      <SectionCard title="Penrith Residence" description="The same project model can power summary, milestones, financials, and team views.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          {[
-            ["Status", "On Track"],
-            ["Client", "Harpreet Kaur"],
-            ["Budget", "$485K"],
-            ["Progress", "65%"],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-2xl border border-border/70 bg-background p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-              <p className="mt-2 font-heading text-lg font-semibold">{value}</p>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-      <SectionCard title="Team and actions" description="Buttons and status chips map cleanly to Clerk-secured actions later.">
-        <div className="space-y-3">
-          <Button className="w-full">Add site update</Button>
-          <Button variant="outline" className="w-full">Create variation</Button>
-          <Button variant="secondary" className="w-full">Message client</Button>
-        </div>
-      </SectionCard>
-    </div>
-  ),
+  "project-detail": () => <ProjectDetailIndex />,
 }
 
 function SimpleListScreen({ title, items }: { title: string; items: string[] }) {
