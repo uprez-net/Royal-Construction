@@ -1,10 +1,9 @@
+import { SafeTradie } from "@/types/project";
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { Prisma } from "@prisma/client";
 
-export type TradieRecord = Prisma.TradieGetPayload<Record<string, never>>;
 
 export interface TradiesState {
-  tradies: TradieRecord[];
+  tradies: SafeTradie[];
   pendingScheduleIds: string[];
   replacementRequired: string[];
 }
@@ -19,10 +18,10 @@ const tradiesSlice = createSlice({
   name: "tradies",
   initialState,
   reducers: {
-    setTradies(state, action: PayloadAction<TradieRecord[]>) {
+    setTradies(state, action: PayloadAction<SafeTradie[]>) {
       state.tradies = action.payload;
     },
-    appendTradie(state, action: PayloadAction<TradieRecord>) {
+    appendTradie(state, action: PayloadAction<SafeTradie>) {
       state.tradies.push(action.payload);
     },
     addPendingSchedule(state, action: PayloadAction<string>) {

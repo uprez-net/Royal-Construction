@@ -12,7 +12,7 @@ import { ProjectCard } from "@/components/project/project-card";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal, setProjectFilter, setProjectView } from "@/lib/store/slices/uiSlice";
-import type { ProjectKPIs, ProjectWithStats } from "@/lib/data/projects";
+import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
 
 function formatStatus(status: string) {
   return status

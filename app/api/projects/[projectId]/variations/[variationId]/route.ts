@@ -6,12 +6,14 @@ import { applyVariationDelay } from "@/lib/utils/apply-variation-delay";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { projectId: string; variationId: string } },
+  { params }: { params: Promise<{ projectId: string; variationId: string }> },
 ) {
   const { userId } = await auth();
   if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const { projectId, variationId } = await params;
 
   const body = (await request.json()) as { status?: "APPROVED" | "REJECTED" };
 
@@ -20,17 +22,17 @@ export async function PATCH(
   }
 
   const variation = await prisma.variation.update({
-    where: { id: params.variationId },
+    where: { id: variationId },
     data:
       body.status === "APPROVED"
         ? {
-            status: VariationStatus.APPROVED,
-            approvedDate: new Date(),
-          }
+          status: VariationStatus.APPROVED,
+          approvedDate: new Date(),
+        }
         : {
-            status: VariationStatus.REJECTED,
-            approvedDate: null,
-          },
+          status: VariationStatus.REJECTED,
+          approvedDate: null,
+        },
   });
 
   if (body.status === "APPROVED") {

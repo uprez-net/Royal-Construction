@@ -13,7 +13,7 @@ import { LogCallModal } from "@/components/tradies/log-call-modal";
 import { ScheduleTradieModal } from "@/components/tradies/schedule-tradie-modal";
 import { TradieDirectoryModal } from "@/components/tradies/tradie-directory-modal";
 
-import type { TradieScheduleWithRelations } from "@/lib/data/tradies";
+import type { TradieScheduleWithTradieMilestoneAndProject } from "@/types/project";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -58,7 +58,7 @@ export function ModalManager() {
       return <ScheduleTradieModal open onOpenChange={(open) => !open && handleClose()} onSuccess={handleSuccess} />;
     case "logCall":
       {
-        const schedule = modal.payload?.schedule as TradieScheduleWithRelations | undefined;
+        const schedule = modal.payload?.schedule as TradieScheduleWithTradieMilestoneAndProject | undefined;
 
         if (!schedule) {
           return null;
@@ -77,7 +77,7 @@ export function ModalManager() {
       }
     case "confirmStatus":
       {
-        const schedule = modal.payload?.schedule as TradieScheduleWithRelations | undefined;
+        const schedule = modal.payload?.schedule as TradieScheduleWithTradieMilestoneAndProject | undefined;
 
         if (!schedule) {
           return null;

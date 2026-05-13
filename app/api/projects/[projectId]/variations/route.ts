@@ -5,12 +5,14 @@ import prisma from "@/lib/prisma";
 
 export async function POST(
   request: Request,
-  { params }: { params: { projectId: string } },
+  { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { userId } = await auth();
   if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const { projectId } = await params;
 
   const body = (await request.json()) as {
     description?: string;
@@ -24,7 +26,7 @@ export async function POST(
 
   const variation = await prisma.variation.create({
     data: {
-      projectId: params.projectId,
+      projectId: projectId,
       description: body.description,
       cost: body.cost,
       requestedDate: body.requestedDate ? new Date(body.requestedDate) : new Date(),

@@ -8,9 +8,10 @@ import prisma from "@/lib/prisma";
 
 export async function POST(
   request: Request,
-  { params }: { params: { projectId: string } },
+  { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { userId } = await auth();
+  const { projectId } = await params;
   if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
@@ -39,7 +40,7 @@ export async function POST(
 
   const photoUrls = await Promise.all(
     files.map(async (file) => {
-      const blob = await put(`projects/${params.projectId}/${randomUUID()}-${file.name}`, file, {
+      const blob = await put(`projects/${projectId}/${randomUUID()}-${file.name}`, file, {
         access: "public",
       });
 
@@ -50,7 +51,7 @@ export async function POST(
   const siteUpdate = await prisma.$transaction(async (tx) => {
     const created = await tx.siteUpdate.create({
       data: {
-        projectId: params.projectId,
+        projectId: projectId,
         milestoneId,
         authorId: user.id,
         notes,
@@ -60,11 +61,11 @@ export async function POST(
 
     await tx.activityLog.create({
       data: {
-        projectId: params.projectId,
+        projectId: projectId,
         milestoneId,
         authorId: user.id,
         type: "site-update",
-        message: `Site update posted for ${params.projectId}`,
+        message: `Site update posted for ${projectId}`,
       },
     });
 

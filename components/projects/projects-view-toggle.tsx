@@ -7,7 +7,7 @@ import { Grid2x2, List } from "lucide-react";
 import { DataTable } from "@/components/common/data-table";
 import { ProjectCard } from "@/components/project/project-card";
 import { Button } from "@/components/ui/button";
-import { ProjectWithStats } from "@/lib/data/projects";
+import { ProjectWithStats } from "@/types/project";
 
 const currency = new Intl.NumberFormat("en-AU", {
   style: "currency",

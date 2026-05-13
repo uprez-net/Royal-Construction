@@ -3,9 +3,9 @@
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 
-import type { TradieScheduleWithRelations } from "@/lib/data/tradies";
+import type { TradieScheduleWithTradieMilestoneAndProject } from "@/types/project";
 
-export function UrgentReminderActions({ schedule }: { schedule: TradieScheduleWithRelations }) {
+export function UrgentReminderActions({ schedule }: { schedule: TradieScheduleWithTradieMilestoneAndProject }) {
   const dispatch = useAppDispatch();
 
   return (

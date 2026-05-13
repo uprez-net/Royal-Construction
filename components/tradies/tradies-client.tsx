@@ -11,8 +11,7 @@ import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal, setTradieFilter } from "@/lib/store/slices/uiSlice";
-import type { TradieKPIs, TradieScheduleWithRelations } from "@/lib/data/tradies";
-import type { TradieRecord } from "@/lib/store/slices/tradiesSlice";
+import type { SafeTradie, TradieKPIs, TradieScheduleWithTradieMilestoneAndProject } from "@/types/project";
 
 const chartColors: Record<string, string> = {
   CONFIRMED: "#10b981",
@@ -41,8 +40,8 @@ export function TradiesClient({
   schedules,
   kpis,
 }: {
-  tradies: TradieRecord[];
-  schedules: TradieScheduleWithRelations[];
+  tradies: SafeTradie[];
+  schedules: TradieScheduleWithTradieMilestoneAndProject[];
   kpis: TradieKPIs;
 }) {
   const dispatch = useAppDispatch();

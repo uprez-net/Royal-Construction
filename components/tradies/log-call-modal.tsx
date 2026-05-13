@@ -12,7 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import type { TradieScheduleWithRelations } from "@/lib/data/tradies";
+import type { TradieScheduleWithTradieMilestoneAndProject } from "@/types/project";
+
 
 export function LogCallModal({
   schedule,
@@ -20,7 +21,7 @@ export function LogCallModal({
   onOpenChange,
   onSuccess,
 }: {
-  schedule: TradieScheduleWithRelations;
+  schedule: TradieScheduleWithTradieMilestoneAndProject;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;

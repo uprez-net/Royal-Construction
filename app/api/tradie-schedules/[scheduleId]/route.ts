@@ -5,12 +5,14 @@ import prisma from "@/lib/prisma";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { scheduleId: string } },
+  { params }: { params: Promise<{ scheduleId: string }> },
 ) {
   const { userId } = await auth();
   if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const { scheduleId } = await params;
 
   const body = (await request.json()) as { status?: TradieScheduleStatus };
 
@@ -21,7 +23,7 @@ export async function PATCH(
   const requiresReplacement = body.status === TradieScheduleStatus.DECLINED;
 
   const schedule = await prisma.tradieSchedule.update({
-    where: { id: params.scheduleId },
+    where: { id: scheduleId },
     data: {
       status: body.status,
     },

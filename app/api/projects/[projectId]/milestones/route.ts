@@ -4,15 +4,16 @@ import prisma from "@/lib/prisma";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { projectId: string } },
+  { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { userId } = await auth();
+  const { projectId } = await params;
   if (!userId) {
     return new Response("Unauthorized", { status: 401 });
   }
 
   const milestones = await prisma.milestone.findMany({
-    where: { projectId: params.projectId },
+    where: { projectId: projectId },
     orderBy: { order: "asc" },
     select: {
       id: true,

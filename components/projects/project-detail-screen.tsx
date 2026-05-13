@@ -4,7 +4,7 @@ import Image from "next/image";
 import { SectionCard } from "@/components/common/section-card";
 import { StatusPill } from "@/components/common/status-pill";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ProjectDetail } from "@/lib/data/projects";
+import { ProjectDetail } from "@/types/project";
 
 import { ProjectDetailActions } from "./project-detail-actions";
 
