@@ -1,10 +1,10 @@
 "use server";
 
-
-import { Prisma, TradieScheduleStatus } from "@prisma/client";
+import { TradieScheduleStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 
 import prisma from "@/lib/prisma";
+import { SafeTradie, TradieKPIs, TradieScheduleWithTradieMilestoneAndProject } from "@/types/project";
 
 const tradieScheduleInclude = {
   tradie: true,
@@ -12,24 +12,15 @@ const tradieScheduleInclude = {
   milestone: true,
 } as const;
 
-export type TradieScheduleWithRelations = Prisma.TradieScheduleGetPayload<{
-  include: typeof tradieScheduleInclude;
-}>;
-
-export type TradieKPIs = {
-  totalScheduled: number;
-  pending: number;
-  pendingResponse: number;
-  confirmed: number;
-  noResponse: number;
-  declined: number;
-  completed: number;
-};
-
-export async function getTradies() {
-  return prisma.tradie.findMany({
+export async function getTradies(): Promise<SafeTradie[]> {
+  const tradies = await prisma.tradie.findMany({
     orderBy: { name: "asc" },
   });
+  return tradies.map(tradie => ({
+    ...tradie,
+    hourlyRate: tradie.hourlyRate?.toString(),
+    rating: tradie.rating?.toString(),
+  }));
 }
 
 export async function getTradieSchedules(filters?: {
@@ -38,7 +29,7 @@ export async function getTradieSchedules(filters?: {
   tradeType?: string;
   sort?: "scheduledDate" | "tradieName" | "projectName";
   order?: "asc" | "desc";
-}): Promise<TradieScheduleWithRelations[]> {
+}): Promise<TradieScheduleWithTradieMilestoneAndProject[]> {
   const order = filters?.order ?? "asc";
 
   const orderBy =
@@ -48,7 +39,7 @@ export async function getTradieSchedules(filters?: {
         ? { project: { name: order } }
         : { scheduledDate: order };
 
-  return prisma.tradieSchedule.findMany({
+  const schedules = await prisma.tradieSchedule.findMany({
     where: {
       projectId: filters?.projectId,
       status: filters?.status,
@@ -57,6 +48,22 @@ export async function getTradieSchedules(filters?: {
     include: tradieScheduleInclude,
     orderBy,
   });
+
+  return schedules.map(schedule => ({
+    ...schedule,
+    tradie: {
+      ...schedule.tradie,
+      hourlyRate: schedule.tradie.hourlyRate?.toString(),
+      rating: schedule.tradie.rating?.toString(),
+    },
+    project: {
+      ...schedule.project,
+      totalBudget: schedule.project.totalBudget.toString(),
+      spent: schedule.project.spent.toString(),
+    },
+    // normalize nullable milestone (Prisma may return null) to undefined to match our TS type
+    milestone: schedule.milestone ?? undefined,
+  }));
 }
 
 export async function getTradieScheduleKPIs(): Promise<TradieKPIs> {

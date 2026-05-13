@@ -1,9 +1,9 @@
 "use server";
 
-import { ProjectStatus, Prisma } from "@prisma/client";
+import { ProjectStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
-
 import prisma from "@/lib/prisma";
+import { ProjectDetail, ProjectKPIs, ProjectWithStats } from "@/types/project";
 
 const projectInclude = {
   customer: true,
@@ -54,25 +54,6 @@ const projectDetailInclude = {
   files: true,
 } as const;
 
-export type ProjectWithStats = Prisma.ProjectGetPayload<{
-  include: typeof projectInclude;
-}> & {
-  milestoneCount: number;
-  completedMilestoneCount: number;
-  progressPercent: number;
-};
-
-export type ProjectDetail = Prisma.ProjectGetPayload<{
-  include: typeof projectDetailInclude;
-}>;
-
-export type ProjectKPIs = {
-  totalActive: number;
-  onTrack: number;
-  needsAttention: number;
-  delayed: number;
-};
-
 export async function getProjects(filters?: { status?: ProjectStatus }): Promise<ProjectWithStats[]> {
   const projects = await prisma.project.findMany({
     where: filters?.status ? { status: filters.status } : undefined,
@@ -87,6 +68,8 @@ export async function getProjects(filters?: { status?: ProjectStatus }): Promise
 
     return {
       ...project,
+      totalBudget: project.totalBudget.toString(),
+      spent: project.spent.toString(),
       milestoneCount,
       completedMilestoneCount,
       progressPercent,
@@ -95,10 +78,50 @@ export async function getProjects(filters?: { status?: ProjectStatus }): Promise
 }
 
 export async function getProjectById(id: string): Promise<ProjectDetail | null> {
-  return prisma.project.findUnique({
+  const project = await prisma.project.findUnique({
     where: { id },
     include: projectDetailInclude,
   });
+
+  if (!project) {
+    return null;
+  }
+
+  return {
+    ...project,
+    totalBudget: project.totalBudget.toString(),
+    spent: project.spent.toString(),
+    siteUpdates: project.siteUpdates
+      .filter((siteUpdate) => siteUpdate.milestone !== null)
+      .map((siteUpdate) => ({
+        ...siteUpdate,
+        milestone: siteUpdate.milestone!,
+      })),
+    milestones: project.milestones.map((milestone) => ({
+      ...milestone,
+      tradieSchedules: milestone.tradieSchedules.map((schedule) => ({
+        ...schedule,
+        tradie: {
+          ...schedule.tradie,
+          hourlyRate: schedule.tradie.hourlyRate?.toString(),
+          rating: schedule.tradie.rating?.toString(),
+        },
+      })),
+    })),
+    variations: project.variations.map((variation) => ({
+      ...variation,
+      cost: variation.cost.toString(),
+    })),
+    tradieSchedules: project.tradieSchedules.map((schedule) => ({
+      ...schedule,
+      tradie: {
+        ...schedule.tradie,
+        hourlyRate: schedule.tradie.hourlyRate?.toString(),
+        rating: schedule.tradie.rating?.toString(),
+      },
+      milestone: schedule.milestone ?? undefined,
+    })),
+  };
 }
 
 export async function getProjectKPIs(): Promise<ProjectKPIs> {

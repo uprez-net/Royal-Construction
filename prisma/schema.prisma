@@ -57,6 +57,9 @@ model Project {
   estimatedEndDate DateTime
   requirements     Json?
 
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
   milestones      Milestone[]
   siteUpdates     SiteUpdate[]
   variations      Variation[]
@@ -64,8 +67,6 @@ model Project {
   files           File[]           @relation("ProjectFiles")
   activityLogs    ActivityLog[]
   tradies         Tradie[]         @relation("ProjectTradies")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
 
   @@index([name])
   @@index([customerId])
@@ -84,13 +85,15 @@ model Milestone {
   actualDate      DateTime?
   status          MilestoneStatus  @default(PENDING)
   isPhotoRequired Boolean          @default(false)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
   siteUpdates     SiteUpdate[]
   tradieSchedules TradieSchedule[]
   files           File[]           @relation("MilestoneFiles")
   activityLogs    ActivityLog[]
   tradies         Tradie[]         @relation("TradieMilestones")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
 
   @@unique([projectId, order])
   @@index([projectId])
@@ -107,11 +110,12 @@ model Tradie {
   email      String           @unique
   hourlyRate Decimal?         @db.Decimal(8, 2)
   rating     Decimal?         @db.Decimal(2, 1)
-  schedules  TradieSchedule[]
-  projects   Project[]        @relation("ProjectTradies")
-  milestones Milestone[]      @relation("TradieMilestones")
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
+
+  projects   Project[]        @relation("ProjectTradies")
+  milestones Milestone[]      @relation("TradieMilestones")
+  schedules  TradieSchedule[]
 
   @@index([name])
   @@index([trade])
@@ -142,14 +146,16 @@ model File {
 model SiteUpdate {
   id          String     @id @default(uuid())
   projectId   String
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestoneId String?
-  milestone   Milestone? @relation(fields: [milestoneId], references: [id])
   authorId    String
-  author      User       @relation(fields: [authorId], references: [id])
   notes       String
   photoUrls   String[]
+
   createdAt   DateTime   @default(now())
+
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id])
+  author      User       @relation(fields: [authorId], references: [id])
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([milestoneId])
@@ -158,15 +164,17 @@ model SiteUpdate {
 model Variation {
   id            String          @id @default(uuid())
   projectId     String
-  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   description   String
   cost          Decimal         @db.Decimal(10, 2)
   requestedDate DateTime        @default(now())
   approvedDate  DateTime?
   delayDays     Int             @default(0)
   status        VariationStatus @default(PENDING)
+
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([status])
@@ -175,17 +183,18 @@ model Variation {
 model TradieSchedule {
   id             String               @id @default(uuid())
   tradieId       String
-  tradie         Tradie               @relation(fields: [tradieId], references: [id])
   projectId      String
-  project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestoneId    String?
-  milestone      Milestone?           @relation(fields: [milestoneId], references: [id])
   scheduledDate  DateTime
   durationDays   Int                  @default(1)
   status         TradieScheduleStatus @default(PENDING)
   reminderSentAt DateTime?
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
+
+  tradie         Tradie               @relation(fields: [tradieId], references: [id])
+  project        Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone      Milestone?           @relation(fields: [milestoneId], references: [id])
 
   @@index([tradieId])
   @@index([projectId])
@@ -196,14 +205,16 @@ model TradieSchedule {
 model ActivityLog {
   id          String     @id @default(uuid())
   projectId   String
-  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestoneId String?
-  milestone   Milestone? @relation(fields: [milestoneId], references: [id])
   authorId    String?
-  author      User?      @relation(fields: [authorId], references: [id])
   type        String
   message     String
+
   createdAt   DateTime   @default(now())
+
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author      User?      @relation(fields: [authorId], references: [id])
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id])
 
   @@index([projectId])
   @@index([milestoneId])
@@ -216,6 +227,7 @@ model Customer {
   name      String
   email     String   @unique
   phone     String   @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -234,6 +246,7 @@ model User {
   role       Role     @default(CUSTOMER)
   customerId String?
   clerkId    String   @unique
+  
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

@@ -16,8 +16,6 @@ export function DashboardHome({ isSignedIn }: { isSignedIn: boolean }) {
   return (
     <AppShell
       isSignedIn={isSignedIn}
-      activeSlug="dashboard"
-      title="Dashboard"
       description="A single composable shell now backs the dashboard, list views, detail pages, and future module screens."
       actions={
         <>

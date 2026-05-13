@@ -5,24 +5,20 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Bell, Search, Hammer, ChevronRight } from "lucide-react";
 import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
-
-import { navigationItems, tickerItems } from "@/lib/mock-data";
+import { navigationItems, tickerItems, getScreenTitle } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { usePathname } from "next/navigation";
 
 export function AppShell({
   isSignedIn,
-  activeSlug,
-  title,
   description,
   breadcrumbs,
   actions,
   children,
 }: {
   isSignedIn: boolean;
-  activeSlug: string;
-  title: string;
   description?: string;
   breadcrumbs?: string[];
   actions?: ReactNode;
@@ -30,6 +26,9 @@ export function AppShell({
 }) {
   const [time, setTime] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const pathName = usePathname();
+  const activeSlug =  pathName.split("/").pop() ?? "dashboard";
+  const title = getScreenTitle(activeSlug);
 
   useEffect(() => {
     const tick = () => {
