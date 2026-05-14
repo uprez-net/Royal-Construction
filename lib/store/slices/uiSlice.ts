@@ -22,6 +22,9 @@ export interface UIState {
   projectFilters: {
     status: string | null;
     view: "grid" | "list";
+    searchQuery: string;
+    sortBy: "name" | "progress" | "budget" | "startDate" | "spent";
+    sortOrder: "asc" | "desc";
   };
   tradieFilters: {
     tradeType: string | null;
@@ -39,6 +42,9 @@ const initialState: UIState = {
   projectFilters: {
     status: null,
     view: "grid",
+    searchQuery: "",
+    sortBy: "name",
+    sortOrder: "asc",
   },
   tradieFilters: {
     tradeType: null,
@@ -66,6 +72,21 @@ const uiSlice = createSlice({
     setProjectView(state, action: PayloadAction<"grid" | "list">) {
       state.projectFilters.view = action.payload;
     },
+    setProjectSearchQuery(state, action: PayloadAction<string>) {
+      state.projectFilters.searchQuery = action.payload;
+    },
+    setProjectSort(state, action: PayloadAction<{ sortBy: UIState["projectFilters"]["sortBy"]; sortOrder?: "asc" | "desc" }>) {
+      state.projectFilters.sortBy = action.payload.sortBy;
+      if (action.payload.sortOrder) {
+        state.projectFilters.sortOrder = action.payload.sortOrder;
+      }
+    },
+    clearProjectFilters(state) {
+      state.projectFilters.searchQuery = "";
+      state.projectFilters.status = null;
+      state.projectFilters.sortBy = "name";
+      state.projectFilters.sortOrder = "asc";
+    },
     setTradieFilter(
       state,
       action: PayloadAction<Partial<UIState["tradieFilters"]>>,
@@ -75,5 +96,14 @@ const uiSlice = createSlice({
   },
 });
 
-export const { openModal, closeModal, setProjectFilter, setProjectView, setTradieFilter } = uiSlice.actions;
+export const {
+  openModal,
+  closeModal,
+  setProjectFilter,
+  setProjectView,
+  setProjectSearchQuery,
+  setProjectSort,
+  clearProjectFilters,
+  setTradieFilter,
+} = uiSlice.actions;
 export default uiSlice.reducer;

@@ -1,29 +1,56 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
 
 import {
   AlertTriangle,
   CheckCircle2,
   CircleDot,
   ClipboardList,
+  Download,
+  Plus,
 } from "lucide-react";
 
-import { DataTable } from "@/components/common/data-table";
 import { MetricCard } from "@/components/common/metric-card";
 import { SectionCard } from "@/components/common/section-card";
-import { ProjectCard } from "@/components/project/project-card";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import {
-  openModal,
-  setProjectFilter,
-  setProjectView,
-} from "@/lib/store/slices/uiSlice";
+import { openModal, clearProjectFilters } from "@/lib/store/slices/uiSlice";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { setProjects } from "@/lib/store/slices/projectsSlice";
-import { useEffect, useMemo } from "react";
+import { ProjectFilters } from "./project-filters";
+import { ProjectToolbar } from "./project-toolbar";
+import { EnhancedProjectCard } from "./enhanced-project-card";
+import { DataTable } from "@/components/common/data-table";
+import { ProjectDetailModal } from "./project-detail-modal";
+import { Badge } from "../ui/badge";
+
+const statusConfig: Record<
+  string,
+  { bg: string; text: string; stripe: string }
+> = {
+  ON_TRACK: {
+    bg: "bg-emerald-100",
+    text: "text-emerald-700",
+    stripe: "bg-emerald-500",
+  },
+  NEEDS_ATTENTION: {
+    bg: "bg-amber-100",
+    text: "text-amber-700",
+    stripe: "bg-amber-500",
+  },
+  DELAYED: {
+    bg: "bg-red-100",
+    text: "text-red-700",
+    stripe: "bg-red-500",
+  },
+  ACTIVE: {
+    bg: "bg-blue-100",
+    text: "text-blue-700",
+    stripe: "bg-blue-500",
+  },
+};
 
 function formatStatus(status: string) {
   return status
@@ -32,14 +59,6 @@ function formatStatus(status: string) {
     .join(" ");
 }
 
-const statuses = [
-  { label: "All", value: null },
-  { label: "Active", value: "ACTIVE" },
-  { label: "On Track", value: "ON_TRACK" },
-  { label: "Needs Attention", value: "NEEDS_ATTENTION" },
-  { label: "Delayed", value: "DELAYED" },
-] as const;
-
 export function ProjectsClient({
   projects,
   kpis,
@@ -47,37 +66,140 @@ export function ProjectsClient({
   projects: ProjectWithStats[];
   kpis: ProjectKPIs;
 }) {
-  const router = useRouter();
   const dispatch = useAppDispatch();
   const projectsInStore = useAppSelector((state) => state.projects.projects);
   const view = useAppSelector((state) => state.ui.projectFilters.view);
   const statusFilter = useAppSelector(
     (state) => state.ui.projectFilters.status,
   );
+  const searchQuery = useAppSelector(
+    (state) => state.ui.projectFilters.searchQuery,
+  );
+  const sortBy = useAppSelector((state) => state.ui.projectFilters.sortBy);
+  const sortOrder = useAppSelector(
+    (state) => state.ui.projectFilters.sortOrder,
+  );
   const optimisticUpdates = useAppSelector(
     (state) => state.projects.optimisticUpdates,
   );
 
-  const filteredProjects = useMemo(
-    () =>
-      projectsInStore
-        .map((project) => {
-          const optimisticUpdate = optimisticUpdates[project.id];
-          return optimisticUpdate
-            ? ({ ...project, ...optimisticUpdate } as ProjectWithStats)
-            : project;
-        })
-        .filter((project) => !statusFilter || project.status === statusFilter),
-    [projectsInStore, optimisticUpdates, statusFilter],
-  );
+  const [selectedProject, setSelectedProject] =
+    useState<ProjectWithStats | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  // Filter and sort projects
+  const filteredSortedProjects = useMemo(() => {
+    let result = projectsInStore
+      .map((project) => {
+        const optimisticUpdate = optimisticUpdates[project.id];
+        return optimisticUpdate
+          ? ({ ...project, ...optimisticUpdate } as ProjectWithStats)
+          : project;
+      })
+      .filter((project) => !statusFilter || project.status === statusFilter);
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.location.toLowerCase().includes(query) ||
+          p.customer.name.toLowerCase().includes(query) ||
+          p.siteManager?.name.toLowerCase().includes(query),
+      );
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      let compareResult = 0;
+
+      switch (sortBy) {
+        case "name":
+          compareResult = a.name.localeCompare(b.name);
+          break;
+        case "progress":
+          compareResult = b.progressPercent - a.progressPercent;
+          break;
+        case "budget":
+          compareResult = Number(b.totalBudget) - Number(a.totalBudget);
+          break;
+        case "spent":
+          compareResult = Number(b.spent) - Number(a.spent);
+          break;
+        case "startDate":
+          compareResult =
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          break;
+      }
+
+      return sortOrder === "asc" ? -compareResult : compareResult;
+    });
+
+    return result;
+  }, [
+    projectsInStore,
+    optimisticUpdates,
+    statusFilter,
+    searchQuery,
+    sortBy,
+    sortOrder,
+  ]);
 
   useEffect(() => {
-    // Sync projects to Redux store for global access (e.g. detail pages)
     dispatch(setProjects(projects));
-  }, [projects]);
+  }, [projects, dispatch]);
+
+  const handleExport = () => {
+    // CSV export logic
+    const headers = [
+      "Project",
+      "Customer",
+      "Location",
+      "Manager",
+      "Stage",
+      "Budget",
+      "Spent",
+      "Progress",
+      "Status",
+    ];
+    const rows = filteredSortedProjects.map((p) => [
+      p.name,
+      p.customer.name,
+      p.location,
+      p.siteManager?.name || "—",
+      "—", // stage not available in type
+      p.totalBudget,
+      p.spent,
+      `${p.progressPercent}%`,
+      p.status,
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((cell) => {
+            const cellStr = String(cell);
+            return cellStr.includes(",") ? `"${cellStr}"` : cellStr;
+          })
+          .join(","),
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `projects-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="grid gap-6">
+      {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Total Active"
@@ -109,120 +231,153 @@ export function ProjectsClient({
         />
       </div>
 
+      {/* Main Section */}
       <SectionCard
-        title="Projects"
-        description="Live project records are filtered client-side from the cached server payload."
+        title="Active Projects"
+        description="Manage all construction projects — click card for quick view, or hit Details for full page"
         action={
-          <Button
-            type="button"
-            onClick={() => dispatch(openModal({ type: "createProject" }))}
-          >
-            New Project
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+            <Button
+              type="button"
+              onClick={() => dispatch(openModal({ type: "createProject" }))}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New Project
+            </Button>
+          </div>
         }
       >
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            <div className="inline-flex rounded-full border border-border bg-background p-1">
+        <div className="space-y-4">
+          {/* Filters */}
+          <ProjectFilters kpis={kpis} activeFilter={statusFilter} />
+
+          {/* Toolbar */}
+          <ProjectToolbar onExport={handleExport} />
+
+          {/* Projects Grid/List */}
+          {filteredSortedProjects.length === 0 ? (
+            <div className="rounded-lg border-2 border-dashed border-border bg-muted/30 py-12 px-6 text-center">
+              <div className="text-muted-foreground">
+                <p className="text-sm font-medium">No projects found</p>
+                <p className="text-xs mt-1">
+                  Try adjusting your filters or search terms
+                </p>
+              </div>
               <Button
                 type="button"
+                variant="outline"
                 size="sm"
-                variant={view === "grid" ? "default" : "ghost"}
-                onClick={() => dispatch(setProjectView("grid"))}
+                onClick={() => dispatch(clearProjectFilters())}
+                className="mt-3"
               >
-                Grid View
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={view === "list" ? "default" : "ghost"}
-                onClick={() => dispatch(setProjectView("list"))}
-              >
-                List View
+                Clear Filters
               </Button>
             </div>
-            <div className="inline-flex flex-wrap gap-2">
-              {statuses.map((item) => (
-                <Button
-                  key={item.label}
-                  type="button"
-                  size="sm"
-                  variant={statusFilter === item.value ? "default" : "outline"}
-                  onClick={() =>
-                    dispatch(setProjectFilter({ status: item.value }))
-                  }
-                >
-                  {item.label}
-                </Button>
+          ) : view === "grid" ? (
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {filteredSortedProjects.map((project) => (
+                <EnhancedProjectCard
+                  key={project.id}
+                  project={project}
+                  onDetailsClick={(id) => {
+                    const proj = filteredSortedProjects.find(
+                      (p) => p.id === id,
+                    );
+                    if (proj) {
+                      setSelectedProject(proj);
+                      setModalOpen(true);
+                    }
+                  }}
+                />
               ))}
             </div>
-          </div>
-        </div>
+          ) : (
+            <DataTable
+              headers={[
+                "Project",
+                "Client",
+                "Location",
+                "Budget",
+                "Spent",
+                "Progress",
+                "Status",
+              ]}
+              rows={filteredSortedProjects.map((project) => [
+                <div key={`name-${project.id}`}>
+                  <Link
+                    href={`/projects/${project.id}`}
+                    className="font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {project.name}
+                  </Link>
+                </div>,
+                <div key={`client-${project.id}`}>{project.customer.name}</div>,
+                <div key={`loc-${project.id}`}>{project.location}</div>,
+                <div key={`budget-${project.id}`} className="font-mono">
+                  ${Math.round(Number(project.totalBudget) / 1000)}K
+                </div>,
+                <div key={`spent-${project.id}`} className="font-mono">
+                  ${Math.round(Number(project.spent) / 1000)}K
+                </div>,
+                <div key={`prog-${project.id}`}>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-16 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-teal-500"
+                        style={{ width: `${project.progressPercent}%` }}
+                      />
+                    </div>
+                    <span className="font-mono font-semibold">
+                      {project.progressPercent}%
+                    </span>
+                  </div>
+                </div>,
+                <div key={`status-${project.id}`}>
+                  <Badge
+                    className={`rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap ${(statusConfig[project.status] ?? statusConfig.ACTIVE).bg} ${(statusConfig[project.status] ?? statusConfig.ACTIVE).text}`}
+                  >
+                    {formatStatus(project.status)}
+                  </Badge>
+                </div>,
+              ])}
+              onRowClick={(rowIndex) => {
+                const p = filteredSortedProjects[rowIndex];
+                if (p) {
+                  setSelectedProject(p);
+                  setModalOpen(true);
+                }
+              }}
+            />
+          )}
 
-        {filteredProjects.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-            No projects match the current filter.
-          </div>
-        ) : view === "grid" ? (
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {filteredProjects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                id={project.id}
-                name={project.name}
-                location={project.location}
-                status={project.status}
-                progressPercent={project.progressPercent}
-                spent={Number(project.spent)}
-                totalBudget={Number(project.totalBudget)}
-                estimatedEndDate={project.estimatedEndDate}
-                customerName={project.customer.name}
-              />
-            ))}
-          </div>
-        ) : (
-          <DataTable
-            headers={[
-              "Name",
-              "Customer",
-              "Location",
-              "Status",
-              "Progress %",
-              "Budget Used",
-              "End Date",
-            ]}
-            rows={filteredProjects.map((project) => [
-              <Link
-                key={project.id}
-                href={`/projects/${project.id}`}
-                className="font-medium text-teal-700 hover:underline"
-              >
-                {project.name}
-              </Link>,
-              project.customer.name,
-              project.location,
-              formatStatus(project.status),
-              <span className="font-mono" key={`${project.id}-progress`}>
-                {project.progressPercent}%
-              </span>,
-              <span className="font-mono" key={`${project.id}-budget`}>
-                ${Number(project.spent).toLocaleString()} of $
-                {Number(project.totalBudget).toLocaleString()}
-              </span>,
-              <span className="font-mono" key={`${project.id}-end`}>
-                {new Intl.DateTimeFormat("en-AU", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                }).format(new Date(project.estimatedEndDate))}
-              </span>,
-            ])}
-            onRowClick={(rowIndex) =>
-              router.push(`/projects/${filteredProjects[rowIndex].id}`)
-            }
-          />
-        )}
+          {/* Results Count */}
+          {filteredSortedProjects.length > 0 && (
+            <div className="text-center text-xs text-muted-foreground pt-2">
+              Showing {filteredSortedProjects.length} of {projects.length}{" "}
+              projects
+            </div>
+          )}
+        </div>
       </SectionCard>
+
+      {/* Project Detail Modal */}
+      <ProjectDetailModal
+        project={selectedProject}
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+      />
     </div>
   );
 }
