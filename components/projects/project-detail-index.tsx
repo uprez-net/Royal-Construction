@@ -11,7 +11,7 @@ export async function ProjectDetailIndex() {
       description="Open a live project record to inspect milestones, updates, variations, and schedules."
     >
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        {projects.slice(0, 6).map((project) => (
+        {projects.items.slice(0, 6).map((project) => (
           <ProjectCard
             key={project.id}
             id={project.id}

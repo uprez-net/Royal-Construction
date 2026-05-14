@@ -1,0 +1,242 @@
+import type { ProjectDetail, SafeVariation } from "@/types/project";
+
+import { StatusPill } from "@/components/common/status-pill";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  projectVariationImpactMock,
+  VariationTimelineImpact,
+} from "@/lib/mock-data";
+import { Clock, Plus, Eye, Bell } from "lucide-react";
+
+import { currency, dateFormat, variationStatusTone } from "./formatters";
+
+import { addDays, differenceInDays, format } from "date-fns";
+import { DataTable } from "@/components/common/data-table";
+
+const calculateVariationImpact = (
+  variations: SafeVariation[],
+  startDate: Date,
+  endDate: Date,
+): VariationTimelineImpact => {
+  const originalDurationDays = Math.max(
+    1,
+    differenceInDays(endDate, startDate),
+  );
+
+  const approvedVariations = variations.filter(
+    (variation) => variation.status === "APPROVED",
+  );
+
+  const totalDelayDays = approvedVariations.reduce(
+    (total, variation) => total + (variation.delayDays ?? 0),
+    0,
+  );
+
+  const adjustedDurationDays = originalDurationDays + totalDelayDays;
+
+  const originalDurationPercent =
+    adjustedDurationDays > 0
+      ? (originalDurationDays / adjustedDurationDays) * 100
+      : 100;
+
+  const delayPercent =
+    adjustedDurationDays > 0
+      ? (totalDelayDays / adjustedDurationDays) * 100
+      : 0;
+
+  const adjustedEndDate = addDays(endDate, totalDelayDays);
+
+  const summary =
+    totalDelayDays > 0
+      ? `${approvedVariations.length} approved variation${
+          approvedVariations.length === 1 ? "" : "s"
+        } added ${totalDelayDays} day${
+          totalDelayDays === 1 ? "" : "s"
+        } to the project timeline.`
+      : "No approved variations have impacted the project timeline.";
+
+  return {
+    originalDurationPercent: Number(originalDurationPercent.toFixed(1)),
+    delayPercent: Number(delayPercent.toFixed(1)),
+    adjustedDurationPercent: 100,
+    startDateLabel: format(startDate, "d MMM yyyy"),
+    originalEndLabel: format(endDate, "d MMM yyyy"),
+    adjustedEndLabel: format(adjustedEndDate, "d MMM yyyy"),
+    summary,
+  };
+};
+
+export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
+  const totalBudget = Number(project.totalBudget);
+  const variationTotal = project.variations.reduce(
+    (sum, variation) => sum + Number(variation.cost),
+    0,
+  );
+  const projectVariationImpact = calculateVariationImpact(
+    project.variations,
+    new Date(project.startDate),
+    new Date(project.estimatedEndDate),
+  );
+
+  return (
+    <section className="space-y-4">
+      <Card className="border-red-200 bg-red-50/70 shadow-sm rounded-xl">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+              <Clock className="size-5" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-[13px] font-bold text-red-600 mb-0.5">
+                Timeline Impact Detected
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                {projectVariationImpact.summary}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="h-6 overflow-hidden rounded-lg bg-white/70 flex">
+              <div
+                className="flex h-full text-[10px] font-semibold text-white items-center justify-center bg-teal-600 transition-all"
+                style={{
+                  width: `${projectVariationImpact.originalDurationPercent}%`,
+                }}
+              >
+                Original Plan
+              </div>
+              <div
+                className="flex h-full text-[10px] font-semibold text-white items-center justify-center bg-amber-500 transition-all"
+                style={{ width: `${projectVariationImpact.delayPercent}%` }}
+              >
+                +8d Delay
+              </div>
+              <div
+                className="flex h-full text-[10px] font-semibold text-white items-center justify-center bg-red-500 transition-all"
+                style={{
+                  width: `${projectVariationImpact.adjustedDurationPercent}%`,
+                }}
+              >
+                Adjusted Timeline
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2 text-[10px] text-muted-foreground mt-1.5 px-1">
+              <span>{projectVariationImpact.startDateLabel}</span>
+              <span>{projectVariationImpact.originalEndLabel}</span>
+              <span>{projectVariationImpact.adjustedEndLabel}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
+        <CardHeader className="border-b border-border/60 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
+              Variation Log
+            </CardTitle>
+            <Button
+              size="sm"
+              className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
+            >
+              <Plus className="mr-1 size-4" />
+              Add Variation
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-0 px-0 pb-5">
+          <div className="overflow-x-auto">
+            <DataTable
+              headers={[
+                "Var #",
+                "Date Sent",
+                "Reply Date",
+                "Delay",
+                "Description",
+                "Reason",
+                "Cost Impact",
+                "New Total",
+                "Status",
+                "Action",
+              ]}
+              rows={project.variations.map((variation, index) => {
+                const variationCost = Number(variation.cost);
+
+                return [
+                  <span className="font-semibold text-slate-900">
+                    V-{String(index + 1).padStart(3, "0")}
+                  </span>,
+
+                  <span>{dateFormat.format(variation.requestedDate)}</span>,
+
+                  <span>
+                    {variation.approvedDate
+                      ? dateFormat.format(variation.approvedDate)
+                      : "-"}
+                  </span>,
+
+                  <span>
+                    {variation.delayDays ? `${variation.delayDays} days` : "-"}
+                  </span>,
+
+                  <span className="max-w-[200px] truncate text-slate-700">
+                    {variation.description}
+                  </span>,
+
+                  <span className="text-slate-600">Client Request</span>,
+
+                  <span className="font-semibold text-red-600">
+                    +{currency.format(variationCost)}
+                  </span>,
+
+                  <span className="font-medium text-slate-900">
+                    {currency.format(totalBudget + variationCost)}
+                  </span>,
+
+                  <StatusPill tone={variationStatusTone(variation.status)}>
+                    {variation.status}
+                  </StatusPill>,
+
+                  <div className="flex justify-end gap-1.5">
+                    {variation.status !== "APPROVED" && (
+                      <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-[#D97706] hover:bg-amber-50 hover:text-[#D97706]">
+                        <Bell className="size-3.5" />
+                      </button>
+                    )}
+
+                    <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600">
+                      <Eye className="size-3.5" />
+                    </button>
+                  </div>,
+                ];
+              })}
+              onRowClick={(rowIndex) => {
+                const variation = project.variations[rowIndex];
+
+                // handle navigation / dialog
+                console.log("Clicked variation:", variation.id);
+              }}
+            />
+          </div>
+          <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-4 py-3">
+            <div className="text-[13px]">
+              <b>Original Quote:</b> {currency.format(totalBudget)} &rarr;{" "}
+              <b>With Variations:</b>{" "}
+              <span className="ml-1 text-base font-extrabold text-[#E8730C]">
+                {currency.format(totalBudget + variationTotal)}
+              </span>
+            </div>
+            <div className="text-[13px]">
+              <b>Total Variation Cost:</b>{" "}
+              <span className="ml-1 text-[14px] font-extrabold text-red-600">
+                +{currency.format(variationTotal)}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
