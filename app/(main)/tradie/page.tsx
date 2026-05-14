@@ -1,13 +1,12 @@
 
-import { TradiesClient } from "@/components/tradies/tradies-client";
-import { getCachedTradieScheduleKPIs, getCachedTradieSchedules, getCachedTradies } from "@/lib/data/tradies";
+import { TradiesClient } from "../../../components/tradies/tradies-client";
+import { getCachedTradieCoordinationDashboard, getCachedTradies } from "../../../lib/data/tradies";
 
 export default async function TradiePage() {
-  const [tradies, schedules, kpis] = await Promise.all([
+  const [tradies, coordination] = await Promise.all([
     getCachedTradies(),
-    getCachedTradieSchedules(),
-    getCachedTradieScheduleKPIs(),
+    getCachedTradieCoordinationDashboard({ page: 1, limit: 10 }),
   ]);
 
-  return <TradiesClient tradies={tradies} schedules={schedules} kpis={kpis} />;
+  return <TradiesClient initialTradies={tradies} initialDashboard={coordination} />;
 }

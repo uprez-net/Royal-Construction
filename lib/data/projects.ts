@@ -24,6 +24,19 @@ export type PaginatedProjectsResult = {
   totalPages: number;
 };
 
+export type ProjectLookupItem = {
+  id: string;
+  name: string;
+};
+
+export type PaginatedProjectLookupResult = {
+  items: ProjectLookupItem[];
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
+};
+
 const projectInclude = {
   customer: true,
   siteManager: true,
@@ -80,6 +93,7 @@ const projectDetailInclude = {
 } as const;
 
 const defaultPageSize = 12;
+const defaultLookupPageSize = 10;
 
 function normalizeSearch(search?: string) {
   return search?.trim() ?? "";
@@ -178,6 +192,43 @@ export async function getProjects(query?: ProjectListQuery): Promise<PaginatedPr
   return getProjectsPage(query);
 }
 
+export async function getProjectsForLookup(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedProjectLookupResult> {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
+  const search = normalizeSearch(query);
+
+  const where: Prisma.ProjectWhereInput | undefined = search
+    ? {
+      OR: [
+        { name: { contains: search, mode: "insensitive" } },
+        { location: { contains: search, mode: "insensitive" } },
+      ],
+    }
+    : undefined;
+
+  const [items, totalCount] = await prisma.$transaction([
+    prisma.project.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: { name: "asc" },
+      skip: (safePage - 1) * safeLimit,
+      take: safeLimit,
+    }),
+    prisma.project.count({ where }),
+  ]);
+
+  return {
+    items,
+    page: safePage,
+    limit: safeLimit,
+    totalCount,
+    totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
+  };
+}
+
 export async function getProjectById(projectId: string): Promise<ProjectDetail | null> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -253,4 +304,10 @@ export const getCachedProjectKPIs = unstable_cache(
   async () => getProjectKPIs(),
   ["projects-kpis"],
   { tags: ["projects"], revalidate: false },
+);
+
+export const getCachedProjectsForLookup = unstable_cache(
+  async (page = 1, limit = defaultLookupPageSize, query?: string) => getProjectsForLookup(page, limit, query),
+  ["projects-lookup"],
+  { tags: ["projects"], revalidate: 120 },
 );

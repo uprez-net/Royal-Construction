@@ -23,8 +23,9 @@ import { AddressSuggestion } from "@/types/data";
 export interface LookupOption {
   id: string;
   name: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
+  description?: string;
 }
 
 type SearchableItem = LookupOption | AddressSuggestion;
@@ -119,7 +120,7 @@ export function SearchableSelect({
                     : item.label;
 
                   const subtitle = isLookupOption(item)
-                    ? `${item.email} · ${item.phone}`
+                    ? ((item.description ?? [item.email, item.phone].filter(Boolean).join(" · ")) || "No additional details")
                     : `${item.address}, ${item.postcode ?? ""}, Council: ${item.council}`;
 
                   return (
