@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -20,20 +23,143 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+
 import { PhoneNumberInput } from "@/components/common/phone-number-input";
 import {
   SearchableSelect,
   type LookupOption,
 } from "@/components/common/searchable-select";
+
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchCustomers } from "@/lib/store/slices/customersSlice";
 import { fetchSiteManagers } from "@/lib/store/slices/siteManagersSlice";
-import { AddressSuggestion } from "@/types/data";
 
-type CustomerMode = "existing" | "new";
+import type { AddressSuggestion } from "@/types/data";
 
 const customerLookupPageSize = 10;
 const siteManagerLookupPageSize = 10;
+
+const lookUpItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string(),
+});
+
+const locationSuggestionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  address: z.string(),
+  council: z.string(),
+  state: z.string(),
+  countryCode: z.string(),
+  postcode: z.string().nullable(),
+});
+
+const formSchema = z
+  .object({
+    name: z.string().min(1, "Project name is required"),
+
+    propertyType: z.string().min(1, "Property type is required"),
+
+    customerMode: z.enum(["existing", "new"]),
+
+    selectedCustomer: lookUpItemSchema.nullable(),
+
+    newCustomerName: z.string().optional(),
+    newCustomerPhone: z.string().optional(),
+    newCustomerEmail: z.string().optional(),
+
+    location: z.string().min(1, "Location is required"),
+
+    selectedLocationSuggestion: locationSuggestionSchema.nullable(),
+
+    selectedManager: lookUpItemSchema.nullable(),
+
+    budget: z.coerce
+      .number({
+        message: "Budget is required",
+      })
+      .min(1, "Budget must be greater than 0"),
+
+    lotSize: z.coerce
+      .number({
+        message: "Lot size is required",
+      })
+      .min(1, "Lot size must be greater than 0"),
+
+    startDate: z.string().min(1, "Start date is required"),
+
+    estimatedEndDate: z.string().optional(),
+
+    notes: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.customerMode === "existing" &&
+      !data.selectedCustomer
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["selectedCustomer"],
+        message: "Please select a customer",
+      });
+    }
+
+    if (data.customerMode === "new") {
+      if (!data.newCustomerName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["newCustomerName"],
+          message: "Customer name is required",
+        });
+      }
+
+      if (!data.newCustomerPhone?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["newCustomerPhone"],
+          message: "Customer phone is required",
+        });
+      }
+
+      if (!data.newCustomerEmail?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["newCustomerEmail"],
+          message: "Customer email is required",
+        });
+      }
+    }
+  });
+
+type FormValues = z.infer<typeof formSchema>;
+
+const defaultValues: FormValues = {
+  name: "",
+  propertyType: "",
+
+  customerMode: "existing",
+
+  selectedCustomer: null,
+
+  newCustomerName: "",
+  newCustomerPhone: "",
+  newCustomerEmail: "",
+
+  location: "",
+  selectedLocationSuggestion: null,
+
+  selectedManager: null,
+
+  budget: undefined as unknown as number,
+  lotSize: undefined as unknown as number,
+
+  startDate: "",
+  estimatedEndDate: "",
+
+  notes: "",
+};
 
 export function CreateProjectModal({
   open,
@@ -45,448 +171,800 @@ export function CreateProjectModal({
   onSuccess: () => void;
 }) {
   const dispatch = useAppDispatch();
-  const customers = useAppSelector((state) => state.customers);
-  const siteManagers = useAppSelector((state) => state.siteManagers);
 
-  const [name, setName] = useState("");
-  const [propertyType, setPropertyType] = useState("");
-  const [customerMode, setCustomerMode] = useState<CustomerMode>("existing");
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState<LookupOption | null>(
-    null,
+  const customers = useAppSelector((state) => state.customers);
+
+  const siteManagers = useAppSelector(
+    (state) => state.siteManagers,
   );
-  const [newCustomerName, setNewCustomerName] = useState("");
-  const [newCustomerPhone, setNewCustomerPhone] = useState("");
-  const [newCustomerEmail, setNewCustomerEmail] = useState("");
-  const [location, setLocation] = useState("");
-  const [managerSearch, setManagerSearch] = useState("");
-  const [selectedManager, setSelectedManager] = useState<LookupOption | null>(
-    null,
-  );
-  const [budget, setBudget] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [estimatedEndDate, setEstimatedEndDate] = useState("");
-  const [notes, setNotes] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [locationSuggestions, setLocationSuggestions] = useState<
-    AddressSuggestion[]
-  >([]);
-  const [selectedLocationSuggestion, setSelectedLocationSuggestion] =
-    useState<AddressSuggestion | null>(null);
-  const [lotSize, setLotSize] = useState("");
+
+  const [isPending, startTransition] = useTransition();
+
+  const [customerSearch, setCustomerSearch] =
+    useState("");
+
+  const [managerSearch, setManagerSearch] =
+    useState("");
+
+  const [locationSuggestions, setLocationSuggestions] =
+    useState<AddressSuggestion[]>([]);
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    clearErrors,
+    setValue,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(formSchema as any),
+    defaultValues,
+  });
+
+  const customerMode = useWatch({
+    control,
+    name: "customerMode",
+  });
+
+  const location = useWatch({
+    control,
+    name: "location",
+  });
 
   const customerItems = useMemo(
     () => customers.items.map((item) => ({ ...item })),
     [customers.items],
   );
+
   const managerItems = useMemo(
-    () => siteManagers.items.map((item) => ({ ...item })),
+    () =>
+      siteManagers.items.map((item) => ({
+        ...item,
+      })),
     [siteManagers.items],
   );
 
-  const resetForm = () => {
-    setName("");
-    setPropertyType("");
-    setCustomerMode("existing");
-    setCustomerSearch("");
-    setSelectedCustomer(null);
-    setNewCustomerName("");
-    setNewCustomerPhone("");
-    setNewCustomerEmail("");
-    setLocation("");
-    setManagerSearch("");
-    setSelectedManager(null);
-    setBudget("");
-    setStartDate("");
-    setEstimatedEndDate("");
-    setNotes("");
-    setIsSaving(false);
-    setErrorMessage(null);
-  };
-
   useEffect(() => {
     if (!open) {
-      resetForm();
       return;
     }
 
-    const customerTimer = window.setTimeout(() => {
-      dispatch(
+    const timer = window.setTimeout(() => {
+      void dispatch(
         fetchCustomers({
           page: 1,
           limit: customerLookupPageSize,
           query: customerSearch,
         }),
       );
-    }, 250);
+    }, 300);
 
     return () => {
-      window.clearTimeout(customerTimer);
+      window.clearTimeout(timer);
     };
-  }, [open, customerSearch, dispatch]);
+  }, [dispatch, customerSearch, open]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    const managerTimer = window.setTimeout(() => {
-      dispatch(
+    const timer = window.setTimeout(() => {
+      void dispatch(
         fetchSiteManagers({
           page: 1,
           limit: siteManagerLookupPageSize,
           query: managerSearch,
         }),
       );
-    }, 250);
+    }, 300);
 
     return () => {
-      window.clearTimeout(managerTimer);
+      window.clearTimeout(timer);
     };
-  }, [open, managerSearch, dispatch]);
+  }, [dispatch, managerSearch, open]);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-    if (location.length < 3) {
+    if (!open || location.length < 3) {
       setLocationSuggestions([]);
       return;
     }
-    const fetchedSuggestions = fetch(
-      `/api/address/suggestions?query=${encodeURIComponent(location)}`,
-    )
-      .then((res) => res.json())
-      .then((data: { suggestions: AddressSuggestion[] }) => {
+
+    const controller = new AbortController();
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/address/suggestions?query=${encodeURIComponent(
+            location,
+          )}`,
+          {
+            signal: controller.signal,
+          },
+        );
+
+        const data: {
+          suggestions: AddressSuggestion[];
+        } = await response.json();
+
         setLocationSuggestions(data.suggestions);
-      })
-      .catch((err) => {
-        console.error("Error fetching address suggestions:", err);
-        setLocationSuggestions([]);
-      });
-  }, [open, location]);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.name !== "AbortError"
+        ) {
+          console.error(
+            "Failed to fetch location suggestions",
+            error,
+          );
 
-  async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setErrorMessage(null);
-    setIsSaving(true);
+          setLocationSuggestions([]);
+        }
+      }
+    }, 300);
 
-    const payload =
-      customerMode === "existing"
-        ? {
-            name,
-            propertyType,
-            customerMode,
-            customerId: selectedCustomer?.id,
-            location,
-            siteManagerId: selectedManager?.id ?? null,
-            budget: Number(budget),
-            startDate,
-            estimatedEndDate: estimatedEndDate || null,
-            notes,
-          }
-        : {
-            name,
-            propertyType,
-            customerMode,
-            customerName: newCustomerName,
-            customerPhone: newCustomerPhone,
-            customerEmail: newCustomerEmail,
-            location,
-            siteManagerId: selectedManager?.id ?? null,
-            budget: Number(budget),
-            startDate,
-            estimatedEndDate: estimatedEndDate || null,
-            notes,
-          };
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [location, open]);
 
-    const response = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+  useEffect(() => {
+    if (!open) {
+      reset(defaultValues);
 
-    setIsSaving(false);
-
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      setErrorMessage(body?.error ?? "Unable to create project");
-      return;
+      setCustomerSearch("");
+      setManagerSearch("");
+      setLocationSuggestions([]);
     }
+  }, [open, reset]);
 
-    resetForm();
-    onOpenChange(false);
-    onSuccess();
-  }
+  const onSubmit = async (values: FormValues) => {
+    clearErrors("root");
+
+    startTransition(async () => {
+      try {
+        const payload =
+          values.customerMode === "existing"
+            ? {
+                name: values.name,
+                propertyType:
+                  values.propertyType,
+
+                customerMode:
+                  values.customerMode,
+
+                customerId:
+                  values.selectedCustomer?.id,
+
+                location: values.location,
+
+                siteManagerId:
+                  values.selectedManager?.id ??
+                  null,
+
+                budget: values.budget,
+                lotSize: values.lotSize,
+
+                startDate:
+                  values.startDate,
+
+                estimatedEndDate:
+                  values.estimatedEndDate ||
+                  null,
+
+                notes: values.notes,
+              }
+            : {
+                name: values.name,
+                propertyType:
+                  values.propertyType,
+
+                customerMode:
+                  values.customerMode,
+
+                customerName:
+                  values.newCustomerName,
+
+                customerPhone:
+                  values.newCustomerPhone,
+
+                customerEmail:
+                  values.newCustomerEmail,
+
+                location: values.location,
+
+                siteManagerId:
+                  values.selectedManager?.id ??
+                  null,
+
+                budget: values.budget,
+                lotSize: values.lotSize,
+
+                startDate:
+                  values.startDate,
+
+                estimatedEndDate:
+                  values.estimatedEndDate ||
+                  null,
+
+                notes: values.notes,
+              };
+
+        const response = await fetch(
+          "/api/projects",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify(payload),
+          },
+        );
+
+        if (!response.ok) {
+          const body = await response
+            .json()
+            .catch(() => null);
+
+          setError("root", {
+            message:
+              body?.error ??
+              "Unable to create project",
+          });
+
+          return;
+        }
+
+        reset(defaultValues);
+
+        onOpenChange(false);
+
+        onSuccess();
+      } catch (error) {
+        console.error(error);
+
+        setError("root", {
+          message: "Something went wrong",
+        });
+      }
+    });
+  };
 
   return (
     <Dialog
       open={open}
-      onOpenChange={(nextOpen) => !nextOpen && onOpenChange(false)}
+      onOpenChange={onOpenChange}
     >
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Create New Project</DialogTitle>
+          <DialogTitle>
+            Create New Project
+          </DialogTitle>
+
           <DialogDescription>
-            Add a new construction project to the system.
+            Add a new construction project
+            to the system.
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-5"
+        >
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+              <label className="text-sm font-medium">
                 Project Name *
               </label>
+
               <Input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
+                {...register("name")}
                 placeholder="e.g. Penrith Residence"
-                required
               />
+
+              {errors.name && (
+                <p className="text-sm text-destructive">
+                  {errors.name.message}
+                </p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+              <label className="text-sm font-medium">
                 Property Type *
               </label>
-              <Select
-                value={propertyType}
-                onValueChange={setPropertyType}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="4BR Modern Home">
-                    4BR Modern Home
-                  </SelectItem>
-                  <SelectItem value="5BR Luxury Home">
-                    5BR Luxury Home
-                  </SelectItem>
-                  <SelectItem value="Duplex Construction">
-                    Duplex Construction
-                  </SelectItem>
-                  <SelectItem value="4BR + Granny Flat">
-                    4BR + Granny Flat
-                  </SelectItem>
-                  <SelectItem value="6BR Double Storey">
-                    6BR Double Storey
-                  </SelectItem>
-                  <SelectItem value="3BR Apartment Reno">
-                    3BR Apartment Reno
-                  </SelectItem>
-                  <SelectItem value="Townhouse">Townhouse</SelectItem>
-                  <SelectItem value="Custom Build">Custom Build</SelectItem>
-                </SelectContent>
-              </Select>
+
+              <Controller
+                control={control}
+                name="propertyType"
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={
+                      field.onChange
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type..." />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      <SelectItem value="4BR Modern Home">
+                        4BR Modern Home
+                      </SelectItem>
+
+                      <SelectItem value="5BR Luxury Home">
+                        5BR Luxury Home
+                      </SelectItem>
+
+                      <SelectItem value="Duplex Construction">
+                        Duplex Construction
+                      </SelectItem>
+
+                      <SelectItem value="4BR + Granny Flat">
+                        4BR + Granny Flat
+                      </SelectItem>
+
+                      <SelectItem value="6BR Double Storey">
+                        6BR Double Storey
+                      </SelectItem>
+
+                      <SelectItem value="3BR Apartment Reno">
+                        3BR Apartment Reno
+                      </SelectItem>
+
+                      <SelectItem value="Townhouse">
+                        Townhouse
+                      </SelectItem>
+
+                      <SelectItem value="Custom Build">
+                        Custom Build
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+
+              {errors.propertyType && (
+                <p className="text-sm text-destructive">
+                  {
+                    errors.propertyType
+                      .message
+                  }
+                </p>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-1">
             <Button
               type="button"
-              variant={customerMode === "existing" ? "default" : "ghost"}
               className="flex-1"
-              onClick={() => setCustomerMode("existing")}
+              variant={
+                customerMode ===
+                "existing"
+                  ? "default"
+                  : "ghost"
+              }
+              onClick={() =>
+                setValue(
+                  "customerMode",
+                  "existing",
+                )
+              }
             >
               Existing Customer
             </Button>
+
             <Button
               type="button"
-              variant={customerMode === "new" ? "default" : "ghost"}
               className="flex-1"
-              onClick={() => setCustomerMode("new")}
+              variant={
+                customerMode === "new"
+                  ? "default"
+                  : "ghost"
+              }
+              onClick={() =>
+                setValue(
+                  "customerMode",
+                  "new",
+                )
+              }
             >
               New Customer
             </Button>
           </div>
 
           {customerMode === "existing" ? (
-            <SearchableSelect
-              label="Customer"
-              placeholder="Select a customer..."
-              searchValue={customerSearch}
-              selectedItem={selectedCustomer}
-              items={customerItems}
-              loading={customers.loading}
-              hasMore={customers.page < customers.totalPages}
-              onQueryChange={setCustomerSearch}
-              onSelect={(item) => {
-                setSelectedCustomer(item as LookupOption);
-                setCustomerMode("existing");
-              }}
-              onLoadMore={() => {
-                void dispatch(
-                  fetchCustomers({
-                    page: customers.page + 1,
-                    limit: customerLookupPageSize,
-                    query: customerSearch,
-                  }),
-                );
-              }}
-            />
+            <div className="space-y-2">
+              <Controller
+                control={control}
+                name="selectedCustomer"
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Customer"
+                    placeholder="Select a customer..."
+                    searchValue={
+                      customerSearch
+                    }
+                    selectedItem={
+                      field.value
+                    }
+                    items={customerItems}
+                    loading={
+                      customers.loading
+                    }
+                    hasMore={
+                      customers.page <
+                      customers.totalPages
+                    }
+                    onQueryChange={
+                      setCustomerSearch
+                    }
+                    onSelect={(item) => {
+                      field.onChange(
+                        item,
+                      );
+
+                      setCustomerSearch(
+                        (item as LookupOption).name,
+                      );
+                    }}
+                    onLoadMore={() => {
+                      void dispatch(
+                        fetchCustomers({
+                          page:
+                            customers.page +
+                            1,
+                          limit:
+                            customerLookupPageSize,
+                          query:
+                            customerSearch,
+                        }),
+                      );
+                    }}
+                  />
+                )}
+              />
+
+              {errors.selectedCustomer && (
+                <p className="text-sm text-destructive">
+                  {
+                    errors
+                      .selectedCustomer
+                      .message
+                  }
+                </p>
+              )}
+            </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-medium">
                   Customer Name *
                 </label>
+
                 <Input
-                  value={newCustomerName}
-                  onChange={(event) => setNewCustomerName(event.target.value)}
+                  {...register(
+                    "newCustomerName",
+                  )}
                   placeholder="e.g. Harpreet Kaur"
-                  required
                 />
+
+                {errors.newCustomerName && (
+                  <p className="text-sm text-destructive">
+                    {
+                      errors
+                        .newCustomerName
+                        .message
+                    }
+                  </p>
+                )}
               </div>
+
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-medium">
                   Customer Phone *
                 </label>
-                <PhoneNumberInput
-                  value={newCustomerPhone}
-                  onChange={setNewCustomerPhone}
-                  placeholder="+61 4XX XXX XXX"
-                  required
+
+                <Controller
+                  control={control}
+                  name="newCustomerPhone"
+                  render={({ field }) => (
+                    <PhoneNumberInput
+                      value={
+                        field.value ?? ""
+                      }
+                      onChange={
+                        field.onChange
+                      }
+                      placeholder="+61 4XX XXX XXX"
+                    />
+                  )}
                 />
+
+                {errors.newCustomerPhone && (
+                  <p className="text-sm text-destructive">
+                    {
+                      errors
+                        .newCustomerPhone
+                        .message
+                    }
+                  </p>
+                )}
               </div>
+
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">
+                <label className="text-sm font-medium">
                   Customer Email *
                 </label>
+
                 <Input
-                  value={newCustomerEmail}
-                  onChange={(event) => setNewCustomerEmail(event.target.value)}
+                  {...register(
+                    "newCustomerEmail",
+                  )}
                   type="email"
                   placeholder="email@example.com"
-                  required
                 />
+
+                {errors.newCustomerEmail && (
+                  <p className="text-sm text-destructive">
+                    {
+                      errors
+                        .newCustomerEmail
+                        .message
+                    }
+                  </p>
+                )}
               </div>
             </div>
           )}
 
           <div className="grid gap-3 md:grid-cols-2">
-            {/* Site Location */}
-            <SearchableSelect
-              label="Site Location"
-              placeholder="e.g. Penrith, NSW 2750"
-              searchValue={location}
-              selectedItem={selectedLocationSuggestion}
-              items={locationSuggestions}
-              onQueryChange={setLocation}
-              onSelect={(item) =>
-                setSelectedLocationSuggestion(item as AddressSuggestion)
-              }
-            />
-            {/* Site Manager */}
-            <SearchableSelect
-              label="Site Manager"
-              placeholder="Assign manager..."
-              searchValue={managerSearch}
-              selectedItem={selectedManager}
-              items={managerItems}
-              loading={siteManagers.loading}
-              hasMore={siteManagers.page < siteManagers.totalPages}
-              onQueryChange={setManagerSearch}
-              onSelect={(item) => setSelectedManager(item as LookupOption)}
-              onLoadMore={() => {
-                void dispatch(
-                  fetchSiteManagers({
-                    page: siteManagers.page + 1,
-                    limit: siteManagerLookupPageSize,
-                    query: managerSearch,
-                  }),
-                );
-              }}
-            />
+            <div className="space-y-2">
+              <Controller
+                control={control}
+                name="selectedLocationSuggestion"
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Site Location"
+                    placeholder="e.g. Penrith, NSW 2750"
+                    searchValue={
+                      location
+                    }
+                    selectedItem={
+                      field.value as AddressSuggestion | null
+                    }
+                    items={
+                      locationSuggestions
+                    }
+                    onQueryChange={(
+                      query,
+                    ) => {
+                      setValue(
+                        "location",
+                        query,
+                      );
+                    }}
+                    onSelect={(item) => {
+                      const suggestion =
+                        item as AddressSuggestion;
+
+                      field.onChange(
+                        suggestion,
+                      );
+
+                      setValue(
+                        "location",
+                        suggestion.address,
+                      );
+                    }}
+                  />
+                )}
+              />
+
+              {errors.location && (
+                <p className="text-sm text-destructive">
+                  {
+                    errors.location
+                      .message
+                  }
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Controller
+                control={control}
+                name="selectedManager"
+                render={({ field }) => (
+                  <SearchableSelect
+                    label="Site Manager"
+                    placeholder="Assign manager..."
+                    searchValue={
+                      managerSearch
+                    }
+                    selectedItem={
+                      field.value
+                    }
+                    items={managerItems}
+                    loading={
+                      siteManagers.loading
+                    }
+                    hasMore={
+                      siteManagers.page <
+                      siteManagers.totalPages
+                    }
+                    onQueryChange={
+                      setManagerSearch
+                    }
+                    onSelect={(item) => {
+                      field.onChange(
+                        item,
+                      );
+
+                      setManagerSearch(
+                        (item as LookupOption).name,
+                      );
+                    }}
+                    onLoadMore={() => {
+                      void dispatch(
+                        fetchSiteManagers(
+                          {
+                            page:
+                              siteManagers.page +
+                              1,
+                            limit:
+                              siteManagerLookupPageSize,
+                            query:
+                              managerSearch,
+                          },
+                        ),
+                      );
+                    }}
+                  />
+                )}
+              />
+            </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+              <label className="text-sm font-medium">
                 Budget (AUD) *
               </label>
+
               <Input
-                value={budget}
-                onChange={(event) => setBudget(event.target.value)}
+                {...register("budget")}
                 type="number"
                 min="0"
                 placeholder="e.g. 485000"
-                required
               />
+
+              {errors.budget && (
+                <p className="text-sm text-destructive">
+                  {
+                    errors.budget
+                      .message
+                  }
+                </p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+              <label className="text-sm font-medium">
                 Lot Size (m²) *
               </label>
+
               <Input
-                value={lotSize}
-                onChange={(event) => setLotSize(event.target.value)}
+                {...register("lotSize")}
                 type="number"
                 min="0"
                 placeholder="e.g. 620"
-                required
               />
+
+              {errors.lotSize && (
+                <p className="text-sm text-destructive">
+                  {
+                    errors.lotSize
+                      .message
+                  }
+                </p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+              <label className="text-sm font-medium">
                 Start Date *
               </label>
+
               <Input
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
+                {...register(
+                  "startDate",
+                )}
                 type="date"
-                required
               />
+
+              {errors.startDate && (
+                <p className="text-sm text-destructive">
+                  {
+                    errors.startDate
+                      .message
+                  }
+                </p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
+              <label className="text-sm font-medium">
                 Est. Completion
               </label>
+
               <Input
-                value={estimatedEndDate}
-                onChange={(event) => setEstimatedEndDate(event.target.value)}
+                {...register(
+                  "estimatedEndDate",
+                )}
                 type="date"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              Special Requirements / Notes
+            <label className="text-sm font-medium">
+              Special Requirements /
+              Notes
             </label>
+
             <Textarea
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
+              {...register("notes")}
               rows={4}
               placeholder="Any specific customer requirements, site conditions, etc."
             />
           </div>
 
-          {errorMessage ? (
+          {errors.root?.message && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {errorMessage}
+              {errors.root.message}
             </div>
-          ) : null}
+          )}
 
           <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() =>
+                onOpenChange(false)
+              }
             >
               Cancel
             </Button>
+
             <Button
               type="button"
               variant="outline"
-              onClick={() => setErrorMessage("Save draft is not wired yet")}
+              onClick={() =>
+                setError("root", {
+                  message:
+                    "Save draft is not wired yet",
+                })
+              }
             >
               Save Draft
             </Button>
-            <Button type="submit" disabled={isSaving} className="gap-2">
-              {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="gap-2"
+            >
+              {isPending && (
+                <Loader2 className="size-4 animate-spin" />
+              )}
+
               Create Project
             </Button>
           </div>
