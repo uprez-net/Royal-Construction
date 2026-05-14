@@ -17,6 +17,8 @@ import { dateFormat, shortDateFormat } from "../../../utils/formatters";
 import type { TradieScheduleStatus } from "@prisma/client";
 import { differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const getStatusTone = (status: TradieScheduleStatus) => {
@@ -138,6 +140,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
   const tradies = project.tradieSchedules;
   const attentionStatus = getAttentionStatus(tradies);
+  const dispatch = useAppDispatch();
 
   return (
     <div className="space-y-4">
@@ -178,6 +181,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
           <Button
             size="sm"
             className="h-8 rounded-md bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700"
+            onClick={() => dispatch(openModal({ type: "scheduleTradie", payload: { project } }))}
           >
             <Plus className="mr-1 size-3.5" />
             Add Tradie

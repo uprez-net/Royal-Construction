@@ -60,11 +60,11 @@ export function TradiesClient({
     const factor = filters.order === "asc" ? 1 : -1;
     if (filters.sort === "tradieName") return left.tradie.name.localeCompare(right.tradie.name) * factor;
     if (filters.sort === "projectName") return left.project.name.localeCompare(right.project.name) * factor;
-    return (left.scheduledDate.getTime() - right.scheduledDate.getTime()) * factor;
+    return (new Date(left.scheduledDate).getTime() - new Date(right.scheduledDate).getTime()) * factor;
   });
 
   const urgentSchedules = sortedSchedules.filter((schedule) => {
-    const scheduledDate = schedule.scheduledDate.getTime();
+    const scheduledDate = new Date(schedule.scheduledDate).getTime();
     const upperBound = new Date();
     upperBound.setDate(upperBound.getDate() + 7);
     return scheduledDate <= upperBound.getTime() && schedule.status !== "CONFIRMED" && schedule.status !== "COMPLETED";
@@ -160,7 +160,7 @@ export function TradiesClient({
                 {schedule.milestone?.name ?? "Unassigned"}
               </span>,
               <span key={`${schedule.id}-date`} className="font-mono">
-                {dateFormat.format(schedule.scheduledDate)}
+                {dateFormat.format(new Date(schedule.scheduledDate))}
               </span>,
               `${schedule.durationDays} day${schedule.durationDays === 1 ? "" : "s"}`,
               <StatusPill key={schedule.id} tone={schedule.status === "DECLINED" ? "danger" : schedule.status === "CONFIRMED" ? "success" : schedule.status === "NO_RESPONSE" || schedule.status === "PENDING_RESPONSE" ? "warning" : "neutral"}>
@@ -188,7 +188,7 @@ export function TradiesClient({
                         <p className="text-sm text-muted-foreground">{schedule.tradie.tradeType}</p>
                         <p className="text-sm text-slate-700">{schedule.project.name}</p>
                       </div>
-                      <StatusPill tone={schedule.status === "DECLINED" ? "danger" : "warning"}>Due {dateFormat.format(schedule.scheduledDate)}</StatusPill>
+                      <StatusPill tone={schedule.status === "DECLINED" ? "danger" : "warning"}>Due {dateFormat.format(new Date(schedule.scheduledDate))}</StatusPill>
                     </div>
                     <div className="mt-3">
                       <Button type="button" size="sm" variant="outline" onClick={() => dispatch(openModal({ type: "logCall", payload: { schedule } }))}>

@@ -31,7 +31,7 @@ export function AppShell({
   const activeProject = useAppSelector((state) => state.projects.activeProject);
   const pathName = usePathname();
   const lastSegment = pathName.split("/").filter(Boolean).pop() ?? "";
-  const activeSlug = isUUID(lastSegment) ? "Loading Project..." : pathName.split("/").pop() ?? "dashboard";
+  const activeSlug = isUUID(lastSegment) ? "Loading..." : pathName.split("/").pop() ?? "dashboard";
   const title = activeProject ? activeProject.name : getScreenTitle(activeSlug);
 
   useEffect(() => {

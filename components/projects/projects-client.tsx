@@ -236,7 +236,7 @@ export function ProjectsClient({
       >
         <div className="space-y-4">
           <ProjectFilters kpis={kpis} activeFilter={statusFilter} />
-          <ProjectToolbar onExport={handleExport} />
+          <ProjectToolbar />
 
           {isPageLoading ? (
             <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">

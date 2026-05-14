@@ -3,9 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Plus, User, Bell } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
 import { dataTimeFormat } from "../../../utils/formatters";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
   const siteUpdates = project.siteUpdates;
+  const dispatch = useAppDispatch();
+  
   return (
     <SectionCard
       title="Site Manager Updates"
@@ -13,6 +17,7 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
         <Button
           size="sm"
           className="h-8 rounded-md bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700"
+          onClick={() => dispatch(openModal({ type: "addUpdate", payload: { project } }))}
         >
           <Plus className="mr-1 size-3.5" />
           Add Update

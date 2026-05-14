@@ -11,6 +11,8 @@ import { currency, dateFormat, variationStatusTone } from "../../../utils/format
 import { addDays, differenceInDays, format } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
 import { cn } from "@/lib/utils";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 const calculateVariationImpact = (
   variations: SafeVariation[],
@@ -127,6 +129,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
     new Date(project.startDate),
     new Date(project.estimatedEndDate),
   );
+  const dispatch = useAppDispatch();
 
   return (
     <section className="space-y-4">
@@ -216,6 +219,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
             <Button
               size="sm"
               className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
+              onClick={() => dispatch(openModal({ type: "createVariation", payload: { project } }))}
             >
               <Plus className="mr-1 size-4" />
               Add Variation

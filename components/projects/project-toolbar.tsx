@@ -9,10 +9,6 @@ import {
   setProjectView,
 } from "@/lib/store/slices/uiSlice";
 
-interface ProjectToolbarProps {
-  onExport?: () => void;
-}
-
 type SortOption = "name" | "progress" | "budget" | "startDate" | "spent";
 
 const SORT_OPTIONS: { label: string; value: SortOption }[] = [
@@ -23,7 +19,7 @@ const SORT_OPTIONS: { label: string; value: SortOption }[] = [
   { label: "Spent (High-Low)", value: "spent" },
 ];
 
-export function ProjectToolbar({ onExport }: ProjectToolbarProps) {
+export function ProjectToolbar() {
   const dispatch = useAppDispatch();
   const searchQuery = useAppSelector(
     (state) => state.ui.projectFilters.searchQuery
@@ -127,14 +123,6 @@ export function ProjectToolbar({ onExport }: ProjectToolbarProps) {
             <List className="h-4 w-4" />
           </button>
         </div>
-        {onExport && (
-          <button
-            onClick={onExport}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
-          >
-            Export
-          </button>
-        )}
       </div>
     </div>
   );
