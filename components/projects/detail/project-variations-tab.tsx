@@ -3,16 +3,14 @@ import type { ProjectDetail, SafeVariation } from "@/types/project";
 import { StatusPill } from "@/components/common/status-pill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  projectVariationImpactMock,
-  VariationTimelineImpact,
-} from "@/lib/mock-data";
+import { VariationImpactTone, VariationTimelineImpact } from "@/lib/mock-data";
 import { Clock, Plus, Eye, Bell } from "lucide-react";
 
 import { currency, dateFormat, variationStatusTone } from "./formatters";
 
 import { addDays, differenceInDays, format } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
+import { cn } from "@/lib/utils";
 
 const calculateVariationImpact = (
   variations: SafeVariation[],
@@ -47,6 +45,49 @@ const calculateVariationImpact = (
 
   const adjustedEndDate = addDays(endDate, totalDelayDays);
 
+  let tone: VariationImpactTone = "neutral";
+
+  if (totalDelayDays >= 14) {
+    tone = "danger";
+  } else if (totalDelayDays > 0) {
+    tone = "warning";
+  }
+
+  const toneConfig: Record<
+    VariationImpactTone,
+    VariationTimelineImpact["styles"] & { titleText: string }
+  > = {
+    neutral: {
+      titleText: "Timeline On Track",
+      card: "border-emerald-200 bg-emerald-50/70",
+      iconWrapper: "bg-emerald-100 text-emerald-600",
+      icon: "text-emerald-600",
+      title: "text-emerald-700",
+      originalBar: "bg-emerald-600",
+      delayBar: "bg-emerald-400",
+    },
+
+    warning: {
+      titleText: "Timeline Impact Detected",
+      card: "border-amber-200 bg-amber-50/70",
+      iconWrapper: "bg-amber-100 text-amber-600",
+      icon: "text-amber-600",
+      title: "text-amber-700",
+      originalBar: "bg-teal-600",
+      delayBar: "bg-amber-500",
+    },
+
+    danger: {
+      titleText: "Critical Timeline Delay",
+      card: "border-red-200 bg-red-50/70",
+      iconWrapper: "bg-red-100 text-red-600",
+      icon: "text-red-600",
+      title: "text-red-700",
+      originalBar: "bg-teal-600",
+      delayBar: "bg-red-500",
+    },
+  };
+
   const summary =
     totalDelayDays > 0
       ? `${approvedVariations.length} approved variation${
@@ -57,13 +98,21 @@ const calculateVariationImpact = (
       : "No approved variations have impacted the project timeline.";
 
   return {
+    tone,
+    title: toneConfig[tone].titleText,
+    summary,
+
+    totalDelayDays,
+    approvedVariationCount: approvedVariations.length,
+
     originalDurationPercent: Number(originalDurationPercent.toFixed(1)),
     delayPercent: Number(delayPercent.toFixed(1)),
-    adjustedDurationPercent: 100,
+
     startDateLabel: format(startDate, "d MMM yyyy"),
     originalEndLabel: format(endDate, "d MMM yyyy"),
     adjustedEndLabel: format(adjustedEndDate, "d MMM yyyy"),
-    summary,
+
+    styles: toneConfig[tone],
   };
 };
 
@@ -81,16 +130,33 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
 
   return (
     <section className="space-y-4">
-      <Card className="border-red-200 bg-red-50/70 shadow-sm rounded-xl">
+      <Card
+        className={cn(
+          "rounded-xl shadow-sm transition-colors",
+          projectVariationImpact.styles.card,
+        )}
+      >
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <div
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                projectVariationImpact.styles.iconWrapper,
+              )}
+            >
               <Clock className="size-5" />
             </div>
+
             <div className="flex-1">
-              <h4 className="text-[13px] font-bold text-red-600 mb-0.5">
-                Timeline Impact Detected
+              <h4
+                className={cn(
+                  "mb-0.5 text-[13px] font-bold",
+                  projectVariationImpact.styles.title,
+                )}
+              >
+                {projectVariationImpact.title}
               </h4>
+
               <p className="text-xs text-muted-foreground">
                 {projectVariationImpact.summary}
               </p>
@@ -98,33 +164,43 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
           </div>
 
           <div className="mt-4">
-            <div className="h-6 overflow-hidden rounded-lg bg-white/70 flex">
+            <div className="flex h-6 overflow-hidden rounded-lg bg-white/70">
               <div
-                className="flex h-full text-[10px] font-semibold text-white items-center justify-center bg-teal-600 transition-all"
+                className={cn(
+                  "flex h-full items-center justify-center text-[10px] font-semibold text-white transition-all",
+                  projectVariationImpact.styles.originalBar,
+                )}
                 style={{
                   width: `${projectVariationImpact.originalDurationPercent}%`,
                 }}
               >
                 Original Plan
               </div>
-              <div
-                className="flex h-full text-[10px] font-semibold text-white items-center justify-center bg-amber-500 transition-all"
-                style={{ width: `${projectVariationImpact.delayPercent}%` }}
-              >
-                +8d Delay
-              </div>
-              <div
-                className="flex h-full text-[10px] font-semibold text-white items-center justify-center bg-red-500 transition-all"
-                style={{
-                  width: `${projectVariationImpact.adjustedDurationPercent}%`,
-                }}
-              >
-                Adjusted Timeline
-              </div>
+
+              {projectVariationImpact.totalDelayDays > 0 && (
+                <div
+                  className={cn(
+                    "flex h-full items-center justify-center text-[10px] font-semibold text-white transition-all",
+                    projectVariationImpact.styles.delayBar,
+                  )}
+                  style={{
+                    width: `${projectVariationImpact.delayPercent}%`,
+                  }}
+                >
+                  +{projectVariationImpact.totalDelayDays}d Delay
+                </div>
+              )}
             </div>
-            <div className="flex flex-wrap justify-between gap-2 text-[10px] text-muted-foreground mt-1.5 px-1">
+
+            <div className="mt-1.5 flex flex-wrap justify-between gap-2 px-1 text-[10px] text-muted-foreground">
               <span>{projectVariationImpact.startDateLabel}</span>
-              <span>{projectVariationImpact.originalEndLabel}</span>
+
+              <span>
+                {projectVariationImpact.totalDelayDays > 0
+                  ? projectVariationImpact.originalEndLabel
+                  : "Estimated Completion"}
+              </span>
+
               <span>{projectVariationImpact.adjustedEndLabel}</span>
             </div>
           </div>

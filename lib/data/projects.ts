@@ -37,6 +37,12 @@ const projectInclude = {
 const projectDetailInclude = {
   customer: true,
   siteManager: true,
+  activityLogs: {
+    orderBy: { createdAt: "desc" as const },
+    include: {
+      author: true,
+    },
+  },
   milestones: {
     orderBy: { order: "asc" as const },
     include: {

@@ -6,7 +6,7 @@ import { Eye, Image, FileText, Download } from "lucide-react";
 import { LineChartCard } from "@/components/charts/line-chart-card";
 import { projectActivityMock, projectBudgetBurndownMock, projectOverviewMock } from "@/lib/mock-data";
 
-import { currency, dateFormat } from "./formatters";
+import { currency, dataTimeFormat, dateFormat } from "./formatters";
 
 function DetailItem({ label, value, valueClass = "text-slate-900" }: { label: string; value: string; valueClass?: string }) {
   return (
@@ -19,6 +19,7 @@ function DetailItem({ label, value, valueClass = "text-slate-900" }: { label: st
 
 export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
   const totalBudget = Number(project.totalBudget);
+  const activityLog = project.activityLogs || [];
   const spent = Number(project.spent);
 
   return (
@@ -83,14 +84,14 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
             <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Recent Activity</CardTitle>
           </CardHeader>
           <CardContent className="space-y-0 pt-5">
-            <div className="relative pl-7 before:absolute before:left-[9px] before:top-2 before:bottom-2 before:w-[2px] before:bg-border before:rounded-full">
-              {projectActivityMock.map((item) => (
+            <div className="relative pl-7 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-[2px] before:bg-border before:rounded-full">
+              {activityLog.map((item) => (
                 <article key={item.id} className="relative pb-5 last:pb-0">
-                  <div className={`absolute -left-[27.5px] top-1 size-[10px] rounded-full border-2 border-white ring-2 ring-offset-background z-10 ${item.state === "done" ? "bg-green-600 ring-green-600" : item.state === "active" ? "bg-amber-500 ring-amber-500" : "bg-slate-300 ring-slate-300"}`} />
-                  <p className="text-[13px] font-bold text-slate-900">{item.title}</p>
-                  <p className="mt-1 text-[13px] text-muted-foreground max-w-2xl">{item.description}</p>
+                  <div className={`absolute -left-[27.5px] top-1 size-[10px] rounded-full border-2 border-white ring-2 ring-offset-background z-10 bg-green-600 ring-green-600`} />
+                  <p className="text-[13px] font-bold text-slate-900">{item.type}</p>
+                  <p className="mt-1 text-[13px] text-muted-foreground max-w-2xl">{item.message}</p>
                   <p className="mt-1.5 text-[11px] text-muted-foreground font-medium">
-                    {item.author} • {item.timestamp}
+                    {item.author?.name ?? "System"} • {dataTimeFormat.format(new Date(item.createdAt))}
                   </p>
                 </article>
               ))}

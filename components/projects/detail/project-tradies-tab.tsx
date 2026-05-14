@@ -80,35 +80,97 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     return "neutral";
   };
 
+  const getAttentionStatus = (tradies: typeof project.tradieSchedules) => {
+    const getAttentionMessage = (
+      tradie: (typeof tradies)[number],
+    ): string | null => {
+      const reminderTone = getReminderTone(
+        tradie.reminderSentAt,
+        new Date(tradie.scheduledDate),
+        tradie.status,
+      );
+
+      const tradieName = tradie.tradie.name;
+      const scheduledDate = new Date(tradie.scheduledDate).toLocaleDateString(
+        "en-AU",
+        {
+          month: "short",
+        },
+      );
+
+      if (getStatusTone(tradie.status) === "danger") {
+        switch (tradie.status) {
+          case "PENDING":
+          case "PENDING_RESPONSE":
+            return `${tradieName} confirmation pending`;
+
+          case "NO_RESPONSE":
+            return `${tradieName} not responding`;
+
+          case "DECLINED":
+            return `${tradieName} declined the schedule`;
+
+          default:
+            return `${tradieName} needs attention`;
+        }
+      }
+
+      if (reminderTone === "warning") {
+        return `${tradieName} yet to be connected for ${scheduledDate} milestone`;
+      }
+
+      return null;
+    };
+
+    const attentionMessages = tradies
+      .map(getAttentionMessage)
+      .filter((message): message is string => Boolean(message));
+
+    if (attentionMessages.length === 0) {
+      return null;
+    }
+
+    return {
+      count: attentionMessages.length,
+      summary: `${attentionMessages.join(". ")}.`,
+    };
+  };
+
   const tradies = project.tradieSchedules;
-  
+  const attentionStatus = getAttentionStatus(tradies);
 
   return (
     <div className="space-y-4">
-      <Card className="border-red-200 bg-red-50/50 shadow-sm">
-        <CardContent className="flex items-center gap-3 p-4">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
-            <AlertTriangle className="size-5" />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-[13px] font-bold text-red-600">
-              2 Tradies Need Attention
-            </h4>
-            <p className="text-xs text-muted-foreground">
-              Roofer confirmation pending. Plasterer yet to be connected for Feb
-              milestone.
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="destructive"
-            className="h-8 rounded-md px-3 text-xs font-semibold"
-          >
-            <Send className="mr-1 size-3.5" />
-            Send All Reminders
-          </Button>
-        </CardContent>
-      </Card>
+      {attentionStatus && (
+        <Card className="border-red-200 bg-red-50/50 shadow-sm">
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+              <AlertTriangle className="size-5" />
+            </div>
+
+            <div className="flex-1">
+              <h4 className="text-[13px] font-bold text-red-600">
+                {attentionStatus.count}{" "}
+                {attentionStatus.count === 1 ? "Tradie Needs" : "Tradies Need"}{" "}
+                Attention
+              </h4>
+
+              <p className="text-xs text-muted-foreground">
+                {attentionStatus.summary}
+              </p>
+            </div>
+
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-8 rounded-md px-3 text-xs font-semibold"
+            >
+              <Send className="mr-1 size-3.5" />
+              Send All Reminders
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <SectionCard
         title="Tradie Coordination Board"
