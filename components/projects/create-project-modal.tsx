@@ -95,10 +95,7 @@ const formSchema = z
     notes: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (
-      data.customerMode === "existing" &&
-      !data.selectedCustomer
-    ) {
+    if (data.customerMode === "existing" && !data.selectedCustomer) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["selectedCustomer"],
@@ -130,6 +127,23 @@ const formSchema = z
           message: "Customer email is required",
         });
       }
+    }
+
+    // Location & Site Manager
+    if (!data.selectedLocationSuggestion) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["selectedLocationSuggestion"],
+        message: "Please select a valid location from suggestions",
+      });
+    }
+
+    if (!data.selectedManager) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["selectedManager"],
+        message: "Please select a site manager",
+      });
     }
   });
 
@@ -174,20 +188,17 @@ export function CreateProjectModal({
 
   const customers = useAppSelector((state) => state.customers);
 
-  const siteManagers = useAppSelector(
-    (state) => state.siteManagers,
-  );
+  const siteManagers = useAppSelector((state) => state.siteManagers);
 
   const [isPending, startTransition] = useTransition();
 
-  const [customerSearch, setCustomerSearch] =
-    useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
 
-  const [managerSearch, setManagerSearch] =
-    useState("");
+  const [managerSearch, setManagerSearch] = useState("");
 
-  const [locationSuggestions, setLocationSuggestions] =
-    useState<AddressSuggestion[]>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<
+    AddressSuggestion[]
+  >([]);
 
   const {
     control,
@@ -277,9 +288,7 @@ export function CreateProjectModal({
     const timer = window.setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/address/suggestions?query=${encodeURIComponent(
-            location,
-          )}`,
+          `/api/address/suggestions?query=${encodeURIComponent(location)}`,
           {
             signal: controller.signal,
           },
@@ -291,14 +300,8 @@ export function CreateProjectModal({
 
         setLocationSuggestions(data.suggestions);
       } catch (error) {
-        if (
-          error instanceof Error &&
-          error.name !== "AbortError"
-        ) {
-          console.error(
-            "Failed to fetch location suggestions",
-            error,
-          );
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Failed to fetch location suggestions", error);
 
           setLocationSuggestions([]);
         }
@@ -330,90 +333,66 @@ export function CreateProjectModal({
           values.customerMode === "existing"
             ? {
                 name: values.name,
-                propertyType:
-                  values.propertyType,
+                propertyType: values.propertyType,
 
-                customerMode:
-                  values.customerMode,
+                customerMode: values.customerMode,
 
-                customerId:
-                  values.selectedCustomer?.id,
+                customerId: values.selectedCustomer?.id,
 
-                location: values.location,
+                location: `${values.selectedLocationSuggestion?.address ?? ""}, ${values.selectedLocationSuggestion?.state ?? ""} ${values.selectedLocationSuggestion?.postcode ?? ""}`,
+                council: values.selectedLocationSuggestion?.council ?? "",
 
-                siteManagerId:
-                  values.selectedManager?.id ??
-                  null,
+                siteManagerId: values.selectedManager?.id ?? null,
 
                 budget: values.budget,
                 lotSize: values.lotSize,
 
-                startDate:
-                  values.startDate,
+                startDate: values.startDate,
 
-                estimatedEndDate:
-                  values.estimatedEndDate ||
-                  null,
+                estimatedEndDate: values.estimatedEndDate || null,
 
                 notes: values.notes,
               }
             : {
                 name: values.name,
-                propertyType:
-                  values.propertyType,
+                propertyType: values.propertyType,
 
-                customerMode:
-                  values.customerMode,
+                customerMode: values.customerMode,
 
-                customerName:
-                  values.newCustomerName,
+                customerName: values.newCustomerName,
 
-                customerPhone:
-                  values.newCustomerPhone,
+                customerPhone: values.newCustomerPhone,
 
-                customerEmail:
-                  values.newCustomerEmail,
+                customerEmail: values.newCustomerEmail,
 
-                location: values.location,
+                location: `${values.selectedLocationSuggestion?.address ?? ""}, ${values.selectedLocationSuggestion?.state ?? ""} ${values.selectedLocationSuggestion?.postcode ?? ""}`,
+                council: values.selectedLocationSuggestion?.council ?? "",
 
-                siteManagerId:
-                  values.selectedManager?.id ??
-                  null,
+                siteManagerId: values.selectedManager?.id ?? null,
 
                 budget: values.budget,
                 lotSize: values.lotSize,
 
-                startDate:
-                  values.startDate,
+                startDate: values.startDate,
 
-                estimatedEndDate:
-                  values.estimatedEndDate ||
-                  null,
+                estimatedEndDate: values.estimatedEndDate || null,
 
                 notes: values.notes,
               };
 
-        const response = await fetch(
-          "/api/projects",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify(payload),
+        const response = await fetch("/api/projects", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        );
+          body: JSON.stringify(payload),
+        });
 
         if (!response.ok) {
-          const body = await response
-            .json()
-            .catch(() => null);
+          const body = await response.json().catch(() => null);
 
           setError("root", {
-            message:
-              body?.error ??
-              "Unable to create project",
+            message: body?.error ?? "Unable to create project",
           });
 
           return;
@@ -435,31 +414,20 @@ export function CreateProjectModal({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>
-            Create New Project
-          </DialogTitle>
+          <DialogTitle>Create New Project</DialogTitle>
 
           <DialogDescription>
-            Add a new construction project
-            to the system.
+            Add a new construction project to the system.
           </DialogDescription>
         </DialogHeader>
 
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="space-y-5"
-        >
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Project Name *
-              </label>
+              <label className="text-sm font-medium">Project Name *</label>
 
               <Input
                 {...register("name")}
@@ -474,20 +442,13 @@ export function CreateProjectModal({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Property Type *
-              </label>
+              <label className="text-sm font-medium">Property Type *</label>
 
               <Controller
                 control={control}
                 name="propertyType"
                 render={({ field }) => (
-                  <Select
-                    value={field.value}
-                    onValueChange={
-                      field.onChange
-                    }
-                  >
+                  <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select type..." />
                     </SelectTrigger>
@@ -517,13 +478,9 @@ export function CreateProjectModal({
                         3BR Apartment Reno
                       </SelectItem>
 
-                      <SelectItem value="Townhouse">
-                        Townhouse
-                      </SelectItem>
+                      <SelectItem value="Townhouse">Townhouse</SelectItem>
 
-                      <SelectItem value="Custom Build">
-                        Custom Build
-                      </SelectItem>
+                      <SelectItem value="Custom Build">Custom Build</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
@@ -531,10 +488,7 @@ export function CreateProjectModal({
 
               {errors.propertyType && (
                 <p className="text-sm text-destructive">
-                  {
-                    errors.propertyType
-                      .message
-                  }
+                  {errors.propertyType.message}
                 </p>
               )}
             </div>
@@ -544,18 +498,8 @@ export function CreateProjectModal({
             <Button
               type="button"
               className="flex-1"
-              variant={
-                customerMode ===
-                "existing"
-                  ? "default"
-                  : "ghost"
-              }
-              onClick={() =>
-                setValue(
-                  "customerMode",
-                  "existing",
-                )
-              }
+              variant={customerMode === "existing" ? "default" : "ghost"}
+              onClick={() => setValue("customerMode", "existing")}
             >
               Existing Customer
             </Button>
@@ -563,17 +507,8 @@ export function CreateProjectModal({
             <Button
               type="button"
               className="flex-1"
-              variant={
-                customerMode === "new"
-                  ? "default"
-                  : "ghost"
-              }
-              onClick={() =>
-                setValue(
-                  "customerMode",
-                  "new",
-                )
-              }
+              variant={customerMode === "new" ? "default" : "ghost"}
+              onClick={() => setValue("customerMode", "new")}
             >
               New Customer
             </Button>
@@ -588,42 +523,23 @@ export function CreateProjectModal({
                   <SearchableSelect
                     label="Customer"
                     placeholder="Select a customer..."
-                    searchValue={
-                      customerSearch
-                    }
-                    selectedItem={
-                      field.value
-                    }
+                    searchValue={customerSearch}
+                    selectedItem={field.value}
                     items={customerItems}
-                    loading={
-                      customers.loading
-                    }
-                    hasMore={
-                      customers.page <
-                      customers.totalPages
-                    }
-                    onQueryChange={
-                      setCustomerSearch
-                    }
+                    loading={customers.loading}
+                    hasMore={customers.page < customers.totalPages}
+                    onQueryChange={setCustomerSearch}
                     onSelect={(item) => {
-                      field.onChange(
-                        item,
-                      );
+                      field.onChange(item);
 
-                      setCustomerSearch(
-                        (item as LookupOption).name,
-                      );
+                      setCustomerSearch((item as LookupOption).name);
                     }}
                     onLoadMore={() => {
                       void dispatch(
                         fetchCustomers({
-                          page:
-                            customers.page +
-                            1,
-                          limit:
-                            customerLookupPageSize,
-                          query:
-                            customerSearch,
+                          page: customers.page + 1,
+                          limit: customerLookupPageSize,
+                          query: customerSearch,
                         }),
                       );
                     }}
@@ -633,55 +549,37 @@ export function CreateProjectModal({
 
               {errors.selectedCustomer && (
                 <p className="text-sm text-destructive">
-                  {
-                    errors
-                      .selectedCustomer
-                      .message
-                  }
+                  {errors.selectedCustomer.message}
                 </p>
               )}
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium">
-                  Customer Name *
-                </label>
+                <label className="text-sm font-medium">Customer Name *</label>
 
                 <Input
-                  {...register(
-                    "newCustomerName",
-                  )}
+                  {...register("newCustomerName")}
                   placeholder="e.g. Harpreet Kaur"
                 />
 
                 {errors.newCustomerName && (
                   <p className="text-sm text-destructive">
-                    {
-                      errors
-                        .newCustomerName
-                        .message
-                    }
+                    {errors.newCustomerName.message}
                   </p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Customer Phone *
-                </label>
+                <label className="text-sm font-medium">Customer Phone *</label>
 
                 <Controller
                   control={control}
                   name="newCustomerPhone"
                   render={({ field }) => (
                     <PhoneNumberInput
-                      value={
-                        field.value ?? ""
-                      }
-                      onChange={
-                        field.onChange
-                      }
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
                       placeholder="+61 4XX XXX XXX"
                     />
                   )}
@@ -689,35 +587,23 @@ export function CreateProjectModal({
 
                 {errors.newCustomerPhone && (
                   <p className="text-sm text-destructive">
-                    {
-                      errors
-                        .newCustomerPhone
-                        .message
-                    }
+                    {errors.newCustomerPhone.message}
                   </p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Customer Email *
-                </label>
+                <label className="text-sm font-medium">Customer Email *</label>
 
                 <Input
-                  {...register(
-                    "newCustomerEmail",
-                  )}
+                  {...register("newCustomerEmail")}
                   type="email"
                   placeholder="email@example.com"
                 />
 
                 {errors.newCustomerEmail && (
                   <p className="text-sm text-destructive">
-                    {
-                      errors
-                        .newCustomerEmail
-                        .message
-                    }
+                    {errors.newCustomerEmail.message}
                   </p>
                 )}
               </div>
@@ -733,35 +619,18 @@ export function CreateProjectModal({
                   <SearchableSelect
                     label="Site Location"
                     placeholder="e.g. Penrith, NSW 2750"
-                    searchValue={
-                      location
-                    }
-                    selectedItem={
-                      field.value as AddressSuggestion | null
-                    }
-                    items={
-                      locationSuggestions
-                    }
-                    onQueryChange={(
-                      query,
-                    ) => {
-                      setValue(
-                        "location",
-                        query,
-                      );
+                    searchValue={location}
+                    selectedItem={field.value as AddressSuggestion | null}
+                    items={locationSuggestions}
+                    onQueryChange={(query) => {
+                      setValue("location", query);
                     }}
                     onSelect={(item) => {
-                      const suggestion =
-                        item as AddressSuggestion;
+                      const suggestion = item as AddressSuggestion;
 
-                      field.onChange(
-                        suggestion,
-                      );
+                      field.onChange(suggestion);
 
-                      setValue(
-                        "location",
-                        suggestion.address,
-                      );
+                      setValue("location", suggestion.address);
                     }}
                   />
                 )}
@@ -769,10 +638,7 @@ export function CreateProjectModal({
 
               {errors.location && (
                 <p className="text-sm text-destructive">
-                  {
-                    errors.location
-                      .message
-                  }
+                  {errors.location.message}
                 </p>
               )}
             </div>
@@ -785,45 +651,24 @@ export function CreateProjectModal({
                   <SearchableSelect
                     label="Site Manager"
                     placeholder="Assign manager..."
-                    searchValue={
-                      managerSearch
-                    }
-                    selectedItem={
-                      field.value
-                    }
+                    searchValue={managerSearch}
+                    selectedItem={field.value}
                     items={managerItems}
-                    loading={
-                      siteManagers.loading
-                    }
-                    hasMore={
-                      siteManagers.page <
-                      siteManagers.totalPages
-                    }
-                    onQueryChange={
-                      setManagerSearch
-                    }
+                    loading={siteManagers.loading}
+                    hasMore={siteManagers.page < siteManagers.totalPages}
+                    onQueryChange={setManagerSearch}
                     onSelect={(item) => {
-                      field.onChange(
-                        item,
-                      );
+                      field.onChange(item);
 
-                      setManagerSearch(
-                        (item as LookupOption).name,
-                      );
+                      setManagerSearch((item as LookupOption).name);
                     }}
                     onLoadMore={() => {
                       void dispatch(
-                        fetchSiteManagers(
-                          {
-                            page:
-                              siteManagers.page +
-                              1,
-                            limit:
-                              siteManagerLookupPageSize,
-                            query:
-                              managerSearch,
-                          },
-                        ),
+                        fetchSiteManagers({
+                          page: siteManagers.page + 1,
+                          limit: siteManagerLookupPageSize,
+                          query: managerSearch,
+                        }),
                       );
                     }}
                   />
@@ -834,9 +679,7 @@ export function CreateProjectModal({
 
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Budget (AUD) *
-              </label>
+              <label className="text-sm font-medium">Budget (AUD) *</label>
 
               <Input
                 {...register("budget")}
@@ -847,18 +690,13 @@ export function CreateProjectModal({
 
               {errors.budget && (
                 <p className="text-sm text-destructive">
-                  {
-                    errors.budget
-                      .message
-                  }
+                  {errors.budget.message}
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Lot Size (m²) *
-              </label>
+              <label className="text-sm font-medium">Lot Size (m²) *</label>
 
               <Input
                 {...register("lotSize")}
@@ -869,54 +707,33 @@ export function CreateProjectModal({
 
               {errors.lotSize && (
                 <p className="text-sm text-destructive">
-                  {
-                    errors.lotSize
-                      .message
-                  }
+                  {errors.lotSize.message}
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Start Date *
-              </label>
+              <label className="text-sm font-medium">Start Date *</label>
 
-              <Input
-                {...register(
-                  "startDate",
-                )}
-                type="date"
-              />
+              <Input {...register("startDate")} type="date" />
 
               {errors.startDate && (
                 <p className="text-sm text-destructive">
-                  {
-                    errors.startDate
-                      .message
-                  }
+                  {errors.startDate.message}
                 </p>
               )}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Est. Completion
-              </label>
+              <label className="text-sm font-medium">Est. Completion</label>
 
-              <Input
-                {...register(
-                  "estimatedEndDate",
-                )}
-                type="date"
-              />
+              <Input {...register("estimatedEndDate")} type="date" />
             </div>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              Special Requirements /
-              Notes
+              Special Requirements / Notes
             </label>
 
             <Textarea
@@ -936,9 +753,7 @@ export function CreateProjectModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                onOpenChange(false)
-              }
+              onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
@@ -948,23 +763,15 @@ export function CreateProjectModal({
               variant="outline"
               onClick={() =>
                 setError("root", {
-                  message:
-                    "Save draft is not wired yet",
+                  message: "Save draft is not wired yet",
                 })
               }
             >
               Save Draft
             </Button>
 
-            <Button
-              type="submit"
-              disabled={isPending}
-              className="gap-2"
-            >
-              {isPending && (
-                <Loader2 className="size-4 animate-spin" />
-              )}
-
+            <Button type="submit" disabled={isPending} className="gap-2">
+              {isPending && <Loader2 className="size-4 animate-spin" />}
               Create Project
             </Button>
           </div>
