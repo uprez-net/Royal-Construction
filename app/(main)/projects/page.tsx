@@ -1,11 +1,13 @@
 import { ProjectsClient } from "@/components/projects/projects-client";
 import { getCachedProjectKPIs, getCachedProjects } from "@/lib/data/projects";
 
+const projectPageSize = 12;
+
 export default async function ProjectPage() {
-  const [projects, kpis] = await Promise.all([
-    getCachedProjects(),
+  const [projectsPage, kpis] = await Promise.all([
+    getCachedProjects({ page: 1, limit: projectPageSize }),
     getCachedProjectKPIs(),
   ]);
 
-  return <ProjectsClient projects={projects} kpis={kpis} />;
+  return <ProjectsClient projects={projectsPage.items} pagination={projectsPage} kpis={kpis} />;
 }

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import prisma from "@/lib/prisma";
-import { getProjects } from "@/lib/data/projects";
+import { getProjects, type ProjectListSortBy } from "@/lib/data/projects";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
 
@@ -34,8 +34,20 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const status = url.searchParams.get("status");
+  const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
+  const limit = Number.parseInt(url.searchParams.get("limit") ?? "12", 10);
+  const search = url.searchParams.get("search") ?? "";
+  const sortBy = url.searchParams.get("sortBy") as ProjectListSortBy | null;
+  const sortOrder = url.searchParams.get("sortOrder") === "desc" ? "desc" : "asc";
   const projectStatus = status && Object.values(ProjectStatus).includes(status as ProjectStatus) ? (status as ProjectStatus) : undefined;
-  const projects = await getProjects(projectStatus ? { status: projectStatus } : undefined);
+  const projects = await getProjects({
+    status: projectStatus,
+    page,
+    limit,
+    search,
+    sortBy: sortBy ?? undefined,
+    sortOrder,
+  });
 
   return NextResponse.json(projects);
 }
