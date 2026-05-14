@@ -128,15 +128,6 @@ export function AppShell({
                     ))}
                   </div>
                 </div>
-                <div className="hidden lg:block">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-                    <Input
-                      placeholder="Search projects, leads, quotes..."
-                      className="h-10 w-64 rounded-2xl border-white/10 bg-white/5 pl-9 text-sm text-white placeholder:text-slate-400 focus-visible:ring-teal-500/30"
-                    />
-                  </div>
-                </div>
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3">

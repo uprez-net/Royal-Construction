@@ -8,13 +8,14 @@ import { closeModal } from "@/lib/store/slices/uiSlice";
 
 import { AddUpdateModal } from "@/components/projects/add-update-modal";
 import { CreateVariationModal } from "@/components/projects/create-variation-modal";
-import { CreateProjectModal } from "@/components/projects/create-project-modal";
+
 import { ConfirmStatusModal } from "@/components/tradies/confirm-status-modal";
 import { LogCallModal } from "@/components/tradies/log-call-modal";
 import { ScheduleTradieModal } from "@/components/tradies/schedule-tradie-modal";
 import { TradieDirectoryModal } from "@/components/tradies/tradie-directory-modal";
 
 import type { TradieScheduleWithTradieMilestoneAndProject } from "@/types/project";
+import { CreateProjectModal } from "../projects/create-project-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
