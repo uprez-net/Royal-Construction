@@ -27,11 +27,6 @@ type CreateProjectPayload = {
 };
 
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const url = new URL(request.url);
   const mode = url.searchParams.get("mode");
   const status = url.searchParams.get("status");

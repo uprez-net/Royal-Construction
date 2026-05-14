@@ -1,4 +1,3 @@
-import { auth } from "@clerk/nextjs/server";
 import { TradieScheduleStatus } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
@@ -7,11 +6,6 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ scheduleId: string }> },
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
   const { scheduleId } = await params;
 
   const body = (await request.json()) as { status?: TradieScheduleStatus };

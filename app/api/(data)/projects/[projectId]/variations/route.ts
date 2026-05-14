@@ -1,4 +1,3 @@
-import { auth } from "@clerk/nextjs/server";
 import { VariationStatus } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
@@ -7,10 +6,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+
 
   const { projectId } = await params;
 
