@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { usePathname } from "next/navigation";
 import { useAppSelector } from "@/lib/store/hooks";
+import { isUUID } from "@/utils/parser";
 
 export function AppShell({
   isSignedIn,
@@ -29,7 +30,8 @@ export function AppShell({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
   const pathName = usePathname();
-  const activeSlug = pathName.split("/").pop() ?? "dashboard";
+  const lastSegment = pathName.split("/").filter(Boolean).pop() ?? "";
+  const activeSlug = isUUID(lastSegment) ? "Loading Project..." : pathName.split("/").pop() ?? "dashboard";
   const title = activeProject ? activeProject.name : getScreenTitle(activeSlug);
 
   useEffect(() => {
