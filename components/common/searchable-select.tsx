@@ -12,13 +12,25 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
+import { AddressSuggestion } from "@/types/data";
 
 export interface LookupOption {
   id: string;
   name: string;
   email: string;
   phone: string;
+}
+
+type SearchableItem = LookupOption | AddressSuggestion;
+
+function isLookupOption(item: SearchableItem): item is LookupOption {
+  return "name" in item;
 }
 
 export function SearchableSelect({
@@ -37,61 +49,111 @@ export function SearchableSelect({
   label: string;
   placeholder: string;
   searchValue: string;
-  selectedItem: LookupOption | null;
-  items: LookupOption[];
+  selectedItem: SearchableItem | null;
+  items: SearchableItem[];
   loading?: boolean;
   hasMore?: boolean;
   onQueryChange: (query: string) => void;
-  onSelect: (item: LookupOption) => void;
+  onSelect: (item: SearchableItem) => void;
   onLoadMore?: () => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const triggerLabel = selectedItem ? selectedItem.name : placeholder;
+
+  const triggerLabel = selectedItem
+    ? isLookupOption(selectedItem)
+      ? selectedItem.name
+      : selectedItem.label
+    : placeholder;
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-foreground">{label}</label>
+      <label className="text-sm font-medium text-foreground">
+        {label}
+      </label>
+
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" className="w-full justify-between gap-3" disabled={disabled}>
-            <span className="truncate text-left">{triggerLabel}</span>
-            {loading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : <ChevronDown className="size-4 shrink-0 text-muted-foreground" />}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-between gap-3"
+            disabled={disabled}
+          >
+            <span className="truncate text-left">
+              {triggerLabel}
+            </span>
+
+            {loading ? (
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+
+        <PopoverContent
+          className="w-(--radix-popover-trigger-width) p-0"
+          align="start"
+        >
           <Command shouldFilter={false}>
             <CommandInput
               placeholder={`Search ${label.toLowerCase()}...`}
               value={searchValue}
               onValueChange={onQueryChange}
             />
+
             <CommandList>
-              {loading && items.length === 0 ? <CommandEmpty>Loading...</CommandEmpty> : null}
-              {!loading && items.length === 0 ? <CommandEmpty>No results found.</CommandEmpty> : null}
+              {loading && items.length === 0 ? (
+                <CommandEmpty>Loading...</CommandEmpty>
+              ) : null}
+
+              {!loading && items.length === 0 ? (
+                <CommandEmpty>No results found.</CommandEmpty>
+              ) : null}
+
               <CommandGroup>
-                {items.map((item) => (
-                  <CommandItem
-                    key={item.id}
-                    value={item.name}
-                    onSelect={() => {
-                      onSelect(item);
-                      setOpen(false);
-                    }}
-                  >
-                    <div className="flex w-full flex-col gap-0.5 text-left">
-                      <span className="font-medium text-foreground">{item.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {item.email} · {item.phone}
-                      </span>
-                    </div>
-                  </CommandItem>
-                ))}
+                {items.map((item) => {
+                  const title = isLookupOption(item)
+                    ? item.name
+                    : item.label;
+
+                  const subtitle = isLookupOption(item)
+                    ? `${item.email} · ${item.phone}`
+                    : `${item.address}, ${item.postcode ?? ""}, Council: ${item.council}`;
+
+                  return (
+                    <CommandItem
+                      key={item.id}
+                      value={title}
+                      onSelect={() => {
+                        onSelect(item);
+                        setOpen(false);
+                      }}
+                    >
+                      <div className="flex w-full flex-col gap-0.5 text-left">
+                        <span className="font-medium text-foreground">
+                          {title}
+                        </span>
+
+                        <span className="text-xs text-muted-foreground">
+                          {subtitle}
+                        </span>
+                      </div>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             </CommandList>
+
             {hasMore ? (
               <div className="border-t border-border p-2">
-                <Button type="button" variant="ghost" className="w-full justify-center text-sm" onClick={onLoadMore}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full justify-center text-sm"
+                  onClick={onLoadMore}
+                >
                   Load more
                 </Button>
               </div>

@@ -230,12 +230,12 @@ export const tickerItems = [
 
 
 export const projectOverviewMock = {
-  buildingType: "Double Storey 4BR + Study",
-  lotSize: "620 sqm",
-  council: "Penrith City Council",
+  // buildingType: "Double Storey 4BR + Study",
+  // lotSize: "620 sqm",
+  // council: "Penrith City Council",
   certifier: "SafeBuild Certifiers NSW",
   architect: "Mike Thompson",
-  contractWithVariations: "$494,700",
+  // contractWithVariations: "$494,700",
 };
 
 export const projectKpiMock: ProjectDetailKpi[] = [

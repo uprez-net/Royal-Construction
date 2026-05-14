@@ -1,8 +1,9 @@
 import { Milestone, Project, Tradie, Variation, File, SiteUpdate, User, TradieSchedule, Customer, ActivityLog } from "@prisma/client";
 
-export interface SafeProject extends Omit<Project, "totalBudget" | "spent"> {
+export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize"> {
     totalBudget: string;
     spent: string;
+    lotSize?: string;
 }
 
 export interface SafeTradie extends Omit<Tradie, "hourlyRate" | "rating"> {

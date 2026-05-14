@@ -12,13 +12,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PhoneNumberInput } from "@/components/common/phone-number-input";
-import { SearchableSelect, type LookupOption } from "@/components/common/searchable-select";
+import {
+  SearchableSelect,
+  type LookupOption,
+} from "@/components/common/searchable-select";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchCustomers } from "@/lib/store/slices/customersSlice";
 import { fetchSiteManagers } from "@/lib/store/slices/siteManagersSlice";
+import { AddressSuggestion } from "@/types/data";
 
 type CustomerMode = "existing" | "new";
 
@@ -42,19 +52,29 @@ export function CreateProjectModal({
   const [propertyType, setPropertyType] = useState("");
   const [customerMode, setCustomerMode] = useState<CustomerMode>("existing");
   const [customerSearch, setCustomerSearch] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState<LookupOption | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<LookupOption | null>(
+    null,
+  );
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
   const [location, setLocation] = useState("");
   const [managerSearch, setManagerSearch] = useState("");
-  const [selectedManager, setSelectedManager] = useState<LookupOption | null>(null);
+  const [selectedManager, setSelectedManager] = useState<LookupOption | null>(
+    null,
+  );
   const [budget, setBudget] = useState("");
   const [startDate, setStartDate] = useState("");
   const [estimatedEndDate, setEstimatedEndDate] = useState("");
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [locationSuggestions, setLocationSuggestions] = useState<
+    AddressSuggestion[]
+  >([]);
+  const [selectedLocationSuggestion, setSelectedLocationSuggestion] =
+    useState<AddressSuggestion | null>(null);
+  const [lotSize, setLotSize] = useState("");
 
   const customerItems = useMemo(
     () => customers.items.map((item) => ({ ...item })),
@@ -92,7 +112,13 @@ export function CreateProjectModal({
     }
 
     const customerTimer = window.setTimeout(() => {
-      dispatch(fetchCustomers({ page: 1, limit: customerLookupPageSize, query: customerSearch }));
+      dispatch(
+        fetchCustomers({
+          page: 1,
+          limit: customerLookupPageSize,
+          query: customerSearch,
+        }),
+      );
     }, 250);
 
     return () => {
@@ -106,13 +132,40 @@ export function CreateProjectModal({
     }
 
     const managerTimer = window.setTimeout(() => {
-      dispatch(fetchSiteManagers({ page: 1, limit: siteManagerLookupPageSize, query: managerSearch }));
+      dispatch(
+        fetchSiteManagers({
+          page: 1,
+          limit: siteManagerLookupPageSize,
+          query: managerSearch,
+        }),
+      );
     }, 250);
 
     return () => {
       window.clearTimeout(managerTimer);
     };
   }, [open, managerSearch, dispatch]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    if (location.length < 3) {
+      setLocationSuggestions([]);
+      return;
+    }
+    const fetchedSuggestions = fetch(
+      `/api/address/suggestions?query=${encodeURIComponent(location)}`,
+    )
+      .then((res) => res.json())
+      .then((data: { suggestions: AddressSuggestion[] }) => {
+        setLocationSuggestions(data.suggestions);
+      })
+      .catch((err) => {
+        console.error("Error fetching address suggestions:", err);
+        setLocationSuggestions([]);
+      });
+  }, [open, location]);
 
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,32 +221,62 @@ export function CreateProjectModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onOpenChange(false)}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => !nextOpen && onOpenChange(false)}
+    >
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
-          <DialogDescription>Add a new construction project to the system.</DialogDescription>
+          <DialogDescription>
+            Add a new construction project to the system.
+          </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Project Name *</label>
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Penrith Residence" required />
+              <label className="text-sm font-medium text-foreground">
+                Project Name *
+              </label>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="e.g. Penrith Residence"
+                required
+              />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Property Type *</label>
-              <Select value={propertyType} onValueChange={setPropertyType} required>
+              <label className="text-sm font-medium text-foreground">
+                Property Type *
+              </label>
+              <Select
+                value={propertyType}
+                onValueChange={setPropertyType}
+                required
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="4BR Modern Home">4BR Modern Home</SelectItem>
-                  <SelectItem value="5BR Luxury Home">5BR Luxury Home</SelectItem>
-                  <SelectItem value="Duplex Construction">Duplex Construction</SelectItem>
-                  <SelectItem value="4BR + Granny Flat">4BR + Granny Flat</SelectItem>
-                  <SelectItem value="6BR Double Storey">6BR Double Storey</SelectItem>
-                  <SelectItem value="3BR Apartment Reno">3BR Apartment Reno</SelectItem>
+                  <SelectItem value="4BR Modern Home">
+                    4BR Modern Home
+                  </SelectItem>
+                  <SelectItem value="5BR Luxury Home">
+                    5BR Luxury Home
+                  </SelectItem>
+                  <SelectItem value="Duplex Construction">
+                    Duplex Construction
+                  </SelectItem>
+                  <SelectItem value="4BR + Granny Flat">
+                    4BR + Granny Flat
+                  </SelectItem>
+                  <SelectItem value="6BR Double Storey">
+                    6BR Double Storey
+                  </SelectItem>
+                  <SelectItem value="3BR Apartment Reno">
+                    3BR Apartment Reno
+                  </SelectItem>
                   <SelectItem value="Townhouse">Townhouse</SelectItem>
                   <SelectItem value="Custom Build">Custom Build</SelectItem>
                 </SelectContent>
@@ -202,10 +285,20 @@ export function CreateProjectModal({
           </div>
 
           <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-1">
-            <Button type="button" variant={customerMode === "existing" ? "default" : "ghost"} className="flex-1" onClick={() => setCustomerMode("existing")}>
+            <Button
+              type="button"
+              variant={customerMode === "existing" ? "default" : "ghost"}
+              className="flex-1"
+              onClick={() => setCustomerMode("existing")}
+            >
               Existing Customer
             </Button>
-            <Button type="button" variant={customerMode === "new" ? "default" : "ghost"} className="flex-1" onClick={() => setCustomerMode("new")}>
+            <Button
+              type="button"
+              variant={customerMode === "new" ? "default" : "ghost"}
+              className="flex-1"
+              onClick={() => setCustomerMode("new")}
+            >
               New Customer
             </Button>
           </div>
@@ -221,7 +314,7 @@ export function CreateProjectModal({
               hasMore={customers.page < customers.totalPages}
               onQueryChange={setCustomerSearch}
               onSelect={(item) => {
-                setSelectedCustomer(item);
+                setSelectedCustomer(item as LookupOption);
                 setCustomerMode("existing");
               }}
               onLoadMore={() => {
@@ -237,25 +330,56 @@ export function CreateProjectModal({
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-foreground">Customer Name *</label>
-                <Input value={newCustomerName} onChange={(event) => setNewCustomerName(event.target.value)} placeholder="e.g. Harpreet Kaur" required />
+                <label className="text-sm font-medium text-foreground">
+                  Customer Name *
+                </label>
+                <Input
+                  value={newCustomerName}
+                  onChange={(event) => setNewCustomerName(event.target.value)}
+                  placeholder="e.g. Harpreet Kaur"
+                  required
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Customer Phone *</label>
-                <PhoneNumberInput value={newCustomerPhone} onChange={setNewCustomerPhone} placeholder="+61 4XX XXX XXX" required />
+                <label className="text-sm font-medium text-foreground">
+                  Customer Phone *
+                </label>
+                <PhoneNumberInput
+                  value={newCustomerPhone}
+                  onChange={setNewCustomerPhone}
+                  placeholder="+61 4XX XXX XXX"
+                  required
+                />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Customer Email *</label>
-                <Input value={newCustomerEmail} onChange={(event) => setNewCustomerEmail(event.target.value)} type="email" placeholder="email@example.com" required />
+                <label className="text-sm font-medium text-foreground">
+                  Customer Email *
+                </label>
+                <Input
+                  value={newCustomerEmail}
+                  onChange={(event) => setNewCustomerEmail(event.target.value)}
+                  type="email"
+                  placeholder="email@example.com"
+                  required
+                />
               </div>
             </div>
           )}
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Site Location *</label>
-              <Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Penrith, NSW 2750" required />
-            </div>
+            {/* Site Location */}
+            <SearchableSelect
+              label="Site Location"
+              placeholder="e.g. Penrith, NSW 2750"
+              searchValue={location}
+              selectedItem={selectedLocationSuggestion}
+              items={locationSuggestions}
+              onQueryChange={setLocation}
+              onSelect={(item) =>
+                setSelectedLocationSuggestion(item as AddressSuggestion)
+              }
+            />
+            {/* Site Manager */}
             <SearchableSelect
               label="Site Manager"
               placeholder="Assign manager..."
@@ -265,7 +389,7 @@ export function CreateProjectModal({
               loading={siteManagers.loading}
               hasMore={siteManagers.page < siteManagers.totalPages}
               onQueryChange={setManagerSearch}
-              onSelect={setSelectedManager}
+              onSelect={(item) => setSelectedManager(item as LookupOption)}
               onLoadMore={() => {
                 void dispatch(
                   fetchSiteManagers({
@@ -280,22 +404,64 @@ export function CreateProjectModal({
 
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Budget (AUD) *</label>
-              <Input value={budget} onChange={(event) => setBudget(event.target.value)} type="number" min="0" placeholder="e.g. 485000" required />
+              <label className="text-sm font-medium text-foreground">
+                Budget (AUD) *
+              </label>
+              <Input
+                value={budget}
+                onChange={(event) => setBudget(event.target.value)}
+                type="number"
+                min="0"
+                placeholder="e.g. 485000"
+                required
+              />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Start Date *</label>
-              <Input value={startDate} onChange={(event) => setStartDate(event.target.value)} type="date" required />
+              <label className="text-sm font-medium text-foreground">
+                Lot Size (m²) *
+              </label>
+              <Input
+                value={lotSize}
+                onChange={(event) => setLotSize(event.target.value)}
+                type="number"
+                min="0"
+                placeholder="e.g. 620"
+                required
+              />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Est. Completion</label>
-              <Input value={estimatedEndDate} onChange={(event) => setEstimatedEndDate(event.target.value)} type="date" />
+              <label className="text-sm font-medium text-foreground">
+                Start Date *
+              </label>
+              <Input
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                type="date"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Est. Completion
+              </label>
+              <Input
+                value={estimatedEndDate}
+                onChange={(event) => setEstimatedEndDate(event.target.value)}
+                type="date"
+              />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Special Requirements / Notes</label>
-            <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="Any specific customer requirements, site conditions, etc." />
+            <label className="text-sm font-medium text-foreground">
+              Special Requirements / Notes
+            </label>
+            <Textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              rows={4}
+              placeholder="Any specific customer requirements, site conditions, etc."
+            />
           </div>
 
           {errorMessage ? (
@@ -305,10 +471,20 @@ export function CreateProjectModal({
           ) : null}
 
           <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="button" variant="outline" onClick={() => setErrorMessage("Save draft is not wired yet")}>Save Draft</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setErrorMessage("Save draft is not wired yet")}
+            >
+              Save Draft
+            </Button>
             <Button type="submit" disabled={isSaving} className="gap-2">
               {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
               Create Project

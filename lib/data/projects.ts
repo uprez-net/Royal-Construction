@@ -156,6 +156,7 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
 
     return {
       ...project,
+      lotSize: project.lotSize?.toString() ?? undefined,
       totalBudget: project.totalBudget.toString(),
       spent: project.spent.toString(),
       milestoneCount,
@@ -189,6 +190,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
 
   return {
     ...project,
+    lotSize: project.lotSize?.toString() ?? undefined,
     totalBudget: project.totalBudget.toString(),
     spent: project.spent.toString(),
     siteUpdates: project.siteUpdates
