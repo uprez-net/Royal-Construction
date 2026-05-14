@@ -64,7 +64,7 @@ export function ProjectCard(props: ProjectCardProps) {
   const isLive = "id" in props
   const progress = isLive ? props.progressPercent : props.progress
   const statusTone = statusToneMap[props.status] ?? "bg-slate-100 text-slate-700"
-  const href = isLive ? `/project-detail/${props.id}` : "/project-detail"
+  const href = isLive ? `/projects/${props.id}` : "/projects"
   const card = (
     <Card className="overflow-hidden border-border/70 bg-white/95 shadow-sm transition-transform duration-200 hover:-translate-y-1">
       <div className="h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-orange-400" />

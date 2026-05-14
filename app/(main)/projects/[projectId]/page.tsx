@@ -5,10 +5,10 @@ import { getProjectById } from "@/lib/data/projects";
 export default async function ProjectDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ projectId: string }>;
 }) {
-  const { id } = await params;
-  const project = await getProjectById(id);
+  const { projectId } = await params;
+  const project = await getProjectById(projectId);
 
   if (!project) {
     notFound();

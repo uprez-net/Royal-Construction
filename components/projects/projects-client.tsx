@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { AlertTriangle, CheckCircle2, CircleDot, ClipboardList } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleDot,
+  ClipboardList,
+} from "lucide-react";
 
 import { DataTable } from "@/components/common/data-table";
 import { MetricCard } from "@/components/common/metric-card";
@@ -11,8 +16,14 @@ import { SectionCard } from "@/components/common/section-card";
 import { ProjectCard } from "@/components/project/project-card";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { openModal, setProjectFilter, setProjectView } from "@/lib/store/slices/uiSlice";
+import {
+  openModal,
+  setProjectFilter,
+  setProjectView,
+} from "@/lib/store/slices/uiSlice";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
+import { setProjects } from "@/lib/store/slices/projectsSlice";
+import { useEffect, useMemo } from "react";
 
 function formatStatus(status: string) {
   return status
@@ -29,34 +40,83 @@ const statuses = [
   { label: "Delayed", value: "DELAYED" },
 ] as const;
 
-export function ProjectsClient({ projects, kpis }: { projects: ProjectWithStats[]; kpis: ProjectKPIs }) {
+export function ProjectsClient({
+  projects,
+  kpis,
+}: {
+  projects: ProjectWithStats[];
+  kpis: ProjectKPIs;
+}) {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const projectsInStore = useAppSelector((state) => state.projects.projects);
   const view = useAppSelector((state) => state.ui.projectFilters.view);
-  const statusFilter = useAppSelector((state) => state.ui.projectFilters.status);
-  const optimisticUpdates = useAppSelector((state) => state.projects.optimisticUpdates);
+  const statusFilter = useAppSelector(
+    (state) => state.ui.projectFilters.status,
+  );
+  const optimisticUpdates = useAppSelector(
+    (state) => state.projects.optimisticUpdates,
+  );
 
-  const filteredProjects = projects
-    .map((project) => {
-      const optimisticUpdate = optimisticUpdates[project.id];
-      return optimisticUpdate ? ({ ...project, ...optimisticUpdate } as ProjectWithStats) : project;
-    })
-    .filter((project) => !statusFilter || project.status === statusFilter);
+  const filteredProjects = useMemo(
+    () =>
+      projectsInStore
+        .map((project) => {
+          const optimisticUpdate = optimisticUpdates[project.id];
+          return optimisticUpdate
+            ? ({ ...project, ...optimisticUpdate } as ProjectWithStats)
+            : project;
+        })
+        .filter((project) => !statusFilter || project.status === statusFilter),
+    [projectsInStore, optimisticUpdates, statusFilter],
+  );
+
+  useEffect(() => {
+    // Sync projects to Redux store for global access (e.g. detail pages)
+    dispatch(setProjects(projects));
+  }, [projects]);
 
   return (
     <div className="grid gap-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total Active" value={String(kpis.totalActive)} note="Projects currently in active delivery" tone="primary" icon={ClipboardList} />
-        <MetricCard label="On Track" value={String(kpis.onTrack)} note="Projects tracking to plan" tone="success" icon={CheckCircle2} />
-        <MetricCard label="Needs Attention" value={String(kpis.needsAttention)} note="Projects with live issues or blockers" tone="warning" icon={AlertTriangle} />
-        <MetricCard label="Delayed" value={String(kpis.delayed)} note="Projects past the current window" tone="danger" icon={CircleDot} />
+        <MetricCard
+          label="Total Active"
+          value={String(kpis.totalActive)}
+          note="Projects currently in active delivery"
+          tone="primary"
+          icon={ClipboardList}
+        />
+        <MetricCard
+          label="On Track"
+          value={String(kpis.onTrack)}
+          note="Projects tracking to plan"
+          tone="success"
+          icon={CheckCircle2}
+        />
+        <MetricCard
+          label="Needs Attention"
+          value={String(kpis.needsAttention)}
+          note="Projects with live issues or blockers"
+          tone="warning"
+          icon={AlertTriangle}
+        />
+        <MetricCard
+          label="Delayed"
+          value={String(kpis.delayed)}
+          note="Projects past the current window"
+          tone="danger"
+          icon={CircleDot}
+        />
       </div>
 
       <SectionCard
         title="Projects"
         description="Live project records are filtered client-side from the cached server payload."
         action={
-          <Button type="button" onClick={() => dispatch(openModal({ type: "createProject" }))}>
+          <Button
+            type="button"
+            onClick={() => dispatch(openModal({ type: "createProject" }))}
+          >
             New Project
           </Button>
         }
@@ -64,16 +124,34 @@ export function ProjectsClient({ projects, kpis }: { projects: ProjectWithStats[
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             <div className="inline-flex rounded-full border border-border bg-background p-1">
-              <Button type="button" size="sm" variant={view === "grid" ? "default" : "ghost"} onClick={() => dispatch(setProjectView("grid"))}>
+              <Button
+                type="button"
+                size="sm"
+                variant={view === "grid" ? "default" : "ghost"}
+                onClick={() => dispatch(setProjectView("grid"))}
+              >
                 Grid View
               </Button>
-              <Button type="button" size="sm" variant={view === "list" ? "default" : "ghost"} onClick={() => dispatch(setProjectView("list"))}>
+              <Button
+                type="button"
+                size="sm"
+                variant={view === "list" ? "default" : "ghost"}
+                onClick={() => dispatch(setProjectView("list"))}
+              >
                 List View
               </Button>
             </div>
             <div className="inline-flex flex-wrap gap-2">
               {statuses.map((item) => (
-                <Button key={item.label} type="button" size="sm" variant={statusFilter === item.value ? "default" : "outline"} onClick={() => dispatch(setProjectFilter({ status: item.value }))}>
+                <Button
+                  key={item.label}
+                  type="button"
+                  size="sm"
+                  variant={statusFilter === item.value ? "default" : "outline"}
+                  onClick={() =>
+                    dispatch(setProjectFilter({ status: item.value }))
+                  }
+                >
                   {item.label}
                 </Button>
               ))}
@@ -104,9 +182,21 @@ export function ProjectsClient({ projects, kpis }: { projects: ProjectWithStats[
           </div>
         ) : (
           <DataTable
-            headers={["Name", "Customer", "Location", "Status", "Progress %", "Budget Used", "End Date"]}
+            headers={[
+              "Name",
+              "Customer",
+              "Location",
+              "Status",
+              "Progress %",
+              "Budget Used",
+              "End Date",
+            ]}
             rows={filteredProjects.map((project) => [
-              <Link key={project.id} href={`/project-detail/${project.id}`} className="font-medium text-teal-700 hover:underline">
+              <Link
+                key={project.id}
+                href={`/projects/${project.id}`}
+                className="font-medium text-teal-700 hover:underline"
+              >
                 {project.name}
               </Link>,
               project.customer.name,
@@ -116,13 +206,20 @@ export function ProjectsClient({ projects, kpis }: { projects: ProjectWithStats[
                 {project.progressPercent}%
               </span>,
               <span className="font-mono" key={`${project.id}-budget`}>
-                ${Number(project.spent).toLocaleString()} of ${Number(project.totalBudget).toLocaleString()}
+                ${Number(project.spent).toLocaleString()} of $
+                {Number(project.totalBudget).toLocaleString()}
               </span>,
               <span className="font-mono" key={`${project.id}-end`}>
-                {new Intl.DateTimeFormat("en-AU", { day: "2-digit", month: "short", year: "numeric" }).format(project.estimatedEndDate)}
+                {new Intl.DateTimeFormat("en-AU", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                }).format(new Date(project.estimatedEndDate))}
               </span>,
             ])}
-            onRowClick={(rowIndex) => router.push(`/project-detail/${filteredProjects[rowIndex].id}`)}
+            onRowClick={(rowIndex) =>
+              router.push(`/projects/${filteredProjects[rowIndex].id}`)
+            }
           />
         )}
       </SectionCard>

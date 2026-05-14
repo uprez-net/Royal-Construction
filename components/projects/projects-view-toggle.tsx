@@ -80,7 +80,7 @@ export function ProjectsViewToggle({ projects }: { projects: ProjectWithStats[] 
         <DataTable
           headers={["Name", "Customer", "Location", "Status", "Progress", "Budget", "End Date"]}
           rows={projects.map((project) => [
-            <Link key={project.id} href={`/project-detail/${project.id}`} className="font-medium text-teal-700 hover:underline">
+            <Link key={project.id} href={`/projects/${project.id}`} className="font-medium text-teal-700 hover:underline">
               {project.name}
             </Link>,
             project.customer.name,

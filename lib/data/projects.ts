@@ -77,9 +77,9 @@ export async function getProjects(filters?: { status?: ProjectStatus }): Promise
   });
 }
 
-export async function getProjectById(id: string): Promise<ProjectDetail | null> {
+export async function getProjectById(projectId: string): Promise<ProjectDetail | null> {
   const project = await prisma.project.findUnique({
-    where: { id },
+    where: { id: projectId },
     include: projectDetailInclude,
   });
 

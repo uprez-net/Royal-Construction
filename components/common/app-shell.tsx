@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { usePathname } from "next/navigation";
+import { useAppSelector } from "@/lib/store/hooks";
 
 export function AppShell({
   isSignedIn,
@@ -26,9 +27,10 @@ export function AppShell({
 }) {
   const [time, setTime] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const activeProject = useAppSelector((state) => state.projects.activeProject);
   const pathName = usePathname();
-  const activeSlug =  pathName.split("/").pop() ?? "dashboard";
-  const title = getScreenTitle(activeSlug);
+  const activeSlug = pathName.split("/").pop() ?? "dashboard";
+  const title = activeProject ? activeProject.name : getScreenTitle(activeSlug);
 
   useEffect(() => {
     const tick = () => {

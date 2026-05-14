@@ -1,3 +1,4 @@
+"use client"
 import { MetricCard } from "@/components/common/metric-card";
 import { SectionCard } from "@/components/common/section-card";
 import { ProjectCard } from "@/components/project/project-card";
