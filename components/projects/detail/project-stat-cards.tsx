@@ -2,7 +2,7 @@ import { ArrowUpRight, CheckCircle2, PiggyBank, ReceiptText, Users, Wallet2 } fr
 import { useAppSelector } from "@/lib/store/hooks";
 import { selectActiveProjectBudgetSummary } from "@/lib/store/slices/projectsSlice";
 import { projectKpiMock } from "@/lib/mock-data";
-import { currency } from "./formatters";
+import { currency } from "../../../utils/formatters";
 
 export function ProjectStatCards() {
   const budgetSummary = useAppSelector(selectActiveProjectBudgetSummary);

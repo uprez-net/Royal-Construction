@@ -10,10 +10,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/common/status-pill";
 import { DonutChartCard } from "@/components/charts/donut-chart-card";
-import type { ProjectMilestoneMix } from "@/lib/mock-data";
+import type { ProjectMilestoneMix } from "@/types/ui";
 import type { ProjectDetail } from "@/types/project";
 
-import { dateFormat, formatStatus } from "./formatters";
+import { dateFormat, formatStatus } from "../../../utils/formatters";
 
 export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   const tradieAlerts = project.tradieSchedules.filter(

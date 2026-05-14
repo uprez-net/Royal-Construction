@@ -3,10 +3,10 @@ import type { ProjectDetail, SafeVariation } from "@/types/project";
 import { StatusPill } from "@/components/common/status-pill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { VariationImpactTone, VariationTimelineImpact } from "@/lib/mock-data";
+import { VariationImpactTone, VariationTimelineImpact } from "@/types/ui";
 import { Clock, Plus, Eye, Bell } from "lucide-react";
 
-import { currency, dateFormat, variationStatusTone } from "./formatters";
+import { currency, dateFormat, variationStatusTone } from "../../../utils/formatters";
 
 import { addDays, differenceInDays, format } from "date-fns";
 import { DataTable } from "@/components/common/data-table";

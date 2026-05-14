@@ -1,7 +1,7 @@
 import { ProjectDetail, ProjectWithStats } from "@/types/project";
 import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "@/lib/store";
-import type { ProjectDetailTabKey } from "@/lib/mock-data";
+import type { ProjectDetailTabKey } from "@/types/ui";
 
 export interface ProjectsState {
   projects: ProjectWithStats[];

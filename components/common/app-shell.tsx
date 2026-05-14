@@ -3,15 +3,15 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Search, Hammer, ChevronRight } from "lucide-react";
+import { Bell, Hammer, ChevronRight } from "lucide-react";
 import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
-import { navigationItems, tickerItems, getScreenTitle } from "@/lib/mock-data";
+import { navigationItems, tickerItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { usePathname } from "next/navigation";
 import { useAppSelector } from "@/lib/store/hooks";
 import { isUUID } from "@/utils/parser";
+import { getScreenTitle } from "@/utils/uiHelper";
 
 export function AppShell({
   isSignedIn,

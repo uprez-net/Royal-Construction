@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/common/status-pill";
 import { workerAttendanceMock } from "@/lib/mock-data";
 
-import { currency } from "./formatters";
+import { currency } from "../../../utils/formatters";
 
 export function ProjectWorkersTab() {
   const { summary, workers } = workerAttendanceMock;

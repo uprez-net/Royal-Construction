@@ -4,9 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Eye, Image, FileText, Download } from "lucide-react";
 import { LineChartCard } from "@/components/charts/line-chart-card";
-import { projectActivityMock, projectBudgetBurndownMock, projectOverviewMock } from "@/lib/mock-data";
+import { projectBudgetBurndownMock, projectOverviewMock } from "@/lib/mock-data";
 
-import { currency, dataTimeFormat, dateFormat } from "./formatters";
+import { currency, dataTimeFormat, dateFormat } from "../../../utils/formatters";
 
 function DetailItem({ label, value, valueClass = "text-slate-900" }: { label: string; value: string; valueClass?: string }) {
   return (

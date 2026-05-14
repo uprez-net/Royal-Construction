@@ -2,7 +2,7 @@ import type { ProjectDetail } from "@/types/project";
 import { Button } from "@/components/ui/button";
 import { Plus, User, Bell } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
-import { dataTimeFormat } from "./formatters";
+import { dataTimeFormat } from "../../../utils/formatters";
 
 export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
   const siteUpdates = project.siteUpdates;

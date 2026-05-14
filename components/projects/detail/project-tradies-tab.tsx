@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
 import { StatusPill } from "@/components/common/status-pill";
-import { dateFormat, shortDateFormat } from "./formatters";
+import { dateFormat, shortDateFormat } from "../../../utils/formatters";
 import type { TradieScheduleStatus } from "@prisma/client";
 import { differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";

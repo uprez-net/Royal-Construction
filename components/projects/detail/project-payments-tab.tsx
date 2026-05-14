@@ -4,7 +4,7 @@ import { projectPaymentsMock } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Download, Send, Eye, Bell } from "lucide-react";
 
-import { currency } from "./formatters";
+import { currency } from "../../../utils/formatters";
 
 function paymentTone(status: "Cleared" | "Pending" | "Overdue") {
   if (status === "Cleared") return "success" as const;

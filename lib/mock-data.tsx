@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import {
   Banknote,
   BarChart3,
@@ -17,14 +15,7 @@ import {
   ShoppingCart,
   Users,
 } from "lucide-react";
-import { SectionCard } from "@/components/common/section-card";
-import { StatusPill } from "@/components/common/status-pill";
-
-export type NavItem = {
-  slug: string;
-  label: string;
-  icon: ReactNode;
-};
+import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, ProjectMaterialItem, ProjectPaymentItem, QuoteRequestItem, TradieItem, WorkerAttendanceItem } from "@/types/ui";
 
 export const navigationItems: NavItem[] = [
   {
@@ -235,182 +226,8 @@ export const tickerItems = [
   "Worker attendance: 53/56 checked in today",
 ];
 
-export function SimpleListScreen({
-  title,
-  items,
-}: {
-  title: string;
-  items: string[];
-}) {
-  return (
-    <SectionCard
-      title={title}
-      description="A lightweight list surface built from the same reusable card and badge primitives."
-    >
-      <div className="space-y-3">
-        {items.map((item) => (
-          <div
-            key={item}
-            className="flex items-center justify-between rounded-2xl border border-border/70 bg-background p-4"
-          >
-            <span className="text-sm font-medium">{item}</span>
-            <StatusPill tone="neutral">Open</StatusPill>
-          </div>
-        ))}
-      </div>
-    </SectionCard>
-  );
-}
 
-export function getScreenTitle(slug: string) {
-  const title = slug
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 
-  return title;
-}
-
-export type ProjectDetailTabKey =
-  | "overview"
-  | "milestones"
-  | "materials"
-  | "payments"
-  | "updates"
-  | "tradies"
-  | "workers"
-  | "quotes"
-  | "variations";
-
-export type ProjectDetailKpi = {
-  id: string;
-  label: string;
-  value: string;
-  note: string;
-  trend?: string;
-  trendTone?: "success" | "warning" | "danger" | "neutral";
-};
-
-export type ProjectBudgetPoint = {
-  month: string;
-  planned: number;
-  actual: number;
-  contract: number;
-};
-
-export type ProjectMilestoneMix = {
-  status: "Completed" | "In Progress" | "Upcoming";
-  count: number;
-  color: string;
-};
-
-export type ProjectActivityItem = {
-  id: string;
-  title: string;
-  description: string;
-  author: string;
-  timestamp: string;
-  state: "done" | "active" | "upcoming";
-};
-
-export type ProjectMaterialItem = {
-  id: string;
-  category: string;
-  product: string;
-  specification: string;
-  quantity: string;
-  unitCost: string;
-  totalCost: string;
-  orderedStatus: "Yes" | "Partial" | "Pending" | "Not Yet";
-  deliveredStatus: "Yes" | "Partial" | "No";
-};
-
-export type ProjectPaymentItem = {
-  id: string;
-  invoiceNumber: string;
-  milestone: string;
-  amount: number;
-  gst: number;
-  sentOn: string;
-  paidOn?: string;
-  status: "Cleared" | "Pending" | "Overdue";
-};
-
-export type WorkerAttendanceItem = {
-  id: string;
-  name: string;
-  trade: string;
-  gpsActive: boolean;
-  checkIn: string;
-  checkOut: string;
-  hours: number;
-  hourlyRate: number;
-  status: "On Site" | "Completed";
-};
-
-export type QuoteRequestItem = {
-  id: string;
-  quoteNumber: string;
-  type: "Initial" | "Variation" | "Revised";
-  createdOn: string;
-  description: string;
-  amount: number;
-  gst: number;
-  sentOn: string;
-  approvedOn?: string;
-  status: "Approved" | "Pending Approval";
-};
-
-export type VariationImpactTone = "neutral" | "warning" | "danger";
-
-export type VariationTimelineImpact = {
-  tone: VariationImpactTone;
-  title: string;
-  totalDelayDays: number;
-  approvedVariationCount: number;
-
-  originalDurationPercent: number;
-  delayPercent: number;
-
-  startDateLabel: string;
-  originalEndLabel: string;
-  adjustedEndLabel: string;
-  summary: string;
-  styles: {
-    card: string;
-    iconWrapper: string;
-    icon: string;
-    title: string;
-    originalBar: string;
-    delayBar: string;
-  };
-};
-
-export type SiteUpdateItem = {
-  id: string;
-  title: string;
-  description: string;
-  by: string;
-  time: string;
-  photos: number;
-};
-
-export type TradieItem = {
-  id: string;
-  trade: string;
-  company: string;
-  contact: string;
-  needed: string;
-  scheduled: string;
-  reminder: string;
-  confirmed: "Yes" | "Not Yet" | "Pending";
-  status:
-    | "Completed"
-    | "On Site"
-    | "Needs Attention"
-    | "Yet to Connect"
-    | "Scheduled";
-};
 
 export const projectOverviewMock = {
   buildingType: "Double Storey 4BR + Study",
@@ -468,36 +285,6 @@ export const projectBudgetBurndownMock: ProjectBudgetPoint[] = [
   { month: "Nov", planned: 437, actual: 312, contract: 485 },
   { month: "Dec", planned: 460, actual: 312, contract: 485 },
   { month: "Jan", planned: 485, actual: 312, contract: 485 },
-];
-
-export const projectActivityMock: ProjectActivityItem[] = [
-  {
-    id: "act-1",
-    title: "Frame Inspection Passed",
-    description:
-      "Certifier signed off frame inspection. Electrical rough-in is 80% complete.",
-    author: "Amrit Singh",
-    timestamp: "5 Jan 2026, 2:30 PM",
-    state: "done",
-  },
-  {
-    id: "act-2",
-    title: "Brickwork Completed - Ground Floor External",
-    description:
-      "External brickwork on ground floor completed, internal partitions started.",
-    author: "Amrit Singh",
-    timestamp: "3 Jan 2026, 4:00 PM",
-    state: "done",
-  },
-  {
-    id: "act-3",
-    title: "Electrical Rough-in In Progress",
-    description:
-      "NSW Spark Solutions team is on site for Day 2 of 5 on ground floor.",
-    author: "Amrit Singh",
-    timestamp: "3 Jan 2026, 10:00 AM",
-    state: "active",
-  },
 ];
 
 export const projectMaterialsMock: ProjectMaterialItem[] = [
@@ -680,96 +467,5 @@ export const quoteRequestsMock: QuoteRequestItem[] = [
     gst: 109,
     sentOn: "30 Dec",
     status: "Pending Approval",
-  },
-];
-
-export const projectTradiesMock: TradieItem[] = [
-  {
-    id: "tradie-1",
-    trade: "Bricklayer",
-    company: "Raj Singh Bricklaying",
-    contact: "0433 111 222",
-    needed: "Slab Stage",
-    scheduled: "Completed",
-    reminder: "—",
-    confirmed: "Yes",
-    status: "Completed",
-  },
-  {
-    id: "tradie-2",
-    trade: "Electrician",
-    company: "NSW Spark Solutions",
-    contact: "0444 333 444",
-    needed: "Frame Stage",
-    scheduled: "2-7 Jan",
-    reminder: "Sent 26 Dec",
-    confirmed: "Yes",
-    status: "On Site",
-  },
-  {
-    id: "tradie-3",
-    trade: "Plumber",
-    company: "Flow Right Plumbing",
-    contact: "0455 555 666",
-    needed: "Frame Stage",
-    scheduled: "5-12 Jan",
-    reminder: "Sent 29 Dec",
-    confirmed: "Yes",
-    status: "On Site",
-  },
-  {
-    id: "tradie-4",
-    trade: "Roofer",
-    company: "Top Roof Co",
-    contact: "0466 777 888",
-    needed: "Frame Stage",
-    scheduled: "20 Jan",
-    reminder: "Sent 13 Jan",
-    confirmed: "Pending",
-    status: "Needs Attention",
-  },
-  {
-    id: "tradie-5",
-    trade: "Plasterer",
-    company: "Smooth Walls Plaster",
-    contact: "0477 999 000",
-    needed: "Lockup Stage",
-    scheduled: "3 Feb",
-    reminder: "Due 27 Jan",
-    confirmed: "Not Yet",
-    status: "Yet to Connect",
-  },
-  {
-    id: "tradie-6",
-    trade: "Tiler",
-    company: "Precision Tiling",
-    contact: "0488 111 333",
-    needed: "Fixing Stage",
-    scheduled: "20 Feb",
-    reminder: "Due 13 Feb",
-    confirmed: "Not Yet",
-    status: "Scheduled",
-  },
-  {
-    id: "tradie-7",
-    trade: "Painter",
-    company: "Colour Masters",
-    contact: "0499 222 444",
-    needed: "Fixing Stage",
-    scheduled: "15 Mar",
-    reminder: "Due 8 Mar",
-    confirmed: "Not Yet",
-    status: "Scheduled",
-  },
-  {
-    id: "tradie-8",
-    trade: "Kitchen Installer",
-    company: "Elite Kitchens NSW",
-    contact: "0411 333 555",
-    needed: "Fixing Stage",
-    scheduled: "1 Apr",
-    reminder: "Due 25 Mar",
-    confirmed: "Not Yet",
-    status: "Scheduled",
   },
 ];

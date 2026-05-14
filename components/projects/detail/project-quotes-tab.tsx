@@ -4,7 +4,7 @@ import { Plus, Eye, Send, Download } from "lucide-react";
 import { StatusPill } from "@/components/common/status-pill";
 import { quoteRequestsMock } from "@/lib/mock-data";
 
-import { currency } from "./formatters";
+import { currency } from "../../../utils/formatters";
 
 function getQuoteTypeTone(type: string) {
   if (type === "Initial") return "purple" as any;

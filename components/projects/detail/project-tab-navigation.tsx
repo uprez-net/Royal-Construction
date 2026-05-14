@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProjectDetailTabKey } from "@/lib/mock-data";
+import type { ProjectDetailTabKey } from "@/types/ui";
 import { cn } from "@/lib/utils";
 import {
   LayoutGrid,
