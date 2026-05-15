@@ -176,7 +176,7 @@ export function ScheduleTradieModal({
               <label className="text-sm font-medium text-foreground">Duration in Days</label>
               <Input type="number" min="1" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} required />
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end justify-end col-span-2">
               <div className="rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
                 <CalendarDays className="mr-2 inline-block size-4" />
                 All new schedules start in PENDING state.

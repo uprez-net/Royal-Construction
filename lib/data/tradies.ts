@@ -310,12 +310,15 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
             name: true,
             company: true,
             tradeType: true,
+            phone: true,
+            email: true,
           },
         },
         project: {
           select: {
             id: true,
             name: true,
+            siteManager: true,
           },
         },
         milestone: {
@@ -490,6 +493,15 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
     status: schedule.status,
     reminderSentAt: schedule.reminderSentAt?.toISOString(),
     updatedAt: schedule.updatedAt.toISOString(),
+    contact: {
+      email: schedule.tradie.email,
+      phone: schedule.tradie.phone,
+    },
+    siteManager: {
+      name: schedule.project.siteManager?.name ?? "Site manager",
+      email: schedule.project.siteManager?.email ?? "",
+      phone: schedule.project.siteManager?.phone ?? "",
+    },
   }));
 
   const totalScheduledForCompletion = confirmedCount + completedCount + pendingNoResponse;

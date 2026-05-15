@@ -2,7 +2,14 @@
 
 import { Cell, Pie, PieChart } from "recharts";
 
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 import { ChartCardShell } from "./chart-card-shell";
 
@@ -35,7 +42,9 @@ export function DonutChartCard<T extends Record<string, string | number>>({
       <ChartContainer config={chartConfig} className="h-[240px] w-full">
         <PieChart>
           <ChartTooltip content={<ChartTooltipContent />} />
-          <ChartLegend content={<ChartLegendContent nameKey={String(labelKey)} />} />
+          <ChartLegend
+            content={<ChartLegendContent nameKey={String(labelKey)} />}
+          />
           <Pie
             data={data}
             dataKey={String(valueKey)}
@@ -47,7 +56,13 @@ export function DonutChartCard<T extends Record<string, string | number>>({
           >
             {data.map((row) => {
               const label = String(row[labelKey]);
-              return <Cell key={label} fill={`var(--color-${label})`} />;
+
+              return (
+                <Cell
+                  key={label}
+                  fill={colorByLabel[label] ?? "hsl(var(--chart-1))"}
+                />
+              );
             })}
           </Pie>
         </PieChart>

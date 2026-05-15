@@ -116,6 +116,15 @@ export type TradieScheduleListItem = {
   status: TradieScheduleStatus;
   reminderSentAt?: string;
   updatedAt: string;
+  contact: {
+    email: string;
+    phone: string;
+  };
+  siteManager: {
+    name: string;
+    email: string;
+    phone: string;
+  };
 };
 
 export type TradieCoordinationSummary = {

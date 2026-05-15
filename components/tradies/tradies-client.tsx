@@ -1,21 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { TradieScheduleStatus } from "@prisma/client";
 import {
   AlertTriangle,
+  Calendar,
   CalendarDays,
+  Check,
   CheckCircle2,
+  CircleAlert,
+  Clock,
   Download,
+  EllipsisVertical,
   Loader2,
+  Mail,
+  Phone,
   PhoneCall,
   Search,
+  TriangleAlert,
   Users,
 } from "lucide-react";
 
 import { DonutChartCard } from "@/components/charts/donut-chart-card";
 import { HorizontalBarChartCard } from "@/components/charts/horizontal-bar-chart-card";
-import { LineChartCard } from "@/components/charts/line-chart-card";
 import { SearchableSelect } from "@/components/common/searchable-select";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -45,7 +52,15 @@ import {
   toggleScheduleSelection,
 } from "@/lib/store/slices/tradiesSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
-import type { SafeTradie, TradieCoordinationDashboard, TradieScheduleListItem } from "@/types/project";
+import type {
+  SafeTradie,
+  TradieCoordinationDashboard,
+  TradieScheduleListItem,
+} from "@/types/project";
+import { dataTimeFormat } from "@/utils/formatters";
+import { DataTable } from "../common/data-table";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const statusLabelMap: Record<TradieScheduleStatus, string> = {
   PENDING: "Pending",
@@ -56,7 +71,10 @@ const statusLabelMap: Record<TradieScheduleStatus, string> = {
   COMPLETED: "Completed",
 };
 
-const statusToneMap: Record<TradieScheduleStatus, "success" | "warning" | "danger" | "neutral"> = {
+const statusToneMap: Record<
+  TradieScheduleStatus,
+  "success" | "warning" | "danger" | "neutral"
+> = {
   PENDING: "warning",
   PENDING_RESPONSE: "warning",
   CONFIRMED: "success",
@@ -78,7 +96,9 @@ function daysUntil(value: string) {
   today.setHours(0, 0, 0, 0);
   const target = new Date(value);
   target.setHours(0, 0, 0, 0);
-  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.ceil(
+    (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  );
 }
 
 function TrendBadge({ value }: { value: number }) {
@@ -87,12 +107,52 @@ function TrendBadge({ value }: { value: number }) {
     <span
       className={[
         "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold",
-        isPositive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700",
+        isPositive
+          ? "bg-emerald-100 text-emerald-700"
+          : "bg-red-100 text-red-700",
       ].join(" ")}
     >
       {isPositive ? "+" : ""}
       {value}
     </span>
+  );
+}
+
+function CalanderRow(scheduledData: string): ReactNode {
+  const daysLeft = daysUntil(scheduledData);
+
+  if (daysLeft < 0) {
+    return (
+      <>
+        <CircleAlert className="h-4 w-4 text-gray-500" />
+        <span>{Math.abs(daysLeft)}d overdue</span>
+      </>
+    );
+  }
+
+  if (daysLeft === 0) {
+    return (
+      <>
+        <CircleAlert className="h-4 w-4 text-red-600" />
+        <span>Due today</span>
+      </>
+    );
+  }
+
+  if (daysLeft <= 4) {
+    return (
+      <>
+        <TriangleAlert className="h-4 w-4 text-amber-600" />
+        <span>{daysLeft}d left</span>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Calendar className="h-4 w-4 text-green-600" />
+      <span>{daysLeft}d left</span>
+    </>
   );
 }
 
@@ -114,12 +174,14 @@ export function TradiesClient({
   initialTradies: SafeTradie[];
 }) {
   const dispatch = useAppDispatch();
-  const tradiesState = useAppSelector((state) => (state as RootState).tradies) as TradiesState;
+  const tradiesState = useAppSelector((state) => state.tradies);
 
   const [searchInput, setSearchInput] = useState(initialDashboard.query.search);
   const [projectSearch, setProjectSearch] = useState("");
   const [urgentCollapsed, setUrgentCollapsed] = useState(false);
-  const [bulkLoading, setBulkLoading] = useState<"confirm" | "pending" | null>(null);
+  const [bulkLoading, setBulkLoading] = useState<"confirm" | "pending" | null>(
+    null,
+  );
 
   useEffect(() => {
     dispatch(setTradies(initialTradies));
@@ -168,12 +230,16 @@ export function TradiesClient({
       return null;
     }
 
-    const existing = tradiesState.projectLookup.items.find((item) => item.id === tradiesState.filters.projectId);
+    const existing = tradiesState.projectLookup.items.find(
+      (item) => item.id === tradiesState.filters.projectId,
+    );
     if (existing) {
       return existing;
     }
 
-    const fallback = tradiesState.schedules.find((item) => item.projectId === tradiesState.filters.projectId);
+    const fallback = tradiesState.schedules.find(
+      (item) => item.projectId === tradiesState.filters.projectId,
+    );
     if (!fallback) {
       return null;
     }
@@ -183,9 +249,15 @@ export function TradiesClient({
       name: fallback.projectName,
       description: "Current filter",
     };
-  }, [tradiesState.filters.projectId, tradiesState.projectLookup.items, tradiesState.schedules]);
+  }, [
+    tradiesState.filters.projectId,
+    tradiesState.projectLookup.items,
+    tradiesState.schedules,
+  ]);
 
-  const tableRowsSelected = tradiesState.schedules.filter((row) => tradiesState.selectedScheduleIds.includes(row.id));
+  const tableRowsSelected = tradiesState.schedules.filter((row) =>
+    tradiesState.selectedScheduleIds.includes(row.id),
+  );
 
   const pageItems = useMemo(() => {
     const total = tradiesState.pagination.totalPages;
@@ -207,7 +279,10 @@ export function TradiesClient({
     return items;
   }, [tradiesState.pagination.page, tradiesState.pagination.totalPages]);
 
-  const updateScheduleStatuses = async (ids: string[], status: TradieScheduleStatus) => {
+  const updateScheduleStatuses = async (
+    ids: string[],
+    status: TradieScheduleStatus,
+  ) => {
     if (ids.length === 0) {
       return;
     }
@@ -228,31 +303,61 @@ export function TradiesClient({
 
   const handleBulkConfirm = async () => {
     setBulkLoading("confirm");
-    await updateScheduleStatuses(tradiesState.selectedScheduleIds, TradieScheduleStatus.CONFIRMED);
+    await updateScheduleStatuses(
+      tradiesState.selectedScheduleIds,
+      TradieScheduleStatus.CONFIRMED,
+    );
     setBulkLoading(null);
   };
 
   const handleBulkReminder = async () => {
-    const valid = tableRowsSelected.filter((row) => row.status !== TradieScheduleStatus.CONFIRMED && row.status !== TradieScheduleStatus.COMPLETED);
+    const valid = tableRowsSelected.filter(
+      (row) =>
+        row.status !== TradieScheduleStatus.CONFIRMED &&
+        row.status !== TradieScheduleStatus.COMPLETED,
+    );
     setBulkLoading("pending");
-    await updateScheduleStatuses(valid.map((row) => row.id), TradieScheduleStatus.PENDING_RESPONSE);
+    await updateScheduleStatuses(
+      valid.map((row) => row.id),
+      TradieScheduleStatus.PENDING_RESPONSE,
+    );
     setBulkLoading(null);
   };
 
   const handleRowQuickConfirm = async (row: TradieScheduleListItem) => {
-    await updateScheduleStatuses([row.id], TradieScheduleStatus.CONFIRMED);
+    const loading = toast.loading("Updating status...");
+    try {
+      await updateScheduleStatuses([row.id], TradieScheduleStatus.CONFIRMED);
+    } catch (error) {
+      toast.error("Failed to update status. Please try again.");
+      console.error("Error updating tradie schedule status:", error);
+    } finally {
+      toast.dismiss(loading);
+    }
   };
 
+  const handleUpdateRowStatus = (row: TradieScheduleListItem) => {
+    dispatch(openModal({ type: "confirmStatus", payload: { schedule: row } }));
+  }
+
   const handleRowReminder = async (row: TradieScheduleListItem) => {
-    await updateScheduleStatuses([row.id], TradieScheduleStatus.PENDING_RESPONSE);
+    dispatch(openModal({ type: "tradieReminder", payload: { schedule: row } }));
   };
 
   const handleRowCallLogged = async (row: TradieScheduleListItem) => {
-    await updateScheduleStatuses([row.id], TradieScheduleStatus.NO_RESPONSE);
+    dispatch(openModal({ type: "logCall", payload: { schedule: row } }));
   };
 
   const exportCsv = () => {
-    const headers = ["Tradie", "Trade", "Project", "Task", "Scheduled", "Duration", "Status"];
+    const headers = [
+      "Tradie",
+      "Trade",
+      "Project",
+      "Task",
+      "Scheduled",
+      "Duration",
+      "Status",
+    ];
     const rows = tradiesState.schedules.map((row) => [
       row.tradieName,
       row.tradeType,
@@ -264,7 +369,11 @@ export function TradiesClient({
     ]);
 
     const csv = [headers, ...rows]
-      .map((line) => line.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))
+      .map((line) =>
+        line
+          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+          .join(","),
+      )
       .join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -278,6 +387,134 @@ export function TradiesClient({
     URL.revokeObjectURL(url);
   };
 
+  const scheduleTableHeaders = [
+    <input
+      key="select-all"
+      type="checkbox"
+      checked={
+        tradiesState.schedules.length > 0 &&
+        tradiesState.selectedScheduleIds.length ===
+          tradiesState.schedules.length
+      }
+      onChange={(event) => {
+        if (event.target.checked) {
+          dispatch(
+            setSelectedSchedules(tradiesState.schedules.map((row) => row.id)),
+          );
+        } else {
+          dispatch(clearSelectedSchedules());
+        }
+      }}
+    />,
+    "Tradie",
+    "Trade",
+    "Project",
+    "Task",
+    "Scheduled",
+    "Days Left",
+    "Status",
+    "Actions",
+  ];
+
+  const scheduleTableRows = tradiesState.schedules.map((row) => [
+    <input
+      key={`select-${row.id}`}
+      type="checkbox"
+      checked={tradiesState.selectedScheduleIds.includes(row.id)}
+      onChange={() => dispatch(toggleScheduleSelection(row.id))}
+      onClick={(event) => event.stopPropagation()}
+    />,
+
+    <div key={`tradie-${row.id}`}>
+      <p className="font-semibold text-slate-900">{row.tradieName}</p>
+      <p className="text-xs text-muted-foreground">
+        {row.company ?? "Independent"}
+      </p>
+    </div>,
+
+    row.tradeType,
+
+    row.projectName,
+
+    row.taskLabel,
+
+    <div key={`schedule-${row.id}`}>
+      <p className="font-medium">{formatDate(row.scheduledDate)}</p>
+      <p className="text-xs text-muted-foreground">{row.durationDays} day(s)</p>
+    </div>,
+
+    <span
+      key={`days-${row.id}`}
+      className={[
+        "rounded-md px-2 py-1 text-xs font-semibold flex gap-2 items-center",
+        daysUntil(row.scheduledDate) <= 2
+          ? "bg-red-100 text-red-700"
+          : daysUntil(row.scheduledDate) <= 7
+            ? "bg-amber-100 text-amber-700"
+            : "bg-slate-100 text-slate-700",
+      ].join(" ")}
+    >
+      {CalanderRow(row.scheduledDate)}
+    </span>,
+
+    <StatusPill key={`status-${row.id}`} tone={statusToneMap[row.status]}>
+      {statusLabelMap[row.status]}
+    </StatusPill>,
+
+    <div
+      key={`actions-${row.id}`}
+      className="flex justify-start gap-1"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {(row.status === TradieScheduleStatus.PENDING ||
+        row.status === TradieScheduleStatus.NO_RESPONSE ||
+        row.status === TradieScheduleStatus.PENDING_RESPONSE) && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void handleRowCallLogged(row)}
+        >
+          <Phone className="h-4 w-4" />
+        </Button>
+      )}
+
+      {row.status !== TradieScheduleStatus.CONFIRMED &&
+        row.status !== TradieScheduleStatus.COMPLETED && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void handleRowQuickConfirm(row)}
+          >
+            <Check className="h-4 w-4" />
+          </Button>
+        )}
+
+      {row.status !== TradieScheduleStatus.COMPLETED && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void handleRowReminder(row, )}
+        >
+          <Mail className="h-4 w-4" />
+        </Button>
+      )}
+      {row.status === TradieScheduleStatus.COMPLETED && (
+        <Button size="sm" variant="ghost" disabled>
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+        </Button>
+      )}
+
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={row.status === TradieScheduleStatus.COMPLETED}
+        onClick={() => void handleUpdateRowStatus(row)}
+      >
+        <EllipsisVertical className="h-4 w-4" />
+      </Button>
+    </div>,
+  ]);
+
   return (
     <div className="space-y-6">
       <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
@@ -286,15 +523,25 @@ export function TradiesClient({
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
           <div className="relative flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900">Tradie Coordination Hub</h2>
-              <p className="text-sm text-slate-600">Schedule tradies, track confirmations, and drive weekly site readiness.</p>
+              <h2 className="text-lg font-extrabold text-slate-900">
+                Tradie Coordination Hub
+              </h2>
+              <p className="text-sm text-slate-600">
+                Schedule tradies, track confirmations, and drive weekly site
+                readiness.
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => dispatch(openModal({ type: "scheduleTradie" }))}>
+              <Button
+                onClick={() => dispatch(openModal({ type: "scheduleTradie" }))}
+              >
                 <CalendarDays className="mr-2 size-4" />
                 Schedule Tradie
               </Button>
-              <Button variant="outline" onClick={() => dispatch(openModal({ type: "tradieDirectory" }))}>
+              <Button
+                variant="outline"
+                onClick={() => dispatch(openModal({ type: "tradieDirectory" }))}
+              >
                 <Users className="mr-2 size-4" />
                 Directory
               </Button>
@@ -317,8 +564,12 @@ export function TradiesClient({
                 </div>
                 <TrendBadge value={tradiesState.summary.registeredTrendDelta} />
               </div>
-              <p className="text-3xl font-bold">{tradiesState.summary.registeredTradies}</p>
-              <p className="text-xs text-muted-foreground">Registered Tradies</p>
+              <p className="text-3xl font-bold">
+                {tradiesState.summary.registeredTradies}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Registered Tradies
+              </p>
             </CardContent>
           </Card>
 
@@ -330,8 +581,12 @@ export function TradiesClient({
                 </div>
                 <TrendBadge value={tradiesState.summary.scheduledWeekDelta} />
               </div>
-              <p className="text-3xl font-bold">{tradiesState.summary.scheduledThisWeek}</p>
-              <p className="text-xs text-muted-foreground">Scheduled This Week</p>
+              <p className="text-3xl font-bold">
+                {tradiesState.summary.scheduledThisWeek}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Scheduled This Week
+              </p>
             </CardContent>
           </Card>
 
@@ -340,8 +595,12 @@ export function TradiesClient({
               <div className="mb-3 grid size-11 place-items-center rounded-xl bg-emerald-600 text-white">
                 <CheckCircle2 className="size-5" />
               </div>
-              <p className="text-3xl font-bold">{tradiesState.summary.confirmedBookings}</p>
-              <p className="text-xs text-muted-foreground">Confirmed Bookings</p>
+              <p className="text-3xl font-bold">
+                {tradiesState.summary.confirmedBookings}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Confirmed Bookings
+              </p>
             </CardContent>
           </Card>
 
@@ -350,8 +609,12 @@ export function TradiesClient({
               <div className="mb-3 grid size-11 place-items-center rounded-xl bg-red-500 text-white">
                 <AlertTriangle className="size-5" />
               </div>
-              <p className="text-3xl font-bold">{tradiesState.summary.pendingNoResponse}</p>
-              <p className="text-xs text-muted-foreground">Pending / No Response</p>
+              <p className="text-3xl font-bold">
+                {tradiesState.summary.pendingNoResponse}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Pending / No Response
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -360,8 +623,14 @@ export function TradiesClient({
       <Card className="border-border/70 bg-white/95 shadow-sm">
         <CardHeader className="border-b border-border/70 pb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-base font-semibold">1-Week Advance Reminders</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setUrgentCollapsed((prev) => !prev)}>
+            <CardTitle className="text-base font-semibold">
+              1-Week Advance Reminders
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setUrgentCollapsed((prev) => !prev)}
+            >
               {urgentCollapsed ? "Expand" : "Collapse"}
             </Button>
           </div>
@@ -378,17 +647,36 @@ export function TradiesClient({
                   key={item.id}
                   className={[
                     "flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3",
-                    item.daysLeft <= 2 ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50",
+                    item.daysLeft <= 2
+                      ? "border-red-200 bg-red-50"
+                      : "border-amber-200 bg-amber-50",
                   ].join(" ")}
                 >
                   <div>
-                    <p className="font-semibold text-slate-900">{item.tradieName} · {item.projectName}</p>
-                    <p className="text-sm text-slate-600">{item.tradeType} · {item.taskLabel}</p>
-                    <p className="text-xs text-muted-foreground">Scheduled {formatDate(item.scheduledDate)}</p>
+                    <p className="font-semibold text-slate-900">
+                      {item.tradieName} · {item.projectName}
+                    </p>
+                    <p className="text-sm text-slate-600">
+                      {item.tradeType} · {item.taskLabel}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Scheduled {formatDate(item.scheduledDate)}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <StatusPill tone={statusToneMap[item.status]}>{statusLabelMap[item.status]}</StatusPill>
-                    <Button size="sm" variant="outline" onClick={() => void updateScheduleStatuses([item.id], TradieScheduleStatus.NO_RESPONSE)}>
+                    <StatusPill tone={statusToneMap[item.status]}>
+                      {statusLabelMap[item.status]}
+                    </StatusPill>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        void updateScheduleStatuses(
+                          [item.id],
+                          TradieScheduleStatus.NO_RESPONSE,
+                        )
+                      }
+                    >
                       <PhoneCall className="mr-1 size-3.5" />
                       Call
                     </Button>
@@ -401,96 +689,149 @@ export function TradiesClient({
       </Card>
 
       <Card className="border-border/70 bg-white/95 shadow-sm">
-        <CardHeader className="border-b border-border/70 pb-3">
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2 border-b border-border/70 pb-3">
-              {(["all", "week", "confirmed", "pending", "overdue", "completed"] as const).map((tab) => (
-                <Button
-                  key={tab}
-                  variant={tradiesState.filters.tab === tab ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => dispatch(setTradieFilters({ tab }))}
-                >
-                  {tab === "all" ? "All" : tab === "week" ? "Next 7 Days" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  <span className="ml-2 rounded-full bg-white/20 px-1.5 text-[10px]">
-                    {tradiesState.tabCounts[tab]}
-                  </span>
-                </Button>
-              ))}
+        <CardHeader className="border-b border-border/70 px-5 py-4">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 pb-4">
+              {(
+                [
+                  "all",
+                  "week",
+                  "confirmed",
+                  "pending",
+                  "overdue",
+                  "completed",
+                ] as const
+              ).map((tab) => {
+                const active = tradiesState.filters.tab === tab;
+
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => dispatch(setTradieFilters({ tab }))}
+                    className={cn(
+                      "group relative inline-flex h-9 items-center rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
+                      active
+                        ? "bg-teal-50 text-teal-700 shadow-sm"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                    )}
+                  >
+                    <span>
+                      {tab === "all"
+                        ? "All"
+                        : tab === "week"
+                          ? "Next 7 Days"
+                          : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </span>
+
+                    <span
+                      className={cn(
+                        "ml-2 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
+                        active
+                          ? "bg-teal-600 text-white"
+                          : "bg-muted text-muted-foreground group-hover:bg-background",
+                      )}
+                    >
+                      {tradiesState.tabCounts[tab]}
+                    </span>
+
+                    {active && (
+                      <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="grid gap-2 lg:grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr]">
-              <div className="relative pt-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[280px] flex-1">
                 <label htmlFor="search" className="sr-only">
                   Search
                 </label>
-                <Search className="pointer-events-none absolute left-3 top-9 size-4 -translate-y-1/2 text-muted-foreground" />
+
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
                 <Input
-                  className="pl-9"
-                  placeholder="Search tradies, project, trade, task"
+                  id="search"
+                  className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
+                  placeholder="Search tradies, projects, trades..."
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
                 />
               </div>
 
-              <SearchableSelect
-                label="Project"
-                placeholder="All Projects"
-                searchValue={projectSearch}
-                selectedItem={selectedProject}
-                items={tradiesState.projectLookup.items}
-                loading={tradiesState.projectLookup.loading || tradiesState.projectLookup.loadingMore}
-                hasMore={tradiesState.projectLookup.page < tradiesState.projectLookup.totalPages}
-                onQueryChange={setProjectSearch}
-                onSelect={(item) => {
-                  dispatch(setTradieFilters({ projectId: item.id }));
-                }}
-                onLoadMore={() => {
-                  void dispatch(
-                    fetchTradieProjectLookup({
-                      page: tradiesState.projectLookup.page + 1,
-                      limit: tradiesState.projectLookup.limit,
-                      query: projectSearch,
+              <div className="min-w-[180px] flex-1 lg:max-w-[220px]">
+                <SearchableSelect
+                  label=""
+                  placeholder="All Projects"
+                  searchValue={projectSearch}
+                  selectedItem={selectedProject}
+                  items={tradiesState.projectLookup.items}
+                  loading={
+                    tradiesState.projectLookup.loading ||
+                    tradiesState.projectLookup.loadingMore
+                  }
+                  hasMore={
+                    tradiesState.projectLookup.page <
+                    tradiesState.projectLookup.totalPages
+                  }
+                  onQueryChange={setProjectSearch}
+                  onSelect={(item) => {
+                    dispatch(setTradieFilters({ projectId: item.id }));
+                  }}
+                  onLoadMore={() => {
+                    void dispatch(
+                      fetchTradieProjectLookup({
+                        page: tradiesState.projectLookup.page + 1,
+                        limit: tradiesState.projectLookup.limit,
+                        query: projectSearch,
+                      }),
+                    );
+                  }}
+                />
+              </div>
+
+              <select
+                className="h-10 min-w-[170px] rounded-lg border border-border bg-background px-3 text-[12.5px] font-medium text-foreground outline-none transition-all focus:border-teal-600 focus:ring-4 focus:ring-teal-500/10"
+                value={tradiesState.filters.tradeType ?? ""}
+                onChange={(event) =>
+                  dispatch(
+                    setTradieFilters({
+                      tradeType: event.target.value || null,
                     }),
-                  );
-                }}
-              />
+                  )
+                }
+              >
+                <option value="">All Trades</option>
 
-              <label className="space-y-2 text-sm font-medium text-foreground">
-                Trade
-                <select
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={tradiesState.filters.tradeType ?? ""}
-                  onChange={(event) => dispatch(setTradieFilters({ tradeType: event.target.value || null }))}
-                >
-                  <option value="">All Trades</option>
-                  {tradiesState.tradeOptions.map((trade) => (
-                    <option key={trade} value={trade}>
-                      {trade}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                {tradiesState.tradeOptions.map((trade) => (
+                  <option key={trade} value={trade}>
+                    {trade}
+                  </option>
+                ))}
+              </select>
 
-              <label className="space-y-2 text-sm font-medium text-foreground">
-                Status
-                <select
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={tradiesState.filters.status ?? ""}
-                  onChange={(event) => dispatch(setTradieFilters({ status: (event.target.value as TradieScheduleStatus) || null }))}
-                >
-                  <option value="">All Statuses</option>
-                  {Object.entries(statusLabelMap).map(([status, label]) => (
-                    <option key={status} value={status}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+              <select
+                className="h-10 min-w-[170px] rounded-lg border border-border bg-background px-3 text-[12.5px] font-medium text-foreground outline-none transition-all focus:border-teal-600 focus:ring-4 focus:ring-teal-500/10"
+                value={tradiesState.filters.status ?? ""}
+                onChange={(event) =>
+                  dispatch(
+                    setTradieFilters({
+                      status:
+                        (event.target.value as TradieScheduleStatus) || null,
+                    }),
+                  )
+                }
+              >
+                <option value="">All Statuses</option>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="ml-auto text-xs text-muted-foreground">
+                {Object.entries(statusLabelMap).map(([status, label]) => (
+                  <option key={status} value={status}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+
+              <p className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground">
                 {tradiesState.pagination.totalCount} results
               </p>
             </div>
@@ -506,113 +847,49 @@ export function TradiesClient({
             </div>
           ) : null}
 
-          {!tradiesState.loading && !tradiesState.error && tradiesState.schedules.length === 0 ? (
+          {!tradiesState.loading &&
+          !tradiesState.error &&
+          tradiesState.schedules.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
               No tradies match your current filters.
             </div>
           ) : null}
 
-          {!tradiesState.loading && !tradiesState.error && tradiesState.schedules.length > 0 ? (
+          {!tradiesState.loading &&
+          !tradiesState.error &&
+          tradiesState.schedules.length > 0 ? (
             <>
               <div className="overflow-x-auto rounded-xl border border-border/70">
-                <table className="w-full border-collapse text-sm">
-                  <thead className="bg-muted/70 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={tradiesState.schedules.length > 0 && tradiesState.selectedScheduleIds.length === tradiesState.schedules.length}
-                          onChange={(event) => {
-                            if (event.target.checked) {
-                              dispatch(setSelectedSchedules(tradiesState.schedules.map((row) => row.id)));
-                            } else {
-                              dispatch(clearSelectedSchedules());
-                            }
-                          }}
-                        />
-                      </th>
-                      <th className="px-3 py-2">Tradie</th>
-                      <th className="px-3 py-2">Trade</th>
-                      <th className="px-3 py-2">Project</th>
-                      <th className="px-3 py-2">Task</th>
-                      <th className="px-3 py-2">Scheduled</th>
-                      <th className="px-3 py-2">Days Left</th>
-                      <th className="px-3 py-2">Status</th>
-                      <th className="px-3 py-2 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tradiesState.schedules.map((row) => (
-                      <tr key={row.id} className="border-t border-border/70 transition-colors hover:bg-muted/30">
-                        <td className="px-3 py-3">
-                          <input
-                            type="checkbox"
-                            checked={tradiesState.selectedScheduleIds.includes(row.id)}
-                            onChange={() => dispatch(toggleScheduleSelection(row.id))}
-                          />
-                        </td>
-                        <td className="px-3 py-3">
-                          <p className="font-semibold text-slate-900">{row.tradieName}</p>
-                          <p className="text-xs text-muted-foreground">{row.company ?? "Independent"}</p>
-                        </td>
-                        <td className="px-3 py-3">{row.tradeType}</td>
-                        <td className="px-3 py-3">{row.projectName}</td>
-                        <td className="px-3 py-3">{row.taskLabel}</td>
-                        <td className="px-3 py-3">
-                          <p className="font-medium">{formatDate(row.scheduledDate)}</p>
-                          <p className="text-xs text-muted-foreground">{row.durationDays} day(s)</p>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span
-                            className={[
-                              "rounded-md px-2 py-1 text-xs font-semibold",
-                              daysUntil(row.scheduledDate) <= 2
-                                ? "bg-red-100 text-red-700"
-                                : daysUntil(row.scheduledDate) <= 7
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-slate-100 text-slate-700",
-                            ].join(" ")}
-                          >
-                            {daysUntil(row.scheduledDate)}d
-                          </span>
-                        </td>
-                        <td className="px-3 py-3">
-                          <StatusPill tone={statusToneMap[row.status]}>{statusLabelMap[row.status]}</StatusPill>
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <div className="flex justify-center gap-1">
-                            {(row.status === TradieScheduleStatus.PENDING || row.status === TradieScheduleStatus.NO_RESPONSE || row.status === TradieScheduleStatus.PENDING_RESPONSE) ? (
-                              <Button size="sm" variant="ghost" onClick={() => void handleRowCallLogged(row)}>
-                                Call
-                              </Button>
-                            ) : null}
-                            {(row.status !== TradieScheduleStatus.CONFIRMED && row.status !== TradieScheduleStatus.COMPLETED) ? (
-                              <Button size="sm" variant="ghost" onClick={() => void handleRowQuickConfirm(row)}>
-                                Confirm
-                              </Button>
-                            ) : null}
-                            {(row.status !== TradieScheduleStatus.COMPLETED) ? (
-                              <Button size="sm" variant="ghost" onClick={() => void handleRowReminder(row)}>
-                                Remind
-                              </Button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable
+                  headers={scheduleTableHeaders}
+                  rows={scheduleTableRows}
+                />
               </div>
 
               {tradiesState.selectedScheduleIds.length > 0 ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 p-3">
-                  <span className="text-sm font-semibold text-teal-700">{tradiesState.selectedScheduleIds.length} selected</span>
-                  <Button size="sm" onClick={() => void handleBulkReminder()} disabled={bulkLoading !== null}>
-                    {bulkLoading === "pending" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  <span className="text-sm font-semibold text-teal-700">
+                    {tradiesState.selectedScheduleIds.length} selected
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={() => void handleBulkReminder()}
+                    disabled={bulkLoading !== null}
+                  >
+                    {bulkLoading === "pending" ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : null}
                     Send Reminders
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => void handleBulkConfirm()} disabled={bulkLoading !== null}>
-                    {bulkLoading === "confirm" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleBulkConfirm()}
+                    disabled={bulkLoading !== null}
+                  >
+                    {bulkLoading === "confirm" ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : null}
                     Mark Confirmed
                   </Button>
                 </div>
@@ -621,7 +898,8 @@ export function TradiesClient({
               {tradiesState.pagination.totalCount > 0 ? (
                 <div className="space-y-2 pt-4">
                   <p className="text-center text-xs text-muted-foreground">
-                    Showing {tradiesState.schedules.length} of {tradiesState.pagination.totalCount} schedules
+                    Showing {tradiesState.schedules.length} of{" "}
+                    {tradiesState.pagination.totalCount} schedules
                   </p>
                   <Pagination>
                     <PaginationContent>
@@ -630,7 +908,11 @@ export function TradiesClient({
                           href="#"
                           onClick={(event) => {
                             event.preventDefault();
-                            dispatch(setTradiePage(Math.max(1, tradiesState.pagination.page - 1)));
+                            dispatch(
+                              setTradiePage(
+                                Math.max(1, tradiesState.pagination.page - 1),
+                              ),
+                            );
                           }}
                           aria-disabled={tradiesState.pagination.page === 1}
                         />
@@ -660,9 +942,19 @@ export function TradiesClient({
                           href="#"
                           onClick={(event) => {
                             event.preventDefault();
-                            dispatch(setTradiePage(Math.min(tradiesState.pagination.totalPages, tradiesState.pagination.page + 1)));
+                            dispatch(
+                              setTradiePage(
+                                Math.min(
+                                  tradiesState.pagination.totalPages,
+                                  tradiesState.pagination.page + 1,
+                                ),
+                              ),
+                            );
                           }}
-                          aria-disabled={tradiesState.pagination.page >= tradiesState.pagination.totalPages}
+                          aria-disabled={
+                            tradiesState.pagination.page >=
+                            tradiesState.pagination.totalPages
+                          }
                         />
                       </PaginationItem>
                     </PaginationContent>
@@ -677,19 +969,32 @@ export function TradiesClient({
       <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
         <Card className="border-border/70 bg-white/95 shadow-sm">
           <CardHeader className="border-b border-border/70 pb-3">
-            <CardTitle className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">Recent Activity</CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Recent Activity
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
-            {tradiesState.activity.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No recent tradie activity found.</p>
-            ) : (
-              tradiesState.activity.map((entry) => (
-                <div key={entry.id} className="rounded-lg border border-border/70 p-3">
-                  <p className="text-sm font-medium text-slate-900">{entry.message}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatDate(entry.createdAt)}</p>
-                </div>
-              ))
-            )}
+            <div className="relative pl-7 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-[2px] before:bg-border before:rounded-full">
+              {tradiesState.activity.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No recent tradie activity found.
+                </p>
+              ) : (
+                tradiesState.activity.map((entry) => (
+                  <article key={entry.id} className="relative pb-5 last:pb-0">
+                    <div
+                      className={`absolute -left-[27.5px] top-1 size-[10px] rounded-full border-2 border-white ring-2 ring-offset-background z-10 ${entry.type === "done" ? "bg-green-600 ring-green-600" : entry.type === "warn" ? "bg-yellow-500 ring-yellow-500" : "bg-red-400 ring-red-400"}`}
+                    />
+                    <p className="mt-1 text-[13px] text-muted-foreground max-w-2xl">
+                      {entry.message}
+                    </p>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground font-medium">
+                      {dataTimeFormat.format(new Date(entry.createdAt))}
+                    </p>
+                  </article>
+                ))
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -719,18 +1024,6 @@ export function TradiesClient({
               Declined: "#B91C1C",
               Completed: "#64748B",
             }}
-          />
-
-          <LineChartCard
-            title="Utilization Trend"
-            subtitle="Weekly confirmation performance vs target"
-            data={tradiesState.utilizationTrend}
-            xKey="weekLabel"
-            yAxisFormatter={(value) => `${value}%`}
-            series={[
-              { key: "utilization", label: "Utilization", color: "#0D9488" },
-              { key: "target", label: "Target", color: "#0F766E", dashed: true },
-            ]}
           />
         </div>
       </div>

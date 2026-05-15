@@ -14,8 +14,9 @@ import { LogCallModal } from "@/components/tradies/log-call-modal";
 import { ScheduleTradieModal } from "@/components/tradies/schedule-tradie-modal";
 import { TradieDirectoryModal } from "@/components/tradies/tradie-directory-modal";
 
-import type { TradieScheduleWithTradieMilestoneAndProject } from "@/types/project";
+import type { TradieScheduleListItem } from "@/types/project";
 import { CreateProjectModal } from "../projects/create-project-modal";
+import { ReminderModal } from "../tradies/reminder-send-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -37,7 +38,9 @@ export function ModalManager() {
       return (
         <AddUpdateModal
           projectId={String(modal.payload?.projectId ?? "")}
-          milestones={(modal.payload?.milestones as { id: string; name: string }[]) ?? []}
+          milestones={
+            (modal.payload?.milestones as { id: string; name: string }[]) ?? []
+          }
           open
           onOpenChange={(open) => {
             if (!open) handleClose();
@@ -67,14 +70,21 @@ export function ModalManager() {
         />
       );
     case "scheduleTradie":
-      return <ScheduleTradieModal open onOpenChange={(open) => !open && handleClose()} onSuccess={handleSuccess} />;
-    case "logCall":
-      {
-        const schedule = modal.payload?.schedule as TradieScheduleWithTradieMilestoneAndProject | undefined;
+      return (
+        <ScheduleTradieModal
+          open
+          onOpenChange={(open) => !open && handleClose()}
+          onSuccess={handleSuccess}
+        />
+      );
+    case "logCall": {
+      const schedule = modal.payload?.schedule as
+        | TradieScheduleListItem
+        | undefined;
 
-        if (!schedule) {
-          return null;
-        }
+      if (!schedule) {
+        return null;
+      }
 
       return (
         <LogCallModal
@@ -86,14 +96,15 @@ export function ModalManager() {
           onSuccess={handleSuccess}
         />
       );
-      }
-    case "confirmStatus":
-      {
-        const schedule = modal.payload?.schedule as TradieScheduleWithTradieMilestoneAndProject | undefined;
+    }
+    case "confirmStatus": {
+      const schedule = modal.payload?.schedule as
+        | TradieScheduleListItem
+        | undefined;
 
-        if (!schedule) {
-          return null;
-        }
+      if (!schedule) {
+        return null;
+      }
 
       return (
         <ConfirmStatusModal
@@ -105,9 +116,33 @@ export function ModalManager() {
           onSuccess={handleSuccess}
         />
       );
-      }
+    }
     case "tradieDirectory":
-      return <TradieDirectoryModal open onOpenChange={(open) => !open && handleClose()} />;
+      return (
+        <TradieDirectoryModal
+          open
+          onOpenChange={(open) => !open && handleClose()}
+        />
+      );
+    case "tradieReminder":
+      const { schedule } = modal.payload as {
+        schedule: TradieScheduleListItem;
+      };
+      const tradie = schedule.contact;
+      const siteManager = schedule.siteManager;
+
+      return (
+        <ReminderModal
+          schedule={schedule as TradieScheduleListItem}
+          tradie={tradie as { email: string; phone: string }}
+          siteManager={
+            siteManager as { email: string; phone: string; name: string }
+          }
+          open
+          onOpenChange={(open) => !open && handleClose()}
+          onSend={handleSuccess}
+        />
+      );
     default:
       return null;
   }
