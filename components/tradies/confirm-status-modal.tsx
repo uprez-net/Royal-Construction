@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Box,
   Check,
@@ -142,9 +142,18 @@ export function ConfirmStatusModal({
 
   const [loading, setLoading] = useState<ScheduleStatus | null>(null);
 
-  useEffect(() => {
+  const resetState = () => {
     setStatus(schedule.status as ScheduleStatus);
-  }, [schedule.status]);
+    setLoading(null);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      resetState();
+    }
+
+    onOpenChange(nextOpen);
+  };
 
   async function updateStatus(nextStatus: ScheduleStatus) {
     setLoading(nextStatus);
@@ -166,13 +175,12 @@ export function ConfirmStatusModal({
     }
 
     setStatus(nextStatus);
-
     onOpenChange(false);
     onSuccess();
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
           "max-w-[680px] gap-0 overflow-hidden rounded-[14px] border border-[#E2E8F0] bg-white p-0 shadow-2xl",

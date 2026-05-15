@@ -147,7 +147,7 @@ const formSchema = z
     }
   });
 
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = z.input<typeof formSchema>;
 
 const defaultValues: FormValues = {
   name: "",
@@ -185,21 +185,14 @@ export function CreateProjectModal({
   onSuccess: () => void;
 }) {
   const dispatch = useAppDispatch();
-
   const customers = useAppSelector((state) => state.customers);
-
   const siteManagers = useAppSelector((state) => state.siteManagers);
-
   const [isPending, startTransition] = useTransition();
-
   const [customerSearch, setCustomerSearch] = useState("");
-
   const [managerSearch, setManagerSearch] = useState("");
-
   const [locationSuggestions, setLocationSuggestions] = useState<
     AddressSuggestion[]
   >([]);
-
   const {
     control,
     register,
@@ -210,25 +203,21 @@ export function CreateProjectModal({
     setValue,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver: zodResolver(formSchema as any),
+    resolver: zodResolver(formSchema),
     defaultValues,
   });
-
   const customerMode = useWatch({
     control,
     name: "customerMode",
   });
-
   const location = useWatch({
     control,
     name: "location",
   });
-
   const customerItems = useMemo(
     () => customers.items.map((item) => ({ ...item })),
     [customers.items],
   );
-
   const managerItems = useMemo(
     () =>
       siteManagers.items.map((item) => ({
@@ -236,6 +225,21 @@ export function CreateProjectModal({
       })),
     [siteManagers.items],
   );
+
+  const displayedLocationSuggestions =
+    open && location.length >= 3 ? locationSuggestions : [];
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      reset(defaultValues);
+
+      setCustomerSearch("");
+      setManagerSearch("");
+      setLocationSuggestions([]);
+    }
+
+    onOpenChange(nextOpen);
+  };
 
   useEffect(() => {
     if (!open) {
@@ -279,7 +283,6 @@ export function CreateProjectModal({
 
   useEffect(() => {
     if (!open || location.length < 3) {
-      setLocationSuggestions([]);
       return;
     }
 
@@ -302,8 +305,6 @@ export function CreateProjectModal({
       } catch (error) {
         if (error instanceof Error && error.name !== "AbortError") {
           console.error("Failed to fetch location suggestions", error);
-
-          setLocationSuggestions([]);
         }
       }
     }, 300);
@@ -313,16 +314,6 @@ export function CreateProjectModal({
       window.clearTimeout(timer);
     };
   }, [location, open]);
-
-  useEffect(() => {
-    if (!open) {
-      reset(defaultValues);
-
-      setCustomerSearch("");
-      setManagerSearch("");
-      setLocationSuggestions([]);
-    }
-  }, [open, reset]);
 
   const onSubmit = async (values: FormValues) => {
     clearErrors("root");
@@ -414,7 +405,7 @@ export function CreateProjectModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
@@ -621,7 +612,7 @@ export function CreateProjectModal({
                     placeholder="e.g. Penrith, NSW 2750"
                     searchValue={location}
                     selectedItem={field.value as AddressSuggestion | null}
-                    items={locationSuggestions}
+                    items={displayedLocationSuggestions}
                     onQueryChange={(query) => {
                       setValue("location", query);
                     }}

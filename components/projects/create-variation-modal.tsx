@@ -144,7 +144,7 @@ export function CreateVariationModal({
           <div className="rounded-[8px] bg-amber-50 px-3.5 py-2.5 text-[12px] text-amber-900 flex items-start gap-1.5">
             <Info className="size-4 shrink-0 text-amber-600 mt-0.5" />
             <p>
-              A new quote will be created with this variation. The timeline will be automatically adjusted based on the customer's reply date.
+              A new quote will be created with this variation. The timeline will be automatically adjusted based on the customer&apos;s reply date.
             </p>
           </div>
 

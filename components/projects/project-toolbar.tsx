@@ -19,7 +19,11 @@ const SORT_OPTIONS: { label: string; value: SortOption }[] = [
   { label: "Spent (High-Low)", value: "spent" },
 ];
 
-export function ProjectToolbar() {
+interface ProjectToolbarProps {
+  onSearchChange: () => void;
+}
+
+export function ProjectToolbar({ onSearchChange }: ProjectToolbarProps) {
   const dispatch = useAppDispatch();
   const searchQuery = useAppSelector(
     (state) => state.ui.projectFilters.searchQuery
@@ -60,7 +64,10 @@ export function ProjectToolbar() {
             type="text"
             placeholder="Search projects, clients..."
             value={searchQuery}
-            onChange={(e) => dispatch(setProjectSearchQuery(e.target.value))}
+            onChange={(e) => {
+              dispatch(setProjectSearchQuery(e.target.value));
+              onSearchChange();
+            }}
             className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2 text-sm placeholder-muted-foreground focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:ring-opacity-20"
           />
         </div>

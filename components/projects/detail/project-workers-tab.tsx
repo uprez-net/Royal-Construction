@@ -80,7 +80,7 @@ export function ProjectWorkersTab() {
 
         <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
           <CardHeader className="border-b border-border/60 pb-4">
-            <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Today's Summary</CardTitle>
+            <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">Today&apos;s Summary</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2 pt-4 px-4 pb-4">
             <SummaryTile label="Checked In" value={summary.checkedIn} colorClass="text-teal-600" />

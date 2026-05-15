@@ -19,10 +19,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LookupOption, SearchableSelect } from "@/components/common/searchable-select";
+import {
+  LookupOption,
+  SearchableSelect,
+} from "@/components/common/searchable-select";
 
 import { useProjectSearch } from "@/hooks/useProjectSearch";
-import { useTradieSearch, LookupOption as TradieLookUpOption } from "@/hooks/useTradieSearch";
+import {
+  useTradieSearch,
+  LookupOption as TradieLookUpOption,
+} from "@/hooks/useTradieSearch";
 
 type Milestone = { id: string; name: string };
 
@@ -42,7 +48,8 @@ export function ScheduleTradieModal({
     id: string;
     name: string;
   } | null>(null);
-  const [selectedTradie, setSelectedTradie] = useState<TradieLookUpOption | null>(null);
+  const [selectedTradie, setSelectedTradie] =
+    useState<TradieLookUpOption | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [milestoneId, setMilestoneId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(() =>
@@ -52,11 +59,37 @@ export function ScheduleTradieModal({
   const [loading, setLoading] = useState(false);
   const [loadingMilestones, setLoadingMilestones] = useState(false);
 
+  const resetForm = () => {
+    setSelectedTradie(null);
+    setSelectedProject(null);
+    setMilestones([]);
+    setMilestoneId("");
+    setScheduledDate(new Date().toISOString().slice(0, 10));
+    setDurationDays("1");
+    setLoadingMilestones(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      resetForm();
+    }
+
+    onOpenChange(nextOpen);
+  };
+
+  const handleProjectSelect = (item: LookupOption) => {
+    const project = item as { id: string; name: string };
+
+    setSelectedProject(project);
+
+    // reset dependent state here instead of inside effect
+    setMilestones([]);
+    setMilestoneId("");
+    setLoadingMilestones(true);
+  };
+
   useEffect(() => {
     if (!selectedProject) {
-      setMilestones([]);
-      setMilestoneId("");
-      setLoadingMilestones(false);
       return;
     }
 
@@ -74,7 +107,9 @@ export function ScheduleTradieModal({
         const data = (await res.json()) as Milestone[];
         if (!cancelled) setMilestones(data);
       } catch (err) {
-        if ((err as any).name === "AbortError") return;
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
         console.error("Failed to load milestones", err);
       } finally {
         if (!cancelled) setLoadingMilestones(false);
@@ -112,17 +147,12 @@ export function ScheduleTradieModal({
     }
 
     onOpenChange(false);
-    setSelectedTradie(null);
-    setSelectedProject(null);
-    setMilestones([]);
-    setMilestoneId("");
-    setScheduledDate(new Date().toISOString().slice(0, 10));
-    setDurationDays("1");
+    resetForm();
     onSuccess();
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Schedule New Tradie</DialogTitle>
@@ -142,9 +172,9 @@ export function ScheduleTradieModal({
               items={projectSearch.items as unknown as LookupOption[]}
               loading={projectSearch.loading}
               onQueryChange={(q) => projectSearch.setQuery(q)}
-              onSelect={(item) => {
-                setSelectedProject(item as { id: string; name: string });
-              }}
+              onSelect={(item) =>
+                handleProjectSelect(item as unknown as LookupOption)
+              }
             />
 
             <SearchableSelect
@@ -155,7 +185,9 @@ export function ScheduleTradieModal({
               items={tradieSearch.items as unknown as LookupOption[]}
               loading={tradieSearch.loading}
               onQueryChange={(q) => tradieSearch.setQuery(q)}
-              onSelect={(item) => setSelectedTradie(item as unknown as TradieLookUpOption)}
+              onSelect={(item) =>
+                setSelectedTradie(item as unknown as TradieLookUpOption)
+              }
             />
           </div>
 

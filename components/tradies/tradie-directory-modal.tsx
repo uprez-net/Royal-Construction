@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { List } from "lucide-react";
 
 import {
@@ -16,16 +16,26 @@ export function TradieDirectoryModal({ open, onOpenChange }: { open: boolean; on
   const tradieSearch = useTradieSearch("");
   const [search, setSearch] = useState("");
 
+  const resetSearch = useCallback(() => {
+    setSearch("");
+    tradieSearch.setQuery("");
+  }, [tradieSearch]);
+
   useEffect(() => {
     tradieSearch.setQuery(search);
-  }, [search]);
+  }, [search, tradieSearch]);
 
-  useEffect(() => {
-    if (!open) setSearch("");
-  }, [open]);
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      resetSearch();
+    }
+
+    onOpenChange(nextOpen);
+  };
+
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Tradie Directory</DialogTitle>

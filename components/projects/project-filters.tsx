@@ -8,13 +8,15 @@ import type { ProjectKPIs } from "@/types/project";
 interface ProjectFiltersProps {
   kpis: ProjectKPIs;
   activeFilter: string | null;
+  onFilterChange: () => void;
 }
 
-export function ProjectFilters({ kpis, activeFilter }: ProjectFiltersProps) {
+export function ProjectFilters({ kpis, activeFilter, onFilterChange }: ProjectFiltersProps) {
   const dispatch = useAppDispatch();
+  const allCount = kpis.onTrack + kpis.needsAttention + kpis.delayed + kpis.totalActive;
 
   const filters = [
-    { label: "All", value: null, count: kpis.totalActive },
+    { label: "All", value: null, count: allCount },
     { label: "On Track", value: "ON_TRACK", count: kpis.onTrack },
     { label: "Needs Attention", value: "NEEDS_ATTENTION", count: kpis.needsAttention },
     { label: "Delayed", value: "DELAYED", count: kpis.delayed },
@@ -25,7 +27,10 @@ export function ProjectFilters({ kpis, activeFilter }: ProjectFiltersProps) {
       {filters.map((filter) => (
         <button
           key={filter.label}
-          onClick={() => dispatch(setProjectFilter({ status: filter.value }))}
+          onClick={() => {
+            dispatch(setProjectFilter({ status: filter.value }));
+            onFilterChange();
+          }}
           className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
             activeFilter === filter.value
               ? "border-teal-600 bg-teal-600 text-white"
