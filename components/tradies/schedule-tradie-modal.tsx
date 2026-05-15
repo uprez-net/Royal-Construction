@@ -12,10 +12,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 
-type Tradie = { id: string; name: string; tradeType: string; company: string | null };
-type Project = { id: string; name: string };
+import { useProjectSearch } from "@/hooks/useProjectSearch";
+import { useTradieSearch } from "@/hooks/useTradieSearch";
+
 type Milestone = { id: string; name: string };
 
 export function ScheduleTradieModal({
@@ -27,58 +35,70 @@ export function ScheduleTradieModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
-  const [tradies, setTradies] = useState<Tradie[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const projectSearch = useProjectSearch("");
+  const tradieSearch = useTradieSearch("");
+
+  const [selectedProject, setSelectedProject] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [selectedTradie, setSelectedTradie] = useState<any | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [tradieId, setTradieId] = useState("");
-  const [projectId, setProjectId] = useState("");
   const [milestoneId, setMilestoneId] = useState("");
-  const [scheduledDate, setScheduledDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [scheduledDate, setScheduledDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [durationDays, setDurationDays] = useState("1");
   const [loading, setLoading] = useState(false);
+  const [loadingMilestones, setLoadingMilestones] = useState(false);
 
   useEffect(() => {
-    if (!open || !projectId) {
+    if (!selectedProject) {
+      setMilestones([]);
+      setMilestoneId("");
+      setLoadingMilestones(false);
       return;
     }
 
-    async function loadOptions() {
-      const [tradieResponse, projectResponse] = await Promise.all([
-        fetch("/api/tradies-schedules"),
-        fetch("/api/projects?status=ACTIVE"),
-      ]);
+    let cancelled = false;
+    const controller = new AbortController();
 
-      setTradies((await tradieResponse.json()) as Tradie[]);
-      setProjects((await projectResponse.json()) as Project[]);
-    }
+    (async () => {
+      setLoadingMilestones(true);
+      try {
+        const res = await fetch(
+          `/api/projects/${selectedProject.id}/milestones`,
+          { signal: controller.signal },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as Milestone[];
+        if (!cancelled) setMilestones(data);
+      } catch (err) {
+        if ((err as any).name === "AbortError") return;
+        console.error("Failed to load milestones", err);
+      } finally {
+        if (!cancelled) setLoadingMilestones(false);
+      }
+    })();
 
-    void loadOptions();
-  }, [open, projectId]);
-
-  useEffect(() => {
-    if (!projectId) {
-      return;
-    }
-
-    async function loadMilestones() {
-      const response = await fetch(`/api/projects/${projectId}/milestones`);
-      const data = (await response.json()) as Milestone[];
-      setMilestones(data);
-    }
-
-    void loadMilestones();
-  }, [projectId]);
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [selectedProject]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!selectedTradie || !selectedProject) return;
+
     setLoading(true);
 
     const response = await fetch("/api/tradie-schedules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tradieId,
-        projectId,
+        tradieId: selectedTradie.id,
+        projectId: selectedProject.id,
         milestoneId: milestoneId || undefined,
         scheduledDate,
         durationDays: Number(durationDays),
@@ -92,10 +112,10 @@ export function ScheduleTradieModal({
     }
 
     onOpenChange(false);
-    setTradieId("");
-    setProjectId("");
-    setMilestoneId("");
+    setSelectedTradie(null);
+    setSelectedProject(null);
     setMilestones([]);
+    setMilestoneId("");
     setScheduledDate(new Date().toISOString().slice(0, 10));
     setDurationDays("1");
     onSuccess();
@@ -106,75 +126,109 @@ export function ScheduleTradieModal({
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Schedule New Tradie</DialogTitle>
-          <DialogDescription>Choose a tradie, active project, and milestone before sending the job through.</DialogDescription>
+          <DialogDescription>
+            Choose a tradie, active project, and milestone before sending the
+            job through.
+          </DialogDescription>
         </DialogHeader>
+
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
+            <SearchableSelect
+              label="Project"
+              placeholder="Select project"
+              searchValue={projectSearch.query}
+              selectedItem={selectedProject}
+              items={projectSearch.items as any}
+              loading={projectSearch.loading}
+              onQueryChange={(q) => projectSearch.setQuery(q)}
+              onSelect={(item) => {
+                setSelectedProject(item as { id: string; name: string });
+              }}
+            />
+
+            <SearchableSelect
+              label="Tradie"
+              placeholder="Search tradie"
+              searchValue={tradieSearch.query}
+              selectedItem={selectedTradie}
+              items={tradieSearch.items as any}
+              loading={tradieSearch.loading}
+              onQueryChange={(q) => tradieSearch.setQuery(q)}
+              onSelect={(item) => setSelectedTradie(item)}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Tradie</label>
-              <Select value={tradieId} onValueChange={setTradieId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select tradie" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tradies.map((tradie) => (
-                    <SelectItem key={tradie.id} value={tradie.id}>
-                      {tradie.name} - {tradie.tradeType}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Project</label>
+              <label className="text-sm font-medium text-foreground">
+                Milestone
+              </label>
               <Select
-                value={projectId}
-                onValueChange={(value) => {
-                  setProjectId(value);
-                  setMilestoneId("");
-                  setMilestones([]);
-                }}
+                value={milestoneId}
+                onValueChange={setMilestoneId}
+                disabled={
+                  !selectedProject ||
+                  loadingMilestones ||
+                  milestones.length === 0
+                }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select project" />
+                  <SelectValue
+                    placeholder={
+                      !selectedProject
+                        ? "Select a project first"
+                        : loadingMilestones
+                          ? "Loading milestones..."
+                          : "Select milestone"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
+                  {loadingMilestones ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      Loading milestones...
+                    </div>
+                  ) : milestones.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      No milestones found for the selected project.
+                    </div>
+                  ) : (
+                    milestones.map((milestone) => (
+                      <SelectItem key={milestone.id} value={milestone.id}>
+                        {milestone.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Scheduled Date
+              </label>
+              <Input
+                type="date"
+                value={scheduledDate}
+                onChange={(event) => setScheduledDate(event.target.value)}
+                required
+              />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Milestone</label>
-              <Select value={milestoneId} onValueChange={setMilestoneId} disabled={!projectId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={projectId ? "Select milestone" : "Select a project first"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {milestones.map((milestone) => (
-                    <SelectItem key={milestone.id} value={milestone.id}>
-                      {milestone.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Scheduled Date</label>
-              <Input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} required />
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Duration in Days</label>
-              <Input type="number" min="1" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} required />
+              <label className="text-sm font-medium text-foreground">
+                Duration in Days
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={durationDays}
+                onChange={(event) => setDurationDays(event.target.value)}
+                required
+              />
             </div>
             <div className="flex items-end justify-end col-span-2">
               <div className="rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -185,11 +239,22 @@ export function ScheduleTradieModal({
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !tradieId || !projectId}>
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            <Button
+              type="submit"
+              disabled={loading || !selectedTradie || !selectedProject}
+            >
+              {loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
               Save Schedule
             </Button>
           </div>

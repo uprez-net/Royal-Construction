@@ -25,6 +25,8 @@ export interface LookupOption {
   name: string;
   email?: string;
   phone?: string;
+  company?: string;
+  tradeType?: string;
   description?: string;
 }
 
@@ -120,7 +122,7 @@ export function SearchableSelect({
                     : item.label;
 
                   const subtitle = isLookupOption(item)
-                    ? ((item.description ?? [item.email, item.phone].filter(Boolean).join(" · ")) || "No additional details")
+                    ? ((item.description ?? [item.email, item.phone, item.company, item.tradeType].filter(Boolean).join(" · ")) || "No additional details")
                     : `${item.address}, ${item.postcode ?? ""}, Council: ${item.council}`;
 
                   return (

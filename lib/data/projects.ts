@@ -111,10 +111,10 @@ function buildProjectWhere(query?: ProjectListQuery): Prisma.ProjectWhereInput |
   if (search) {
     filters.push({
       OR: [
-        { name: { contains: search, mode: "insensitive" } },
-        { location: { contains: search, mode: "insensitive" } },
-        { customer: { name: { contains: search, mode: "insensitive" } } },
-        { siteManager: { name: { contains: search, mode: "insensitive" } } },
+        { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { customer: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
+        { siteManager: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
       ],
     });
   }
@@ -200,8 +200,8 @@ export async function getProjectsForLookup(page = 1, limit = defaultLookupPageSi
   const where: Prisma.ProjectWhereInput | undefined = search
     ? {
       OR: [
-        { name: { contains: search, mode: "insensitive" } },
-        { location: { contains: search, mode: "insensitive" } },
+        { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
       ],
     }
     : undefined;

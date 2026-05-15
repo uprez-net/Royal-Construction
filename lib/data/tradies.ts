@@ -87,11 +87,11 @@ function buildCoordinationWhere(
   if (query.search) {
     filters.push({
       OR: [
-        { tradie: { name: { contains: query.search, mode: "insensitive" } } },
-        { tradie: { company: { contains: query.search, mode: "insensitive" } } },
-        { tradie: { tradeType: { contains: query.search, mode: "insensitive" } } },
-        { project: { name: { contains: query.search, mode: "insensitive" } } },
-        { milestone: { is: { name: { contains: query.search, mode: "insensitive" } } } },
+        { tradie: { name: { contains: query.search, mode: Prisma.QueryMode.insensitive } } },
+        { tradie: { company: { contains: query.search, mode: Prisma.QueryMode.insensitive } } },
+        { tradie: { tradeType: { contains: query.search, mode: Prisma.QueryMode.insensitive } } },
+        { project: { name: { contains: query.search, mode: Prisma.QueryMode.insensitive } } },
+        { milestone: { is: { name: { contains: query.search, mode: Prisma.QueryMode.insensitive } } } },
       ],
     });
   }

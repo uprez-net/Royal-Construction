@@ -62,7 +62,7 @@ export function ModalManager() {
     );
 
     dispatch(clearSelectedSchedules());
-    void dispatch(fetchTradieCoordinationDashboard({ force: true }));
+    dispatch(fetchTradieCoordinationDashboard({ force: true }));
   };
 
   const handleRowQuickConfirm = async (row: TradieScheduleListItem) => {

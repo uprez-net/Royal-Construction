@@ -2,7 +2,7 @@
 
 import { Role, type Customer } from "@prisma/client";
 import { revalidateTag, unstable_cache } from "next/cache";
-
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 
 export type CustomerDropdownItem = Pick<Customer, "id" | "name" | "email" | "phone" | "createdAt">;
@@ -33,9 +33,9 @@ async function getCustomersDropdownPage(
     const where = search
         ? {
                 OR: [
-                    { name: { contains: search, mode: "insensitive" as const } },
-                    { email: { contains: search, mode: "insensitive" as const } },
-                    { phone: { contains: search, mode: "insensitive" as const } },
+                    { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                    { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                    { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
                 ],
             }
         : undefined;
