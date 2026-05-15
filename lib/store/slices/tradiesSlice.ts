@@ -174,7 +174,7 @@ export const fetchTradieCoordinationDashboard = createAsyncThunk<
   if (state.filters.tradeType) params.set("tradeType", state.filters.tradeType);
   if (state.filters.status) params.set("status", state.filters.status);
 
-  const response = await fetch(`/api/tradies?${params.toString()}`);
+  const response = await fetch(`/api/tradies-schedules?${params.toString()}`);
   if (!response.ok) {
     throw new Error("Failed to load tradie coordination data");
   }

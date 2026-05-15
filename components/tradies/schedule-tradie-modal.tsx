@@ -44,7 +44,7 @@ export function ScheduleTradieModal({
 
     async function loadOptions() {
       const [tradieResponse, projectResponse] = await Promise.all([
-        fetch("/api/tradies"),
+        fetch("/api/tradies-schedules"),
         fetch("/api/projects?status=ACTIVE"),
       ]);
 
