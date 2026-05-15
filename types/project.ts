@@ -175,10 +175,23 @@ export type TradieUrgentReminderItem = {
   tradieName: string;
   tradeType: string;
   projectName: string;
+  milestoneName?: string;
   taskLabel: string;
   scheduledDate: string;
   daysLeft: number;
   status: TradieScheduleStatus;
+  reminderSentAt?: string;
+  company: string | null;
+  contact: {
+    email: string;
+    phone: string;
+  };
+  rating?: string;
+  siteManager: {
+    name: string;
+    email: string;
+    phone: string;
+  };
 };
 
 export type TradieTabCounts = Record<TradieCoordinationTab, number>;

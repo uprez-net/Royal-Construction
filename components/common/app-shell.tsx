@@ -31,7 +31,9 @@ export function AppShell({
   const activeProject = useAppSelector((state) => state.projects.activeProject);
   const pathName = usePathname();
   const lastSegment = pathName.split("/").filter(Boolean).pop() ?? "";
-  const activeSlug = isUUID(lastSegment) ? "Loading..." : pathName.split("/").pop() ?? "dashboard";
+  const activeSlug = isUUID(lastSegment)
+    ? "Loading..."
+    : (pathName.split("/").pop() ?? "dashboard");
   const title = activeProject ? activeProject.name : getScreenTitle(activeSlug);
 
   useEffect(() => {
@@ -83,7 +85,7 @@ export function AppShell({
             {navigationItems.map((item) => (
               <Link
                 key={item.slug}
-                href={item.slug === "dashboard" ? "/" : `/${item.slug}`}
+                href={`/${item.slug}`}
                 className={cn(
                   "group relative grid size-10 place-items-center rounded-2xl transition-colors hover:bg-white/10 hover:text-white",
                   item.slug === activeSlug && "bg-teal-500/15 text-teal-300",
@@ -97,12 +99,6 @@ export function AppShell({
               </Link>
             ))}
           </nav>
-          <Link
-            href="/sign-in"
-            className="mt-auto grid size-10 place-items-center rounded-2xl bg-white/5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <ChevronRight className="size-4" />
-          </Link>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -196,25 +192,17 @@ export function AppShell({
             </div>
           </header>
 
-          <main className="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-            <section className="flex flex-col gap-4 rounded-[2rem] border border-white/70 bg-white/90 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur xl:flex-row xl:items-end xl:justify-between">
-              <div className="max-w-3xl space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-700/70">
-                  BuildPro Operations
-                </p>
-                <h1 className="font-heading text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-                  {title}
-                </h1>
-                {description ? (
-                  <p className="max-w-2xl text-sm leading-6 text-slate-600 sm:text-[15px]">
-                    {description}
-                  </p>
-                ) : null}
-              </div>
-              {actions ? (
-                <div className="flex flex-wrap gap-2">{actions}</div>
-              ) : null}
-            </section>
+          <main
+            className={cn(
+              "mx-auto flex w-full max-w-screen-2xl flex-1 flex-col gap-6",
+              "overflow-y-auto",
+              "max-h-[90vh]",
+              "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
+              "[scrollbar-width:none]",
+              "[-ms-overflow-style:none]",
+              "[&::-webkit-scrollbar]:hidden",
+            )}
+          >
             {children}
           </main>
         </div>

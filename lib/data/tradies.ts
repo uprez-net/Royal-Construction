@@ -23,24 +23,8 @@ const tradieScheduleInclude = {
 } as const;
 
 const defaultCoordinationPageSize = 10;
+import { differenceInCalendarDays, startOfDay, addDays, startOfWeek } from "date-fns";
 
-function startOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function startOfWeek(date: Date) {
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  return startOfDay(addDays(date, diff));
-}
 
 function getWeekLabel(date: Date) {
   return new Intl.DateTimeFormat("en-AU", { day: "2-digit", month: "short" }).format(date);
@@ -462,8 +446,8 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
       orderBy: { scheduledDate: "asc" },
       take: 8,
       include: {
-        tradie: { select: { name: true, tradeType: true } },
-        project: { select: { name: true } },
+        tradie: { select: { name: true, tradeType: true, phone: true, email: true, rating: true, company: true } },
+        project: { select: { name: true, siteManager: true } },
         milestone: { select: { name: true } },
       },
     }),
@@ -604,10 +588,26 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
     tradieName: row.tradie.name,
     tradeType: row.tradie.tradeType,
     projectName: row.project.name,
+    milestoneName: row.milestone?.name,
     taskLabel: row.milestone?.name ?? "General trade task",
     scheduledDate: row.scheduledDate.toISOString(),
-    daysLeft: Math.ceil((startOfDay(row.scheduledDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)),
+    daysLeft: differenceInCalendarDays(
+      startOfDay(row.scheduledDate),
+      today
+    ),
+    company: row.tradie.company,
     status: row.status,
+    contact: {
+      email: row.tradie.email,
+      phone: row.tradie.phone,
+    },
+    siteManager: {
+      name: row.project.siteManager?.name ?? "Site manager",
+      email: row.project.siteManager?.email ?? "",
+      phone: row.project.siteManager?.phone ?? "",
+    },
+    rating: row.tradie.rating?.toString(),
+    reminderSentAt: row.reminderSentAt?.toISOString(),
   }));
 
   return {

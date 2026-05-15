@@ -12,6 +12,7 @@ import {
   Clock,
   Download,
   EllipsisVertical,
+  Eye,
   Loader2,
   Mail,
   Phone,
@@ -56,6 +57,7 @@ import type {
   SafeTradie,
   TradieCoordinationDashboard,
   TradieScheduleListItem,
+  TradieUrgentReminderItem,
 } from "@/types/project";
 import { dataTimeFormat } from "@/utils/formatters";
 import { DataTable } from "../common/data-table";
@@ -338,7 +340,13 @@ export function TradiesClient({
 
   const handleUpdateRowStatus = (row: TradieScheduleListItem) => {
     dispatch(openModal({ type: "confirmStatus", payload: { schedule: row } }));
-  }
+  };
+
+  const handleViewScheduleDetails = (row: TradieUrgentReminderItem) => {
+    dispatch(
+      openModal({ type: "tradieScheduleDetails", payload: { schedule: row } }),
+    );
+  };
 
   const handleRowReminder = async (row: TradieScheduleListItem) => {
     dispatch(openModal({ type: "tradieReminder", payload: { schedule: row } }));
@@ -493,7 +501,7 @@ export function TradiesClient({
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => void handleRowReminder(row, )}
+          onClick={() => void handleRowReminder(row)}
         >
           <Mail className="h-4 w-4" />
         </Button>
@@ -671,14 +679,36 @@ export function TradiesClient({
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        void updateScheduleStatuses(
-                          [item.id],
-                          TradieScheduleStatus.NO_RESPONSE,
-                        )
+                        handleRowReminder({
+                          id: item.id,
+                          tradieId: "tradieId",
+                          tradieName: item.tradieName,
+                          tradeType: item.tradeType,
+                          projectId: "item.projectId",
+                          projectName: item.projectName,
+                          milestoneId: "item.milestoneId",
+                          milestoneName: item.milestoneName,
+                          taskLabel: item.taskLabel,
+                          scheduledDate: item.scheduledDate,
+                          contact: item.contact,
+                          siteManager: item.siteManager,
+                          status: item.status,
+                          reminderSentAt: item.reminderSentAt,
+                          updatedAt: "item.updatedAt",
+                          durationDays: 1,
+                          company: item.company,
+                        } satisfies TradieScheduleListItem)
                       }
                     >
                       <PhoneCall className="mr-1 size-3.5" />
                       Call
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleViewScheduleDetails(item)}
+                    >
+                      <Eye className="mr-1 size-3.5" />
                     </Button>
                   </div>
                 </div>

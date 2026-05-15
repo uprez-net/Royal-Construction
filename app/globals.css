@@ -139,6 +139,15 @@
   ::selection {
     background: color-mix(in oklab, var(--primary) 22%, white);
   }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer utilities {
