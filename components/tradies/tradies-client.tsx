@@ -9,7 +9,6 @@ import {
   Check,
   CheckCircle2,
   CircleAlert,
-  Clock,
   Download,
   EllipsisVertical,
   Eye,
@@ -39,8 +38,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import type { RootState } from "@/lib/store";
-import type { TradiesState } from "@/lib/store/slices/tradiesSlice";
 import {
   clearSelectedSchedules,
   fetchTradieCoordinationDashboard,

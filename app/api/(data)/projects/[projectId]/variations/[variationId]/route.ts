@@ -8,7 +8,7 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string; variationId: string }> },
 ) {
 
-  const { projectId, variationId } = await params;
+  const { variationId } = await params;
 
   const body = (await request.json()) as { status?: "APPROVED" | "REJECTED" };
 

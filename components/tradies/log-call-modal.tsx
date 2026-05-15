@@ -7,18 +7,14 @@ import {
   Loader2,
   Phone,
   PhoneOff,
-  X,
   XCircle,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,

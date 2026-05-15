@@ -1,8 +1,8 @@
-import { ArrowUpRight, CheckCircle2, PiggyBank, ReceiptText, Users, Wallet2 } from "lucide-react";
+import { ArrowUpRight, PiggyBank, ReceiptText, Users, Wallet2 } from "lucide-react";
 import { useAppSelector } from "@/lib/store/hooks";
 import { selectActiveProjectBudgetSummary } from "@/lib/store/slices/projectsSlice";
 import { projectKpiMock } from "@/lib/mock-data";
-import { currency } from "../../../utils/formatters";
+import { currency } from "@/utils/formatters";
 
 export function ProjectStatCards() {
   const budgetSummary = useAppSelector(selectActiveProjectBudgetSummary);

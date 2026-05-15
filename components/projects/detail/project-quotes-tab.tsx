@@ -4,12 +4,12 @@ import { Plus, Eye, Send, Download } from "lucide-react";
 import { StatusPill } from "@/components/common/status-pill";
 import { quoteRequestsMock } from "@/lib/mock-data";
 
-import { currency } from "../../../utils/formatters";
+import { currency } from "@/utils/formatters";
 
 function getQuoteTypeTone(type: string) {
-  if (type === "Initial") return "purple" as any;
-  if (type === "Variation") return "primary" as any;
-  return "neutral" as any;
+  if (type === "Initial") return "purple" as const;
+  if (type === "Variation") return "primary" as const;
+  return "neutral" as const;
 }
 
 export function ProjectQuotesTab() {

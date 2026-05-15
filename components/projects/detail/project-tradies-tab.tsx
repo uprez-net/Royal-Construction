@@ -202,23 +202,28 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               "Action",
             ]}
             rows={tradies.map((tradie) => [
-              <span className="text-[13px] font-bold">
+              <span className="text-[13px] font-bold" key={tradie.id}>
                 {tradie.tradie.trade}
               </span>,
 
-              <span className="text-[13px]">{tradie.tradie.company}</span>,
+              <span className="text-[13px]" key={`${tradie.id}-company`}>
+                {tradie.tradie.company}
+              </span>,
 
-              <span className="text-xs">{tradie.tradie.phone}</span>,
+              <span className="text-xs" key={`${tradie.id}-phone`}>
+                {tradie.tradie.phone}
+              </span>,
 
-              <span className="text-xs">
+              <span className="text-xs" key={`${tradie.id}-milestone`}>
                 {tradie.milestone?.name ?? "N/A"}
               </span>,
 
-              <span className="text-xs">
+              <span className="text-xs" key={`${tradie.id}-scheduled`}>
                 {dateFormat.format(new Date(tradie.scheduledDate))}
               </span>,
 
               <StatusPill
+                key={`${tradie.id}-reminder`}
                 tone={getReminderTone(
                   tradie.reminderSentAt,
                   new Date(tradie.scheduledDate),
@@ -236,11 +241,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 <XCircle className="size-4 text-muted-foreground" />
               ),
 
-              <StatusPill tone={getStatusTone(tradie.status)}>
+              <StatusPill key={`${tradie.id}-status`} tone={getStatusTone(tradie.status)}>
                 {tradie.status}
               </StatusPill>,
 
-              <div className="flex gap-1">
+              <div className="flex gap-1" key={`${tradie.id}-actions`}>
                 {tradie.status !== "COMPLETED" && (
                   <Button
                     variant="outline"

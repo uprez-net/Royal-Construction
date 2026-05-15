@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Hammer, ChevronRight } from "lucide-react";
+import { Bell, Hammer } from "lucide-react";
 import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import { navigationItems, tickerItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
@@ -15,9 +15,9 @@ import { getScreenTitle } from "@/utils/uiHelper";
 
 export function AppShell({
   isSignedIn,
-  description,
+  // description,
   breadcrumbs,
-  actions,
+  // actions,
   children,
 }: {
   isSignedIn: boolean;

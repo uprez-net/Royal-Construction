@@ -15,7 +15,7 @@ import {
   ShoppingCart,
   Users,
 } from "lucide-react";
-import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, ProjectMaterialItem, ProjectPaymentItem, QuoteRequestItem, TradieItem, WorkerAttendanceItem } from "@/types/ui";
+import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, ProjectMaterialItem, ProjectPaymentItem, QuoteRequestItem, WorkerAttendanceItem } from "@/types/ui";
 
 export const navigationItems: NavItem[] = [
   {

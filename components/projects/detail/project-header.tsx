@@ -1,11 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Mail, MapPin, Phone, Printer, UserRound, MessageCircle } from "lucide-react";
-
-import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import type { ProjectDetail } from "@/types/project";
-
-import { formatStatus, projectStatusTone } from "../../../utils/formatters";
 
 export function ProjectHeader({
   project,

@@ -19,10 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SearchableSelect } from "@/components/common/searchable-select";
+import { LookupOption, SearchableSelect } from "@/components/common/searchable-select";
 
 import { useProjectSearch } from "@/hooks/useProjectSearch";
-import { useTradieSearch } from "@/hooks/useTradieSearch";
+import { useTradieSearch, LookupOption as TradieLookUpOption } from "@/hooks/useTradieSearch";
 
 type Milestone = { id: string; name: string };
 
@@ -42,7 +42,7 @@ export function ScheduleTradieModal({
     id: string;
     name: string;
   } | null>(null);
-  const [selectedTradie, setSelectedTradie] = useState<any | null>(null);
+  const [selectedTradie, setSelectedTradie] = useState<TradieLookUpOption | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [milestoneId, setMilestoneId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(() =>
@@ -139,7 +139,7 @@ export function ScheduleTradieModal({
               placeholder="Select project"
               searchValue={projectSearch.query}
               selectedItem={selectedProject}
-              items={projectSearch.items as any}
+              items={projectSearch.items as unknown as LookupOption[]}
               loading={projectSearch.loading}
               onQueryChange={(q) => projectSearch.setQuery(q)}
               onSelect={(item) => {
@@ -151,11 +151,11 @@ export function ScheduleTradieModal({
               label="Tradie"
               placeholder="Search tradie"
               searchValue={tradieSearch.query}
-              selectedItem={selectedTradie}
-              items={tradieSearch.items as any}
+              selectedItem={selectedTradie as unknown as LookupOption}
+              items={tradieSearch.items as unknown as LookupOption[]}
               loading={tradieSearch.loading}
               onQueryChange={(q) => tradieSearch.setQuery(q)}
-              onSelect={(item) => setSelectedTradie(item)}
+              onSelect={(item) => setSelectedTradie(item as unknown as TradieLookUpOption)}
             />
           </div>
 

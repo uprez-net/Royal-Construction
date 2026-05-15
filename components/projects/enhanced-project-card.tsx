@@ -40,14 +40,6 @@ const getProgressColor = (progress: number) => {
   return "bg-red-500";
 };
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-    maximumFractionDigits: 0,
-  }).format(value);
-};
-
 export function EnhancedProjectCard({
   project,
   onDetailsClick,

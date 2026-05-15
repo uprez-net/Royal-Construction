@@ -29,7 +29,7 @@ export default function ProjectDetailError({
         </h2>
         
         <p className="mb-8 text-[14px] leading-relaxed text-muted-foreground">
-          We encountered an unexpected error while retrieving this project's information. 
+          We encountered an unexpected error while retrieving this project&apos;s information. 
           The project may have been removed, or there might be a temporary connection issue.
         </p>
 

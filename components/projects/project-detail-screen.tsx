@@ -4,7 +4,6 @@ import { useEffect } from "react";
 
 import { useAppDispatch } from "@/lib/store/hooks";
 import { resetProjectDetailUiState, setActiveProject } from "@/lib/store/slices/projectsSlice";
-import { openModal } from "@/lib/store/slices/uiSlice";
 import type { ProjectDetail } from "@/types/project";
 
 import { ProjectDetailTabs } from "./detail/project-detail-tabs";

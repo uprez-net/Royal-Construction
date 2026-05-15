@@ -2,7 +2,7 @@ import type { ProjectDetail } from "@/types/project";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Eye, Image, FileText, Download } from "lucide-react";
+import { Eye, Image as ImageIcon, FileText, Download } from "lucide-react";
 import { LineChartCard } from "@/components/charts/line-chart-card";
 import {
   projectBudgetBurndownMock,
@@ -13,7 +13,7 @@ import {
   currency,
   dataTimeFormat,
   dateFormat,
-} from "../../../utils/formatters";
+} from "@/utils/formatters";
 
 function DetailItem({
   label,
@@ -37,7 +37,7 @@ function DetailItem({
 export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
   const totalBudget = Number(project.totalBudget);
   const activityLog = project.activityLogs || [];
-  const spent = Number(project.spent);
+  // const spent = Number(project.spent);
   const variationCost = project.variations.reduce((sum, variation) => {
     if (variation.status === "APPROVED") {
       return sum + Number(variation.cost);
@@ -110,7 +110,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                 variant="outline"
                 className="h-8 rounded-lg px-2.5 text-[11.5px] font-semibold text-slate-700"
               >
-                <Image className="mr-1 size-3.5" /> Drawings
+                <ImageIcon className="mr-1 size-3.5" /> Drawings
               </Button>
               <Button
                 size="sm"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, FilePlus2, Loader2, Info } from "lucide-react";
+import { FilePlus2, Loader2, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {

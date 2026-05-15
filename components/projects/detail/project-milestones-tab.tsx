@@ -1,8 +1,5 @@
 import {
   CalendarCheck2,
-  CheckCircle2,
-  Circle,
-  CircleDot,
   TriangleAlert,
   Bell,
 } from "lucide-react";
@@ -13,7 +10,7 @@ import { DonutChartCard } from "@/components/charts/donut-chart-card";
 import type { ProjectMilestoneMix } from "@/types/ui";
 import type { ProjectDetail } from "@/types/project";
 
-import { dateFormat, formatStatus } from "../../../utils/formatters";
+import { dateFormat, formatStatus } from "@/utils/formatters";
 
 export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   const tradieAlerts = project.tradieSchedules.filter(

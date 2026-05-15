@@ -1,17 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, MessageSquare, Send, X } from "lucide-react";
-
+import { Mail, MessageSquare, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
-
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";

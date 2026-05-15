@@ -245,41 +245,43 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                 const variationCost = Number(variation.cost);
 
                 return [
-                  <span className="font-semibold text-slate-900">
+                  <span className="font-semibold text-slate-900" key={variation.id}>
                     V-{String(index + 1).padStart(3, "0")}
                   </span>,
 
-                  <span>{dateFormat.format(variation.requestedDate)}</span>,
+                  <span key={`${variation.id}-sent`}>{dateFormat.format(variation.requestedDate)}</span>,
 
-                  <span>
+                  <span key={`${variation.id}-approved`}>
                     {variation.approvedDate
                       ? dateFormat.format(variation.approvedDate)
                       : "-"}
                   </span>,
 
-                  <span>
+                  <span key={`${variation.id}-delay`} className="text-center text-slate-700">
                     {variation.delayDays ? `${variation.delayDays} days` : "-"}
                   </span>,
 
-                  <span className="max-w-[200px] truncate text-slate-700">
+                  <span className="max-w-[200px] truncate text-slate-700" key={`${variation.id}-description`}>
                     {variation.description}
                   </span>,
 
-                  <span className="text-slate-600">Client Request</span>,
+                  <span className="text-slate-600" key={`${variation.id}-reason`}>
+                    Client Request
+                  </span>,
 
-                  <span className="font-semibold text-red-600">
+                  <span className="font-semibold text-red-600" key={`${variation.id}-cost`}>
                     +{currency.format(variationCost)}
                   </span>,
 
-                  <span className="font-medium text-slate-900">
+                  <span className="font-medium text-slate-900" key={`${variation.id}-new-total`}>
                     {currency.format(totalBudget + variationCost)}
                   </span>,
 
-                  <StatusPill tone={variationStatusTone(variation.status)}>
+                  <StatusPill key={`${variation.id}-status`} tone={variationStatusTone(variation.status)}>
                     {variation.status}
                   </StatusPill>,
 
-                  <div className="flex justify-end gap-1.5">
+                  <div className="flex justify-end gap-1.5" key={`${variation.id}-actions`}>
                     {variation.status !== "APPROVED" && (
                       <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-[#D97706] hover:bg-amber-50 hover:text-[#D97706]">
                         <Bell className="size-3.5" />

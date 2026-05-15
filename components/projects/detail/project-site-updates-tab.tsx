@@ -5,6 +5,7 @@ import { SectionCard } from "@/components/common/section-card";
 import { dataTimeFormat } from "../../../utils/formatters";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import Image from "next/image";
 
 export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
   const siteUpdates = project.siteUpdates;
@@ -64,7 +65,7 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
                       key={i}
                       className="group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
                     >
-                      <img
+                      <Image
                         src={`https://picsum.photos/seed/update${dataTimeFormat.format(new Date(update.createdAt)).slice(0, 6).replace(/ /g, "")}${i}/400/300`}
                         alt={`Photo ${i + 1}`}
                         className="h-full w-full object-cover transition-transform group-hover:scale-105"
