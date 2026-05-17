@@ -1,0 +1,916 @@
+import React, { useState, useMemo } from 'react';
+import { Search, Phone, Mail, ArrowRight, Download, Users, X, Bell, Check, Calendar, UserPlus } from 'lucide-react';
+import { Lead, LeadStage } from '@/lib/types';
+import { EmailTemplate } from '@/lib/types';
+import { EMAIL_TEMPLATES } from '@/lib/variables';
+import { sendEmailToLead } from '@/lib/leads-service';
+
+interface TableViewProps {
+  leads: Lead[];
+  onLeadUpdate: (lead: Lead) => void;
+  onLeadDelete: (leadId: number) => void;
+}
+
+/* ── Source icon helper ────────────────────────────── */
+function SourceIcon({ source }: { source: string }) {
+  if (source === 'Google Ads') {
+    return (
+      <svg className="source-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+      </svg>
+    );
+  }
+
+  if (source === 'Facebook Ads') {
+    return (
+      <svg className="source-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
+        <path d="M24 12c0-6.627-5.373-12-12-12S0 5.373 0 12c0 5.99 4.388 10.954 10.125 11.854V15.47H7.078V12h3.047V9.356c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.234 2.686.234v2.953H15.83c-1.491 0-1.956.925-1.956 1.875V12h3.328l-.532 3.469h-2.796v8.385C19.612 22.954 24 17.99 24 12z" fill="#1877F2" />
+      </svg>
+    );
+  }
+
+  if (source === 'Referral') {
+    return <Users size={16} className="source-icon source-icon-referral" />;
+  }
+
+  if (source === 'Website') {
+    return (
+      <svg className="source-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="2" y1="12" x2="22" y2="12" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      </svg>
+    );
+  }
+
+  if (source === 'Repeat Client') {
+    return (
+      <svg className="source-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 1l4 4-4 4" />
+        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+        <path d="M7 23l-4-4 4-4" />
+        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+      </svg>
+    );
+  }
+
+  // Walk-in or default
+  return (
+    <svg className="source-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+/* ── Format date helper ────────────────────────────── */
+function formatFollowup(date: string | null, time?: string | null): string {
+  if (!date) return '';
+  const d = new Date(date);
+  const day = d.getDate();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  const timeStr = time || '';
+  return `${day} ${month} ${year}${timeStr ? ' ' + timeStr : ''}`;
+}
+
+const MOVABLE_STAGES: LeadStage[] = ['New', 'Contacted', 'Qualified', 'Quoted', 'Negotiating', 'Won'];
+
+
+
+const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
+
+function formatShortDate(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function hydrateTemplate(text: string, lead: Lead): string {
+  const values: Record<string, string> = {
+    name: lead.name,
+    location: lead.location,
+    type: lead.type,
+    phone: lead.phone,
+    project: `${lead.type} at ${lead.location}`,
+    notes: lead.notes || 'Previous discussion details',
+    amount: lead.budget !== 'Not Discussed' ? lead.budget : 'TBD',
+    duration: '6-8 months',
+    date: formatShortDate(new Date()),
+    time: '10:00 AM',
+    milestone: 'Foundation Complete',
+    nextMilestone: 'Frame Stage',
+    originalAmount: '$480,000',
+    variationAmount: '$4,500',
+    revisedAmount: '$484,500',
+  };
+
+  return text.replace(PLACEHOLDER_PATTERN, (_, key) => values[key] ?? `{${key}}`);
+}
+
+function buildEmailDraft(template: EmailTemplate, lead: Lead) {
+  return {
+    subject: hydrateTemplate(template.subject, lead),
+    body: hydrateTemplate(template.body, lead),
+  };
+}
+
+function previewTemplateText(text: string) {
+  return text.replace(PLACEHOLDER_PATTERN, '...');
+}
+
+function buildSnippet(text: string, maxLength = 110) {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength)}...`;
+}
+
+function dialablePhone(phone: string) {
+  return phone.replace(/[^0-9+]/g, '');
+}
+
+interface ModalShellProps {
+  open: boolean;
+  onClose: () => void;
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  maxWidthClass?: string;
+  titleClassName?: string;
+  children: React.ReactNode;
+}
+
+function ModalShell({
+  open,
+  onClose,
+  title,
+  subtitle,
+  maxWidthClass = 'max-w-[520px]',
+  titleClassName,
+  children,
+}: ModalShellProps) {
+  if (!open) return null;
+
+  const handleBackdropMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0c0a09]/30 p-4"
+      onMouseDown={handleBackdropMouseDown}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className={`w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
+          <div>
+            <h4 className={`text-[18px] font-medium tracking-[-0.016px] text-[#0c0a09] ${titleClassName ?? ''}`}>{title}</h4>
+            {subtitle ? <p className="mt-1 text-[13px] text-[#a8a29e]">{subtitle}</p> : null}
+          </div>
+          <button
+            type="button"
+            className="rounded-full p-1.5 text-[#a8a29e] transition hover:bg-[#fafaf9] hover:text-[#78716c]"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-5 py-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export default function TableView({
+  leads,
+  onLeadUpdate,
+}: TableViewProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
+  const [statusLead, setStatusLead] = useState<Lead | null>(null);
+  const [statusStage, setStatusStage] = useState<LeadStage>('New');
+  const [statusNotes, setStatusNotes] = useState('');
+  const [emailLead, setEmailLead] = useState<Lead | null>(null);
+  const [showEmailTemplates, setShowEmailTemplates] = useState(false);
+  const [showSendEmail, setShowSendEmail] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+
+  const [editFollowupLead, setEditFollowupLead] = useState<Lead | null>(null);
+  const [followupDate, setFollowupDate] = useState('');
+  const [followupTime, setFollowupTime] = useState('');
+
+  const [editAssignedLead, setEditAssignedLead] = useState<Lead | null>(null);
+  const [assignedPerson, setAssignedPerson] = useState('');
+
+  // Toast state
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
+
+  /* ── Toast helper ────────────────────── */
+  const showToast = (message: string, type: 'success' | 'info' = 'success') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
+
+  const filteredLeads = useMemo(() => {
+    let filtered = leads;
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        lead =>
+          lead.name.toLowerCase().includes(term) ||
+          lead.phone.includes(term) ||
+          lead.location.toLowerCase().includes(term) ||
+          lead.email.toLowerCase().includes(term)
+      );
+    }
+
+    // Apply stage filter
+    if (!activeFilters.includes('all')) {
+      filtered = filtered.filter(lead => activeFilters.includes(lead.stage));
+    }
+
+    return filtered;
+  }, [leads, searchTerm, activeFilters]);
+
+  const toggleFilter = (stage: string) => {
+    setActiveFilters(prev => {
+      if (stage === 'all') {
+        return prev.includes('all') ? [] : ['all'];
+      }
+
+      const updated = prev.filter(f => f !== 'all');
+      if (updated.includes(stage)) {
+        return updated.filter(f => f !== stage);
+      }
+      return [...updated, stage];
+    });
+  };
+
+  const stageStyles: Record<LeadStage, string> = {
+    New: 'stage-badge-info',
+    Contacted: 'stage-badge-warning',
+    Qualified: 'stage-badge-purple',
+    Quoted: 'stage-badge-accent',
+    Negotiating: 'stage-badge-pink',
+    Won: 'stage-badge-success',
+    Lost: 'stage-badge-danger',
+  };
+
+  const openStatusModal = (lead: Lead) => {
+    setStatusLead(lead);
+    setStatusStage(lead.stage);
+    setStatusNotes('');
+  };
+
+  const closeStatusModal = () => {
+    setStatusLead(null);
+  };
+
+  const openEmailTemplates = (lead: Lead) => {
+    setEmailLead(lead);
+    setShowEmailTemplates(true);
+    setSelectedTemplate(null);
+    setEmailSubject('');
+    setEmailBody('');
+  };
+
+  const closeEmailTemplates = () => {
+    setShowEmailTemplates(false);
+  };
+
+  const closeSendEmail = () => {
+    setShowSendEmail(false);
+    setSelectedTemplate(null);
+  };
+
+  const openFollowupModal = (lead: Lead) => {
+    setEditFollowupLead(lead);
+    setFollowupDate(lead.followupDate || '');
+    setFollowupTime(lead.followupTime || '');
+  };
+
+  const closeFollowupModal = () => {
+    setEditFollowupLead(null);
+  };
+
+  const handleUpdateFollowup = () => {
+    if (!editFollowupLead) return;
+    const updatedLead: Lead = {
+      ...editFollowupLead,
+      followupDate,
+      followupTime,
+    };
+    onLeadUpdate(updatedLead);
+    showToast(`Updated follow-up for ${updatedLead.name}`, 'success');
+    closeFollowupModal();
+  };
+
+  const openAssignedModal = (lead: Lead) => {
+    setEditAssignedLead(lead);
+    setAssignedPerson(lead.assigned || '');
+  };
+
+  const closeAssignedModal = () => {
+    setEditAssignedLead(null);
+  };
+
+  const handleUpdateAssigned = () => {
+    if (!editAssignedLead) return;
+    const updatedLead: Lead = {
+      ...editAssignedLead,
+      assigned: assignedPerson,
+    };
+    onLeadUpdate(updatedLead);
+    showToast(`Assigned ${assignedPerson} to ${updatedLead.name}`, 'success');
+    closeAssignedModal();
+  };
+
+  const handleTemplateSelect = (template: EmailTemplate) => {
+    if (!emailLead) return;
+    const draft = buildEmailDraft(template, emailLead);
+    setSelectedTemplate(template);
+    setEmailSubject(draft.subject);
+    setEmailBody(draft.body);
+    setShowEmailTemplates(false);
+    setShowSendEmail(true);
+  };
+
+  const handleMoveStage = () => {
+    if (!statusLead) return;
+    if (statusStage === statusLead.stage) {
+      closeStatusModal();
+      return;
+    }
+
+    const now = new Date();
+    const historyEntry: Lead['history'][number] = {
+      date: now.toISOString().slice(0, 10),
+      time: now.toTimeString().slice(0, 5),
+      action: 'Stage changed',
+      detail: `Moved from "${statusLead.stage}" to "${statusStage}".${statusNotes ? ` ${statusNotes}` : ''}`,
+      type: 'system',
+    };
+
+    const updatedLead: Lead = {
+      ...statusLead,
+      stage: statusStage,
+      history: [...statusLead.history, historyEntry],
+      followupDate: statusStage === 'Won' ? '' : statusLead.followupDate,
+      followupTime: statusStage === 'Won' ? '' : statusLead.followupTime,
+      followupNotes: statusStage === 'Won' ? '' : statusLead.followupNotes,
+      urgent: statusStage === 'Won' ? false : statusLead.urgent,
+    };
+
+    onLeadUpdate(updatedLead);
+    closeStatusModal();
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailLead) return;
+    const now = new Date();
+    const historyEntry: Lead['history'][number] = {
+      date: now.toISOString().slice(0, 10),
+      time: now.toTimeString().slice(0, 5),
+      action: 'Email sent',
+      detail: `Subject: ${emailSubject}`,
+      type: 'email',
+    };
+
+    const sendCampaign = await sendEmailToLead(
+      emailLead.email,
+      emailSubject,
+      hydrateTemplate(emailBody, emailLead)
+    );
+
+    if (sendCampaign) {
+      showToast(`Email sent to ${emailLead.name} Successfully`, 'success');
+      const updatedLead: Lead = {
+        ...emailLead,
+        history: [...emailLead.history, historyEntry],
+      };
+      onLeadUpdate(updatedLead);
+    } else {
+      showToast(`Failed to send email to ${emailLead.name}`, 'info');
+    }
+    closeSendEmail();
+  };
+
+  const handleCall = (lead: Lead) => {
+    const dial = dialablePhone(lead.phone);
+    if (!dial) return;
+    window.location.href = `tel:${dial}`;
+  };
+
+  const handleExport = () => {
+    const headers = [
+      'Name',
+      'Phone',
+      'Email',
+      'Location',
+      'Source',
+      'Stage',
+      'Budget',
+      'Type',
+      'Assigned',
+      'Follow-up Date',
+      'Notes',
+      'Lost Reason',
+    ];
+
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const rows = filteredLeads.map(lead => [
+      lead.name,
+      lead.phone,
+      lead.email,
+      lead.location,
+      lead.source,
+      lead.stage,
+      lead.budget,
+      lead.type,
+      lead.assigned,
+      lead.followupDate || '',
+      lead.notes || '',
+      lead.lostReason || '',
+    ].map(value => escapeCsv(String(value ?? ''))).join(','));
+
+    const csv = [headers.map(escapeCsv).join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `BuildPro_Leads_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    window.URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="table-view">
+
+      {/* ═══ TOAST NOTIFICATIONS ═══ */}
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map(toast => (
+            <div key={toast.id} className={`toast-item toast-${toast.type}`}>
+              <div className="toast-icon-wrapper" style={{
+                background: toast.type === 'success' ? 'rgba(22,163,74,0.1)' : 'rgba(37,99,235,0.1)',
+                color: toast.type === 'success' ? '#16A34A' : '#2563EB',
+              }}>
+                {toast.type === 'success' ? <Check size={15} /> : <Bell size={15} />}
+              </div>
+              <span className="toast-msg">{toast.message}</span>
+              <button className="toast-close" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}>
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="table-card">
+        <div className="table-header">
+          <div className="table-header-row">
+            <h3 className="table-title">All Leads</h3>
+            <div className="table-filters">
+              <div className="search-box">
+                <Search size={16} />
+                <input
+                  type="text"
+                  placeholder="Search leads..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="filter-chips">
+                {['all', 'New', 'Contacted', 'Qualified', 'Quoted', 'Negotiating', 'Won', 'Lost'].map(stage => (
+                  <button
+                    key={stage}
+                    className={`filter-chip ${activeFilters.includes(stage) ? 'active' : ''
+                      }`}
+                    onClick={() => toggleFilter(stage)}
+                  >
+                    {stage === 'all' ? 'All' : stage}
+                  </button>
+                ))}
+              </div>
+              <button className="btn-export" onClick={handleExport}>
+                <Download size={14} />
+                Export
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {filteredLeads.length === 0 ? (
+          <div className="table-empty">
+            <Search size={32} />
+            <p>No leads match your search.</p>
+          </div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="leads-table">
+              <thead>
+                <tr>
+                  <th className="col-lead">Lead</th>
+                  <th className="col-phone">Phone</th>
+                  <th className="col-location">Location</th>
+                  {/* <th className="col-source">Source</th> */}
+                  <th className="col-stage">Stage</th>
+                  <th className="col-followup">Follow-up</th>
+                  <th className="col-assigned">Assigned</th>
+                  <th className="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLeads.map(lead => (
+                  <tr key={lead.id} className={lead.urgent ? 'urgent-row' : ''}>
+                    <td className="col-lead">
+                      <div className="cell-name">
+                        {lead.urgent && <span className="urgent-dot" />}
+                        <div className="cell-name-text">
+                          <strong>{lead.name}</strong>
+                          <small>{lead.email}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="col-phone">{lead.phone}</td>
+                    <td className="col-location">{lead.location}</td>
+                    {/* <td className="col-source">
+                      <span className="source-with-icon">
+                        <SourceIcon source={lead.source} />
+                        <span className="source-label">{lead.source}</span>
+                      </span>
+                    </td> */}
+                    <td className="col-stage">
+                      <span className={`stage-badge ${stageStyles[lead.stage]}`}>
+                        {lead.stage}
+                      </span>
+                    </td>
+                    <td className="col-followup">
+                      {!lead.followupDate && !lead.followupTime ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#3ba6f1] hover:bg-[#c1e1f7]/20 hover:text-[#3ba6f1]"
+                          onClick={(e) => { e.stopPropagation(); openFollowupModal(lead); }}
+                          title="Set Follow-up"
+                        >
+                          <Calendar size={12} />
+                          <span>Set date</span>
+                        </button>
+                      ) : (
+                        <span
+                          className={`followup-date-text cursor-pointer hover:text-[#3ba6f1] transition-colors ${lead.urgent ? 'followup-urgent' : ''}`}
+                          onClick={(e) => { e.stopPropagation(); openFollowupModal(lead); }}
+                        >
+                          {formatFollowup(lead.followupDate, lead.followupTime)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="col-assigned">
+                      {!lead.assigned ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#3ba6f1] hover:bg-[#c1e1f7]/20 hover:text-[#3ba6f1]"
+                          onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}
+                          title="Assign Lead"
+                        >
+                          <UserPlus size={12} />
+                          <span>Assign</span>
+                        </button>
+                      ) : (
+                        <span
+                          className="assigned-name cursor-pointer hover:text-[#3ba6f1] transition-colors"
+                          onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}
+                        >
+                          {lead.assigned}
+                        </span>
+                      )}
+                    </td>
+                    <td className="col-actions">
+                      <div className="action-buttons">
+                        {!['Won', 'Lost'].includes(lead.stage) && (
+                          <button
+                            type="button"
+                            className="action-btn-icon"
+                            title="Call"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleCall(lead);
+                            }}
+                          >
+                            <Phone size={15} />
+                          </button>
+                        )}
+                        {lead.email ? (
+                          <button
+                            type="button"
+                            className="action-btn-icon"
+                            title="Follow-up Email"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openEmailTemplates(lead);
+                            }}
+                          >
+                            <Mail size={15} />
+                          </button>
+                        ) : null}
+                        {!['Won', 'Lost'].includes(lead.stage) && (
+                          <button
+                            type="button"
+                            className="action-btn-icon"
+                            title="Change Stage"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openStatusModal(lead);
+                            }}
+                          >
+                            <ArrowRight size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <ModalShell
+        open={!!statusLead}
+        onClose={closeStatusModal}
+        title={statusLead ? `Move: ${statusLead.name}` : 'Change Stage'}
+        maxWidthClass="max-w-[420px]"
+      >
+        {statusLead && (
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-medium text-[#a8a29e]">Current Stage</div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {MOVABLE_STAGES.map(stage => (
+                  <span
+                    key={stage}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] ${stage === statusLead.stage
+                      ? 'border-[#c1e1f7] bg-[#c1e1f7]/30 text-[#3ba6f1] font-medium'
+                      : 'border-[#e5e7eb] bg-[#fafaf9] text-[#78716c]'
+                      }`}
+                  >
+                    {stage}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[#78716c]">Move to Stage</label>
+              <select
+                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                value={statusStage}
+                onChange={event => setStatusStage(event.target.value as LeadStage)}
+              >
+                {MOVABLE_STAGES.map(stage => (
+                  <option key={stage} value={stage} disabled={stage === statusLead.stage}>
+                    {stage} {stage === statusLead.stage ? '(current)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[#78716c]">Notes (optional)</label>
+              <textarea
+                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                rows={3}
+                placeholder="Why are you moving this lead?"
+                value={statusNotes}
+                onChange={event => setStatusNotes(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+                onClick={handleMoveStage}
+              >
+                <ArrowRight size={14} />
+                Move Lead
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+                onClick={closeStatusModal}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </ModalShell>
+
+      <ModalShell
+        open={showEmailTemplates}
+        onClose={closeEmailTemplates}
+        title="Email Templates"
+        subtitle="Select a template to send to the lead"
+        maxWidthClass="max-w-[720px]"
+      >
+        <div className="space-y-4">
+          {emailLead ? (
+            <div className="rounded-[10px] border border-[#c1e1f7] bg-[#c1e1f7]/30 px-4 py-3 text-sm text-[#0c0a09]">
+              Sending to: <span className="font-medium">{emailLead.name}</span> -{' '}
+              {emailLead.email || 'No email'}
+            </div>
+          ) : (
+            <div className="rounded-[10px] border border-[#e5e7eb] bg-[#fafaf9] px-4 py-3 text-sm text-[#78716c]">
+              Select a template, then choose a lead to send it to.
+            </div>
+          )}
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {EMAIL_TEMPLATES.map(template => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => handleTemplateSelect(template)}
+                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#3ba6f1] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
+                >
+                  <div className="text-[11px] font-medium uppercase tracking-[0.048px] text-[#a8a29e]">
+                    {template.category}
+                  </div>
+                  <div className="mt-1 text-[15px] font-medium text-[#0c0a09]">
+                    {previewTemplateText(template.subject)}
+                  </div>
+                  <div className="mt-2 text-xs leading-relaxed text-[#78716c]">
+                    {buildSnippet(template.body)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </ModalShell>
+
+      <ModalShell
+        open={showSendEmail}
+        onClose={closeSendEmail}
+        title="Send Email"
+        subtitle={emailLead ? `To: ${emailLead.name} (${emailLead.email || 'No email'})` : undefined}
+        maxWidthClass="max-w-[600px]"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-[#78716c]">To</label>
+            <input
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-[#fafaf9] px-3 py-2 text-sm text-[#78716c]"
+              value={emailLead?.email || emailLead?.name || ''}
+              readOnly
+            />
+          </div>
+          {selectedTemplate ? (
+            <div className="flex items-center justify-between rounded-[4px] border border-[#e5e7eb] bg-[#fafaf9] px-3 py-2 text-xs text-[#78716c]">
+              <span>Template</span>
+              <span className="font-medium text-[#0c0a09]">{selectedTemplate.category}</span>
+            </div>
+          ) : null}
+          <div>
+            <label className="text-xs font-medium text-[#78716c]">Subject</label>
+            <input
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              value={emailSubject}
+              onChange={event => setEmailSubject(event.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-[#78716c]">Body</label>
+            <textarea
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              rows={8}
+              value={emailBody}
+              onChange={event => setEmailBody(event.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              onClick={handleSendEmail}
+              disabled={!emailSubject.trim()}
+            >
+              <Mail size={14} />
+              Send Email
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+              onClick={closeSendEmail}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </ModalShell>
+
+      <ModalShell
+        open={!!editFollowupLead}
+        onClose={closeFollowupModal}
+        title="Set Follow-up"
+        subtitle={editFollowupLead ? `For ${editFollowupLead.name}` : undefined}
+        maxWidthClass="max-w-[400px]"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-[#78716c]">Date</label>
+            <input
+              type="date"
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              value={followupDate}
+              onChange={event => setFollowupDate(event.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-[#78716c]">Time</label>
+            <input
+              type="time"
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              value={followupTime}
+              onChange={event => setFollowupTime(event.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              onClick={handleUpdateFollowup}
+              disabled={!followupDate}
+            >
+              Save Follow-up
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+              onClick={closeFollowupModal}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </ModalShell>
+
+      <ModalShell
+        open={!!editAssignedLead}
+        onClose={closeAssignedModal}
+        title="Assign Lead"
+        subtitle={editAssignedLead ? `Assign ${editAssignedLead.name} to:` : undefined}
+        maxWidthClass="max-w-[400px]"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-[#78716c]">Assigned To</label>
+            <select
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              value={assignedPerson}
+              onChange={event => setAssignedPerson(event.target.value)}
+            >
+              <option value="" disabled>Select a person</option>
+              {["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(person => (
+                <option key={person} value={person}>{person}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              onClick={handleUpdateAssigned}
+              disabled={!assignedPerson}
+            >
+              Save Assignment
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+              onClick={closeAssignedModal}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </ModalShell>
+    </div>
+  );
+}

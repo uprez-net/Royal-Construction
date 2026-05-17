@@ -203,7 +203,7 @@ export function AppShell({
           </header>
 
           <main className="mx-auto flex w-full max-w-screen-2xl flex-1 flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-            <section className="flex flex-col gap-4 rounded-[2rem] border border-white/70 bg-white/90 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur xl:flex-row xl:items-end xl:justify-between">
+            {/* <section className="flex flex-col gap-4 rounded-[2rem] border border-white/70 bg-white/90 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur xl:flex-row xl:items-end xl:justify-between">
               <div className="max-w-3xl space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-700/70">
                   BuildPro Operations
@@ -220,7 +220,7 @@ export function AppShell({
               {actions ? (
                 <div className="flex flex-wrap gap-2">{actions}</div>
               ) : null}
-            </section>
+            </section> */}
             {children}
           </main>
         </div>
