@@ -41,6 +41,23 @@ enum TradieScheduleStatus {
   COMPLETED
 }
 
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTED
+  NEGOTIATING
+  WON
+  LOST
+}
+
+enum HistoryType {
+  SYSTEM
+  CALL
+  EMAIL
+  REFERRAL
+}
+
 model Project {
   id               String   @id @default(uuid())
   name             String
@@ -263,4 +280,59 @@ model User {
   @@index([phone])
   @@index([role])
   @@index([clerkId])
+}
+
+model Lead {
+  id Int @id @default(autoincrement())
+
+  name     String
+  phone    String
+  email    String @unique
+  location String
+
+  source       String
+  sourceDetail String?
+
+  stage LeadStage @default(NEW)
+
+  assigned String?
+
+  budget String?
+  type   String?
+
+  notes String? @db.Text
+
+  followupDate  DateTime?
+  followupTime  String?
+  followupNotes String?   @db.Text
+
+  urgent Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  history LeadHistory[]
+
+  @@index([stage])
+  @@index([assigned])
+  @@index([createdAt])
+}
+
+model LeadHistory {
+  id Int @id @default(autoincrement())
+
+  leadId Int
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  action String
+  detail String @db.Text
+
+  type HistoryType
+
+  actionDate DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+  @@index([type])
 }

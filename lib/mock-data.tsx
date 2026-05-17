@@ -226,9 +226,6 @@ export const tickerItems = [
   "Worker attendance: 53/56 checked in today",
 ];
 
-
-
-
 export const projectOverviewMock = {
   // buildingType: "Double Storey 4BR + Study",
   // lotSize: "620 sqm",
