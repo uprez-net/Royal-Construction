@@ -147,6 +147,19 @@ That intent is partially implemented, but there is a material mismatch in [proxy
 
 This needs to be treated as a real security issue, not just a style concern.
 
+Immediate remediation checklist (apply quickly, then follow with tests):
+
+- Restrict `proxy.ts` public-route matcher to only explicit public routes (sign-in, sign-up, webhook, static assets, health). Remove any catch-all like `/(.*)`.
+- Add explicit `auth()` checks to all mutation endpoints and any endpoints that return sensitive project or user data.
+- Introduce Zod request schemas for mutation routes and enforce them at the top of each handler; return a consistent JSON error envelope on validation failure.
+- Run a quick integration check (or unit test) that protected endpoints return 401 when unauthenticated.
+- Audit `app/api/(data)` GET endpoints and decide whether each should be public or require auth; document the decision in these docs.
+
+Longer-term follow-ups:
+
+- Add automated route-protection tests to CI to prevent regressions.
+- Consider explicit role-based guards for admin or cross-customer operations (check `User.role` and `customerId` relationships).
+
 ## Server Actions, API Routes, And Backend Integration
 
 The repository uses `use server` modules under `lib/data/*` for query composition and `app/api/*` route handlers for network-visible integration.
