@@ -1,98 +1,98 @@
 import { auth } from '@clerk/nextjs/server';
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { saveFile } from '@/lib/data/file';
 import { getUserByClerkIdCached } from '@/lib/data/user';
+import { UPLOAD_CONSTRAINTS } from '@/utils/validators/files';
+import { errorResponse, unauthorizedResponse } from '@/utils/validators';
 
-interface ClientPayload {
-    fileId?: string;
-    fileName: string;
-    projectId: string;
-    milestoneId?: string | null;
-}
+/**
+ * Client payload schema - validated before token generation
+ */
+const clientPayloadSchema = z.object({
+    fileId: z.string().optional(),
+    fileName: z.string().trim().min(1, 'File name is required').max(255),
+    projectId: z.string().trim().min(1, 'Project ID is required'),
+    milestoneId: z.string().trim().optional().nullable(),
+});
 
-interface TokenPayload {
-    fileId?: string;
-    fileName: string;
-    userId: string;
-    projectId: string;
-    milestoneId?: string | null;
-}
+type ClientPayload = z.infer<typeof clientPayloadSchema>;
+
+/**
+ * Token payload schema - validated on completion
+ */
+const tokenPayloadSchema = clientPayloadSchema.extend({
+    userId: z.string().min(1, 'User ID is required'),
+});
+
+type TokenPayload = z.infer<typeof tokenPayloadSchema>;
 
 export async function POST(request: Request): Promise<NextResponse> {
-    const body = (await request.json()) as HandleUploadBody;
-
     try {
+        const body = (await request.json()) as HandleUploadBody;
+
         const jsonResponse = await handleUpload({
             body,
             request,
-            onBeforeGenerateToken: async (
-                // pathname,
-                clientPayload
-            ) => {
+            onBeforeGenerateToken: async (clientPayloadStr: string) => {
                 const { isAuthenticated, userId } = await auth();
-                if (!isAuthenticated) throw new Error('Not authenticated');
-                const { projectId, milestoneId, fileName, fileId } = JSON.parse(clientPayload) as ClientPayload;
+                if (!isAuthenticated) {
+                    throw new Error('Not authenticated');
+                }
+
+                // Parse and validate client payload
+                let clientPayload: ClientPayload;
+                try {
+                    clientPayload = clientPayloadSchema.parse(JSON.parse(clientPayloadStr));
+                } catch (error) {
+                    throw new Error('Invalid file metadata in payload');
+                }
 
                 return {
-                    allowedContentTypes: [
-                        'image/jpeg',
-                        'image/png',
-                        'image/webp',
-                        'application/pdf',
-
-                        // Microsoft Word
-                        'application/msword', // .doc
-                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-
-                        // Excel
-                        'application/vnd.ms-excel', // .xls
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-
-                        // CSV
-                        'text/csv',
-                        'application/csv',
-                        'text/plain'
-                    ],
+                    allowedContentTypes: UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[],
                     addRandomSuffix: true,
-                    maximumSizeInBytes: 40 * 1024 * 1024, // 40MB
+                    maximumSizeInBytes: UPLOAD_CONSTRAINTS.maxFileSizeBytes,
                     tokenPayload: JSON.stringify({
-                        userId: userId,
-                        projectId,
-                        milestoneId,
-                        fileId,
-                        fileName,
-                    }),
-                }
+                        userId,
+                        projectId: clientPayload.projectId,
+                        milestoneId: clientPayload.milestoneId,
+                        fileId: clientPayload.fileId,
+                        fileName: clientPayload.fileName,
+                    } satisfies TokenPayload),
+                };
             },
             onUploadCompleted: async ({ blob, tokenPayload }) => {
                 try {
-                    const { userId, projectId, milestoneId, fileName } = JSON.parse(tokenPayload!) as TokenPayload;
-                    const user = await getUserByClerkIdCached(userId);
+                    // Validate token payload
+                    const payload = tokenPayloadSchema.parse(JSON.parse(tokenPayload!));
+
+                    const user = await getUserByClerkIdCached(payload.userId);
                     if (!user) {
                         throw new Error('User not found');
                     }
 
                     await saveFile({
                         userId: user.id,
-                        projectId,
-                        milestoneId: milestoneId ?? undefined,
+                        projectId: payload.projectId,
+                        milestoneId: payload.milestoneId ?? undefined,
                         fileUrl: blob.url,
-                        fileName,
+                        fileName: payload.fileName,
                     });
                 } catch (error) {
                     console.error('Error in onUploadCompleted', error);
-                    throw new Error('Could not update user');
+                    throw new Error('Failed to save file metadata');
                 }
             },
         });
 
         return NextResponse.json(jsonResponse);
     } catch (error) {
-        return NextResponse.json(
-            { error: (error as Error).message },
-            { status: 400 },
-        );
+        const message = (error as Error).message || 'Upload failed';
+        return errorResponse(message, {
+            status: 400,
+            code: 'UPLOAD_ERROR',
+        });
     }
 }

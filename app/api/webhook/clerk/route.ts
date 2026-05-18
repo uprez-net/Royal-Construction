@@ -1,21 +1,23 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
 import { updateUserMetadata } from "@/lib/auth";
-
+import { errorResponse, successResponse } from "@/utils/validators";
 
 export async function POST(request: NextRequest) {
     try {
-        const evt = await verifyWebhook(request)
+        const evt = await verifyWebhook(request);
         if (!evt) {
             console.error("Invalid webhook event");
-            console.dir(evt);
-            return new Response("Invalid webhook", { status: 400 });
+            return errorResponse("Invalid webhook signature", {
+                status: 401,
+                code: "INVALID_SIGNATURE",
+            });
         }
 
         switch (evt.type) {
-            case "user.created":
+            case "user.created": {
                 const {
                     phone_numbers,
                     email_addresses,
@@ -37,9 +39,10 @@ export async function POST(request: NextRequest) {
                         applicationUserId: newUser.userId,
                     }
                 });
-                return new Response("User created", { status: 200 });
-            case "user.updated":
-                // Handle user updated event
+                return NextResponse.json({ success: true, message: "User created" }, { status: 201 });
+            }
+
+            case "user.updated": {
                 const {
                     public_metadata,
                     phone_numbers: updatedPhoneNumbers,
@@ -60,19 +63,24 @@ export async function POST(request: NextRequest) {
                     role,
                 });
 
-                return new Response("User updated", { status: 200 });
-            case "user.deleted":
+                return NextResponse.json({ success: true, message: "User updated" }, { status: 200 });
+            }
+
+            case "user.deleted": {
                 const { id: deletedId } = evt.data;
 
                 if (!deletedId) {
-                    console.error("No user ID provided in user.deleted event");
-                    return new Response("User ID missing", { status: 400 });
+                    return errorResponse("User ID is required for deletion", {
+                        status: 400,
+                        code: "MISSING_USER_ID",
+                    });
                 }
 
                 await deleteUser(deletedId);
-                // Handle user deleted event
-                return new Response("User deleted", { status: 200 });
-            case "organizationInvitation.accepted":
+                return NextResponse.json({ success: true, message: "User deleted" }, { status: 200 });
+            }
+
+            case "organizationInvitation.accepted": {
                 const {
                     role_name: invitationRoleName,
                     user_id: invitationUserId,
@@ -88,22 +96,25 @@ export async function POST(request: NextRequest) {
                         organizationId: invitationOrganizationId,
                     },
                 });
-                // Handle organization invitation accepted event
-                return new Response("Organization invitation accepted", { status: 200 });
+                return NextResponse.json({ success: true, message: "Organization invitation accepted" }, { status: 200 });
+            }
+
             case "organizationInvitation.created":
-                // Handle organization invitation created event
-                return new Response("Organization invitation created", { status: 200 });
+                return NextResponse.json({ success: true, message: "Organization invitation created" }, { status: 200 });
+
             case "organizationInvitation.revoked":
-                // Handle organization invitation revoked event
-                return new Response("Organization invitation revoked", { status: 200 });
+                return NextResponse.json({ success: true, message: "Organization invitation revoked" }, { status: 200 });
+
             default:
                 console.warn(`Unhandled event type: ${evt.type}`);
+                return NextResponse.json({ success: true, message: "Event acknowledged but not processed" }, { status: 200 });
         }
-
-        return new Response("Webhook event not handled", { status: 200 });
 
     } catch (error) {
         console.error("Error verifying webhook:", error);
-        return new Response("Error verifying webhook", { status: 400 });
+        return errorResponse("Failed to process webhook", {
+            status: 500,
+            code: "WEBHOOK_ERROR",
+        });
     }
 }

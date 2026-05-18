@@ -1,140 +1,121 @@
 import { auth } from "@clerk/nextjs/server";
-import { ProjectStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import prisma from "@/lib/prisma";
-import { getCachedProjectById, getCachedProjects, getCachedProjectsForLookup, type ProjectListSortBy } from "@/lib/data/projects";
+import { getCachedProjectById, getCachedProjects, getCachedProjectsForLookup } from "@/lib/data/projects";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
-
-type CreateProjectPayload = {
-  name?: string;
-  propertyType?: string;
-  type?: string;
-  customerMode?: "existing" | "new";
-  customerId?: string;
-  customerName?: string;
-  customerPhone?: string;
-  customerEmail?: string;
-  location?: string;
-  siteManagerId?: string | null;
-  budget?: string | number;
-  lotSize?: string | number;
-  startDate?: string;
-  estimatedEndDate?: string | null;
-  estEnd?: string | null;
-  notes?: string;
-};
+import {
+  createProjectSchema,
+  projectListQuerySchema,
+  projectLookupQuerySchema,
+  parseSearchParamsWithResponse,
+  validationErrorResponse,
+  successResponse,
+  unauthorizedResponse,
+  notFoundResponse,
+  badRequestResponse,
+  parseBodyWithResponse,
+  errorResponse,
+} from "@/utils/validators";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const mode = url.searchParams.get("mode");
-  const status = url.searchParams.get("status");
-  const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
-  const limit = Number.parseInt(url.searchParams.get("limit") ?? "12", 10);
-  const search = url.searchParams.get("search") ?? "";
-  const lookupQuery = url.searchParams.get("q") ?? "";
 
+  // Handle lookup mode
   if (mode === "lookup") {
-    const result = await getCachedProjectsForLookup(page, limit, lookupQuery);
-    return NextResponse.json(result);
+    const params = parseSearchParamsWithResponse(url, projectLookupQuerySchema);
+    if (!params.success) return params.response;
+
+    const result = await getCachedProjectsForLookup(
+      params.data.page,
+      params.data.limit,
+      params.data.q,
+    );
+
+    return successResponse(result);
   }
 
-  const sortBy = url.searchParams.get("sortBy") as ProjectListSortBy | null;
-  const sortOrder = url.searchParams.get("sortOrder") === "desc" ? "desc" : "asc";
-  const projectStatus = status && Object.values(ProjectStatus).includes(status as ProjectStatus) ? (status as ProjectStatus) : undefined;
+  // Handle main list mode
+  const params = parseSearchParamsWithResponse(url, projectListQuerySchema);
+  if (!params.success) return params.response;
+
   const projects = await getCachedProjects({
-    status: projectStatus,
-    page,
-    limit,
-    search,
-    sortBy: sortBy ?? undefined,
-    sortOrder,
+    status: params.data.status,
+    page: params.data.page,
+    limit: params.data.limit,
+    search: params.data.search,
+    sortBy: params.data.sortBy,
+    sortOrder: params.data.sortOrder,
   });
 
-  return NextResponse.json(projects);
+  return successResponse(projects);
 }
 
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return unauthorizedResponse();
   }
 
   try {
-    const body = (await request.json()) as CreateProjectPayload;
-    const projectName = body.name?.trim();
-    const propertyType = body.propertyType?.trim() || body.type?.trim() || "Custom Build";
-    const customerMode = body.customerMode ?? (body.customerId ? "existing" : "new");
-    const location = body.location?.trim();
-    const startDate = body.startDate?.trim();
-    const totalBudget = Number(body.budget ?? 0);
-    const lotSize = Number(body.lotSize ?? 0);
-    const estimatedEndDate = body.estimatedEndDate ?? body.estEnd ?? null;
+    const body = await parseBodyWithResponse(request, createProjectSchema);
+    if (!body.success) return body.response;
 
-    if (!projectName || !location || !startDate || !Number.isFinite(totalBudget) || !Number.isFinite(lotSize)) {
-      return NextResponse.json({ error: "Missing required project fields" }, { status: 400 });
-    }
+    const projectData = body.data;
+    const customerMode = projectData.customerMode;
 
     let customerId = "";
 
     if (customerMode === "existing") {
-      if (!body.customerId) {
-        return NextResponse.json({ error: "Customer selection is required" }, { status: 400 });
-      }
-
-      const existingCustomer = await findCustomerById(body.customerId);
+      const existingCustomer = await findCustomerById(projectData.customerId!);
       if (!existingCustomer) {
-        return NextResponse.json({ error: "Selected customer was not found" }, { status: 404 });
+        return notFoundResponse("Customer");
       }
       customerId = existingCustomer.id;
     } else {
-      const customerName = body.customerName?.trim();
-      const customerPhone = body.customerPhone?.trim();
-      const customerEmail = body.customerEmail?.trim();
-
-      if (!customerName || !customerPhone || !customerEmail) {
-        return NextResponse.json({ error: "New customer details are required" }, { status: 400 });
-      }
-
-      const existingCustomer = await findCustomerByContact(customerEmail, customerPhone);
+      const existingCustomer = await findCustomerByContact(
+        projectData.customerEmail!,
+        projectData.customerPhone!,
+      );
       if (existingCustomer) {
         customerId = existingCustomer.id;
       } else {
         const createdCustomer = await createCustomerForProject({
-          name: customerName,
-          email: customerEmail,
-          phone: customerPhone,
+          name: projectData.customerName!,
+          email: projectData.customerEmail!,
+          phone: projectData.customerPhone!,
         });
         customerId = createdCustomer.id;
       }
     }
 
-    const siteManagerId = body.siteManagerId?.trim() || null;
+    const siteManagerId = projectData.siteManagerId?.trim() || null;
     let siteManager = null;
 
     if (siteManagerId) {
       siteManager = await getSiteManagerById(siteManagerId);
       if (!siteManager) {
-        return NextResponse.json({ error: "Selected site manager was not found" }, { status: 404 });
+        return notFoundResponse("Site Manager");
       }
     }
 
     const project = await prisma.project.create({
       data: {
-        name: projectName,
-        description: body.notes?.trim() || null,
+        name: projectData.name,
+        buildingType: projectData.propertyType,
+        description: projectData.notes?.trim() || null,
         customerId,
-        location,
+        location: projectData.location,
         siteManagerId: siteManager?.id ?? null,
-        totalBudget: String(totalBudget),
-        lotSize: String(lotSize),
-        startDate: new Date(startDate),
-        estimatedEndDate: estimatedEndDate ? new Date(estimatedEndDate) : new Date(startDate),
+        totalBudget: String(projectData.budget),
+        lotSize: String(projectData.lotSize),
+        startDate: projectData.startDate,
+        estimatedEndDate: projectData.estimatedEndDate || projectData.startDate,
         requirements: {
-          propertyType,
-          notes: body.notes?.trim() || null,
+          notes: projectData.notes?.trim() || null,
           customerMode,
         },
       },
@@ -146,12 +127,18 @@ export async function POST(request: Request) {
     const createdProject = await getCachedProjectById(project.id);
 
     if (!createdProject) {
-      return NextResponse.json({ error: "Project was created but could not be loaded" }, { status: 500 });
+      return errorResponse("Project was created but could not be loaded", {
+        status: 500,
+        code: "POST_LOAD_FAILED",
+      });
     }
 
-    return NextResponse.json(createdProject, { status: 201 });
+    return successResponse(createdProject, { status: 201 });
   } catch (error) {
     console.error("/api/projects POST error", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return errorResponse("Failed to create project", {
+      status: 500,
+      code: "INTERNAL_ERROR",
+    });
   }
 }

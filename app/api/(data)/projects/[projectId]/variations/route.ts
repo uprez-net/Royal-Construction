@@ -3,29 +3,37 @@ import { VariationStatus } from "@prisma/client";
 import { getProjectById } from "@/lib/data/projects";
 import prisma from "@/lib/prisma";
 import { revalidateTag } from "next/cache";
+import {
+  createVariationSchema,
+  projectParamSchema,
+  parseRouteParamsWithResponse,
+  parseBodyWithResponse,
+  successResponse,
+  errorResponse,
+} from "@/utils/validators";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
-  const { projectId } = await params;
+  const resolvedParams = await params;
+  const routeParams = parseRouteParamsWithResponse(
+    resolvedParams,
+    projectParamSchema
+  );
+  if (!routeParams.success) return routeParams.response;
 
-  const body = (await request.json()) as {
-    description?: string;
-    cost?: number;
-    requestedDate?: string;
-  };
+  const body = await parseBodyWithResponse(request, createVariationSchema);
+  if (!body.success) return body.response;
 
-  if (!body.description || typeof body.cost !== "number") {
-    return new Response("Invalid variation payload", { status: 400 });
-  }
+  const projectId = routeParams.data.projectId;
 
   await prisma.variation.create({
     data: {
       projectId: projectId,
-      description: body.description,
-      cost: body.cost,
-      requestedDate: body.requestedDate ? new Date(body.requestedDate) : new Date(),
+      description: body.data.description,
+      cost: body.data.cost,
+      requestedDate: body.data.requestedDate || new Date(),
       status: VariationStatus.PENDING,
     },
   });
@@ -35,8 +43,11 @@ export async function POST(
   const updatedProject = await getProjectById(projectId);
 
   if (!updatedProject) {
-    return new Response("Project not found after creating variation", { status: 404 });
+    return errorResponse("Project not found after creating variation", {
+      status: 404,
+      code: "NOT_FOUND",
+    });
   }
 
-  return Response.json(updatedProject);
+  return successResponse(updatedProject, { status: 201 });
 }

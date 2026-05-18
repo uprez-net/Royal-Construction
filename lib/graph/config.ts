@@ -4,7 +4,7 @@ export interface GraphConfig {
   mode: GraphMode;
   tenantId: string;
   clientId: string;
-  clientSecret?: string;
+  clientSecret: string;
   senderUpn?: string;
   defaultRecipient: string;
   defaultSubject: string;
@@ -13,7 +13,7 @@ export interface GraphConfig {
   webhookNotificationUrl?: string;
   webhookSubscriptionResource?: string;
   webhookSubscriptionMinutes: number;
-  adminToken?: string;
+  adminToken: string;
 }
 
 function requireEnv(name: string): string {
@@ -52,7 +52,7 @@ export function getGraphConfig(): GraphConfig {
     mode,
     tenantId: requireEnv('AZURE_TENANT_ID'),
     clientId: requireEnv('AZURE_CLIENT_ID'),
-    clientSecret: process.env.AZURE_CLIENT_SECRET,
+    clientSecret: requireEnv('AZURE_CLIENT_SECRET'),
     senderUpn: process.env.BUSINESS_EMAIL || process.env.GRAPH_SENDER_UPN,
     defaultRecipient: process.env.DEMO_RECIPIENT || 'your-recipient@contoso.com',
     defaultSubject: process.env.DEMO_SUBJECT || 'Hello from Microsoft Graph',
@@ -67,6 +67,6 @@ export function getGraphConfig(): GraphConfig {
       process.env.GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES,
       60,
     ),
-    adminToken: process.env.GRAPH_ADMIN_TOKEN,
+    adminToken: requireEnv('GRAPH_ADMIN_TOKEN'),
   };
 }

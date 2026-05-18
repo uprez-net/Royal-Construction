@@ -333,36 +333,36 @@ export async function GET(
     request: Request,
 ) {
     try {
-        const { searchParams } =
-            new URL(
-                request.url,
-            );
+        const url = new URL(request.url);
+        const query = url.searchParams.get("query")?.trim() ?? "";
+        const limitParam = url.searchParams.get("limit");
 
-        const query =
-            searchParams
-                .get(
-                    "query",
-                )
-                ?.trim() ?? "";
+        // Validate query param
+        if (query.length < 2) {
+            return NextResponse.json({
+                suggestions: [] as AddressSuggestion[],
+                count: 0,
+            });
+        }
 
-        if (
-            query.length < 3
-        ) {
+        if (query.length > 255) {
             return NextResponse.json(
                 {
-                    suggestions:
-                        [] as AddressSuggestion[],
+                    error: "Search query is too long (max 255 characters)",
                 },
+                { status: 400 }
             );
         }
 
-        const googleApiKey =
-            process.env
-                .GOOGLE_MAPS_API_KEY;
+        const limit = Math.min(
+            limitParam ? Math.max(1, parseInt(limitParam, 10)) : 8,
+            20
+        );
 
-        const geoscapeApiKey =
-            process.env
-                .GEOSCAPE_API_KEY;
+        const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+        const geoscapeApiKey = process.env.GEOSCAPE_API_KEY;
+
+        // The rest of the function continues with the 'query' variable from above
 
         if (
             !googleApiKey ||

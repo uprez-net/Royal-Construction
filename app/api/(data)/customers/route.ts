@@ -1,13 +1,19 @@
-import { NextResponse } from "next/server";
-
 import { getCachedCustomersForDropdown } from "@/lib/data/customers";
+import {
+  customerLookupQuerySchema,
+  parseSearchParamsWithResponse,
+  successResponse,
+} from "@/utils/validators";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
-  const limit = Number.parseInt(url.searchParams.get("limit") ?? "10", 10);
-  const query = url.searchParams.get("q") ?? "";
+  const params = parseSearchParamsWithResponse(url, customerLookupQuerySchema);
+  if (!params.success) return params.response;
 
-  const result = await getCachedCustomersForDropdown(page, limit, query);
-  return NextResponse.json(result);
+  const result = await getCachedCustomersForDropdown(
+    params.data.page,
+    params.data.limit,
+    params.data.q || params.data.search
+  );
+  return successResponse(result);
 }

@@ -1,13 +1,34 @@
 import { sendTradieReminders } from "@/lib/jobs/tradie-reminder";
+import { successResponse, errorResponse } from "@/utils/validators";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret) {
+    return errorResponse("Cron not configured", {
+      status: 500,
+      code: "CONFIG_ERROR",
+    });
   }
 
-  const result = await sendTradieReminders();
-  return Response.json(result);
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return errorResponse("Unauthorized", {
+      status: 401,
+      code: "UNAUTHORIZED",
+    });
+  }
+
+  try {
+    const result = await sendTradieReminders();
+    return successResponse(result);
+  } catch (error) {
+    console.error("/api/cron/tradie-reminders GET error", error);
+    return errorResponse("Failed to send tradie reminders", {
+      status: 500,
+      code: "INTERNAL_ERROR",
+    });
+  }
 }

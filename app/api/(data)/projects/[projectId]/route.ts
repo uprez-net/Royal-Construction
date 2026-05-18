@@ -1,15 +1,22 @@
 import { getCachedProjectById } from "@/lib/data/projects";
+import { parseRouteParamsWithResponse, successResponse, notFoundResponse } from "@/utils/validators";
+import { projectParamSchema } from "@/utils/validators/projects";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
-  const { projectId } = await params;
+  const resolvedParams = await params;
+  const routeParams = parseRouteParamsWithResponse(
+    resolvedParams,
+    projectParamSchema
+  );
+  if (!routeParams.success) return routeParams.response;
 
-  const project = await getCachedProjectById(projectId);
+  const project = await getCachedProjectById(routeParams.data.projectId);
   if (!project) {
-    return new Response("Not found", { status: 404 });
+    return notFoundResponse("Project");
   }
 
-  return Response.json(project);
+  return successResponse(project);
 }

@@ -1,13 +1,19 @@
-import { NextResponse } from "next/server";
-
 import { getCachedSiteManagersForDropdown } from "@/lib/data/siteManagers";
+import {
+  siteManagerLookupQuerySchema,
+  parseSearchParamsWithResponse,
+  successResponse,
+} from "@/utils/validators";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
-  const limit = Number.parseInt(url.searchParams.get("limit") ?? "10", 10);
-  const query = url.searchParams.get("q") ?? "";
+  const params = parseSearchParamsWithResponse(url, siteManagerLookupQuerySchema);
+  if (!params.success) return params.response;
 
-  const result = await getCachedSiteManagersForDropdown(page, limit, query);
-  return NextResponse.json(result);
+  const result = await getCachedSiteManagersForDropdown(
+    params.data.page,
+    params.data.limit,
+    params.data.q || params.data.search
+  );
+  return successResponse(result);
 }

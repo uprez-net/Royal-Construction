@@ -1,41 +1,60 @@
 import { VariationStatus } from "@prisma/client";
+import { z } from "zod";
 
 import prisma from "@/lib/prisma";
 import { applyVariationDelay } from "@/lib/utils/apply-variation-delay";
 import { revalidateTag } from "next/cache";
+import {
+  parseRouteParamsWithResponse,
+  parseBodyWithResponse,
+  successResponse,
+  badRequestResponse,
+} from "@/utils/validators";
+
+const variationUpdateSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED"]),
+});
+
+const variationParamSchema = z.object({
+  projectId: z.string().trim().min(1, "Project ID is required"),
+  variationId: z.string().trim().min(1, "Variation ID is required"),
+});
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ projectId: string; variationId: string }> },
 ) {
+  const resolvedParams = await params;
+  const routeParams = parseRouteParamsWithResponse(
+    resolvedParams,
+    variationParamSchema
+  );
+  if (!routeParams.success) return routeParams.response;
 
-  const { projectId, variationId } = await params;
+  const body = await parseBodyWithResponse(request, variationUpdateSchema);
+  if (!body.success) return body.response;
 
-  const body = (await request.json()) as { status?: "APPROVED" | "REJECTED" };
-
-  if (!body.status) {
-    return new Response("Status is required", { status: 400 });
-  }
+  const { projectId, variationId } = routeParams.data;
 
   const variation = await prisma.variation.update({
     where: { id: variationId },
     data:
-      body.status === "APPROVED"
+      body.data.status === "APPROVED"
         ? {
-          status: VariationStatus.APPROVED,
-          approvedDate: new Date(),
-        }
+            status: VariationStatus.APPROVED,
+            approvedDate: new Date(),
+          }
         : {
-          status: VariationStatus.REJECTED,
-          approvedDate: null,
-        },
+            status: VariationStatus.REJECTED,
+            approvedDate: null,
+          },
   });
 
-  if (body.status === "APPROVED") {
+  if (body.data.status === "APPROVED") {
     await applyVariationDelay(variation.id);
   }
 
   revalidateTag(`project-${projectId}`, "max");
 
-  return Response.json(variation);
+  return successResponse(variation);
 }

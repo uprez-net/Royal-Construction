@@ -1,8 +1,23 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
-import { jsonError, requireAdminToken } from '@/lib/graph/route-utils';
+import { successResponse, errorResponse, unauthorizedResponse } from '@/utils/validators';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
+
+function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return unauthorizedResponse();
+  }
+
+  const token = authHeader.slice(7);
+  if (token !== adminToken) {
+    return unauthorizedResponse();
+  }
+
+  return null;
+}
 
 export async function GET(request: Request): Promise<Response> {
   const config = getGraphConfig();
@@ -14,9 +29,9 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const client = await createGraphContext(config);
     const tokenPreview = await client.getTokenPreview();
-    return Response.json({ tokenPreview });
+    return successResponse({ tokenPreview });
   } catch (error) {
     console.error('Graph token preview failed', error);
-    return jsonError('Failed to acquire token preview', 500);
+    return errorResponse('Failed to acquire token preview', { status: 500, code: 'GRAPH_ERROR' });
   }
 }

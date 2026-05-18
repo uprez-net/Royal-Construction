@@ -1,13 +1,20 @@
 import prisma from "@/lib/prisma";
+import { parseRouteParamsWithResponse, successResponse } from "@/utils/validators";
+import { projectParamSchema } from "@/utils/validators/projects";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
-  const { projectId } = await params;
+  const resolvedParams = await params;
+  const routeParams = parseRouteParamsWithResponse(
+    resolvedParams,
+    projectParamSchema
+  );
+  if (!routeParams.success) return routeParams.response;
 
   const milestones = await prisma.milestone.findMany({
-    where: { projectId: projectId },
+    where: { projectId: routeParams.data.projectId },
     orderBy: { order: "asc" },
     select: {
       id: true,
@@ -18,5 +25,5 @@ export async function GET(
     },
   });
 
-  return Response.json(milestones);
+  return successResponse(milestones);
 }

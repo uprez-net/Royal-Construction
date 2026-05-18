@@ -1,8 +1,23 @@
 import { createGraphContext, type EmailInput } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
-import { jsonError, requireAdminToken } from '@/lib/graph/route-utils';
+import { successResponse, errorResponse, unauthorizedResponse, badRequestResponse } from '@/utils/validators';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
+
+function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return unauthorizedResponse();
+  }
+
+  const token = authHeader.slice(7);
+  if (token !== adminToken) {
+    return unauthorizedResponse();
+  }
+
+  return null;
+}
 
 function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
   const trimmed = rawBody.trim();
@@ -24,7 +39,7 @@ function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
         return parsed;
       }
     } catch {
-      // Try next candidate.
+      // Try next candidate
     }
   }
 
@@ -49,27 +64,27 @@ export async function POST(request: Request): Promise<Response> {
     return guard;
   }
 
-  const rawBody = await request.text();
-  const payload = parseEmailPayload(rawBody);
-  if (!payload) {
-    console.error('Invalid JSON body for /api/graph/send');
-    return jsonError('Invalid JSON body', 400);
-  }
-
-  const to = payload.to ?? config.defaultRecipient;
-  if (!to) {
-    return jsonError('Missing "to"', 400);
-  }
-
-  const subject = payload.subject ?? config.defaultSubject;
-  const body = payload.body ?? config.defaultBody;
-
   try {
+    const rawBody = await request.text();
+    const payload = parseEmailPayload(rawBody);
+    if (!payload) {
+      console.error('Invalid body for /api/graph/send');
+      return badRequestResponse('Invalid request body format');
+    }
+
+    const to = payload.to ?? config.defaultRecipient;
+    if (!to) {
+      return badRequestResponse('Recipient address (to) is required');
+    }
+
+    const subject = payload.subject ?? config.defaultSubject;
+    const body = payload.body ?? config.defaultBody;
+
     const client = await createGraphContext(config);
     await client.sendMail({ to, subject, body });
-    return Response.json({ status: 'sent' }, { status: 202 });
+    return successResponse({ status: 'sent' }, { status: 202 });
   } catch (error) {
     console.error('Graph send failed', error);
-    return jsonError('Failed to send mail', 500);
+    return errorResponse('Failed to send email', { status: 500, code: 'GRAPH_ERROR' });
   }
 }

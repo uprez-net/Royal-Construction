@@ -1,8 +1,23 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
-import { jsonError, requireAdminToken } from '@/lib/graph/route-utils';
+import { successResponse, errorResponse, unauthorizedResponse } from '@/utils/validators';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
+
+function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return unauthorizedResponse();
+  }
+
+  const token = authHeader.slice(7);
+  if (token !== adminToken) {
+    return unauthorizedResponse();
+  }
+
+  return null;
+}
 
 function parseNumber(value: string | null, fallback: number): number {
   if (!value) {
@@ -24,18 +39,18 @@ export async function GET(request: Request): Promise<Response> {
     return guard;
   }
 
-  const { searchParams } = new URL(request.url);
-  const top = Math.min(parseNumber(searchParams.get('top'), 10), 50);
-  const includeBody = ['1', 'true', 'yes'].includes(
-    (searchParams.get('body') || '').toLowerCase(),
-  );
-
   try {
+    const { searchParams } = new URL(request.url);
+    const top = Math.min(parseNumber(searchParams.get('top'), 10), 50);
+    const includeBody = ['1', 'true', 'yes'].includes(
+      (searchParams.get('body') || '').toLowerCase(),
+    );
+
     const client = await createGraphContext(config);
     const items = await client.listInbox(top, includeBody);
-    return Response.json({ items });
+    return successResponse({ items });
   } catch (error) {
     console.error('Graph list failed', error);
-    return jsonError('Failed to list inbox', 500);
+    return errorResponse('Failed to list inbox', { status: 500, code: 'GRAPH_ERROR' });
   }
 }

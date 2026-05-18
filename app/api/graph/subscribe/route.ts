@@ -1,6 +1,7 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig, type GraphMode } from '@/lib/graph/config';
-import { jsonError, requireAdminToken } from '@/lib/graph/route-utils';
+import { errorResponse, unauthorizedResponse, badRequestResponse } from '@/utils/validators';
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +10,20 @@ interface SubscribeBody {
   clientState?: string;
   expirationMinutes?: number;
   resource?: string;
+}
+
+function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return unauthorizedResponse();
+  }
+
+  const token = authHeader.slice(7);
+  if (token !== adminToken) {
+    return unauthorizedResponse();
+  }
+
+  return null;
 }
 
 function buildDefaultResource(mode: GraphMode, senderUpn?: string): string | undefined {
@@ -35,17 +50,17 @@ export async function POST(request: Request): Promise<Response> {
   try {
     payload = (await request.json()) as SubscribeBody;
   } catch {
-    return jsonError('Invalid JSON body', 400);
+    return badRequestResponse('Invalid JSON body');
   }
 
   const notificationUrl = payload.notificationUrl || config.webhookNotificationUrl;
   if (!notificationUrl) {
-    return jsonError('Missing "notificationUrl"', 400);
+    return badRequestResponse('Missing notification URL');
   }
 
   const clientState = payload.clientState || config.webhookClientState;
   if (!clientState) {
-    return jsonError('Missing "clientState"', 400);
+    return badRequestResponse('Missing client state');
   }
 
   const expirationMinutes = payload.expirationMinutes ?? config.webhookSubscriptionMinutes;
@@ -55,7 +70,7 @@ export async function POST(request: Request): Promise<Response> {
     buildDefaultResource(config.mode, config.senderUpn);
 
   if (!resource) {
-    return jsonError('Missing "resource"', 400);
+    return badRequestResponse('Missing resource path');
   }
 
   try {
@@ -72,6 +87,6 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     console.error('Graph subscription failed', error);
     const message = error instanceof Error ? error.message : 'Failed to create subscription';
-    return jsonError(message, 500);
+    return errorResponse(message, { status: 500, code: 'GRAPH_ERROR' });
   }
 }
