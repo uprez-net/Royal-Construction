@@ -1,7 +1,7 @@
 "use server";
 
 import { Role, type Customer } from "@prisma/client";
-import { revalidateTag, unstable_cache } from "next/cache";
+import { revalidateTag, cacheTag, cacheLife } from "next/cache";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 
@@ -32,12 +32,12 @@ async function getCustomersDropdownPage(
 
     const where = search
         ? {
-                OR: [
-                    { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                    { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                    { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                ],
-            }
+            OR: [
+                { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            ],
+        }
         : undefined;
 
     const [items, totalCount] = await prisma.$transaction([
@@ -66,11 +66,23 @@ async function getCustomersDropdownPage(
     };
 }
 
-export const getCachedCustomersForDropdown = unstable_cache(
-    async (page = 1, limit = defaultPageSize, query?: string) => getCustomersDropdownPage(page, limit, query),
-    ["customers-dropdown"],
-    { tags: ["customers"], revalidate: 300 },
-);
+export async function getCachedCustomersForDropdown(
+    page = 1,
+    limit = defaultPageSize,
+    query?: string,
+) {
+    "use cache";
+
+    cacheTag("customers");
+
+    cacheLife({
+        stale: 300,
+        revalidate: 300,
+        expire: 600,
+    });
+
+    return getCustomersDropdownPage(page, limit, query);
+}
 
 export async function getCustomersForDropdown(page = 1, limit = defaultPageSize, query?: string) {
     return getCustomersDropdownPage(page, limit, query);

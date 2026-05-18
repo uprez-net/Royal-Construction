@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { Role } from "@prisma/client";
+import { cacheTag, cacheLife } from "next/cache";
 
 export async function createUser(name: string, email: string, clerkId: string, phone: string, role: Role = Role.CUSTOMER) {
     try {
@@ -64,7 +65,7 @@ export async function updateUser(clerkId: string, updates: Partial<{ name: strin
         const filteredUpdates = Object.fromEntries(
             Object.entries(updates).filter(([, value]) => value !== undefined)
         );
-        
+
         const user = await prisma.user.update({
             where: { clerkId },
             data: filteredUpdates,
@@ -95,4 +96,12 @@ export async function deleteUser(clerkId: string) {
         console.error("Error deleting user:", error);
         throw error;
     }
+}
+
+export async function getUserByClerkIdCached(clerkId: string) {
+    "use cache";
+    cacheTag(`user-${clerkId}`);
+    cacheLife("max");
+
+    return getUserByClerkId(clerkId);
 }

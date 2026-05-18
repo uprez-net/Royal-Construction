@@ -1,4 +1,4 @@
-import { getProjectById } from "@/lib/data/projects";
+import { getCachedProjectById } from "@/lib/data/projects";
 
 export async function GET(
   _request: Request,
@@ -6,7 +6,7 @@ export async function GET(
 ) {
   const { projectId } = await params;
 
-  const project = await getProjectById(projectId);
+  const project = await getCachedProjectById(projectId);
   if (!project) {
     return new Response("Not found", { status: 404 });
   }

@@ -30,7 +30,7 @@ export async function POST(
     },
   });
 
-  revalidateTag("projects", "max");
+  revalidateTag(`project-${projectId}`, "max");
 
   const updatedProject = await getProjectById(projectId);
 

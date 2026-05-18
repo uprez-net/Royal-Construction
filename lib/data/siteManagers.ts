@@ -1,7 +1,7 @@
 "use server";
 
 import { Role, type User } from "@prisma/client";
-import { unstable_cache } from "next/cache";
+import { cacheTag, cacheLife } from "next/cache";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 
@@ -34,12 +34,12 @@ async function getSiteManagersDropdownPage(
         role: Role.SITE_MANAGER,
         ...(search
             ? {
-                    OR: [
-                        { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                        { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                        { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                    ],
-                }
+                OR: [
+                    { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                    { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                    { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
+                ],
+            }
             : {}),
     };
 
@@ -69,11 +69,23 @@ async function getSiteManagersDropdownPage(
     };
 }
 
-export const getCachedSiteManagersForDropdown = unstable_cache(
-    async (page = 1, limit = defaultPageSize, query?: string) => getSiteManagersDropdownPage(page, limit, query),
-    ["site-managers-dropdown"],
-    { tags: ["site-managers"], revalidate: 300 },
-);
+export async function getCachedSiteManagersForDropdown(
+    page = 1,
+    limit = defaultPageSize,
+    query?: string,
+) {
+    "use cache";
+
+    cacheTag("site-managers");
+
+    cacheLife({
+        stale: 300,
+        revalidate: 300,
+        expire: 600,
+    });
+
+    return getSiteManagersDropdownPage(page, limit, query);
+}
 
 export async function getSiteManagersForDropdown(page = 1, limit = defaultPageSize, query?: string) {
     return getSiteManagersDropdownPage(page, limit, query);

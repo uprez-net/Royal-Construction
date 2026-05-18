@@ -1,7 +1,7 @@
 "use server";
 
 import { Prisma, TradieScheduleStatus } from "@prisma/client";
-import { unstable_cache } from "next/cache";
+import { cacheTag, cacheLife } from "next/cache";
 
 import prisma from "@/lib/prisma";
 import {
@@ -648,32 +648,67 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
   };
 }
 
-export const getCachedTradies = unstable_cache(
-  async () => getTradies(),
-  ["tradies"],
-  { tags: ["tradies"], revalidate: 300 },
-);
+export async function getCachedTradies() {
+  "use cache";
 
-export const getCachedTradieSchedules = unstable_cache(
-  async (filters?: {
-    projectId?: string;
-    status?: TradieScheduleStatus;
-    tradeType?: string;
-    sort?: "scheduledDate" | "tradieName" | "projectName";
-    order?: "asc" | "desc";
-  }) => getTradieSchedules(filters),
-  ["tradie-schedules"],
-  { tags: ["tradies"], revalidate: 300 },
-);
+  cacheTag("tradies");
 
-export const getCachedTradieScheduleKPIs = unstable_cache(
-  async () => getTradieScheduleKPIs(),
-  ["tradies-kpis"],
-  { tags: ["tradies"], revalidate: 300 },
-);
+  cacheLife({
+    stale: 300,
+    revalidate: 300,
+    expire: 600,
+  });
 
-export const getCachedTradieCoordinationDashboard = unstable_cache(
-  async (query?: TradieCoordinationQuery) => getTradieCoordinationDashboard(query),
-  ["tradies-coordination"],
-  { tags: ["tradies", "projects"], revalidate: 120 },
-);
+  return getTradies();
+}
+
+export async function getCachedTradieSchedules(filters?: {
+  projectId?: string;
+  status?: TradieScheduleStatus;
+  tradeType?: string;
+  sort?: "scheduledDate" | "tradieName" | "projectName";
+  order?: "asc" | "desc";
+}) {
+  "use cache";
+
+  cacheTag("tradies");
+
+  cacheLife({
+    stale: 300,
+    revalidate: 300,
+    expire: 600,
+  });
+
+  return getTradieSchedules(filters);
+}
+
+export async function getCachedTradieScheduleKPIs() {
+  "use cache";
+
+  cacheTag("tradies");
+
+  cacheLife({
+    stale: 300,
+    revalidate: 300,
+    expire: 600,
+  });
+
+  return getTradieScheduleKPIs();
+}
+
+export async function getCachedTradieCoordinationDashboard(
+  query?: TradieCoordinationQuery,
+) {
+  "use cache";
+
+  cacheTag("tradies");
+  cacheTag("projects");
+
+  cacheLife({
+    stale: 120,
+    revalidate: 120,
+    expire: 300,
+  });
+
+  return getTradieCoordinationDashboard(query);
+}

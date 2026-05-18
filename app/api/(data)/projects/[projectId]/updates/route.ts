@@ -109,8 +109,7 @@ export async function POST(
     console.log(`[NOTIFICATION] Client notified for milestone ${milestoneId}`);
   }
 
-  revalidateTag("projects", "max");
-  revalidateTag("milestones", "max");
+  revalidateTag(`project-${projectId}`, "max");
 
   const updatedProject = await getProjectById(projectId);
 

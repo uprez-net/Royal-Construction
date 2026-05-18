@@ -2,13 +2,14 @@ import { VariationStatus } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
 import { applyVariationDelay } from "@/lib/utils/apply-variation-delay";
+import { revalidateTag } from "next/cache";
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ projectId: string; variationId: string }> },
 ) {
 
-  const { variationId } = await params;
+  const { projectId, variationId } = await params;
 
   const body = (await request.json()) as { status?: "APPROVED" | "REJECTED" };
 
@@ -33,6 +34,8 @@ export async function PATCH(
   if (body.status === "APPROVED") {
     await applyVariationDelay(variation.id);
   }
+
+  revalidateTag(`project-${projectId}`, "max");
 
   return Response.json(variation);
 }

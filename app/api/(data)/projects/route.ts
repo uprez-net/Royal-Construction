@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import prisma from "@/lib/prisma";
-import { getProjectById, getProjects, getProjectsForLookup, type ProjectListSortBy } from "@/lib/data/projects";
+import { getCachedProjectById, getCachedProjects, getCachedProjectsForLookup, type ProjectListSortBy } from "@/lib/data/projects";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
 
@@ -37,14 +37,14 @@ export async function GET(request: Request) {
   const lookupQuery = url.searchParams.get("q") ?? "";
 
   if (mode === "lookup") {
-    const result = await getProjectsForLookup(page, limit, lookupQuery);
+    const result = await getCachedProjectsForLookup(page, limit, lookupQuery);
     return NextResponse.json(result);
   }
 
   const sortBy = url.searchParams.get("sortBy") as ProjectListSortBy | null;
   const sortOrder = url.searchParams.get("sortOrder") === "desc" ? "desc" : "asc";
   const projectStatus = status && Object.values(ProjectStatus).includes(status as ProjectStatus) ? (status as ProjectStatus) : undefined;
-  const projects = await getProjects({
+  const projects = await getCachedProjects({
     status: projectStatus,
     page,
     limit,
@@ -141,8 +141,9 @@ export async function POST(request: Request) {
     });
 
     revalidateTag("projects", "max");
+    revalidateTag(`project-${project.id}`, "max");
 
-    const createdProject = await getProjectById(project.id);
+    const createdProject = await getCachedProjectById(project.id);
 
     if (!createdProject) {
       return NextResponse.json({ error: "Project was created but could not be loaded" }, { status: 500 });

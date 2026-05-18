@@ -1,333 +1,261 @@
 # Current Implementation
 
-This document describes the live implementation in the repository today. It focuses on the concrete routing model, Prisma schema changes, seed data, API routes, and the data access layers that power the new project and tradie experiences.
+This document is a live report of what is implemented today. It is intentionally specific to the repository, including the current architecture, feature surface, integration points, and the parts of the system that still need cleanup.
 
-## Product Shape
+## Snapshot
 
-The application is a construction management portal built on Next.js App Router, Clerk authentication, and Prisma/PostgreSQL persistence. The product still uses a shared app shell and a route-driven screen registry, but the important operational modules now read from live database-backed queries rather than static mock arrays.
+The application is a construction management portal built with Next.js App Router, Clerk authentication, Prisma on PostgreSQL, Redux Toolkit, and Vercel Blob. The product is split between live operational surfaces and legacy mock-driven screens. The live paths are centered on projects, tradies, file uploads, Clerk sync, and reminder automation.
 
-At a high level, the app already supports:
+At the moment the app includes:
 
-- authenticated access control through Clerk middleware
-- sign-in and sign-up flows
-- a dashboard shell with navigation, breadcrumbs, actions, and notifications UI
-- multiple business screens rendered from a single screen registry
-- Clerk webhook synchronization into Prisma records
-- file uploads through Vercel Blob with post-upload database persistence
-- live project, milestone, update, variation, tradie schedule, and activity log data
+- a shared application shell with navigation, breadcrumb, notifications, and account controls
+- Clerk sign-in, sign-up, and profile routes
+- project list, project detail, project mutation, and upload workflows backed by Prisma
+- tradie coordination dashboards, schedule updates, and reminder jobs
+- Clerk webhook synchronization into local user and customer records
+- a route-driven screen registry that still powers several mock module surfaces
+
+## What Is Actually Live
+
+| Area | Current state | Key files |
+| --- | --- | --- |
+| Shell and navigation | Live | [app/(main)/layout.tsx](../app/(main)/layout.tsx), [components/common/app-shell.tsx](../components/common/app-shell.tsx) |
+| Project list and detail | Live and data-backed | [lib/data/projects.ts](../lib/data/projects.ts), [components/projects/project-detail-screen.tsx](../components/projects/project-detail-screen.tsx) |
+| Tradie coordination | Live and data-backed | [lib/data/tradies.ts](../lib/data/tradies.ts), [lib/store/slices/tradiesSlice.ts](../lib/store/slices/tradiesSlice.ts) |
+| Uploads | Live | [app/api/upload/route.ts](../app/api/upload/route.ts), [lib/data/file.ts](../lib/data/file.ts) |
+| Identity sync | Live | [app/api/webhook/clerk/route.ts](../app/api/webhook/clerk/route.ts), [lib/auth.ts](../lib/auth.ts), [lib/data/user.ts](../lib/data/user.ts) |
+| Reminder automation | Live | [app/api/cron/tradie-reminders/route.ts](../app/api/cron/tradie-reminders/route.ts), [lib/jobs/tradie-reminder.ts](../lib/jobs/tradie-reminder.ts) |
+| Legacy module screens | Still mostly mock-driven | [lib/mock-data.tsx](../lib/mock-data.tsx) |
 
 ## Routing And Entry Points
 
-### Home route
+The home route in [app/page.tsx](../app/page.tsx) renders the dashboard experience directly and passes the Clerk signed-in state into the dashboard component.
 
-The home route in [app/page.tsx](../app/page.tsx) loads the dashboard experience directly. It checks the Clerk session server-side and passes the signed-in state into the dashboard component.
+The main route group in [app/(main)/layout.tsx](../app/(main)/layout.tsx) wraps authenticated surfaces in [components/common/app-shell.tsx](../components/common/app-shell.tsx). That shell is responsible for global chrome rather than feature logic.
 
-### Dynamic screen route
+The app still uses a screen registry in [lib/mock-data.tsx](../lib/mock-data.tsx) to map route slugs to module renderers. That registry is now a mix of legacy mock screens and live implementations. The important consequence is that routing is still centralized even though data sources now vary by screen.
 
-The dynamic route in [app/[screen]/page.tsx](../app/%5Bscreen%5D/page.tsx) is the main screen dispatcher. It reads the screen segment from the URL, looks up the matching renderer in `screenRegistry`, and wraps the result in the shared AppShell.
-
-The registry still powers the legacy screen routing shape, but the project and tradie entries now resolve to live server components backed by Prisma query helpers instead of static mock renderers.
-
-### Authentication pages
-
-The workspace already includes Clerk auth pages for sign-in and sign-up under:
+Authentication pages are mounted under:
 
 - [app/sign-in/[[...sign-in]]/page.tsx](../app/sign-in/%5B%5B...sign-in%5D%5D/page.tsx)
 - [app/sign-up/[[...sign-up]]/page.tsx](../app/sign-up/%5B%5B...sign-up%5D%5D/page.tsx)
+- [app/user-profile/page.tsx](../app/user-profile/page.tsx)
 
-There is also a [user profile page](../app/user-profile/page.tsx) for account-related flows.
+## Request And Rendering Model
 
-## Shared Layout And Shell
+```mermaid
+flowchart TD
+	A[Browser] --> B[Clerk session]
+	B --> C[proxy.ts middleware]
+	C --> D[App Router page or route handler]
+	D --> E[Server components / lib data helpers]
+	D --> F[Route handlers under app/api]
+	E --> G[Prisma/PostgreSQL]
+	F --> G
+	G --> H[JSON payload or Prisma DTO]
+	H --> I[Redux slice or client component]
+	I --> J[Shared shell and feature UI]
+```
 
-### Root layout
+The server-side model is split into two layers:
 
-The global layout in [app/layout.tsx](../app/layout.tsx) sets the application metadata, registers Clerk, and loads three Google fonts:
+1. Pages and layouts render the initial UI, often with server-side auth checks.
+2. Route handlers or `lib/data/*` helpers perform the actual database queries and mutations.
 
-- Manrope for body text
-- Fraunces for headings
-- IBM Plex Mono for mono accents
+That separation is deliberate. It allows server components to read live data directly while client components can still use route-based mutations and Redux state for interactivity.
 
-The layout also defines the app metadata, including the BuildPro title and a construction-management description.
+## Frontend Architecture
 
-### App shell
+The top-level shell is implemented in [components/common/app-shell.tsx](../components/common/app-shell.tsx) and mounted by [app/(main)/layout.tsx](../app/(main)/layout.tsx). The shell owns:
 
-The main chrome lives in [components/common/app-shell.tsx](../components/common/app-shell.tsx). It provides:
+- global navigation
+- breadcrumbs
+- live clock display
+- notification dropdown
+- Clerk user controls
+- the ambient background and layout framing
 
-- a left-hand navigation rail
-- top-level breadcrumbs
-- an action area for screen-specific controls
-- a live clock in the header
-- a notification toggle
-- Clerk-aware sign-in, sign-up, and user menu controls
+Feature composition is mostly layered like this:
 
-The shell also adds the visual treatment for the current product theme, including layered gradients and grid texture in the background.
+- `app/` defines routes and route groups
+- `components/common/` holds cross-feature surfaces such as cards, status pills, and data tables
+- `components/<feature>/` holds feature-specific screens, modals, and detail subcomponents
+- `components/ui/` contains the low-level shadcn-style primitives
+- `lib/store/` coordinates cross-screen client state
 
-## Screen Registry And Implemented Modules
+The current codebase is not purely server-driven or purely client-driven. It is a hybrid:
 
-The screen system is defined in [lib/mock-data.tsx](../lib/mock-data.tsx). Each slug maps to a renderer function, which is how the app currently delivers the module surfaces.
+- server components and `lib/data/*` fetch the canonical project and tradie data
+- client components manage screen interactivity, filters, selection, dialogs, and optimistic overlays
+- Redux is used only where state must survive across subcomponents or flows
 
-### Dashboard
+## API Layer And Data Access
 
-The dashboard implementation shows:
+The main data access pattern is server helper first, route handler second.
 
-- KPI cards for active projects, pending quotes, open leads, and revenue forecast
-- a project section using reusable project cards
-- a live activity feed for operational updates
+- `lib/data/projects.ts` builds Prisma queries, maps decimal fields to strings, and exposes cached helpers through `unstable_cache`
+- `lib/data/tradies.ts` does the same for tradie lists, schedules, and dashboard aggregates
+- `app/api/(data)/*` routes mostly call those helpers or mirror their logic for client requests
+- mutation routes return refreshed entity payloads so the UI can update immediately without building client-side normalization logic
 
-The dashboard experience is implemented in [components/dashboard/dashboard-home.tsx](../components/dashboard/dashboard-home.tsx) and is also reused through the screen registry.
+This pattern is visible in the project workflow. A mutation such as project creation or variation approval updates the database, revalidates the `projects` tag, and returns a full refreshed `ProjectDetail` payload. Redux then replaces the list item and active detail state with the returned entity instead of trying to patch nested fields manually.
+
+### Fetching strategies
+
+There is no single data-fetching abstraction yet.
+
+- server pages use direct helper calls such as `getProjectById()` and `getCachedProjects()`
+- Redux slices use `createAsyncThunk` plus the native `fetch()` API or `fetchJson()` wrapper
+- some client components, such as the project list, still perform local debounced fetches instead of dispatching a slice thunk
+- lookup collections such as customers, site managers, and project lookups use paginated append behavior with de-duplication by id
+
+`fetchJson()` in [utils/fetch.ts](../utils/fetch.ts) is the only shared client request helper. It expects JSON responses and translates `{ error: string }` bodies into thrown errors with a fallback message.
+
+### Error Handling
+
+The repository currently uses pragmatic, route-local error handling rather than a global envelope:
+
+- route handlers return `Response` or `NextResponse` with short error messages
+- client thunks catch and rethrow readable error strings
+- low-level helpers log to `console.error` when a database or Clerk operation fails
+- upload completion and webhook handlers fail closed when the expected identity or user record is missing
+
+This works, but it is inconsistent. Some routes return plain strings, some return JSON `{ error }`, and some client code expects one style while other code expects the other.
+
+### Validation Strategy
+
+Validation is mostly imperative today.
+
+- route handlers validate required fields manually before database writes
+- IDs, query params, and enum-like strings are checked with simple runtime guards
+- Prisma schema constraints provide the final structural safety net
+
+The repo already depends on Zod and React Hook Form, but those tools are not yet used as a project-wide validation contract in the inspected code paths.
+
+## Authentication And Authorization
+
+Clerk is the only authentication provider in the repository.
+
+The intended flow is:
+
+1. middleware gates access
+2. server components call `auth()` when they need the signed-in state
+3. mutation routes check `userId` before writing
+4. webhooks update local user records and mirror metadata back into Clerk
+
+That intent is partially implemented, but there is a material mismatch in [proxy.ts](../proxy.ts). The public route matcher currently includes `/(.*)`, which makes the middleware effectively public for all routes. In practice, protection is therefore applied inconsistently and several GET endpoints remain publicly readable.
+
+This needs to be treated as a real security issue, not just a style concern.
+
+## Server Actions, API Routes, And Backend Integration
+
+The repository uses `use server` modules under `lib/data/*` for query composition and `app/api/*` route handlers for network-visible integration.
+
+The model is:
+
+- `lib/data/*` = reusable server-side query and mapping logic
+- `app/api/*` = request boundary, validation, auth, and response formatting
+- Prisma = persistence layer
+- Clerk + Blob + cron = external integrations
+
+The most important backend integrations are:
+
+- Clerk webhook sync in [app/api/webhook/clerk/route.ts](../app/api/webhook/clerk/route.ts)
+- Blob upload token generation and post-upload persistence in [app/api/upload/route.ts](../app/api/upload/route.ts)
+- tradie reminder automation in [app/api/cron/tradie-reminders/route.ts](../app/api/cron/tradie-reminders/route.ts)
+- variation delay logic in [lib/utils/apply-variation-delay.ts](../lib/utils/apply-variation-delay.ts)
+
+## Business Workflows
 
 ### Projects
 
-The projects module now uses the live data layer in [lib/data/projects.ts](../lib/data/projects.ts). That module exposes:
+The project workflow is the most complete live module.
 
-- getProjects() for the project index and server-filtered project screen
-- getProjectById() for the dynamic detail route and the registry-backed project detail surface
-- getProjectKPIs() for the dashboard-style summary cards
+- [lib/data/projects.ts](../lib/data/projects.ts) provides list, lookup, detail, and KPI queries
+- [app/api/(data)/projects/route.ts](../app/api/(data)/projects/route.ts) supports list and lookup modes
+- [app/api/(data)/projects/[projectId]/route.ts](../app/api/(data)/projects/%5BprojectId%5D/route.ts) returns the full detail payload
+- [app/api/(data)/projects/[projectId]/updates/route.ts](../app/api/(data)/projects/%5BprojectId%5D/updates/route.ts) creates updates, uploads photos, and marks photo-required milestones complete
+- [app/api/(data)/projects/[projectId]/variations/route.ts](../app/api/(data)/projects/%5BprojectId%5D/variations/route.ts) creates variations
+- [app/api/(data)/projects/[projectId]/variations/[variationId]/route.ts](../app/api/(data)/projects/%5BprojectId%5D/variations/%5BvariationId%5D/route.ts) approves or rejects variations and applies schedule delay logic
 
-The list query returns the customer, optional site manager, milestone completion counts, and a computed progress percentage. The detail query expands into milestone timelines, site updates, variations, tradie schedules, and project files so the detail screen can render everything from one server-side fetch.
+The detail page is not a stub. [components/projects/project-detail-screen.tsx](../components/projects/project-detail-screen.tsx) hydrates Redux with the project payload, restores local detail UI state, and cleans up when the component unmounts.
 
-### Leads
+### Tradies
 
-The leads screen is currently implemented as a stage-based board with counts and card stacks for each pipeline stage.
+The tradie module centers on scheduling and operational coordination.
 
-### Quotations
+- [lib/data/tradies.ts](../lib/data/tradies.ts) returns tradies, schedules, and dashboard aggregates
+- [app/api/(data)/tradie-schedules/route.ts](../app/api/(data)/tradie-schedules/route.ts) creates schedules and serves coordination data
+- [app/api/(data)/tradie-schedules/[scheduleId]/route.ts](../app/api/(data)/tradie-schedules/%5BscheduleId%5D/route.ts) updates schedule status and flags replacement requirements
+- [lib/jobs/tradie-reminder.ts](../lib/jobs/tradie-reminder.ts) sends reminder state and advances pending schedules to pending response
 
-The quotations screen uses the shared data table component to present quote rows, status, and expiry information.
+Redux carries a meaningful amount of tradie coordination state, including filters, pagination, selection, replacement flags, and a local 30-second dashboard cache.
 
-### Quote details
+### Auth, Identity, And Sync
 
-The quote-details screen already has a structured detail layout with quote metadata, a status pill, a right-side action panel, and approval-related buttons.
+The Clerk webhook in [app/api/webhook/clerk/route.ts](../app/api/webhook/clerk/route.ts) keeps Prisma aligned with identity lifecycle changes.
 
-### Catalogue
+- `user.created` inserts a local user and, for customers, creates a matching customer row
+- `user.updated` syncs profile edits and role changes
+- `user.deleted` deletes the local user row
+- `organizationInvitation.accepted` updates role metadata
 
-The catalogue screen is a category grid for material groups such as roofing, joinery, bathroom, and outdoor products.
+The helper in [lib/auth.ts](../lib/auth.ts) then mirrors role and customer metadata back to Clerk.
 
-### Milestones
+### Uploads
 
-The milestones screen uses a vertical timeline pattern to show stages and their status, including done, current, and pending markers.
+The upload flow in [app/api/upload/route.ts](../app/api/upload/route.ts) uses Vercel Blob direct uploads.
 
-### Trade- and role-specific screens
+The current behavior is:
 
-The following screens are implemented as reusable simple list surfaces backed by the same card and status primitives:
+- the user must be authenticated before a token can be generated
+- the client sends a payload with file name, project id, optional milestone id, and an optional stable file id
+- the route allows common image, document, spreadsheet, and text formats
+- uploads are capped at 40 MB
+- completion saves a `File` row through [lib/data/file.ts](../lib/data/file.ts)
 
-- architect
-- government
-- sitemanager
+### Reminders And Background Jobs
 
-The tradie module is now live and backed by [lib/data/tradies.ts](../lib/data/tradies.ts). That module exposes:
+[lib/jobs/tradie-reminder.ts](../lib/jobs/tradie-reminder.ts) finds schedules due exactly seven days out, skips already-reminded rows, marks eligible schedules as pending response, and writes a reminder timestamp. The cron route only exposes that job behind a bearer secret.
 
-- getTradies() for the tradie directory and schedule modals
-- getTradieSchedules() for the schedule table, urgent reminders, and filters
-- getTradieScheduleKPIs() for the reminder dashboard cards
+The job is intentionally simple. It does not send email itself; it mutates schedule state and logs reminder activity.
 
-The schedule query supports project, status, trade-type, sort, and order filters, and returns the tradie, project, and milestone relations needed by the UI without extra client fetches.
+## Performance And Caching
 
-### Financials
+The codebase already uses a number of sensible performance tactics:
 
-The financials screen combines KPI cards with a project P&L table. It is already structured for revenue, cost, margin, and status tracking.
+- server-side data helpers with `unstable_cache`
+- cache tags on the `projects` and `milestones` domains
+- pagination for lookup collections
+- de-duplication when appending paged lookup items
+- debounced client fetches for project list search
+- query-level pagination and lookup limits to avoid overfetching
 
-### Chatbot
+The cost is that the system now has three caching concepts in play at once: Next cache tags, client-side Redux caches, and component-local state. This is workable today, but it is a refactor target.
 
-The chatbot screen is laid out as a three-column conversation workspace with customer list, conversation thread, and settings pane.
+## Current Limitations And Inconsistencies
 
-### Project detail
+The biggest implementation gaps today are:
 
-The project-detail experience now comes from live data in [components/projects/project-detail-screen.tsx](../components/projects/project-detail-screen.tsx) and the dynamic route in [app/project-detail/[id]/page.tsx](../app/project-detail/%5Bid%5D/page.tsx). It is no longer a stub summary card.
+- [proxy.ts](../proxy.ts) currently marks nearly everything public because the matcher includes `/(.*)`
+- several GET data endpoints under `app/api/(data)` do not check auth at all
+- `lib/mock-data.tsx` still mixes route registry, dashboard mock data, and design constants
+- the project list fetch path in [components/projects/projects-client.tsx](../components/projects/projects-client.tsx) bypasses a Redux thunk and fetches directly from the client
+- customer and site manager lookup slices duplicate almost the same pagination code
+- [app/globals.css](../app/globals.css) contains a large leads-specific CSS block with its own token system and font choice, which sits outside the shared design system
 
-The live view includes:
+## Recommended Refactor Targets
 
-- project metadata and budget usage
-- customer and site manager details
-- milestone status and timeline tracking
-- site updates with attached photos
-- variation records with approval and delay information
-- action modals for posting site updates and creating variations
+1. Fix the Clerk matcher and align route-level authorization with the intended security model.
+2. Split `lib/mock-data.tsx` into separate navigation, screen registry, and mock-content modules.
+3. Normalize the API response envelope so JSON errors and success payloads are consistent.
+4. Consolidate lookup pagination into one helper or shared thunk pattern.
+5. Move the large leads CSS block into a feature-scoped stylesheet or rebuild it with the shared tokens.
 
-## Reusable UI Building Blocks
+## Implementation Notes For Future Work
 
-The app is built from composable UI primitives in components/common, components/project, components/projects, and components/ui.
+- Keep live business flows returning refreshed entity payloads instead of partial patches when the UI depends on nested relations.
+- Prefer server helpers in `lib/data/*` for reusable Prisma queries and route handlers for request-specific auth and validation.
+- Treat Redux as coordination state, not as a replacement for the database.
+- Keep serializable DTOs at the client boundary, especially where Prisma decimals or nested relations are involved.
 
-The most important reusable pieces already in place are:
-
-- [components/common/metric-card.tsx](../components/common/metric-card.tsx) for KPI summaries
-- [components/common/section-card.tsx](../components/common/section-card.tsx) for consistent surface containers
-- [components/common/data-table.tsx](../components/common/data-table.tsx) for tabular views
-- [components/common/status-pill.tsx](../components/common/status-pill.tsx) for status labels
-- [components/project/project-card.tsx](../components/project/project-card.tsx) for project previews
-- [components/projects/project-detail-screen.tsx](../components/projects/project-detail-screen.tsx) for the live project detail view
-- [components/tradies/tradies-screen.tsx](../components/tradies/tradies-screen.tsx) for the tradie coordination view
-
-The shared UI library under [components/ui](../components/ui) is already populated with standard primitives such as buttons, inputs, dialogs, tables, tabs, sheets, and more.
-
-## Authentication And Access Control
-
-### Middleware protection
-
-The middleware in [proxy.ts](../proxy.ts) protects all non-public routes through Clerk. Public routes currently include sign-in, sign-up, and the Clerk webhook endpoint.
-
-### Clerk server usage
-
-Server-side auth checks use auth() from Clerk in the main dashboard route, the screen dispatcher, and every authenticated API route. That means the current implementation already knows whether a user is signed in when rendering views or mutating records.
-
-### User metadata synchronization
-
-The Clerk client wrapper in [lib/auth.ts](../lib/auth.ts) updates public and private metadata after user lifecycle events. This is used to keep Clerk and the internal app record aligned.
-
-## Webhooks
-
-The Clerk webhook handler in [app/api/webhook/clerk/route.ts](../app/api/webhook/clerk/route.ts) is already implemented for several event types:
-
-- user.created creates a local Prisma user and, for customers, a matching customer record
-- user.updated keeps the Prisma user record in sync with Clerk profile changes
-- user.deleted removes the local user record
-- organizationInvitation.accepted updates the role and organization metadata
-- invitation created and revoked events are handled as acknowledged cases
-
-This webhook is the current bridge between identity state and database state.
-
-## File Upload Flow
-
-The upload endpoint in [app/api/upload/route.ts](../app/api/upload/route.ts) is already wired to Vercel Blob.
-
-The implementation currently does the following:
-
-- requires an authenticated Clerk session before generating an upload token
-- accepts a client payload containing the file name, project ID, and optional milestone ID
-- allows common document and image types
-- limits uploads to 40 MB
-- attaches the authenticated user ID plus project and milestone metadata to the token payload
-- saves the uploaded file record to Prisma after Blob reports completion
-
-The database write for uploaded files is handled by [lib/data/file.ts](../lib/data/file.ts).
-
-## Database Model
-
-The Prisma schema in [prisma/schema.prisma](../prisma/schema.prisma) already defines the core domain model, but it has been expanded substantially to support live operational workflows.
-
-### User and customer identity
-
-- User stores the local application identity, Clerk ID, role, contact details, and optional customer link
-- Customer stores customer profile data and links back to User
-- Role currently supports ADMIN, CUSTOMER, and SITE_MANAGER
-
-### Project structure
-
-- Project belongs to a customer, may be assigned to a site manager, and carries budget, schedule, location, status, and requirement data
-- Milestone belongs to a project and tracks ordering, target and actual dates, completion state, and photo requirements
-- SiteUpdate, Variation, TradieSchedule, and ActivityLog now capture the operational workflow around each project
-- Tradie stores trade type, company, contact details, optional rate and rating, plus project and milestone relationships
-- File attaches uploaded documents to projects, optional milestones, and the uploading user
-
-### Why the schema changed
-
-The expanded schema supports the live workbench that the new UI needs. The original mock screens only needed labels and statuses, but the live project and tradie flows need more context:
-
-- project-level budgeting and delivery timing
-- milestone-level target dates and completion state
-- uploaded site photos and progress notes
-- change-order approval and schedule delay tracking
-- tradie scheduling and reminder automation
-
-That is why the new models are centered around operational workflow rather than display fields alone.
-
-### Schema behavior already in place
-
-The schema includes:
-
-- UUID primary keys
-- timestamps on all major models
-- indexes for common lookup fields
-- uniqueness constraints for email, phone, Clerk ID, and composite milestone ordering
-- cascade behavior on file and customer relations where appropriate
-
-## Seed Script
-
-The seed script in [prisma/seed.ts](../prisma/seed.ts) now builds a realistic construction dataset that matches the expanded schema.
-
-It does the following:
-
-- initializes Prisma Client with the PostgreSQL adapter required by the current Prisma setup
-- clears the database in dependency order before inserting new records
-- creates one admin user, six site managers, five customers, and six tradies
-- inserts five end-to-end projects with customer assignments, site managers, budgets, statuses, and dates
-- creates project milestones, site updates, variations, tradie schedules, and activity logs for those projects
-- writes JSON requirement data and date-based operational history so the live screens have meaningful content immediately after seeding
-
-The seed data is intentionally connected across relations. Project milestones are created first so later site updates and tradie schedules can link to them, and customer users are created before customer records so the user/customer relationship stays valid.
-
-The seed config in [prisma.config.ts](../prisma.config.ts) points Prisma at the TypeScript seed entry, and the package scripts include the dependencies required to execute it in this workspace.
-
-## API Surface
-
-The live APIs are authenticated and built around the new data layer. They are shaped to support the current screens rather than being generic CRUD endpoints.
-
-### Project routes
-
-- [app/api/projects/route.ts](../app/api/projects/route.ts) returns the project list and supports a status filter from the query string
-- [app/api/projects/[projectId]/route.ts](../app/api/projects/%5BprojectId%5D/route.ts) returns a single project with the full detail payload
-- [app/api/projects/[projectId]/milestones/route.ts](../app/api/projects/%5BprojectId%5D/milestones/route.ts) returns milestone options for scheduling and update modals
-- [app/api/projects/[projectId]/updates/route.ts](../app/api/projects/%5BprojectId%5D/updates/route.ts) posts site updates, uploads attached photos to Blob, records the update in Prisma, and marks photo-required milestones complete
-- [app/api/projects/[projectId]/variations/route.ts](../app/api/projects/%5BprojectId%5D/variations/route.ts) creates variation requests
-- [app/api/projects/[projectId]/variations/[variationId]/route.ts](../app/api/projects/%5BprojectId%5D/variations/%5BvariationId%5D/route.ts) updates variation status and applies the delay logic when approved
-
-### Tradie routes
-
-- [app/api/tradies/route.ts](../app/api/tradies/route.ts) returns the tradie directory
-- [app/api/tradie-schedules/route.ts](../app/api/tradie-schedules/route.ts) creates new tradie schedule records
-- [app/api/tradie-schedules/[scheduleId]/route.ts](../app/api/tradie-schedules/%5BscheduleId%5D/route.ts) updates schedule status and flags whether a replacement may be required
-
-### Upload and cron routes
-
-- [app/api/upload/route.ts](../app/api/upload/route.ts) generates Blob upload tokens, enforces authentication, and persists uploaded files after completion
-- [app/api/cron/tradie-reminders/route.ts](../app/api/cron/tradie-reminders/route.ts) runs the reminder job and requires the cron secret bearer token
-
-All of these routes check Clerk auth before serving data or mutating records, except for the cron route, which uses the configured secret instead.
-
-## Background Jobs And Business Logic
-
-The live data layer is supported by two helper modules that implement business logic instead of just query logic.
-
-### Variation delay helper
-
-[lib/utils/apply-variation-delay.ts](../lib/utils/apply-variation-delay.ts) applies a delay after a variation is approved. It:
-
-- loads the variation and its parent project milestones
-- requires the variation to be approved before it can run
-- calculates the day delta between the requested and approved dates
-- updates later pending milestones by shifting their target dates
-- extends the project estimated end date in the same transaction
-
-This is what makes the variation approval route more than a status update; it affects the project schedule.
-
-### Tradie reminder job
-
-[lib/jobs/tradie-reminder.ts](../lib/jobs/tradie-reminder.ts) sends reminder state for schedules due seven days out. It:
-
-- finds schedules in the target date window
-- skips schedules that already have a reminder timestamp
-- marks pending schedules as pending response
-- writes reminder timestamps back to the database
-- records reminder activity in the logs through console output and the cron route response
-
-The deployment hook for that job is [vercel.json](../vercel.json), which schedules the cron endpoint daily at 8:00 AM.
-
-## Data Flow Summary
-
-The implementation already follows a coherent flow:
-
-1. Clerk authenticates the user.
-2. The middleware protects the app except for auth and webhook endpoints.
-3. The dashboard or screen registry renders the requested surface inside the shared shell.
-4. Server components call the Prisma data helpers in [lib/data/projects.ts](../lib/data/projects.ts) and [lib/data/tradies.ts](../lib/data/tradies.ts) to fetch live projects, KPIs, and schedules.
-5. Mutation routes handle updates, variations, schedules, and uploads with the same authenticated user context.
-6. Clerk webhooks synchronize identity changes into Prisma.
-7. Blob uploads are authorized server-side and persisted into the file table after completion.
-8. The cron route runs tradie reminders on a daily schedule.
-
-This makes the current app more than a static mockup set: the UI is still registry-driven, but the identity, persistence, query, and file-handling paths are already wired for production-style integration.
-
-## Current Implementation Notes
-
-- The legacy registry still exists in [lib/mock-data.tsx](../lib/mock-data.tsx), but the projects and tradie entries now point at live server components.
-- The shell, auth, webhook, upload, API, and cron flows are real and already connected.
-- The app is organized so that each screen can later be replaced with live database-backed data without changing the overall routing model.

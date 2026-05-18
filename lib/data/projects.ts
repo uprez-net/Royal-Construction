@@ -1,7 +1,7 @@
 "use server";
 
 import { Prisma, ProjectStatus } from "@prisma/client";
-import { unstable_cache } from "next/cache";
+import { cacheTag, cacheLife } from "next/cache";
 import prisma from "@/lib/prisma";
 import { ProjectDetail, ProjectKPIs, ProjectWithStats } from "@/types/project";
 
@@ -288,26 +288,48 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
   return { totalActive, onTrack, needsAttention, delayed };
 }
 
-export const getCachedProjects = unstable_cache(
-  async (query?: ProjectListQuery) => getProjects(query),
-  ["projects"],
-  { tags: ["projects"], revalidate: false },
-);
+export async function getCachedProjects(query?: ProjectListQuery) {
+  "use cache";
 
-export const getCachedProjectById = unstable_cache(
-  async (id: string) => getProjectById(id),
-  ["projects-detail"],
-  { tags: ["projects", "milestones"], revalidate: false },
-);
+  cacheTag("projects");
+  cacheLife("max");
 
-export const getCachedProjectKPIs = unstable_cache(
-  async () => getProjectKPIs(),
-  ["projects-kpis"],
-  { tags: ["projects"], revalidate: false },
-);
+  return getProjects(query);
+}
 
-export const getCachedProjectsForLookup = unstable_cache(
-  async (page = 1, limit = defaultLookupPageSize, query?: string) => getProjectsForLookup(page, limit, query),
-  ["projects-lookup"],
-  { tags: ["projects"], revalidate: 120 },
-);
+export async function getCachedProjectById(id: string) {
+  "use cache";
+
+  cacheTag(`project-${id}`);
+  cacheLife("max");
+
+  return getProjectById(id);
+}
+
+export async function getCachedProjectKPIs() {
+  "use cache";
+
+  cacheTag("projects");
+  cacheLife("max");
+
+  return getProjectKPIs();
+}
+
+export async function getCachedProjectsForLookup(
+  page = 1,
+  limit = defaultLookupPageSize,
+  query?: string,
+) {
+  "use cache";
+
+  cacheTag("projects");
+
+  // equivalent to revalidate: 120
+  cacheLife({
+    stale: 120,
+    revalidate: 120,
+    expire: 300,
+  });
+
+  return getProjectsForLookup(page, limit, query);
+}
