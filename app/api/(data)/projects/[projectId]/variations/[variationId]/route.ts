@@ -31,16 +31,12 @@ export async function PATCH(
     variationParamSchema
   );
   if (!routeParams.success) {
-    return badRequestResponse("Invalid route parameters", {
-      issues: routeParams.response,
-    });
+    return badRequestResponse("Invalid route parameters");
   };
 
   const body = await parseBodyWithResponse(request, variationUpdateSchema);
   if (!body.success) {
-    return badRequestResponse("Invalid request body", {
-      issues: body.response,
-    });
+    return badRequestResponse("Invalid request body");
   }
 
   const { projectId, variationId } = routeParams.data;
