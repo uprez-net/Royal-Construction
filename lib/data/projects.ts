@@ -4,6 +4,7 @@ import { Prisma, ProjectStatus } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
 import prisma from "@/lib/prisma";
 import { ProjectDetail, ProjectKPIs, ProjectWithStats } from "@/types/project";
+import { CACHE_PROFILES } from "@/types/cache";
 
 export type ProjectListSortBy = "name" | "progress" | "budget" | "startDate" | "spent";
 
@@ -292,7 +293,7 @@ export async function getCachedProjects(query?: ProjectListQuery) {
   "use cache";
 
   cacheTag("projects");
-  cacheLife("max");
+  cacheLife(CACHE_PROFILES.LONG);
 
   return getProjects(query);
 }
@@ -301,7 +302,7 @@ export async function getCachedProjectById(id: string) {
   "use cache";
 
   cacheTag(`project-${id}`);
-  cacheLife("max");
+  cacheLife(CACHE_PROFILES.LONG);
 
   return getProjectById(id);
 }
@@ -310,7 +311,7 @@ export async function getCachedProjectKPIs() {
   "use cache";
 
   cacheTag("projects");
-  cacheLife("max");
+  cacheLife(CACHE_PROFILES.LONG);
 
   return getProjectKPIs();
 }
@@ -325,11 +326,7 @@ export async function getCachedProjectsForLookup(
   cacheTag("projects");
 
   // equivalent to revalidate: 120
-  cacheLife({
-    stale: 120,
-    revalidate: 120,
-    expire: 300,
-  });
+  cacheLife(CACHE_PROFILES.SHORT);
 
   return getProjectsForLookup(page, limit, query);
 }

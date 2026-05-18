@@ -4,6 +4,7 @@ import { Role, type User } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
+import { CACHE_PROFILES } from "@/types/cache";
 
 export type SiteManagerDropdownItem = Pick<User, "id" | "name" | "email" | "phone" | "createdAt">;
 
@@ -78,11 +79,7 @@ export async function getCachedSiteManagersForDropdown(
 
     cacheTag("site-managers");
 
-    cacheLife({
-        stale: 300,
-        revalidate: 300,
-        expire: 600,
-    });
+    cacheLife(CACHE_PROFILES.MEDIUM);
 
     return getSiteManagersDropdownPage(page, limit, query);
 }

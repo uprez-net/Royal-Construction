@@ -24,6 +24,7 @@ const tradieScheduleInclude = {
 
 const defaultCoordinationPageSize = 10;
 import { differenceInCalendarDays, startOfDay, addDays, startOfWeek } from "date-fns";
+import { CACHE_PROFILES } from "@/types/cache";
 
 
 function getWeekLabel(date: Date) {
@@ -653,11 +654,7 @@ export async function getCachedTradies() {
 
   cacheTag("tradies");
 
-  cacheLife({
-    stale: 300,
-    revalidate: 300,
-    expire: 600,
-  });
+  cacheLife(CACHE_PROFILES.MEDIUM);
 
   return getTradies();
 }
@@ -673,11 +670,7 @@ export async function getCachedTradieSchedules(filters?: {
 
   cacheTag("tradies");
 
-  cacheLife({
-    stale: 300,
-    revalidate: 300,
-    expire: 600,
-  });
+  cacheLife(CACHE_PROFILES.MEDIUM);
 
   return getTradieSchedules(filters);
 }
@@ -687,11 +680,7 @@ export async function getCachedTradieScheduleKPIs() {
 
   cacheTag("tradies");
 
-  cacheLife({
-    stale: 300,
-    revalidate: 300,
-    expire: 600,
-  });
+  cacheLife(CACHE_PROFILES.MEDIUM);
 
   return getTradieScheduleKPIs();
 }
@@ -704,11 +693,7 @@ export async function getCachedTradieCoordinationDashboard(
   cacheTag("tradies");
   cacheTag("projects");
 
-  cacheLife({
-    stale: 120,
-    revalidate: 120,
-    expire: 300,
-  });
+  cacheLife(CACHE_PROFILES.SHORT);
 
   return getTradieCoordinationDashboard(query);
 }

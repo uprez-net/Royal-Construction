@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { CACHE_PROFILES } from "@/types/cache";
 import { Role } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
 
@@ -101,7 +102,7 @@ export async function deleteUser(clerkId: string) {
 export async function getUserByClerkIdCached(clerkId: string) {
     "use cache";
     cacheTag(`user-${clerkId}`);
-    cacheLife("max");
+    cacheLife(CACHE_PROFILES.MEDIUM);
 
     return getUserByClerkId(clerkId);
 }

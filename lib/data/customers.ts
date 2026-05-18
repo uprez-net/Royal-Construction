@@ -4,6 +4,7 @@ import { Role, type Customer } from "@prisma/client";
 import { revalidateTag, cacheTag, cacheLife } from "next/cache";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
+import { CACHE_PROFILES } from "@/types/cache";
 
 export type CustomerDropdownItem = Pick<Customer, "id" | "name" | "email" | "phone" | "createdAt">;
 
@@ -75,11 +76,7 @@ export async function getCachedCustomersForDropdown(
 
     cacheTag("customers");
 
-    cacheLife({
-        stale: 300,
-        revalidate: 300,
-        expire: 600,
-    });
+    cacheLife(CACHE_PROFILES.MEDIUM);
 
     return getCustomersDropdownPage(page, limit, query);
 }

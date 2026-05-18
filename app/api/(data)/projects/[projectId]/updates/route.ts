@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import { getProjectById } from "@/lib/data/projects";
-import { getUserByClerkId } from "@/lib/data/user";
+import { getUserByClerkIdCached } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
 
 type AddProjectUpdateBody = {
@@ -25,7 +25,7 @@ export async function POST(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const user = await getUserByClerkId(userId);
+  const user = await getUserByClerkIdCached(userId);
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }

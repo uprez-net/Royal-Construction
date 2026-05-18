@@ -3,7 +3,7 @@ import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
 
 import { saveFile } from '@/lib/data/file';
-import { getUserByClerkId } from '@/lib/data/user';
+import { getUserByClerkIdCached } from '@/lib/data/user';
 
 interface ClientPayload {
     fileId?: string;
@@ -69,7 +69,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             onUploadCompleted: async ({ blob, tokenPayload }) => {
                 try {
                     const { userId, projectId, milestoneId, fileName } = JSON.parse(tokenPayload!) as TokenPayload;
-                    const user = await getUserByClerkId(userId);
+                    const user = await getUserByClerkIdCached(userId);
                     if (!user) {
                         throw new Error('User not found');
                     }
