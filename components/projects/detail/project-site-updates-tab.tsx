@@ -31,7 +31,6 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
             key={update.id}
             className="relative overflow-hidden rounded-xl border border-border/70 bg-card p-4 transition-all hover:shadow-sm"
           >
-            {/* Green left border for "done" items (all updates seem to use ms-done in mock) */}
             <div className="absolute bottom-0 left-0 top-0 w-1 bg-green-600" />
 
             <div className="flex items-start justify-between gap-4">
@@ -66,9 +65,10 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
                       className="group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
                     >
                       <Image
-                        src={`https://picsum.photos/seed/update${dataTimeFormat.format(new Date(update.createdAt)).slice(0, 6).replace(/ /g, "")}${i}/400/300`}
+                        src={update.photoUrls[i]}
                         alt={`Photo ${i + 1}`}
                         className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                        loading="lazy"
                       />
                     </div>
                   ),

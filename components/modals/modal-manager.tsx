@@ -15,6 +15,7 @@ import { ScheduleTradieModal } from "@/components/tradies/schedule-tradie-modal"
 import { TradieDirectoryModal } from "@/components/tradies/tradie-directory-modal";
 
 import type {
+  ProjectDetail,
   TradieScheduleListItem,
   TradieUrgentReminderItem,
 } from "@/types/project";
@@ -34,10 +35,22 @@ export function ModalManager() {
   const router = useRouter();
 
   const handleClose = () => dispatch(closeModal());
+  const handleProjectSuccess = () => {
+    handleClose();
+  };
   const handleSuccess = () => {
     handleClose();
     router.refresh();
   };
+
+  const projectPayload = modal.payload?.project as ProjectDetail | undefined;
+  const projectId = projectPayload?.id ?? String(modal.payload?.projectId ?? "");
+  const projectMilestones =
+    projectPayload?.milestones.map((milestone) => ({
+      id: milestone.id,
+      name: milestone.name,
+    })) ??
+    ((modal.payload?.milestones as { id: string; name: string }[]) ?? []);
 
   if (!modal.type) {
     return null;
@@ -67,7 +80,7 @@ export function ModalManager() {
 
   const handleRowQuickConfirm = async (row: TradieScheduleListItem) => {
     const loading = toast.loading("Updating status...");
-    handleSuccess();
+    handleClose();
     try {
       await updateScheduleStatuses([row.id], TradieScheduleStatus.CONFIRMED);
     } catch (error) {
@@ -94,26 +107,24 @@ export function ModalManager() {
     case "addUpdate":
       return (
         <AddUpdateModal
-          projectId={String(modal.payload?.projectId ?? "")}
-          milestones={
-            (modal.payload?.milestones as { id: string; name: string }[]) ?? []
-          }
+          projectId={projectId}
+          milestones={projectMilestones}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();
           }}
-          onSuccess={handleSuccess}
+          onSuccess={handleProjectSuccess}
         />
       );
     case "createVariation":
       return (
         <CreateVariationModal
-          projectId={String(modal.payload?.projectId ?? "")}
+          projectId={projectId}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();
           }}
-          onSuccess={handleSuccess}
+          onSuccess={handleProjectSuccess}
         />
       );
     case "createProject":
@@ -123,7 +134,7 @@ export function ModalManager() {
           onOpenChange={(open) => {
             if (!open) handleClose();
           }}
-          onSuccess={handleSuccess}
+          onSuccess={handleProjectSuccess}
         />
       );
     case "scheduleTradie":

@@ -6,16 +6,18 @@ import { saveFile } from '@/lib/data/file';
 import { getUserByClerkId } from '@/lib/data/user';
 
 interface ClientPayload {
+    fileId?: string;
     fileName: string;
     projectId: string;
-    milestoneId?: string;
+    milestoneId?: string | null;
 }
 
 interface TokenPayload {
+    fileId?: string;
     fileName: string;
     userId: string;
     projectId: string;
-    milestoneId?: string;
+    milestoneId?: string | null;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -31,7 +33,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             ) => {
                 const { isAuthenticated, userId } = await auth();
                 if (!isAuthenticated) throw new Error('Not authenticated');
-                const { projectId, milestoneId, fileName } = JSON.parse(clientPayload) as ClientPayload;
+                const { projectId, milestoneId, fileName, fileId } = JSON.parse(clientPayload) as ClientPayload;
 
                 return {
                     allowedContentTypes: [
@@ -59,6 +61,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         userId: userId,
                         projectId,
                         milestoneId,
+                        fileId,
                         fileName,
                     }),
                 }
@@ -74,7 +77,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                     await saveFile({
                         userId: user.id,
                         projectId,
-                        milestoneId,
+                        milestoneId: milestoneId ?? undefined,
                         fileUrl: blob.url,
                         fileName,
                     });

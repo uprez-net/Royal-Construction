@@ -32,7 +32,9 @@ import {
 
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchCustomers } from "@/lib/store/slices/customersSlice";
+import { createProject } from "@/lib/store/slices/projectsSlice";
 import { fetchSiteManagers } from "@/lib/store/slices/siteManagersSlice";
+import { toast } from "sonner";
 
 import type { AddressSuggestion } from "@/types/data";
 
@@ -76,17 +78,15 @@ const formSchema = z
 
     selectedManager: lookUpItemSchema.nullable(),
 
-    budget: z.coerce
-      .number({
-        message: "Budget is required",
-      })
-      .min(1, "Budget must be greater than 0"),
+    budget: z
+      .string()
+      .min(1, "Budget is required")
+      .refine((value) => Number(value) > 0, "Budget must be greater than 0"),
 
-    lotSize: z.coerce
-      .number({
-        message: "Lot size is required",
-      })
-      .min(1, "Lot size must be greater than 0"),
+    lotSize: z
+      .string()
+      .min(1, "Lot size is required")
+      .refine((value) => Number(value) > 0, "Lot size must be greater than 0"),
 
     startDate: z.string().min(1, "Start date is required"),
 
@@ -166,8 +166,8 @@ const defaultValues: FormValues = {
 
   selectedManager: null,
 
-  budget: undefined as unknown as number,
-  lotSize: undefined as unknown as number,
+  budget: "",
+  lotSize: "",
 
   startDate: "",
   estimatedEndDate: "",
@@ -187,6 +187,9 @@ export function CreateProjectModal({
   const dispatch = useAppDispatch();
   const customers = useAppSelector((state) => state.customers);
   const siteManagers = useAppSelector((state) => state.siteManagers);
+  const createProjectMutation = useAppSelector(
+    (state) => state.projects.mutations.createProject,
+  );
   const [isPending, startTransition] = useTransition();
   const [customerSearch, setCustomerSearch] = useState("");
   const [managerSearch, setManagerSearch] = useState("");
@@ -225,6 +228,7 @@ export function CreateProjectModal({
       })),
     [siteManagers.items],
   );
+  const isSubmitting = createProjectMutation.status === "pending" || isPending;
 
   const displayedLocationSuggestions =
     open && location.length >= 3 ? locationSuggestions : [];
@@ -316,90 +320,66 @@ export function CreateProjectModal({
   }, [location, open]);
 
   const onSubmit = async (values: FormValues) => {
-    clearErrors("root");
-
     startTransition(async () => {
-      try {
-        const payload =
-          values.customerMode === "existing"
-            ? {
-                name: values.name,
-                propertyType: values.propertyType,
+      clearErrors("root");
 
-                customerMode: values.customerMode,
+      const selectedLocation = values.selectedLocationSuggestion;
 
-                customerId: values.selectedCustomer?.id,
-
-                location: `${values.selectedLocationSuggestion?.address ?? ""}, ${values.selectedLocationSuggestion?.state ?? ""} ${values.selectedLocationSuggestion?.postcode ?? ""}`,
-                council: values.selectedLocationSuggestion?.council ?? "",
-
-                siteManagerId: values.selectedManager?.id ?? null,
-
-                budget: values.budget,
-                lotSize: values.lotSize,
-
-                startDate: values.startDate,
-
-                estimatedEndDate: values.estimatedEndDate || null,
-
-                notes: values.notes,
-              }
-            : {
-                name: values.name,
-                propertyType: values.propertyType,
-
-                customerMode: values.customerMode,
-
-                customerName: values.newCustomerName,
-
-                customerPhone: values.newCustomerPhone,
-
-                customerEmail: values.newCustomerEmail,
-
-                location: `${values.selectedLocationSuggestion?.address ?? ""}, ${values.selectedLocationSuggestion?.state ?? ""} ${values.selectedLocationSuggestion?.postcode ?? ""}`,
-                council: values.selectedLocationSuggestion?.council ?? "",
-
-                siteManagerId: values.selectedManager?.id ?? null,
-
-                budget: values.budget,
-                lotSize: values.lotSize,
-
-                startDate: values.startDate,
-
-                estimatedEndDate: values.estimatedEndDate || null,
-
-                notes: values.notes,
-              };
-
-        const response = await fetch("/api/projects", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
+      if (!selectedLocation) {
+        setError("root", {
+          message: "Please select a valid location from suggestions",
         });
 
-        if (!response.ok) {
-          const body = await response.json().catch(() => null);
+        return;
+      }
 
-          setError("root", {
-            message: body?.error ?? "Unable to create project",
-          });
+      const payload =
+        values.customerMode === "existing"
+          ? {
+              name: values.name,
+              propertyType: values.propertyType,
+              customerMode: values.customerMode,
+              customerId: values.selectedCustomer?.id ?? "",
+              location: `${selectedLocation.address}, ${selectedLocation.state} ${selectedLocation.postcode ?? ""}`,
+              council: selectedLocation.council,
+              siteManagerId: values.selectedManager?.id ?? null,
+              budget: Number(values.budget),
+              lotSize: Number(values.lotSize),
+              startDate: values.startDate,
+              estimatedEndDate: values.estimatedEndDate || null,
+              notes: values.notes,
+            }
+          : {
+              name: values.name,
+              propertyType: values.propertyType,
+              customerMode: values.customerMode,
+              customerName: values.newCustomerName ?? "",
+              customerPhone: values.newCustomerPhone ?? "",
+              customerEmail: values.newCustomerEmail ?? "",
+              location: `${selectedLocation.address}, ${selectedLocation.state} ${selectedLocation.postcode ?? ""}`,
+              council: selectedLocation.council,
+              siteManagerId: values.selectedManager?.id ?? null,
+              budget: Number(values.budget),
+              lotSize: Number(values.lotSize),
+              startDate: values.startDate,
+              estimatedEndDate: values.estimatedEndDate || null,
+              notes: values.notes,
+            };
 
-          return;
-        }
+      try {
+        const createdProject = await dispatch(createProject(payload)).unwrap();
 
-        reset(defaultValues);
-
-        onOpenChange(false);
-
+        toast.success(`Project created: ${createdProject.name}`);
         onSuccess();
       } catch (error) {
-        console.error(error);
+        const message =
+          error instanceof Error ? error.message : "Unable to create project";
 
-        setError("root", {
-          message: "Something went wrong",
-        });
+        setError("root", { message });
+        toast.error(message);
+      } finally {
+        reset(defaultValues);
+        onOpenChange(false);
       }
     });
   };
@@ -761,8 +741,8 @@ export function CreateProjectModal({
               Save Draft
             </Button>
 
-            <Button type="submit" disabled={isPending} className="gap-2">
-              {isPending && <Loader2 className="size-4 animate-spin" />}
+            <Button type="submit" disabled={isSubmitting} className="gap-2">
+              {isSubmitting && <Loader2 className="size-4 animate-spin" />}
               Create Project
             </Button>
           </div>

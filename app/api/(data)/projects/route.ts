@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import prisma from "@/lib/prisma";
-import { getProjects, getProjectsForLookup, type ProjectListSortBy } from "@/lib/data/projects";
+import { getProjectById, getProjects, getProjectsForLookup, type ProjectListSortBy } from "@/lib/data/projects";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
 
@@ -20,6 +20,7 @@ type CreateProjectPayload = {
   location?: string;
   siteManagerId?: string | null;
   budget?: string | number;
+  lotSize?: string | number;
   startDate?: string;
   estimatedEndDate?: string | null;
   estEnd?: string | null;
@@ -69,9 +70,10 @@ export async function POST(request: Request) {
     const location = body.location?.trim();
     const startDate = body.startDate?.trim();
     const totalBudget = Number(body.budget ?? 0);
+    const lotSize = Number(body.lotSize ?? 0);
     const estimatedEndDate = body.estimatedEndDate ?? body.estEnd ?? null;
 
-    if (!projectName || !location || !startDate || !Number.isFinite(totalBudget)) {
+    if (!projectName || !location || !startDate || !Number.isFinite(totalBudget) || !Number.isFinite(lotSize)) {
       return NextResponse.json({ error: "Missing required project fields" }, { status: 400 });
     }
 
@@ -127,6 +129,7 @@ export async function POST(request: Request) {
         location,
         siteManagerId: siteManager?.id ?? null,
         totalBudget: String(totalBudget),
+        lotSize: String(lotSize),
         startDate: new Date(startDate),
         estimatedEndDate: estimatedEndDate ? new Date(estimatedEndDate) : new Date(startDate),
         requirements: {
@@ -139,7 +142,13 @@ export async function POST(request: Request) {
 
     revalidateTag("projects", "max");
 
-    return NextResponse.json({ id: project.id }, { status: 201 });
+    const createdProject = await getProjectById(project.id);
+
+    if (!createdProject) {
+      return NextResponse.json({ error: "Project was created but could not be loaded" }, { status: 500 });
+    }
+
+    return NextResponse.json(createdProject, { status: 201 });
   } catch (error) {
     console.error("/api/projects POST error", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

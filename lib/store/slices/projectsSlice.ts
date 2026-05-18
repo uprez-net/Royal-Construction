@@ -1,13 +1,29 @@
-import { ProjectDetail, ProjectWithStats } from "@/types/project";
-import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+
 import type { RootState } from "@/lib/store";
 import type { ProjectDetailTabKey } from "@/types/ui";
+import type {
+  AddProjectUpdateRequest,
+  CreateProjectRequest,
+  CreateVariationRequest,
+  ProjectDetail,
+  ProjectMutationState,
+  ProjectUploadRecord,
+  ProjectWithStats,
+} from "@/types/project";
+
+type MutationKey = "createProject" | "createVariation" | "addUpdate";
+
+type ProjectsMutationState = Record<MutationKey, ProjectMutationState>;
+
+type ProjectUploadState = Record<string, Record<string, ProjectUploadRecord>>;
 
 export interface ProjectsState {
   projects: ProjectWithStats[];
   activeProject: ProjectDetail | null;
   optimisticUpdates: Record<string, Partial<Record<string, unknown>>>;
-  pendingVariations: string[];
+  mutations: ProjectsMutationState;
+  uploadsByProjectId: ProjectUploadState;
   detailUi: {
     byProjectId: Record<
       string,
@@ -20,21 +36,142 @@ export interface ProjectsState {
   };
 }
 
-const initialState: ProjectsState = {
-  projects: [],
-  activeProject: null,
-  optimisticUpdates: {},
-  pendingVariations: [],
-  detailUi: {
-    byProjectId: {},
-  },
-};
-
 const defaultDetailUiState = {
   activeTab: "overview",
   activityFilter: "all",
   chartRange: "monthly",
 } as const;
+
+const initialMutationState = (): ProjectsMutationState => ({
+  createProject: { status: "idle", error: null },
+  createVariation: { status: "idle", error: null },
+  addUpdate: { status: "idle", error: null },
+});
+
+const initialState: ProjectsState = {
+  projects: [],
+  activeProject: null,
+  optimisticUpdates: {},
+  mutations: initialMutationState(),
+  uploadsByProjectId: {},
+  detailUi: {
+    byProjectId: {},
+  },
+};
+
+function fetchErrorMessage(responseBody: unknown, fallback: string) {
+  if (responseBody && typeof responseBody === "object" && "error" in responseBody) {
+    const message = (responseBody as { error?: unknown }).error;
+
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
+async function fetchJson<T>(input: RequestInfo | URL, init: RequestInit, fallback: string): Promise<T> {
+  const response = await fetch(input, init);
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(fetchErrorMessage(body, fallback));
+  }
+
+  return body as T;
+}
+
+function toProjectListItem(project: ProjectDetail): ProjectWithStats {
+  const milestoneCount = project.milestones.length;
+  const completedMilestoneCount = project.milestones.filter((milestone) => milestone.status === "DONE").length;
+  const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
+
+  return {
+    ...project,
+    milestoneCount,
+    completedMilestoneCount,
+    progressPercent,
+  };
+}
+
+function syncProjectState(state: ProjectsState, project: ProjectDetail) {
+  const nextProject = toProjectListItem(project);
+  const existingIndex = state.projects.findIndex((item) => item.id === project.id);
+
+  if (existingIndex >= 0) {
+    state.projects[existingIndex] = nextProject;
+  } else {
+    state.projects.unshift(nextProject);
+  }
+
+  if (state.activeProject?.id === project.id) {
+    state.activeProject = project;
+  }
+
+  delete state.optimisticUpdates[project.id];
+  delete state.uploadsByProjectId[project.id];
+}
+
+export const createProject = createAsyncThunk<
+  ProjectDetail,
+  CreateProjectRequest,
+  { rejectValue: string }
+>("projects/createProject", async (payload, thunkApi) => {
+  try {
+    return await fetchJson<ProjectDetail>(
+      "/api/projects",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      "Unable to create project",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to create project");
+  }
+});
+
+export const createVariation = createAsyncThunk<
+  ProjectDetail,
+  CreateVariationRequest,
+  { rejectValue: string }
+>("projects/createVariation", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    return await fetchJson<ProjectDetail>(
+      `/api/projects/${projectId}/variations`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      "Unable to create variation",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to create variation");
+  }
+});
+
+export const addProjectUpdate = createAsyncThunk<
+  ProjectDetail,
+  AddProjectUpdateRequest,
+  { rejectValue: string }
+>("projects/addUpdate", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    return await fetchJson<ProjectDetail>(
+      `/api/projects/${projectId}/updates`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      "Unable to add site update",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to add site update");
+  }
+});
 
 const projectsSlice = createSlice({
   name: "projects",
@@ -49,19 +186,94 @@ const projectsSlice = createSlice({
     clearOptimisticUpdate(state, action: PayloadAction<string>) {
       delete state.optimisticUpdates[action.payload];
     },
-    addPendingVariation(state, action: PayloadAction<string>) {
-      if (!state.pendingVariations.includes(action.payload)) {
-        state.pendingVariations.push(action.payload);
-      }
-    },
-    removePendingVariation(state, action: PayloadAction<string>) {
-      state.pendingVariations = state.pendingVariations.filter((variationId) => variationId !== action.payload);
-    },
     setProjects(state, action: PayloadAction<ProjectWithStats[]>) {
       state.projects = action.payload;
     },
     setActiveProject(state, action: PayloadAction<ProjectDetail | null>) {
       state.activeProject = action.payload;
+    },
+    syncProjectFromDetail(state, action: PayloadAction<ProjectDetail>) {
+      syncProjectState(state, action.payload);
+    },
+    registerProjectUpload(
+      state,
+      action: PayloadAction<{
+        projectId: string;
+        fileId: string;
+        fileName: string;
+        fileSize: number;
+      }>,
+    ) {
+      const projectUploads = state.uploadsByProjectId[action.payload.projectId] ?? {};
+
+      projectUploads[action.payload.fileId] = {
+        id: action.payload.fileId,
+        fileName: action.payload.fileName,
+        fileSize: action.payload.fileSize,
+        progress: 0,
+        status: "queued",
+        url: null,
+        error: null,
+      };
+
+      state.uploadsByProjectId[action.payload.projectId] = projectUploads;
+    },
+    updateProjectUploadProgress(
+      state,
+      action: PayloadAction<{
+        projectId: string;
+        fileId: string;
+        progress: number;
+      }>,
+    ) {
+      const upload = state.uploadsByProjectId[action.payload.projectId]?.[action.payload.fileId];
+
+      if (!upload) {
+        return;
+      }
+
+      upload.status = "uploading";
+      upload.progress = Math.max(0, Math.min(100, Math.round(action.payload.progress)));
+      upload.error = null;
+    },
+    completeProjectUpload(
+      state,
+      action: PayloadAction<{
+        projectId: string;
+        fileId: string;
+        url: string;
+      }>,
+    ) {
+      const upload = state.uploadsByProjectId[action.payload.projectId]?.[action.payload.fileId];
+
+      if (!upload) {
+        return;
+      }
+
+      upload.status = "completed";
+      upload.progress = 100;
+      upload.url = action.payload.url;
+      upload.error = null;
+    },
+    failProjectUpload(
+      state,
+      action: PayloadAction<{
+        projectId: string;
+        fileId: string;
+        error: string;
+      }>,
+    ) {
+      const upload = state.uploadsByProjectId[action.payload.projectId]?.[action.payload.fileId];
+
+      if (!upload) {
+        return;
+      }
+
+      upload.status = "failed";
+      upload.error = action.payload.error;
+    },
+    clearProjectUploads(state, action: PayloadAction<string>) {
+      delete state.uploadsByProjectId[action.payload];
     },
     setProjectDetailTab(state, action: PayloadAction<{ projectId: string; tab: ProjectDetailTabKey }>) {
       const current = state.detailUi.byProjectId[action.payload.projectId] ?? defaultDetailUiState;
@@ -91,15 +303,61 @@ const projectsSlice = createSlice({
       delete state.detailUi.byProjectId[action.payload];
     },
   },
+  extraReducers(builder) {
+    builder
+      .addCase(createProject.pending, (state) => {
+        state.mutations.createProject = { status: "pending", error: null };
+      })
+      .addCase(createProject.fulfilled, (state, action) => {
+        state.mutations.createProject = { status: "succeeded", error: null };
+        syncProjectState(state, action.payload);
+      })
+      .addCase(createProject.rejected, (state, action) => {
+        state.mutations.createProject = {
+          status: "failed",
+          error: action.payload ?? action.error.message ?? "Unable to create project",
+        };
+      })
+      .addCase(createVariation.pending, (state) => {
+        state.mutations.createVariation = { status: "pending", error: null };
+      })
+      .addCase(createVariation.fulfilled, (state, action) => {
+        state.mutations.createVariation = { status: "succeeded", error: null };
+        syncProjectState(state, action.payload);
+      })
+      .addCase(createVariation.rejected, (state, action) => {
+        state.mutations.createVariation = {
+          status: "failed",
+          error: action.payload ?? action.error.message ?? "Unable to create variation",
+        };
+      })
+      .addCase(addProjectUpdate.pending, (state) => {
+        state.mutations.addUpdate = { status: "pending", error: null };
+      })
+      .addCase(addProjectUpdate.fulfilled, (state, action) => {
+        state.mutations.addUpdate = { status: "succeeded", error: null };
+        syncProjectState(state, action.payload);
+      })
+      .addCase(addProjectUpdate.rejected, (state, action) => {
+        state.mutations.addUpdate = {
+          status: "failed",
+          error: action.payload ?? action.error.message ?? "Unable to add site update",
+        };
+      });
+  },
 });
 
 export const {
   addOptimisticUpdate,
   clearOptimisticUpdate,
-  addPendingVariation,
-  removePendingVariation,
   setProjects,
   setActiveProject,
+  syncProjectFromDetail,
+  registerProjectUpload,
+  updateProjectUploadProgress,
+  completeProjectUpload,
+  failProjectUpload,
+  clearProjectUploads,
   setProjectDetailTab,
   setProjectDetailActivityFilter,
   setProjectDetailChartRange,
@@ -112,6 +370,9 @@ export const selectProjectDetailUiState = (projectId: string) =>
   createSelector(selectProjectsState, (projectsState) => {
     return projectsState.detailUi.byProjectId[projectId] ?? defaultDetailUiState;
   });
+
+export const selectProjectUploadQueue = (projectId: string) =>
+  createSelector(selectProjectsState, (projectsState) => projectsState.uploadsByProjectId[projectId] ?? {});
 
 export const selectActiveProjectBudgetSummary = createSelector(selectProjectsState, (projectsState) => {
   const project = projectsState.activeProject;

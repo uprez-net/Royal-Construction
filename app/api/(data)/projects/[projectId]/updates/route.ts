@@ -2,9 +2,18 @@ import { randomUUID } from "crypto";
 
 import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
+import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 
+import { getProjectById } from "@/lib/data/projects";
 import { getUserByClerkId } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
+
+type AddProjectUpdateBody = {
+  notes?: string;
+  milestoneId?: string | null;
+  photoUrls?: string[];
+};
 
 export async function POST(
   request: Request,
@@ -21,11 +30,35 @@ export async function POST(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const formData = await request.formData();
-  const notes = String(formData.get("notes") ?? "").trim();
-  const milestoneIdValue = formData.get("milestoneId");
-  const milestoneId = typeof milestoneIdValue === "string" && milestoneIdValue.length > 0 ? milestoneIdValue : null;
-  const files = formData.getAll("photos").filter((file): file is File => file instanceof File && file.size > 0 && file.type.startsWith("image/"));
+  const contentType = request.headers.get("content-type") ?? "";
+  let notes = "";
+  let milestoneId: string | null = null;
+  let photoUrls: string[] = [];
+
+  if (contentType.includes("application/json")) {
+    const body = (await request.json()) as AddProjectUpdateBody;
+    notes = String(body.notes ?? "").trim();
+    milestoneId = typeof body.milestoneId === "string" && body.milestoneId.length > 0 ? body.milestoneId : null;
+    photoUrls = Array.isArray(body.photoUrls)
+      ? body.photoUrls.filter((url): url is string => typeof url === "string" && url.length > 0)
+      : [];
+  } else {
+    const formData = await request.formData();
+    notes = String(formData.get("notes") ?? "").trim();
+    const milestoneIdValue = formData.get("milestoneId");
+    milestoneId = typeof milestoneIdValue === "string" && milestoneIdValue.length > 0 ? milestoneIdValue : null;
+    const files = formData.getAll("photos").filter((file): file is File => file instanceof File && file.size > 0 && file.type.startsWith("image/"));
+
+    photoUrls = await Promise.all(
+      files.map(async (file) => {
+        const blob = await put(`projects/${projectId}/${randomUUID()}-${file.name}`, file, {
+          access: "public",
+        });
+
+        return blob.url;
+      }),
+    );
+  }
 
   if (!notes) {
     return new Response("Notes are required", { status: 400 });
@@ -38,17 +71,7 @@ export async function POST(
     })
     : null;
 
-  const photoUrls = await Promise.all(
-    files.map(async (file) => {
-      const blob = await put(`projects/${projectId}/${randomUUID()}-${file.name}`, file, {
-        access: "public",
-      });
-
-      return blob.url;
-    }),
-  );
-
-  const siteUpdate = await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const created = await tx.siteUpdate.create({
       data: {
         projectId: projectId,
@@ -86,5 +109,14 @@ export async function POST(
     console.log(`[NOTIFICATION] Client notified for milestone ${milestoneId}`);
   }
 
-  return Response.json(siteUpdate);
+  revalidateTag("projects", "max");
+  revalidateTag("milestones", "max");
+
+  const updatedProject = await getProjectById(projectId);
+
+  if (!updatedProject) {
+    return NextResponse.json({ error: "Project not found after creating update" }, { status: 404 });
+  }
+
+  return NextResponse.json(updatedProject);
 }

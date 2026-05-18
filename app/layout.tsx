@@ -5,6 +5,7 @@ import { Fraunces, IBM_Plex_Mono, Manrope } from "next/font/google"
 
 import { ModalManager } from "@/components/modals/modal-manager"
 import { ReduxProvider } from "@/components/providers/redux-provider"
+import { Toaster } from "@/components/ui/sonner"
 
 import "./globals.css"
 
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ClerkProvider>
           <ReduxProvider>
             {children}
+            <Toaster />
             <ModalManager />
           </ReduxProvider>
         </ClerkProvider>

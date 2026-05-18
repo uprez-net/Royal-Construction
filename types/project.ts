@@ -225,3 +225,54 @@ export type TradieCoordinationDashboard = {
   activity: TradieActivityItem[];
   urgentReminders: TradieUrgentReminderItem[];
 };
+
+export type ProjectMutationStatus = "idle" | "pending" | "succeeded" | "failed";
+
+export type ProjectMutationState = {
+  status: ProjectMutationStatus;
+  error: string | null;
+};
+
+export type ProjectUploadStatus = "queued" | "uploading" | "completed" | "failed";
+
+export type ProjectUploadRecord = {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  progress: number;
+  status: ProjectUploadStatus;
+  url: string | null;
+  error: string | null;
+};
+
+export type CreateProjectRequest = {
+  name: string;
+  propertyType: string;
+  customerMode: "existing" | "new";
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  location: string;
+  council?: string;
+  siteManagerId?: string | null;
+  budget: number;
+  lotSize: number;
+  startDate: string;
+  estimatedEndDate?: string | null;
+  notes?: string;
+};
+
+export type CreateVariationRequest = {
+  projectId: string;
+  description: string;
+  cost: number;
+  requestedDate?: string;
+};
+
+export type AddProjectUpdateRequest = {
+  projectId: string;
+  notes: string;
+  milestoneId?: string | null;
+  photoUrls: string[];
+};
