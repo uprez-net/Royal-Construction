@@ -279,7 +279,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
 
 export async function getProjectKPIs(): Promise<ProjectKPIs> {
   const [totalActive, onTrack, needsAttention, delayed] = await Promise.all([
-    prisma.project.count({ where: { status: ProjectStatus.ACTIVE } }),
+    prisma.project.count({ where: { status: { not: ProjectStatus.COMPLETED } } }),
     prisma.project.count({ where: { status: ProjectStatus.ON_TRACK } }),
     prisma.project.count({ where: { status: ProjectStatus.NEEDS_ATTENTION } }),
     prisma.project.count({ where: { status: ProjectStatus.DELAYED } }),

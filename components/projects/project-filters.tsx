@@ -13,10 +13,9 @@ interface ProjectFiltersProps {
 
 export function ProjectFilters({ kpis, activeFilter, onFilterChange }: ProjectFiltersProps) {
   const dispatch = useAppDispatch();
-  const allCount = kpis.onTrack + kpis.needsAttention + kpis.delayed + kpis.totalActive;
 
   const filters = [
-    { label: "All", value: null, count: allCount },
+    { label: "All", value: null, count: kpis.totalActive },
     { label: "On Track", value: "ON_TRACK", count: kpis.onTrack },
     { label: "Needs Attention", value: "NEEDS_ATTENTION", count: kpis.needsAttention },
     { label: "Delayed", value: "DELAYED", count: kpis.delayed },

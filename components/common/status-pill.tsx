@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode } from "react"
+import type { ReactNode, Key } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -19,7 +19,7 @@ export function StatusPill({
   tone,
   children,
 }: {
-  key?: string | number
+  key?: Key | null | undefined
   tone: keyof typeof statusToneMap
   children: ReactNode
 }) {
