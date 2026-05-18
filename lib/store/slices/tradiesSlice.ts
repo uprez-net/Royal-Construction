@@ -21,6 +21,25 @@ type ProjectLookupItem = {
   name: string;
 };
 
+type CreateScheduleRequest = {
+  tradieId: string;
+  projectId: string;
+  milestoneId?: string;
+  scheduledDate: string;
+  durationDays?: number;
+};
+
+type UpdateScheduleStatusRequest = {
+  scheduleId: string;
+  status: TradieScheduleStatus;
+  notes?: string;
+};
+
+type UpdateScheduleStatusResponse = {
+  schedule: TradieScheduleListItem;
+  requiresReplacement: boolean;
+};
+
 type ProjectLookupResponse = {
   items: ProjectLookupItem[];
   page: number;
@@ -204,6 +223,42 @@ export const fetchTradieProjectLookup = createAsyncThunk<
   return (await response.json()) as ProjectLookupResponse;
 });
 
+export const createTradieSchedule = createAsyncThunk<
+  TradieScheduleListItem,
+  CreateScheduleRequest
+>("tradies/createSchedule", async (payload, thunkApi) => {
+  const response = await fetch("/api/tradie-schedules", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to create tradie schedule");
+  }
+
+  return (await response.json()) as TradieScheduleListItem;
+});
+
+export const updateTradieScheduleStatus = createAsyncThunk<
+  UpdateScheduleStatusResponse,
+  UpdateScheduleStatusRequest
+>("tradies/updateScheduleStatus", async (payload) => {
+  const { scheduleId, status, notes } = payload;
+
+  const response = await fetch(`/api/tradie-schedules/${scheduleId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, notes }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to update schedule status");
+  }
+
+  return (await response.json()) as UpdateScheduleStatusResponse;
+});
+
 const tradiesSlice = createSlice({
   name: "tradies",
   initialState,
@@ -365,6 +420,55 @@ const tradiesSlice = createSlice({
         state.projectLookup.loading = false;
         state.projectLookup.loadingMore = false;
         state.projectLookup.error = action.error.message ?? "Failed to load projects";
+      });
+
+    builder
+      .addCase(createTradieSchedule.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createTradieSchedule.fulfilled, (state, action) => {
+        state.loading = false;
+        // insert the newly created schedule at the top for visibility
+        state.schedules = [action.payload, ...state.schedules];
+        state.pagination.totalCount = state.pagination.totalCount + 1;
+      })
+      .addCase(createTradieSchedule.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message ?? "Failed to create schedule";
+      });
+
+    builder
+      .addCase(updateTradieScheduleStatus.pending, (state, action) => {
+        const scheduleId = action.meta.arg.scheduleId;
+        if (!state.pendingScheduleIds.includes(scheduleId)) {
+          state.pendingScheduleIds.push(scheduleId);
+        }
+        state.error = null;
+      })
+      .addCase(updateTradieScheduleStatus.fulfilled, (state, action) => {
+        const { schedule, requiresReplacement } = action.payload;
+        // remove from pending
+        state.pendingScheduleIds = state.pendingScheduleIds.filter((id) => id !== schedule.id);
+
+        // update schedule in-place immutably
+        const idx = state.schedules.findIndex((s) => s.id === schedule.id);
+        if (idx >= 0) {
+          state.schedules = [...state.schedules.slice(0, idx), schedule, ...state.schedules.slice(idx + 1)];
+        } else {
+          state.schedules = [schedule, ...state.schedules];
+        }
+
+        if (requiresReplacement && schedule.milestoneId) {
+          if (!state.replacementRequired.includes(schedule.milestoneId)) {
+            state.replacementRequired.push(schedule.milestoneId);
+          }
+        }
+      })
+      .addCase(updateTradieScheduleStatus.rejected, (state, action) => {
+        const scheduleId = action.meta.arg.scheduleId;
+        state.pendingScheduleIds = state.pendingScheduleIds.filter((id) => id !== scheduleId);
+        state.error = action.error.message ?? "Failed to update schedule status";
       });
   },
 });

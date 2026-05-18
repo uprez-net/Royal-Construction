@@ -25,6 +25,7 @@ import { TradieScheduleDetailsModal } from "../tradies/details-view-modal";
 import {
   clearSelectedSchedules,
   fetchTradieCoordinationDashboard,
+  updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
 import { TradieScheduleStatus } from "@prisma/client";
@@ -56,22 +57,14 @@ export function ModalManager() {
     return null;
   }
 
-  const updateScheduleStatuses = async (
-    ids: string[],
-    status: TradieScheduleStatus,
-  ) => {
-    if (ids.length === 0) {
-      return;
-    }
+  const updateScheduleStatuses = async (ids: string[], status: TradieScheduleStatus) => {
+    if (ids.length === 0) return;
 
     await Promise.all(
-      ids.map(async (id) => {
-        await fetch(`/api/tradie-schedules/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
-        });
-      }),
+      ids.map(async (id) =>
+        // dispatch thunk so state updates are driven by reducers
+        dispatch(updateTradieScheduleStatus({ scheduleId: id, status })),
+      ),
     );
 
     dispatch(clearSelectedSchedules());
@@ -181,7 +174,7 @@ export function ModalManager() {
           onOpenChange={(open) => {
             if (!open) handleClose();
           }}
-          onSuccess={handleSuccess}
+          onSuccess={handleClose}
         />
       );
     }
@@ -208,7 +201,7 @@ export function ModalManager() {
           }
           open
           onOpenChange={(open) => !open && handleClose()}
-          onSend={handleSuccess}
+          onSend={handleClose}
         />
       );
     case "tradieScheduleDetails":

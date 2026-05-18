@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   Box,
   Check,
@@ -12,6 +12,9 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { updateTradieScheduleStatus } from "@/lib/store/slices/tradiesSlice";
+import type { TradieScheduleStatus } from "@prisma/client";
 import {
   Dialog,
   DialogContent,
@@ -136,15 +139,17 @@ export function ConfirmStatusModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
-  const [status, setStatus] = useState<ScheduleStatus>(
-    schedule.status as ScheduleStatus,
-  );
-
-  const [loading, setLoading] = useState<ScheduleStatus | null>(null);
+  const [status, setStatus] = useState<ScheduleStatus>(schedule.status as ScheduleStatus);
+  const [activeLoading, setActiveLoading] = useState<ScheduleStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const dispatch = useAppDispatch();
+  const [isPending, startTransition] = useTransition();
+  const pendingFromStore = useAppSelector((s) => s.tradies.pendingScheduleIds.includes(schedule.id));
 
   const resetState = () => {
     setStatus(schedule.status as ScheduleStatus);
-    setLoading(null);
+    setActiveLoading(null);
+    setError(null);
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -155,28 +160,26 @@ export function ConfirmStatusModal({
     onOpenChange(nextOpen);
   };
 
-  async function updateStatus(nextStatus: ScheduleStatus) {
-    setLoading(nextStatus);
+  function updateStatus(nextStatus: ScheduleStatus) {
+    setActiveLoading(nextStatus);
+    setError(null);
 
-    const response = await fetch(`/api/tradie-schedules/${schedule.id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        status: nextStatus,
-      }),
+    startTransition(() => {
+      void dispatch(
+        updateTradieScheduleStatus({ scheduleId: schedule.id, status: nextStatus as TradieScheduleStatus }),
+      )
+        .unwrap()
+        .then(() => {
+          setActiveLoading(null);
+          setStatus(nextStatus);
+          onOpenChange(false);
+          onSuccess();
+        })
+        .catch((err: unknown) => {
+          setActiveLoading(null);
+          setError(err instanceof Error ? err.message : String(err));
+        });
     });
-
-    setLoading(null);
-
-    if (!response.ok) {
-      return;
-    }
-
-    setStatus(nextStatus);
-    onOpenChange(false);
-    onSuccess();
   }
 
   return (
@@ -218,17 +221,25 @@ export function ConfirmStatusModal({
             </div>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-[#FEE2E2] px-3 py-2 text-[12px] text-[#DC2626]">
+              <XCircle className="h-4 w-4" />
+              {error}
+            </div>
+          )}
+
           {/* Status Options */}
           <div className="flex flex-col gap-[6px]">
             {statusOptions.map((option) => {
               const selected = status === option.value;
-              const isLoading = loading === option.value;
+              const isLoading = activeLoading === option.value || (pendingFromStore && isPending);
 
               return (
                 <button
                   key={option.value}
                   type="button"
-                  disabled={loading !== null}
+                  disabled={isLoading !== null}
                   onClick={() => void updateStatus(option.value)}
                   className={cn(
                     "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-white px-4 py-[14px] text-left transition-all",

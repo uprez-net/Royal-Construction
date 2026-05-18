@@ -47,7 +47,7 @@ import {
   setTradieFilters,
   setTradiePage,
   setTradies,
-  toggleScheduleSelection,
+  toggleScheduleSelection, updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import type {
@@ -278,25 +278,22 @@ export function TradiesClient({
     return items;
   }, [tradiesState.pagination.page, tradiesState.pagination.totalPages]);
 
-  const updateScheduleStatuses = async (
-    ids: string[],
-    status: TradieScheduleStatus,
-  ) => {
-    if (ids.length === 0) {
-      return;
-    }
+  const updateScheduleStatuses = async (ids: string[], status: TradieScheduleStatus) => {
+    if (ids.length === 0) return;
 
     await Promise.all(
-      ids.map(async (id) => {
-        await fetch(`/api/tradie-schedules/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
-        });
-      }),
+      ids.map(async (id) =>
+        dispatch(
+          // dispatch individual update thunks to keep UI reactive
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore TODO: narrow thunk types when exporting AppDispatch
+          updateTradieScheduleStatus({ scheduleId: id, status }),
+        ).unwrap(),
+      ),
     );
 
     dispatch(clearSelectedSchedules());
+    // optionally refetch summary/dashboard to keep counts accurate
     void dispatch(fetchTradieCoordinationDashboard({ force: true }));
   };
 

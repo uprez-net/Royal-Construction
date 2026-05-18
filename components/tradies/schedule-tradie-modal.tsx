@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { CalendarDays, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ import {
   useTradieSearch,
   LookupOption as TradieLookUpOption,
 } from "@/hooks/useTradieSearch";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { createTradieSchedule } from "@/lib/store/slices/tradiesSlice";
 
 type Milestone = { id: string; name: string };
 
@@ -58,6 +60,8 @@ export function ScheduleTradieModal({
   const [durationDays, setDurationDays] = useState("1");
   const [loading, setLoading] = useState(false);
   const [loadingMilestones, setLoadingMilestones] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const dispatch = useAppDispatch();
 
   const resetForm = () => {
     setSelectedTradie(null);
@@ -128,27 +132,28 @@ export function ScheduleTradieModal({
 
     setLoading(true);
 
-    const response = await fetch("/api/tradie-schedules", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tradieId: selectedTradie.id,
-        projectId: selectedProject.id,
-        milestoneId: milestoneId || undefined,
-        scheduledDate,
-        durationDays: Number(durationDays),
-      }),
+    startTransition(() => {
+      void dispatch(
+        createTradieSchedule({
+          tradieId: selectedTradie.id,
+          projectId: selectedProject.id,
+          milestoneId: milestoneId || undefined,
+          scheduledDate,
+          durationDays: Number(durationDays),
+        }),
+      )
+        .unwrap()
+        .then(() => {
+          setLoading(false);
+          onOpenChange(false);
+          resetForm();
+          onSuccess();
+        })
+        .catch((err: unknown) => {
+          setLoading(false);
+          console.error("Failed to create schedule", err);
+        });
     });
-
-    setLoading(false);
-
-    if (!response.ok) {
-      return;
-    }
-
-    onOpenChange(false);
-    resetForm();
-    onSuccess();
   }
 
   return (
@@ -278,11 +283,8 @@ export function ScheduleTradieModal({
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={loading || !selectedTradie || !selectedProject}
-            >
-              {loading ? (
+            <Button type="submit" disabled={(loading || isPending) || !selectedTradie || !selectedProject}>
+              {loading || isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Plus className="size-4" />

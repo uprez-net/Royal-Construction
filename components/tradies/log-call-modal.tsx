@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/dialog";
 
 import type { TradieScheduleListItem } from "@/types/project";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { updateTradieScheduleStatus } from "@/lib/store/slices/tradiesSlice";
+import type { TradieScheduleStatus } from "@prisma/client";
 
 type CallStatus = "CONFIRMED" | "PENDING" | "NO_RESPONSE" | "DECLINED";
 
@@ -89,31 +92,31 @@ export function LogCallModal({
   onSuccess: () => void;
 }) {
   const [notes, setNotes] = useState("");
+  const [activeLoading, setActiveLoading] = useState<CallStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const dispatch = useAppDispatch();
+  const [isPending, startTransition] = useTransition();
+  const pendingFromStore = useAppSelector((s) => s.tradies.pendingScheduleIds.includes(schedule.id));
 
-  const [loading, setLoading] = useState<CallStatus | null>(null);
+  function submit(status: CallStatus) {
+    setActiveLoading(status);
+    setError(null);
 
-  async function submit(status: CallStatus) {
-    setLoading(status);
-
-    const response = await fetch(`/api/tradie-schedules/${schedule.id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        status,
-        notes,
-      }),
+    startTransition(() => {
+      void dispatch(
+        updateTradieScheduleStatus({ scheduleId: schedule.id, status: status as TradieScheduleStatus, notes }),
+      )
+        .unwrap()
+        .then(() => {
+          setActiveLoading(null);
+          onOpenChange(false);
+          onSuccess();
+        })
+        .catch((err: unknown) => {
+          setActiveLoading(null);
+          setError(err instanceof Error ? err.message : String(err));
+        });
     });
-
-    setLoading(null);
-
-    if (!response.ok) {
-      return;
-    }
-
-    onOpenChange(false);
-    onSuccess();
   }
 
   return (
@@ -184,6 +187,13 @@ export function LogCallModal({
           <div className="mb-2 text-[10px] font-[600] uppercase tracking-[0.06em] text-[#94A3B8]">
             Outcome
           </div>
+          {/* Error Message */}
+          {error && (
+            <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-[#FEE2E2] px-3 py-2 text-[12px] text-[#DC2626]">
+              <XCircle className="h-4 w-4" />
+              {error}
+            </div>
+          )}
 
           {/* Outcome Grid */}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -193,13 +203,13 @@ export function LogCallModal({
                 (typeof outcomeConfig)[CallStatus],
               ][]
             ).map(([status, config]) => {
-              const isLoading = loading === status;
+              const isLoading = activeLoading === status || (pendingFromStore && isPending);
 
               return (
                 <button
                   key={status}
                   type="button"
-                  disabled={loading !== null}
+                  disabled={isLoading !== null}
                   onClick={() => void submit(status)}
                   className={cn(
                     "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-white px-4 py-[14px] text-left transition-all",
