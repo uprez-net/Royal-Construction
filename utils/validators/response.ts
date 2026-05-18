@@ -13,7 +13,7 @@ import { NextResponse } from "next/server";
 /**
  * Standard success response shape
  */
-export interface ApiSuccessResponse<T = any> {
+export interface ApiSuccessResponse<T = unknown> {
   success: true;
   data: T;
   timestamp: string;
@@ -26,7 +26,7 @@ export interface ApiErrorResponse {
   success: false;
   error: string;
   code: string;
-  issues?: Record<string, any>;
+  issues?: Record<string, unknown>;
   details?: string;
   timestamp: string;
 }
@@ -34,7 +34,7 @@ export interface ApiErrorResponse {
 /**
  * Standard paginated response
  */
-export interface ApiPaginatedResponse<T = any> {
+export interface ApiPaginatedResponse<T = unknown> {
   success: true;
   data: T[];
   pagination: {
@@ -135,7 +135,7 @@ export function errorResponse(
     status?: number;
     code?: string;
     details?: string;
-    issues?: Record<string, any>;
+    issues?: Record<string, unknown>;
   }
 ): NextResponse<ApiErrorResponse> {
   return NextResponse.json(
@@ -194,7 +194,7 @@ export function notFoundResponse(
  */
 export function badRequestResponse(
   message: string,
-  options?: { issues?: Record<string, any> }
+  options?: { issues?: Record<string, unknown> }
 ): NextResponse<ApiErrorResponse> {
   return errorResponse(message, {
     status: 400,
@@ -245,7 +245,9 @@ export async function parseBodyWithResponse<T extends z.ZodSchema>(
   } catch (error) {
     return {
       success: false,
-      response: badRequestResponse("Invalid JSON in request body"),
+      response: badRequestResponse("Invalid JSON in request body", {
+        issues: error instanceof Error ? { message: error.message } : undefined,
+      }),
     };
   }
 }
@@ -263,7 +265,7 @@ export function parseSearchParamsWithResponse<T extends z.ZodSchema>(
   success: false;
   response: NextResponse<ApiErrorResponse>;
 } {
-  const obj: Record<string, any> = {};
+  const obj: Record<string, string | string[] | undefined> = {};
 
   url.searchParams.forEach((value, key) => {
     if (obj[key]) {
@@ -290,7 +292,7 @@ export function parseSearchParamsWithResponse<T extends z.ZodSchema>(
  * Parse route params with schema and return appropriate response
  */
 export function parseRouteParamsWithResponse<T extends z.ZodSchema>(
-  params: Record<string, any>,
+  params: Record<string, string | string[] | undefined>,
   schema: T
 ): {
   success: true;

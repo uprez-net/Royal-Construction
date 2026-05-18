@@ -1,5 +1,4 @@
 import { auth } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
 import prisma from "@/lib/prisma";
@@ -11,11 +10,9 @@ import {
   projectListQuerySchema,
   projectLookupQuerySchema,
   parseSearchParamsWithResponse,
-  validationErrorResponse,
   successResponse,
   unauthorizedResponse,
   notFoundResponse,
-  badRequestResponse,
   parseBodyWithResponse,
   errorResponse,
 } from "@/utils/validators";

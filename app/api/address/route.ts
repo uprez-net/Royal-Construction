@@ -483,7 +483,7 @@ export async function GET(
             [];
 
         for (const place of validPlaces) {
-            if(!place) continue;
+            if (!place) continue;
             let matched =
                 councilGroups.find(
                     (
@@ -577,7 +577,11 @@ export async function GET(
 
         return NextResponse.json(
             {
-                suggestions,
+                suggestions: suggestions.slice(
+                    0,
+                    limit,
+                ),
+                count: suggestions.length,
             },
         );
     } catch (

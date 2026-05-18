@@ -246,7 +246,7 @@ export const coerceBoolSchema = z
  * Create a safe enum validator that catches invalid values
  * Returns undefined instead of throwing on invalid enum
  */
-export function safeEnumSchema<T extends Record<string, any>>(
+export function safeEnumSchema<T extends Record<string, string | number>>(
   enumObj: T
 ): z.ZodType<T[keyof T] | undefined> {
   return z.nativeEnum(enumObj).optional();
@@ -255,7 +255,7 @@ export function safeEnumSchema<T extends Record<string, any>>(
 /**
  * Create optional enum validator
  */
-export function optionalEnumSchema<T extends Record<string, any>>(
+export function optionalEnumSchema<T extends Record<string, string | number>>(
   enumObj: T
 ): z.ZodType<T[keyof T] | undefined | null> {
   return z
@@ -273,7 +273,7 @@ export function optionalEnumSchema<T extends Record<string, any>>(
  */
 export const errorResponseSchema = z.object({
   error: z.string(),
-  issues: z.record(z.string(), z.any()).optional(),
+  issues: z.record(z.string(), z.unknown()).optional(),
   details: z.string().optional(),
 });
 
@@ -282,7 +282,7 @@ export const errorResponseSchema = z.object({
  */
 export const validationErrorSchema = z.object({
   error: z.literal("Invalid request data"),
-  issues: z.record(z.string(), z.any()),
+  issues: z.record(z.string(), z.unknown()),
 });
 
 /**
@@ -329,7 +329,7 @@ export function parseSearchParams(
  * Parse and validate route params
  */
 export function parseRouteParams(
-  params: Record<string, any>,
+  params: Record<string, string | string[] | undefined>,
   schema: z.ZodSchema
 ): ReturnType<typeof schema.safeParse> {
   return schema.safeParse(params);
@@ -343,16 +343,25 @@ export async function safeParseBody<T extends z.ZodSchema>(
   schema: T
 ): Promise<
   | { success: true; data: z.infer<T> }
-  | { success: false; error: z.ZodError<any> }
+  | { success: false; error: z.ZodError }
 > {
   try {
-    const body = await request.json();
+    const body: unknown = await request.json();
+
     const parsed = schema.safeParse(body);
+
     if (!parsed.success) {
-      return { success: false, error: parsed.error };
+      return {
+        success: false,
+        error: parsed.error,
+      };
     }
-    return { success: true, data: parsed.data };
-  } catch (error) {
+
+    return {
+      success: true,
+      data: parsed.data,
+    };
+  } catch {
     return {
       success: false,
       error: new z.ZodError([

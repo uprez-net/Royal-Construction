@@ -39,7 +39,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             onBeforeGenerateToken: async (clientPayloadStr: string) => {
                 const { isAuthenticated, userId } = await auth();
                 if (!isAuthenticated) {
-                    throw new Error('Not authenticated');
+                    throw new Error('Unauthorized');
                 }
 
                 // Parse and validate client payload
@@ -47,6 +47,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                 try {
                     clientPayload = clientPayloadSchema.parse(JSON.parse(clientPayloadStr));
                 } catch (error) {
+                    console.error('Invalid client payload', error);
                     throw new Error('Invalid file metadata in payload');
                 }
 
@@ -90,9 +91,20 @@ export async function POST(request: Request): Promise<NextResponse> {
         return NextResponse.json(jsonResponse);
     } catch (error) {
         const message = (error as Error).message || 'Upload failed';
-        return errorResponse(message, {
-            status: 400,
-            code: 'UPLOAD_ERROR',
-        });
+        switch (message) {
+            case 'Unauthorized':
+                return unauthorizedResponse();
+            case 'Invalid file metadata in payload':
+            case 'Failed to save file metadata':
+                return errorResponse(message, {
+                    status: 400,
+                    code: 'UPLOAD_ERROR',
+                });
+            default:
+                return errorResponse(message, {
+                    status: 400,
+                    code: 'UPLOAD_ERROR',
+                });
+        }
     }
 }

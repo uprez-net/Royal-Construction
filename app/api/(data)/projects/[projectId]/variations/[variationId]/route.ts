@@ -9,6 +9,7 @@ import {
   parseBodyWithResponse,
   successResponse,
   badRequestResponse,
+  errorResponse,
 } from "@/utils/validators";
 
 const variationUpdateSchema = z.object({
@@ -29,32 +30,48 @@ export async function PATCH(
     resolvedParams,
     variationParamSchema
   );
-  if (!routeParams.success) return routeParams.response;
+  if (!routeParams.success) {
+    return badRequestResponse("Invalid route parameters", {
+      issues: routeParams.response,
+    });
+  };
 
   const body = await parseBodyWithResponse(request, variationUpdateSchema);
-  if (!body.success) return body.response;
+  if (!body.success) {
+    return badRequestResponse("Invalid request body", {
+      issues: body.response,
+    });
+  }
 
   const { projectId, variationId } = routeParams.data;
-
-  const variation = await prisma.variation.update({
-    where: { id: variationId },
-    data:
-      body.data.status === "APPROVED"
-        ? {
+  try {
+    const variation = await prisma.variation.update({
+      where: { id: variationId },
+      data:
+        body.data.status === "APPROVED"
+          ? {
             status: VariationStatus.APPROVED,
             approvedDate: new Date(),
           }
-        : {
+          : {
             status: VariationStatus.REJECTED,
             approvedDate: null,
           },
-  });
+    });
 
-  if (body.data.status === "APPROVED") {
-    await applyVariationDelay(variation.id);
+    if (body.data.status === "APPROVED") {
+      await applyVariationDelay(variation.id);
+    }
+
+    revalidateTag(`project-${projectId}`, "max");
+
+    return successResponse(variation);
+  } catch (error) {
+    console.error("Error updating variation status:", error);
+    return errorResponse("Failed to update variation status", {
+      status: 500,
+      code: "VARIATION_UPDATE_FAILED",
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
-
-  revalidateTag(`project-${projectId}`, "max");
-
-  return successResponse(variation);
 }

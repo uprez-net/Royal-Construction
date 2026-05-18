@@ -226,7 +226,7 @@ export const fetchTradieProjectLookup = createAsyncThunk<
 export const createTradieSchedule = createAsyncThunk<
   TradieScheduleListItem,
   CreateScheduleRequest
->("tradies/createSchedule", async (payload, thunkApi) => {
+>("tradies/createSchedule", async (payload) => {
   const response = await fetch("/api/tradie-schedules", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

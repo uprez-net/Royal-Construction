@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { verifyWebhook } from "@clerk/nextjs/webhooks";
 import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
                         applicationUserId: newUser.userId,
                     }
                 });
-                return NextResponse.json({ success: true, message: "User created" }, { status: 201 });
+                return successResponse({ message: "User created" });
             }
 
             case "user.updated": {
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
                     role,
                 });
 
-                return NextResponse.json({ success: true, message: "User updated" }, { status: 200 });
+                return successResponse({ message: "User updated" });
             }
 
             case "user.deleted": {
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 await deleteUser(deletedId);
-                return NextResponse.json({ success: true, message: "User deleted" }, { status: 200 });
+                return successResponse({ message: "User deleted" });
             }
 
             case "organizationInvitation.accepted": {
@@ -96,18 +96,18 @@ export async function POST(request: NextRequest) {
                         organizationId: invitationOrganizationId,
                     },
                 });
-                return NextResponse.json({ success: true, message: "Organization invitation accepted" }, { status: 200 });
+                return successResponse({ message: "Organization invitation accepted" });
             }
 
             case "organizationInvitation.created":
-                return NextResponse.json({ success: true, message: "Organization invitation created" }, { status: 200 });
+                return successResponse({ message: "Organization invitation created" });
 
             case "organizationInvitation.revoked":
-                return NextResponse.json({ success: true, message: "Organization invitation revoked" }, { status: 200 });
+                return successResponse({ message: "Organization invitation revoked" });
 
             default:
                 console.warn(`Unhandled event type: ${evt.type}`);
-                return NextResponse.json({ success: true, message: "Event acknowledged but not processed" }, { status: 200 });
+                return successResponse({ message: `Event type ${evt.type} received` });
         }
 
     } catch (error) {
