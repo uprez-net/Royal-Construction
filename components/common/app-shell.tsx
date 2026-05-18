@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Bell, Hammer } from "lucide-react";
-import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 import { navigationItems, tickerItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAppSelector } from "@/lib/store/hooks";
 import { isUUID } from "@/utils/parser";
 import { getScreenTitle } from "@/utils/uiHelper";
@@ -26,6 +26,7 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const router = useRouter();
   const [time, setTime] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
@@ -169,19 +170,19 @@ export function AppShell({
                 </div>
                 {!isSignedIn ? (
                   <div className="flex items-center gap-2">
-                    <SignInButton mode="modal">
-                      <Button
-                        variant="outline"
-                        className="rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                      >
-                        Sign in
-                      </Button>
-                    </SignInButton>
-                    <SignUpButton mode="modal">
-                      <Button className="rounded-2xl bg-teal-500 text-slate-950 hover:bg-teal-400">
-                        Sign up
-                      </Button>
-                    </SignUpButton>
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                      onClick={() => router.push("/sign-in")}
+                    >
+                      Sign in
+                    </Button>
+                    <Button
+                      className="rounded-2xl bg-teal-500 text-slate-950 hover:bg-teal-400"
+                      onClick={() => router.push("/sign-up")}
+                    >
+                      Sign up
+                    </Button>
                   </div>
                 ) : (
                   <UserButton
