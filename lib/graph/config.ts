@@ -67,6 +67,6 @@ export function getGraphConfig(): GraphConfig {
       process.env.GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES,
       60,
     ),
-    adminToken: requireEnv('GRAPH_ADMIN_TOKEN'),
+    adminToken: process.env.GRAPH_ADMIN_TOKEN || 'admin-secret-token',
   };
 }

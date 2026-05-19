@@ -3,8 +3,6 @@ import { getGraphConfig, type GraphMode } from '@/lib/graph/config';
 import { errorResponse, unauthorizedResponse, badRequestResponse } from '@/utils/validators';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
-
 interface SubscribeBody {
   notificationUrl?: string;
   clientState?: string;

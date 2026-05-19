@@ -3,8 +3,6 @@ import { getGraphConfig } from '@/lib/graph/config';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/utils/validators';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
-
 function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {

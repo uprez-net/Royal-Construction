@@ -2,7 +2,6 @@ import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
 import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 
-export const runtime = 'nodejs';
 
 interface GraphNotificationBody {
   value?: Array<{
