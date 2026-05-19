@@ -8,7 +8,7 @@ import { UserButton } from "@clerk/nextjs";
 import { navigationItems, tickerItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAppSelector } from "@/lib/store/hooks";
 import { isUUID } from "@/utils/parser";
 import { getScreenTitle } from "@/utils/uiHelper";
@@ -26,7 +26,6 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const router = useRouter();
   const [time, setTime] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
@@ -173,21 +172,25 @@ export function AppShell({
                     <Button
                       variant="outline"
                       className="rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                      onClick={() => router.push("/sign-in")}
+                      asChild
                     >
-                      Sign in
+                      <Link href="/sign-in">Sign in</Link>
                     </Button>
                     <Button
                       className="rounded-2xl bg-teal-500 text-slate-950 hover:bg-teal-400"
-                      onClick={() => router.push("/sign-up")}
+                      asChild
                     >
-                      Sign up
+                      <Link href="/sign-up">Sign up</Link>
                     </Button>
                   </div>
                 ) : (
-                  <UserButton
-                    appearance={{ elements: { avatarBox: "size-9" } }}
-                  />
+                    <UserButton
+                      appearance={{
+                        elements: {
+                          avatarBox: "size-9",
+                        },
+                      }}
+                    />
                 )}
               </div>
             </div>
