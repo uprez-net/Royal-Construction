@@ -9,14 +9,19 @@ export function fetchErrorMessage(responseBody: unknown, fallback: string) {
 
   return fallback;
 }
+interface FetchJsonResponse<T> {
+  data: T;
+  success: boolean;
+  timestamp: string;
+}
 
-export async function fetchJson<T>(input: RequestInfo | URL, init: RequestInit, fallback: string): Promise<T> {
-  const response = await fetch(input, init);
+export async function fetchJson<T>(input: RequestInfo | URL, init: RequestInit, fallback: string, signal?: AbortSignal): Promise<FetchJsonResponse<T>> {
+  const response = await fetch(input, { ...init, signal });
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
     throw new Error(fetchErrorMessage(body, fallback));
   }
 
-  return body as T;
+  return body as FetchJsonResponse<T>;
 }

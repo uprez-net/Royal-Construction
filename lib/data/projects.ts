@@ -28,6 +28,7 @@ export type PaginatedProjectsResult = {
 export type ProjectLookupItem = {
   id: string;
   name: string;
+  location: string;
 };
 
 export type PaginatedProjectLookupResult = {
@@ -190,103 +191,124 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
 }
 
 export async function getProjects(query?: ProjectListQuery): Promise<PaginatedProjectsResult> {
-  return getProjectsPage(query);
+  try {
+    return getProjectsPage(query);
+  } catch (error) {
+    console.error("Error fetching projects:", error);
+    throw new Error(error instanceof Error ? error.message : "Error fetching projects");
+  }
 }
 
 export async function getProjectsForLookup(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedProjectLookupResult> {
-  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
-  const search = normalizeSearch(query);
+  try {
+    const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
+    const search = normalizeSearch(query);
 
-  const where: Prisma.ProjectWhereInput | undefined = search
-    ? {
-      OR: [
-        { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
-      ],
-    }
-    : undefined;
+    const where: Prisma.ProjectWhereInput | undefined = search.length > 0
+      ? {
+        OR: [
+          { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        ],
+      }
+      : undefined;
 
-  const [items, totalCount] = await prisma.$transaction([
-    prisma.project.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-      },
-      orderBy: { name: "asc" },
-      skip: (safePage - 1) * safeLimit,
-      take: safeLimit,
-    }),
-    prisma.project.count({ where }),
-  ]);
+    const [items, totalCount] = await prisma.$transaction([
+      prisma.project.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          location: true,
+        },
+        orderBy: { name: "asc" },
+        skip: (safePage - 1) * safeLimit,
+        take: safeLimit,
+      }),
+      prisma.project.count({ where }),
+    ]);
 
-  return {
-    items,
-    page: safePage,
-    limit: safeLimit,
-    totalCount,
-    totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
-  };
+    return {
+      items: items as ProjectLookupItem[],
+      page: safePage,
+      limit: safeLimit,
+      totalCount,
+      totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
+    };
+  } catch (error) {
+    console.error("Error fetching projects for lookup:", error);
+    throw new Error(error instanceof Error ? error.message : "Error fetching projects for lookup");
+  }
 }
 
-export async function getProjectById(projectId: string): Promise<ProjectDetail | null> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: projectDetailInclude,
-  });
+export async function getProjectById(projectId: string): Promise<ProjectDetail> {
+  try {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: projectDetailInclude,
+    });
 
-  if (!project) {
-    return null;
-  }
+    if (!project) {
+      throw new Error("Project not found");
+    }
 
-  return {
-    ...project,
-    lotSize: project.lotSize?.toString() ?? undefined,
-    totalBudget: project.totalBudget.toString(),
-    spent: project.spent.toString(),
-    siteUpdates: project.siteUpdates
-      .filter((siteUpdate) => siteUpdate.milestone !== null)
-      .map((siteUpdate) => ({
-        ...siteUpdate,
-        milestone: siteUpdate.milestone!,
+    return {
+      ...project,
+      lotSize: project.lotSize?.toString() ?? undefined,
+      totalBudget: project.totalBudget.toString(),
+      spent: project.spent.toString(),
+      siteUpdates: project.siteUpdates
+        .filter((siteUpdate) => siteUpdate.milestone !== null)
+        .map((siteUpdate) => ({
+          ...siteUpdate,
+          milestone: siteUpdate.milestone!,
+        })),
+      milestones: project.milestones.map((milestone) => ({
+        ...milestone,
+        tradieSchedules: milestone.tradieSchedules.map((schedule) => ({
+          ...schedule,
+          tradie: {
+            ...schedule.tradie,
+            hourlyRate: schedule.tradie.hourlyRate?.toString(),
+            rating: schedule.tradie.rating?.toString(),
+          },
+        })),
       })),
-    milestones: project.milestones.map((milestone) => ({
-      ...milestone,
-      tradieSchedules: milestone.tradieSchedules.map((schedule) => ({
+      variations: project.variations.map((variation) => ({
+        ...variation,
+        cost: variation.cost.toString(),
+      })),
+      tradieSchedules: project.tradieSchedules.map((schedule) => ({
         ...schedule,
         tradie: {
           ...schedule.tradie,
           hourlyRate: schedule.tradie.hourlyRate?.toString(),
           rating: schedule.tradie.rating?.toString(),
         },
+        milestone: schedule.milestone ?? undefined,
       })),
-    })),
-    variations: project.variations.map((variation) => ({
-      ...variation,
-      cost: variation.cost.toString(),
-    })),
-    tradieSchedules: project.tradieSchedules.map((schedule) => ({
-      ...schedule,
-      tradie: {
-        ...schedule.tradie,
-        hourlyRate: schedule.tradie.hourlyRate?.toString(),
-        rating: schedule.tradie.rating?.toString(),
-      },
-      milestone: schedule.milestone ?? undefined,
-    })),
-  };
+    };
+  } catch (error) {
+    console.error("Error fetching project by ID:", error);
+    throw new Error(error instanceof Error ? error.message : "Error fetching project by ID");
+  }
 }
 
 export async function getProjectKPIs(): Promise<ProjectKPIs> {
-  const [totalActive, onTrack, needsAttention, delayed] = await Promise.all([
-    prisma.project.count({ where: { status: { not: ProjectStatus.COMPLETED } } }),
-    prisma.project.count({ where: { status: ProjectStatus.ON_TRACK } }),
-    prisma.project.count({ where: { status: ProjectStatus.NEEDS_ATTENTION } }),
-    prisma.project.count({ where: { status: ProjectStatus.DELAYED } }),
-  ]);
+  try {
+    const [totalActive, onTrack, needsAttention, delayed] = await Promise.all([
+      prisma.project.count({ where: { status: { not: ProjectStatus.COMPLETED } } }),
+      prisma.project.count({ where: { status: ProjectStatus.ON_TRACK } }),
+      prisma.project.count({ where: { status: ProjectStatus.NEEDS_ATTENTION } }),
+      prisma.project.count({ where: { status: ProjectStatus.DELAYED } }),
+    ]);
 
-  return { totalActive, onTrack, needsAttention, delayed };
+    return { totalActive, onTrack, needsAttention, delayed };
+  } catch (error) {
+    console.error("Error fetching project KPIs:", error);
+    throw new Error(error instanceof Error ? error.message : "Error fetching project KPIs");
+  }
 }
 
 export async function getCachedProjects(query?: ProjectListQuery) {

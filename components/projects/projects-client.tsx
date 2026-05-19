@@ -35,6 +35,8 @@ import { EnhancedProjectCard } from "./enhanced-project-card";
 import { ProjectDetailModal } from "./project-detail-modal";
 import { ProjectFilters } from "./project-filters";
 import { ProjectToolbar } from "./project-toolbar";
+import { fetchJson } from "@/utils/fetch";
+import { PaginatedProjectsResult } from "@/lib/data/projects";
 
 const statusConfig: Record<
   string,
@@ -77,22 +79,16 @@ export function ProjectsClient({
 }) {
   const dispatch = useAppDispatch();
   const pageInfo = pagination;
-  const projectsInStore = useAppSelector((state) => state.projects.projects);
-  const view = useAppSelector((state) => state.ui.projectFilters.view);
-  const statusFilter = useAppSelector(
-    (state) => state.ui.projectFilters.status,
+  const { projects: projectsInStore, optimisticUpdates } = useAppSelector(
+    (state) => state.projects,
   );
-  const searchQuery = useAppSelector(
-    (state) => state.ui.projectFilters.searchQuery,
-  );
-  const sortBy = useAppSelector((state) => state.ui.projectFilters.sortBy);
-  const sortOrder = useAppSelector(
-    (state) => state.ui.projectFilters.sortOrder,
-  );
-  const optimisticUpdates = useAppSelector(
-    (state) => state.projects.optimisticUpdates,
-  );
-
+  const {
+    view,
+    status: statusFilter,
+    searchQuery,
+    sortBy,
+    sortOrder,
+  } = useAppSelector((state) => state.ui.projectFilters);
   const [currentPage, setCurrentPage] = useState(pagination.page);
   const [isPageLoading, setIsPageLoading] = useState(false);
   const [selectedProject, setSelectedProject] =
@@ -131,7 +127,7 @@ export function ProjectsClient({
 
   useEffect(() => {
     dispatch(setProjects(projects));
-  }, [projects, dispatch]);
+  }, [projects]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -149,22 +145,20 @@ export function ProjectsClient({
         if (statusFilter) params.set("status", statusFilter);
         if (searchQuery.trim()) params.set("search", searchQuery.trim());
 
-        const response = await fetch(`/api/projects?${params.toString()}`, {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) return;
-
-        const data = (await response.json()) as {
-          items: ProjectWithStats[];
-          page: number;
-          limit: number;
-          totalCount: number;
-          totalPages: number;
-        };
+        const response = await fetchJson<PaginatedProjectsResult>(
+          `/api/projects?${params.toString()}`,
+          {
+            method: "GET",
+          },
+          "Unable to load projects",
+          controller.signal,
+        );
+        const data = response.data;
 
         setCurrentPage(data.page);
         dispatch(setProjects(data.items));
+      } catch (error) {
+        console.error("Error fetching projects:", error);
       } finally {
         setIsPageLoading(false);
       }
@@ -182,7 +176,6 @@ export function ProjectsClient({
     sortBy,
     sortOrder,
     statusFilter,
-    dispatch,
   ]);
 
   const handleExport = () => {
@@ -290,7 +283,11 @@ export function ProjectsClient({
         }
       >
         <div className="space-y-4">
-          <ProjectFilters kpis={kpis} activeFilter={statusFilter} onFilterChange={() => setCurrentPage(1)} />
+          <ProjectFilters
+            kpis={kpis}
+            activeFilter={statusFilter}
+            onFilterChange={() => setCurrentPage(1)}
+          />
           <ProjectToolbar onSearchChange={() => setCurrentPage(1)} />
 
           {isPageLoading ? (
@@ -317,9 +314,7 @@ export function ProjectsClient({
                 Clear Filters
               </Button>
             </div>
-          ) : 
-          isPageLoading ? null :
-          view === "grid" ? (
+          ) : isPageLoading ? null : view === "grid" ? (
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
               {visibleProjects.map((project) => (
                 <EnhancedProjectCard

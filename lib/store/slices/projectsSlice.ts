@@ -97,7 +97,7 @@ export const createProject = createAsyncThunk<
   { rejectValue: string }
 >("projects/createProject", async (payload, thunkApi) => {
   try {
-    return await fetchJson<ProjectDetail>(
+    const response = await fetchJson<ProjectDetail>(
       "/api/projects",
       {
         method: "POST",
@@ -106,6 +106,8 @@ export const createProject = createAsyncThunk<
       },
       "Unable to create project",
     );
+
+    return response.data;
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to create project");
   }
@@ -117,7 +119,7 @@ export const createVariation = createAsyncThunk<
   { rejectValue: string }
 >("projects/createVariation", async ({ projectId, ...payload }, thunkApi) => {
   try {
-    return await fetchJson<ProjectDetail>(
+    const response = await fetchJson<ProjectDetail>(
       `/api/projects/${projectId}/variations`,
       {
         method: "POST",
@@ -126,6 +128,8 @@ export const createVariation = createAsyncThunk<
       },
       "Unable to create variation",
     );
+
+    return response.data;
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to create variation");
   }
@@ -137,7 +141,7 @@ export const addProjectUpdate = createAsyncThunk<
   { rejectValue: string }
 >("projects/addUpdate", async ({ projectId, ...payload }, thunkApi) => {
   try {
-    return await fetchJson<ProjectDetail>(
+    const response = await fetchJson<ProjectDetail>(
       `/api/projects/${projectId}/updates`,
       {
         method: "POST",
@@ -146,6 +150,8 @@ export const addProjectUpdate = createAsyncThunk<
       },
       "Unable to add site update",
     );
+    
+    return response.data;
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to add site update");
   }
@@ -165,7 +171,7 @@ const projectsSlice = createSlice({
       delete state.optimisticUpdates[action.payload];
     },
     setProjects(state, action: PayloadAction<ProjectWithStats[]>) {
-      state.projects = action.payload;
+      state.projects = [...action.payload];
     },
     setActiveProject(state, action: PayloadAction<ProjectDetail | null>) {
       state.activeProject = action.payload;

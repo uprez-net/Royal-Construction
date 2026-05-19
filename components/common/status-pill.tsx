@@ -15,13 +15,13 @@ const statusToneMap = {
 }
 
 export function StatusPill({
-  key,
+  id,
   tone,
   children,
 }: {
-  key?: Key | null | undefined
+  id?: Key | null | undefined
   tone: keyof typeof statusToneMap
   children: ReactNode
 }) {
-  return <Badge key={key} className={cn("rounded-full px-3 py-1 text-xs font-semibold", statusToneMap[tone])}>{children}</Badge>
+  return <Badge key={id} className={cn("rounded-full px-3 py-1 text-xs font-semibold", statusToneMap[tone])}>{children}</Badge>
 }

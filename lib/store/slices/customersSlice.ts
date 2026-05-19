@@ -1,3 +1,4 @@
+import { fetchJson } from "@/utils/fetch";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
 export interface CustomerLookupItem {
@@ -47,12 +48,13 @@ export const fetchCustomers = createAsyncThunk<
     params.set("q", query.trim());
   }
 
-  const response = await fetch(`/api/customers?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error("Failed to load customers");
-  }
+  const response = await fetchJson<CustomerLookupResponse>(
+    `/api/customers?${params.toString()}`,
+    { method: "GET" },
+    "Unable to load customers"
+  );
 
-  return (await response.json()) as CustomerLookupResponse;
+  return response.data;
 });
 
 const customersSlice = createSlice({

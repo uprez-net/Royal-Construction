@@ -15,11 +15,8 @@ import type {
   TradieActivityItem,
   TradieUrgentReminderItem,
 } from "@/types/project";
-
-type ProjectLookupItem = {
-  id: string;
-  name: string;
-};
+import { fetchJson } from "@/utils/fetch";
+import { ProjectLookupItem } from "@/lib/data/projects";
 
 type CreateScheduleRequest = {
   tradieId: string;
@@ -193,12 +190,13 @@ export const fetchTradieCoordinationDashboard = createAsyncThunk<
   if (state.filters.tradeType) params.set("tradeType", state.filters.tradeType);
   if (state.filters.status) params.set("status", state.filters.status);
 
-  const response = await fetch(`/api/tradies-schedules?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error("Failed to load tradie coordination data");
-  }
+  const response = await fetchJson<TradieCoordinationDashboard>(
+    `/api/tradies-schedules?${params.toString()}`,
+    { method: "GET" },
+    "Failed to load tradie coordination data"
+  );
 
-  return (await response.json()) as TradieCoordinationDashboard;
+  return response.data;
 });
 
 export const fetchTradieProjectLookup = createAsyncThunk<
@@ -215,29 +213,32 @@ export const fetchTradieProjectLookup = createAsyncThunk<
     params.set("q", query.trim());
   }
 
-  const response = await fetch(`/api/projects?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error("Failed to load projects");
-  }
+  const response = await fetchJson<ProjectLookupResponse>(
+    `/api/projects?${params.toString()}`,
+    {
+      method: "GET",
+    },
+    "Failed to load projects"
+  );
 
-  return (await response.json()) as ProjectLookupResponse;
+  return response.data;
 });
 
 export const createTradieSchedule = createAsyncThunk<
   TradieScheduleListItem,
   CreateScheduleRequest
 >("tradies/createSchedule", async (payload) => {
-  const response = await fetch("/api/tradie-schedules", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchJson<TradieScheduleListItem>(
+    "/api/tradie-schedules",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to create tradie schedule"
+  );
 
-  if (!response.ok) {
-    throw new Error("Failed to create tradie schedule");
-  }
-
-  return (await response.json()) as TradieScheduleListItem;
+  return response.data;
 });
 
 export const updateTradieScheduleStatus = createAsyncThunk<
@@ -246,17 +247,17 @@ export const updateTradieScheduleStatus = createAsyncThunk<
 >("tradies/updateScheduleStatus", async (payload) => {
   const { scheduleId, status, notes } = payload;
 
-  const response = await fetch(`/api/tradie-schedules/${scheduleId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status, notes }),
-  });
+  const response = await fetchJson<UpdateScheduleStatusResponse>(
+    `/api/tradie-schedules/${scheduleId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, notes }),
+    },
+    "Failed to update schedule status"
+  );
 
-  if (!response.ok) {
-    throw new Error("Failed to update schedule status");
-  }
-
-  return (await response.json()) as UpdateScheduleStatusResponse;
+  return response.data;
 });
 
 const tradiesSlice = createSlice({

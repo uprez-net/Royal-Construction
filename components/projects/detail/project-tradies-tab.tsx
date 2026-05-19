@@ -241,7 +241,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 <XCircle className="size-4 text-muted-foreground" />
               ),
 
-              <StatusPill key={`${tradie.id}-status`} tone={getStatusTone(tradie.status)}>
+              <StatusPill id={`${tradie.id}-status`} tone={getStatusTone(tradie.status)}>
                 {tradie.status}
               </StatusPill>,
 
