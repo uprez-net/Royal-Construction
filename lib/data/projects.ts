@@ -44,7 +44,18 @@ const projectInclude = {
   siteManager: true,
   milestones: {
     select: {
+      id: true,
+      name: true,
       status: true,
+      targetDate: true,
+      actualDate: true,
+      tradies: {
+        select: {
+          name: true,
+          company: true,
+          tradeType: true,
+        },
+      }
     },
   },
 } as const;

@@ -10,7 +10,10 @@ interface EnhancedProjectCardProps {
   onDetailsClick?: (projectId: string) => void;
 }
 
-const statusConfig: Record<string, { bg: string; text: string; stripe: string }> = {
+const statusConfig: Record<
+  string,
+  { bg: string; text: string; stripe: string }
+> = {
   ON_TRACK: {
     bg: "bg-emerald-100",
     text: "text-emerald-700",
@@ -51,7 +54,14 @@ export function EnhancedProjectCard({
   const progressColor = getProgressColor(project.progressPercent);
 
   return (
-    <div className="group rounded-lg border border-border bg-white shadow-sm transition-all hover:shadow-md hover:-translate-y-1 overflow-hidden">
+    <div
+      className="group rounded-lg border border-border bg-white shadow-sm transition-all hover:shadow-md hover:-translate-y-1 overflow-hidden"
+      onClick={() => {
+        if (onDetailsClick) {
+          onDetailsClick(project.id);
+        }
+      }}
+    >
       {/* Top Stripe */}
       <div className={`h-1 ${config.stripe}`} />
 
@@ -67,7 +77,9 @@ export function EnhancedProjectCard({
               📍 {project.location}
             </p>
           </div>
-          <Badge className={`rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap ${config.bg} ${config.text}`}>
+          <Badge
+            className={`rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap ${config.bg} ${config.text}`}
+          >
             {project.status
               .split("_")
               .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
@@ -84,7 +96,9 @@ export function EnhancedProjectCard({
             </p>
           </div>
           <div className="text-xs">
-            <p className="text-muted-foreground font-medium mb-1">Site Manager</p>
+            <p className="text-muted-foreground font-medium mb-1">
+              Site Manager
+            </p>
             <p className="font-semibold text-sm text-foreground">
               {project.siteManager?.name || "Unassigned"}
             </p>
@@ -97,15 +111,17 @@ export function EnhancedProjectCard({
             <span className="text-xs text-muted-foreground font-medium">
               Progress
             </span>
-            <span className={`text-xs font-bold ${
-              project.progressPercent >= 60
-                ? "text-emerald-600"
-                : project.progressPercent >= 30
-                ? "text-teal-600"
-                : project.progressPercent >= 15
-                ? "text-amber-600"
-                : "text-red-600"
-            }`}>
+            <span
+              className={`text-xs font-bold ${
+                project.progressPercent >= 60
+                  ? "text-emerald-600"
+                  : project.progressPercent >= 30
+                    ? "text-teal-600"
+                    : project.progressPercent >= 15
+                      ? "text-amber-600"
+                      : "text-red-600"
+              }`}
+            >
               {project.progressPercent}%
             </span>
           </div>
@@ -127,7 +143,9 @@ export function EnhancedProjectCard({
           </div>
           <div className="text-center">
             <p className="text-muted-foreground font-medium">Spent</p>
-            <p className={`font-bold text-sm ${spentPercent > 80 ? "text-red-600" : "text-foreground"}`}>
+            <p
+              className={`font-bold text-sm ${spentPercent > 80 ? "text-red-600" : "text-foreground"}`}
+            >
               ${Math.round(spent / 1000)}K
             </p>
           </div>
@@ -145,10 +163,7 @@ export function EnhancedProjectCard({
         <Link
           href={`/projects/${project.id}`}
           onClick={(e) => {
-            if (onDetailsClick) {
-              e.preventDefault();
-              onDetailsClick(project.id);
-            }
+            e.stopPropagation();
           }}
           className="inline-flex items-center gap-2 text-xs font-semibold text-teal-600 hover:text-teal-700 transition-colors group-hover:gap-3"
         >

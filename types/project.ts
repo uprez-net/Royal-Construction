@@ -45,7 +45,16 @@ export interface ProjectWithStats extends SafeProject {
   customer: Customer;
   siteManager: User | null;
   milestones: {
+    id: string;
+    name: string;
+    targetDate: Date;
+    actualDate: Date | null;
     status: Milestone["status"];
+    tradies: {
+      name: string;
+      company: string | null;
+      tradeType: string;
+    }[]
   }[];
   milestoneCount: number;
   completedMilestoneCount: number;
