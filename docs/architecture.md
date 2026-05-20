@@ -179,6 +179,15 @@ There is a critical mismatch between intent and implementation:
 
 So the architecture is auth-aware, but not uniformly auth-enforced.
 
+Important production note: API routes are intended to be private. Authentication and request gating are implemented via the global middleware in `proxy.ts` (Clerk middleware). In this codebase the middleware is the primary enforcement boundary and route handlers should assume requests are authenticated unless they are explicitly public endpoints (webhooks, static assets, health checks, etc.).
+
+Recommended immediate actions:
+
+- Restrict the middleware public-route matcher to only true public routes (sign-in, sign-up, webhook, static assets, health). Do not include a catch-all like `/(.*)`.
+- Require explicit server-side `auth()` checks in any mutation route that performs writes or sensitive reads. Middleware is necessary but not always sufficient; server-side guards prove intent and are resilient to future middleware changes.
+- Validate request bodies at the route boundary (use Zod or shared validators) and return a consistent JSON error envelope for client consumption.
+- Add automated tests or a small integration check that exercises the most-sensitive routes and verifies they return 401/403 when unauthenticated.
+
 ## Server Actions, API Routes, And Backend Integration Patterns
 
 The repository does not rely on broad client-side server actions. Instead, it uses a mix of server helpers and route handlers:

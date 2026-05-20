@@ -162,6 +162,40 @@ That means the current standard should be:
 - never trust client-provided ids or status strings without validation
 - treat file uploads as untrusted input until Blob and database persistence succeed
 
+Guidance and checklist:
+
+- Ensure middleware public-route matchers list *only* truly public paths (sign-in, sign-up, webhook, static assets, health). Avoid patterns like `/(.*)` that make the middleware permissive.
+- Prefer explicit server-side `auth()` in mutation handlers that write to the database even when middleware is present. This makes security intentions explicit and protects against future middleware misconfiguration.
+- Validate and parse request bodies at the route boundary; use Zod schemas for consistent validation and types. Return a stable JSON error envelope such as `{ ok: false, error: string }` for failures.
+- Add a short integration test that asserts protected routes return 401/403 when unauthenticated and 200 when authenticated.
+
+Example: tighten the `createRouteMatcher` in `proxy.ts` (replace permissive catch-all):
+
+```
+// only allow these routes to be public
+const isPublicRoute = createRouteMatcher([
+	"/api/webhook/clerk(.*)",
+	"/sign-in(.*)",
+	"/sign-up(.*)",
+	"/_next/static(.*)",
+	"/_next/image(.*)",
+	"/static(.*)",
+	"/api/health(.*)",
+]);
+```
+
+And in mutation handlers:
+
+```
+import { auth } from '@clerk/nextjs/server'
+
+export async function POST(req: Request) {
+	const user = auth();
+	if (!user?.userId) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 });
+	// validate with zod
+}
+```
+
 ## Caching Strategy
 
 The current cache model uses:

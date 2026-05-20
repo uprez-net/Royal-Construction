@@ -23,6 +23,7 @@ import { AddressSuggestion } from "@/types/data";
 export interface LookupOption {
   id: string;
   name: string;
+  location?: string;
   email?: string;
   phone?: string;
   company?: string;
@@ -122,7 +123,7 @@ export function SearchableSelect({
                     : item.label;
 
                   const subtitle = isLookupOption(item)
-                    ? ((item.description ?? [item.email, item.phone, item.company, item.tradeType].filter(Boolean).join(" · ")) || "No additional details")
+                    ? ((item.description ?? [item.email, item.phone, item.company, item.tradeType, item.location].filter(Boolean).join(" · ")) || "No additional details")
                     : `${item.address}, ${item.postcode ?? ""}, Council: ${item.council}`;
 
                   return (

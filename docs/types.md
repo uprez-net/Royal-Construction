@@ -283,6 +283,8 @@ These transitions are the real business logic of the app. They should stay expli
 - some UI types in `types/ui.ts` still reflect mock-era screens rather than live entities
 - some feature DTOs are defined near the store slice instead of in shared type modules
 
+- never trust client-provided ids or status strings as authoritative; validate and canonicalize inputs at the route handler before persisting or returning DTOs.
+
 ## Recommended Type Hygiene
 
 1. Keep frontend-facing DTOs serializable by construction.

@@ -27,6 +27,8 @@ The `app` directory is the routing layer.
 - API route handlers under `app/api`
 - auth pages, profile pages, and server-rendered entry points
 
+Security note: Most `app/api` routes are intended to be private and rely on the global middleware in `proxy.ts` for authentication. Route handlers that perform mutations or return sensitive data should also perform explicit server-side `auth()` checks and validate incoming payloads. Do not rely solely on a permissive middleware matcher.
+
 ### Current substructure
 
 - `app/(main)` wraps authenticated screens in the global shell

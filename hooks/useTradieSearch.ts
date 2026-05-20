@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchJson } from "@/utils/fetch";
 import { useEffect, useState } from "react";
 
 export type LookupOption = {
@@ -24,13 +25,15 @@ export function useTradieSearch(initialQuery = "") {
       setError(null);
 
       const q = encodeURIComponent(query.trim());
-      fetch(`/api/tradies?search=${q}&limit=50`, { signal: controller.signal })
+      fetchJson<LookupOption[]>(
+        `/api/tradies?search=${q}&limit=50`,
+        { method: "GET" },
+        "Failed to fetch tradies",
+        controller.signal
+      )
         .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch");
-          return res.json();
-        })
-        .then((data) => {
-          setItems(Array.isArray(data) ? data : []);
+          const items = res.data
+          setItems(Array.isArray(items) ? items : []);
         })
         .catch((err) => {
           if (err.name === "AbortError") return;

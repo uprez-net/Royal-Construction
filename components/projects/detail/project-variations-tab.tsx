@@ -277,7 +277,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                     {currency.format(totalBudget + variationCost)}
                   </span>,
 
-                  <StatusPill key={`${variation.id}-status`} tone={variationStatusTone(variation.status)}>
+                  <StatusPill id={`${variation.id}-status`} tone={variationStatusTone(variation.status)}>
                     {variation.status}
                   </StatusPill>,
 

@@ -247,6 +247,8 @@ The intended boundary is:
 - Redux owns interaction state and cross-component coordination
 - React local state owns transient UI state
 
+Security note: do not store or rely on client-provided identity or authorization flags in Redux as a trust boundary. Validate any client-provided ids, role hints, or status changes on the server before applying them to canonical state.
+
 The project list page currently blurs that boundary because it fetches server data in a component effect rather than a thunk. That should be standardized.
 
 ## Cross-Feature Communication

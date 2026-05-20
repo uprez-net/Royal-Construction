@@ -1,8 +1,6 @@
 import { sendTradieReminders } from "@/lib/jobs/tradie-reminder";
 import { successResponse, errorResponse } from "@/utils/validators";
 
-export const runtime = "nodejs";
-
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;

@@ -1,3 +1,4 @@
+import { fetchJson } from "@/utils/fetch";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
 export interface SiteManagerLookupItem {
@@ -47,12 +48,13 @@ export const fetchSiteManagers = createAsyncThunk<
     params.set("q", query.trim());
   }
 
-  const response = await fetch(`/api/site-managers?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error("Failed to load site managers");
-  }
+  const response = await fetchJson<SiteManagerLookupResponse>(
+    `/api/site-managers?${params.toString()}`,
+    { method: "GET" },
+    "Failed to load site managers"
+  );
 
-  return (await response.json()) as SiteManagerLookupResponse;
+  return response.data;
 });
 
 const siteManagersSlice = createSlice({
