@@ -5,29 +5,8 @@ import { z } from 'zod';
 
 import { saveFile } from '@/lib/data/file';
 import { getUserByClerkIdCached } from '@/lib/data/user';
-import { UPLOAD_CONSTRAINTS } from '@/utils/validators/files';
+import { ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
 import { errorResponse, unauthorizedResponse } from '@/utils/validators';
-
-/**
- * Client payload schema - validated before token generation
- */
-const clientPayloadSchema = z.object({
-    fileId: z.string().optional(),
-    fileName: z.string().trim().min(1, 'File name is required').max(255),
-    projectId: z.string().trim().min(1, 'Project ID is required'),
-    milestoneId: z.string().trim().optional().nullable(),
-});
-
-type ClientPayload = z.infer<typeof clientPayloadSchema>;
-
-/**
- * Token payload schema - validated on completion
- */
-const tokenPayloadSchema = clientPayloadSchema.extend({
-    userId: z.string().min(1, 'User ID is required'),
-});
-
-type TokenPayload = z.infer<typeof tokenPayloadSchema>;
 
 export async function POST(request: Request): Promise<NextResponse> {
     try {
@@ -61,6 +40,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         milestoneId: clientPayload.milestoneId,
                         fileId: clientPayload.fileId,
                         fileName: clientPayload.fileName,
+                        fileSize: clientPayload.fileSize,
                     } satisfies TokenPayload),
                 };
             },
@@ -80,6 +60,8 @@ export async function POST(request: Request): Promise<NextResponse> {
                         milestoneId: payload.milestoneId ?? undefined,
                         fileUrl: blob.url,
                         fileName: payload.fileName,
+                        fileType: blob.contentType,
+                        fileSize: payload.fileSize,
                     });
                 } catch (error) {
                     console.error('Error in onUploadCompleted', error);

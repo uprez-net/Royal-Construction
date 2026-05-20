@@ -86,6 +86,8 @@ model Milestone {
   description     String?
   targetDate      DateTime
   actualDate      DateTime?
+  budget          Decimal         @default(10000) @db.Decimal(12, 2)
+  spend           Decimal?        @db.Decimal(12, 2)
   status          MilestoneStatus @default(PENDING)
   isPhotoRequired Boolean         @default(false)
 
@@ -132,6 +134,8 @@ model File {
   projectId   String
   milestoneId String?
   filename    String
+  fileType    String
+  filesize    Int
   url         String
   uploadedBy  String
   createdAt   DateTime @default(now())

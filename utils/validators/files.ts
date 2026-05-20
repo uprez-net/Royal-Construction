@@ -141,3 +141,25 @@ export const addressSuggestionsResponseSchema = z.object({
 });
 
 export type AddressSuggestionsResponse = z.infer<typeof addressSuggestionsResponseSchema>;
+
+/**
+ * Client payload schema - validated before token generation
+ */
+export const clientPayloadSchema = z.object({
+    fileId: z.string().optional(),
+    fileName: z.string().trim().min(1, 'File name is required').max(255),
+    fileSize: z.number().max(UPLOAD_CONSTRAINTS.maxFileSizeBytes, `File size must be less than ${UPLOAD_CONSTRAINTS.maxFileSizeBytes} bytes`),
+    projectId: z.string().trim().min(1, 'Project ID is required'),
+    milestoneId: z.string().trim().optional().nullable(),
+});
+
+export type ClientPayload = z.infer<typeof clientPayloadSchema>;
+
+/**
+ * Token payload schema - validated on completion
+ */
+export const tokenPayloadSchema = clientPayloadSchema.extend({
+    userId: z.string().min(1, 'User ID is required'),
+});
+
+export type TokenPayload = z.infer<typeof tokenPayloadSchema>;

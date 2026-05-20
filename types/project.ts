@@ -20,7 +20,7 @@ export interface SiteUpdateWithAuthor extends SiteUpdate {
 }
 
 export interface SiteUpdateWithAuthorAndMilestone extends SiteUpdateWithAuthor {
-    milestone: Milestone;
+    milestone: SafeMilestone;
 }
 
 export interface TradieScheduleWithTradie extends TradieSchedule {
@@ -28,14 +28,19 @@ export interface TradieScheduleWithTradie extends TradieSchedule {
 }
 
 export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWithTradie {
-    milestone?: Milestone;
+    milestone?: SafeMilestone;
 }
 
 export interface TradieScheduleWithTradieMilestoneAndProject extends TradieScheduleWithTradieAndMilestone {
     project: SafeProject;
 }
 
-export interface MilestoneWithFilesTradiesUpdates extends Milestone {
+export interface SafeMilestone extends Omit<Milestone, "spend" | "budget"> {
+    budget: string;
+    spend?: string;
+}
+
+export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
     files: File[];
     siteUpdates: SiteUpdateWithAuthor[];
     tradieSchedules: TradieScheduleWithTradie[];

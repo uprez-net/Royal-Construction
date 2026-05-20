@@ -45,6 +45,7 @@ import {
   registerProjectUpload,
   updateProjectUploadProgress,
 } from "@/lib/store/slices/projectsSlice";
+import { ClientPayload } from "@/utils/validators";
 
 const maxFiles = 5;
 
@@ -217,7 +218,8 @@ export function AddUpdateModal({
             milestoneId: milestoneId ?? null,
             fileId: queuedFile.id,
             fileName: queuedFile.file.name,
-          }),
+            fileSize: queuedFile.file.size,
+          } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {
             dispatch(

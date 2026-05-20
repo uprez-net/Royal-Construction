@@ -273,10 +273,16 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
         .filter((siteUpdate) => siteUpdate.milestone !== null)
         .map((siteUpdate) => ({
           ...siteUpdate,
-          milestone: siteUpdate.milestone!,
+          milestone: {
+            ...siteUpdate.milestone!,
+            spend: siteUpdate.milestone!.spend?.toString(),
+            budget: siteUpdate.milestone!.budget.toString(),
+          },
         })),
       milestones: project.milestones.map((milestone) => ({
         ...milestone,
+        spend: milestone.spend?.toString(),
+        budget: milestone.budget.toString(),
         tradieSchedules: milestone.tradieSchedules.map((schedule) => ({
           ...schedule,
           tradie: {
@@ -297,7 +303,11 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
           hourlyRate: schedule.tradie.hourlyRate?.toString(),
           rating: schedule.tradie.rating?.toString(),
         },
-        milestone: schedule.milestone ?? undefined,
+        milestone: schedule.milestone ? {
+          ...schedule.milestone,
+          budget: schedule.milestone.budget.toString(),
+          spend: schedule.milestone.spend?.toString(),
+        } : undefined,
       })),
     };
   } catch (error) {

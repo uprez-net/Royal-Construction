@@ -2,6 +2,10 @@ import {
   CalendarCheck2,
   TriangleAlert,
   Bell,
+  Calendar,
+  CheckCircle2,
+  DollarSign,
+  Users,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +14,9 @@ import { DonutChartCard } from "@/components/charts/donut-chart-card";
 import type { ProjectMilestoneMix } from "@/types/ui";
 import type { ProjectDetail } from "@/types/project";
 
-import { dateFormat, formatStatus } from "@/utils/formatters";
+import { currency, dateFormat, formatStatus } from "@/utils/formatters";
+import Image from "next/image";
+import { File } from "@prisma/client";
 
 export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   const tradieAlerts = project.tradieSchedules.filter(
@@ -79,6 +85,9 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
           {project.milestones.map((milestone) => {
             const isDone = milestone.status === "DONE";
             const isActive = milestone.status === "ACTIVE";
+            const milestonePictures = milestone.files.filter((file) =>
+              file.fileType.startsWith("image/"),
+            );
 
             return (
               <article
@@ -101,16 +110,52 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                         <StatusPill tone="warning">Active</StatusPill>
                       )}
                     </div>
-                    <div className="flex gap-4 text-[12.5px] text-muted-foreground mt-1.5">
-                      <p>
-                        <b>Target:</b> {dateFormat.format(milestone.targetDate)}
-                      </p>
-                      {milestone.actualDate ? (
-                        <p>
-                          <b>Actual:</b>{" "}
-                          {dateFormat.format(milestone.actualDate)}
-                        </p>
-                      ) : null}
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-[12.5px] text-muted-foreground mt-1.5">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>
+                          Target:{" "}
+                          {dateFormat.format(new Date(milestone.targetDate))}
+                        </span>
+                      </div>
+
+                      {milestone.actualDate && (
+                        <div className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                          <span>
+                            Actual:{" "}
+                            {dateFormat.format(new Date(milestone.actualDate))}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-1">
+                        <DollarSign className="h-3.5 w-3.5" />
+                        <span>
+                          {currency.format(Number(milestone.budget))}{" "}
+                          {`(${(
+                            (Number(milestone.budget) /
+                              Number(project.totalBudget)) *
+                            100
+                          ).toFixed(2)}
+                          %)`}
+                        </span>
+                      </div>
+
+                      {milestone.tradieSchedules.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5" />
+                          <span>
+                            {" "}
+                            {milestone.tradieSchedules
+                              .map(
+                                (s) =>
+                                  `${s.tradie.name} - ${s.tradie.trade}`,
+                              )
+                              .join(", ")}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   {isDone && (
@@ -124,6 +169,33 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                     </StatusPill>
                   )}
                 </div>
+
+                {milestonePictures.length > 0 && (
+                  <div className="mt-3 grid grid-cols-4 gap-1.5">
+                    {Array.from({
+                      length: Math.min(milestonePictures.length, 4),
+                    }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
+                      >
+                        <Image
+                          src={milestonePictures[i].url}
+                          alt={`Photo ${i + 1}`}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                          loading="lazy"
+                          width={800}
+                          height={600}
+                        />
+                      </div>
+                    ))}
+                    {milestonePictures.length > 4 && (
+                      <div className="flex aspect-4/3 cursor-pointer items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600">
+                        +{milestonePictures.length - 4}
+                      </div>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })}
