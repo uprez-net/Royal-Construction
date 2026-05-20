@@ -4,6 +4,7 @@ import { createUser, deleteUser, updateUser } from "@/lib/data/user";
 import { Role } from "@prisma/client";
 import { updateUserMetadata } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
+import { randomPhoneNumberGenerator } from "@/utils/generator";
 
 export async function POST(request: NextRequest) {
     try {
@@ -19,7 +20,6 @@ export async function POST(request: NextRequest) {
         switch (evt.type) {
             case "user.created": {
                 const {
-                    phone_numbers,
                     email_addresses,
                     first_name,
                     last_name,
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
                 } = evt.data;
 
                 const email = email_addresses[0]?.email_address;
-                const phone = phone_numbers[0]?.phone_number;
+                const phone = randomPhoneNumberGenerator();
 
                 const newUser = await createUser(`${first_name} ${last_name}`, email, id, phone);
                 await updateUserMetadata(id, {
@@ -45,7 +45,6 @@ export async function POST(request: NextRequest) {
             case "user.updated": {
                 const {
                     public_metadata,
-                    phone_numbers: updatedPhoneNumbers,
                     email_addresses: updatedEmailAddresses,
                     first_name: updatedFirstName,
                     last_name: updatedLastName,
@@ -53,13 +52,12 @@ export async function POST(request: NextRequest) {
                 } = evt.data;
 
                 const updatedEmail = updatedEmailAddresses[0]?.email_address;
-                const updatedPhone = updatedPhoneNumbers[0]?.phone_number;
                 const role = public_metadata?.role as Role || Role.CUSTOMER;
 
                 await updateUser(updatedId, {
                     name: `${updatedFirstName} ${updatedLastName}`,
                     email: updatedEmail,
-                    phone: updatedPhone,
+                    phone: randomPhoneNumberGenerator(),
                     role,
                 });
 
