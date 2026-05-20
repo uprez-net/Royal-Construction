@@ -1,8 +1,9 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
 import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
+import prisma from "@/lib/prisma";
 
-export const runtime = 'nodejs';
+// export const runtime = 'nodejs';
 
 interface GraphNotificationBody {
   value?: Array<{
@@ -118,6 +119,22 @@ export async function POST(request: Request): Promise<Response> {
           );
           if (extracted) {
             console.log(`  extractedLead: ${JSON.stringify(extracted)}`);
+            if(extracted.Status === false) {
+                 await prisma.lead.create({
+                  data:{
+                    name: extracted.Name,
+                    email: extracted.Email,
+                    phone: String(extracted.ContactNo),
+                    location: extracted.Address,
+                    sourceDetail: 'Website',
+                    stage: 'NEW',
+                    type: extracted.Type,
+                    notes:extracted.Info
+                  }
+                 })
+            }else{
+              console.log('Lead Extracted Found as Spam, Ignoring the lead');
+            }
           }
         } catch (error) {
           console.error('Failed to fetch message details', error);

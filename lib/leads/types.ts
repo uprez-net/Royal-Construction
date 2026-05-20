@@ -1,7 +1,40 @@
-export type LeadStage = 'New' | 'Contacted' | 'Qualified' | 'Quoted' | 'Negotiating' | 'Won' | 'Lost';
-export type LeadSource = 'Google Ads' | 'Referral' | 'Facebook Ads' | 'Walk-in' | 'Repeat Client' | 'Website';
+export type LeadStage =
+  | 'New'
+  | 'Contacted'
+  | 'Qualified'
+  | 'Quoted'
+  | 'Negotiating'
+  | 'Won'
+  | 'Lost'
+  | 'Meeting Scheduled'
+  | 'In Follow-up'
+  | 'No Response'
+  | 'Converted'
+  | 'Cancelled'
+  | 'Disqualified';
+export type LeadSource =
+  | 'Google Ads'
+  | 'Referral'
+  | 'Facebook Ads'
+  | 'Walk-in'
+  | 'Repeat Client'
+  | 'Website'
+  | 'Personal'
+  | 'Business';
 export type BudgetRange = 'Not Discussed' | '$200K - $350K' | '$350K - $500K' | '$500K - $700K' | '$700K+';
-export type ProjectType = 'Not Specified' | 'New Home' | 'Duplex' | 'Renovation' | 'Granny Flat' | 'Townhouse';
+export type ProjectType =
+  | 'Not Specified'
+  | 'New Home'
+  | 'Duplex'
+  | 'Renovation'
+  | 'Granny Flat'
+  | 'Townhouse'
+  | 'Dual Occupancy'
+  | 'Single Storey'
+  | 'Double Storey'
+  | 'House and Granny'
+  | 'Knockdown and rebuild'
+  | 'House + land package';
 
 export interface HistoryItem {
   date: string;
@@ -21,8 +54,8 @@ export interface Lead {
   sourceDetail: string;
   stage: LeadStage;
   assigned: string | null;
-  budget: BudgetRange;
-  type: ProjectType;
+  budget: BudgetRange | string;
+  type: string;
   notes: string;
   followupDate: string | null;
   followupTime: string | null;

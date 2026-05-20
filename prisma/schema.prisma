@@ -41,22 +41,6 @@ enum TradieScheduleStatus {
   COMPLETED
 }
 
-enum LeadStage {
-  NEW
-  CONTACTED
-  QUALIFIED
-  QUOTED
-  NEGOTIATING
-  WON
-  LOST
-}
-
-enum HistoryType {
-  SYSTEM
-  CALL
-  EMAIL
-  REFERRAL
-}
 
 model Project {
   id               String   @id @default(uuid())
@@ -282,15 +266,38 @@ model User {
   @@index([clerkId])
 }
 
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTED
+  NEGOTIATING
+  WON
+  LOST
+  MEETING_SCHEDULED
+  IN_FOLLOW_UP
+  NO_RESPONSE
+  CONVERTED
+  CANCELLED
+  DISQUALIFIED
+}
+
+enum HistoryType {
+  SYSTEM
+  CALL
+  EMAIL
+  REFERRAL
+}
+
 model Lead {
   id Int @id @default(autoincrement())
 
   name     String
-  phone    String
-  email    String @unique
-  location String
+  phone    String   @default("")
+  email    String   @default("")
+  location String   @default("")
 
-  source       String
+  source       String?
   sourceDetail String?
 
   stage LeadStage @default(NEW)
@@ -298,13 +305,15 @@ model Lead {
   assigned String?
 
   budget String?
-  type   String?
+  type   String[]
 
   notes String? @db.Text
 
   followupDate  DateTime?
   followupTime  String?
   followupNotes String?   @db.Text
+
+  lostReason String?
 
   urgent Boolean @default(false)
 

@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, Phone, Mail, CheckCircle, X, Check, Bell, Clock, User, AlertCircle } from 'lucide-react';
-import { EmailTemplate, Lead } from '@/lib/types';
-import { EMAIL_TEMPLATES } from '@/lib/variables';
-import { sendEmailToLead } from '@/lib/leads-service';
+import { EmailTemplate, Lead } from '@/lib/leads/types';
+import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
+import { sendEmailToLead } from '@/lib/leads/leads-service';
 
 interface FollowupsViewProps {
   leads: Lead[];
@@ -514,9 +514,9 @@ function ModalShell({
       aria-modal="true"
     >
       <div
-        className={`w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
+        className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
           <div>
             <h4 className={`text-[18px] font-medium tracking-[-0.016px] text-[#0c0a09] ${titleClassName ?? ''}`}>{title}</h4>
             {subtitle ? <p className="mt-1 text-[13px] text-[#a8a29e]">{subtitle}</p> : null}
@@ -530,7 +530,7 @@ function ModalShell({
             <X size={16} />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-5 py-4">{children}</div>
       </div>
     </div>
   );

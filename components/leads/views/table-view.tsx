@@ -1,14 +1,33 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Phone, Mail, ArrowRight, Download, Users, X, Bell, Check, Calendar, UserPlus } from 'lucide-react';
-import { Lead, LeadStage } from '@/lib/types';
-import { EmailTemplate } from '@/lib/types';
-import { EMAIL_TEMPLATES } from '@/lib/variables';
-import { sendEmailToLead } from '@/lib/leads-service';
+import { Search, Phone, Mail, ArrowRight, Edit, Download, Users, X, Bell, Check, Calendar, UserPlus } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { HistoryItem, Lead, LeadSource, LeadStage, ProjectType } from '@/lib/leads/types';
+import { EmailTemplate } from '@/lib/leads/types';
+import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
+import { deleteLead, sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
 
 interface TableViewProps {
   leads: Lead[];
   onLeadUpdate: (lead: Lead) => void;
   onLeadDelete: (leadId: number) => void;
+}
+
+interface LeadDetailFormData {
+  name: string;
+  phone: string;
+  email: string;
+  location: string;
+  sourceDetail: LeadSource;
+  stage: LeadStage;
+  assigned: string;
+  budget: string;
+  type: ProjectType[];
+  notes: string;
+  followupDate: string;
+  followupTime: string;
+  urgent: boolean;
+  lostReason: string;
+  historyEntries: HistoryItem[];
 }
 
 /* ── Source icon helper ────────────────────────────── */
@@ -78,7 +97,70 @@ function formatFollowup(date: string | null, time?: string | null): string {
   return `${day} ${month} ${year}${timeStr ? ' ' + timeStr : ''}`;
 }
 
-const MOVABLE_STAGES: LeadStage[] = ['New', 'Contacted', 'Qualified', 'Quoted', 'Negotiating', 'Won'];
+const MOVABLE_STAGES: LeadStage[] = [
+  'New',
+  'Contacted',
+  'Meeting Scheduled',
+  'In Follow-up',
+  'Qualified',
+  'Quoted',
+  'Negotiating',
+  'Won',
+  'Converted',
+  'No Response',
+  'Cancelled',
+  'Disqualified',
+  'Lost',
+];
+
+const LEAD_SOURCE_OPTIONS: LeadSource[] = [
+  'Google Ads',
+  'Referral',
+  'Facebook Ads',
+  'Walk-in',
+  'Repeat Client',
+  'Website',
+  'Personal',
+  'Business',
+];
+
+const LEAD_STAGE_OPTIONS: LeadStage[] = [
+  'New',
+  'Contacted',
+  'Qualified',
+  'Quoted',
+  'Negotiating',
+  'Won',
+  'Lost',
+  'Meeting Scheduled',
+  'In Follow-up',
+  'No Response',
+  'Converted',
+  'Cancelled',
+  'Disqualified',
+];
+
+const PROJECT_TYPE_OPTIONS: ProjectType[] = [
+  'Not Specified',
+  'New Home',
+  'Duplex',
+  'Renovation',
+  'Granny Flat',
+  'Townhouse',
+  'Dual Occupancy',
+  'Single Storey',
+  'Double Storey',
+  'House and Granny',
+  'Knockdown and rebuild',
+  'House + land package',
+];
+
+const HISTORY_TYPE_OPTIONS: HistoryItem['type'][] = [
+  'system',
+  'call',
+  'email',
+  'referral',
+];
 
 
 
@@ -167,9 +249,9 @@ function ModalShell({
       aria-modal="true"
     >
       <div
-        className={`w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
+        className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
           <div>
             <h4 className={`text-[18px] font-medium tracking-[-0.016px] text-[#0c0a09] ${titleClassName ?? ''}`}>{title}</h4>
             {subtitle ? <p className="mt-1 text-[13px] text-[#a8a29e]">{subtitle}</p> : null}
@@ -183,7 +265,7 @@ function ModalShell({
             <X size={16} />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-5 py-4">{children}</div>
       </div>
     </div>
   );
@@ -192,6 +274,7 @@ function ModalShell({
 export default function TableView({
   leads,
   onLeadUpdate,
+  onLeadDelete,
 }: TableViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
@@ -212,6 +295,19 @@ export default function TableView({
   const [editAssignedLead, setEditAssignedLead] = useState<Lead | null>(null);
   const [assignedPerson, setAssignedPerson] = useState('');
 
+  const [selectedLeads, setSelectedLeads] = useState<number[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [detailLead, setDetailLead] = useState<Lead | null>(null);
+  const [detailForm, setDetailForm] = useState<LeadDetailFormData | null>(null);
+  const [detailBaseline, setDetailBaseline] = useState<LeadDetailFormData | null>(null);
+
+  const [historyDraft, setHistoryDraft] = useState<{ action: string, detail: string, type: HistoryItem['type'] }>({
+    action: '',
+    detail: '',
+    type: 'call',
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
+
   // Toast state
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
 
@@ -222,6 +318,149 @@ export default function TableView({
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
+  };
+
+  const normalizeTypes = (types: string | string[] | null | undefined): ProjectType[] => {
+    if (!types) return ['Not Specified'];
+    if (Array.isArray(types)) {
+      return types.length > 0 ? (types as ProjectType[]) : ['Not Specified'];
+    }
+    const normalized = types
+      .split(',')
+      .map(type => type.trim())
+      .filter(Boolean);
+    return normalized.length > 0 ? (normalized as ProjectType[]) : ['Not Specified'];
+  };
+
+  const openDetailModal = (lead: Lead) => {
+    const baseline: LeadDetailFormData = {
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      location: lead.location,
+      sourceDetail: (lead.sourceDetail || lead.source) as LeadSource,
+      stage: lead.stage,
+      assigned: lead.assigned || '',
+      budget: lead.budget || '',
+      type: normalizeTypes(lead.type),
+      notes: lead.notes || '',
+      followupDate: lead.followupDate || '',
+      followupTime: lead.followupTime || '',
+      urgent: Boolean(lead.urgent),
+      lostReason: lead.lostReason || '',
+      historyEntries: lead.history || [],
+    };
+
+    setDetailLead(lead);
+    setDetailForm(baseline);
+    setDetailBaseline(baseline);
+    setShowDeleteConfirm(false);
+  };
+
+  const closeDetailModal = () => {
+    setDetailLead(null);
+    setDetailForm(null);
+    setDetailBaseline(null);
+    setShowDeleteConfirm(false);
+    setHistoryDraft({ action: '', detail: '', type: 'call' });
+  };
+
+  const addHistoryEntry = () => {
+    if (!historyDraft.action.trim() && !historyDraft.detail.trim()) return;
+    const now = new Date();
+    const newEntry: HistoryItem = {
+      action: historyDraft.action,
+      detail: historyDraft.detail,
+      type: historyDraft.type,
+      date: now.toISOString().slice(0, 10),
+      time: now.toTimeString().slice(0, 5),
+    };
+    setDetailForm(prev => prev ? { ...prev, historyEntries: [...prev.historyEntries, newEntry] } : prev);
+    setHistoryDraft({ action: '', detail: '', type: 'call' });
+  };
+
+  // const removeHistoryEntry = (index: number) => {
+  //   setDetailForm(prev => prev ? { ...prev, historyEntries: prev.historyEntries.filter((_, idx) => idx !== index) } : prev);
+  // };
+
+  const hasDetailChanges = useMemo(() => {
+    if (!detailForm || !detailBaseline) return false;
+    return JSON.stringify(detailForm) !== JSON.stringify(detailBaseline);
+  }, [detailForm, detailBaseline]);
+
+  const toggleDetailType = (value: ProjectType) => {
+    setDetailForm(prev => {
+      if (!prev) return prev;
+      const exists = prev.type.includes(value);
+      if (value === 'Not Specified') {
+        return { ...prev, type: ['Not Specified'] };
+      }
+
+      const withoutNotSpecified = prev.type.filter(item => item !== 'Not Specified');
+      const next = exists
+        ? withoutNotSpecified.filter(item => item !== value)
+        : [...withoutNotSpecified, value];
+
+      return { ...prev, type: next.length > 0 ? next : ['Not Specified'] };
+    });
+  };
+
+  const handleDetailUpdate = async () => {
+    if (!detailLead || !detailForm) return;
+
+    if (detailForm.stage === 'Lost' && !detailForm.lostReason.trim()) {
+      showToast('Please provide a reason for the lost lead.', 'info');
+      return;
+    }
+
+    setIsUpdating(true);
+    const normalizedTypes = detailForm.type.length > 0 ? detailForm.type : ['Not Specified'];
+    const typeValue: string = normalizedTypes.join(', ');
+    const updates: Partial<Lead> = {
+      name: detailForm.name,
+      phone: detailForm.phone,
+      email: detailForm.email,
+      location: detailForm.location,
+      source: detailForm.sourceDetail,
+      sourceDetail: detailForm.sourceDetail,
+      stage: detailForm.stage,
+      assigned: detailForm.assigned,
+      budget: detailForm.budget,
+      type: typeValue,
+      notes: detailForm.notes,
+      followupDate: detailForm.followupDate,
+      followupTime: detailForm.followupTime,
+      urgent: detailForm.urgent,
+      lostReason: detailForm.stage === 'Lost' ? detailForm.lostReason : '',
+      history: detailForm.historyEntries as any, // Passed down if service supports it
+    };
+
+    try {
+      const updated = await updateLead(detailLead.id, updates);
+      if (!updated) return;
+      onLeadUpdate(updated);
+      openDetailModal(updated);
+      showToast('Lead updated');
+      closeDetailModal();
+    } catch (error) {
+      console.error('Failed to update lead', error);
+      showToast('Failed to update lead', 'info');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDetailDelete = async () => {
+    if (!detailLead) return;
+    try {
+      await deleteLead(detailLead.id);
+      onLeadDelete(detailLead.id);
+      setShowDeleteConfirm(false);
+      closeDetailModal();
+      showToast('Lead deleted');
+    } catch (error) {
+      console.error('Failed to delete lead', error);
+    }
   };
 
   const filteredLeads = useMemo(() => {
@@ -269,13 +508,19 @@ export default function TableView({
     Negotiating: 'stage-badge-pink',
     Won: 'stage-badge-success',
     Lost: 'stage-badge-danger',
+    'Meeting Scheduled': 'stage-badge-info',
+    'In Follow-up': 'stage-badge-warning',
+    'No Response': 'stage-badge-danger',
+    Converted: 'stage-badge-success',
+    Cancelled: 'stage-badge-danger',
+    Disqualified: 'stage-badge-danger',
   };
 
-  const openStatusModal = (lead: Lead) => {
-    setStatusLead(lead);
-    setStatusStage(lead.stage);
-    setStatusNotes('');
-  };
+  // const openStatusModal = (lead: Lead) => {
+  //   setStatusLead(lead);
+  //   setStatusStage(lead.stage);
+  //   setStatusNotes('');
+  // };
 
   const closeStatusModal = () => {
     setStatusLead(null);
@@ -308,16 +553,20 @@ export default function TableView({
     setEditFollowupLead(null);
   };
 
-  const handleUpdateFollowup = () => {
+  const handleUpdateFollowup = async () => {
     if (!editFollowupLead) return;
-    const updatedLead: Lead = {
-      ...editFollowupLead,
-      followupDate,
-      followupTime,
-    };
-    onLeadUpdate(updatedLead);
-    showToast(`Updated follow-up for ${updatedLead.name}`, 'success');
-    closeFollowupModal();
+    try {
+      const updatedLead = await updateLead(editFollowupLead.id, {
+        followupDate,
+        followupTime,
+      });
+      if (!updatedLead) return;
+      onLeadUpdate(updatedLead);
+      showToast(`Updated follow-up for ${updatedLead.name}`, 'success');
+      closeFollowupModal();
+    } catch (error) {
+      console.error('Failed to update follow-up', error);
+    }
   };
 
   const openAssignedModal = (lead: Lead) => {
@@ -329,15 +578,19 @@ export default function TableView({
     setEditAssignedLead(null);
   };
 
-  const handleUpdateAssigned = () => {
+  const handleUpdateAssigned = async () => {
     if (!editAssignedLead) return;
-    const updatedLead: Lead = {
-      ...editAssignedLead,
-      assigned: assignedPerson,
-    };
-    onLeadUpdate(updatedLead);
-    showToast(`Assigned ${assignedPerson} to ${updatedLead.name}`, 'success');
-    closeAssignedModal();
+    try {
+      const updatedLead = await updateLead(editAssignedLead.id, {
+        assigned: assignedPerson,
+      });
+      if (!updatedLead) return;
+      onLeadUpdate(updatedLead);
+      showToast(`Assigned ${assignedPerson} to ${updatedLead.name}`, 'success');
+      closeAssignedModal();
+    } catch (error) {
+      console.error('Failed to update assigned', error);
+    }
   };
 
   const handleTemplateSelect = (template: EmailTemplate) => {
@@ -350,7 +603,7 @@ export default function TableView({
     setShowSendEmail(true);
   };
 
-  const handleMoveStage = () => {
+  const handleMoveStage = async () => {
     if (!statusLead) return;
     if (statusStage === statusLead.stage) {
       closeStatusModal();
@@ -375,9 +628,20 @@ export default function TableView({
       followupNotes: statusStage === 'Won' ? '' : statusLead.followupNotes,
       urgent: statusStage === 'Won' ? false : statusLead.urgent,
     };
-
-    onLeadUpdate(updatedLead);
-    closeStatusModal();
+    try {
+      const savedLead = await updateLead(statusLead.id, {
+        stage: updatedLead.stage,
+        followupDate: updatedLead.followupDate,
+        followupTime: updatedLead.followupTime,
+        followupNotes: updatedLead.followupNotes,
+        urgent: updatedLead.urgent,
+      });
+      if (!savedLead) return;
+      onLeadUpdate({ ...savedLead, history: updatedLead.history });
+      closeStatusModal();
+    } catch (error) {
+      console.error('Failed to move stage', error);
+    }
   };
 
   const handleSendEmail = async () => {
@@ -417,47 +681,84 @@ export default function TableView({
   };
 
   const handleExport = () => {
-    const headers = [
-      'Name',
-      'Phone',
-      'Email',
-      'Location',
-      'Source',
+    const leadHeader = [
+      'leadId',
+      'name',
+      'phone',
+      'email',
+      'location',
+      'SourceDetail',
       'Stage',
-      'Budget',
-      'Type',
-      'Assigned',
-      'Follow-up Date',
-      'Notes',
-      'Lost Reason',
+      'assigned',
+      'budget',
+      'notes',
+      'FollowupsDate',
+      'FollowupTime',
+      'type',
+      'lostReason',
+      'urgent',
     ];
 
-    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const rows = filteredLeads.map(lead => [
-      lead.name,
-      lead.phone,
-      lead.email,
-      lead.location,
-      lead.source,
-      lead.stage,
-      lead.budget,
-      lead.type,
-      lead.assigned,
-      lead.followupDate || '',
-      lead.notes || '',
-      lead.lostReason || '',
-    ].map(value => escapeCsv(String(value ?? ''))).join(','));
+    const leadRows = filteredLeads.map(lead => {
+      const normalized = normalizeTypes(lead.type).filter(
+        type => type !== 'Not Specified',
+      );
+      const typeValue = normalized.join(', ');
 
-    const csv = [headers.map(escapeCsv).join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `BuildPro_Leads_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    window.URL.revokeObjectURL(url);
+      return [
+        lead.id,
+        lead.name,
+        lead.phone,
+        lead.email,
+        lead.location,
+        lead.sourceDetail,
+        lead.stage,
+        lead.assigned || '',
+        lead.budget,
+        lead.notes || '',
+        lead.followupDate || '',
+        lead.followupTime || '',
+        typeValue,
+        lead.lostReason || '',
+        lead.urgent ? 'true' : 'false',
+      ];
+    });
+
+    const historyHeader = [
+      'leadId',
+      'action',
+      'detail',
+      'type',
+      'actionDate',
+    ];
+
+    const historyRows = filteredLeads.flatMap(lead =>
+      (lead.history ?? []).map(entry => [
+        lead.id,
+        entry.action,
+        entry.detail,
+        entry.type,
+        `${entry.date} ${entry.time}`.trim(),
+      ]),
+    );
+
+    const workbook = XLSX.utils.book_new();
+    const leadSheet = XLSX.utils.aoa_to_sheet([
+      leadHeader,
+      ...leadRows,
+    ]);
+    const historySheet = XLSX.utils.aoa_to_sheet([
+      historyHeader,
+      ...historyRows,
+    ]);
+
+    XLSX.utils.book_append_sheet(workbook, leadSheet, 'Lead Data');
+    XLSX.utils.book_append_sheet(workbook, historySheet, 'History');
+
+    XLSX.writeFile(
+      workbook,
+      `BuildPro_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
   };
 
   return (
@@ -498,7 +799,22 @@ export default function TableView({
                 />
               </div>
               <div className="filter-chips">
-                {['all', 'New', 'Contacted', 'Qualified', 'Quoted', 'Negotiating', 'Won', 'Lost'].map(stage => (
+                {[
+                  'all',
+                  'New',
+                  'Contacted',
+                  'Meeting Scheduled',
+                  'In Follow-up',
+                  'Qualified',
+                  'Quoted',
+                  'Negotiating',
+                  'Won',
+                  'Converted',
+                  'No Response',
+                  'Cancelled',
+                  'Disqualified',
+                  'Lost',
+                ].map(stage => (
                   <button
                     key={stage}
                     className={`filter-chip ${activeFilters.includes(stage) ? 'active' : ''
@@ -530,7 +846,7 @@ export default function TableView({
                   <th className="col-lead">Lead</th>
                   <th className="col-phone">Phone</th>
                   <th className="col-location">Location</th>
-                  {/* <th className="col-source">Source</th> */}
+                  <th className="col-source">Source Detail</th>
                   <th className="col-stage">Stage</th>
                   <th className="col-followup">Follow-up</th>
                   <th className="col-assigned">Assigned</th>
@@ -539,7 +855,11 @@ export default function TableView({
               </thead>
               <tbody>
                 {filteredLeads.map(lead => (
-                  <tr key={lead.id} className={lead.urgent ? 'urgent-row' : ''}>
+                  <tr
+                    key={lead.id}
+                    className={lead.urgent ? 'urgent-row' : ''}
+                    
+                  >
                     <td className="col-lead">
                       <div className="cell-name">
                         {lead.urgent && <span className="urgent-dot" />}
@@ -551,6 +871,7 @@ export default function TableView({
                     </td>
                     <td className="col-phone">{lead.phone}</td>
                     <td className="col-location">{lead.location}</td>
+                    <td className="col-source-detail">{lead.sourceDetail}</td>
                     {/* <td className="col-source">
                       <span className="source-with-icon">
                         <SourceIcon source={lead.source} />
@@ -634,13 +955,13 @@ export default function TableView({
                           <button
                             type="button"
                             className="action-btn-icon"
-                            title="Change Stage"
+                            title="Edit Lead"
                             onClick={(event) => {
                               event.stopPropagation();
-                              openStatusModal(lead);
+                              openDetailModal(lead);
                             }}
                           >
-                            <ArrowRight size={15} />
+                            <Edit size={15} />
                           </button>
                         )}
                       </div>
@@ -654,6 +975,371 @@ export default function TableView({
       </div>
 
       <ModalShell
+        open={!!detailLead}
+        onClose={closeDetailModal}
+        title={detailLead ? detailLead.name : 'Lead Details'}
+        subtitle={detailLead ? `${detailLead.location} | ${detailLead.phone}` : undefined}
+        maxWidthClass="max-w-[860px]"
+      >
+        {detailLead && detailForm && (
+          <div className="space-y-5">
+            {detailForm.stage === 'Won' && (
+              <div className="status-banner status-banner-success">
+                <span className="status-banner-title">Status: Won</span>
+                <span className="status-banner-text">This lead is marked as won.</span>
+              </div>
+            )}
+            {detailForm.stage === 'Lost' && (
+              <div className="status-banner status-banner-danger">
+                <span className="status-banner-title">Status: Lost</span>
+                <span className="status-banner-text">
+                  {detailForm.lostReason ? `Reason: ${detailForm.lostReason}` : 'Add a reason before updating.'}
+                </span>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Name</label>
+                <input
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.name}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, name: event.target.value } : prev)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Phone</label>
+                <input
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.phone}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, phone: event.target.value } : prev)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Email</label>
+                <input
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.email}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, email: event.target.value } : prev)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Location</label>
+                <input
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.location}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, location: event.target.value } : prev)}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Source Detail</label>
+                <select
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.sourceDetail}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, sourceDetail: event.target.value as LeadSource } : prev)}
+                >
+                  {LEAD_SOURCE_OPTIONS.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Stage</label>
+                <select
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.stage}
+                  onChange={event => setDetailForm(prev => {
+                    if (!prev) return prev;
+                    const nextStage = event.target.value as LeadStage;
+                    return {
+                      ...prev,
+                      stage: nextStage,
+                      lostReason: nextStage === 'Lost' ? prev.lostReason : '',
+                    };
+                  })}
+                >
+                  {LEAD_STAGE_OPTIONS.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Assigned</label>
+                <select
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.assigned}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, assigned: event.target.value } : prev)}
+                >
+                  <option value="">Unassigned</option>
+                  {["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(person => (
+                    <option key={person} value={person}>{person}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Budget</label>
+                <select
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.budget}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, budget: event.target.value } : prev)}
+                >
+                  {['Not Discussed', '$200K - $350K', '$350K - $500K', '$500K - $700K', '$700K+'].map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-[#78716c]">Project Type</label>
+              <div className="checkbox-grid mt-2">
+                {PROJECT_TYPE_OPTIONS.map(option => (
+                  <label
+                    key={option}
+                    className={`checkbox-item ${detailForm.type.includes(option) ? 'active' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={detailForm.type.includes(option)}
+                      onChange={() => toggleDetailType(option)}
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Follow-up Date</label>
+                <input
+                  type="date"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.followupDate}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, followupDate: event.target.value } : prev)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Follow-up Time</label>
+                <input
+                  type="time"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.followupTime}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, followupTime: event.target.value } : prev)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-[#78716c]">Notes</label>
+              <textarea
+                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                rows={4}
+                value={detailForm.notes}
+                onChange={event => setDetailForm(prev => prev ? { ...prev, notes: event.target.value } : prev)}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="urgent-checkbox"
+                type="checkbox"
+                checked={detailForm.urgent}
+                onChange={event => setDetailForm(prev => prev ? { ...prev, urgent: event.target.checked } : prev)}
+              />
+              <label htmlFor="urgent-checkbox" className="text-xs font-medium text-[#78716c]">
+                Urgent
+              </label>
+            </div>
+
+            {/* {detailForm.stage === 'Lost' && (
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Lost Reason</label>
+                <input
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  value={detailForm.lostReason}
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, lostReason: event.target.value } : prev)}
+                />
+              </div>
+            )} */}
+
+            <div>
+              <label className="text-xs font-medium text-[#78716c]">History</label>
+              {detailLead.history.length === 0 ? (
+                <div className="mt-2 text-xs text-[#a8a29e]">No history recorded yet.</div>
+              ) : (
+                <div className="history-list mt-2">
+                  {detailLead.history.map((entry, index) => (
+                    <div key={`${entry.date}-${entry.time}-${index}`} className="history-entry">
+                      <div className="history-entry-meta">
+                        <div className="history-entry-title">{entry.action}</div>
+                        <div className="history-entry-detail">{entry.detail}</div>
+                        <div className="history-entry-date">{entry.date} {entry.time}</div>
+                      </div>
+                      <div className="history-entry-actions">
+                        <span className="history-entry-badge">{entry.type}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add New History Form */}
+              <div className="mt-4 rounded-[8px] border border-[#e5e7eb] bg-[#fafaf9] p-3">
+                <h5 className="mb-3 text-xs font-medium text-[#0c0a09]">Add New History Entry</h5>
+                {detailForm.historyEntries.length > 0 && (
+                  <div className="mb-4 space-y-2">
+                    {detailForm.historyEntries.map((entry, idx) => (
+                      <div key={idx} className="flex items-start justify-between rounded-[6px] border border-[#e5e7eb] bg-white p-2 text-xs">
+                        <div>
+                          <div className="font-medium text-[#0c0a09]">{entry.action} <span className="font-normal text-[#a8a29e]">({entry.type})</span></div>
+                          {entry.detail && <div className="mt-0.5 text-[#78716c]">{entry.detail}</div>}
+                          <div className="mt-1 text-[10px] text-[#a8a29e]">{entry.date} {entry.time}</div>
+                        </div>
+                        {/* <button type="button" onClick={() => removeHistoryEntry(idx)} className="text-[#a8a29e] hover:text-red-500">
+                          <X size={14} />
+                        </button> */}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-[#e5e7eb]">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-medium text-[#78716c]">Action</label>
+                    <input
+                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-1 focus:ring-[#3ba6f1]"
+                      placeholder="e.g. Left a voicemail"
+                      value={historyDraft.action}
+                      onChange={e => setHistoryDraft(prev => ({ ...prev, action: e.target.value }))}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-medium text-[#78716c]">Detail</label>
+                    <textarea
+                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-1 focus:ring-[#3ba6f1]"
+                      placeholder="Additional context..."
+                      rows={2}
+                      value={historyDraft.detail}
+                      onChange={e => setHistoryDraft(prev => ({ ...prev, detail: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-[#78716c]">Type</label>
+                    <select
+                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-1 focus:ring-[#3ba6f1]"
+                      value={historyDraft.type}
+                      onChange={e => setHistoryDraft(prev => ({ ...prev, type: e.target.value as HistoryItem['type'] }))}
+                    >
+                      {HISTORY_TYPE_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      className="w-full rounded-[4px] bg-[#0c0a09] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#292524] disabled:opacity-50"
+                      onClick={addHistoryEntry}
+                      disabled={!historyDraft.action.trim() && !historyDraft.detail.trim()}
+                    >
+                      Add Entry
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {detailForm.stage === 'Lost' && (
+              <div className="col-span-1 rounded-[8px] border border-red-200 bg-red-50 p-4 md:col-span-2">
+                <label className="text-sm font-medium text-red-900">
+                  Reason for Lost <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className={`mt-1 w-full rounded-[4px] border ${!detailForm.lostReason.trim() ? 'border-red-400 ring-1 ring-red-400/20' : 'border-[#d6d3d1]'} bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200`}
+                  placeholder="e.g. Went with competitor, Price ..."
+                  value={detailForm.lostReason}
+                  onChange={e => setDetailForm({ ...detailForm, lostReason: e.target.value })}
+                />
+                {!detailForm.lostReason.trim() && (
+                  <p className="mt-1.5 text-xs text-red-600 font-medium">This is required when marking a lead as Lost.</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleDetailUpdate}
+                disabled={!hasDetailChanges || isUpdating}
+              >
+                {isUpdating ? (
+                  <>
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Lead'
+                )}
+              </button>
+              {['Won', 'Lost'].includes(detailLead.stage) && (
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-full border border-[#fecaca] bg-[#fee2e2] px-4 py-2 text-xs font-medium text-[#b91c1c] transition hover:border-[#fca5a5]"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  Delete Lead
+                </button>
+              )}
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+                onClick={closeDetailModal}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </ModalShell>
+
+      <ModalShell
+        open={showDeleteConfirm && !!detailLead}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Delete Lead"
+        maxWidthClass="max-w-[420px]"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[#78716c]">
+            This will permanently delete {detailLead?.name}. This action cannot be undone.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full bg-[#dc2626] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#b91c1c]"
+              onClick={handleDetailDelete}
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+              onClick={() => setShowDeleteConfirm(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </ModalShell>
+
+      {/* <ModalShell
         open={!!statusLead}
         onClose={closeStatusModal}
         title={statusLead ? `Move: ${statusLead.name}` : 'Change Stage'}
@@ -720,7 +1406,7 @@ export default function TableView({
             </div>
           </div>
         )}
-      </ModalShell>
+      </ModalShell> */}
 
       <ModalShell
         open={showEmailTemplates}

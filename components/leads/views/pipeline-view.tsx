@@ -2,19 +2,34 @@
 
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, Bell, Check, Mail, Phone, X } from 'lucide-react';
-import { Lead, LeadStage } from '@/lib/types';
-import { EmailTemplate } from '@/lib/types';
-import { EMAIL_TEMPLATES } from '@/lib/variables';
-import { sendEmailToLead } from '@/lib/leads-service';
+import { Lead, LeadStage } from '@/lib/leads/types';
+import { EmailTemplate } from '@/lib/leads/types';
+import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
+import { sendEmailToLead } from '@/lib/leads/leads-service';
+import { set } from 'zod';
 
 interface PipelineViewProps {
   leads: Lead[];
-  onLeadUpdate: (lead: Lead) => void;
+  onLeadUpdate: (lead: Lead) => Promise<boolean>;
   onLeadDelete: (leadId: number) => void;
 }
 
-const STAGES: LeadStage[] = ['New', 'Contacted', 'Qualified', 'Quoted', 'Negotiating', 'Won', 'Lost'];
-const MOVABLE_STAGES: LeadStage[] = ['New', 'Contacted', 'Qualified', 'Quoted', 'Negotiating', 'Won'];
+const STAGES: LeadStage[] = [
+  'New',
+  'Contacted',
+  'Meeting Scheduled',
+  'In Follow-up',
+  'Qualified',
+  'Quoted',
+  'Negotiating',
+  'Won',
+  'Converted',
+  'No Response',
+  'Cancelled',
+  'Disqualified',
+  'Lost',
+];
+const MOVABLE_STAGES: LeadStage[] = [...STAGES];
 
 const stageColors: Record<LeadStage, { bg: string; text: string }> = {
   New: { bg: '#c1e1f7', text: '#3ba6f1' },
@@ -24,6 +39,12 @@ const stageColors: Record<LeadStage, { bg: string; text: string }> = {
   Negotiating: { bg: '#F5E6FF', text: '#A855F7' },
   Won: { bg: '#DCFCE7', text: '#16A34A' },
   Lost: { bg: '#FEE2E2', text: '#DC2626' },
+  'Meeting Scheduled': { bg: '#DBEAFE', text: '#2563EB' },
+  'In Follow-up': { bg: '#E0F2FE', text: '#0284C7' },
+  'No Response': { bg: '#FFE4E6', text: '#E11D48' },
+  Converted: { bg: '#DCFCE7', text: '#16A34A' },
+  Cancelled: { bg: '#FEE2E2', text: '#DC2626' },
+  Disqualified: { bg: '#FDE2E4', text: '#B91C1C' },
 };
 
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
@@ -111,9 +132,9 @@ function ModalShell({
       aria-modal="true"
     >
       <div
-        className={`w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
+        className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
           <div>
             <h4 className={`text-[18px] font-medium tracking-[-0.016px] text-[#0c0a09] ${titleClassName ?? ''}`}>{title}</h4>
             {subtitle ? <p className="mt-1 text-[13px] text-[#a8a29e]">{subtitle}</p> : null}
@@ -127,7 +148,7 @@ function ModalShell({
             <X size={16} />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="overflow-y-auto px-5 py-4">{children}</div>
       </div>
     </div>
   );
@@ -153,6 +174,9 @@ export default function PipelineView({
   // Toast state
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
 
+  const [moveStatusConfirmed, setMoveStatusConfirmed] = useState(false);
+  const [lostConfirmed, setLostConfirmed] = useState(false);
+
   /* ── Toast helper ────────────────────── */
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Date.now() + Math.random();
@@ -163,15 +187,10 @@ export default function PipelineView({
   };
 
   const leadsByStage = useMemo(() => {
-    const grouped: Record<LeadStage, Lead[]> = {
-      New: [],
-      Contacted: [],
-      Qualified: [],
-      Quoted: [],
-      Negotiating: [],
-      Won: [],
-      Lost: [],
-    };
+    const grouped = STAGES.reduce((acc, stage) => {
+      acc[stage] = [];
+      return acc;
+    }, {} as Record<LeadStage, Lead[]>);
 
     leads.forEach(lead => {
       grouped[lead.stage].push(lead);
@@ -183,7 +202,7 @@ export default function PipelineView({
   const openStatusModal = (lead: Lead) => {
     setStatusLead(lead);
     setStatusStage(lead.stage);
-    setStatusNotes('');
+    setStatusNotes(lead.notes);
   };
 
   const closeStatusModal = () => {
@@ -193,7 +212,7 @@ export default function PipelineView({
   const openLostModal = (lead: Lead) => {
     setLostLead(lead);
     setLostReason('');
-    setLostNotes('');
+    setLostNotes(lead.notes);
     setLostError('');
   };
 
@@ -229,12 +248,14 @@ export default function PipelineView({
     setShowSendEmail(true);
   };
 
-  const handleMoveStage = () => {
+  const handleMoveStage = async() => {
     if (!statusLead) return;
     if (statusStage === statusLead.stage) {
       closeStatusModal();
       return;
     }
+
+    setMoveStatusConfirmed(true);
 
     const now = new Date();
     const historyEntry: Lead['history'][number] = {
@@ -244,27 +265,36 @@ export default function PipelineView({
       detail: `Moved from "${statusLead.stage}" to "${statusStage}".${statusNotes ? ` ${statusNotes}` : ''}`,
       type: 'system',
     };
-
+    
     const updatedLead: Lead = {
       ...statusLead,
       stage: statusStage,
       history: [...statusLead.history, historyEntry],
-      followupDate: statusStage === 'Won' ? '' : statusLead.followupDate,
-      followupTime: statusStage === 'Won' ? '' : statusLead.followupTime,
-      followupNotes: statusStage === 'Won' ? '' : statusLead.followupNotes,
-      urgent: statusStage === 'Won' ? false : statusLead.urgent,
+      notes: statusNotes,
+      // followupDate: statusStage === 'Won' ? '' : statusLead.followupDate,
+      // followupTime: statusStage === 'Won' ? '' : statusLead.followupTime,
+      // followupNotes: statusStage === 'Won' ? '' : statusLead.followupNotes,
+      // urgent: statusStage === 'Won' ? false : statusLead.urgent,
     };
 
-    onLeadUpdate(updatedLead);
+    const leadUpdated = await onLeadUpdate(updatedLead);
+    setMoveStatusConfirmed(false);
     closeStatusModal();
+    if (leadUpdated) {
+      showToast(`Lead "${statusLead.name}" moved to "${statusStage}".`, 'success');
+    } else {
+      showToast(`Failed to update lead "${statusLead.name}". Please try again.`, 'info');
+    }
   };
 
-  const handleConfirmLost = () => {
+  const handleConfirmLost = async () => {
     if (!lostLead) return;
     if (!lostReason) {
       setLostError('Please select a reason for marking this lead as lost.');
       return;
     }
+
+    setLostConfirmed(true);
 
     const now = new Date();
     const noteText = lostNotes.trim();
@@ -284,15 +314,18 @@ export default function PipelineView({
       stage: 'Lost',
       lostReason,
       notes: updatedNotes,
-      followupDate: '',
-      followupTime: '',
-      followupNotes: '',
-      urgent: false,
       history: [...lostLead.history, historyEntry],
     };
 
-    onLeadUpdate(updatedLead);
+    const leadUpdated = await onLeadUpdate(updatedLead);
+    if (leadUpdated) {
+      showToast(`Lead "${lostLead.name}" marked as lost.`, 'info');
+    } else {
+      showToast(`Failed to update lead "${lostLead.name}". Please try again.`, 'info');
+    }
+    setLostConfirmed(false);
     closeLostModal();
+
   };
 
   const handleSendEmail = async () => {
@@ -322,7 +355,7 @@ export default function PipelineView({
         history: [...emailLead.history, historyEntry],
       };
       onLeadUpdate(updatedLead);
-    }else{
+    } else {
       showToast(`Failed to send email to ${emailLead.name}`, 'info');
     }
 
@@ -357,30 +390,31 @@ export default function PipelineView({
             ))}
           </div>
         )}
-        {STAGES.map(stage => (
-          <div key={stage} className="pipeline-col">
-            <div className="pipeline-header" style={{ backgroundColor: stageColors[stage].bg, color: stageColors[stage].text }}>
-              <span className="pipeline-stage-name">{stage}</span>
-              <span className="pipeline-count">{leadsByStage[stage].length}</span>
+        {STAGES
+          .map(stage => (
+            <div key={stage} className="pipeline-col">
+              <div className="pipeline-header" style={{ backgroundColor: stageColors[stage].bg, color: stageColors[stage].text }}>
+                <span className="pipeline-stage-name">{stage}</span>
+                <span className="pipeline-count">{leadsByStage[stage].length}</span>
+              </div>
+              <div className="pipeline-body">
+                {leadsByStage[stage].length === 0 ? (
+                  <div className="pipeline-empty">No leads</div>
+                ) : (
+                  leadsByStage[stage].map(lead => (
+                    <LeadCard
+                      key={lead.id}
+                      lead={lead}
+                      onMoveStage={openStatusModal}
+                      onMarkLost={openLostModal}
+                      onEmail={openEmailTemplates}
+                      onCall={handleCall}
+                    />
+                  ))
+                )}
+              </div>
             </div>
-            <div className="pipeline-body">
-              {leadsByStage[stage].length === 0 ? (
-                <div className="pipeline-empty">No leads</div>
-              ) : (
-                leadsByStage[stage].map(lead => (
-                  <LeadCard
-                    key={lead.id}
-                    lead={lead}
-                    onMoveStage={openStatusModal}
-                    onMarkLost={openLostModal}
-                    onEmail={openEmailTemplates}
-                    onCall={handleCall}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        ))}
+          ))}
       </div>
 
       <ModalShell
@@ -394,17 +428,19 @@ export default function PipelineView({
             <div>
               <div className="text-xs font-medium text-[#a8a29e]">Current Stage</div>
               <div className="mt-2 flex flex-wrap gap-1">
-                {MOVABLE_STAGES.map(stage => (
-                  <span
-                    key={stage}
-                    className={`rounded-full border px-2 py-0.5 text-[11px] ${stage === statusLead.stage
-                      ? 'border-[#c1e1f7] bg-[#c1e1f7]/30 text-[#3ba6f1] font-medium'
-                      : 'border-[#e5e7eb] bg-[#fafaf9] text-[#78716c]'
-                      }`}
-                  >
-                    {stage}
-                  </span>
-                ))}
+                {MOVABLE_STAGES
+                  // .filter(stage => stage !== 'Lost')
+                  .map(stage => (
+                    <span
+                      key={stage}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] ${stage === statusLead.stage
+                        ? 'border-[#c1e1f7] bg-[#c1e1f7]/30 text-[#3ba6f1] font-medium'
+                        : 'border-[#e5e7eb] bg-[#fafaf9] text-[#78716c]'
+                        }`}
+                    >
+                      {stage}
+                    </span>
+                  ))}
               </div>
             </div>
             <div>
@@ -414,11 +450,13 @@ export default function PipelineView({
                 value={statusStage}
                 onChange={event => setStatusStage(event.target.value as LeadStage)}
               >
-                {MOVABLE_STAGES.map(stage => (
-                  <option key={stage} value={stage} disabled={stage === statusLead.stage}>
-                    {stage} {stage === statusLead.stage ? '(current)' : ''}
-                  </option>
-                ))}
+                {MOVABLE_STAGES
+                  .filter(stage => stage !== 'Lost')
+                  .map(stage => (
+                    <option key={stage} value={stage} disabled={stage === statusLead.stage}>
+                      {stage} {stage === statusLead.stage ? '(current)' : ''}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>
@@ -437,8 +475,19 @@ export default function PipelineView({
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
                 onClick={handleMoveStage}
               >
-                <ArrowRight size={14} />
-                Move Lead
+                {moveStatusConfirmed ? (
+                  <>
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Moving Lead ...
+                  </>
+                )
+                  :
+                  <>
+                    <ArrowRight size={14} />
+                    Move Lead
+                  </>
+                }
+
               </button>
               <button
                 type="button"
@@ -507,8 +556,17 @@ export default function PipelineView({
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-rose-700"
                 onClick={handleConfirmLost}
               >
-                <X size={14} />
-                Confirm - Mark as Lost
+                {lostConfirmed ? (
+                  <>
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Marking as Lost ...
+                  </>
+                ) : (
+                  <>
+                    <X size={14} />
+                    Confirm - Mark as Lost
+                  </>
+                )}
               </button>
               <button
                 type="button"

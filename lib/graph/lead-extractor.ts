@@ -8,8 +8,29 @@ export interface LeadExtraction {
   ContactNo: number;
   Address: string;
   Status: boolean;
+  Type: string[];
   Info: string;
 }
+
+const PROJECT_TYPE_OPTIONS = [
+  'Not Specified',
+  'New Home',
+  'Duplex',
+  'Renovation',
+  'Granny Flat',
+  'Townhouse',
+  'Dual Occupancy',
+  'Single Storey',
+  'Double Storey',
+  'House and Granny',
+  'Knockdown and rebuild',
+  'House + land package',
+] as const;
+
+type ProjectTypeOption = (typeof PROJECT_TYPE_OPTIONS)[number];
+const projectTypeList = PROJECT_TYPE_OPTIONS.map((type) => `"${type}"`).join(
+  ', ',
+);
 
 const MODEL_NAME = 'gemini-2.5-flash';
 const apiKey =
@@ -30,6 +51,11 @@ const validationSchema = z
     Address: z
       .string()
       .describe('Street address or location. Empty string if missing.'),
+    Type: z
+      .array(z.enum(PROJECT_TYPE_OPTIONS))
+      .describe(
+        `Project types from the approved list only: ${projectTypeList}. Use [] if missing or unclear.`,
+      ),
     Status: z
       .boolean()
       .describe(
@@ -53,10 +79,15 @@ const instruction =
   'You extract lead details from an email. Use the subject and body to fill ' +
   'the schema fields. Do not invent data. If a value is missing, return an ' +
   'empty string. Info should summarize the client query or request. ' +
-  'empty string. Set Status to false for genuine customer inquiries about ' +
-  'residential construction or real estate work (new home, renovation, granny ' +
-  'flat, townhouse, similar). Set Status to true for spam, marketing, or ' +
-  'unrelated services. Always call the emitLead tool with the final fields.';
+  'empty string. Type must be an array of exact strings from this list: ' +
+  `${projectTypeList}. Use [] if no clear match. ` +
+  'If Type is only "Not Specified", return []. ' +
+  'Set Status to false for genuine customer inquiries about residential ' +
+  'construction or real estate work (new home, renovation, granny flat, ' +
+  'townhouse, similar). Set Status to true for spam, marketing, or unrelated ' +
+  'services. If the message is pitching their services (marketing, website, ' +
+  'SEO, ads, or similar), mark Status as true. Always call the emitLead tool ' +
+  'with the final fields.';
 
 const leadExtractionAgent = googleProvider
   ? new ToolLoopAgent({
@@ -112,6 +143,17 @@ function normalizeContactNumber(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeProjectTypes(
+  types: ProjectTypeOption[] | null | undefined,
+): ProjectTypeOption[] {
+  const cleaned = (types ?? []).filter((type) =>
+    PROJECT_TYPE_OPTIONS.includes(type),
+  );
+  const unique = Array.from(new Set(cleaned));
+  const filtered = unique.filter((type) => type !== 'Not Specified');
+  return filtered.length > 0 ? filtered : [];
+}
+
 export async function extractLeadFromMessage(
   subject: string,
   body: string,
@@ -130,9 +172,14 @@ export async function extractLeadFromMessage(
     `Body:\n${body.trim()}\n\n` +
     'Info rules:\n' +
     '- Info should summarize the client query or request from the message.\n\n' +
+    'Project type rules:\n' +
+    `- Type must use exact strings from this list: ${projectTypeList}.\n` +
+    '- If missing or unclear, return [].\n' +
+    '- If Type is only "Not Specified", return [].\n\n' +
     'Status rules:\n' +
     '- Status = false for genuine customer inquiries about residential construction or real estate work (new home, renovation, granny flat, townhouse, similar).\n' +
-    '- Status = true for spam, marketing, or unrelated services.\n\n' +
+    '- Status = true for spam, marketing, or unrelated services.\n' +
+    '- Status = true for pitches offering marketing, website, SEO, ads, or similar services.\n\n' +
     'Return the structured fields only.';
 
   const result = await runWithRateLimit(() =>
@@ -157,6 +204,7 @@ export async function extractLeadFromMessage(
     Email: output.Email,
     ContactNo: normalizeContactNumber(output.ContactNo),
     Address: output.Address,
+    Type: normalizeProjectTypes(output.Type),
     Status: output.Status,
     Info: output.Info,
   };

@@ -1,9 +1,10 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig, type GraphMode } from '@/lib/graph/config';
+import { jsonError, requireAdminToken } from '@/lib/graph/route-utils';
 import { errorResponse, unauthorizedResponse, badRequestResponse } from '@/utils/validators';
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+// export const runtime = 'nodejs';
 
 interface SubscribeBody {
   notificationUrl?: string;
@@ -12,19 +13,19 @@ interface SubscribeBody {
   resource?: string;
 }
 
-function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return unauthorizedResponse();
-  }
+// function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
+//   const authHeader = request.headers.get('authorization');
+//   if (!authHeader?.startsWith('Bearer ')) {
+//     return unauthorizedResponse();
+//   }
 
-  const token = authHeader.slice(7);
-  if (token !== adminToken) {
-    return unauthorizedResponse();
-  }
+//   const token = authHeader.slice(7);
+//   if (token !== adminToken) {
+//     return unauthorizedResponse();
+//   }
 
-  return null;
-}
+//   return null;
+// }
 
 function buildDefaultResource(mode: GraphMode, senderUpn?: string): string | undefined {
   if (mode === 'delegated') {

@@ -26,7 +26,7 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from '@/components/ui/chart';
-import { Lead, LeadStage } from '@/lib/types';
+import { Lead, LeadStage } from '@/lib/leads/types';
 
 interface AnalyticsViewProps {
   leads: Lead[];
@@ -40,6 +40,8 @@ const SOURCE_COLORS: Record<string, string> = {
   'Walk-in': '#7C3AED',
   'Website': '#78716c',
   'Repeat Client': '#0c0a09',
+  'Personal': '#0284C7',
+  'Business': '#0F766E',
 };
 
 const LOST_REASON_COLORS = ['#DC2626', '#F59E0B', '#3ba6f1', '#7C3AED', '#a8a29e'];
