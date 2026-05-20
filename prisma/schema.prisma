@@ -41,7 +41,6 @@ enum TradieScheduleStatus {
   COMPLETED
 }
 
-
 model Project {
   id               String   @id @default(uuid())
   name             String
@@ -293,9 +292,9 @@ model Lead {
   id Int @id @default(autoincrement())
 
   name     String
-  phone    String   @default("")
-  email    String   @default("")
-  location String   @default("")
+  phone    String @default("")
+  email    String @default("")
+  location String @default("")
 
   source       String?
   sourceDetail String?

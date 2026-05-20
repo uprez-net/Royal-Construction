@@ -1,0 +1,205 @@
+import { z } from "zod";
+
+import type { LeadSource, LeadStage } from "@/lib/leads/types";
+
+export const leadStages = [
+  "New",
+  "Contacted",
+  "Qualified",
+  "Quoted",
+  "Negotiating",
+  "Won",
+  "Lost",
+  "Meeting Scheduled",
+  "In Follow-up",
+  "No Response",
+  "Converted",
+  "Cancelled",
+  "Disqualified",
+] as const satisfies readonly LeadStage[];
+
+export const leadSources = [
+  "Google Ads",
+  "Referral",
+  "Facebook Ads",
+  "Walk-in",
+  "Repeat Client",
+  "Website",
+  "Personal",
+  "Business",
+] as const satisfies readonly LeadSource[];
+
+const nullableTrimmedString = z.preprocess((value) => {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}, z.string().nullable());
+
+const dateInputSchema = z.preprocess((value) => {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}, z.date().nullable());
+
+const typeSchema = z.preprocess((value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry).trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}, z.array(z.string()));
+
+export const historyItemSchema = z.object({
+  action: z.string().trim().min(1),
+  detail: z.string().optional().default(""),
+  type: z
+    .enum(["system", "call", "email", "referral"])
+    .optional()
+    .default("system"),
+  date: z.string(),
+  time: z.string().optional(),
+});
+
+const typeArraySchema = z.preprocess((value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry).trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}, z.array(z.string()));
+
+const dateSchema = z.preprocess((value) => {
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}, z.date().nullable());
+
+export const historySchema = z.object({
+  action: z.string().trim().min(1),
+  detail: z.string().optional().default(""),
+  type: z
+    .enum(["system", "call", "email", "referral"])
+    .optional()
+    .default("system"),
+  actionDate: dateSchema.optional(),
+});
+
+export const updateLeadSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+
+  phone: nullableTrimmedString.optional(),
+  email: nullableTrimmedString.optional(),
+  location: nullableTrimmedString.optional(),
+
+  source: nullableTrimmedString.optional(),
+  sourceDetail: nullableTrimmedString.optional(),
+
+  assigned: nullableTrimmedString.optional(),
+  budget: nullableTrimmedString.optional(),
+
+  notes: nullableTrimmedString.optional(),
+
+  followupDate: dateInputSchema.optional(),
+
+  followupTime: nullableTrimmedString.optional(),
+  followupNotes: nullableTrimmedString.optional(),
+
+  lostReason: nullableTrimmedString.optional(),
+
+  urgent: z.boolean().optional(),
+
+  stage: z.enum(leadStages).optional(),
+
+  type: typeSchema.optional(),
+
+  history: z.array(historyItemSchema).optional(),
+});
+
+export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
+
+export const createLeadSchema = z.object({
+  name: z.string().trim().min(1, "Lead name is required"),
+
+  phone: nullableTrimmedString.optional(),
+  email: nullableTrimmedString.optional(),
+  location: nullableTrimmedString.optional(),
+
+  source: z.enum(leadSources).nullable().optional(),
+
+  sourceDetail: nullableTrimmedString.optional(),
+
+  assigned: nullableTrimmedString.optional(),
+
+  budget: nullableTrimmedString.optional(),
+
+  type: typeArraySchema.optional(),
+
+  notes: nullableTrimmedString.optional(),
+
+  followupDate: dateSchema.optional(),
+
+  followupTime: nullableTrimmedString.optional(),
+
+  followupNotes: nullableTrimmedString.optional(),
+
+  lostReason: nullableTrimmedString.optional(),
+
+  urgent: z.boolean().optional().default(false),
+
+  stage: z
+    .enum([
+      "New",
+      "Contacted",
+      "Qualified",
+      "Quoted",
+      "Negotiating",
+      "Won",
+      "Lost",
+      "Meeting Scheduled",
+      "In Follow-up",
+      "No Response",
+      "Converted",
+      "Cancelled",
+      "Disqualified",
+    ])
+    .optional(),
+
+  history: z.array(historySchema).optional(),
+});
+
+export type CreateLeadInput = z.infer<typeof createLeadSchema>;

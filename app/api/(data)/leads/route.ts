@@ -1,144 +1,7 @@
-import type { HistoryType as PrismaHistoryType, Lead as PrismaLead, LeadHistory as PrismaLeadHistory, LeadStage as PrismaLeadStage } from "@prisma/client";
-
 import prisma from "@/lib/prisma";
-import type { HistoryItem, Lead as UiLead, LeadSource, LeadStage } from "@/lib/leads/types";
-import { badRequestResponse, errorResponse, successResponse } from "@/utils/validators";
-
-const stageMap: Record<PrismaLeadStage, LeadStage> = {
-  NEW: "New",
-  CONTACTED: "Contacted",
-  QUALIFIED: "Qualified",
-  QUOTED: "Quoted",
-  NEGOTIATING: "Negotiating",
-  WON: "Won",
-  LOST: "Lost",
-  MEETING_SCHEDULED: "Meeting Scheduled",
-  IN_FOLLOW_UP: "In Follow-up",
-  NO_RESPONSE: "No Response",
-  CONVERTED: "Converted",
-  CANCELLED: "Cancelled",
-  DISQUALIFIED: "Disqualified",
-};
-
-const stageToPrismaMap: Record<LeadStage, PrismaLeadStage> = {
-  "New": "NEW",
-  "Contacted": "CONTACTED",
-  "Qualified": "QUALIFIED",
-  "Quoted": "QUOTED",
-  "Negotiating": "NEGOTIATING",
-  "Won": "WON",
-  "Lost": "LOST",
-  "Meeting Scheduled": "MEETING_SCHEDULED",
-  "In Follow-up": "IN_FOLLOW_UP",
-  "No Response": "NO_RESPONSE",
-  "Converted": "CONVERTED",
-  "Cancelled": "CANCELLED",
-  "Disqualified": "DISQUALIFIED",
-};
-
-const historyTypeMap: Record<PrismaHistoryType, HistoryItem["type"]> = {
-  SYSTEM: "system",
-  CALL: "call",
-  EMAIL: "email",
-  REFERRAL: "referral",
-};
-
-const historyTypeToPrisma: Record<HistoryItem["type"], PrismaHistoryType> = {
-  system: "SYSTEM",
-  call: "CALL",
-  email: "EMAIL",
-  referral: "REFERRAL",
-};
-
-const leadSourceSet = new Set<LeadSource>([
-  "Google Ads",
-  "Referral",
-  "Facebook Ads",
-  "Walk-in",
-  "Repeat Client",
-  "Website",
-  "Personal",
-  "Business",
-]);
-
-function normalizeSource(source: string | null, sourceDetail: string | null): LeadSource {
-  const raw = (source ?? sourceDetail ?? "").trim();
-  if (leadSourceSet.has(raw as LeadSource)) {
-    return raw as LeadSource;
-  }
-  return "Website";
-}
-
-function toDateOnly(date: Date | null): string | null {
-  if (!date) return null;
-  return date.toISOString().slice(0, 10);
-}
-
-function toTimeOnly(date: Date | null): string | null {
-  if (!date) return null;
-  return date.toTimeString().slice(0, 5);
-}
-
-function parseDateInput(value: unknown): Date | null {
-  if (typeof value !== "string" || value.trim() === "") return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function parseTypeInput(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((entry) => String(entry).trim()).filter(Boolean);
-  }
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function parseStringInput(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function mapHistory(history: PrismaLeadHistory): HistoryItem {
-  return {
-    date: toDateOnly(history.actionDate) ?? "",
-    time: toTimeOnly(history.actionDate) ?? "",
-    action: history.action,
-    detail: history.detail,
-    type: historyTypeMap[history.type],
-  };
-}
-
-function mapLead(lead: PrismaLead & { history: PrismaLeadHistory[] }): UiLead {
-  const typeLabel = lead.type.length > 0 ? lead.type.join(", ") : "Not Specified";
-
-  return {
-    id: lead.id,
-    name: lead.name,
-    phone: lead.phone ?? "",
-    email: lead.email ?? "",
-    location: lead.location ?? "",
-    source: normalizeSource(lead.source, lead.sourceDetail),
-    sourceDetail: lead.sourceDetail ?? "",
-    stage: stageMap[lead.stage],
-    assigned: lead.assigned ?? null,
-    budget: lead.budget ?? "Not Discussed",
-    type: typeLabel,
-    notes: lead.notes ?? "",
-    followupDate: toDateOnly(lead.followupDate),
-    followupTime: lead.followupTime ?? null,
-    followupNotes: lead.followupNotes ?? "",
-    lostReason: lead.lostReason ?? undefined,
-    history: lead.history.map(mapHistory),
-    created: toDateOnly(lead.createdAt) ?? "",
-    urgent: lead.urgent,
-  };
-}
+import type { LeadStage } from "@/lib/leads/types";
+import { badRequestResponse, createLeadSchema, errorResponse, successResponse } from "@/utils/validators";
+import { historyTypeToPrisma, mapLead, stageToPrismaMap } from "@/types/lead";
 
 export async function GET() {
   try {
@@ -164,13 +27,17 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const name = parseStringInput(body?.name);
+    const json = await request.json();
 
-    if (!name) {
-      return badRequestResponse("Lead name is required.");
+    const parsed = createLeadSchema.safeParse(json);
+
+    if (!parsed.success) {
+      return badRequestResponse(
+        parsed.error.message,
+      );
     }
 
+    const body = parsed.data;
     const stageValue = body?.stage as LeadStage | undefined;
     const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
 
@@ -178,13 +45,14 @@ export async function POST(request: Request) {
       return badRequestResponse("Invalid lead stage.");
     }
 
+
     const historyInput = Array.isArray(body?.history) ? body.history : [];
-    const historyCreate = historyInput.map((entry: { action?: unknown; detail?: unknown; type?: unknown; actionDate?: unknown }) => {
-      const action = parseStringInput(entry.action) ?? "Note";
-      const detail = parseStringInput(entry.detail) ?? "";
-      const typeKey = entry.type as HistoryItem["type"] | undefined;
-      const type = typeKey && historyTypeToPrisma[typeKey] ? historyTypeToPrisma[typeKey] : "SYSTEM";
-      const actionDate = parseDateInput(entry.actionDate) ?? new Date();
+    const historyCreate = historyInput.map((entry) => {
+      const action = entry.action;
+      const detail = entry.detail;
+      const typeKey = entry.type;
+      const type = historyTypeToPrisma[typeKey];
+      const actionDate = entry.actionDate ?? new Date();
       return {
         action,
         detail,
@@ -204,22 +72,22 @@ export async function POST(request: Request) {
 
     const createdLead = await prisma.lead.create({
       data: {
-        name,
-        phone: parseStringInput(body?.phone) ?? "",
-        email: parseStringInput(body?.email) ?? "",
-        location: parseStringInput(body?.location) ?? "",
-        source: parseStringInput(body?.source),
-        sourceDetail: parseStringInput(body?.sourceDetail),
+        name: body.name,
+        phone: body.phone ?? "",
+        email: body.email ?? "",
+        location: body.location ?? "",
+        source: body.source,
+        sourceDetail: body.sourceDetail,
         stage: mappedStage,
-        assigned: parseStringInput(body?.assigned),
-        budget: parseStringInput(body?.budget),
-        type: parseTypeInput(body?.type),
-        notes: parseStringInput(body?.notes),
-        followupDate: parseDateInput(body?.followupDate),
-        followupTime: parseStringInput(body?.followupTime),
-        followupNotes: parseStringInput(body?.followupNotes),
-        lostReason: parseStringInput(body?.lostReason),
-        urgent: Boolean(body?.urgent),
+        assigned: body.assigned,
+        budget: body.budget,
+        type: body.type,
+        notes: body.notes,
+        followupDate: body.followupDate,
+        followupTime: body.followupTime,
+        followupNotes: body.followupNotes,
+        lostReason: body.lostReason,
+        urgent: body.urgent ?? false,
         history: {
           create: historyCreate,
         },
