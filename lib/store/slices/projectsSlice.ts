@@ -67,6 +67,18 @@ function toProjectListItem(project: ProjectDetail): ProjectWithStats {
 
   return {
     ...project,
+    milestones: project.milestones.map((milestone) => ({
+      id: milestone.id,
+      name: milestone.name,
+      targetDate: milestone.targetDate,
+      actualDate: milestone.actualDate,
+      status: milestone.status,
+      tradies: milestone.tradieSchedules.map((schedule) => ({
+        name: schedule.tradie.name,
+        company: schedule.tradie.company,
+        tradeType: schedule.tradie.tradeType,
+      })),
+    })),
     milestoneCount,
     completedMilestoneCount,
     progressPercent,
@@ -150,7 +162,7 @@ export const addProjectUpdate = createAsyncThunk<
       },
       "Unable to add site update",
     );
-    
+
     return response.data;
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to add site update");
