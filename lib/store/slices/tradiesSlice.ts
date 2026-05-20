@@ -191,7 +191,7 @@ export const fetchTradieCoordinationDashboard = createAsyncThunk<
   if (state.filters.status) params.set("status", state.filters.status);
 
   const response = await fetchJson<TradieCoordinationDashboard>(
-    `/api/tradies-schedules?${params.toString()}`,
+    `/api/tradie-schedules?${params.toString()}`,
     { method: "GET" },
     "Failed to load tradie coordination data"
   );
@@ -455,16 +455,16 @@ const tradiesSlice = createSlice({
         // update schedule in-place immutably
         const idx = state.schedules.findIndex((s) => s.id === schedule.id);
         if (idx >= 0) {
-          state.schedules = [...state.schedules.slice(0, idx), schedule, ...state.schedules.slice(idx + 1)];
+          state.schedules[idx] = { ...state.schedules[idx], ...schedule };
         } else {
           state.schedules = [schedule, ...state.schedules];
         }
 
-        if (requiresReplacement && schedule.milestoneId) {
-          if (!state.replacementRequired.includes(schedule.milestoneId)) {
-            state.replacementRequired.push(schedule.milestoneId);
-          }
-        }
+        // if (requiresReplacement && schedule.milestoneId) {
+        //   if (!state.replacementRequired.includes(schedule.milestoneId)) {
+        //     state.replacementRequired.push(schedule.milestoneId);
+        //   }
+        // }
       })
       .addCase(updateTradieScheduleStatus.rejected, (state, action) => {
         const scheduleId = action.meta.arg.scheduleId;

@@ -56,10 +56,11 @@ import type {
   TradieScheduleListItem,
   TradieUrgentReminderItem,
 } from "@/types/project";
-import { dataTimeFormat } from "@/utils/formatters";
+import { dataTimeFormat, dateFormat } from "@/utils/formatters";
 import { DataTable } from "../common/data-table";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { daysUntil } from "@/utils/parser";
 
 const statusLabelMap: Record<TradieScheduleStatus, string> = {
   PENDING: "Pending",
@@ -81,24 +82,6 @@ const statusToneMap: Record<
   DECLINED: "danger",
   COMPLETED: "neutral",
 };
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-AU", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
-function daysUntil(value: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(value);
-  target.setHours(0, 0, 0, 0);
-  return Math.ceil(
-    (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-  );
-}
 
 function TrendBadge({ value }: { value: number }) {
   const isPositive = value >= 0;
@@ -285,16 +268,12 @@ export function TradiesClient({
       ids.map(async (id) =>
         dispatch(
           // dispatch individual update thunks to keep UI reactive
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore TODO: narrow thunk types when exporting AppDispatch
           updateTradieScheduleStatus({ scheduleId: id, status }),
         ).unwrap(),
       ),
     );
 
     dispatch(clearSelectedSchedules());
-    // optionally refetch summary/dashboard to keep counts accurate
-    void dispatch(fetchTradieCoordinationDashboard({ force: true }));
   };
 
   const handleBulkConfirm = async () => {
@@ -324,8 +303,9 @@ export function TradiesClient({
     const loading = toast.loading("Updating status...");
     try {
       await updateScheduleStatuses([row.id], TradieScheduleStatus.CONFIRMED);
+      toast.success("Status updated to Confirmed", { id: loading });
     } catch (error) {
-      toast.error("Failed to update status. Please try again.");
+      toast.error("Failed to update status. Please try again.", { id: loading });
       console.error("Error updating tradie schedule status:", error);
     } finally {
       toast.dismiss(loading);
@@ -365,7 +345,7 @@ export function TradiesClient({
       row.tradeType,
       row.projectName,
       row.taskLabel,
-      formatDate(row.scheduledDate),
+      dateFormat.format(new Date(row.scheduledDate)),
       `${row.durationDays}`,
       statusLabelMap[row.status],
     ]);
@@ -441,7 +421,7 @@ export function TradiesClient({
     row.taskLabel,
 
     <div key={`schedule-${row.id}`}>
-      <p className="font-medium">{formatDate(row.scheduledDate)}</p>
+      <p className="font-medium">{dateFormat.format(new Date(row.scheduledDate))}</p>
       <p className="text-xs text-muted-foreground">{row.durationDays} day(s)</p>
     </div>,
 
@@ -662,7 +642,7 @@ export function TradiesClient({
                       {item.tradeType} · {item.taskLabel}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Scheduled {formatDate(item.scheduledDate)}
+                      Scheduled {dateFormat.format(new Date(item.scheduledDate))}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -802,6 +782,7 @@ export function TradiesClient({
                   onSelect={(item) => {
                     dispatch(setTradieFilters({ projectId: item.id }));
                   }}
+                  onClear={() => dispatch(setTradieFilters({ projectId: null }))}
                   onLoadMore={() => {
                     void dispatch(
                       fetchTradieProjectLookup({
@@ -887,6 +868,10 @@ export function TradiesClient({
                 <DataTable
                   headers={scheduleTableHeaders}
                   rows={scheduleTableRows}
+                  onRowClick={(rowIndex) => {
+                    const row = tradiesState.schedules[rowIndex];
+                    dispatch(openModal({ type: "tradieScheduleDetails", payload: { schedule: row } }))
+                  }}
                 />
               </div>
 

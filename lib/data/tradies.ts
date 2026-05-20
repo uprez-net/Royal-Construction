@@ -230,7 +230,11 @@ export async function getTradieSchedules(filters?: {
       totalBudget: schedule.project.totalBudget.toString(),
       spent: schedule.project.spent.toString(),
     },
-    milestone: schedule.milestone ?? undefined,
+    milestone: schedule.milestone ? {
+      ...schedule.milestone,
+      budget: schedule.milestone.budget.toString(),
+      spend: schedule.milestone.spend?.toString(),
+    } : undefined,
   }));
 }
 
@@ -297,6 +301,8 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
             tradeType: true,
             phone: true,
             email: true,
+            hourlyRate: true,
+            rating: true,
           },
         },
         project: {
@@ -447,7 +453,7 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
       orderBy: { scheduledDate: "asc" },
       take: 8,
       include: {
-        tradie: { select: { name: true, tradeType: true, phone: true, email: true, rating: true, company: true } },
+        tradie: { select: { name: true, tradeType: true, phone: true, email: true, rating: true, company: true, hourlyRate: true } },
         project: { select: { name: true, siteManager: true } },
         milestone: { select: { name: true } },
       },
@@ -476,6 +482,8 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
     scheduledDate: schedule.scheduledDate.toISOString(),
     durationDays: schedule.durationDays,
     status: schedule.status,
+    hourlyRate: schedule.tradie.hourlyRate?.toString(),
+    rating: schedule.tradie.rating?.toString(),
     reminderSentAt: schedule.reminderSentAt?.toISOString(),
     updatedAt: schedule.updatedAt.toISOString(),
     contact: {
@@ -608,6 +616,7 @@ export async function getTradieCoordinationDashboard(query?: TradieCoordinationQ
       phone: row.project.siteManager?.phone ?? "",
     },
     rating: row.tradie.rating?.toString(),
+    hourlyRate: row.tradie.hourlyRate?.toString(),
     reminderSentAt: row.reminderSentAt?.toISOString(),
   }));
 

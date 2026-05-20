@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +48,7 @@ export function SearchableSelect({
   onQueryChange,
   onSelect,
   onLoadMore,
+  onClear,
   disabled,
 }: {
   label: string;
@@ -60,6 +61,7 @@ export function SearchableSelect({
   onQueryChange: (query: string) => void;
   onSelect: (item: SearchableItem) => void;
   onLoadMore?: () => void;
+  onClear?: () => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -72,9 +74,7 @@ export function SearchableSelect({
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-foreground">
-        {label}
-      </label>
+      <label className="text-sm font-medium text-foreground">{label}</label>
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -84,15 +84,28 @@ export function SearchableSelect({
             className="w-full justify-between gap-3"
             disabled={disabled}
           >
-            <span className="truncate text-left">
-              {triggerLabel}
-            </span>
+            <span className="truncate text-left">{triggerLabel}</span>
 
-            {loading ? (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            ) : (
-              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-            )}
+            <div className="flex items-center gap-1">
+              {selectedItem && onClear ? (
+                <div
+                  // variant="ghost"
+                  className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClear();
+                  }}
+                >
+                  <X className="size-4" />
+                </div>
+              ) : null}
+
+              {loading ? (
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+              )}
+            </div>
           </Button>
         </PopoverTrigger>
 
@@ -118,12 +131,20 @@ export function SearchableSelect({
 
               <CommandGroup>
                 {items.map((item) => {
-                  const title = isLookupOption(item)
-                    ? item.name
-                    : item.label;
+                  const title = isLookupOption(item) ? item.name : item.label;
 
                   const subtitle = isLookupOption(item)
-                    ? ((item.description ?? [item.email, item.phone, item.company, item.tradeType, item.location].filter(Boolean).join(" · ")) || "No additional details")
+                    ? (item.description ??
+                        [
+                          item.email,
+                          item.phone,
+                          item.company,
+                          item.tradeType,
+                          item.location,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")) ||
+                      "No additional details"
                     : `${item.address}, ${item.postcode ?? ""}, Council: ${item.council}`;
 
                   return (

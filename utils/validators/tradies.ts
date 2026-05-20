@@ -129,6 +129,7 @@ export type ScheduleStatusFilter = z.infer<typeof scheduleStatusFilterSchema>;
  */
 export const tradieCoordinationListQuerySchema = z
   .object({
+    mode: z.literal("coordination"),
     page: z.coerce
       .number()
       .int()

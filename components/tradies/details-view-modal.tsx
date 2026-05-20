@@ -22,6 +22,9 @@ import type {
   TradieScheduleListItem,
   TradieUrgentReminderItem,
 } from "@/types/project";
+import { currency, dataTimeFormat, dateFormat } from "@/utils/formatters";
+import { daysUntil } from "@/utils/parser";
+import { RatingStars } from "../common/rating-star";
 
 interface ViewDetailsModalProps {
   schedule: TradieUrgentReminderItem;
@@ -31,14 +34,6 @@ interface ViewDetailsModalProps {
   onSendReminder: (item: TradieScheduleListItem) => void;
   onCall: (item: TradieScheduleListItem) => void;
   onUpdateStatus?: (item: TradieScheduleListItem) => void;
-}
-
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 function getStatusStyles(status: string) {
@@ -149,7 +144,8 @@ export function TradieScheduleDetailsModal({
     company: schedule.company,
   } satisfies TradieScheduleListItem;
 
-  const daysBadge = getDaysBadge(schedule.daysLeft);
+  const daysLeft = daysUntil(new Date(schedule.scheduledDate));
+  const daysBadge = getDaysBadge(daysLeft);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -178,21 +174,6 @@ export function TradieScheduleDetailsModal({
                   {schedule.company ?? "Independent Tradie"}
                 </p>
               </div>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onOpenChange(false)}
-                className={cn(
-                  "h-8 w-8 shrink-0 rounded-[8px]",
-                  "border border-[#E2E8F0]",
-                  "text-[#94A3B8]",
-                  "hover:border-transparent hover:bg-[#FEE2E2]",
-                  "hover:text-[#DC2626]",
-                )}
-              >
-                <X className="h-4 w-4" />
-              </Button>
             </div>
           </div>
 
@@ -214,6 +195,24 @@ export function TradieScheduleDetailsModal({
                 }
               />
 
+              {schedule.hourtlyRate && (
+                <DetailItem
+                  label="Hourly Rate"
+                  value={
+                    <span className="truncate">
+                      {currency.format(Number(schedule.hourtlyRate))}/hr
+                    </span>
+                  }
+                />
+              )}
+
+              {schedule.rating && (
+                <DetailItem
+                  label="Rating"
+                  value={<RatingStars rating={Number(schedule.rating)} />}
+                />
+              )}
+
               <DetailItem
                 label="Project"
                 value={
@@ -229,7 +228,7 @@ export function TradieScheduleDetailsModal({
               <DetailItem
                 label="Scheduled"
                 icon={<CalendarDays className="h-3.5 w-3.5 text-[#94A3B8]" />}
-                value={formatDate(schedule.scheduledDate)}
+                value={dateFormat.format(new Date(schedule.scheduledDate))}
               />
 
               <div className="space-y-1">
@@ -292,7 +291,10 @@ export function TradieScheduleDetailsModal({
 
                 <div className="text-[13px] text-[#0F172A]">
                   {schedule.reminderSentAt ? (
-                    <>Sent on {formatDate(schedule.reminderSentAt)}</>
+                    <>
+                      Sent on{" "}
+                      {dataTimeFormat.format(new Date(schedule.reminderSentAt))}
+                    </>
                   ) : (
                     <span className="text-[#94A3B8]">Not sent yet</span>
                   )}

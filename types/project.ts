@@ -1,49 +1,49 @@
 import { Milestone, Project, Tradie, Variation, File, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog } from "@prisma/client";
 
 export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize"> {
-    totalBudget: string;
-    spent: string;
-    lotSize?: string;
+  totalBudget: string;
+  spent: string;
+  lotSize?: string;
 }
 
 export interface SafeTradie extends Omit<Tradie, "hourlyRate" | "rating"> {
-    hourlyRate?: string;
-    rating?: string;
+  hourlyRate?: string;
+  rating?: string;
 }
 
 export interface SafeVariation extends Omit<Variation, "cost"> {
-    cost: string;
+  cost: string;
 }
 
 export interface SiteUpdateWithAuthor extends SiteUpdate {
-    author: User;
+  author: User;
 }
 
 export interface SiteUpdateWithAuthorAndMilestone extends SiteUpdateWithAuthor {
-    milestone: SafeMilestone;
+  milestone: SafeMilestone;
 }
 
 export interface TradieScheduleWithTradie extends TradieSchedule {
-    tradie: SafeTradie;
+  tradie: SafeTradie;
 }
 
 export interface TradieScheduleWithTradieAndMilestone extends TradieScheduleWithTradie {
-    milestone?: SafeMilestone;
+  milestone?: SafeMilestone;
 }
 
 export interface TradieScheduleWithTradieMilestoneAndProject extends TradieScheduleWithTradieAndMilestone {
-    project: SafeProject;
+  project: SafeProject;
 }
 
 export interface SafeMilestone extends Omit<Milestone, "spend" | "budget"> {
-    budget: string;
-    spend?: string;
+  budget: string;
+  spend?: string;
 }
 
 export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
-    files: File[];
-    siteUpdates: SiteUpdateWithAuthor[];
-    tradieSchedules: TradieScheduleWithTradie[];
+  files: File[];
+  siteUpdates: SiteUpdateWithAuthor[];
+  tradieSchedules: TradieScheduleWithTradie[];
 }
 
 export interface ProjectWithStats extends SafeProject {
@@ -130,6 +130,8 @@ export type TradieScheduleListItem = {
   status: TradieScheduleStatus;
   reminderSentAt?: string;
   updatedAt: string;
+  hourtlyRate?: string;
+  rating?: string;
   contact: {
     email: string;
     phone: string;
@@ -200,6 +202,7 @@ export type TradieUrgentReminderItem = {
     email: string;
     phone: string;
   };
+  hourtlyRate?: string;
   rating?: string;
   siteManager: {
     name: string;

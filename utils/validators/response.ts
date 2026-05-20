@@ -110,14 +110,14 @@ export function validationErrorResponse(
   error: z.ZodError,
   options?: { status?: number; message?: string }
 ): NextResponse<ApiErrorResponse> {
-  const flattened = error.flatten();
+  const flattened = z.treeifyError(error);
 
   return NextResponse.json(
     {
       success: false,
       error: options?.message ?? "Validation failed",
       code: "VALIDATION_ERROR",
-      issues: flattened.fieldErrors,
+      issues: flattened,
       timestamp: new Date().toISOString(),
     },
     {
@@ -339,7 +339,7 @@ export function legacyErrorResponse(
   return NextResponse.json(
     {
       error: "Validation failed",
-      issues: error.flatten(),
+      issues: z.treeifyError(error),
     },
     { status }
   );

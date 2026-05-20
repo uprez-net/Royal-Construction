@@ -1,6 +1,5 @@
 import { TradieScheduleStatus } from "@prisma/client";
 import { getCachedTradieCoordinationDashboard, getCachedTradies } from "@/lib/data/tradies";
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import {
   createTradieScheduleSchema,
@@ -8,7 +7,6 @@ import {
   parseBodyWithResponse,
   parseSearchParamsWithResponse,
   successResponse,
-  errorResponse,
 } from "@/utils/validators";
 
 export async function POST(request: Request) {
