@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { TradieScheduleStatus } from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
+import { AddMaterialModal } from "../projects/add-material-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -252,6 +253,14 @@ export function ModalManager() {
       return (
         <ProjectDetailModal
           project={statProject}
+          isOpen
+          onClose={handleClose}
+        />
+      );
+    case "addMaterial":
+      return (
+        <AddMaterialModal
+          projectId={projectPayload!.id}
           isOpen
           onClose={handleClose}
         />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { type SubmitEvent, useState, useTransition } from "react";
 import { FilePlus2, Loader2, Info } from "lucide-react";
 import { toast } from "sonner";
 
@@ -71,7 +71,7 @@ export function CreateVariationModal({
     onOpenChange(nextOpen);
   };
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedDescription = description.trim();

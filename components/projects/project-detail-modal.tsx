@@ -83,7 +83,7 @@ export function ProjectDetailModal({
         {/* Content */}
         <div className="overflow-y-auto no-scrollbar max-h-[calc(90vh-180px)] px-6 py-4 ">
           {activeTab === "overview" && (
-            <OverviewTab project={project} setActiveTab={setActiveTab} />
+            <OverviewTab project={project} setActiveTab={setActiveTab} onClose={onClose} />
           )}
 
           {activeTab === "customer" && <CustomerTab project={project} />}

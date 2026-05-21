@@ -10,11 +10,13 @@ type TabType = "overview" | "customer" | "milestones" | "financials" | "team";
 interface ProjectOverviewTabProps {
   project: ProjectWithStats;
   setActiveTab: (tab: TabType) => void;
+  onClose: () => void;
 }
 
 export function OverviewTab({
   project,
   setActiveTab,
+  onClose,
 }: ProjectOverviewTabProps) {
   const spent = Number(project.spent);
   const budget = Number(project.totalBudget);
@@ -138,7 +140,7 @@ export function OverviewTab({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button asChild className="gap-1.5">
+        <Button asChild className="gap-1.5" onClick={onClose}>
           <Link href={`/projects/${project.id}`}>
             <ArrowRightCircle className="h-4 w-4" />
             Open Full Details
