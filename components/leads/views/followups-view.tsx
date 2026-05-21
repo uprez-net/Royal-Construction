@@ -172,6 +172,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
+  const emailBodyRef = React.useRef<HTMLDivElement>(null);
 
   // Toast state
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
@@ -224,10 +225,11 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
       type: 'email',
     };
 
+    const finalBody = emailBodyRef.current ? emailBodyRef.current.innerHTML : emailBody;
     const sendCampaign = await sendEmailToLead(
       emailLead.email,
       emailSubject,
-      hydrateTemplate(emailBody, emailLead)
+      hydrateTemplate(finalBody, emailLead)
     );
 
     if (sendCampaign) {
@@ -278,24 +280,48 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
   function buildEmailDraft(template: EmailTemplate, lead: Lead) {
     return {
       subject: hydrateTemplate(template.subject, lead),
-      body: hydrateTemplate(template.body, lead),
+      body: hydrateTemplate(getTemplateHtml(template), lead),
     };
+  }
+
+  function getTemplateHtml(template: EmailTemplate) {
+    const html = template.content?.trim();
+    return html ? html : template.body;
   }
 
   function previewTemplateText(text: string) {
     return text.replace(PLACEHOLDER_PATTERN, '...');
   }
 
-  function buildSnippet(text: string, maxLength = 110) {
-    const normalized = text.replace(/\s+/g, ' ').trim();
-    if (normalized.length <= maxLength) return normalized;
-    return `${normalized.slice(0, maxLength)}...`;
+  function getTemplateDescription(template: EmailTemplate): string {
+    switch (template.category) {
+      case 'Welcome':
+        return 'Welcome new clients to Royal Constructions. Outlines the initial phases of the home building project, first steps, consultation details, and client portal setup.';
+      case 'Quotation':
+        return 'Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.';
+      case 'Follow-up':
+        return 'Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.';
+      case 'Catalogue':
+        return 'Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.';
+      case 'Variation':
+        return 'Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.';
+      case 'Promotion':
+        return 'Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.';
+      case 'Meeting':
+        return 'Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.';
+      case 'Update':
+        return 'Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.';
+      default:
+        return 'Curated and professionally designed email template adhering to brand standards to streamline client communications.';
+    }
   }
 
   const stageConfig = getStageConfig(lead.stage);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = lead.followupDate === todayStr;
 
   return (
-    <div className="fu-item">
+    <div className={`fu-item ${isToday ? 'fu-item-today' : ''}`}>
 
       {/* ═══ TOAST NOTIFICATIONS ═══ */}
       {toasts.length > 0 && (
@@ -351,7 +377,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
                     {previewTemplateText(template.subject)}
                   </div>
                   <div className="mt-2 text-xs leading-relaxed text-[#78716c]">
-                    {buildSnippet(template.body)}
+                    {getTemplateDescription(template)}
                   </div>
                 </button>
               ))}
@@ -390,12 +416,19 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-[#78716c]">Body</label>
-            <textarea
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
-              rows={8}
-              value={emailBody}
-              onChange={event => setEmailBody(event.target.value)}
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-[#78716c]">Body (HTML Preview)</label>
+              <span className="text-[11px] text-[#a8a29e]">Click to edit</span>
+            </div>
+            <div
+              key={selectedTemplate?.id}
+              ref={emailBodyRef}
+              className="email-html-preview"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-multiline="true"
+              dangerouslySetInnerHTML={{ __html: emailBody }}
             />
           </div>
           <div className="flex flex-wrap gap-2">
@@ -421,7 +454,10 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
 
       {/* Timeline connector line */}
       <div className="fu-timeline-track">
-        <div className="fu-timeline-dot" style={{ background: stageConfig.dot }}>
+        <div
+          className="fu-timeline-dot"
+          style={{ background: isToday ? '#F59E0B' : stageConfig.dot }}
+        >
           {index + 1}
         </div>
       </div>
@@ -433,7 +469,10 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
             <span className="fu-item-name">{lead.name}</span>
             <span
               className="fu-stage-pill"
-              style={{ background: stageConfig.bg, color: stageConfig.color }}
+              style={{
+                background: isToday ? 'rgba(245, 158, 11, 0.15)' : stageConfig.bg,
+                color: isToday ? '#F59E0B' : stageConfig.color,
+              }}
             >
               {lead.stage}
             </span>

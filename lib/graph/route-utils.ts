@@ -7,6 +7,7 @@ export function requireAdminToken(
   }
 
   const provided = request.headers.get('x-graph-admin-token');
+  console.log('Admin token provided:', provided);
   if (!provided || provided !== adminToken) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }

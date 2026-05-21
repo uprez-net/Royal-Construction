@@ -80,7 +80,6 @@ export async function POST(request: Request): Promise<Response> {
 
     const subject = payload.subject ?? config.defaultSubject;
     const body = payload.body ?? config.defaultBody;
-
     const client = await createGraphContext(config);
     await client.sendMail({ to, subject, body });
     return successResponse({ status: 'sent' }, { status: 202 });
