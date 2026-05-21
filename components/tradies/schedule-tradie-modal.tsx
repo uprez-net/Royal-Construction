@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { CalendarDays, Loader2, Plus } from "lucide-react";
+import { CalendarDays, Info, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +32,8 @@ import {
 import { useAppDispatch } from "@/lib/store/hooks";
 import { createTradieSchedule } from "@/lib/store/slices/tradiesSlice";
 import { fetchJson } from "@/utils/fetch";
+import { cn } from "@/lib/utils";
+import { Textarea } from "../ui/textarea";
 
 type Milestone = { id: string; name: string };
 
@@ -57,12 +59,16 @@ export function ScheduleTradieModal({
   } | null>(initialProject ?? null);
   const [selectedTradie, setSelectedTradie] =
     useState<TradieLookUpOption | null>(null);
-  const [milestones, setMilestones] = useState<Milestone[]>(initialMilestones ?? []);
+  const [milestones, setMilestones] = useState<Milestone[]>(
+    initialMilestones ?? [],
+  );
   const [milestoneId, setMilestoneId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
   const [durationDays, setDurationDays] = useState("1");
+  const [taskDescription, setTaskDescription] = useState("");
+  const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMilestones, setLoadingMilestones] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -190,21 +196,6 @@ export function ScheduleTradieModal({
               disabled={initialProject !== undefined}
             />
 
-            <SearchableSelect
-              label="Tradie"
-              placeholder="Search tradie"
-              searchValue={tradieSearch.query}
-              selectedItem={selectedTradie as unknown as LookupOption}
-              items={tradieSearch.items as unknown as LookupOption[]}
-              loading={tradieSearch.loading}
-              onQueryChange={(q) => tradieSearch.setQuery(q)}
-              onSelect={(item) =>
-                setSelectedTradie(item as unknown as TradieLookUpOption)
-              }
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Milestone
@@ -249,9 +240,41 @@ export function ScheduleTradieModal({
               </Select>
             </div>
 
+            <SearchableSelect
+              label="Tradie"
+              placeholder="Search tradie"
+              searchValue={tradieSearch.query}
+              selectedItem={selectedTradie as unknown as LookupOption}
+              items={tradieSearch.items as unknown as LookupOption[]}
+              loading={tradieSearch.loading}
+              onQueryChange={(q) => tradieSearch.setQuery(q)}
+              onSelect={(item) =>
+                setSelectedTradie(item as unknown as TradieLookUpOption)
+              }
+            />
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                Scheduled Date
+                Trade Type
+              </label>
+              <Input
+                type="text"
+                placeholder="Auto-filled from tradie selection"
+                value={
+                  selectedTradie
+                    ? (selectedTradie.tradeType ?? "General Work")
+                    : ""
+                }
+                // required
+                disabled
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Start Date
               </label>
               <Input
                 type="date"
@@ -260,9 +283,7 @@ export function ScheduleTradieModal({
                 required
               />
             </div>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Duration in Days
@@ -275,10 +296,51 @@ export function ScheduleTradieModal({
                 required
               />
             </div>
-            <div className="flex items-end justify-end col-span-2">
-              <div className="rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-                <CalendarDays className="mr-2 inline-block size-4" />
-                All new schedules start in PENDING state.
+          </div>
+
+          <div className="flex w-full">
+            <div className="w-full space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Task Description
+              </label>
+              <Input
+                type="text"
+                className="w-full"
+                placeholder="e.g. Plumbing work for bathroom renovation"
+                value={taskDescription}
+                onChange={(event) => setTaskDescription(event.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="flex w-full">
+            <div className="space-y-2 flex-1">
+              <label className="text-sm font-medium text-foreground">
+                Notes
+              </label>
+              <Textarea
+                placeholder="Any additional details for the tradie"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                className={cn(
+                  "min-h-22.5 resize-none rounded-[8px] border-[#E2E8F0]",
+                  "px-3 py-2 text-[13px] text-[#0F172A]",
+                  "focus-visible:border-[#0D9488]",
+                  "focus-visible:ring-[3px]",
+                  "focus-visible:ring-[rgba(13,148,136,0.15)]",
+                )}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="flex w-full">
+            <div className="w-full rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-start gap-2">
+                <CalendarDays className="mt-0.5 size-4 shrink-0" />
+
+                <span>All new schedules start in PENDING state.</span>
               </div>
             </div>
           </div>
@@ -291,7 +353,12 @@ export function ScheduleTradieModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={(loading || isPending) || !selectedTradie || !selectedProject}>
+            <Button
+              type="submit"
+              disabled={
+                loading || isPending || !selectedTradie || !selectedProject
+              }
+            >
               {loading || isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
