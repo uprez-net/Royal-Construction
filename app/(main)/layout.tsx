@@ -8,7 +8,7 @@ async function LayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <AppShell
-      description="BuildPro - One place for all your construction project management needs."
+      description="Royal Constructions - One place for all your construction project management needs."
       isSignedIn={user.isAuthenticated}
     >
       {children}

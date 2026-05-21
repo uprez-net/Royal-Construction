@@ -74,7 +74,7 @@ export function CustomerTab({ project }: CustomerTabProps) {
         </div>
 
         <p className="m-0 text-[13px] leading-6 text-[var(--text-secondary)]">
-          Client has been provided the BuildPro platform link for requirement
+          Client has been provided the Royal Constructions platform link for requirement
           submission. All selections from catalogue have been recorded.
         </p>
       </div>

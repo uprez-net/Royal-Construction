@@ -55,7 +55,7 @@ export function ReminderModal({
     
     Best regards,
     Guri Singh
-    BuildPro Construction
+    Royal Constructions
     NSW, Australia
     `;
 

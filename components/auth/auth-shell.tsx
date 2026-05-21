@@ -22,7 +22,7 @@ export function AuthShell({
                 <span className="grid size-11 place-items-center rounded-2xl bg-teal-500/15">
                   <Hammer className="size-5" />
                 </span>
-                <span className="font-heading text-2xl font-semibold">BuildPro</span>
+                <span className="font-heading text-2xl font-semibold">Royal Constructions</span>
               </Link>
               <div className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-teal-300/80">Authentication</p>

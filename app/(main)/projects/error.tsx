@@ -90,7 +90,7 @@ export default function ProjectsError({
             size="sm"
             onClick={() => {
               // Open support email or contact page
-              window.location.href = "mailto:support@buildpro.com";
+              window.location.href = "mailto:support@royalconstructions.com.au";
             }}
           >
             Contact Support
