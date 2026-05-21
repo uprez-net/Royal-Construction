@@ -41,6 +41,13 @@ enum TradieScheduleStatus {
   COMPLETED
 }
 
+enum MaterialStatus {
+  PENDING
+  ORDERED
+  DELIVERED
+  INSTALLED
+}
+
 model Project {
   id               String   @id @default(uuid())
   name             String
@@ -69,6 +76,7 @@ model Project {
   tradieSchedules TradieSchedule[]
   files           File[]           @relation("ProjectFiles")
   activityLogs    ActivityLog[]
+  materials       Material[]
   tradies         Tradie[]         @relation("ProjectTradies")
 
   @@index([name])
@@ -103,6 +111,25 @@ model Milestone {
   @@unique([projectId, order])
   @@index([projectId])
   @@index([status])
+}
+
+model Material {
+  id             String         @id @default(uuid())
+  projectId      String
+  name           String
+  category       String
+  specifications String?
+  quantity       Int
+  unitCost       Decimal        @db.Decimal(10, 2)
+  totalCost      Decimal        @db.Decimal(12, 2)
+  status         MaterialStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 model Tradie {

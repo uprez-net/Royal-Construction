@@ -284,53 +284,6 @@ export const projectBudgetBurndownMock: ProjectBudgetPoint[] = [
   { month: "Jan", planned: 485, actual: 312, contract: 485 },
 ];
 
-export const projectMaterialsMock: ProjectMaterialItem[] = [
-  {
-    id: "mat-1",
-    category: "Bricks",
-    product: "Austral - Charcoal Smooth",
-    specification: "230x110x76mm",
-    quantity: "12,000",
-    unitCost: "$1.25/ea",
-    totalCost: "$15,000",
-    orderedStatus: "Yes",
-    deliveredStatus: "Yes",
-  },
-  {
-    id: "mat-2",
-    category: "Tiles",
-    product: "Beaumont Nero Porcelain",
-    specification: "600x600mm Matte",
-    quantity: "145 sqm",
-    unitCost: "$45/sqm",
-    totalCost: "$6,525",
-    orderedStatus: "Yes",
-    deliveredStatus: "Partial",
-  },
-  {
-    id: "mat-3",
-    category: "Roofing",
-    product: "Lysaght Custom Orb",
-    specification: "Colorbond Surfmist",
-    quantity: "210 sqm",
-    unitCost: "$42/sqm",
-    totalCost: "$8,820",
-    orderedStatus: "Pending",
-    deliveredStatus: "No",
-  },
-  {
-    id: "mat-4",
-    category: "Kitchen",
-    product: "Custom Kitchen Package",
-    specification: "2-pac white + stone bench",
-    quantity: "1 pkg",
-    unitCost: "Lump sum",
-    totalCost: "$28,500",
-    orderedStatus: "Not Yet",
-    deliveredStatus: "No",
-  },
-];
-
 export const projectPaymentsMock = {
   summary: {
     totalBilled: 312400,

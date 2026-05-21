@@ -11,6 +11,7 @@ import {
   badRequestResponse,
   errorResponse,
 } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
 
 const variationUpdateSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED"]),
@@ -59,7 +60,7 @@ export async function PATCH(
       await applyVariationDelay(variation.id);
     }
 
-    revalidateTag(`project-${projectId}`, "max");
+    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
     return successResponse(variation);
   } catch (error) {

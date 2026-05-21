@@ -11,6 +11,7 @@ import {
   successResponse,
   errorResponse,
 } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
 
 export async function POST(
   request: Request,
@@ -38,7 +39,7 @@ export async function POST(
     },
   });
 
-  revalidateTag(`project-${projectId}`, "max");
+  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
   const updatedProject = await getProjectById(projectId);
 

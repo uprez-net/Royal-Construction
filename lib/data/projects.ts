@@ -104,6 +104,7 @@ const projectDetailInclude = {
     },
   },
   files: true,
+  materials: true,
 } as const;
 
 const defaultPageSize = 12;
@@ -271,6 +272,11 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
 
     return {
       ...project,
+      materials: project.materials.map((material) => ({
+        ...material,
+        unitCost: material.unitCost.toString(),
+        totalCost: material.totalCost.toString(),
+      })),
       lotSize: project.lotSize?.toString() ?? undefined,
       totalBudget: project.totalBudget.toString(),
       spent: project.spent.toString(),

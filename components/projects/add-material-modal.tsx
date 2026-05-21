@@ -18,6 +18,10 @@ import { type SubmitEvent, useState, useTransition } from "react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { FilePlus2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { addMaterialSchema } from "@/utils/validators/material";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { addMaterialToProject } from "@/lib/store/slices/projectsSlice";
 
 interface AddMaterialModalProps {
   projectId: string;
@@ -51,6 +55,7 @@ export function AddMaterialModal({
   isOpen,
   onClose,
 }: AddMaterialModalProps) {
+  const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
   const [formData, setFormData] = useState<AddMaterialFormData>({
     category: "",
@@ -60,6 +65,17 @@ export function AddMaterialModal({
     unitCost: undefined,
     totalCost: undefined,
   });
+
+  const resetForm = () => {
+    setFormData({
+      category: "",
+      productName: "",
+      specifications: "",
+      quantity: undefined,
+      unitCost: undefined,
+      totalCost: undefined,
+    });
+  };
 
   const handleOpenChange = (open: boolean) => {
     if (!open) onClose();
@@ -75,11 +91,39 @@ export function AddMaterialModal({
     }));
   };
 
-  const handleSubmit = async (data: SubmitEvent<HTMLFormElement>) => {
-    // Handle form submission to add material
-    // You would typically dispatch a Redux action or call an API here
-    console.log("Submitting material for project:", projectId);
-    onClose();
+  const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    try {
+      const data = {
+        projectId,
+        materialData: {
+          name: formData.productName,
+          category: formData.category,
+          specifications: formData.specifications,
+          quantity: formData.quantity,
+          unitCost: formData.unitCost,
+          totalCost: formData.totalCost,
+        },
+      };
+      const parsedData = addMaterialSchema.safeParse(data);
+      if (!parsedData.success) {
+        throw new Error(parsedData.error.message);
+      }
+      const updatedProject = await dispatch(
+        addMaterialToProject(parsedData.data),
+      ).unwrap();
+      toast.success(`Material added to ${updatedProject.name}`);
+      resetForm();
+      onClose();
+    } catch (error) {
+      console.error("Error adding material:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to add material to project",
+      );
+    }
   };
 
   return (

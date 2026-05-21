@@ -14,18 +14,12 @@ import { StatusPill } from "@/components/common/status-pill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { projectMaterialsMock } from "@/lib/mock-data";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { ProjectDetail } from "@/types/project";
-
-function toneForMaterialStatus(
-  status: "Yes" | "Partial" | "Pending" | "Not Yet" | "No",
-) {
-  if (status === "Yes") return "success" as const;
-  if (status === "Partial" || status === "Pending") return "warning" as const;
-  return "neutral" as const;
-}
+import { DataTable } from "@/components/common/data-table";
+import { currency } from "@/utils/formatters";
+import { toast } from "sonner";
 
 interface ProjectMaterialsTabProps {
   project: ProjectDetail;
@@ -34,22 +28,85 @@ interface ProjectMaterialsTabProps {
 export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
   const dispatch = useAppDispatch();
   const [query, setQuery] = useState("");
+  const {
+    pendingMaterials,
+    deliveredMaterials,
+    installedMaterials,
+    totalMaterialCost,
+  } = useMemo(() => {
+    const pendingMaterials = project.materials.filter(
+      (item) => item.status === "PENDING",
+    ).length;
+    const deliveredMaterials = project.materials.filter((item) =>
+      ["DELIVERED", "INSTALLED"].includes(item.status),
+    ).length;
+    const installedMaterials = project.materials.filter(
+      (item) => item.status === "INSTALLED",
+    ).length;
+    const totalMaterialCost = project.materials.reduce(
+      (sum, item) => sum + Number(item.totalCost),
+      0,
+    );
 
-  const filteredItems = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    return {
+      pendingMaterials,
+      deliveredMaterials,
+      installedMaterials,
+      totalMaterialCost,
+    };
+  }, [project.materials]);
 
-    if (!normalized) {
-      return projectMaterialsMock;
-    }
+  const materialRows = project.materials.map((item) => [
+    <span key={`${item.id}-category`} className="font-medium text-foreground">
+      {item.category}
+    </span>,
 
-    return projectMaterialsMock.filter((item) => {
-      return (
-        item.category.toLowerCase().includes(normalized) ||
-        item.product.toLowerCase().includes(normalized) ||
-        item.specification.toLowerCase().includes(normalized)
-      );
-    });
-  }, [query]);
+    <span key={`${item.id}-product`}>{item.name}</span>,
+
+    <span key={`${item.id}-spec`} className="text-muted-foreground">
+      {item.specifications}
+    </span>,
+
+    <span key={`${item.id}-qty`}>{item.quantity}</span>,
+
+    <span key={`${item.id}-unit`}>
+      {currency.format(Number(item.unitCost))}
+    </span>,
+
+    <span key={`${item.id}-total`} className="font-semibold text-foreground">
+      {currency.format(Number(item.totalCost))}
+    </span>,
+
+    <StatusPill
+      key={`${item.id}-ordered`}
+      tone={item.status !== "PENDING" ? "success" : "neutral"}
+    >
+      {item.status === "PENDING" ? "No" : "Yes"}
+    </StatusPill>,
+
+    <StatusPill
+      key={`${item.id}-delivered`}
+      tone={
+        ["DELIVERED", "INSTALLED"].includes(item.status) ? "success" : "neutral"
+      }
+    >
+      {["DELIVERED", "INSTALLED"].includes(item.status) ? "Yes" : "No"}
+    </StatusPill>,
+
+    <div key={`${item.id}-actions`} className="flex justify-end">
+      <Button
+        variant="outline"
+        size="icon"
+        className="size-8"
+        onClick={() => {
+          // edit action
+          toast.info("Edit material feature coming soon!");
+        }}
+      >
+        <PenSquare className="size-3.5" />
+      </Button>
+    </div>,
+  ]);
 
   return (
     <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
@@ -89,87 +146,43 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
       </CardHeader>
       <CardContent className="space-y-4 pt-0 px-0 pb-5">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-[13px]">
-            <thead>
-              <tr className="border-b border-border text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-muted-foreground bg-slate-50">
-                <th className="py-2.5 px-[14px] whitespace-nowrap">Category</th>
-                <th className="py-2.5 px-[14px] whitespace-nowrap">Product</th>
-                <th className="py-2.5 px-[14px] whitespace-nowrap">
-                  Specification
-                </th>
-                <th className="py-2.5 px-[14px] whitespace-nowrap">Qty</th>
-                <th className="py-2.5 px-[14px] whitespace-nowrap">
-                  Unit Cost
-                </th>
-                <th className="py-2.5 px-[14px] whitespace-nowrap">Total</th>
-                <th className="py-2.5 px-[14px] whitespace-nowrap">Ordered</th>
-                <th className="py-2.5 px-[14px] whitespace-nowrap">
-                  Delivered
-                </th>
-                <th className="py-2.5 px-[14px] whitespace-nowrap text-right">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-b border-slate-100 align-middle transition-colors hover:bg-slate-50/80 cursor-pointer"
-                >
-                  <td className="py-3 px-[14px] text-slate-900">
-                    {item.category}
-                  </td>
-                  <td className="py-3 px-[14px]">{item.product}</td>
-                  <td className="py-3 px-[14px] text-slate-600">
-                    {item.specification}
-                  </td>
-                  <td className="py-3 px-[14px]">{item.quantity}</td>
-                  <td className="py-3 px-[14px]">{item.unitCost}</td>
-                  <td className="py-3 px-[14px] font-medium text-slate-900">
-                    {item.totalCost}
-                  </td>
-                  <td className="py-3 px-[14px]">
-                    <StatusPill
-                      tone={toneForMaterialStatus(item.orderedStatus)}
-                    >
-                      {item.orderedStatus}
-                    </StatusPill>
-                  </td>
-                  <td className="py-3 px-[14px]">
-                    <StatusPill
-                      tone={toneForMaterialStatus(item.deliveredStatus)}
-                    >
-                      {item.deliveredStatus}
-                    </StatusPill>
-                  </td>
-                  <td className="py-3 px-[14px] text-right">
-                    <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-teal-600 hover:bg-teal-600/10 hover:text-teal-600">
-                      <PenSquare className="size-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            headers={[
+              "Category",
+              "Product",
+              "Specification",
+              "Qty",
+              "Unit Cost",
+              "Total",
+              "Ordered",
+              "Delivered",
+              <div key="action-header" className="text-right">
+                Action
+              </div>,
+            ]}
+            rows={materialRows}
+          />
         </div>
 
         <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-4 py-3">
           <div className="text-[13px]">
             <b>Total Materials Cost:</b>{" "}
             <span className="ml-1 text-base font-extrabold text-teal-600">
-              $90,060
+              {currency.format(totalMaterialCost)}
             </span>
           </div>
           <div className="flex gap-1.5">
             <StatusPill tone="success">
-              <CheckCircle className="mr-1 size-3" />5 Delivered
+              <CheckCircle className="mr-1 size-3" />
+              {deliveredMaterials} Delivered
             </StatusPill>
-            <StatusPill tone="warning">
-              <Clock className="mr-1 size-3" />1 Partial
+            <StatusPill tone="primary">
+              <Clock className="mr-1 size-3" />
+              {installedMaterials} Installed
             </StatusPill>
             <StatusPill tone="neutral">
-              <MinusCircle className="mr-1 size-3" />2 Pending
+              <MinusCircle className="mr-1 size-3" />
+              {pendingMaterials} Pending
             </StatusPill>
           </div>
         </div>

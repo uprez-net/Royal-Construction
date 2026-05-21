@@ -2,18 +2,20 @@ import { createAsyncThunk, createSelector, createSlice, type PayloadAction } fro
 
 import type { RootState } from "@/lib/store";
 import type { ProjectDetailTabKey } from "@/types/ui";
-import type {
-  AddProjectUpdateRequest,
-  CreateProjectRequest,
-  CreateVariationRequest,
-  ProjectDetail,
-  ProjectMutationState,
-  ProjectUploadRecord,
-  ProjectWithStats,
+import {
+  SafeMaterial,
+  type AddProjectUpdateRequest,
+  type CreateProjectRequest,
+  type CreateVariationRequest,
+  type ProjectDetail,
+  type ProjectMutationState,
+  type ProjectUploadRecord,
+  type ProjectWithStats,
 } from "@/types/project";
 import { fetchJson } from "@/utils/fetch";
+import { AddMaterialInput } from "@/utils/validators/material";
 
-type MutationKey = "createProject" | "createVariation" | "addUpdate";
+type MutationKey = "createProject" | "createVariation" | "addUpdate" | "addMaterial";
 
 type ProjectsMutationState = Record<MutationKey, ProjectMutationState>;
 
@@ -47,6 +49,7 @@ const initialMutationState = (): ProjectsMutationState => ({
   createProject: { status: "idle", error: null },
   createVariation: { status: "idle", error: null },
   addUpdate: { status: "idle", error: null },
+  addMaterial: { status: "idle", error: null },
 });
 
 const initialState: ProjectsState = {
@@ -64,9 +67,14 @@ function toProjectListItem(project: ProjectDetail): ProjectWithStats {
   const milestoneCount = project.milestones.length;
   const completedMilestoneCount = project.milestones.filter((milestone) => milestone.status === "DONE").length;
   const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
+  const approvedVariationSpend = project.variations
+    .filter((variation) => variation.status === "APPROVED")
+    .reduce((sum, variation) => sum + Number(variation.cost), 0)
+    .toString();
 
   return {
     ...project,
+    approvedVariationSpend,
     milestones: project.milestones.map((milestone) => ({
       id: milestone.id,
       name: milestone.name,
@@ -122,6 +130,28 @@ export const createProject = createAsyncThunk<
     return response.data;
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to create project");
+  }
+});
+
+export const addMaterialToProject = createAsyncThunk<
+  ProjectDetail,
+  AddMaterialInput,
+  { rejectValue: string }
+>("projects/addMaterial", async (payload, thunkApi) => {
+  try {
+    const response = await fetchJson<ProjectDetail>(
+      `/api/material`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      "Unable to add material to project",
+    );
+
+    return response.data;
+  } catch (error) {
+    return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to add material to project");
   }
 });
 
@@ -338,6 +368,19 @@ const projectsSlice = createSlice({
         state.mutations.addUpdate = {
           status: "failed",
           error: action.payload ?? action.error.message ?? "Unable to add site update",
+        };
+      })
+      .addCase(addMaterialToProject.pending, (state) => {
+        state.mutations.addMaterial = { status: "pending", error: null };
+      })
+      .addCase(addMaterialToProject.fulfilled, (state, action) => {
+        state.mutations.addMaterial = { status: "succeeded", error: null };
+        syncProjectState(state, action.payload);
+      })
+      .addCase(addMaterialToProject.rejected, (state, action) => {
+        state.mutations.addMaterial = {
+          status: "failed",
+          error: action.payload ?? action.error.message ?? "Unable to add material to project",
         };
       });
   },
