@@ -64,6 +64,7 @@ export interface ProjectWithStats extends SafeProject {
   milestoneCount: number;
   completedMilestoneCount: number;
   progressPercent: number;
+  approvedVariationSpend: string;
 }
 
 export interface ActivityLogWithAuthor extends ActivityLog {

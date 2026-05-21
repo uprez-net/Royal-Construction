@@ -466,3 +466,31 @@ export const quoteRequestsMock: QuoteRequestItem[] = [
     status: "Pending Approval",
   },
 ];
+
+export const projectTeamMock = {
+  location: "42 Railway St, Penrith",
+  stage: "Frame Stage",
+  manager: "Gurpreet Singh",
+  workers: [
+    {
+      name: "Gurmeet Singh",
+      role: "Carpenter",
+      hours: 8,
+    },
+    {
+      name: "Kulwinder Dhillon",
+      role: "Electrician",
+      hours: 8,
+    },
+    {
+      name: "Jatinder Sidhu",
+      role: "Electrician",
+      hours: 7.5,
+    },
+    {
+      name: "Sukhwinder Sandhu",
+      role: "Labourer",
+      hours: 7.5,
+    },
+  ],
+}
