@@ -26,30 +26,34 @@ const day = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const addDays = (baseDate: Date, offsetDays: number) => new Date(baseDate.getTime() + offsetDays * 86_400_000);
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 /**
- * Random but deterministic-ish Unsplash image seeding helper.
+ * Random but deterministic-ish Picsum image seeding helper.
  *
  * Why:
- * - Avoid fake CDN paths
- * - Make seeded environments visually alive
+ * - Avoid broken Unsplash source URLs
+ * - Stable seeded images across environments
  * - Different projects/milestones get believable imagery
  * - No need to manually maintain assets
+ * - Picsum is extremely reliable for seeded placeholders
  *
  * Usage:
  * asset(projectSlug, "updates", "frame-progress")
  */
 
-const UNSPLASH_COLLECTIONS = {
-    construction: "825494", // construction/building
-    interiors: "317099", // interiors/joinery
-    architecture: "1065976", // houses/architecture
-    tools: "1118905", // tools/tradies
-    roofing: "1424340",
-    kitchens: "404339",
-    bathrooms: "1065392",
-    landscaping: "483251",
+const PICSUM_THEMES = {
+    construction: [1011, 1015, 1025, 1031, 1043, 1050],
+    interiors: [1060, 1067, 1076, 1081, 1084],
+    architecture: [1005, 1006, 1018, 1020, 1035],
+    tools: [1044, 1052, 1062, 1074],
+    roofing: [1032, 1033, 1039],
+    kitchens: [1080, 1082, 1083],
+    bathrooms: [1008, 1012, 1019],
+    landscaping: [1021, 1022, 1024, 1036],
 } as const;
 
-const folderThemes: Record<string, keyof typeof UNSPLASH_COLLECTIONS> = {
+const folderThemes: Record<
+    string,
+    keyof typeof PICSUM_THEMES
+> = {
     updates: "construction",
     milestones: "construction",
     feasibility: "architecture",
@@ -79,10 +83,10 @@ const hashString = (value: string) => {
 };
 
 /**
- * Generates realistic seeded image URLs using Unsplash.
+ * Generates realistic seeded image URLs using Picsum.
  *
  * Result examples:
- * https://source.unsplash.com/collection/825494/1280x720?sig=18273
+ * https://picsum.photos/seed/frame-progress-18273/1280/720
  */
 export const asset = (
     projectSlug: string,
@@ -90,15 +94,19 @@ export const asset = (
     filename: string,
 ) => {
     const theme =
-        folderThemes[folder.toLowerCase()] ?? "construction";
+        folderThemes[folder.toLowerCase()] ??
+        "construction";
 
-    const collectionId = UNSPLASH_COLLECTIONS[theme];
+    const imagePool = PICSUM_THEMES[theme];
 
     const seed = hashString(
         `${projectSlug}-${folder}-${filename}`,
     );
 
-    return `https://source.unsplash.com/collection/${collectionId}/1280x720?sig=${seed}`;
+    const imageId =
+        imagePool[seed % imagePool.length];
+
+    return `https://picsum.photos/id/${imageId}/1280/720`;
 };
 
 type FileAuthor = "admin" | "manager" | "customer";
@@ -210,25 +218,25 @@ type TradieSeed = {
  * Helper to push activity rows
  */
 const pushActivity = ({
-  projectId,
-  userId,
-  type,
-  message,
-  createdAt,
-}: {
-  projectId: string;
-  userId?: string | null;
-  type: string;
-  message: string;
-  createdAt: Date;
-}) => {
-  activityEntries.push({
     projectId,
-    authorId: userId ?? null,
+    userId,
     type,
     message,
     createdAt,
-  });
+}: {
+    projectId: string;
+    userId?: string | null;
+    type: string;
+    message: string;
+    createdAt: Date;
+}) => {
+    activityEntries.push({
+        projectId,
+        authorId: userId ?? null,
+        type,
+        message,
+        createdAt,
+    });
 };
 
 const activityEntries: Prisma.ActivityLogCreateManyInput[] = [];
@@ -1774,12 +1782,6 @@ async function main() {
 
     const customerMap = new Map(customers.map((customer) => [customer.key, customer]));
     const managerMap = new Map(siteManagers.map((manager) => [manager.key, manager]));
-    // const tradieMap = new Map(
-    //     tradies.map((tradie, index) => [
-    //         ["excavation", "concreting", "carpentry", "roofing", "plumbing", "electrical", "plastering", "waterproofing", "tiling", "cabinetry", "painting", "landscaping", "glazing"][index],
-    //         tradie,
-    //     ]),
-    // );
 
     for (const projectSeed of projectSeeds) {
         const customer = customerMap.get(projectSeed.customerKey);
@@ -1812,17 +1814,20 @@ async function main() {
             },
         });
 
-        const milestonesByOrder = new Map<number, { id: string; name: string }>();
+        const milestonesByOrder = new Map<number, MilestoneRecord>();
 
         for (const milestoneSeed of projectSeed.milestones) {
+            const targetDate = addDays(projectStart, milestoneSeed.targetOffsetDays);
+            const actualDate = milestoneSeed.actualOffsetDays !== undefined ? addDays(projectStart, milestoneSeed.actualOffsetDays) : null;
+
             const milestone = await prisma.milestone.create({
                 data: {
                     projectId: project.id,
                     name: milestoneSeed.name,
                     order: milestoneSeed.order,
                     description: milestoneSeed.description,
-                    targetDate: addDays(projectStart, milestoneSeed.targetOffsetDays),
-                    actualDate: milestoneSeed.actualOffsetDays !== undefined ? addDays(projectStart, milestoneSeed.actualOffsetDays) : null,
+                    targetDate,
+                    actualDate,
                     budget: decimal(milestoneSeed.budget),
                     spend: milestoneSeed.spend !== undefined ? decimal(milestoneSeed.spend) : null,
                     status: milestoneSeed.status,
@@ -1830,7 +1835,12 @@ async function main() {
                 },
             });
 
-            milestonesByOrder.set(milestoneSeed.order, { id: milestone.id, name: milestone.name });
+            milestonesByOrder.set(milestoneSeed.order, {
+                ...milestoneSeed,
+                id: milestone.id,
+                targetDate,
+                actualDate,
+            });
 
             const files = fileSeedsForMilestone(projectSlug, milestoneSeed.order, milestoneSeed.fileProfile, authorIds);
             for (const fileSeed of files) {
@@ -1912,31 +1922,33 @@ async function main() {
             });
         }
 
-        await prisma.activityLog.create({
-            data: {
-                projectId: project.id,
-                authorId: manager.user.id,
-                type: "seed",
-                message: `${projectSeed.name} seeded with realistic milestone, material, file and schedule history.`,
-            },
+        generateProjectActivities({
+            projectId: project.id,
+            projectSlug,
+            projectName: projectSeed.name,
+            projectStatus: projectSeed.status,
+            projectStart,
+            managerId: manager.user.id,
+            managerName: manager.name,
+            customerId: customer.user.id,
+            customerName: customer.name,
+            projectSeed,
+            milestonesByOrder,
+            tradiesByKey: tradieMap,
         });
     }
 
-    await prisma.activityLog.create({
-        data: {
-            projectId: (await prisma.project.findFirst({ select: { id: true }, orderBy: { createdAt: "asc" } }))!.id,
-            authorId: admin.id,
-            type: "seed",
-            message: "Seed completed for admin oversight.",
-        },
+    await prisma.activityLog.createMany({
+        data: activityEntries,
     });
 
     const materialCount = await prisma.material.count();
     const milestoneCount = await prisma.milestone.count();
     const fileCount = await prisma.file.count();
+    const activityCount = await prisma.activityLog.count();
 
     console.log(
-        `Seeded ${customers.length} customers, ${siteManagers.length} site managers, ${tradies.length} tradies, ${projectSeeds.length} projects, ${milestoneCount} milestones, ${materialCount} materials and ${fileCount} files.`,
+        `Seeded ${customers.length} customers, ${siteManagers.length} site managers, ${tradies.length} tradies, ${projectSeeds.length} projects, ${milestoneCount} milestones, ${materialCount} materials, ${activityCount} activities, and ${fileCount} files.`,
     );
 }
 

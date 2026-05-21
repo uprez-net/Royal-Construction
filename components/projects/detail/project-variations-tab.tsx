@@ -300,7 +300,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                   </span>,
 
                   <span
-                    className="max-w-[200px] truncate text-slate-700"
+                    className="max-w-10 text-wrap text-slate-700 max-h-20 no-scrollbar"
                     key={`${variation.id}-description`}
                   >
                     {variation.description}
