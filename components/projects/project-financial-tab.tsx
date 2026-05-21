@@ -8,6 +8,7 @@ import {
   Eye,
   LucideIcon,
   Receipt,
+  ReceiptText,
 } from "lucide-react";
 import { DataTable } from "../common/data-table";
 import { toast } from "sonner";
@@ -208,6 +209,23 @@ export function FinancialTab({ project }: FinancialTabProps) {
 
                   toast.info(`Viewing ${invoice.id}...`);
                 }}
+                emptyState={
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="flex size-12 items-center justify-center">
+                      <ReceiptText className="size-5 text-muted-foreground" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        No financial data available
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        Your Financial details will appear here.
+                      </p>
+                    </div>
+                  </div>
+                }
               />
             </div>
           </div>

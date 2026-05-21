@@ -147,38 +147,36 @@ export function TeamTab({ project }: { project: Project }) {
       </Card>
 
       {/* Workers Table */}
-      {project.workers.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border bg-card">
-          <div className="overflow-x-auto no-scrollbar">
-            <DataTable
-              headers={["Worker", "Role", "Hours/Week", "Status", "Actions"]}
-              rows={workerRows}
-              onRowClick={(rowIndex) => {
-                const worker = project.workers[rowIndex];
+      <div className="overflow-hidden rounded-2xl border bg-card">
+        <div className="overflow-x-auto no-scrollbar">
+          <DataTable
+            headers={["Worker", "Role", "Hours/Week", "Status", "Actions"]}
+            rows={workerRows}
+            onRowClick={(rowIndex) => {
+              const worker = project.workers[rowIndex];
 
-                toast.info(`Viewing ${worker.name}'s details...`);
-              }}
-            />
-          </div>
+              toast.info(`Viewing ${worker.name}'s details...`);
+            }}
+            emptyState={
+              <Card className="rounded-2xl border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-14 text-center">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                    <Users className="h-7 w-7 text-muted-foreground" />
+                  </div>
+
+                  <h3 className="text-sm font-semibold text-foreground">
+                    No workers assigned yet
+                  </h3>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Project is currently in {project.stage}.
+                  </p>
+                </CardContent>
+              </Card>
+            }
+          />
         </div>
-      ) : (
-        <Card className="rounded-2xl border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-14 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-              <Users className="h-7 w-7 text-muted-foreground" />
-            </div>
-
-            <h3 className="text-sm font-semibold text-foreground">
-              No workers assigned yet
-            </h3>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              Project is currently in {project.stage}.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
+      </div>
       {/* Site Manager */}
       <Card className="bg-muted/30">
         <CardHeader className="pb-2">

@@ -10,6 +10,7 @@ import {
   Pencil,
   CheckCircle2,
   XCircle,
+  Clock10,
 } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
 import { StatusPill } from "@/components/common/status-pill";
@@ -186,7 +187,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 openModal({
                   type: "scheduleTradie",
                   payload: {
-                    project
+                    project,
                   },
                 }),
               )
@@ -291,6 +292,23 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               // handle dialog/navigation
               console.log("Clicked tradie:", tradie.id);
             }}
+            emptyState={
+              <div className="flex flex-col items-center justify-center gap-3">
+                <div className="flex size-12 items-center justify-center">
+                  <Clock10 className="size-5 text-muted-foreground" />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    No Tradie Schedule data available
+                  </p>
+
+                  <p className="text-xs text-muted-foreground">
+                    Your Tradie Schedule details will appear here.
+                  </p>
+                </div>
+              </div>
+            }
           />
         </div>
       </SectionCard>

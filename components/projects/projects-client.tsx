@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Download,
   Plus,
+  ToolCaseIcon,
 } from "lucide-react";
 
 import { DataTable } from "@/components/common/data-table";
@@ -389,6 +390,23 @@ export function ProjectsClient({
                   );
                 }
               }}
+              emptyState={
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="flex size-12 items-center justify-center">
+                      <ToolCaseIcon className="size-5 text-muted-foreground" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        No Project data available
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        Your Projects will appear here.
+                      </p>
+                    </div>
+                  </div>
+              }
             />
           )}
 

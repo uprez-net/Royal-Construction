@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  Boxes,
   CheckCircle,
   Clock,
   MinusCircle,
@@ -145,7 +146,7 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-0 px-0 pb-5">
-        <div className="overflow-x-auto">
+        <div className="mx-4 mt-2 rounded-lg border border-border/60">
           <DataTable
             headers={[
               "Category",
@@ -161,6 +162,23 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
               </div>,
             ]}
             rows={materialRows}
+            emptyState={
+              <div className="flex flex-col items-center justify-center gap-3">
+                <div className="flex size-12 items-center justify-center">
+                  <Boxes className="size-5 text-muted-foreground" />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    No materials added
+                  </p>
+
+                  <p className="text-xs text-muted-foreground">
+                    Materials for this project will appear here.
+                  </p>
+                </div>
+              </div>
+            }
           />
         </div>
 

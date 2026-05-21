@@ -23,7 +23,7 @@ const calculateVariationImpact = (
   startDate: Date,
   endDate: Date,
 ): VariationTimelineImpact => {
-  const MIN_DELAY_VISUAL_PERCENT = 12;
+  const MIN_DELAY_VISUAL_PERCENT = 18;
   const originalDurationDays = Math.max(
     1,
     differenceInDays(endDate, startDate),
@@ -124,9 +124,9 @@ const calculateVariationImpact = (
     visualOriginalPercent,
     visualDelayPercent,
 
-    startDateLabel: `Start Date: ${dateFormat.format(startDate)}`,
-    originalEndLabel: `Original End Date: ${dateFormat.format(endDate)}`,
-    adjustedEndLabel: `Adjusted End Date: ${dateFormat.format(adjustedEndDate)}`,
+    startDateLabel: `${dateFormat.format(startDate)}`,
+    originalEndLabel: `Original End: ${dateFormat.format(endDate)}`,
+    adjustedEndLabel: `New End: ${dateFormat.format(adjustedEndDate)}`,
 
     styles: toneConfig[tone],
   };
@@ -209,16 +209,28 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
               )}
             </div>
 
-            <div className="mt-1.5 flex flex-wrap justify-between gap-2 px-1 text-[10px] text-muted-foreground">
-              <span>{projectVariationImpact.startDateLabel}</span>
+            <div className="relative mt-2 h-5 text-[10px] text-muted-foreground">
+              {/* Start */}
+              <span className="absolute left-0 -translate-x-0">
+                {projectVariationImpact.startDateLabel}
+              </span>
 
-              <span>
+              {/* Original completion */}
+              <span
+                className="absolute -translate-x-1/2 whitespace-nowrap"
+                style={{
+                  left: `${projectVariationImpact.visualOriginalPercent}%`,
+                }}
+              >
                 {projectVariationImpact.totalDelayDays > 0
                   ? projectVariationImpact.originalEndLabel
                   : "Estimated Completion"}
               </span>
 
-              <span>{projectVariationImpact.adjustedEndLabel}</span>
+              {/* Adjusted completion */}
+              <span className="absolute right-0 translate-x-0 whitespace-nowrap">
+                {projectVariationImpact.adjustedEndLabel}
+              </span>
             </div>
           </div>
         </CardContent>

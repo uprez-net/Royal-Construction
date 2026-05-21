@@ -9,6 +9,7 @@ import {
   Check,
   CheckCircle2,
   CircleAlert,
+  Clock10,
   Download,
   EllipsisVertical,
   Eye,
@@ -62,7 +63,13 @@ import { DataTable } from "../common/data-table";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { daysUntil } from "@/utils/parser";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 const statusLabelMap: Record<TradieScheduleStatus, string> = {
   PENDING: "Pending",
@@ -901,6 +908,23 @@ export function TradiesClient({
                       }),
                     );
                   }}
+                  emptyState={
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="flex size-12 items-center justify-center">
+                        <Clock10 className="size-5 text-muted-foreground" />
+                      </div>
+
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          No Tradie Schedule data available
+                        </p>
+
+                        <p className="text-xs text-muted-foreground">
+                          Your Tradie Schedule details will appear here.
+                        </p>
+                      </div>
+                    </div>
+                  }
                 />
               </div>
 

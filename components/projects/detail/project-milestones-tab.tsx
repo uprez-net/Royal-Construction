@@ -9,6 +9,7 @@ import {
   Camera,
   Send,
   Wrench,
+  BellRing,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -337,19 +338,58 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                   className="rounded-[10px] border border-amber-200/80 bg-white/60 p-3.5 flex items-center gap-3"
                 >
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
-                    <TriangleAlert className="size-5" />
+                    <Wrench className="size-5" />
                   </div>
+                  
                   <div>
                     <p className="text-[13px] font-bold text-slate-900">
                       {schedule.tradie.trade} •{" "}
                       {schedule.tradie.company ?? schedule.tradie.name}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Needed by: {schedule.milestone?.name ?? "General"}
+                      Needed for: {schedule.milestone?.name ?? "General"} —{" "}
+                      {dateFormat.format(new Date(schedule.scheduledDate))}
                     </p>
-                    <p className="mt-0.5 text-[11px] font-semibold text-[#D97706]">
-                      {formatStatus(schedule.status)}
-                    </p>
+                  </div>
+
+                  <div className="ml-auto">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-8"
+                      onClick={() =>
+                        handleSendReminder({
+                          id: schedule.id,
+                          tradieId: schedule.tradieId,
+                          milestoneId: schedule.milestoneId ?? undefined,
+                          scheduledDate: schedule.scheduledDate.toISOString(),
+                          status: schedule.status,
+                          company: schedule.tradie.company,
+                          tradieName: schedule.tradie.name,
+                          tradeType: schedule.tradie.tradeType,
+                          projectId: schedule.projectId,
+                          projectName: project.name,
+                          taskLabel: `${project.milestones.find((m) => m.id === schedule.milestoneId)?.name ?? "General"} - ${schedule.tradie.trade}`,
+                          durationDays: schedule.durationDays,
+                          updatedAt: new Date(schedule.updatedAt).toISOString(),
+                          contact: {
+                            email: schedule.tradie.email,
+                            phone: schedule.tradie.phone,
+                          },
+                          siteManager: {
+                            name: project.siteManager?.name ?? "Site Manager",
+                            email:
+                              project.siteManager?.email ??
+                              "Site Manager Email",
+                            phone:
+                              project.siteManager?.phone ??
+                              "Site Manager Phone",
+                          },
+                        } satisfies TradieScheduleListItem)
+                      }
+                    >
+                      <Bell className="size-3.5" />
+                    </Button>
                   </div>
                 </article>
               ))
