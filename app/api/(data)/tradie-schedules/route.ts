@@ -8,6 +8,8 @@ import {
   parseSearchParamsWithResponse,
   successResponse,
 } from "@/utils/validators";
+import { revalidateTag } from "next/cache";
+import { CACHE_PROFILES } from "@/types/cache";
 
 export async function POST(request: Request) {
   const body = await parseBodyWithResponse(request, createTradieScheduleSchema);
@@ -31,6 +33,7 @@ export async function POST(request: Request) {
     },
   });
 
+  revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
   return successResponse(schedule, { status: 201 });
 }
 

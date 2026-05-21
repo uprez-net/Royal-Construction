@@ -181,7 +181,16 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
           <Button
             size="sm"
             className="h-8 rounded-md bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700"
-            onClick={() => dispatch(openModal({ type: "scheduleTradie", payload: { project } }))}
+            onClick={() =>
+              dispatch(
+                openModal({
+                  type: "scheduleTradie",
+                  payload: {
+                    project
+                  },
+                }),
+              )
+            }
           >
             <Plus className="mr-1 size-3.5" />
             Add Tradie
@@ -241,7 +250,10 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 <XCircle className="size-4 text-muted-foreground" />
               ),
 
-              <StatusPill id={`${tradie.id}-status`} tone={getStatusTone(tradie.status)}>
+              <StatusPill
+                id={`${tradie.id}-status`}
+                tone={getStatusTone(tradie.status)}
+              >
                 {tradie.status}
               </StatusPill>,
 

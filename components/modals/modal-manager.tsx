@@ -45,19 +45,24 @@ export function ModalManager() {
   };
 
   const projectPayload = modal.payload?.project as ProjectDetail | undefined;
-  const projectId = projectPayload?.id ?? String(modal.payload?.projectId ?? "");
+  const projectId =
+    projectPayload?.id ?? String(modal.payload?.projectId ?? "");
   const projectMilestones =
     projectPayload?.milestones.map((milestone) => ({
       id: milestone.id,
       name: milestone.name,
     })) ??
-    ((modal.payload?.milestones as { id: string; name: string }[]) ?? []);
+    (modal.payload?.milestones as { id: string; name: string }[]) ??
+    [];
 
   if (!modal.type) {
     return null;
   }
 
-  const updateScheduleStatuses = async (ids: string[], status: TradieScheduleStatus) => {
+  const updateScheduleStatuses = async (
+    ids: string[],
+    status: TradieScheduleStatus,
+  ) => {
     if (ids.length === 0) return;
 
     await Promise.all(
@@ -131,9 +136,24 @@ export function ModalManager() {
         />
       );
     case "scheduleTradie":
+      const project = projectPayload
+        ? {
+            id: projectPayload.id,
+            name: projectPayload.name,
+          }
+        : undefined;
+      const milestones = projectPayload
+        ? projectPayload.milestones.map((m) => ({
+            id: m.id,
+            name: m.name,
+          }))
+        : undefined;
+
       return (
         <ScheduleTradieModal
           open
+          project={project}
+          milestones={milestones}
           onOpenChange={(open) => !open && handleClose()}
           onSuccess={handleSuccess}
         />

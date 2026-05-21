@@ -8,6 +8,8 @@ import {
   parseBodyWithResponse,
   successResponse,
 } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 const ScheduleParamSchema = z.object({
   scheduleId: z.string().trim().min(1, "Schedule ID is required"),
@@ -41,6 +43,7 @@ export async function PATCH(
     },
   });
 
+  revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
   return successResponse({
     schedule,
     requiresReplacement,

@@ -653,7 +653,7 @@ export function TradiesClient({
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        handleRowReminder({
+                        handleRowCallLogged({
                           id: item.id,
                           tradieId: "tradieId",
                           tradieName: item.tradieName,

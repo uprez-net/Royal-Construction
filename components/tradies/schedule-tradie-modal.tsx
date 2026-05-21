@@ -31,15 +31,20 @@ import {
 } from "@/hooks/useTradieSearch";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { createTradieSchedule } from "@/lib/store/slices/tradiesSlice";
+import { fetchJson } from "@/utils/fetch";
 
 type Milestone = { id: string; name: string };
 
 export function ScheduleTradieModal({
   open,
+  project: initialProject,
+  milestones: initialMilestones,
   onOpenChange,
   onSuccess,
 }: {
   open: boolean;
+  project?: { id: string; name: string };
+  milestones?: Milestone[];
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
@@ -49,10 +54,10 @@ export function ScheduleTradieModal({
   const [selectedProject, setSelectedProject] = useState<{
     id: string;
     name: string;
-  } | null>(null);
+  } | null>(initialProject ?? null);
   const [selectedTradie, setSelectedTradie] =
     useState<TradieLookUpOption | null>(null);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>(initialMilestones ?? []);
   const [milestoneId, setMilestoneId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
@@ -103,12 +108,14 @@ export function ScheduleTradieModal({
     (async () => {
       setLoadingMilestones(true);
       try {
-        const res = await fetch(
+        const res = await fetchJson<Milestone[]>(
           `/api/projects/${selectedProject.id}/milestones`,
-          { signal: controller.signal },
+          { method: "GET" },
+          "Failed to load milestones",
+          controller.signal,
         );
-        if (!res.ok) return;
-        const data = (await res.json()) as Milestone[];
+        if (!res.success) return;
+        const data = res.data;
         if (!cancelled) setMilestones(data);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
@@ -133,7 +140,7 @@ export function ScheduleTradieModal({
     setLoading(true);
 
     startTransition(() => {
-      void dispatch(
+      dispatch(
         createTradieSchedule({
           tradieId: selectedTradie.id,
           projectId: selectedProject.id,
@@ -180,6 +187,7 @@ export function ScheduleTradieModal({
               onSelect={(item) =>
                 handleProjectSelect(item as unknown as LookupOption)
               }
+              disabled={initialProject !== undefined}
             />
 
             <SearchableSelect

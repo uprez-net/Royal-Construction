@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ChevronDown, Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -133,19 +133,24 @@ export function SearchableSelect({
                 {items.map((item) => {
                   const title = isLookupOption(item) ? item.name : item.label;
 
-                  const subtitle = isLookupOption(item)
+                  const subtitleParts = isLookupOption(item)
                     ? (item.description ??
-                        [
-                          item.email,
-                          item.phone,
-                          item.company,
-                          item.tradeType,
-                          item.location,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")) ||
-                      "No additional details"
-                    : `${item.address}, ${item.postcode ?? ""}, Council: ${item.council}`;
+                      [
+                        item.email ? `Email: ${item.email}\n` : null,
+                        item.phone ? `Phone: ${item.phone}\n` : null,
+                        item.company ? `Company: ${item.company}\n` : null,
+                        item.tradeType ? `Trade: ${item.tradeType}\n` : null,
+                        item.location ? `Location: ${item.location}\n` : null,
+                      ].filter((value): value is string =>
+                        Boolean(value?.trim()),
+                      ))
+                    : [
+                        item.address,
+                        item.postcode,
+                        item.council ? `Council: ${item.council}` : null,
+                      ].filter((value): value is string =>
+                        Boolean(value?.trim()),
+                      );
 
                   return (
                     <CommandItem
@@ -161,9 +166,29 @@ export function SearchableSelect({
                           {title}
                         </span>
 
-                        <span className="text-xs text-muted-foreground">
-                          {subtitle}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          {Array.isArray(subtitleParts) &&
+                          subtitleParts.length > 0 ? (
+                            subtitleParts.map((part, index) => (
+                              <Fragment key={part}>
+                                {index > 0 && (
+                                  <span className="text-muted-foreground/40">
+                                    •
+                                  </span>
+                                )}
+
+                                <span className="break-words">{part}</span>
+                              </Fragment>
+                            ))
+                          ) : (
+                            <span>
+                              {" "}
+                              {typeof subtitleParts === "string"
+                                ? subtitleParts
+                                : "No additional details"}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </CommandItem>
                   );
