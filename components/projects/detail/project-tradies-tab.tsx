@@ -38,6 +38,25 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     }
   };
 
+  const getStatusText = (status: TradieScheduleStatus) => {
+    switch (status) {
+      case "PENDING":
+        return "Pending Confirmation";
+      case "PENDING_RESPONSE":
+        return "Awaiting Response";
+      case "NO_RESPONSE":
+        return "No Response";
+      case "CONFIRMED":
+        return "Confirmed";
+      case "DECLINED":
+        return "Declined";
+      case "COMPLETED":
+        return "Completed";
+      default:
+        return status;
+    }
+  };
+
   const getReminderTone = (
     reminder: Date | null,
     scheduledDate: Date,
@@ -255,7 +274,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 id={`${tradie.id}-status`}
                 tone={getStatusTone(tradie.status)}
               >
-                {tradie.status}
+                {getStatusText(tradie.status)}
               </StatusPill>,
 
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
