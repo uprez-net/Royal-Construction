@@ -27,8 +27,8 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "BuildPro",
-    template: "%s | BuildPro",
+    default: "Royal Constructions",
+    template: "%s | Royal Constructions",
   },
   description: "Construction management portal rebuilt from static mockups into a reusable Next.js architecture.",
 }

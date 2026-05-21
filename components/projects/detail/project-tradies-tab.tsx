@@ -10,6 +10,7 @@ import {
   Pencil,
   CheckCircle2,
   XCircle,
+  Clock10,
 } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
 import { StatusPill } from "@/components/common/status-pill";
@@ -34,6 +35,25 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
         return "warning";
       default:
         return "neutral";
+    }
+  };
+
+  const getStatusText = (status: TradieScheduleStatus) => {
+    switch (status) {
+      case "PENDING":
+        return "Pending Confirmation";
+      case "PENDING_RESPONSE":
+        return "Awaiting Response";
+      case "NO_RESPONSE":
+        return "No Response";
+      case "CONFIRMED":
+        return "Confirmed";
+      case "DECLINED":
+        return "Declined";
+      case "COMPLETED":
+        return "Completed";
+      default:
+        return status;
     }
   };
 
@@ -181,7 +201,16 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
           <Button
             size="sm"
             className="h-8 rounded-md bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700"
-            onClick={() => dispatch(openModal({ type: "scheduleTradie", payload: { project } }))}
+            onClick={() =>
+              dispatch(
+                openModal({
+                  type: "scheduleTradie",
+                  payload: {
+                    project,
+                  },
+                }),
+              )
+            }
           >
             <Plus className="mr-1 size-3.5" />
             Add Tradie
@@ -241,8 +270,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 <XCircle className="size-4 text-muted-foreground" />
               ),
 
-              <StatusPill id={`${tradie.id}-status`} tone={getStatusTone(tradie.status)}>
-                {tradie.status}
+              <StatusPill
+                id={`${tradie.id}-status`}
+                tone={getStatusTone(tradie.status)}
+              >
+                {getStatusText(tradie.status)}
               </StatusPill>,
 
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
@@ -279,6 +311,23 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               // handle dialog/navigation
               console.log("Clicked tradie:", tradie.id);
             }}
+            emptyState={
+              <div className="flex flex-col items-center justify-center gap-3">
+                <div className="flex size-12 items-center justify-center">
+                  <Clock10 className="size-5 text-muted-foreground" />
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    No Tradie Schedule data available
+                  </p>
+
+                  <p className="text-xs text-muted-foreground">
+                    Your Tradie Schedule details will appear here.
+                  </p>
+                </div>
+              </div>
+            }
           />
         </div>
       </SectionCard>

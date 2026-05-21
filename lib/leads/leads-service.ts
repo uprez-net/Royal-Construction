@@ -1,5 +1,6 @@
 import type { ApiSuccessResponse } from '@/utils/validators';
 import { HistoryItem, Lead, LeadsStats } from './types';
+import { fetchJson } from '@/utils/fetch';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
   actionDate: string;
@@ -68,90 +69,71 @@ export async function fetchLeadsStats(): Promise<LeadsStats> {
 }
 
 export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {
-  const response = await fetch('/api/leads', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(leadData),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to create lead');
-  }
-
-  const payload = (await response.json()) as
-    | ApiSuccessResponse<Lead>
-    | { success: false; error?: string };
-
-  if (!payload.success) {
-    throw new Error(payload.error ?? 'Failed to create lead');
-  }
-
-  return payload.data;
-}
-
-export async function updateLead(id: number, updates: Partial<Lead>): Promise<Lead | null> {
-  const response = await fetch(`/api/leads/${id}`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(updates),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to update lead');
-  }
-
-  const payload = (await response.json()) as
-    | ApiSuccessResponse<Lead>
-    | { success: false; error?: string };
-
-  if (!payload.success) {
-    throw new Error(payload.error ?? 'Failed to update lead');
-  }
-
-  return payload.data;
-}
-
-export async function deleteLead(id: number): Promise<{ success: boolean; message: string }> {
-  const response = await fetch(`/api/leads/${id}`, {
-    method: 'DELETE',
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to delete lead');
-  }
-
-  const payload = (await response.json()) as
-    | ApiSuccessResponse<{ success: boolean; message: string }>
-    | { success: false; error?: string };
-
-  if (!payload.success) {
-    throw new Error(payload.error ?? 'Failed to delete lead');
-  }
-
-  return payload.data;
-}
-
-export async function sendEmailToLead(to: string, subject: string, body: string): Promise<boolean> {
-  try {
-    const response = await fetch('/api/graph/send', {
+  const response = await fetchJson<Lead>(
+    '/api/leads',
+    {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ to, subject, body }),
-    });
+      body: JSON.stringify(leadData),
+    },
+    'Failed to create lead'
+  );
 
-    if (!response.ok) {
-      const data = await response.json().catch(() => null);
-      console.error('Failed to send email via Graph API', data ?? response.statusText);
-      return false;
-    }
+  const payload = response.data;
 
-    return true;
+  return payload;
+}
+
+export async function updateLead(id: number, updates: Partial<Lead>): Promise<Lead | null> {
+  const response = await fetchJson<Lead>(
+    `/api/leads/${id}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    },
+    'Failed to update lead'
+  );
+
+  const payload = response.data;
+
+  return payload;
+}
+
+export async function deleteLead(id: number): Promise<{ success: boolean; message: string }> {
+  const response = await fetchJson<{ success: boolean; message: string }>(
+    `/api/leads/${id}`,
+    {
+      method: 'DELETE',
+    },
+    'Failed to delete lead'
+  );
+
+  const payload = response.data;
+
+  return payload;
+}
+
+
+export async function sendEmailToLead(to: string, subject: string, body: string): Promise<boolean> {
+  try {
+    const response = await fetchJson(
+      '/api/graph/send',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ to, subject, body }),
+      },
+      'Failed to send email via Graph API'
+    );
+
+    return response.success;
   } catch (error) {
     console.error('Failed to send email via Graph API', error);
     return false;

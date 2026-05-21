@@ -96,15 +96,19 @@ export function LogCallModal({
   const [error, setError] = useState<string | null>(null);
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
-  const pendingFromStore = useAppSelector((s) => s.tradies.pendingScheduleIds.includes(schedule.id));
+  const pendingIds = useAppSelector((s) => s.tradies.pendingScheduleIds);
 
   function submit(status: CallStatus) {
     setActiveLoading(status);
     setError(null);
 
     startTransition(() => {
-      void dispatch(
-        updateTradieScheduleStatus({ scheduleId: schedule.id, status: status as TradieScheduleStatus, notes }),
+      dispatch(
+        updateTradieScheduleStatus({
+          scheduleId: schedule.id,
+          status: status as TradieScheduleStatus,
+          notes,
+        }),
       )
         .unwrap()
         .then(() => {
@@ -125,6 +129,7 @@ export function LogCallModal({
         className={cn(
           "max-w-[680px] gap-0 overflow-hidden rounded-[14px] border border-[#E2E8F0] bg-white p-0 shadow-2xl",
           "sm:rounded-[14px]",
+          "max-h-[60vh] overflow-y-auto"
         )}
       >
         {/* Header */}
@@ -203,19 +208,22 @@ export function LogCallModal({
                 (typeof outcomeConfig)[CallStatus],
               ][]
             ).map(([status, config]) => {
-              const isLoading = activeLoading === status || (pendingFromStore && isPending);
+              const isLoading =
+                activeLoading === status ||
+                (pendingIds.includes(schedule.id) && isPending);
 
               return (
                 <button
                   key={status}
                   type="button"
-                  disabled={isLoading !== null}
-                  onClick={() => void submit(status)}
+                  disabled={isLoading}
+                  onClick={() => submit(status)}
                   className={cn(
                     "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-white px-4 py-[14px] text-left transition-all",
                     "hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
                     "disabled:pointer-events-none disabled:opacity-60",
                     config.border,
+                    schedule.status === status && "border-[#0D9488] shadow-[0_4px_12px_rgba(13,148,136,0.15)]",
                   )}
                 >
                   <div

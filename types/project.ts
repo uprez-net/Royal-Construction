@@ -1,9 +1,14 @@
-import { Milestone, Project, Tradie, Variation, File, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog } from "@prisma/client";
+import { Milestone, Project, Tradie, Variation, File, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material } from "@prisma/client";
 
 export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize"> {
   totalBudget: string;
   spent: string;
   lotSize?: string;
+}
+
+export interface SafeMaterial extends Omit<Material, "unitCost" | "totalCost"> {
+  unitCost: string;
+  totalCost: string;
 }
 
 export interface SafeTradie extends Omit<Tradie, "hourlyRate" | "rating"> {
@@ -64,6 +69,7 @@ export interface ProjectWithStats extends SafeProject {
   milestoneCount: number;
   completedMilestoneCount: number;
   progressPercent: number;
+  approvedVariationSpend: string;
 }
 
 export interface ActivityLogWithAuthor extends ActivityLog {
@@ -79,6 +85,7 @@ export interface ProjectDetail extends SafeProject {
   variations: SafeVariation[];
   tradieSchedules: TradieScheduleWithTradieAndMilestone[];
   files: File[];
+  materials: SafeMaterial[];
 }
 
 export type ProjectKPIs = {

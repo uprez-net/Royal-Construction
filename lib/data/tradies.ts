@@ -687,7 +687,8 @@ export async function getCachedTradieSchedules(filters?: {
 export async function getCachedTradieScheduleKPIs() {
   "use cache";
 
-  cacheTag("tradies");
+  cacheTag("tradies-schedules");
+
 
   cacheLife(CACHE_PROFILES.MEDIUM);
 
@@ -699,7 +700,7 @@ export async function getCachedTradieCoordinationDashboard(
 ) {
   "use cache";
 
-  cacheTag("tradies");
+  cacheTag("tradies-schedules");
   cacheTag("projects");
 
   cacheLife(CACHE_PROFILES.SHORT);

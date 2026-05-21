@@ -42,6 +42,7 @@ export type PaginatedProjectLookupResult = {
 const projectInclude = {
   customer: true,
   siteManager: true,
+  variations: true,
   milestones: {
     select: {
       id: true,
@@ -103,6 +104,7 @@ const projectDetailInclude = {
     },
   },
   files: true,
+  materials: true,
 } as const;
 
 const defaultPageSize = 12;
@@ -176,10 +178,13 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
     prisma.project.count({ where }),
   ]);
 
-  const mapped = projects.map((project) => {
+  const mapped = projects.map(({ variations, ...project }) => {
     const milestoneCount = project.milestones.length;
     const completedMilestoneCount = project.milestones.filter((milestone) => milestone.status === "DONE").length;
     const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
+    const approvedVariationSpend = variations
+      .filter((variation) => variation.status === "APPROVED")
+      .reduce((sum, variation) => sum + Number(variation.cost), 0);
 
     return {
       ...project,
@@ -189,6 +194,7 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
       milestoneCount,
       completedMilestoneCount,
       progressPercent,
+      approvedVariationSpend: approvedVariationSpend.toString(),
     };
   });
 
@@ -266,6 +272,11 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
 
     return {
       ...project,
+      materials: project.materials.map((material) => ({
+        ...material,
+        unitCost: material.unitCost.toString(),
+        totalCost: material.totalCost.toString(),
+      })),
       lotSize: project.lotSize?.toString() ?? undefined,
       totalBudget: project.totalBudget.toString(),
       spent: project.spent.toString(),

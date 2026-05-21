@@ -34,6 +34,12 @@ function DetailItem({
   );
 }
 
+const toLabel = (value: string) =>
+  value
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
 export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
   const totalBudget = Number(project.totalBudget);
   const activityLog = project.activityLogs || [];
@@ -158,7 +164,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
               Recent Activity
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-0 pt-5">
+          <CardContent className="space-y-0 pt-5 max-h-80 overflow-y-auto no-scrollbar">
             <div className="relative pl-7 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-[2px] before:bg-border before:rounded-full">
               {activityLog.map((item) => (
                 <article key={item.id} className="relative pb-5 last:pb-0">
@@ -166,7 +172,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                     className={`absolute -left-[27.5px] top-1 size-[10px] rounded-full border-2 border-white ring-2 ring-offset-background z-10 bg-green-600 ring-green-600`}
                   />
                   <p className="text-[13px] font-bold text-slate-900">
-                    {item.type}
+                    {toLabel(item.type)}
                   </p>
                   <p className="mt-1 text-[13px] text-muted-foreground max-w-2xl">
                     {item.message}

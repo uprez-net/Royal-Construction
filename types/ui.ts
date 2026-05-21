@@ -106,6 +106,8 @@ export type VariationTimelineImpact = {
 
   originalDurationPercent: number;
   delayPercent: number;
+  visualOriginalPercent: number;
+  visualDelayPercent: number;
 
   startDateLabel: string;
   originalEndLabel: string;

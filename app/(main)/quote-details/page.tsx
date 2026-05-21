@@ -13,7 +13,7 @@ export default function QuoteDetailsPage() {
           <div className="flex items-center justify-between border-b border-border pb-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                BuildPro quote
+                Royal Constructions quote
               </p>
               <h3 className="font-heading text-2xl font-semibold">QT-204</h3>
             </div>

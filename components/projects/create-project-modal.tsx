@@ -37,6 +37,7 @@ import { fetchSiteManagers } from "@/lib/store/slices/siteManagersSlice";
 import { toast } from "sonner";
 
 import type { AddressSuggestion } from "@/types/data";
+import { fetchJson } from "@/utils/fetch";
 
 const customerLookupPageSize = 10;
 const siteManagerLookupPageSize = 10;
@@ -294,16 +295,14 @@ export function CreateProjectModal({
 
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch(
-          `/api/address/suggestions?query=${encodeURIComponent(location)}`,
-          {
-            signal: controller.signal,
-          },
+        const response = await fetchJson<{ suggestions: AddressSuggestion[], count: number }>(
+          `/api/address?query=${encodeURIComponent(location)}`,
+          { method: "GET" },
+          "Error fetching location suggestions",
+           controller.signal,
         );
 
-        const data: {
-          suggestions: AddressSuggestion[];
-        } = await response.json();
+        const data = response.data
 
         setLocationSuggestions(data.suggestions);
       } catch (error) {

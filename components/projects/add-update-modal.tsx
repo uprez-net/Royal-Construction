@@ -46,6 +46,7 @@ import {
   updateProjectUploadProgress,
 } from "@/lib/store/slices/projectsSlice";
 import { ClientPayload } from "@/utils/validators";
+import { Input } from "../ui/input";
 
 const maxFiles = 5;
 
@@ -81,12 +82,14 @@ function buildBlobPath(projectId: string, fileId: string, fileName: string) {
 
 export function AddUpdateModal({
   projectId,
+  milestoneId: initialMilestoneId,
   milestones,
   open,
   onOpenChange,
   onSuccess,
 }: {
   projectId: string;
+  milestoneId?: string;
   milestones: { id: string; name: string }[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -96,8 +99,9 @@ export function AddUpdateModal({
   const mutation = useAppSelector(
     (state) => state.projects.mutations.addUpdate,
   );
-  const [milestoneId, setMilestoneId] = useState<string | undefined>();
+  const [milestoneId, setMilestoneId] = useState<string | undefined>(initialMilestoneId);
   const [notes, setNotes] = useState("");
+  const [updatedNotesTitle, setUpdatedNotesTitle] = useState("");
   const [queuedFiles, setQueuedFiles] = useState<QueuedUploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -355,7 +359,7 @@ export function AddUpdateModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-[14px] border-border bg-white p-0 shadow-lg sm:max-w-150">
+      <DialogContent className="max-h-[60vh] overflow-y-auto rounded-[14px] border-border bg-white p-0 shadow-lg sm:max-w-150">
         <DialogHeader className="flex flex-row items-center justify-between border-b border-border px-6 pb-4 pt-5">
           <div>
             <DialogTitle className="text-base font-bold">
@@ -374,6 +378,7 @@ export function AddUpdateModal({
               Milestone
             </label>
             <Select
+              disabled={initialMilestoneId !== undefined}
               value={milestoneId ?? "__none__"}
               onValueChange={(value) =>
                 setMilestoneId(value === "__none__" ? undefined : value)
@@ -391,6 +396,19 @@ export function AddUpdateModal({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Update Title
+            </label>
+            <Input
+              value={updatedNotesTitle}
+              onChange={(event) => setUpdatedNotesTitle(event.target.value)}
+              placeholder="Enter a title for the update..."
+              required
+              className="resize-y rounded-[7px] bg-white px-3 py-2 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10"
+            />
           </div>
 
           <div className="space-y-1.5">

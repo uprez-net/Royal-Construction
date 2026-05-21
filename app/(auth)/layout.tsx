@@ -8,7 +8,7 @@ export default function AuthLayout({
 }) {
     return (
         <AuthShell
-            title="Welcome to BuildPro"
+            title="Welcome to Royal Constructions"
             description="Please sign in or sign up to continue."
         >
             {children}

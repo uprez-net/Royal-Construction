@@ -16,6 +16,7 @@ import { TradieDirectoryModal } from "@/components/tradies/tradie-directory-moda
 
 import type {
   ProjectDetail,
+  ProjectWithStats,
   TradieScheduleListItem,
   TradieUrgentReminderItem,
 } from "@/types/project";
@@ -29,6 +30,8 @@ import {
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
 import { TradieScheduleStatus } from "@prisma/client";
+import { ProjectDetailModal } from "../projects/project-detail-modal";
+import { AddMaterialModal } from "../projects/add-material-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -45,19 +48,24 @@ export function ModalManager() {
   };
 
   const projectPayload = modal.payload?.project as ProjectDetail | undefined;
-  const projectId = projectPayload?.id ?? String(modal.payload?.projectId ?? "");
+  const projectId =
+    projectPayload?.id ?? String(modal.payload?.projectId ?? "");
   const projectMilestones =
     projectPayload?.milestones.map((milestone) => ({
       id: milestone.id,
       name: milestone.name,
     })) ??
-    ((modal.payload?.milestones as { id: string; name: string }[]) ?? []);
+    (modal.payload?.milestones as { id: string; name: string }[]) ??
+    [];
 
   if (!modal.type) {
     return null;
   }
 
-  const updateScheduleStatuses = async (ids: string[], status: TradieScheduleStatus) => {
+  const updateScheduleStatuses = async (
+    ids: string[],
+    status: TradieScheduleStatus,
+  ) => {
     if (ids.length === 0) return;
 
     await Promise.all(
@@ -98,9 +106,11 @@ export function ModalManager() {
 
   switch (modal.type) {
     case "addUpdate":
+      const milestoneId = modal.payload?.milestoneId as string | undefined;
       return (
         <AddUpdateModal
           projectId={projectId}
+          milestoneId={milestoneId}
           milestones={projectMilestones}
           open
           onOpenChange={(open) => {
@@ -131,9 +141,24 @@ export function ModalManager() {
         />
       );
     case "scheduleTradie":
+      const project = projectPayload
+        ? {
+            id: projectPayload.id,
+            name: projectPayload.name,
+          }
+        : undefined;
+      const milestones = projectPayload
+        ? projectPayload.milestones.map((m) => ({
+            id: m.id,
+            name: m.name,
+          }))
+        : undefined;
+
       return (
         <ScheduleTradieModal
           open
+          project={project}
+          milestones={milestones}
           onOpenChange={(open) => !open && handleClose()}
           onSuccess={handleSuccess}
         />
@@ -219,6 +244,25 @@ export function ModalManager() {
           onSendReminder={handleRowReminder}
           onCall={handleRowCallLogged}
           onUpdateStatus={handleUpdateRowStatus}
+        />
+      );
+    case "projectDetail":
+      const { project: statProject } = modal.payload as {
+        project: ProjectWithStats;
+      };
+      return (
+        <ProjectDetailModal
+          project={statProject}
+          isOpen
+          onClose={handleClose}
+        />
+      );
+    case "addMaterial":
+      return (
+        <AddMaterialModal
+          projectId={projectPayload!.id}
+          isOpen
+          onClose={handleClose}
         />
       );
     default:

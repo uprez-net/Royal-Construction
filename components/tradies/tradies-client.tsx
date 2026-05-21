@@ -9,6 +9,7 @@ import {
   Check,
   CheckCircle2,
   CircleAlert,
+  Clock10,
   Download,
   EllipsisVertical,
   Eye,
@@ -47,7 +48,8 @@ import {
   setTradieFilters,
   setTradiePage,
   setTradies,
-  toggleScheduleSelection, updateTradieScheduleStatus,
+  toggleScheduleSelection,
+  updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import type {
@@ -61,6 +63,13 @@ import { DataTable } from "../common/data-table";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { daysUntil } from "@/utils/parser";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 const statusLabelMap: Record<TradieScheduleStatus, string> = {
   PENDING: "Pending",
@@ -261,7 +270,10 @@ export function TradiesClient({
     return items;
   }, [tradiesState.pagination.page, tradiesState.pagination.totalPages]);
 
-  const updateScheduleStatuses = async (ids: string[], status: TradieScheduleStatus) => {
+  const updateScheduleStatuses = async (
+    ids: string[],
+    status: TradieScheduleStatus,
+  ) => {
     if (ids.length === 0) return;
 
     await Promise.all(
@@ -305,7 +317,9 @@ export function TradiesClient({
       await updateScheduleStatuses([row.id], TradieScheduleStatus.CONFIRMED);
       toast.success("Status updated to Confirmed", { id: loading });
     } catch (error) {
-      toast.error("Failed to update status. Please try again.", { id: loading });
+      toast.error("Failed to update status. Please try again.", {
+        id: loading,
+      });
       console.error("Error updating tradie schedule status:", error);
     } finally {
       toast.dismiss(loading);
@@ -421,7 +435,9 @@ export function TradiesClient({
     row.taskLabel,
 
     <div key={`schedule-${row.id}`}>
-      <p className="font-medium">{dateFormat.format(new Date(row.scheduledDate))}</p>
+      <p className="font-medium">
+        {dateFormat.format(new Date(row.scheduledDate))}
+      </p>
       <p className="text-xs text-muted-foreground">{row.durationDays} day(s)</p>
     </div>,
 
@@ -642,7 +658,8 @@ export function TradiesClient({
                       {item.tradeType} · {item.taskLabel}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Scheduled {dateFormat.format(new Date(item.scheduledDate))}
+                      Scheduled{" "}
+                      {dateFormat.format(new Date(item.scheduledDate))}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -653,7 +670,7 @@ export function TradiesClient({
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        handleRowReminder({
+                        handleRowCallLogged({
                           id: item.id,
                           tradieId: "tradieId",
                           tradieName: item.tradieName,
@@ -747,7 +764,7 @@ export function TradiesClient({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[280px] flex-1">
+              <div className="relative max-w-[280px] flex-1">
                 <label htmlFor="search" className="sr-only">
                   Search
                 </label>
@@ -782,7 +799,9 @@ export function TradiesClient({
                   onSelect={(item) => {
                     dispatch(setTradieFilters({ projectId: item.id }));
                   }}
-                  onClear={() => dispatch(setTradieFilters({ projectId: null }))}
+                  onClear={() =>
+                    dispatch(setTradieFilters({ projectId: null }))
+                  }
                   onLoadMore={() => {
                     void dispatch(
                       fetchTradieProjectLookup({
@@ -795,46 +814,58 @@ export function TradiesClient({
                 />
               </div>
 
-              <select
-                className="h-10 min-w-[170px] rounded-lg border border-border bg-background px-3 text-[12.5px] font-medium text-foreground outline-none transition-all focus:border-teal-600 focus:ring-4 focus:ring-teal-500/10"
-                value={tradiesState.filters.tradeType ?? ""}
-                onChange={(event) =>
+              <Select
+                value={tradiesState.filters.tradeType ?? "all"}
+                onValueChange={(value) =>
                   dispatch(
                     setTradieFilters({
-                      tradeType: event.target.value || null,
+                      tradeType: value === "all" ? null : value,
                     }),
                   )
                 }
               >
-                <option value="">All Trades</option>
+                <SelectTrigger className="h-9 min-w-[160px] rounded-md border-border bg-background text-[12.5px] font-medium shadow-none transition-all focus:ring-4 focus:ring-teal-500/10 focus:ring-offset-0">
+                  <SelectValue placeholder="All Trades" />
+                </SelectTrigger>
 
-                {tradiesState.tradeOptions.map((trade) => (
-                  <option key={trade} value={trade}>
-                    {trade}
-                  </option>
-                ))}
-              </select>
+                <SelectContent>
+                  <SelectItem value="all">All Trades</SelectItem>
 
-              <select
-                className="h-10 min-w-[170px] rounded-lg border border-border bg-background px-3 text-[12.5px] font-medium text-foreground outline-none transition-all focus:border-teal-600 focus:ring-4 focus:ring-teal-500/10"
-                value={tradiesState.filters.status ?? ""}
-                onChange={(event) =>
+                  {tradiesState.tradeOptions.map((trade) => (
+                    <SelectItem key={trade} value={trade}>
+                      {trade}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={tradiesState.filters.status ?? "all"}
+                onValueChange={(value) =>
                   dispatch(
                     setTradieFilters({
                       status:
-                        (event.target.value as TradieScheduleStatus) || null,
+                        value === "all"
+                          ? null
+                          : (value as TradieScheduleStatus),
                     }),
                   )
                 }
               >
-                <option value="">All Statuses</option>
+                <SelectTrigger className="h-9 min-w-[160px] rounded-md border-border bg-background text-[12.5px] font-medium shadow-none transition-all focus:ring-4 focus:ring-teal-500/10 focus:ring-offset-0">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
 
-                {Object.entries(statusLabelMap).map(([status, label]) => (
-                  <option key={status} value={status}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+
+                  {Object.entries(statusLabelMap).map(([status, label]) => (
+                    <SelectItem key={status} value={status}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               <p className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground">
                 {tradiesState.pagination.totalCount} results
@@ -870,8 +901,30 @@ export function TradiesClient({
                   rows={scheduleTableRows}
                   onRowClick={(rowIndex) => {
                     const row = tradiesState.schedules[rowIndex];
-                    dispatch(openModal({ type: "tradieScheduleDetails", payload: { schedule: row } }))
+                    dispatch(
+                      openModal({
+                        type: "tradieScheduleDetails",
+                        payload: { schedule: row },
+                      }),
+                    );
                   }}
+                  emptyState={
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="flex size-12 items-center justify-center">
+                        <Clock10 className="size-5 text-muted-foreground" />
+                      </div>
+
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          No Tradie Schedule data available
+                        </p>
+
+                        <p className="text-xs text-muted-foreground">
+                          Your Tradie Schedule details will appear here.
+                        </p>
+                      </div>
+                    </div>
+                  }
                 />
               </div>
 

@@ -16,6 +16,7 @@ import {
   parseBodyWithResponse,
   errorResponse,
 } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -118,8 +119,8 @@ export async function POST(request: Request) {
       },
     });
 
-    revalidateTag("projects", "max");
-    revalidateTag(`project-${project.id}`, "max");
+    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${project.id}`, CACHE_PROFILES.MEDIUM);
 
     const createdProject = await getCachedProjectById(project.id);
 

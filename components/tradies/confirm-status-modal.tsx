@@ -165,7 +165,7 @@ export function ConfirmStatusModal({
     setError(null);
 
     startTransition(() => {
-      void dispatch(
+      dispatch(
         updateTradieScheduleStatus({ scheduleId: schedule.id, status: nextStatus as TradieScheduleStatus }),
       )
         .unwrap()
@@ -188,6 +188,7 @@ export function ConfirmStatusModal({
         className={cn(
           "max-w-[680px] gap-0 overflow-hidden rounded-[14px] border border-[#E2E8F0] bg-white p-0 shadow-2xl",
           "sm:rounded-[14px]",
+          "max-h-[60vh] overflow-y-auto",
         )}
       >
         {/* Header */}
@@ -239,8 +240,8 @@ export function ConfirmStatusModal({
                 <button
                   key={option.value}
                   type="button"
-                  disabled={isLoading !== null}
-                  onClick={() => void updateStatus(option.value)}
+                  disabled={isLoading}
+                  onClick={() => updateStatus(option.value)}
                   className={cn(
                     "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-white px-4 py-[14px] text-left transition-all",
                     "hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",

@@ -128,7 +128,7 @@ export async function createCustomerForProject(input: { name: string; email: str
         data: { customerId: customer.id },
     });
 
-    revalidateTag("customers", "max");
+    revalidateTag("customers", CACHE_PROFILES.MEDIUM);
 
     return customer;
 }

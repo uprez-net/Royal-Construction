@@ -18,6 +18,7 @@ import {
   badRequestResponse,
   notFoundResponse,
 } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB per image
@@ -148,7 +149,7 @@ export async function POST(
       console.log(`[NOTIFICATION] Client notified for milestone ${milestoneId}`);
     }
 
-    revalidateTag(`project-${projectId}`, "max");
+    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
     const updatedProject = await getProjectById(projectId);
 

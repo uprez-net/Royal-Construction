@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Download,
   Plus,
+  ToolCaseIcon,
 } from "lucide-react";
 
 import { DataTable } from "@/components/common/data-table";
@@ -91,9 +92,6 @@ export function ProjectsClient({
   } = useAppSelector((state) => state.ui.projectFilters);
   const [currentPage, setCurrentPage] = useState(pagination.page);
   const [isPageLoading, setIsPageLoading] = useState(false);
-  const [selectedProject, setSelectedProject] =
-    useState<ProjectWithStats | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
 
   const querySignature = `${statusFilter ?? "all"}|${searchQuery.trim()}|${sortBy}|${sortOrder}`;
 
@@ -321,13 +319,12 @@ export function ProjectsClient({
                   key={project.id}
                   project={project}
                   onDetailsClick={(id) => {
-                    const selected = visibleProjects.find(
-                      (item) => item.id === id,
-                    );
-                    if (selected) {
-                      setSelectedProject(selected);
-                      setModalOpen(true);
-                    }
+                    dispatch(
+                      openModal({
+                        type: "projectDetail",
+                        payload: { project, id },
+                      })
+                    )
                   }}
                 />
               ))}
@@ -385,10 +382,31 @@ export function ProjectsClient({
               onRowClick={(rowIndex) => {
                 const project = visibleProjects[rowIndex];
                 if (project) {
-                  setSelectedProject(project);
-                  setModalOpen(true);
+                  dispatch(
+                    openModal({
+                      type: "projectDetail",
+                      payload: { project },
+                    })
+                  );
                 }
               }}
+              emptyState={
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="flex size-12 items-center justify-center">
+                      <ToolCaseIcon className="size-5 text-muted-foreground" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        No Project data available
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        Your Projects will appear here.
+                      </p>
+                    </div>
+                  </div>
+              }
             />
           )}
 
@@ -448,12 +466,6 @@ export function ProjectsClient({
           ) : null}
         </div>
       </SectionCard>
-
-      <ProjectDetailModal
-        project={selectedProject}
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-      />
     </div>
   );
 }
