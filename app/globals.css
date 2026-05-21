@@ -2300,6 +2300,33 @@
   margin: 0;
 }
 
+
+
+.email-html-preview {
+  margin-top: 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow-y: auto;
+  background: #070E1A;
+  color: #B8C4D6;
+  font-family: Inter, Arial, sans-serif;
+  min-height: 240px;
+  max-height: 480px;
+  padding: 12px;
+  cursor: text;
+  line-height: 1.55;
+  font-size: 13px;
+}
+
+.email-html-preview:focus {
+  outline: none;
+  border-color: #3ba6f1;
+  box-shadow: 0 0 0 2px rgba(193, 225, 247, 0.9);
+}
+
+.email-html-preview p{
+  margin: 10px 2px !important;
+}
 /* ──────────────────────────────────── */
 /* TOAST NOTIFICATIONS */
 /* ──────────────────────────────────── */

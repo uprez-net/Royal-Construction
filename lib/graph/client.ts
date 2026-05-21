@@ -243,7 +243,7 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
           message: {
             subject,
             body: {
-              contentType: 'Text',
+              contentType: 'HTML',
               content: body,
             },
             toRecipients: [

@@ -13,7 +13,7 @@ export interface GraphConfig {
   webhookNotificationUrl?: string;
   webhookSubscriptionResource?: string;
   webhookSubscriptionMinutes: number;
-  adminToken: string;
+  adminToken?: string;
 }
 
 function requireEnv(name: string): string {
@@ -67,6 +67,6 @@ export function getGraphConfig(): GraphConfig {
       process.env.GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES,
       60,
     ),
-    adminToken: process.env.GRAPH_ADMIN_TOKEN ?? "admin-secret-token",
+    adminToken: process.env.GRAPH_ADMIN_TOKEN ,
   };
 }

@@ -97,7 +97,7 @@ function LeadSourceIcon({ source }: { source: string }) {
   if (source === 'Facebook Ads') {
     return (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="shrink-0">
-        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" fill="#1877F2"/>
+        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" fill="#1877F2" />
       </svg>
     );
   }
@@ -129,18 +129,40 @@ function hydrateTemplate(text: string, lead: Lead): string {
 function buildEmailDraft(template: EmailTemplate, lead: Lead) {
   return {
     subject: hydrateTemplate(template.subject, lead),
-    body: hydrateTemplate(template.body, lead),
+    body: hydrateTemplate(getTemplateHtml(template), lead),
   };
+}
+
+function getTemplateHtml(template: EmailTemplate) {
+  const html = template.content?.trim();
+  return html ? html : template.body;
 }
 
 function previewTemplateText(text: string) {
   return text.replace(PLACEHOLDER_PATTERN, '...');
 }
 
-function buildSnippet(text: string, maxLength = 110) {
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, maxLength)}...`;
+function getTemplateDescription(template: EmailTemplate): string {
+  switch (template.category) {
+    case 'Welcome':
+      return 'Welcome new clients to Royal Constructions. Outlines the initial phases of the home building project, first steps, consultation details, and client portal setup.';
+    case 'Quotation':
+      return 'Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.';
+    case 'Follow-up':
+      return 'Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.';
+    case 'Catalogue':
+      return 'Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.';
+    case 'Variation':
+      return 'Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.';
+    case 'Promotion':
+      return 'Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.';
+    case 'Meeting':
+      return 'Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.';
+    case 'Update':
+      return 'Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.';
+    default:
+      return 'Curated and professionally designed email template adhering to brand standards to streamline client communications.';
+  }
 }
 
 function dialablePhone(phone: string) {
@@ -221,6 +243,7 @@ export default function PipelineView({
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
+  const emailBodyRef = React.useRef<HTMLDivElement>(null);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
   const [logFollowupLead, setLogFollowupLead] = useState<Lead | null>(null);
   const [logActionType, setLogActionType] = useState<Lead['history'][number]['type']>('call');
@@ -330,7 +353,7 @@ export default function PipelineView({
     setShowSendEmail(true);
   };
 
-  const handleMoveStage = async() => {
+  const handleMoveStage = async () => {
     if (!statusLead) return;
     if (statusStage === statusLead.stage) {
       closeStatusModal();
@@ -347,7 +370,7 @@ export default function PipelineView({
       detail: `Moved from "${statusLead.stage}" to "${statusStage}".${statusNotes ? ` ${statusNotes}` : ''}`,
       type: 'system',
     };
-    
+
     const updatedLead: Lead = {
       ...statusLead,
       stage: statusStage,
@@ -424,10 +447,11 @@ export default function PipelineView({
     console.log('Email subject:', emailSubject);
     console.log('Email body:', emailBody);
 
+    const finalBody = emailBodyRef.current ? emailBodyRef.current.innerHTML : emailBody;
     const sendCampaign = await sendEmailToLead(
       emailLead.email,
       emailSubject,
-      hydrateTemplate(emailBody, emailLead)
+      hydrateTemplate(finalBody, emailLead)
     );
 
     if (sendCampaign) {
@@ -1002,7 +1026,7 @@ export default function PipelineView({
                     {previewTemplateText(template.subject)}
                   </div>
                   <div className="mt-2 text-xs leading-relaxed text-[#78716c]">
-                    {buildSnippet(template.body)}
+                    {getTemplateDescription(template)}
                   </div>
                 </button>
               ))}
@@ -1042,12 +1066,19 @@ export default function PipelineView({
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-[#78716c]">Body</label>
-            <textarea
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
-              rows={8}
-              value={emailBody}
-              onChange={event => setEmailBody(event.target.value)}
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-[#78716c]">Body (HTML Preview)</label>
+              <span className="text-[11px] text-[#a8a29e]">Click to edit</span>
+            </div>
+            <div
+              key={selectedTemplate?.id}
+              ref={emailBodyRef}
+              className="email-html-preview"
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-multiline="true"
+              dangerouslySetInnerHTML={{ __html: emailBody }}
             />
           </div>
           <div className="flex flex-wrap gap-2">

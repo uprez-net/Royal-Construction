@@ -79,6 +79,7 @@ export interface LeadsStats {
 export interface EmailTemplate {
   id: number;
   subject: string;
+  content:string;
   category: string;
   body: string;
 }
