@@ -293,9 +293,11 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
   }
 
   const stageConfig = getStageConfig(lead.stage);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = lead.followupDate === todayStr;
 
   return (
-    <div className="fu-item">
+    <div className={`fu-item ${isToday ? 'fu-item-today' : ''}`}>
 
       {/* ═══ TOAST NOTIFICATIONS ═══ */}
       {toasts.length > 0 && (
@@ -421,7 +423,10 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
 
       {/* Timeline connector line */}
       <div className="fu-timeline-track">
-        <div className="fu-timeline-dot" style={{ background: stageConfig.dot }}>
+        <div
+          className="fu-timeline-dot"
+          style={{ background: isToday ? '#F59E0B' : stageConfig.dot }}
+        >
           {index + 1}
         </div>
       </div>
@@ -433,7 +438,10 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
             <span className="fu-item-name">{lead.name}</span>
             <span
               className="fu-stage-pill"
-              style={{ background: stageConfig.bg, color: stageConfig.color }}
+              style={{
+                background: isToday ? 'rgba(245, 158, 11, 0.15)' : stageConfig.bg,
+                color: isToday ? '#F59E0B' : stageConfig.color,
+              }}
             >
               {lead.stage}
             </span>
