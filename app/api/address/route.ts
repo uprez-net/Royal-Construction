@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { AddressSuggestion } from "@/types/data";
+import {
+    successResponse,
+    errorResponse,
+} from "@/utils/validators";
 
 /**
  * ENV
@@ -574,32 +578,23 @@ export async function GET(
                 },
             );
         }
-
-        return NextResponse.json(
-            {
-                suggestions: suggestions.slice(
-                    0,
-                    limit,
-                ),
-                count: suggestions.length,
-            },
-        );
+        return successResponse({
+            suggestions: suggestions.slice(
+                0,
+                limit,
+            ),
+            count: suggestions.length,
+        });
     } catch (
     error
     ) {
-        return NextResponse.json(
-            {
-                message:
-                    "Lookup failed.",
-                error:
-                    error instanceof
-                        Error
-                        ? error.message
-                        : "Unknown error",
-            },
-            {
-                status: 500,
-            },
-        );
+        return errorResponse(
+        "Lookup failed.",
+        {
+            status: 500,
+            code: "INTERNAL_ERROR",
+            issues: error instanceof Error ? { message: error.message } : undefined,
+        },
+    );
     }
 }
