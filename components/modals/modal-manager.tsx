@@ -103,9 +103,11 @@ export function ModalManager() {
 
   switch (modal.type) {
     case "addUpdate":
+      const milestoneId = modal.payload?.milestoneId as string | undefined;
       return (
         <AddUpdateModal
           projectId={projectId}
+          milestoneId={milestoneId}
           milestones={projectMilestones}
           open
           onOpenChange={(open) => {

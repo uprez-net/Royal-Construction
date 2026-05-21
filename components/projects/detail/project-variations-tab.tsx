@@ -6,9 +6,13 @@ import { Button } from "@/components/ui/button";
 import { VariationImpactTone, VariationTimelineImpact } from "@/types/ui";
 import { Clock, Plus, Eye, Bell } from "lucide-react";
 
-import { currency, dateFormat, variationStatusTone } from "../../../utils/formatters";
+import {
+  currency,
+  dateFormat,
+  variationStatusTone,
+} from "../../../utils/formatters";
 
-import { addDays, differenceInDays, format } from "date-fns";
+import { addDays, differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
 import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -19,6 +23,7 @@ const calculateVariationImpact = (
   startDate: Date,
   endDate: Date,
 ): VariationTimelineImpact => {
+  const MIN_DELAY_VISUAL_PERCENT = 12;
   const originalDurationDays = Math.max(
     1,
     differenceInDays(endDate, startDate),
@@ -46,6 +51,13 @@ const calculateVariationImpact = (
       : 0;
 
   const adjustedEndDate = addDays(endDate, totalDelayDays);
+  let visualDelayPercent = delayPercent;
+  let visualOriginalPercent = originalDurationPercent;
+
+  if (totalDelayDays > 0 && delayPercent < MIN_DELAY_VISUAL_PERCENT) {
+    visualDelayPercent = MIN_DELAY_VISUAL_PERCENT;
+    visualOriginalPercent = 100 - MIN_DELAY_VISUAL_PERCENT;
+  }
 
   let tone: VariationImpactTone = "neutral";
 
@@ -109,10 +121,12 @@ const calculateVariationImpact = (
 
     originalDurationPercent: Number(originalDurationPercent.toFixed(1)),
     delayPercent: Number(delayPercent.toFixed(1)),
+    visualOriginalPercent,
+    visualDelayPercent,
 
-    startDateLabel: format(startDate, "d MMM yyyy"),
-    originalEndLabel: format(endDate, "d MMM yyyy"),
-    adjustedEndLabel: format(adjustedEndDate, "d MMM yyyy"),
+    startDateLabel: `Start Date: ${dateFormat.format(startDate)}`,
+    originalEndLabel: `Original End Date: ${dateFormat.format(endDate)}`,
+    adjustedEndLabel: `Adjusted End Date: ${dateFormat.format(adjustedEndDate)}`,
 
     styles: toneConfig[tone],
   };
@@ -174,7 +188,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                   projectVariationImpact.styles.originalBar,
                 )}
                 style={{
-                  width: `${projectVariationImpact.originalDurationPercent}%`,
+                  width: `${projectVariationImpact.visualOriginalPercent}%`,
                 }}
               >
                 Original Plan
@@ -187,7 +201,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                     projectVariationImpact.styles.delayBar,
                   )}
                   style={{
-                    width: `${projectVariationImpact.delayPercent}%`,
+                    width: `${projectVariationImpact.visualDelayPercent}%`,
                   }}
                 >
                   +{projectVariationImpact.totalDelayDays}d Delay
@@ -219,7 +233,11 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
             <Button
               size="sm"
               className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
-              onClick={() => dispatch(openModal({ type: "createVariation", payload: { project } }))}
+              onClick={() =>
+                dispatch(
+                  openModal({ type: "createVariation", payload: { project } }),
+                )
+              }
             >
               <Plus className="mr-1 size-4" />
               Add Variation
@@ -245,11 +263,16 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                 const variationCost = Number(variation.cost);
 
                 return [
-                  <span className="font-semibold text-slate-900" key={variation.id}>
+                  <span
+                    className="font-semibold text-slate-900"
+                    key={variation.id}
+                  >
                     V-{String(index + 1).padStart(3, "0")}
                   </span>,
 
-                  <span key={`${variation.id}-sent`}>{dateFormat.format(variation.requestedDate)}</span>,
+                  <span key={`${variation.id}-sent`}>
+                    {dateFormat.format(variation.requestedDate)}
+                  </span>,
 
                   <span key={`${variation.id}-approved`}>
                     {variation.approvedDate
@@ -257,31 +280,52 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                       : "-"}
                   </span>,
 
-                  <span key={`${variation.id}-delay`} className="text-center text-slate-700">
+                  <span
+                    key={`${variation.id}-delay`}
+                    className="text-center text-slate-700"
+                  >
                     {variation.delayDays ? `${variation.delayDays} days` : "-"}
                   </span>,
 
-                  <span className="max-w-[200px] truncate text-slate-700" key={`${variation.id}-description`}>
+                  <span
+                    className="max-w-[200px] truncate text-slate-700"
+                    key={`${variation.id}-description`}
+                  >
                     {variation.description}
                   </span>,
 
-                  <span className="text-slate-600" key={`${variation.id}-reason`}>
+                  <span
+                    className="text-slate-600"
+                    key={`${variation.id}-reason`}
+                  >
                     Client Request
                   </span>,
 
-                  <span className="font-semibold text-red-600" key={`${variation.id}-cost`}>
+                  <span
+                    className="font-semibold text-red-600"
+                    key={`${variation.id}-cost`}
+                  >
                     +{currency.format(variationCost)}
                   </span>,
 
-                  <span className="font-medium text-slate-900" key={`${variation.id}-new-total`}>
+                  <span
+                    className="font-medium text-slate-900"
+                    key={`${variation.id}-new-total`}
+                  >
                     {currency.format(totalBudget + variationCost)}
                   </span>,
 
-                  <StatusPill id={`${variation.id}-status`} tone={variationStatusTone(variation.status)}>
+                  <StatusPill
+                    id={`${variation.id}-status`}
+                    tone={variationStatusTone(variation.status)}
+                  >
                     {variation.status}
                   </StatusPill>,
 
-                  <div className="flex justify-end gap-1.5" key={`${variation.id}-actions`}>
+                  <div
+                    className="flex justify-end gap-1.5"
+                    key={`${variation.id}-actions`}
+                  >
                     {variation.status !== "APPROVED" && (
                       <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-[#D97706] hover:bg-amber-50 hover:text-[#D97706]">
                         <Bell className="size-3.5" />

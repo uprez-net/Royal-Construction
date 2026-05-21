@@ -36,7 +36,7 @@ export function TradieDirectoryModal({ open, onOpenChange }: { open: boolean; on
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="sm:max-w-4xl max-h-[60vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tradie Directory</DialogTitle>
           <DialogDescription>Read-only directory of all active tradies in the database.</DialogDescription>

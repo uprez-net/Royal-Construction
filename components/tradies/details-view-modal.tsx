@@ -151,8 +151,8 @@ export function TradieScheduleDetailsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "overflow-hidden border-[#E2E8F0] p-0",
-          "max-h-[90vh] max-w-[720px] gap-0",
+          "border-[#E2E8F0] p-0",
+          "max-h-[60vh] overflow-y-auto max-w-[720px] gap-0",
           "rounded-[18px] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]",
         )}
       >
