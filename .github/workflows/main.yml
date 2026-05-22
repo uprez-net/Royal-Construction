@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  quality-checks:
+    runs-on: ubuntu-latest
+
+    env:
+      NODE_ENV: "test"
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_WEBHOOK_SIGNING_SECRET: ${{ secrets.CLERK_WEBHOOK_SIGNING_SECRET }}
+      NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in"
+      NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up"
+      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+      GEOSCAPE_API_KEY: ${{ secrets.GEOSCAPE_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      BUSINESS_EMAIL: "info@royalconstructions.com.au"
+      GRAPH_SENDER_UPN: "Dhrub@royalconstructions.com.au"
+
+      GRAPH_MODE: "app-only"
+      WEBHOOK_PATH: "/api/graph/notifications"
+      WEBHOOK_PORT: "3000"
+      GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
+      GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
+      GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Optional lint step
+      # Will show as failed, but won't stop the workflow
+      - name: Run lint
+        run: pnpm lint
+        continue-on-error: true
+
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+      # Only skipped if typecheck fails
+      - name: Build project
+        run: pnpm build:webpack
