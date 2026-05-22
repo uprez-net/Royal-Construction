@@ -1,4 +1,8 @@
-import type { ProjectDetail } from "@/types/project";
+import type {
+  ProjectDetail,
+  TradieScheduleListItem,
+  TradieUrgentReminderItem,
+} from "@/types/project";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +18,7 @@ import {
 } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
 import { StatusPill } from "@/components/common/status-pill";
-import { dateFormat, shortDateFormat } from "../../../utils/formatters";
+import { dateFormat, shortDateFormat } from "@/utils/formatters";
 import type { TradieScheduleStatus } from "@prisma/client";
 import { differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
@@ -219,6 +223,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       >
         <div className="overflow-x-auto">
           <DataTable
+            key={tradies.length} // Force remount to reset internal state when tradies change
             headers={[
               "Trade",
               "Company",
@@ -285,6 +290,40 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                     variant="outline"
                     size="icon"
                     className="size-8 rounded-lg text-muted-foreground hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600"
+                    onClick={() => {
+                      dispatch(
+                        openModal({
+                          type: "tradieReminder",
+                          payload: {
+                            schedule: {
+                              id: tradie.id,
+                              tradieId: tradie.tradie.id,
+                              tradieName: tradie.tradie.name,
+                              company: tradie.tradie.company,
+                              tradeType: tradie.tradie.tradeType,
+                              projectId: project.id,
+                              projectName: project.name,
+                              taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
+                              scheduledDate: new Date(
+                                tradie.scheduledDate,
+                              ).toISOString(),
+                              durationDays: tradie.durationDays,
+                              status: tradie.status,
+                              updatedAt: new Date().toISOString(),
+                              contact: {
+                                email: tradie.tradie.email,
+                                phone: tradie.tradie.phone,
+                              },
+                              siteManager: {
+                                name: project.siteManager?.name ?? "N/A",
+                                email: project.siteManager?.email ?? "N/A",
+                                phone: project.siteManager?.phone ?? "N/A",
+                              },
+                            } satisfies TradieScheduleListItem,
+                          },
+                        }),
+                      );
+                    }}
                   >
                     <Bell className="size-3.5" />
                   </Button>
@@ -294,6 +333,40 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   variant="outline"
                   size="icon"
                   className="size-8 rounded-lg text-muted-foreground hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600"
+                  onClick={() => {
+                    dispatch(
+                      openModal({
+                        type: "logCall",
+                        payload: {
+                          schedule: {
+                            id: tradie.id,
+                            tradieId: tradie.tradie.id,
+                            tradieName: tradie.tradie.name,
+                            company: tradie.tradie.company,
+                            tradeType: tradie.tradie.tradeType,
+                            projectId: project.id,
+                            projectName: project.name,
+                            taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
+                            scheduledDate: new Date(
+                              tradie.scheduledDate,
+                            ).toISOString(),
+                            durationDays: tradie.durationDays,
+                            status: tradie.status,
+                            updatedAt: new Date().toISOString(),
+                            contact: {
+                              email: tradie.tradie.email,
+                              phone: tradie.tradie.phone,
+                            },
+                            siteManager: {
+                              name: project.siteManager?.name ?? "N/A",
+                              email: project.siteManager?.email ?? "N/A",
+                              phone: project.siteManager?.phone ?? "N/A",
+                            },
+                          } satisfies TradieScheduleListItem,
+                        },
+                      }),
+                    );
+                  }}
                 >
                   <Phone className="size-3.5" />
                 </Button>
@@ -302,6 +375,40 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   variant="outline"
                   size="icon"
                   className="size-8 rounded-lg text-muted-foreground hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600"
+                  onClick={() => {
+                    dispatch(
+                      openModal({
+                        type: "confirmStatus",
+                        payload: {
+                          schedule: {
+                            id: tradie.id,
+                            tradieId: tradie.tradie.id,
+                            tradieName: tradie.tradie.name,
+                            company: tradie.tradie.company,
+                            tradeType: tradie.tradie.tradeType,
+                            projectId: project.id,
+                            projectName: project.name,
+                            taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
+                            scheduledDate: new Date(
+                              tradie.scheduledDate,
+                            ).toISOString(),
+                            durationDays: tradie.durationDays,
+                            status: tradie.status,
+                            updatedAt: new Date().toISOString(),
+                            contact: {
+                              email: tradie.tradie.email,
+                              phone: tradie.tradie.phone,
+                            },
+                            siteManager: {
+                              name: project.siteManager?.name ?? "N/A",
+                              email: project.siteManager?.email ?? "N/A",
+                              phone: project.siteManager?.phone ?? "N/A",
+                            },
+                          } satisfies TradieScheduleListItem,
+                        },
+                      }),
+                    );
+                  }}
                 >
                   <Pencil className="size-3.5" />
                 </Button>
@@ -309,9 +416,38 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
             ])}
             onRowClick={(rowIndex) => {
               const tradie = tradies[rowIndex];
-
-              // handle dialog/navigation
-              console.log("Clicked tradie:", tradie.id);
+              dispatch(
+                openModal({
+                  type: "tradieScheduleDetails",
+                  payload: {
+                    schedule: {
+                      id: tradie.id,
+                      tradieName: tradie.tradie.name,
+                      tradeType: tradie.tradie.tradeType,
+                      projectName: project.name,
+                      taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
+                      scheduledDate: new Date(
+                        tradie.scheduledDate,
+                      ).toISOString(),
+                      daysLeft: differenceInDays(
+                        new Date(tradie.scheduledDate),
+                        new Date(),
+                      ),
+                      status: tradie.status,
+                      company: tradie.tradie.company,
+                      contact: {
+                        email: tradie.tradie.email,
+                        phone: tradie.tradie.phone,
+                      },
+                      siteManager: {
+                        name: project.siteManager?.name ?? "N/A",
+                        email: project.siteManager?.email ?? "N/A",
+                        phone: project.siteManager?.phone ?? "N/A",
+                      },
+                    } satisfies TradieUrgentReminderItem,
+                  },
+                }),
+              );
             }}
             emptyState={
               <div className="flex flex-col items-center justify-center gap-3">
