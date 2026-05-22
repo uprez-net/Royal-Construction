@@ -1,8 +1,7 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig, type GraphMode } from '@/lib/graph/config';
-import { jsonError, requireAdminToken } from '@/lib/graph/route-utils';
-import { errorResponse, unauthorizedResponse, badRequestResponse } from '@/utils/validators';
-import { NextResponse } from 'next/server';
+import { requireAdminToken } from '@/lib/graph/route-utils';
+import { errorResponse, badRequestResponse } from '@/utils/validators';
 
 // export const runtime = 'nodejs';
 

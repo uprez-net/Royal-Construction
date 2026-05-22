@@ -33,7 +33,6 @@ import { clearProjectFilters, openModal } from "@/lib/store/slices/uiSlice";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
 
 import { EnhancedProjectCard } from "./enhanced-project-card";
-import { ProjectDetailModal } from "./project-detail-modal";
 import { ProjectFilters } from "./project-filters";
 import { ProjectToolbar } from "./project-toolbar";
 import { fetchJson } from "@/utils/fetch";
@@ -125,7 +124,7 @@ export function ProjectsClient({
 
   useEffect(() => {
     dispatch(setProjects(projects));
-  }, [projects]);
+  }, [projects, dispatch]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -174,6 +173,7 @@ export function ProjectsClient({
     sortBy,
     sortOrder,
     statusFilter,
+    dispatch,
   ]);
 
   const handleExport = () => {

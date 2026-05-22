@@ -448,7 +448,7 @@ const tradiesSlice = createSlice({
         state.error = null;
       })
       .addCase(updateTradieScheduleStatus.fulfilled, (state, action) => {
-        const { schedule, requiresReplacement } = action.payload;
+        const { schedule } = action.payload;
         // remove from pending
         state.pendingScheduleIds = state.pendingScheduleIds.filter((id) => id !== schedule.id);
 

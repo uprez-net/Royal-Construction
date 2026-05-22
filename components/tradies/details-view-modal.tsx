@@ -8,7 +8,6 @@ import {
   Pencil,
   Phone,
   Star,
-  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";

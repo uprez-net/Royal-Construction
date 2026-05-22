@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Hammer } from "lucide-react";
+import { Bell } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import { navigationItems, tickerItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";

@@ -328,6 +328,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                   </span>,
 
                   <StatusPill
+                    key={`${variation.id}-status`}
                     id={`${variation.id}-status`}
                     tone={variationStatusTone(variation.status)}
                   >

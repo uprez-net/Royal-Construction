@@ -253,6 +253,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
               <StatusPill
                 key={`${tradie.id}-reminder`}
+                id={`${tradie.id}-reminder`}
                 tone={getReminderTone(
                   tradie.reminderSentAt,
                   new Date(tradie.scheduledDate),
@@ -271,6 +272,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               ),
 
               <StatusPill
+                key={`${tradie.id}-status`}
                 id={`${tradie.id}-status`}
                 tone={getStatusTone(tradie.status)}
               >
