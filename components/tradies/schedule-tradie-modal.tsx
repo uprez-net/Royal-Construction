@@ -34,6 +34,7 @@ import { createTradieSchedule } from "@/lib/store/slices/tradiesSlice";
 import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
 import { Textarea } from "../ui/textarea";
+import { createTradieScheduleForProject } from "@/lib/store/slices/projectsSlice";
 
 type Milestone = { id: string; name: string };
 
@@ -146,26 +147,49 @@ export function ScheduleTradieModal({
     setLoading(true);
 
     startTransition(() => {
-      dispatch(
-        createTradieSchedule({
-          tradieId: selectedTradie.id,
-          projectId: selectedProject.id,
-          milestoneId: milestoneId || undefined,
-          scheduledDate,
-          durationDays: Number(durationDays),
-        }),
-      )
-        .unwrap()
-        .then(() => {
-          setLoading(false);
-          onOpenChange(false);
-          resetForm();
-          onSuccess();
-        })
-        .catch((err: unknown) => {
-          setLoading(false);
-          console.error("Failed to create schedule", err);
-        });
+      if (initialProject) {
+        dispatch(
+          createTradieScheduleForProject({
+            tradieId: selectedTradie.id,
+            projectId: selectedProject.id,
+            milestoneId: milestoneId || undefined,
+            scheduledDate,
+            durationDays: Number(durationDays),
+          }),
+        )
+          .unwrap()
+          .then(() => {
+            setLoading(false);
+            onOpenChange(false);
+            resetForm();
+            onSuccess();
+          })
+          .catch((err: unknown) => {
+            setLoading(false);
+            console.error("Failed to create schedule", err);
+          });
+      } else {
+        dispatch(
+          createTradieSchedule({
+            tradieId: selectedTradie.id,
+            projectId: selectedProject.id,
+            milestoneId: milestoneId || undefined,
+            scheduledDate,
+            durationDays: Number(durationDays),
+          }),
+        )
+          .unwrap()
+          .then(() => {
+            setLoading(false);
+            onOpenChange(false);
+            resetForm();
+            onSuccess();
+          })
+          .catch((err: unknown) => {
+            setLoading(false);
+            console.error("Failed to create schedule", err);
+          });
+      }
     });
   }
 

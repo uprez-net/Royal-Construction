@@ -18,7 +18,7 @@ import type {
 import { fetchJson } from "@/utils/fetch";
 import { ProjectLookupItem } from "@/lib/data/projects";
 
-type CreateScheduleRequest = {
+export type CreateScheduleRequest = {
   tradieId: string;
   projectId: string;
   milestoneId?: string;

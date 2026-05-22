@@ -5,6 +5,7 @@ import type { ProjectDetailTabKey } from "@/types/ui";
 import {
   SafeMaterial,
   SafeVariation,
+  TradieScheduleListItem,
   type AddProjectUpdateRequest,
   type CreateProjectRequest,
   type CreateVariationRequest,
@@ -15,8 +16,9 @@ import {
 } from "@/types/project";
 import { fetchJson } from "@/utils/fetch";
 import { AddMaterialInput } from "@/utils/validators/material";
+import type { CreateScheduleRequest } from "./tradiesSlice";
 
-type MutationKey = "createProject" | "createVariation" | "addUpdate" | "addMaterial";
+type MutationKey = "createProject" | "createVariation" | "addUpdate" | "addMaterial" | "createTradieSchedule";
 
 type ProjectsMutationState = Record<MutationKey, ProjectMutationState>;
 
@@ -51,6 +53,7 @@ const initialMutationState = (): ProjectsMutationState => ({
   createVariation: { status: "idle", error: null },
   addUpdate: { status: "idle", error: null },
   addMaterial: { status: "idle", error: null },
+  createTradieSchedule: { status: "idle", error: null },
 });
 
 const initialState: ProjectsState = {
@@ -159,6 +162,23 @@ export const addProjectUpdate = createAsyncThunk<
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to add site update");
   }
+});
+
+export const createTradieScheduleForProject = createAsyncThunk<
+  TradieScheduleListItem,
+  CreateScheduleRequest
+>("tradies/createSchedule", async (payload) => {
+  const response = await fetchJson<TradieScheduleListItem>(
+    "/api/tradie-schedules",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to create tradie schedule"
+  );
+
+  return response.data;
 });
 
 const projectsSlice = createSlice({
@@ -311,7 +331,7 @@ const projectsSlice = createSlice({
       })
       .addCase(createVariation.fulfilled, (state, action) => {
         state.mutations.createVariation = { status: "succeeded", error: null };
-        if(state.activeProject?.id === action.payload.projectId) {
+        if (state.activeProject?.id === action.payload.projectId) {
           state.activeProject.variations.push(action.payload);
         }
       })
@@ -339,7 +359,7 @@ const projectsSlice = createSlice({
       })
       .addCase(addMaterialToProject.fulfilled, (state, action) => {
         state.mutations.addMaterial = { status: "succeeded", error: null };
-        if(state.activeProject?.id === action.payload.projectId) {
+        if (state.activeProject?.id === action.payload.projectId) {
           state.activeProject.materials.push(action.payload);
         }
       })
@@ -347,6 +367,46 @@ const projectsSlice = createSlice({
         state.mutations.addMaterial = {
           status: "failed",
           error: action.payload ?? action.error.message ?? "Unable to add material to project",
+        };
+      })
+      .addCase(createTradieScheduleForProject.pending, (state, action) => {
+        state.mutations.createTradieSchedule = { status: "pending", error: null };
+      })
+      .addCase(createTradieScheduleForProject.fulfilled, (state, action) => {
+        state.mutations.createTradieSchedule = { status: "succeeded", error: null };
+        const schedule = action.payload;
+        const milestone = state.activeProject?.milestones.find((m) => m.id === schedule.milestoneId);
+        if (state.activeProject?.id === schedule.projectId) {
+          state.activeProject.tradieSchedules.push({
+            id: schedule.id,
+            status: schedule.status,
+            scheduledDate: new Date(schedule.scheduledDate),
+            durationDays: schedule.durationDays,
+            tradieId: schedule.tradieId,
+            tradie: {
+              name: schedule.tradieName,
+              id: schedule.tradieId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              email: schedule.contact.email,
+              phone: schedule.contact.phone,
+              company: schedule.company,
+              trade: schedule.company ? schedule.tradeType : "",
+              tradeType: schedule.tradeType,
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            projectId: schedule.projectId,
+            milestoneId: schedule.milestoneId ?? null,
+            reminderSentAt: schedule.reminderSentAt ? new Date(schedule.reminderSentAt) : null,
+            milestone: milestone
+          });
+        }
+      })
+      .addCase(createTradieScheduleForProject.rejected, (state, action) => {
+        state.mutations.createTradieSchedule = {
+          status: "failed",
+          error: (action.payload as string | null) ?? action.error.message ?? "Failed to create tradie schedule",
         };
       });
   },
