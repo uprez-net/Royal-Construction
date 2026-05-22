@@ -37,15 +37,10 @@ import { PreviewPictureModal } from "../common/preview-picture-modal";
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
   const dispatch = useAppDispatch();
-  const router = useRouter();
 
   const handleClose = () => dispatch(closeModal());
-  const handleProjectSuccess = () => {
-    handleClose();
-  };
   const handleSuccess = () => {
     handleClose();
-    router.refresh();
   };
 
   const projectPayload = modal.payload?.project as ProjectDetail | undefined;
@@ -117,7 +112,7 @@ export function ModalManager() {
           onOpenChange={(open) => {
             if (!open) handleClose();
           }}
-          onSuccess={handleProjectSuccess}
+          onSuccess={handleSuccess}
         />
       );
     case "createVariation":
@@ -128,7 +123,7 @@ export function ModalManager() {
           onOpenChange={(open) => {
             if (!open) handleClose();
           }}
-          onSuccess={handleProjectSuccess}
+          onSuccess={handleSuccess}
         />
       );
     case "createProject":
@@ -138,7 +133,7 @@ export function ModalManager() {
           onOpenChange={(open) => {
             if (!open) handleClose();
           }}
-          onSuccess={handleProjectSuccess}
+          onSuccess={handleSuccess}
         />
       );
     case "scheduleTradie":
