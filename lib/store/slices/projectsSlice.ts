@@ -3,7 +3,6 @@ import { createAsyncThunk, createSelector, createSlice, type PayloadAction } fro
 import type { RootState } from "@/lib/store";
 import type { ProjectDetailTabKey } from "@/types/ui";
 import {
-  SafeMaterial,
   type AddProjectUpdateRequest,
   type CreateProjectRequest,
   type CreateVariationRequest,

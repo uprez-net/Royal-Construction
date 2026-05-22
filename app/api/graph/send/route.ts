@@ -1,8 +1,7 @@
 import { createGraphContext, type EmailInput } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
-import { jsonError, requireAdminToken } from '@/lib/graph/route-utils';
-import { successResponse, errorResponse, unauthorizedResponse, badRequestResponse } from '@/utils/validators';
-import { NextResponse } from 'next/server';
+import { requireAdminToken } from '@/lib/graph/route-utils';
+import { successResponse, errorResponse, badRequestResponse } from '@/utils/validators';
 
 // export const runtime = 'nodejs';
 

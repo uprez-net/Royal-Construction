@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { CalendarDays, Info, Loader2, Plus } from "lucide-react";
+import { CalendarDays, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {

@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import type { ReactNode, Key } from "react"
+import type { ReactNode, Key } from "react";
 
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const statusToneMap = {
   purple: "bg-purple-100 text-purple-700",
@@ -12,16 +12,27 @@ const statusToneMap = {
   success: "bg-emerald-100 text-emerald-700",
   warning: "bg-amber-100 text-amber-700",
   danger: "bg-red-100 text-red-700",
-}
+};
 
 export function StatusPill({
   id,
   tone,
   children,
 }: {
-  id?: Key | null | undefined
-  tone: keyof typeof statusToneMap
-  children: ReactNode
+  key?: Key | string | number;
+  id?: string | number;
+  tone: keyof typeof statusToneMap;
+  children: ReactNode;
 }) {
-  return <Badge key={id} className={cn("rounded-full px-3 py-1 text-xs font-semibold", statusToneMap[tone])}>{children}</Badge>
+  return (
+    <Badge
+      key={id}
+      className={cn(
+        "rounded-full px-3 py-1 text-xs font-semibold",
+        statusToneMap[tone],
+      )}
+    >
+      {children}
+    </Badge>
+  );
 }

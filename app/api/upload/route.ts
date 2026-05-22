@@ -1,8 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
-
 import { saveFile } from '@/lib/data/file';
 import { getUserByClerkIdCached } from '@/lib/data/user';
 import { ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';

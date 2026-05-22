@@ -2,7 +2,6 @@ import prisma from "../prisma";
 import { Prisma } from "@prisma/client";
 import { MaterialInput } from "@/utils/validators/material";
 import { SafeMaterial } from "@/types/project";
-import { revalidateTag } from "next/cache";
 
 export async function addMaterialToProject(projectId: string, materialData: MaterialInput): Promise<SafeMaterial> {
     try {

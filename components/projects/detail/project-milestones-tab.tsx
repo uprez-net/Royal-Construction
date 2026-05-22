@@ -1,6 +1,5 @@
 import {
   CalendarCheck2,
-  TriangleAlert,
   Bell,
   Calendar,
   CheckCircle2,
@@ -9,7 +8,6 @@ import {
   Camera,
   Send,
   Wrench,
-  BellRing,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,7 +121,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
             const tradieAlert =
               nextTradies.length > 0
                 ? nextTradies.map((t) => (
-                    <div className="mb-2.5 flex items-center gap-3 rounded-xl border border-amber-200/50 bg-amber-50 p-3.5 dark:border-amber-900/40 dark:bg-amber-950/20">
+                    <div key={`tradie-alert-${t.id}`} className="mb-2.5 flex items-center gap-3 rounded-xl border border-amber-200/50 bg-amber-50 p-3.5 dark:border-amber-900/40 dark:bg-amber-950/20">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
                         <Wrench className="h-4 w-4" />
                       </div>

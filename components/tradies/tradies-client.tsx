@@ -455,7 +455,7 @@ export function TradiesClient({
       {CalanderRow(row.scheduledDate)}
     </span>,
 
-    <StatusPill id={`status-${row.id}`} tone={statusToneMap[row.status]}>
+    <StatusPill key={`status-${row.id}`} id={`status-${row.id}`} tone={statusToneMap[row.status]}>
       {statusLabelMap[row.status]}
     </StatusPill>,
 
