@@ -96,7 +96,7 @@ export function CreateVariationModal({
         }),
       ).unwrap();
 
-      toast.success(`Variation added to ${updatedProject.name}`);
+      toast.success(`Variation added successfully.`);
       onSuccess();
     } catch (error) {
       const message =

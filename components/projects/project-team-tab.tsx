@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { toast } from "sonner";
 import { DataTable } from "../common/data-table";
+import { ProjectWithStats } from "@/types/project";
 
 type Worker = {
   name: string;
@@ -22,20 +23,23 @@ type Worker = {
   hours: number;
 };
 
-type Project = {
-  location: string;
-  stage: string;
-  manager: string;
-  workers: Worker[];
-};
+interface TeamTabProps {
+  project: ProjectWithStats;
+}
 
-export function TeamTab({ project }: { project: Project }) {
-  const totalHours = project.workers.reduce(
+export function TeamTab({ project }: TeamTabProps) {
+  const projectData = {
+    location: project.location,
+    stage: "Frame Stage",
+    manager: project.siteManager?.name ?? "Site Manager",
+    workers: [] as Worker[],
+  };
+  const totalHours = projectData.workers.reduce(
     (sum, worker) => sum + worker.hours,
     0,
   );
 
-  const workerRows = project.workers.map((worker) => {
+  const workerRows = projectData.workers.map((worker) => {
     const initials = worker.name
       .split(" ")
       .map((name) => name[0])
@@ -93,7 +97,7 @@ export function TeamTab({ project }: { project: Project }) {
       <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">
-            {project.workers.length} workers assigned
+            {projectData.workers.length} workers assigned
           </p>
 
           <p className="text-xs text-muted-foreground">
@@ -153,7 +157,7 @@ export function TeamTab({ project }: { project: Project }) {
             headers={["Worker", "Role", "Hours/Week", "Status", "Actions"]}
             rows={workerRows}
             onRowClick={(rowIndex) => {
-              const worker = project.workers[rowIndex];
+              const worker = projectData.workers[rowIndex];
 
               toast.info(`Viewing ${worker.name}'s details...`);
             }}
@@ -169,7 +173,7 @@ export function TeamTab({ project }: { project: Project }) {
                   </h3>
 
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Project is currently in {project.stage}.
+                    Project is currently in {projectData.stage}.
                   </p>
                 </CardContent>
               </Card>
@@ -182,7 +186,7 @@ export function TeamTab({ project }: { project: Project }) {
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <BadgeCheck className="h-4 w-4 text-primary" />
-            Site Manager: {project.manager}
+            Site Manager: {projectData.manager}
           </div>
         </CardHeader>
 
@@ -196,7 +200,7 @@ export function TeamTab({ project }: { project: Project }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => toast.info(`Messaging ${project.manager}...`)}
+              onClick={() => toast.info(`Messaging ${projectData.manager}...`)}
             >
               <MessageSquare className="mr-2 h-4 w-4" />
               Message
@@ -205,7 +209,7 @@ export function TeamTab({ project }: { project: Project }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => toast.info(`Calling ${project.manager}...`)}
+              onClick={() => toast.info(`Calling ${projectData.manager}...`)}
             >
               <Phone className="mr-2 h-4 w-4" />
               Call

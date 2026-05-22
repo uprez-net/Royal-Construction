@@ -47,15 +47,21 @@ export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
       {detailUi.activeTab === "materials" ? (
         <ProjectMaterialsTab project={project} />
       ) : null}
-      {detailUi.activeTab === "payments" ? <ProjectPaymentsTab /> : null}
+      {detailUi.activeTab === "payments" ? (
+        <ProjectPaymentsTab project={project} />
+      ) : null}
       {detailUi.activeTab === "updates" ? (
         <ProjectSiteUpdatesTab project={project} />
       ) : null}
       {detailUi.activeTab === "tradies" ? (
         <ProjectTradiesTab project={project} />
       ) : null}
-      {detailUi.activeTab === "workers" ? <ProjectWorkersTab /> : null}
-      {detailUi.activeTab === "quotes" ? <ProjectQuotesTab /> : null}
+      {detailUi.activeTab === "workers" ? (
+        <ProjectWorkersTab project={project} />
+      ) : null}
+      {detailUi.activeTab === "quotes" ? (
+        <ProjectQuotesTab project={project} />
+      ) : null}
       {detailUi.activeTab === "variations" ? (
         <ProjectVariationsTab project={project} />
       ) : null}

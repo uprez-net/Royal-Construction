@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import type { ProjectWithStats } from "@/types/project";
 import { TeamTab } from "./project-team-tab";
-import { projectTeamMock } from "@/lib/mock-data";
 import { CustomerTab } from "./project-customer-tab";
 import { MilestoneTab } from "./project-milestone-tab";
 import { OverviewTab } from "./project-overview-tab";
@@ -92,7 +91,7 @@ export function ProjectDetailModal({
 
           {activeTab === "financials" && <FinancialTab project={project} />}
 
-          {activeTab === "team" && <TeamTab project={projectTeamMock} />}
+          {activeTab === "team" && <TeamTab project={project} />}
         </div>
       </DialogContent>
     </Dialog>
