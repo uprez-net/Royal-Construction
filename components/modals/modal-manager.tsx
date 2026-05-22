@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { TradieScheduleStatus } from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
+import { PreviewPictureModal } from "../common/preview-picture-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -264,6 +265,11 @@ export function ModalManager() {
           isOpen
           onClose={handleClose}
         />
+      );
+    case "viewPicture":
+      const { imageUrl } = modal.payload as { imageUrl: string };
+      return (
+        <PreviewPictureModal open onClose={handleClose} imageUrl={imageUrl} />
       );
     default:
       return null;

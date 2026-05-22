@@ -14,6 +14,7 @@ export type ModalType =
   | "tradieScheduleDetails"
   | "projectDetail"
   | "addMaterial"
+  | "viewPicture"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;

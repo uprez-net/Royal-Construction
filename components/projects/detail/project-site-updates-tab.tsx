@@ -67,6 +67,14 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
                   <div
                     key={i}
                     className="h-48 w-48 group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
+                    onClick={() =>
+                      dispatch(
+                        openModal({
+                          type: "viewPicture",
+                          payload: { imageUrl: update.photoUrls[i] },
+                        }),
+                      )
+                    }
                   >
                     <Image
                       src={update.photoUrls[i]}

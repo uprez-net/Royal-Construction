@@ -121,7 +121,10 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
             const tradieAlert =
               nextTradies.length > 0
                 ? nextTradies.map((t) => (
-                    <div key={`tradie-alert-${t.id}`} className="mb-2.5 flex items-center gap-3 rounded-xl border border-amber-200/50 bg-amber-50 p-3.5 dark:border-amber-900/40 dark:bg-amber-950/20">
+                    <div
+                      key={`tradie-alert-${t.id}`}
+                      className="mb-2.5 flex items-center gap-3 rounded-xl border border-amber-200/50 bg-amber-50 p-3.5 dark:border-amber-900/40 dark:bg-amber-950/20"
+                    >
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
                         <Wrench className="h-4 w-4" />
                       </div>
@@ -291,6 +294,14 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                       <div
                         key={i}
                         className="group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
+                        onClick={() =>
+                          dispatch(
+                            openModal({
+                              type: "viewPicture",
+                              payload: { imageUrl: milestonePictures[i].url },
+                            }),
+                          )
+                        }
                       >
                         <Image
                           src={milestonePictures[i].url}
@@ -338,7 +349,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
                     <Wrench className="size-5" />
                   </div>
-                  
+
                   <div>
                     <p className="text-[13px] font-bold text-slate-900">
                       {schedule.tradie.trade} •{" "}
