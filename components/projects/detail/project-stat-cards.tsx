@@ -6,6 +6,7 @@ import { currency } from "@/utils/formatters";
 
 export function ProjectStatCards() {
   const budgetSummary = useAppSelector(selectActiveProjectBudgetSummary);
+  const isNewProject = useAppSelector((state) => state.projects.activeProject?.milestones.length === 0);
 
   if (!budgetSummary) {
     return null;
@@ -70,7 +71,7 @@ export function ProjectStatCards() {
           </div>
         </div>
         <div className="mt-2 text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
-          {projectKpiMock[3].value}
+          {isNewProject ? "0" : projectKpiMock[3].value}
         </div>
         <div className="mt-1 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
           Workers On Site Now

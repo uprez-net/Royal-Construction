@@ -133,6 +133,7 @@ const calculateVariationImpact = (
 };
 
 export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
+  const dispatch = useAppDispatch();
   const totalBudget = Number(project.totalBudget);
   const variationTotal = project.variations.reduce(
     (sum, variation) => sum + Number(variation.cost),
@@ -143,7 +144,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
     new Date(project.startDate),
     new Date(project.estimatedEndDate),
   );
-  const dispatch = useAppDispatch();
+  const noDelay = projectVariationImpact.totalDelayDays === 0;
 
   return (
     <section className="space-y-4">
@@ -194,7 +195,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                 Original Plan
               </div>
 
-              {projectVariationImpact.totalDelayDays > 0 && (
+              {!noDelay && (
                 <div
                   className={cn(
                     "flex h-full items-center justify-center text-[10px] font-semibold text-white transition-all",
@@ -217,20 +218,26 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
 
               {/* Original completion */}
               <span
-                className="absolute -translate-x-1/2 whitespace-nowrap"
+                className={`absolute whitespace-nowrap ${
+                  noDelay ? "-translate-x-full" : "-translate-x-1/2"
+                }`}
                 style={{
-                  left: `${projectVariationImpact.visualOriginalPercent}%`,
+                  left: noDelay
+                    ? `calc(${projectVariationImpact.visualOriginalPercent}% - 8px)`
+                    : `${projectVariationImpact.visualOriginalPercent}%`,
                 }}
               >
-                {projectVariationImpact.totalDelayDays > 0
+                {!noDelay
                   ? projectVariationImpact.originalEndLabel
-                  : "Estimated Completion"}
+                  : projectVariationImpact.adjustedEndLabel}
               </span>
 
               {/* Adjusted completion */}
-              <span className="absolute right-0 translate-x-0 whitespace-nowrap">
-                {projectVariationImpact.adjustedEndLabel}
-              </span>
+              {!noDelay && (
+                <span className="absolute right-0 translate-x-0 whitespace-nowrap">
+                  {projectVariationImpact.adjustedEndLabel}
+                </span>
+              )}
             </div>
           </div>
         </CardContent>

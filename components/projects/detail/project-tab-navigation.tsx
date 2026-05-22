@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
+import { useMemo } from "react";
 
 const TabIcons: Record<ProjectDetailTabKey, React.ElementType> = {
   overview: LayoutGrid,
@@ -41,6 +42,7 @@ const generateProjectDetailTabs = (
 
   const tradieAlerts = project.tradieSchedules.filter(
     (schedule) =>
+      schedule.status === "PENDING" ||
       schedule.status === "PENDING_RESPONSE" ||
       schedule.status === "NO_RESPONSE" ||
       schedule.status === "DECLINED",
@@ -100,14 +102,18 @@ export function ProjectTabNavigation({
   activeTab: ProjectDetailTabKey;
   onTabChange: (tab: ProjectDetailTabKey) => void;
 }) {
-  const projectDetailTabs = generateProjectDetailTabs(project);
+  const projectDetailTabs = useMemo(
+    () => generateProjectDetailTabs(project),
+    [project],
+  );
+
   return (
     <nav className="hide-scrollbar flex gap-0 overflow-x-auto border-b-2 border-border/60 mb-5">
       {projectDetailTabs.map((tab) => {
         const Icon = TabIcons[tab.key];
         return (
           <button
-            key={tab.key}
+            key={`${tab.key}-${tab.label}-${tab.badge}`}
             type="button"
             onClick={() => onTabChange(tab.key)}
             className={cn(
