@@ -3,6 +3,8 @@ import { createAsyncThunk, createSelector, createSlice, type PayloadAction } fro
 import type { RootState } from "@/lib/store";
 import type { ProjectDetailTabKey } from "@/types/ui";
 import {
+  SafeMaterial,
+  SafeVariation,
   type AddProjectUpdateRequest,
   type CreateProjectRequest,
   type CreateVariationRequest,
@@ -62,48 +64,9 @@ const initialState: ProjectsState = {
   },
 };
 
-function toProjectListItem(project: ProjectDetail): ProjectWithStats {
-  const milestoneCount = project.milestones.length;
-  const completedMilestoneCount = project.milestones.filter((milestone) => milestone.status === "DONE").length;
-  const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
-  const approvedVariationSpend = project.variations
-    .filter((variation) => variation.status === "APPROVED")
-    .reduce((sum, variation) => sum + Number(variation.cost), 0)
-    .toString();
-
-  return {
-    ...project,
-    approvedVariationSpend,
-    milestones: project.milestones.map((milestone) => ({
-      id: milestone.id,
-      name: milestone.name,
-      targetDate: milestone.targetDate,
-      actualDate: milestone.actualDate,
-      status: milestone.status,
-      tradies: milestone.tradieSchedules.map((schedule) => ({
-        name: schedule.tradie.name,
-        company: schedule.tradie.company,
-        tradeType: schedule.tradie.tradeType,
-      })),
-    })),
-    milestoneCount,
-    completedMilestoneCount,
-    progressPercent,
-  };
-}
-
 function syncProjectState(state: ProjectsState, project: ProjectDetail) {
-  const nextProject = toProjectListItem(project);
-  const existingIndex = state.projects.findIndex((item) => item.id === project.id);
-
-  if (existingIndex >= 0) {
-    state.projects[existingIndex] = nextProject;
-  } else {
-    state.projects.unshift(nextProject);
-  }
-
   if (state.activeProject?.id === project.id) {
-    state.activeProject = project;
+    state.activeProject = { ...project, ...state.activeProject };
   }
 
   delete state.optimisticUpdates[project.id];
@@ -133,12 +96,12 @@ export const createProject = createAsyncThunk<
 });
 
 export const addMaterialToProject = createAsyncThunk<
-  ProjectDetail,
+  SafeMaterial,
   AddMaterialInput,
   { rejectValue: string }
 >("projects/addMaterial", async (payload, thunkApi) => {
   try {
-    const response = await fetchJson<ProjectDetail>(
+    const response = await fetchJson<SafeMaterial>(
       `/api/material`,
       {
         method: "POST",
@@ -155,12 +118,12 @@ export const addMaterialToProject = createAsyncThunk<
 });
 
 export const createVariation = createAsyncThunk<
-  ProjectDetail,
+  SafeVariation,
   CreateVariationRequest,
   { rejectValue: string }
 >("projects/createVariation", async ({ projectId, ...payload }, thunkApi) => {
   try {
-    const response = await fetchJson<ProjectDetail>(
+    const response = await fetchJson<SafeVariation>(
       `/api/projects/${projectId}/variations`,
       {
         method: "POST",
@@ -348,7 +311,9 @@ const projectsSlice = createSlice({
       })
       .addCase(createVariation.fulfilled, (state, action) => {
         state.mutations.createVariation = { status: "succeeded", error: null };
-        syncProjectState(state, action.payload);
+        if(state.activeProject?.id === action.payload.projectId) {
+          state.activeProject.variations.push(action.payload);
+        }
       })
       .addCase(createVariation.rejected, (state, action) => {
         state.mutations.createVariation = {
@@ -374,7 +339,9 @@ const projectsSlice = createSlice({
       })
       .addCase(addMaterialToProject.fulfilled, (state, action) => {
         state.mutations.addMaterial = { status: "succeeded", error: null };
-        syncProjectState(state, action.payload);
+        if(state.activeProject?.id === action.payload.projectId) {
+          state.activeProject.materials.push(action.payload);
+        }
       })
       .addCase(addMaterialToProject.rejected, (state, action) => {
         state.mutations.addMaterial = {

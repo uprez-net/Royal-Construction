@@ -23,7 +23,7 @@ const calculateVariationImpact = (
   startDate: Date,
   endDate: Date,
 ): VariationTimelineImpact => {
-  const MIN_DELAY_VISUAL_PERCENT = 18;
+  const MIN_DELAY_VISUAL_PERCENT = 25;
   const originalDurationDays = Math.max(
     1,
     differenceInDays(endDate, startDate),
@@ -259,6 +259,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
         <CardContent className="space-y-4 pt-0 px-0 pb-5">
           <div className="overflow-x-auto">
             <DataTable
+              key={project.variations.length}
               headers={[
                 "Var #",
                 "Date Sent",

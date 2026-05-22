@@ -12,6 +12,7 @@ import {
   errorResponse,
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
+import { SafeVariation } from "@/types/project";
 
 export async function POST(
   request: Request,
@@ -29,7 +30,7 @@ export async function POST(
 
   const projectId = routeParams.data.projectId;
 
-  await prisma.variation.create({
+  const variation = await prisma.variation.create({
     data: {
       projectId: projectId,
       description: body.data.description,
@@ -40,15 +41,10 @@ export async function POST(
   });
 
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+  const safeVariation = {
+    ...variation,
+    cost: variation.cost.toString(),
+  } satisfies SafeVariation;
 
-  const updatedProject = await getProjectById(projectId);
-
-  if (!updatedProject) {
-    return errorResponse("Project not found after creating variation", {
-      status: 404,
-      code: "NOT_FOUND",
-    });
-  }
-
-  return successResponse(updatedProject, { status: 201 });
+  return successResponse(safeVariation, { status: 201 });
 }

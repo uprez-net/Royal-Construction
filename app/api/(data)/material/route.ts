@@ -23,14 +23,12 @@ export async function POST(req: NextRequest) {
         }
 
         const { projectId, materialData } = parsed.data;
-        await addMaterialToProject(projectId, materialData);
-
-        const updatedProject = await getProjectById(projectId);
+        const material = await addMaterialToProject(projectId, materialData);
 
         revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
         return successResponse(
-            updatedProject,
+            material,
             {
                 status: 201,
             }

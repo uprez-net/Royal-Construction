@@ -148,6 +148,7 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
       <CardContent className="space-y-4 pt-0 px-0 pb-5">
         <div className="mx-4 mt-2 rounded-lg border border-border/60">
           <DataTable
+            key={project.materials.length}
             headers={[
               "Category",
               "Product",

@@ -27,7 +27,7 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
         </Button>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-3" key={siteUpdates.length}>
         {siteUpdates.map((update) => (
           <div
             key={update.id}
@@ -66,7 +66,7 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
                 }).map((_, i) => (
                   <div
                     key={i}
-                    className="group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
+                    className="h-48 w-48 group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
                   >
                     <Image
                       src={update.photoUrls[i]}

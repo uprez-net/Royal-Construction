@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { TradieScheduleListItem } from "@/types/project";
 import { dateFormat } from "@/utils/formatters";
@@ -31,6 +33,55 @@ interface ReminderModalProps {
   };
 }
 
+const buildEmailAndSmsBodies = (
+  schedule: TradieScheduleListItem,
+  tradie: { email: string; phone: string; name?: string },
+  siteManager: { email: string; phone: string; name: string },
+) => {
+  const formattedDate = dateFormat.format(new Date(schedule.scheduledDate));
+
+  const tradieName = tradie.name || "there";
+
+  const emailSubject = `Work Reminder • ${schedule.tradeType} at ${schedule.projectName} • ${formattedDate}`;
+
+  const emailBody = `
+Hi ${tradieName},
+
+Just a reminder that your ${schedule.tradeType.toLowerCase()} work is scheduled for:
+
+Project: ${schedule.projectName}
+Date: ${formattedDate}
+
+Site Manager Contact
+----------------------------
+Name: ${siteManager.name}
+Email: ${siteManager.email}
+Phone: ${siteManager.phone}
+
+If you need to reschedule, require site access details, materials, or additional support, please get in touch as soon as possible.
+
+Please reply to confirm attendance.
+
+Kind regards,
+Guri Singh
+Royal Constructions
+NSW, Australia
+`.trim();
+
+  const smsBody = [
+    `Reminder: ${schedule.tradeType} work at ${schedule.projectName}`,
+    `Date: ${formattedDate}.`,
+    `Site Manager: ${siteManager.name} (${siteManager.phone}).`,
+    `Reply to confirm or reschedule.`,
+  ].join(" ");
+
+  return {
+    emailSubject,
+    emailBody,
+    smsBody,
+  };
+};
+
 export function ReminderModal({
   open,
   onOpenChange,
@@ -39,35 +90,22 @@ export function ReminderModal({
   tradie,
   siteManager,
 }: ReminderModalProps) {
+  const {
+    emailBody: emailBodyInt,
+    smsBody: smsBodyInt,
+    emailSubject: emailSubjectInt,
+  } = buildEmailAndSmsBodies(schedule, tradie, siteManager);
   const [tab, setTab] = useState<"email" | "sms">("email");
-
-  const emailBody = `
-    Hi ${tradie.email},
-
-    This is a reminder that you have ${schedule.tradeType} work scheduled at ${schedule.projectName} on ${dateFormat.format(new Date(schedule.scheduledDate))}.
-    
-    Site Manager: ${siteManager.name}
-    Email: ${siteManager.email}
-    Phone: ${siteManager.phone}
-
-    Please let us know if you have any questions or need to reschedule.
-    Let us know if you need any materials or support to complete the job.
-    
-    Best regards,
-    Guri Singh
-    Royal Constructions
-    NSW, Australia
-    `;
-
-  const smsBody = `Reminder: You have ${schedule.tradeType} work at ${schedule.projectName} on ${dateFormat.format(new Date(schedule.scheduledDate))}. Reply to confirm or reschedule.`;
-
+  const [emailBody, setEmailBody] = useState(emailBodyInt);
+  const [smsBody, setSmsBody] = useState(smsBodyInt);
+  const [emailSubject, setEmailSubject] = useState(emailSubjectInt);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
           "max-w-[680px] gap-0 overflow-hidden rounded-[14px] border border-[#E2E8F0] bg-white p-0 shadow-2xl",
           "sm:rounded-[14px]",
-          "max-h-[60vh] overflow-y-auto"
+          "max-h-[60vh] overflow-y-auto",
         )}
       >
         {/* Header */}
@@ -128,10 +166,11 @@ export function ReminderModal({
                   Subject
                 </Label>
 
-                <div className="text-[13px] font-[600] text-[#0F172A]">
-                  Reminder: {schedule.tradeType} work at {schedule.projectName}{" "}
-                  — {dateFormat.format(new Date(schedule.scheduledDate))}
-                </div>
+                <Input
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="text-[13px] font-semibold text-[#0F172A]"
+                />
               </div>
 
               <div className="mb-3">
@@ -149,14 +188,14 @@ export function ReminderModal({
                   Body
                 </Label>
 
-                <pre
+                <Textarea
+                  onChange={(e) => setEmailBody(e.target.value)}
                   className={cn(
-                    "whitespace-pre-wrap rounded-[8px] border border-[#E2E8F0] bg-[#F1F5F9] p-[14px]",
+                    "min-h-[180px] resize-none rounded-[8px] border border-[#E2E8F0] bg-[#F1F5F9] p-3.5",
                     "font-sans text-[12.5px] leading-[1.6] text-[#0F172A]",
                   )}
-                >
-                  {emailBody}
-                </pre>
+                  value={emailBody}
+                />
               </div>
             </div>
           )}
@@ -179,9 +218,14 @@ export function ReminderModal({
                   Message
                 </Label>
 
-                <div className="rounded-[8px] border border-[#E2E8F0] bg-[#F1F5F9] p-[14px] text-[13px] text-[#0F172A]">
-                  {smsBody}
-                </div>
+                <Textarea
+                  onChange={(e) => setSmsBody(e.target.value)}
+                  className={cn(
+                    "min-h-[180px] resize-none rounded-[8px] border border-[#E2E8F0] bg-[#F1F5F9] p-3.5",
+                    "font-sans text-[12.5px] leading-[1.6] text-[#0F172A]",
+                  )}
+                  value={smsBody}
+                />
 
                 <div className="mt-1 text-[11px] text-[#94A3B8]">
                   {smsBody.length}/160 characters

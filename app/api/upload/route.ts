@@ -13,7 +13,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         const jsonResponse = await handleUpload({
             body,
             request,
-            onBeforeGenerateToken: async (clientPayloadStr: string) => {
+            onBeforeGenerateToken: async (pathname: string, clientPayloadStr: string | null) => {
                 const { isAuthenticated, userId } = await auth();
                 if (!isAuthenticated) {
                     throw new Error('Unauthorized');
@@ -22,13 +22,18 @@ export async function POST(request: Request): Promise<NextResponse> {
                 // Parse and validate client payload
                 let clientPayload: ClientPayload;
                 try {
-                    clientPayload = clientPayloadSchema.parse(JSON.parse(clientPayloadStr));
+                    if (!clientPayloadStr) {
+                        throw new Error('Client payload is required');
+                    }
+                    const parsedPayload = JSON.parse(clientPayloadStr);
+                    clientPayload = clientPayloadSchema.parse(parsedPayload);
                 } catch (error) {
                     console.error('Invalid client payload', error);
                     throw new Error('Invalid file metadata in payload');
                 }
 
                 return {
+                    pathname,
                     allowedContentTypes: UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[],
                     addRandomSuffix: true,
                     maximumSizeInBytes: UPLOAD_CONSTRAINTS.maxFileSizeBytes,
@@ -45,7 +50,8 @@ export async function POST(request: Request): Promise<NextResponse> {
             onUploadCompleted: async ({ blob, tokenPayload }) => {
                 try {
                     // Validate token payload
-                    const payload = tokenPayloadSchema.parse(JSON.parse(tokenPayload!));
+                    const payloadBody = JSON.parse(tokenPayload!);
+                    const payload = tokenPayloadSchema.parse(payloadBody);
 
                     const user = await getUserByClerkIdCached(payload.userId);
                     if (!user) {
