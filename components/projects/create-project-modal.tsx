@@ -207,7 +207,7 @@ export function CreateProjectModal({
     setValue,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema as any),
     defaultValues,
   });
   const customerMode = useWatch({

@@ -359,7 +359,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
                                       </p>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
-                                        <img alt="Master Builders Association" src="https://royalconstructions.com.au/wp-content/smush-webp/2026/03/image-78.png.webp" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
+                                        <img alt="Master Builders Association" src="https://royal-construction-chi.vercel.app/image-78.png" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
                                       </a>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
@@ -821,7 +821,7 @@ BuildPro NSW`,
                                       </p>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
-                                        <img alt="Master Builders Association" src="https://royalconstructions.com.au/wp-content/smush-webp/2026/03/image-78.png.webp" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
+                                        <img alt="Master Builders Association" src="https://royal-construction-chi.vercel.app/image-78.png" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
                                       </a>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
@@ -1225,7 +1225,7 @@ BuildPro NSW`,
                                       </p>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
-                                        <img alt="Master Builders Association" src="https://royalconstructions.com.au/wp-content/smush-webp/2026/03/image-78.png.webp" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
+                                        <img alt="Master Builders Association" src="https://royal-construction-chi.vercel.app/image-78.png" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
                                       </a>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
@@ -1627,7 +1627,7 @@ BuildPro NSW
                                       </p>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
-                                        <img alt="Master Builders Association" src="https://royalconstructions.com.au/wp-content/smush-webp/2026/03/image-78.png.webp" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
+                                        <img alt="Master Builders Association" src="https://royal-construction-chi.vercel.app/image-78.png" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
                                       </a>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
@@ -2017,7 +2017,7 @@ BuildPro NSW`,
                                       </p>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
-                                        <img alt="Master Builders Association" src="https://royalconstructions.com.au/wp-content/smush-webp/2026/03/image-78.png.webp" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
+                                        <img alt="Master Builders Association" src="https://royal-construction-chi.vercel.app/image-78.png" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
                                       </a>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
@@ -2443,7 +2443,7 @@ BuildPro NSW`,
                                       </p>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
-                                        <img alt="Master Builders Association" src="https://royalconstructions.com.au/wp-content/smush-webp/2026/03/image-78.png.webp" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
+                                        <img alt="Master Builders Association" src="https://royal-construction-chi.vercel.app/image-78.png" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
                                       </a>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
@@ -2920,7 +2920,7 @@ BuildPro NSW`,
                                       </p>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
-                                        <img alt="Master Builders Association" src="https://royalconstructions.com.au/wp-content/smush-webp/2026/03/image-78.png.webp" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
+                                        <img alt="Master Builders Association" src="https://royal-construction-chi.vercel.app/image-78.png" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
                                       </a>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
@@ -3452,7 +3452,7 @@ BuildPro NSW`,
                                       </p>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
-                                        <img alt="Master Builders Association" src="https://royalconstructions.com.au/wp-content/smush-webp/2026/03/image-78.png.webp" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
+                                        <img alt="Master Builders Association" src="https://royal-construction-chi.vercel.app/image-78.png" style="display:block;outline:none;border:none;text-decoration:none;width:100px;height:auto;margin-bottom:1rem;" width="100" />
                                       </a>
 
                                       <a href="https://royalconstructions.com.au/" target="_blank" style="text-decoration:none;">
