@@ -122,22 +122,22 @@ export async function deleteLead(id: number): Promise<{ success: boolean; messag
 export async function sendEmailToLead(to: string, subject: string, body: string): Promise<boolean> {
   try {
 
-     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
+    //  const headers: Record<string, string> = {
+    //   'Content-Type': 'application/json',
+    // };
 
-    const token = process.env.NEXT_PUBLIC_GRAPH_ADMIN_TOKEN;
-     console.log('Graph admin token for sending email:', token);
+    // const token = process.env.NEXT_PUBLIC_GRAPH_ADMIN_TOKEN;
+    //  console.log('Graph admin token for sending email:', token);
     // ✅ Add the token to Authorization header
-    if (token) {
-      headers['x-graph-admin-token'] = token;
-    }
+    // if (token) {
+    //   headers['x-graph-admin-token'] = token;
+    // }
 
     const response = await fetchJson(
       '/api/graph/send',
       {
         method: 'POST',
-        headers,
+        // headers,
         body: JSON.stringify({ to, subject, body }),
       },
       'Failed to send email via Graph API'

@@ -34,13 +34,13 @@ interface AnalyticsViewProps {
 
 /* ── Color palette (matching reference) ─────── */
 const SOURCE_COLORS: Record<string, string> = {
-  'Google Ads': '#3ba6f1',
+  'Google Ads': '#0D9488',
   'Referral': '#16A34A',
   'Facebook Ads': '#F59E0B',
   'Walk-in': '#7C3AED',
-  'Website': '#78716c',
-  'Repeat Client': '#0c0a09',
-  'Personal': '#0284C7',
+  'Website': '#475569',
+  'Repeat Client': '#0F172A',
+  'Personal': '#2563EB',
   'Business': '#0F766E',
 };
 
@@ -105,12 +105,12 @@ export default function AnalyticsView({ leads }: AnalyticsViewProps) {
   });
 
   const trendChartConfig: ChartConfig = {
-    leads: { label: 'Leads', color: '#3ba6f1' },
+    leads: { label: 'Leads', color: '#0D9488' },
     converted: { label: 'Converted', color: '#16A34A' },
   };
 
   const convChartConfig: ChartConfig = {
-    total: { label: 'Total', color: '#3ba6f1' },
+    total: { label: 'Total', color: '#0D9488' },
     won: { label: 'Won', color: '#16A34A' },
   };
 
@@ -170,25 +170,25 @@ export default function AnalyticsView({ leads }: AnalyticsViewProps) {
               <AreaChart data={MONTHLY_TREND}>
                 <defs>
                   <linearGradient id="leadsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3ba6f1" stopOpacity={0.15} />
-                    <stop offset="100%" stopColor="#3ba6f1" stopOpacity={0.02} />
+                    <stop offset="0%" stopColor="#0D9488" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="#0D9488" stopOpacity={0.02} />
                   </linearGradient>
                   <linearGradient id="convertedGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#16A34A" stopOpacity={0.15} />
                     <stop offset="100%" stopColor="#16A34A" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid vertical={false} stroke="#e5e7eb" />
+                <CartesianGrid vertical={false} stroke="#E2E8F0" />
                 <XAxis
                   dataKey="month"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: '#a8a29e' }}
+                  tick={{ fontSize: 11, fill: '#94A3B8' }}
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: '#a8a29e' }}
+                  tick={{ fontSize: 11, fill: '#94A3B8' }}
                   domain={[0, 50]}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
@@ -196,10 +196,10 @@ export default function AnalyticsView({ leads }: AnalyticsViewProps) {
                 <Area
                   type="monotone"
                   dataKey="leads"
-                  stroke="#3ba6f1"
+                  stroke="#0D9488"
                   strokeWidth={2.5}
                   fill="url(#leadsGradient)"
-                  dot={{ r: 4, fill: '#3ba6f1', stroke: '#3ba6f1' }}
+                  dot={{ r: 4, fill: '#0D9488', stroke: '#0D9488' }}
                   activeDot={{ r: 5, strokeWidth: 2 }}
                 />
                 <Area
@@ -226,12 +226,12 @@ export default function AnalyticsView({ leads }: AnalyticsViewProps) {
           <div className="analytics-card-body">
             <ChartContainer config={convChartConfig} className="analytics-chart-container" style={{ height: 280 }}>
               <RechartsBarChart data={analytics.conversionData}>
-                <CartesianGrid vertical={false} stroke="#e5e7eb" />
+                <CartesianGrid vertical={false} stroke="#E2E8F0" />
                 <XAxis
                   dataKey="source"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 10, fill: '#a8a29e' }}
+                  tick={{ fontSize: 10, fill: '#94A3B8' }}
                   interval={0}
                   angle={-15}
                   textAnchor="end"
@@ -240,14 +240,14 @@ export default function AnalyticsView({ leads }: AnalyticsViewProps) {
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: '#a8a29e' }}
+                  tick={{ fontSize: 11, fill: '#94A3B8' }}
                   allowDecimals={false}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} verticalAlign="top" />
                 <Bar
                   dataKey="total"
-                  fill="#3ba6f1"
+                  fill="#0D9488"
                   radius={[5, 5, 0, 0]}
                   barSize={18}
                 />

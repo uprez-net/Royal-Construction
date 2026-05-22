@@ -15,7 +15,7 @@ function dialablePhone(phone: string) {
 }
 
 const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
-  New: { bg: 'rgba(59, 166, 241, 0.08)', color: '#3ba6f1', dot: '#3ba6f1' },
+  New: { bg: 'rgba(59, 166, 241, 0.08)', color: '#0D9488', dot: '#0D9488' },
   Contacted: { bg: 'rgba(245, 158, 11, 0.08)', color: '#D97706', dot: '#F59E0B' },
   Qualified: { bg: 'rgba(22, 163, 74, 0.08)', color: '#16A34A', dot: '#16A34A' },
   Quoted: { bg: 'rgba(124, 58, 237, 0.08)', color: '#7C3AED', dot: '#7C3AED' },
@@ -132,8 +132,8 @@ export default function FollowupsView({ leads, onLeadUpdate, onLeadDelete }: Fol
             </div>
             <div className="fu-stats">
               <StatItem label="Pending Follow-ups" value={stats.pending} color="#DC2626" />
-              <StatItem label="Upcoming" value={stats.upcoming} color="#3ba6f1" />
-              <StatItem label="New Leads" value={stats.byStage.new} color="#3ba6f1" />
+              <StatItem label="Upcoming" value={stats.upcoming} color="#0D9488" />
+              <StatItem label="New Leads" value={stats.byStage.new} color="#0D9488" />
               <StatItem label="Contacted" value={stats.byStage.contacted} color="#F59E0B" />
               <StatItem label="Qualified" value={stats.byStage.qualified} color="#16A34A" />
             </div>
@@ -352,7 +352,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
       >
         <div className="space-y-4">
           {emailLead ? (
-            <div className="rounded-[10px] border border-[#c1e1f7] bg-[#c1e1f7]/30 px-4 py-3 text-sm text-[#0c0a09]">
+            <div className="rounded-[10px] border border-[#CCFBF1] bg-[#CCFBF1]/30 px-4 py-3 text-sm text-[#0c0a09]">
               Sending to: <span className="font-medium">{emailLead.name}</span> -{' '}
               {emailLead.email || 'No email'}
             </div>
@@ -368,7 +368,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#3ba6f1] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
+                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#0D9488] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
                 >
                   <div className="text-[11px] font-medium uppercase tracking-[0.048px] text-[#a8a29e]">
                     {template.category}
@@ -410,7 +410,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
           <div>
             <label className="text-xs font-medium text-[#78716c]">Subject</label>
             <input
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
               value={emailSubject}
               onChange={event => setEmailSubject(event.target.value)}
             />
@@ -434,7 +434,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
               onClick={handleSendEmail}
               disabled={!emailSubject.trim()}
             >

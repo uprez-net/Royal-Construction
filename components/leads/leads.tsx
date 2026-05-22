@@ -150,16 +150,16 @@ function ModalShell({
       aria-modal="true"
     >
       <div
-        className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
+      className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-[14px] bg-white shadow-[0_12px_40px_rgba(0,0,0,0.1)] ring-1 ring-[#E2E8F0]`}
       >
-        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-[#E2E8F0] px-5 py-3">
           <div>
-            <h4 className={`text-[18px] font-medium tracking-[-0.016px] text-[#0c0a09] ${titleClassName ?? ''}`}>{title}</h4>
-            {subtitle ? <p className="mt-1 text-[13px] text-[#a8a29e]">{subtitle}</p> : null}
+            <h4 className={`text-[16px] font-bold tracking-[-0.016px] text-[#0F172A] ${titleClassName ?? ''}`}>{title}</h4>
+            {subtitle ? <p className="mt-1 text-[12px] text-[#94A3B8]">{subtitle}</p> : null}
           </div>
           <button
             type="button"
-            className="rounded-full p-1.5 text-[#a8a29e] transition hover:bg-[#fafaf9] hover:text-[#78716c]"
+            className="rounded-full p-1.5 text-[#94A3B8] transition hover:bg-[#F1F5F9] hover:text-[#475569]"
             onClick={onClose}
             aria-label="Close"
           >
@@ -610,7 +610,7 @@ export default function Leads() {
         maxWidthClass="max-w-[720px]"
       >
         <div className="space-y-4">
-          <div className="rounded-[10px] border border-[#c1e1f7] bg-[#c1e1f7]/30 px-4 py-3 text-sm text-[#0c0a09]">
+          <div className="rounded-[10px] border border-[#CCFBF1] bg-[#CCFBF1]/30 px-4 py-3 text-sm text-[#0F172A]">
             Sending to: <span className="font-medium">{emailTargets.length}</span> leads with email
           </div>
           <div className="max-h-[60vh] overflow-y-auto pr-1">
@@ -620,15 +620,15 @@ export default function Leads() {
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#3ba6f1] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
+                  className="group rounded-[10px] border border-[#E2E8F0] bg-white p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition hover:border-[#0D9488] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
                 >
-                  <div className="text-[11px] font-medium uppercase tracking-[0.048px] text-[#a8a29e]">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.048px] text-[#94A3B8]">
                     {template.category}
                   </div>
-                  <div className="mt-1 text-[15px] font-medium text-[#0c0a09]">
+                  <div className="mt-1 text-[14px] font-semibold text-[#0F172A]">
                     {previewTemplateText(template.subject)}
                   </div>
-                  <div className="mt-2 text-xs leading-relaxed text-[#78716c]">
+                  <div className="mt-2 text-xs leading-relaxed text-[#475569]">
                     {getTemplateDescription(template)}
                   </div>
                 </button>
@@ -667,7 +667,7 @@ export default function Leads() {
           <div>
             <label className="text-xs font-medium text-[#78716c]">Subject</label>
             <input
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              className="mt-1 w-full rounded-[7px] border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
               value={emailSubject}
               onChange={event => setEmailSubject(event.target.value)}
             />
@@ -691,7 +691,7 @@ export default function Leads() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className="inline-flex items-center justify-center gap-2 rounded-[7px] bg-[#0D9488] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F766E]"
               onClick={handleSendEmail}
               disabled={!emailSubject.trim() || emailTargets.length === 0}
             >
@@ -700,7 +700,7 @@ export default function Leads() {
             </button>
             <button
               type="button"
-              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+              className="inline-flex items-center justify-center rounded-[7px] border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#475569] transition hover:border-[#CBD5E1] hover:bg-[#F8FAFC]"
               onClick={closeSendEmail}
             >
               Cancel
@@ -746,8 +746,8 @@ interface StatsCardProps {
 
 function StatsCard({ label, value, icon: Icon, color, trend, trendDirection }: StatsCardProps) {
   const colorMap: Record<string, string> = {
-    primary: '#3ba6f1',
-    info: '#3ba6f1',
+    primary: '#0D9488',
+    info: '#2563EB',
     warning: '#F59E0B',
     success: '#16A34A',
     danger: '#DC2626',

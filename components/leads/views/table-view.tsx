@@ -911,7 +911,7 @@ export default function TableView({
                       {!lead.followupDate && !lead.followupTime ? (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#3ba6f1] hover:bg-[#c1e1f7]/20 hover:text-[#3ba6f1]"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"
                           onClick={(e) => { e.stopPropagation(); openFollowupModal(lead); }}
                           title="Set Follow-up"
                         >
@@ -920,7 +920,7 @@ export default function TableView({
                         </button>
                       ) : (
                         <span
-                          className={`followup-date-text cursor-pointer hover:text-[#3ba6f1] transition-colors ${lead.urgent ? 'followup-urgent' : ''}`}
+                          className={`followup-date-text cursor-pointer hover:text-[#0D9488] transition-colors ${lead.urgent ? 'followup-urgent' : ''}`}
                           onClick={(e) => { e.stopPropagation(); openFollowupModal(lead); }}
                         >
                           {formatFollowup(lead.followupDate, lead.followupTime)}
@@ -931,7 +931,7 @@ export default function TableView({
                       {!lead.assigned ? (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#3ba6f1] hover:bg-[#c1e1f7]/20 hover:text-[#3ba6f1]"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"
                           onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}
                           title="Assign Lead"
                         >
@@ -940,7 +940,7 @@ export default function TableView({
                         </button>
                       ) : (
                         <span
-                          className="assigned-name cursor-pointer hover:text-[#3ba6f1] transition-colors"
+                          className="assigned-name cursor-pointer hover:text-[#0D9488] transition-colors"
                           onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}
                         >
                           {lead.assigned}
@@ -1026,7 +1026,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Name</label>
                 <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.name}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, name: event.target.value } : prev)}
                 />
@@ -1034,7 +1034,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Phone</label>
                 <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.phone}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, phone: event.target.value } : prev)}
                 />
@@ -1042,7 +1042,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Email</label>
                 <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.email}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, email: event.target.value } : prev)}
                 />
@@ -1050,7 +1050,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Location</label>
                 <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.location}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, location: event.target.value } : prev)}
                 />
@@ -1061,7 +1061,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Source Detail</label>
                 <select
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.sourceDetail}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, sourceDetail: event.target.value as LeadSource } : prev)}
                 >
@@ -1073,7 +1073,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Stage</label>
                 <select
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.stage}
                   onChange={event => setDetailForm(prev => {
                     if (!prev) return prev;
@@ -1096,7 +1096,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Assigned</label>
                 <select
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.assigned}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, assigned: event.target.value } : prev)}
                 >
@@ -1109,7 +1109,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Budget</label>
                 <select
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.budget}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, budget: event.target.value } : prev)}
                 >
@@ -1144,7 +1144,7 @@ export default function TableView({
                 <label className="text-xs font-medium text-[#78716c]">Follow-up Date</label>
                 <input
                   type="date"
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.followupDate}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, followupDate: event.target.value } : prev)}
                 />
@@ -1153,7 +1153,7 @@ export default function TableView({
                 <label className="text-xs font-medium text-[#78716c]">Follow-up Time</label>
                 <input
                   type="time"
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.followupTime}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, followupTime: event.target.value } : prev)}
                 />
@@ -1163,7 +1163,7 @@ export default function TableView({
             <div>
               <label className="text-xs font-medium text-[#78716c]">Notes</label>
               <textarea
-                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                 rows={4}
                 value={detailForm.notes}
                 onChange={event => setDetailForm(prev => prev ? { ...prev, notes: event.target.value } : prev)}
@@ -1186,7 +1186,7 @@ export default function TableView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Lost Reason</label>
                 <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={detailForm.lostReason}
                   onChange={event => setDetailForm(prev => prev ? { ...prev, lostReason: event.target.value } : prev)}
                 />
@@ -1238,7 +1238,7 @@ export default function TableView({
                   <div className="sm:col-span-2">
                     <label className="text-[11px] font-medium text-[#78716c]">Action</label>
                     <input
-                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-1 focus:ring-[#3ba6f1]"
+                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]"
                       placeholder="e.g. Left a voicemail"
                       value={historyDraft.action}
                       onChange={e => setHistoryDraft(prev => ({ ...prev, action: e.target.value }))}
@@ -1247,7 +1247,7 @@ export default function TableView({
                   <div className="sm:col-span-2">
                     <label className="text-[11px] font-medium text-[#78716c]">Detail</label>
                     <textarea
-                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-1 focus:ring-[#3ba6f1]"
+                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]"
                       placeholder="Additional context..."
                       rows={2}
                       value={historyDraft.detail}
@@ -1257,7 +1257,7 @@ export default function TableView({
                   <div>
                     <label className="text-[11px] font-medium text-[#78716c]">Type</label>
                     <select
-                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-1 focus:ring-[#3ba6f1]"
+                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]"
                       value={historyDraft.type}
                       onChange={e => setHistoryDraft(prev => ({ ...prev, type: e.target.value as HistoryItem['type'] }))}
                     >
@@ -1300,7 +1300,7 @@ export default function TableView({
             <div className="flex flex-wrap gap-2 pt-2">
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleDetailUpdate}
                 disabled={!hasDetailChanges || isUpdating}
               >
@@ -1378,7 +1378,7 @@ export default function TableView({
                   <span
                     key={stage}
                     className={`rounded-full border px-2 py-0.5 text-[11px] ${stage === statusLead.stage
-                      ? 'border-[#c1e1f7] bg-[#c1e1f7]/30 text-[#3ba6f1] font-medium'
+                      ? 'border-[#CCFBF1] bg-[#CCFBF1]/30 text-[#0D9488] font-medium'
                       : 'border-[#e5e7eb] bg-[#fafaf9] text-[#78716c]'
                       }`}
                   >
@@ -1390,7 +1390,7 @@ export default function TableView({
             <div>
               <label className="text-xs font-medium text-[#78716c]">Move to Stage</label>
               <select
-                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                 value={statusStage}
                 onChange={event => setStatusStage(event.target.value as LeadStage)}
               >
@@ -1404,7 +1404,7 @@ export default function TableView({
             <div>
               <label className="text-xs font-medium text-[#78716c]">Notes (optional)</label>
               <textarea
-                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                 rows={3}
                 placeholder="Why are you moving this lead?"
                 value={statusNotes}
@@ -1414,7 +1414,7 @@ export default function TableView({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
                 onClick={handleMoveStage}
               >
                 <ArrowRight size={14} />
@@ -1441,7 +1441,7 @@ export default function TableView({
       >
         <div className="space-y-4">
           {emailLead ? (
-            <div className="rounded-[10px] border border-[#c1e1f7] bg-[#c1e1f7]/30 px-4 py-3 text-sm text-[#0c0a09]">
+            <div className="rounded-[10px] border border-[#CCFBF1] bg-[#CCFBF1]/30 px-4 py-3 text-sm text-[#0c0a09]">
               Sending to: <span className="font-medium">{emailLead.name}</span> -{' '}
               {emailLead.email || 'No email'}
             </div>
@@ -1457,7 +1457,7 @@ export default function TableView({
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#3ba6f1] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
+                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#0D9488] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
                 >
                   <div className="text-[11px] font-medium uppercase tracking-[0.048px] text-[#a8a29e]">
                     {template.category}
@@ -1500,7 +1500,7 @@ export default function TableView({
           <div>
             <label className="text-xs font-medium text-[#78716c]">Subject</label>
             <input
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
               value={emailSubject}
               onChange={event => setEmailSubject(event.target.value)}
             />
@@ -1524,7 +1524,7 @@ export default function TableView({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
               onClick={handleSendEmail}
               disabled={!emailSubject.trim()}
             >
@@ -1554,7 +1554,7 @@ export default function TableView({
             <label className="text-xs font-medium text-[#78716c]">Date</label>
             <input
               type="date"
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
               value={followupDate}
               onChange={event => setFollowupDate(event.target.value)}
             />
@@ -1563,7 +1563,7 @@ export default function TableView({
             <label className="text-xs font-medium text-[#78716c]">Time</label>
             <input
               type="time"
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
               value={followupTime}
               onChange={event => setFollowupTime(event.target.value)}
             />
@@ -1571,7 +1571,7 @@ export default function TableView({
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
               onClick={handleUpdateFollowup}
               disabled={!followupDate}
             >
@@ -1599,7 +1599,7 @@ export default function TableView({
           <div>
             <label className="text-xs font-medium text-[#78716c]">Assigned To</label>
             <select
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
               value={assignedPerson}
               onChange={event => setAssignedPerson(event.target.value)}
             >
@@ -1612,7 +1612,7 @@ export default function TableView({
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
               onClick={handleUpdateAssigned}
               disabled={!assignedPerson}
             >

@@ -31,7 +31,7 @@ const STAGES: LeadStage[] = [
 const MOVABLE_STAGES: LeadStage[] = [...STAGES];
 
 const stageColors: Record<LeadStage, { bg: string; text: string }> = {
-  New: { bg: '#c1e1f7', text: '#3ba6f1' },
+  New: { bg: '#CCFBF1', text: '#0D9488' },
   Contacted: { bg: '#FEF9C3', text: '#D97706' },
   Qualified: { bg: '#E9D5FF', text: '#7C3AED' },
   Quoted: { bg: '#FFF3E0', text: '#E8730C' },
@@ -679,7 +679,7 @@ export default function PipelineView({
               {detailLead.email ? (
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-xs font-medium text-[#0c0a09] transition hover:border-[#c1e1f7] hover:bg-[#c1e1f7]/20"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-xs font-medium text-[#0c0a09] transition hover:border-[#CCFBF1] hover:bg-[#CCFBF1]/20"
                   onClick={() => openEmailTemplates(detailLead)}
                 >
                   <Mail size={14} />
@@ -688,7 +688,7 @@ export default function PipelineView({
               ) : null}
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-xs font-medium text-[#0c0a09] transition hover:border-[#c1e1f7] hover:bg-[#c1e1f7]/20"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 py-2 text-xs font-medium text-[#0c0a09] transition hover:border-[#CCFBF1] hover:bg-[#CCFBF1]/20"
                 onClick={() => openStatusModal(detailLead)}
               >
                 <ArrowRight size={14} />
@@ -745,7 +745,7 @@ export default function PipelineView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Action Type</label>
                 <select
-                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={logActionType}
                   onChange={event => setLogActionType(event.target.value as Lead['history'][number]['type'])}
                 >
@@ -758,7 +758,7 @@ export default function PipelineView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Action</label>
                 <input
-                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   placeholder="e.g. Phone call"
                   value={logAction}
                   onChange={event => setLogAction(event.target.value)}
@@ -768,7 +768,7 @@ export default function PipelineView({
               <div>
                 <label className="text-xs font-medium text-[#78716c]">Details</label>
                 <textarea
-                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   rows={3}
                   placeholder="Notes from this interaction"
                   value={logDetail}
@@ -782,7 +782,7 @@ export default function PipelineView({
                 <label className="text-xs font-medium text-[#78716c]">Next Follow-up Date</label>
                 <input
                   type="date"
-                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={logNextDate}
                   onChange={event => setLogNextDate(event.target.value)}
                 />
@@ -791,7 +791,7 @@ export default function PipelineView({
                 <label className="text-xs font-medium text-[#78716c]">Next Follow-up Time</label>
                 <input
                   type="time"
-                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                  className="mt-1 w-full rounded-[6px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                   value={logNextTime}
                   onChange={event => setLogNextTime(event.target.value)}
                 />
@@ -846,7 +846,7 @@ export default function PipelineView({
                     <span
                       key={stage}
                       className={`rounded-full border px-2 py-0.5 text-[11px] ${stage === statusLead.stage
-                        ? 'border-[#c1e1f7] bg-[#c1e1f7]/30 text-[#3ba6f1] font-medium'
+                        ? 'border-[#CCFBF1] bg-[#CCFBF1]/30 text-[#0D9488] font-medium'
                         : 'border-[#e5e7eb] bg-[#fafaf9] text-[#78716c]'
                         }`}
                     >
@@ -858,7 +858,7 @@ export default function PipelineView({
             <div>
               <label className="text-xs font-medium text-[#78716c]">Move to Stage</label>
               <select
-                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                 value={statusStage}
                 onChange={event => setStatusStage(event.target.value as LeadStage)}
               >
@@ -874,7 +874,7 @@ export default function PipelineView({
             <div>
               <label className="text-xs font-medium text-[#78716c]">Notes (optional)</label>
               <textarea
-                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                 rows={3}
                 placeholder="Why are you moving this lead?"
                 value={statusNotes}
@@ -884,7 +884,7 @@ export default function PipelineView({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
                 onClick={handleMoveStage}
               >
                 {moveStatusConfirmed ? (
@@ -1001,7 +1001,7 @@ export default function PipelineView({
       >
         <div className="space-y-4">
           {emailLead ? (
-            <div className="rounded-[10px] border border-[#c1e1f7] bg-[#c1e1f7]/30 px-4 py-3 text-sm text-[#0c0a09]">
+            <div className="rounded-[10px] border border-[#CCFBF1] bg-[#CCFBF1]/30 px-4 py-3 text-sm text-[#0c0a09]">
               Sending to: <span className="font-medium">{emailLead.name}</span> -{' '}
               {emailLead.email || 'No email'}
             </div>
@@ -1017,7 +1017,7 @@ export default function PipelineView({
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#3ba6f1] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
+                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#0D9488] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
                 >
                   <div className="text-[11px] font-medium uppercase tracking-[0.048px] text-[#a8a29e]">
                     {template.category}
@@ -1060,7 +1060,7 @@ export default function PipelineView({
           <div>
             <label className="text-xs font-medium text-[#78716c]">Subject</label>
             <input
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#3ba6f1] focus:outline-none focus:ring-2 focus:ring-[#c1e1f7]"
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
               value={emailSubject}
               onChange={event => setEmailSubject(event.target.value)}
             />
@@ -1084,7 +1084,7 @@ export default function PipelineView({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3ba6f1] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
               onClick={handleSendEmail}
               disabled={!emailSubject.trim()}
             >
@@ -1181,7 +1181,7 @@ function LeadCard({ lead, onMoveStage, onMarkLost, onEmail, onCall, onOpenDetail
         {canMove && (
           <button
             type="button"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[#c1e1f7] bg-[#c1e1f7]/30 px-2 py-1 text-[11px] font-medium text-[#3ba6f1] transition hover:border-[#3ba6f1] hover:bg-[#c1e1f7]/50"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[#CCFBF1] bg-[#CCFBF1]/30 px-2 py-1 text-[11px] font-medium text-[#0D9488] transition hover:border-[#0D9488] hover:bg-[#CCFBF1]/50"
             title="Move stage"
             onClick={(event) => {
               event.stopPropagation();
@@ -1209,7 +1209,7 @@ function LeadCard({ lead, onMoveStage, onMarkLost, onEmail, onCall, onOpenDetail
         {canEmail && (
           <button
             type="button"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#e5e7eb] bg-white text-[#3ba6f1] transition hover:border-[#c1e1f7] hover:bg-[#c1e1f7]/20"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#e5e7eb] bg-white text-[#0D9488] transition hover:border-[#CCFBF1] hover:bg-[#CCFBF1]/20"
             title="Email"
             onClick={(event) => {
               event.stopPropagation();
