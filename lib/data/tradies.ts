@@ -184,11 +184,16 @@ function toSafeTradie(tradie: Awaited<ReturnType<typeof prisma.tradie.findMany>>
 }
 
 export async function getTradies(): Promise<SafeTradie[]> {
-  const tradies = await prisma.tradie.findMany({
-    orderBy: { name: "asc" },
-  });
+  try {
+    const tradies = await prisma.tradie.findMany({
+      orderBy: { name: "asc" },
+    });
 
-  return tradies.map((tradie) => toSafeTradie(tradie));
+    return tradies.map((tradie) => toSafeTradie(tradie));
+  } catch (error) {
+    console.error("Error fetching tradies:", error);
+    return [];
+  }
 }
 
 export async function getTradieSchedules(filters?: {
@@ -198,464 +203,514 @@ export async function getTradieSchedules(filters?: {
   sort?: "scheduledDate" | "tradieName" | "projectName";
   order?: "asc" | "desc";
 }): Promise<TradieScheduleWithTradieMilestoneAndProject[]> {
-  const order = filters?.order ?? "asc";
+  try {
+    const order = filters?.order ?? "asc";
 
-  const orderBy =
-    filters?.sort === "tradieName"
-      ? { tradie: { name: order } }
-      : filters?.sort === "projectName"
-        ? { project: { name: order } }
-        : { scheduledDate: order };
+    const orderBy =
+      filters?.sort === "tradieName"
+        ? { tradie: { name: order } }
+        : filters?.sort === "projectName"
+          ? { project: { name: order } }
+          : { scheduledDate: order };
 
-  const schedules = await prisma.tradieSchedule.findMany({
-    where: {
-      projectId: filters?.projectId,
-      status: filters?.status,
-      tradie: filters?.tradeType ? { tradeType: filters.tradeType } : undefined,
-    },
-    include: tradieScheduleInclude,
-    orderBy,
-  });
+    const schedules = await prisma.tradieSchedule.findMany({
+      where: {
+        projectId: filters?.projectId,
+        status: filters?.status,
+        tradie: filters?.tradeType ? { tradeType: filters.tradeType } : undefined,
+      },
+      include: tradieScheduleInclude,
+      orderBy,
+    });
 
-  return schedules.map((schedule) => ({
-    ...schedule,
-    tradie: {
-      ...schedule.tradie,
-      hourlyRate: schedule.tradie.hourlyRate?.toString(),
-      rating: schedule.tradie.rating?.toString(),
-    },
-    project: {
-      ...schedule.project,
-      lotSize: schedule.project.lotSize?.toString() ?? undefined,
-      totalBudget: schedule.project.totalBudget.toString(),
-      spent: schedule.project.spent.toString(),
-    },
-    milestone: schedule.milestone ? {
-      ...schedule.milestone,
-      budget: schedule.milestone.budget.toString(),
-      spend: schedule.milestone.spend?.toString(),
-    } : undefined,
-  }));
+    return schedules.map((schedule) => ({
+      ...schedule,
+      tradie: {
+        ...schedule.tradie,
+        hourlyRate: schedule.tradie.hourlyRate?.toString(),
+        rating: schedule.tradie.rating?.toString(),
+      },
+      project: {
+        ...schedule.project,
+        lotSize: schedule.project.lotSize?.toString() ?? undefined,
+        totalBudget: schedule.project.totalBudget.toString(),
+        spent: schedule.project.spent.toString(),
+      },
+      milestone: schedule.milestone ? {
+        ...schedule.milestone,
+        budget: schedule.milestone.budget.toString(),
+        spend: schedule.milestone.spend?.toString(),
+      } : undefined,
+    }));
+  } catch (error) {
+    console.error("Error fetching tradie schedules:", error);
+    return [];
+  }
 }
 
 export async function getTradieScheduleKPIs(): Promise<TradieKPIs> {
-  const [totalScheduled, pending, pendingResponse, confirmed, noResponse, declined, completed] = await Promise.all([
-    prisma.tradieSchedule.count(),
-    prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.PENDING } }),
-    prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.PENDING_RESPONSE } }),
-    prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.CONFIRMED } }),
-    prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.NO_RESPONSE } }),
-    prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.DECLINED } }),
-    prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.COMPLETED } }),
-  ]);
+  try {
+    const [totalScheduled, pending, pendingResponse, confirmed, noResponse, declined, completed] = await Promise.all([
+      prisma.tradieSchedule.count(),
+      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.PENDING } }),
+      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.PENDING_RESPONSE } }),
+      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.CONFIRMED } }),
+      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.NO_RESPONSE } }),
+      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.DECLINED } }),
+      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.COMPLETED } }),
+    ]);
 
-  return { totalScheduled, pending, pendingResponse, confirmed, noResponse, declined, completed };
+    return { totalScheduled, pending, pendingResponse, confirmed, noResponse, declined, completed };
+  } catch (error) {
+    console.error("Error fetching tradie schedule KPIs:", error);
+    return { totalScheduled: 0, pending: 0, pendingResponse: 0, confirmed: 0, noResponse: 0, declined: 0, completed: 0 };
+  }
 }
 
 export async function getTradieCoordinationDashboard(query?: TradieCoordinationQuery): Promise<TradieCoordinationDashboard> {
   const resolved = resolveCoordinationQuery(query);
-  const listWhere = buildCoordinationWhere(resolved);
-  const insightsWhere = buildCoordinationWhere(resolved, { ignoreStatus: true, ignoreTab: true });
-  const orderBy = buildOrderBy(resolved.sortBy, resolved.sortOrder);
+  try {
+    const listWhere = buildCoordinationWhere(resolved);
+    const insightsWhere = buildCoordinationWhere(resolved, { ignoreStatus: true, ignoreTab: true });
+    const orderBy = buildOrderBy(resolved.sortBy, resolved.sortOrder);
 
-  const today = startOfDay(new Date());
-  const nextWeek = addDays(today, 8);
-  const previousWeekStart = addDays(today, -7);
-  const previousWeekEnd = today;
+    const today = startOfDay(new Date());
+    const nextWeek = addDays(today, 8);
+    const previousWeekStart = addDays(today, -7);
+    const previousWeekEnd = today;
 
-  const [
-    schedules,
-    totalCount,
-    tradeOptionsRaw,
-    totalTradies,
-    currentWeekScheduled,
-    previousWeekScheduled,
-    pendingNoResponse,
-    confirmedCount,
-    completedCount,
-    activeTradieRows,
-    newTradiesCurrentWindow,
-    newTradiesPreviousWindow,
-    statusCounts,
-    tabAll,
-    tabWeek,
-    tabConfirmed,
-    tabPending,
-    tabOverdue,
-    tabCompleted,
-    tradeStatusGroups,
-    projectAllocationGroups,
-    projectAllocationNames,
-    utilizationRows,
-    latestActivityRows,
-    urgentRows,
-  ] = await Promise.all([
-    prisma.tradieSchedule.findMany({
-      where: listWhere,
-      include: {
-        tradie: {
-          select: {
-            id: true,
-            name: true,
-            company: true,
-            tradeType: true,
-            phone: true,
-            email: true,
-            hourlyRate: true,
-            rating: true,
-          },
-        },
-        project: {
-          select: {
-            id: true,
-            name: true,
-            siteManager: true,
-          },
-        },
-        milestone: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy,
-      skip: (resolved.page - 1) * resolved.limit,
-      take: resolved.limit,
-    }),
-    prisma.tradieSchedule.count({ where: listWhere }),
-    prisma.tradie.findMany({
-      select: { tradeType: true },
-      distinct: ["tradeType"],
-      orderBy: { tradeType: "asc" },
-    }),
-    prisma.tradie.count(),
-    prisma.tradieSchedule.count({
-      where: {
-        ...insightsWhere,
-        scheduledDate: { gte: today, lt: nextWeek },
-      },
-    }),
-    prisma.tradieSchedule.count({
-      where: {
-        ...insightsWhere,
-        scheduledDate: { gte: previousWeekStart, lt: previousWeekEnd },
-      },
-    }),
-    prisma.tradieSchedule.count({
-      where: {
-        ...insightsWhere,
-        status: {
-          in: [
-            TradieScheduleStatus.PENDING,
-            TradieScheduleStatus.PENDING_RESPONSE,
-            TradieScheduleStatus.NO_RESPONSE,
-          ],
-        },
-      },
-    }),
-    prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.CONFIRMED } }),
-    prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.COMPLETED } }),
-    prisma.tradieSchedule.findMany({
-      where: {
-        ...insightsWhere,
-        scheduledDate: { gte: addDays(today, -14), lte: addDays(today, 14) },
-        status: { notIn: [TradieScheduleStatus.DECLINED, TradieScheduleStatus.COMPLETED] },
-      },
-      select: { tradieId: true },
-      distinct: ["tradieId"],
-    }),
-    prisma.tradie.count({ where: { createdAt: { gte: addDays(today, -30) } } }),
-    prisma.tradie.count({ where: { createdAt: { gte: addDays(today, -60), lt: addDays(today, -30) } } }),
-    Promise.all([
-      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.CONFIRMED } }),
-      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.PENDING } }),
-      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.PENDING_RESPONSE } }),
-      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.NO_RESPONSE } }),
-      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.DECLINED } }),
-      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.COMPLETED } }),
-    ]),
-    prisma.tradieSchedule.count({ where: insightsWhere }),
-    prisma.tradieSchedule.count({ where: { ...insightsWhere, scheduledDate: { gte: today, lt: nextWeek } } }),
-    prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.CONFIRMED } }),
-    prisma.tradieSchedule.count({
-      where: {
-        ...insightsWhere,
-        status: {
-          in: [TradieScheduleStatus.PENDING, TradieScheduleStatus.PENDING_RESPONSE, TradieScheduleStatus.NO_RESPONSE],
-        },
-      },
-    }),
-    prisma.tradieSchedule.count({
-      where: {
-        ...insightsWhere,
-        scheduledDate: { lt: today },
-        status: { notIn: [TradieScheduleStatus.COMPLETED] },
-      },
-    }),
-    prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.COMPLETED } }),
-    prisma.tradieSchedule.groupBy({
-      by: ["tradieId", "status"],
-      where: insightsWhere,
-      _count: { _all: true },
-    }),
-    prisma.tradieSchedule.groupBy({
-      by: ["projectId"],
-      where: insightsWhere,
-      _count: { _all: true },
-      orderBy: { _count: { projectId: "desc" } },
-      take: 6,
-    }),
-    prisma.project.findMany({
-      where: {
-        id: {
-          in: [],
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-      },
-    }),
-    prisma.tradieSchedule.findMany({
-      where: {
-        ...insightsWhere,
-        scheduledDate: {
-          gte: addDays(startOfWeek(today), -7 * 7),
-          lte: addDays(startOfWeek(today), 7),
-        },
-      },
-      select: {
-        scheduledDate: true,
-        status: true,
-      },
-    }),
-    prisma.tradieSchedule.findMany({
-      where: insightsWhere,
-      orderBy: { updatedAt: "desc" },
-      take: 6,
-      select: {
-        id: true,
-        status: true,
-        updatedAt: true,
-        tradie: { select: { name: true } },
-        project: { select: { name: true } },
-      },
-    }),
-    prisma.tradieSchedule.findMany({
-      where: {
-        ...insightsWhere,
-        scheduledDate: { gte: today, lt: nextWeek },
-        status: {
-          notIn: [TradieScheduleStatus.CONFIRMED, TradieScheduleStatus.COMPLETED],
-        },
-      },
-      orderBy: { scheduledDate: "asc" },
-      take: 8,
-      include: {
-        tradie: { select: { name: true, tradeType: true, phone: true, email: true, rating: true, company: true, hourlyRate: true } },
-        project: { select: { name: true, siteManager: true } },
-        milestone: { select: { name: true } },
-      },
-    }),
-  ]);
-
-  const projectIds = projectAllocationGroups.map((item) => item.projectId);
-  const projectNames = projectIds.length
-    ? await prisma.project.findMany({
-      where: { id: { in: projectIds } },
-      select: { id: true, name: true },
-    })
-    : projectAllocationNames;
-
-  const schedulesMapped = schedules.map((schedule) => ({
-    id: schedule.id,
-    tradieId: schedule.tradie.id,
-    tradieName: schedule.tradie.name,
-    company: schedule.tradie.company,
-    tradeType: schedule.tradie.tradeType,
-    projectId: schedule.project.id,
-    projectName: schedule.project.name,
-    milestoneId: schedule.milestone?.id,
-    milestoneName: schedule.milestone?.name,
-    taskLabel: schedule.milestone?.name ?? "General trade task",
-    scheduledDate: schedule.scheduledDate.toISOString(),
-    durationDays: schedule.durationDays,
-    status: schedule.status,
-    hourlyRate: schedule.tradie.hourlyRate?.toString(),
-    rating: schedule.tradie.rating?.toString(),
-    reminderSentAt: schedule.reminderSentAt?.toISOString(),
-    updatedAt: schedule.updatedAt.toISOString(),
-    contact: {
-      email: schedule.tradie.email,
-      phone: schedule.tradie.phone,
-    },
-    siteManager: {
-      name: schedule.project.siteManager?.name ?? "Site manager",
-      email: schedule.project.siteManager?.email ?? "",
-      phone: schedule.project.siteManager?.phone ?? "",
-    },
-  }));
-
-  const totalScheduledForCompletion = confirmedCount + completedCount + pendingNoResponse;
-  const completionRate = totalScheduledForCompletion > 0 ? Math.round((completedCount / totalScheduledForCompletion) * 100) : 0;
-
-  const statusMetrics: TradieStatusMetric[] = [
-    { label: "Confirmed", value: statusCounts[0], status: TradieScheduleStatus.CONFIRMED },
-    { label: "Pending", value: statusCounts[1], status: TradieScheduleStatus.PENDING },
-    { label: "Pending Response", value: statusCounts[2], status: TradieScheduleStatus.PENDING_RESPONSE },
-    { label: "No Response", value: statusCounts[3], status: TradieScheduleStatus.NO_RESPONSE },
-    { label: "Declined", value: statusCounts[4], status: TradieScheduleStatus.DECLINED },
-    { label: "Completed", value: statusCounts[5], status: TradieScheduleStatus.COMPLETED },
-  ];
-
-  const tradieIds = Array.from(new Set(tradeStatusGroups.map((group) => group.tradieId)));
-  const tradeTypesByTradie = tradieIds.length
-    ? await prisma.tradie.findMany({
-      where: { id: { in: tradieIds } },
-      select: { id: true, tradeType: true },
-    })
-    : [];
-
-  const tradeTypeMap = new Map(tradeTypesByTradie.map((item) => [item.id, item.tradeType]));
-  const tradeBreakdownMap = new Map<string, { total: number; confirmed: number }>();
-
-  for (const group of tradeStatusGroups) {
-    const tradeType = tradeTypeMap.get(group.tradieId) ?? "Unknown";
-    const current = tradeBreakdownMap.get(tradeType) ?? { total: 0, confirmed: 0 };
-    const count = group._count._all;
-    current.total += count;
-
-    if (group.status === TradieScheduleStatus.CONFIRMED || group.status === TradieScheduleStatus.COMPLETED) {
-      current.confirmed += count;
-    }
-
-    tradeBreakdownMap.set(tradeType, current);
-  }
-
-  const tradeBreakdown = Array.from(tradeBreakdownMap.entries())
-    .map(([tradeType, value]) => ({
-      tradeType,
-      total: value.total,
-      confirmedRate: value.total > 0 ? Math.round((value.confirmed / value.total) * 100) : 0,
-    }))
-    .sort((left, right) => right.total - left.total)
-    .slice(0, 8);
-
-  const projectNameMap = new Map(projectNames.map((project) => [project.id, project.name]));
-  const projectAllocations = projectAllocationGroups.map((group) => ({
-    projectId: group.projectId,
-    projectName: projectNameMap.get(group.projectId) ?? "Unknown project",
-    allocationCount: group._count._all,
-  }));
-
-  const trendStart = addDays(startOfWeek(today), -7 * 7);
-  const trendSeries = Array.from({ length: 8 }, (_, index) => {
-    const weekStart = addDays(trendStart, index * 7);
-    return {
-      key: weekStart.toISOString(),
-      weekLabel: getWeekLabel(weekStart),
-      total: 0,
-      confirmed: 0,
-    };
-  });
-
-  const trendMap = new Map(trendSeries.map((point) => [point.key, point]));
-
-  for (const row of utilizationRows) {
-    const rowWeek = startOfWeek(row.scheduledDate).toISOString();
-    const targetPoint = trendMap.get(rowWeek);
-
-    if (!targetPoint) {
-      continue;
-    }
-
-    targetPoint.total += 1;
-    if (row.status === TradieScheduleStatus.CONFIRMED || row.status === TradieScheduleStatus.COMPLETED) {
-      targetPoint.confirmed += 1;
-    }
-  }
-
-  const utilizationTrend = trendSeries.map((point) => ({
-    weekLabel: point.weekLabel,
-    utilization: point.total > 0 ? Math.round((point.confirmed / point.total) * 100) : 0,
-    target: 80,
-  }));
-
-  const activity = latestActivityRows.map((row) => {
-    const mapped = mapScheduleStatus(row.status);
-    return {
-      id: row.id,
-      type: mapped.type,
-      message: `${row.tradie.name} ${mapped.label} for ${row.project.name}`,
-      createdAt: row.updatedAt.toISOString(),
-    };
-  });
-
-  const urgentReminders = urgentRows.map((row) => ({
-    id: row.id,
-    tradieName: row.tradie.name,
-    tradeType: row.tradie.tradeType,
-    projectName: row.project.name,
-    milestoneName: row.milestone?.name,
-    taskLabel: row.milestone?.name ?? "General trade task",
-    scheduledDate: row.scheduledDate.toISOString(),
-    daysLeft: differenceInCalendarDays(
-      startOfDay(row.scheduledDate),
-      today
-    ),
-    company: row.tradie.company,
-    status: row.status,
-    contact: {
-      email: row.tradie.email,
-      phone: row.tradie.phone,
-    },
-    siteManager: {
-      name: row.project.siteManager?.name ?? "Site manager",
-      email: row.project.siteManager?.email ?? "",
-      phone: row.project.siteManager?.phone ?? "",
-    },
-    rating: row.tradie.rating?.toString(),
-    hourlyRate: row.tradie.hourlyRate?.toString(),
-    reminderSentAt: row.reminderSentAt?.toISOString(),
-  }));
-
-  return {
-    query: resolved,
-    pagination: {
-      page: resolved.page,
-      limit: resolved.limit,
+    const [
+      schedules,
       totalCount,
-      totalPages: Math.max(1, Math.ceil(totalCount / resolved.limit)),
-    },
-    schedules: schedulesMapped,
-    summary: {
-      registeredTradies: totalTradies,
-      registeredTrendDelta: newTradiesCurrentWindow - newTradiesPreviousWindow,
-      scheduledThisWeek: currentWeekScheduled,
-      scheduledWeekDelta: currentWeekScheduled - previousWeekScheduled,
-      confirmedBookings: confirmedCount,
+      tradeOptionsRaw,
+      totalTradies,
+      currentWeekScheduled,
+      previousWeekScheduled,
       pendingNoResponse,
-      activeTradies: activeTradieRows.length,
-      inactiveTradies: Math.max(0, totalTradies - activeTradieRows.length),
-      completionRate,
-    },
-    tabCounts: {
-      all: tabAll,
-      week: tabWeek,
-      confirmed: tabConfirmed,
-      pending: tabPending,
-      overdue: tabOverdue,
-      completed: tabCompleted,
-    },
-    tradeOptions: tradeOptionsRaw.map((item) => item.tradeType).filter(Boolean),
-    statusMetrics,
-    tradeBreakdown,
-    projectAllocations,
-    utilizationTrend,
-    activity,
-    urgentReminders,
-  };
+      confirmedCount,
+      completedCount,
+      activeTradieRows,
+      newTradiesCurrentWindow,
+      newTradiesPreviousWindow,
+      statusCounts,
+      tabAll,
+      tabWeek,
+      tabConfirmed,
+      tabPending,
+      tabOverdue,
+      tabCompleted,
+      tradeStatusGroups,
+      projectAllocationGroups,
+      projectAllocationNames,
+      utilizationRows,
+      latestActivityRows,
+      urgentRows,
+    ] = await Promise.all([
+      prisma.tradieSchedule.findMany({
+        where: listWhere,
+        include: {
+          tradie: {
+            select: {
+              id: true,
+              name: true,
+              company: true,
+              tradeType: true,
+              phone: true,
+              email: true,
+              hourlyRate: true,
+              rating: true,
+            },
+          },
+          project: {
+            select: {
+              id: true,
+              name: true,
+              siteManager: true,
+            },
+          },
+          milestone: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy,
+        skip: (resolved.page - 1) * resolved.limit,
+        take: resolved.limit,
+      }),
+      prisma.tradieSchedule.count({ where: listWhere }),
+      prisma.tradie.findMany({
+        select: { tradeType: true },
+        distinct: ["tradeType"],
+        orderBy: { tradeType: "asc" },
+      }),
+      prisma.tradie.count(),
+      prisma.tradieSchedule.count({
+        where: {
+          ...insightsWhere,
+          scheduledDate: { gte: today, lt: nextWeek },
+        },
+      }),
+      prisma.tradieSchedule.count({
+        where: {
+          ...insightsWhere,
+          scheduledDate: { gte: previousWeekStart, lt: previousWeekEnd },
+        },
+      }),
+      prisma.tradieSchedule.count({
+        where: {
+          ...insightsWhere,
+          status: {
+            in: [
+              TradieScheduleStatus.PENDING,
+              TradieScheduleStatus.PENDING_RESPONSE,
+              TradieScheduleStatus.NO_RESPONSE,
+            ],
+          },
+        },
+      }),
+      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.CONFIRMED } }),
+      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.COMPLETED } }),
+      prisma.tradieSchedule.findMany({
+        where: {
+          ...insightsWhere,
+          scheduledDate: { gte: addDays(today, -14), lte: addDays(today, 14) },
+          status: { notIn: [TradieScheduleStatus.DECLINED, TradieScheduleStatus.COMPLETED] },
+        },
+        select: { tradieId: true },
+        distinct: ["tradieId"],
+      }),
+      prisma.tradie.count({ where: { createdAt: { gte: addDays(today, -30) } } }),
+      prisma.tradie.count({ where: { createdAt: { gte: addDays(today, -60), lt: addDays(today, -30) } } }),
+      Promise.all([
+        prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.CONFIRMED } }),
+        prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.PENDING } }),
+        prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.PENDING_RESPONSE } }),
+        prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.NO_RESPONSE } }),
+        prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.DECLINED } }),
+        prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.COMPLETED } }),
+      ]),
+      prisma.tradieSchedule.count({ where: insightsWhere }),
+      prisma.tradieSchedule.count({ where: { ...insightsWhere, scheduledDate: { gte: today, lt: nextWeek } } }),
+      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.CONFIRMED } }),
+      prisma.tradieSchedule.count({
+        where: {
+          ...insightsWhere,
+          status: {
+            in: [TradieScheduleStatus.PENDING, TradieScheduleStatus.PENDING_RESPONSE, TradieScheduleStatus.NO_RESPONSE],
+          },
+        },
+      }),
+      prisma.tradieSchedule.count({
+        where: {
+          ...insightsWhere,
+          scheduledDate: { lt: today },
+          status: { notIn: [TradieScheduleStatus.COMPLETED] },
+        },
+      }),
+      prisma.tradieSchedule.count({ where: { ...insightsWhere, status: TradieScheduleStatus.COMPLETED } }),
+      prisma.tradieSchedule.groupBy({
+        by: ["tradieId", "status"],
+        where: insightsWhere,
+        _count: { _all: true },
+      }),
+      prisma.tradieSchedule.groupBy({
+        by: ["projectId"],
+        where: insightsWhere,
+        _count: { _all: true },
+        orderBy: { _count: { projectId: "desc" } },
+        take: 6,
+      }),
+      prisma.project.findMany({
+        where: {
+          id: {
+            in: [],
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      }),
+      prisma.tradieSchedule.findMany({
+        where: {
+          ...insightsWhere,
+          scheduledDate: {
+            gte: addDays(startOfWeek(today), -7 * 7),
+            lte: addDays(startOfWeek(today), 7),
+          },
+        },
+        select: {
+          scheduledDate: true,
+          status: true,
+        },
+      }),
+      prisma.tradieSchedule.findMany({
+        where: insightsWhere,
+        orderBy: { updatedAt: "desc" },
+        take: 6,
+        select: {
+          id: true,
+          status: true,
+          updatedAt: true,
+          tradie: { select: { name: true } },
+          project: { select: { name: true } },
+        },
+      }),
+      prisma.tradieSchedule.findMany({
+        where: {
+          ...insightsWhere,
+          scheduledDate: { gte: today, lt: nextWeek },
+          status: {
+            notIn: [TradieScheduleStatus.CONFIRMED, TradieScheduleStatus.COMPLETED],
+          },
+        },
+        orderBy: { scheduledDate: "asc" },
+        take: 8,
+        include: {
+          tradie: { select: { name: true, tradeType: true, phone: true, email: true, rating: true, company: true, hourlyRate: true } },
+          project: { select: { name: true, siteManager: true } },
+          milestone: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    const projectIds = projectAllocationGroups.map((item) => item.projectId);
+    const projectNames = projectIds.length
+      ? await prisma.project.findMany({
+        where: { id: { in: projectIds } },
+        select: { id: true, name: true },
+      })
+      : projectAllocationNames;
+
+    const schedulesMapped = schedules.map((schedule) => ({
+      id: schedule.id,
+      tradieId: schedule.tradie.id,
+      tradieName: schedule.tradie.name,
+      company: schedule.tradie.company,
+      tradeType: schedule.tradie.tradeType,
+      projectId: schedule.project.id,
+      projectName: schedule.project.name,
+      milestoneId: schedule.milestone?.id,
+      milestoneName: schedule.milestone?.name,
+      taskLabel: schedule.milestone?.name ?? "General trade task",
+      scheduledDate: schedule.scheduledDate.toISOString(),
+      durationDays: schedule.durationDays,
+      status: schedule.status,
+      hourlyRate: schedule.tradie.hourlyRate?.toString(),
+      rating: schedule.tradie.rating?.toString(),
+      reminderSentAt: schedule.reminderSentAt?.toISOString(),
+      updatedAt: schedule.updatedAt.toISOString(),
+      contact: {
+        email: schedule.tradie.email,
+        phone: schedule.tradie.phone,
+      },
+      siteManager: {
+        name: schedule.project.siteManager?.name ?? "Site manager",
+        email: schedule.project.siteManager?.email ?? "",
+        phone: schedule.project.siteManager?.phone ?? "",
+      },
+    }));
+
+    const totalScheduledForCompletion = confirmedCount + completedCount + pendingNoResponse;
+    const completionRate = totalScheduledForCompletion > 0 ? Math.round((completedCount / totalScheduledForCompletion) * 100) : 0;
+
+    const statusMetrics: TradieStatusMetric[] = [
+      { label: "Confirmed", value: statusCounts[0], status: TradieScheduleStatus.CONFIRMED },
+      { label: "Pending", value: statusCounts[1], status: TradieScheduleStatus.PENDING },
+      { label: "Pending Response", value: statusCounts[2], status: TradieScheduleStatus.PENDING_RESPONSE },
+      { label: "No Response", value: statusCounts[3], status: TradieScheduleStatus.NO_RESPONSE },
+      { label: "Declined", value: statusCounts[4], status: TradieScheduleStatus.DECLINED },
+      { label: "Completed", value: statusCounts[5], status: TradieScheduleStatus.COMPLETED },
+    ];
+
+    const tradieIds = Array.from(new Set(tradeStatusGroups.map((group) => group.tradieId)));
+    const tradeTypesByTradie = tradieIds.length
+      ? await prisma.tradie.findMany({
+        where: { id: { in: tradieIds } },
+        select: { id: true, tradeType: true },
+      })
+      : [];
+
+    const tradeTypeMap = new Map(tradeTypesByTradie.map((item) => [item.id, item.tradeType]));
+    const tradeBreakdownMap = new Map<string, { total: number; confirmed: number }>();
+
+    for (const group of tradeStatusGroups) {
+      const tradeType = tradeTypeMap.get(group.tradieId) ?? "Unknown";
+      const current = tradeBreakdownMap.get(tradeType) ?? { total: 0, confirmed: 0 };
+      const count = group._count._all;
+      current.total += count;
+
+      if (group.status === TradieScheduleStatus.CONFIRMED || group.status === TradieScheduleStatus.COMPLETED) {
+        current.confirmed += count;
+      }
+
+      tradeBreakdownMap.set(tradeType, current);
+    }
+
+    const tradeBreakdown = Array.from(tradeBreakdownMap.entries())
+      .map(([tradeType, value]) => ({
+        tradeType,
+        total: value.total,
+        confirmedRate: value.total > 0 ? Math.round((value.confirmed / value.total) * 100) : 0,
+      }))
+      .sort((left, right) => right.total - left.total)
+      .slice(0, 8);
+
+    const projectNameMap = new Map(projectNames.map((project) => [project.id, project.name]));
+    const projectAllocations = projectAllocationGroups.map((group) => ({
+      projectId: group.projectId,
+      projectName: projectNameMap.get(group.projectId) ?? "Unknown project",
+      allocationCount: group._count._all,
+    }));
+
+    const trendStart = addDays(startOfWeek(today), -7 * 7);
+    const trendSeries = Array.from({ length: 8 }, (_, index) => {
+      const weekStart = addDays(trendStart, index * 7);
+      return {
+        key: weekStart.toISOString(),
+        weekLabel: getWeekLabel(weekStart),
+        total: 0,
+        confirmed: 0,
+      };
+    });
+
+    const trendMap = new Map(trendSeries.map((point) => [point.key, point]));
+
+    for (const row of utilizationRows) {
+      const rowWeek = startOfWeek(row.scheduledDate).toISOString();
+      const targetPoint = trendMap.get(rowWeek);
+
+      if (!targetPoint) {
+        continue;
+      }
+
+      targetPoint.total += 1;
+      if (row.status === TradieScheduleStatus.CONFIRMED || row.status === TradieScheduleStatus.COMPLETED) {
+        targetPoint.confirmed += 1;
+      }
+    }
+
+    const utilizationTrend = trendSeries.map((point) => ({
+      weekLabel: point.weekLabel,
+      utilization: point.total > 0 ? Math.round((point.confirmed / point.total) * 100) : 0,
+      target: 80,
+    }));
+
+    const activity = latestActivityRows.map((row) => {
+      const mapped = mapScheduleStatus(row.status);
+      return {
+        id: row.id,
+        type: mapped.type,
+        message: `${row.tradie.name} ${mapped.label} for ${row.project.name}`,
+        createdAt: row.updatedAt.toISOString(),
+      };
+    });
+
+    const urgentReminders = urgentRows.map((row) => ({
+      id: row.id,
+      tradieName: row.tradie.name,
+      tradeType: row.tradie.tradeType,
+      projectName: row.project.name,
+      milestoneName: row.milestone?.name,
+      taskLabel: row.milestone?.name ?? "General trade task",
+      scheduledDate: row.scheduledDate.toISOString(),
+      daysLeft: differenceInCalendarDays(
+        startOfDay(row.scheduledDate),
+        today
+      ),
+      company: row.tradie.company,
+      status: row.status,
+      contact: {
+        email: row.tradie.email,
+        phone: row.tradie.phone,
+      },
+      siteManager: {
+        name: row.project.siteManager?.name ?? "Site manager",
+        email: row.project.siteManager?.email ?? "",
+        phone: row.project.siteManager?.phone ?? "",
+      },
+      rating: row.tradie.rating?.toString(),
+      hourlyRate: row.tradie.hourlyRate?.toString(),
+      reminderSentAt: row.reminderSentAt?.toISOString(),
+    }));
+
+    return {
+      query: resolved,
+      pagination: {
+        page: resolved.page,
+        limit: resolved.limit,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / resolved.limit)),
+      },
+      schedules: schedulesMapped,
+      summary: {
+        registeredTradies: totalTradies,
+        registeredTrendDelta: newTradiesCurrentWindow - newTradiesPreviousWindow,
+        scheduledThisWeek: currentWeekScheduled,
+        scheduledWeekDelta: currentWeekScheduled - previousWeekScheduled,
+        confirmedBookings: confirmedCount,
+        pendingNoResponse,
+        activeTradies: activeTradieRows.length,
+        inactiveTradies: Math.max(0, totalTradies - activeTradieRows.length),
+        completionRate,
+      },
+      tabCounts: {
+        all: tabAll,
+        week: tabWeek,
+        confirmed: tabConfirmed,
+        pending: tabPending,
+        overdue: tabOverdue,
+        completed: tabCompleted,
+      },
+      tradeOptions: tradeOptionsRaw.map((item) => item.tradeType).filter(Boolean),
+      statusMetrics,
+      tradeBreakdown,
+      projectAllocations,
+      utilizationTrend,
+      activity,
+      urgentReminders,
+    };
+  } catch (error) {
+    console.error("Error fetching tradie coordination dashboard:", error);
+    return {
+      query: resolved,
+      pagination: {
+        page: resolved.page,
+        limit: resolved.limit,
+        totalCount: 0,
+        totalPages: 1,
+      },
+      schedules: [],
+      summary: {
+        registeredTradies: 0,
+        registeredTrendDelta: 0,
+        scheduledThisWeek: 0,
+        scheduledWeekDelta: 0,
+        confirmedBookings: 0,
+        pendingNoResponse: 0,
+        activeTradies: 0,
+        inactiveTradies: 0,
+        completionRate: 0,
+      },
+      tabCounts: {
+        all: 0,
+        week: 0,
+        confirmed: 0,
+        pending: 0,
+        overdue: 0,
+        completed: 0,
+      },
+      tradeOptions: [],
+      statusMetrics: [],
+      tradeBreakdown: [],
+      projectAllocations: [],
+      utilizationTrend: [],
+      activity: [],
+      urgentReminders: [],
+    };
+  }
 }
 
 export async function getCachedTradies() {

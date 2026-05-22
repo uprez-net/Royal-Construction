@@ -3,7 +3,11 @@ import { getGraphConfig } from '@/lib/graph/config';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/utils/validators';
 import { NextResponse } from 'next/server';
 
-function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
+function requireAdminToken(request: Request, adminToken: string | undefined): NextResponse | null {
+  if (!adminToken) {
+    return null;
+  }
+
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return unauthorizedResponse();
