@@ -1,6 +1,5 @@
 import type { ReactNode } from "react"
-import Link from "next/link"
-import { Hammer } from "lucide-react"
+import Image from "next/image"
 
 export function AuthShell({
   title,
@@ -12,44 +11,71 @@ export function AuthShell({
   children: ReactNode
 }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(13,148,136,0.18),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(232,115,12,0.12),_transparent_26%),linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.96))]">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(15,23,42,0.05)_1px,transparent_1px),linear-gradient(rgba(15,23,42,0.05)_1px,transparent_1px)] bg-[size:40px_40px] opacity-25 [mask-image:linear-gradient(to_bottom,black,transparent)]" />
-      <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid w-full gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="flex flex-col justify-between rounded-[2rem] border border-white/70 bg-slate-950 p-8 text-white shadow-[0_24px_60px_rgba(15,23,42,0.22)]">
-            <div className="space-y-6">
-              <Link href="/" className="inline-flex items-center gap-3 text-teal-300">
-                <span className="grid size-11 place-items-center rounded-2xl bg-teal-500/15">
-                  <Hammer className="size-5" />
-                </span>
-                <span className="font-heading text-2xl font-semibold">Royal Constructions</span>
-              </Link>
-              <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-teal-300/80">Authentication</p>
-                <h1 className="max-w-md font-heading text-4xl font-semibold tracking-tight">{title}</h1>
-                <p className="max-w-lg text-sm leading-6 text-slate-300">{description}</p>
-              </div>
-            </div>
-            <div className="mt-10 grid gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-slate-300 sm:grid-cols-3">
-              <div>
-                <p className="text-slate-100">Clerk-native</p>
-                <p className="mt-1 text-xs">Sign-in, sign-up, profile, and session flows.</p>
-              </div>
-              <div>
-                <p className="text-slate-100">Protected</p>
-                <p className="mt-1 text-xs">Proxy-based route guarding for the entire portal.</p>
-              </div>
-              <div>
-                <p className="text-slate-100">Composable</p>
-                <p className="mt-1 text-xs">Wrap Clerk UI without rebuilding auth from scratch.</p>
-              </div>
-            </div>
+    <div className="flex min-h-screen">
+      <aside className="relative hidden w-[42%] flex-shrink-0 flex-col overflow-hidden bg-[oklch(0.16_0.03_249.8)] px-12 py-10 text-white lg:flex">
+        {/* Background photo */}
+        <Image
+          src="https://images.unsplash.com/photo-1587582423116-ec07293f0395?auto=format&fit=crop&w=900&q=80"
+          alt=""
+          fill
+          sizes="42vw"
+          className="object-cover"
+          priority
+        />
+
+        {/* Gradient scrim — dark at bottom (text), fades toward top (photo) */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(22,23,38,0.93)_0%,rgba(22,23,38,0.70)_40%,rgba(22,23,38,0.50)_70%,rgba(22,23,38,0.28)_100%)]" />
+
+        <div className="relative flex flex-1 flex-col justify-between">
+          <div>
+            <h1 className="font-heading text-5xl font-semibold leading-[1.1] tracking-tight">
+              {title}
+            </h1>
+            <p className="mt-5 max-w-sm text-sm leading-6 text-slate-300">{description}</p>
           </div>
-          <div className="flex items-center justify-center rounded-[2rem] border border-white/70 bg-white/90 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur">
-            <div className="w-full max-w-lg">{children}</div>
+
+          <div className="space-y-5 border-t border-white/15 pt-6">
+            <div className="flex items-center gap-3">
+              <Image
+                src="/image-78.png"
+                alt=""
+                width={64}
+                height={38}
+                className="object-contain invert opacity-50"
+              />
+              <span className="text-xs text-slate-400">Master Builders Association NSW</span>
+            </div>
+            <dl className="grid grid-cols-3 gap-6">
+              <div>
+                <dt className="text-xs font-semibold text-slate-100">Full visibility</dt>
+                <dd className="mt-1.5 text-xs leading-5 text-slate-400">Every job, milestone, and tradie in one place.</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-slate-100">Quote to close</dt>
+                <dd className="mt-1.5 text-xs leading-5 text-slate-400">Capture leads, build quotes, convert without paperwork.</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-slate-100">Built for builders</dt>
+                <dd className="mt-1.5 text-xs leading-5 text-slate-400">Workflows that match how construction actually runs.</dd>
+              </div>
+            </dl>
           </div>
         </div>
-      </div>
+      </aside>
+
+      <main className="flex flex-1 flex-col items-center justify-center bg-[oklch(0.979_0.006_248.4)] px-8 py-12">
+        <div className="mb-8">
+          <Image
+            src="/logo-1024x713.png"
+            alt="Royal Constructions"
+            width={160}
+            height={111}
+            className="object-contain"
+            priority
+          />
+        </div>
+        <div className="w-full max-w-md">{children}</div>
+      </main>
     </div>
   )
 }

@@ -8,8 +8,8 @@ export default function AuthLayout({
 }) {
     return (
         <AuthShell
-            title="Welcome to Royal Constructions"
-            description="Please sign in or sign up to continue."
+            title="Every build, one place."
+            description="Manage your projects, tradies, and financials from your construction workspace."
         >
             {children}
         </AuthShell>

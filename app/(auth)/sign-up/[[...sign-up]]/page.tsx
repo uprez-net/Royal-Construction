@@ -1,20 +1,18 @@
-import { SignUp } from "@clerk/nextjs";
-import { Suspense } from "react";
+import { Suspense } from "react"
+import { SignUp } from "@clerk/nextjs"
 
-export function SignUpFallback() {
+function SignUpFallback() {
   return (
-    <div className="flex min-h-125 items-center justify-center">
-      Loading...
+    <div className="flex min-h-[31.25rem] items-center justify-center">
+      <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
     </div>
   )
 }
 
 export default function SignUpPage() {
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-border bg-background shadow-sm">
-      <Suspense fallback={<SignUpFallback />}>
-        <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" />
-      </Suspense>
-    </div>
-  );
+    <Suspense fallback={<SignUpFallback />}>
+      <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" />
+    </Suspense>
+  )
 }
