@@ -16,7 +16,7 @@ export function DataTable({
   emptyState,
 }: DataTableProps) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border/70 bg-background">
+    <div className="overflow-x-auto rounded-lg border border-border/70 bg-background">
       <table className="w-full border-collapse text-sm">
         <thead className="bg-muted/70 text-left text-xs uppercase tracking-[0.15em] text-muted-foreground">
           <tr>
