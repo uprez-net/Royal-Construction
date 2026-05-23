@@ -1,17 +1,35 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
+import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth"
 
 const isPublicRoute = createRouteMatcher(["/api/webhook/clerk(.*)", "/api/graph(.*)"])
-const isAuthRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
+const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
 
 export default clerkMiddleware(async (auth, request) => {
+  // Dev auth routes always pass through — they create the session
+  if (isDevAuthRoute(request)) return
+
+  const pathname = request.nextUrl.pathname
+  const isApiRoute = pathname.startsWith("/api/") || pathname.startsWith("/trpc/")
+
+  // Dev: auto-redirect unauthenticated page navigations to the token sign-in flow
+  if (isDevAutoSignInEnabled() && !isPublicRoute(request) && !isAuthRoute(request) && !isApiRoute) {
+    const { userId } = await auth()
+    if (!userId) {
+      const signInUrl = new URL("/api/dev/sign-in", request.url)
+      signInUrl.searchParams.set("redirect_url", `${pathname}${request.nextUrl.search}`)
+      return NextResponse.redirect(signInUrl)
+    }
+  }
+
   if (!isPublicRoute(request) && !isAuthRoute(request)) await auth.protect()
+
   const { userId } = await auth()
   if (isAuthRoute(request) && userId) {
     return new Response(null, {
       status: 302,
-      headers: {
-        Location: '/dashboard',
-      },
+      headers: { Location: "/dashboard" },
     })
   }
 })
