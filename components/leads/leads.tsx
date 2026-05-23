@@ -7,17 +7,13 @@ import {
   Clock,
   CircleX,
   Mail,
-  Zap,
   Plus,
   Columns3,
   Table2,
   BarChart3,
   X,
-  TrendingUp,
-  TrendingDown,
   Check,
   Bell,
-  Save,
 } from 'lucide-react';
 import { HistoryItem, Lead, LeadStage, LeadSource, BudgetRange, ProjectType, LeadsStats } from '@/lib/leads/types';
 import { createLead, fetchLeads, fetchLeadsStats, sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
@@ -27,6 +23,10 @@ import FollowupsView from './views/followups-view';
 import AnalyticsView from './views/analytics-view';
 import { EmailTemplate } from '@/lib/leads/types';
 import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { MetricCard } from '@/components/common/metric-card';
+import { cn } from '@/lib/utils';
 
 type TabType = 'pipeline' | 'table' | 'followups' | 'analytics';
 
@@ -144,22 +144,22 @@ function ModalShell({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0c0a09]/30 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onMouseDown={handleBackdropMouseDown}
       role="dialog"
       aria-modal="true"
     >
       <div
-      className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-[14px] bg-white shadow-[0_12px_40px_rgba(0,0,0,0.1)] ring-1 ring-[#E2E8F0]`}
+      className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-xl bg-background shadow-lg ring-1 ring-border`}
       >
-        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-[#E2E8F0] px-5 py-3">
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
-            <h4 className={`text-[16px] font-bold tracking-[-0.016px] text-[#0F172A] ${titleClassName ?? ''}`}>{title}</h4>
-            {subtitle ? <p className="mt-1 text-[12px] text-[#94A3B8]">{subtitle}</p> : null}
+            <h4 className={`text-base font-bold tracking-tight text-foreground ${titleClassName ?? ''}`}>{title}</h4>
+            {subtitle ? <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p> : null}
           </div>
           <button
             type="button"
-            className="rounded-full p-1.5 text-[#94A3B8] transition hover:bg-[#F1F5F9] hover:text-[#475569]"
+            className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
             onClick={onClose}
             aria-label="Close"
           >
@@ -469,127 +469,128 @@ export default function Leads() {
   const emailTargetList = emailTargets.map(lead => lead.email).filter(Boolean).join(', ');
 
   return (
-    <div className="leads-container">
-      {/* Header */}
-      <div className="leads-header">
-        <div>
-          <h2 className="leads-title">Lead Pipeline</h2>
-          <p className="leads-subtitle">
-            Google Ads auto-capture • Follow-up automation • Email templates
-          </p>
-        </div>
-        <div className="leads-header-actions">
-          <button className="btn-outline-custom" onClick={openEmailTemplates}>
-            <Mail size={16} /> Email Templates
-          </button>
-          {/* <button className="btn-outline-custom" onClick={simulateNewLead}>
-            <Zap size={16} /> Simulate New Lead
-          </button> */}
-          <button className="btn-primary-custom" onClick={() => setShowAddLeadModal(true)}>
-            <Plus size={16} /> Add Lead Manually
-          </button>
-        </div>
-      </div>
+    <div className="leads-container space-y-6">
+      {/* Header — matches Tradies hero card */}
+      <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
+        <CardContent className="relative p-6">
+          <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
+          <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
+          <div className="relative flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900">Lead Pipeline</h2>
+              <p className="text-sm text-slate-600">
+                Google Ads auto-capture • Follow-up automation • Email templates
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={openEmailTemplates}>
+                <Mail className="mr-2 size-4" /> Email Templates
+              </Button>
+              <Button onClick={() => setShowAddLeadModal(true)}>
+                <Plus className="mr-2 size-4" /> Add Lead Manually
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Stats Grid */}
+      {/* Stats Grid — uses shared MetricCard */}
       {stats && !loading && (
-        <div className="leads-stats-grid">
-          <StatsCard
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
             label="Total Leads"
-            value={stats.total}
+            value={String(stats.total)}
+            note="All leads in the pipeline"
+            tone="primary"
             icon={UserPlus}
-            color="primary"
-            trend={18}
-            trendDirection="up"
           />
-          <StatsCard
+          <MetricCard
             label={`Converted (${conversionRate}%)`}
-            value={stats.conversion}
+            value={String(stats.conversion)}
+            note="Won and converted leads"
+            tone="success"
             icon={CircleCheckBig}
-            color="success"
-            trend={12}
-            trendDirection="up"
           />
-          <StatsCard
+          <MetricCard
             label="Pending Follow-up"
-            value={stats.pendingFollowup}
+            value={String(stats.pendingFollowup)}
+            note="Leads awaiting next action"
+            tone="warning"
             icon={Clock}
-            color="warning"
           />
-          <StatsCard
+          <MetricCard
             label="Lost Leads"
-            value={stats.lost}
+            value={String(stats.lost)}
+            note="Lost, cancelled or disqualified"
+            tone="danger"
             icon={CircleX}
-            color="danger"
-            trend={5}
-            trendDirection="down"
           />
         </div>
       )}
 
-      {/* Tab Navigation */}
-      <div className="leads-tab-nav">
-        <TabButton
-          active={activeTab === 'pipeline'}
-          onClick={() => setActiveTab('pipeline')}
-          icon={Columns3}
-        >
-          Pipeline View
-        </TabButton>
-        <TabButton
-          active={activeTab === 'table'}
-          onClick={() => setActiveTab('table')}
-          icon={Table2}
-        >
-          Table View
-        </TabButton>
-        <TabButton
-          active={activeTab === 'followups'}
-          onClick={() => setActiveTab('followups')}
-          icon={Clock}
-        >
-          Follow-ups
-        </TabButton>
-        <TabButton
-          active={activeTab === 'analytics'}
-          onClick={() => setActiveTab('analytics')}
-          icon={BarChart3}
-        >
-          Analytics
-        </TabButton>
-      </div>
-
-      {/* Tab Content */}
-      {loading ? (
-        <div className="leads-loading">
-          <div className="spinner"></div>
-          <p>Loading leads...</p>
+      {/* Tab Navigation + Content — matches Tradies card style */}
+      <Card className="border-border/70 bg-white/95 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-5 py-3">
+          {([
+            { key: 'pipeline' as TabType, label: 'Pipeline View', Icon: Columns3 },
+            { key: 'table' as TabType, label: 'Table View', Icon: Table2 },
+            { key: 'followups' as TabType, label: 'Follow-ups', Icon: Clock },
+            { key: 'analytics' as TabType, label: 'Analytics', Icon: BarChart3 },
+          ] as const).map(({ key, label, Icon }) => {
+            const active = activeTab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={cn(
+                  'group relative inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200',
+                  active
+                    ? 'bg-teal-50 text-teal-700 shadow-sm'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                )}
+              >
+                <Icon className="size-4" />
+                <span>{label}</span>
+                {active && (
+                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
+                )}
+              </button>
+            );
+          })}
         </div>
-      ) : (
-        <>
-          {activeTab === 'pipeline' && (
-            <PipelineView
-              leads={leads}
-              onLeadUpdate={handleLeadUpdate}
-              onLeadDelete={handleLeadDelete}
-            />
+        <CardContent className="pt-5">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-16 text-muted-foreground">
+              <div className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-teal-600" />
+              <p className="text-sm">Loading leads...</p>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'pipeline' && (
+                <PipelineView
+                  leads={leads}
+                  onLeadUpdate={handleLeadUpdate}
+                  onLeadDelete={handleLeadDelete}
+                />
+              )}
+              {activeTab === 'table' && (
+                <TableView
+                  leads={leads}
+                  onLeadUpdate={handleLeadUpdate}
+                  onLeadDelete={handleLeadDelete}
+                />
+              )}
+              {activeTab === 'followups' &&
+                <FollowupsView
+                  leads={leads}
+                  onLeadUpdate={handleLeadUpdate}
+                  onLeadDelete={handleLeadDelete}
+                />}
+              {activeTab === 'analytics' && <AnalyticsView leads={leads} />}
+            </>
           )}
-          {activeTab === 'table' && (
-            <TableView
-              leads={leads}
-              onLeadUpdate={handleLeadUpdate}
-              onLeadDelete={handleLeadDelete}
-            />
-          )}
-          {activeTab === 'followups' &&
-            <FollowupsView
-              leads={leads}
-              onLeadUpdate={handleLeadUpdate}
-              onLeadDelete={handleLeadDelete}
-            />}
-          {activeTab === 'analytics' && <AnalyticsView leads={leads} />}
-        </>
-      )}
+        </CardContent>
+      </Card>
 
       {/* ═══ ADD LEAD MODAL ═══ */}
       {showAddLeadModal && (
@@ -610,7 +611,7 @@ export default function Leads() {
         maxWidthClass="max-w-[720px]"
       >
         <div className="space-y-4">
-          <div className="rounded-[10px] border border-[#CCFBF1] bg-[#CCFBF1]/30 px-4 py-3 text-sm text-[#0F172A]">
+          <div className="rounded-lg border border-teal-100 bg-teal-50/30 px-4 py-3 text-sm text-foreground">
             Sending to: <span className="font-medium">{emailTargets.length}</span> leads with email
           </div>
           <div className="max-h-[60vh] overflow-y-auto pr-1">
@@ -620,15 +621,15 @@ export default function Leads() {
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className="group rounded-[10px] border border-[#E2E8F0] bg-white p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition hover:border-[#0D9488] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
+                  className="group rounded-xl border border-border bg-background p-4 text-left shadow-sm transition hover:border-teal-600 hover:shadow-md"
                 >
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.048px] text-[#94A3B8]">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {template.category}
                   </div>
-                  <div className="mt-1 text-[14px] font-semibold text-[#0F172A]">
+                  <div className="mt-1 text-sm font-semibold text-foreground">
                     {previewTemplateText(template.subject)}
                   </div>
-                  <div className="mt-2 text-xs leading-relaxed text-[#475569]">
+                  <div className="mt-2 text-xs leading-relaxed text-muted-foreground">
                     {getTemplateDescription(template)}
                   </div>
                 </button>
@@ -647,35 +648,35 @@ export default function Leads() {
       >
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-[#78716c]">To</label>
+            <label className="text-xs font-medium text-muted-foreground">To</label>
             <textarea
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-[#fafaf9] px-3 py-2 text-sm text-[#78716c]"
+              className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
               rows={3}
               value={emailTargetList || 'No leads with email'}
               readOnly
             />
           </div>
           {selectedTemplate ? (
-            <div className="flex items-center justify-between rounded-[4px] border border-[#e5e7eb] bg-[#fafaf9] px-3 py-2 text-xs text-[#78716c]">
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <span>Template</span>
-              <span className="font-medium text-[#0c0a09]">{selectedTemplate.category}</span>
+              <span className="font-medium text-foreground">{selectedTemplate.category}</span>
             </div>
           ) : null}
-          <p className="text-xs text-[#a8a29e]">
+          <p className="text-xs text-muted-foreground">
             Placeholders like {'{name}'} and {'{location}'} will be filled per lead.
           </p>
           <div>
-            <label className="text-xs font-medium text-[#78716c]">Subject</label>
+            <label className="text-xs font-medium text-muted-foreground">Subject</label>
             <input
-              className="mt-1 w-full rounded-[7px] border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#0F172A] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10"
               value={emailSubject}
               onChange={event => setEmailSubject(event.target.value)}
             />
           </div>
           <div>
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#78716c]">Body (HTML Preview)</label>
-              <span className="text-[11px] text-[#a8a29e]">Click to edit</span>
+              <label className="text-xs font-medium text-muted-foreground">Body (HTML Preview)</label>
+              <span className="text-[11px] text-muted-foreground">Click to edit</span>
             </div>
             <div
               key={selectedTemplate?.id}
@@ -689,22 +690,16 @@ export default function Leads() {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-[7px] bg-[#0D9488] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0F766E]"
+            <Button
               onClick={handleSendEmail}
               disabled={!emailSubject.trim() || emailTargets.length === 0}
             >
-              <Mail size={14} />
+              <Mail className="mr-1.5 size-3.5" />
               Send Email
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-[7px] border border-[#E2E8F0] px-4 py-2 text-xs font-semibold text-[#475569] transition hover:border-[#CBD5E1] hover:bg-[#F8FAFC]"
-              onClick={closeSendEmail}
-            >
+            </Button>
+            <Button variant="outline" onClick={closeSendEmail}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       </ModalShell>
@@ -732,67 +727,7 @@ export default function Leads() {
   );
 }
 
-/* ══════════════════════════════════════════════
-   STATS CARD — Redesigned per reference
-   ══════════════════════════════════════════════ */
-interface StatsCardProps {
-  label: string;
-  value: number;
-  icon: React.ComponentType<{ size: number }>;
-  color: 'primary' | 'info' | 'warning' | 'success' | 'danger';
-  trend?: number;
-  trendDirection?: 'up' | 'down';
-}
 
-function StatsCard({ label, value, icon: Icon, color, trend, trendDirection }: StatsCardProps) {
-  const colorMap: Record<string, string> = {
-    primary: '#0D9488',
-    info: '#2563EB',
-    warning: '#F59E0B',
-    success: '#16A34A',
-    danger: '#DC2626',
-  };
-
-  return (
-    <div className="stat-card-v2">
-      <div className="stat-card-v2-top">
-        <div className="stat-card-v2-icon" style={{ backgroundColor: colorMap[color] }}>
-          <Icon size={20} />
-        </div>
-        {trend !== undefined && trendDirection && (
-          <span className={`trend-badge trend-${trendDirection}`}>
-            {trendDirection === 'up' ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-            {trend}%
-          </span>
-        )}
-      </div>
-      <div className="stat-card-v2-value">{value}</div>
-      <div className="stat-card-v2-label">{label}</div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   TAB BUTTON
-   ══════════════════════════════════════════════ */
-interface TabButtonProps {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ComponentType<{ size: number }>;
-  children: React.ReactNode;
-}
-
-function TabButton({ active, onClick, icon: Icon, children }: TabButtonProps) {
-  return (
-    <button
-      className={`tab-button ${active ? 'active' : ''}`}
-      onClick={onClick}
-    >
-      <Icon size={18} />
-      {children}
-    </button>
-  );
-}
 
 /* ══════════════════════════════════════════════
    ADD LEAD MODAL
@@ -947,287 +882,298 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
     }));
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  };
+  const fieldClassName =
+    'mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground shadow-none transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10';
+  const textareaClassName =
+    'mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-none transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10';
+  const sectionLabelClassName = 'text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground';
+  const itemLabelClassName = 'text-xs font-medium text-muted-foreground';
 
   return (
-    <div className="modal-backdrop-custom show" onClick={handleBackdropClick}>
-      <div className="modal-content-custom flex max-h-[90vh] flex-col overflow-hidden" style={{ maxWidth: 600 }}>
-        <div className="modal-header-custom shrink-0">
+    <ModalShell
+      open
+      onClose={onClose}
+      title="Add New Lead"
+      subtitle="Manually add a lead to the pipeline"
+      maxWidthClass="max-w-[920px]"
+    >
+      <div className="space-y-5">
+        <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <h4 className="modal-title">Add New Lead</h4>
-            <p className="modal-subtitle">Manually add a lead to the pipeline</p>
+            <label className={itemLabelClassName}>Full Name *</label>
+            <input
+              className={fieldClassName}
+              placeholder="e.g. Jaswinder Singh"
+              value={form.name}
+              onChange={e => updateField('name', e.target.value)}
+            />
           </div>
-          <button className="modal-close" onClick={onClose}>
-            <X size={16} />
-          </button>
+          <div>
+            <label className={itemLabelClassName}>Phone *</label>
+            <input
+              className={fieldClassName}
+              placeholder="e.g. 0412 345 678"
+              value={form.phone}
+              onChange={e => updateField('phone', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={itemLabelClassName}>Email</label>
+            <input
+              className={fieldClassName}
+              placeholder="e.g. name@email.com"
+              type="email"
+              value={form.email}
+              onChange={e => updateField('email', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={itemLabelClassName}>Location *</label>
+            <input
+              className={fieldClassName}
+              placeholder="e.g. Blacktown, NSW"
+              value={form.location}
+              onChange={e => updateField('location', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={itemLabelClassName}>Source Detail</label>
+            <select
+              className={fieldClassName}
+              value={form.sourceDetail}
+              onChange={e => updateField('sourceDetail', e.target.value)}
+            >
+              {LEAD_SOURCE_OPTIONS.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={itemLabelClassName}>Stage</label>
+            <select
+              className={fieldClassName}
+              value={form.stage}
+              onChange={e => setForm(prev => ({ ...prev, stage: e.target.value as LeadStage }))}
+            >
+              {LEAD_STAGE_OPTIONS.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={itemLabelClassName}>Assigned To</label>
+            <select
+              className={fieldClassName}
+              value={form.assigned}
+              onChange={e => updateField('assigned', e.target.value)}
+            >
+              <option>Guri Singh</option>
+              <option>Amrit Singh</option>
+              <option>Deepak Sharma</option>
+            </select>
+          </div>
+          <div>
+            <label className={itemLabelClassName}>Budget Range</label>
+            <select
+              className={fieldClassName}
+              value={form.budget}
+              onChange={e => updateField('budget', e.target.value)}
+            >
+              <option>Not Discussed</option>
+              <option>$200K - $350K</option>
+              <option>$350K - $500K</option>
+              <option>$500K - $700K</option>
+              <option>$700K+</option>
+            </select>
+          </div>
         </div>
-        <div className="modal-body-custom overflow-y-auto">
-          <div className="form-grid">
-            <div className="form-group">
-              <label className="form-label">Full Name *</label>
-              <input
-                className="form-input"
-                placeholder="e.g. Jaswinder Singh"
-                value={form.name}
-                onChange={e => updateField('name', e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Phone *</label>
-              <input
-                className="form-input"
-                placeholder="e.g. 0412 345 678"
-                value={form.phone}
-                onChange={e => updateField('phone', e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Email</label>
-              <input
-                className="form-input"
-                placeholder="e.g. name@email.com"
-                type="email"
-                value={form.email}
-                onChange={e => updateField('email', e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Location *</label>
-              <input
-                className="form-input"
-                placeholder="e.g. Blacktown, NSW"
-                value={form.location}
-                onChange={e => updateField('location', e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Source Detail</label>
-              <select
-                className="form-select-custom"
-                value={form.sourceDetail}
-                onChange={e => updateField('sourceDetail', e.target.value)}
+
+        <div>
+          <label className={sectionLabelClassName}>Project Type</label>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {PROJECT_TYPE_OPTIONS.map(option => (
+              <label
+                key={option}
+                className={cn(
+                  'inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all',
+                  form.type.includes(option)
+                    ? 'border-teal-600 bg-teal-50 text-teal-700'
+                    : 'border-border bg-background text-muted-foreground hover:border-teal-300 hover:bg-teal-50/40',
+                )}
               >
-                {LEAD_SOURCE_OPTIONS.map(option => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Stage</label>
-              <select
-                className="form-select-custom"
-                value={form.stage}
-                onChange={e => setForm(prev => ({ ...prev, stage: e.target.value as LeadStage }))}
-              >
-                {LEAD_STAGE_OPTIONS.map(option => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Assigned To</label>
-              <select
-                className="form-select-custom"
-                value={form.assigned}
-                onChange={e => updateField('assigned', e.target.value)}
-              >
-                <option>Guri Singh</option>
-                <option>Amrit Singh</option>
-                <option>Deepak Sharma</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Budget Range</label>
-              <select
-                className="form-select-custom"
-                value={form.budget}
-                onChange={e => updateField('budget', e.target.value)}
-              >
-                <option>Not Discussed</option>
-                <option>$200K - $350K</option>
-                <option>$350K - $500K</option>
-                <option>$500K - $700K</option>
-                <option>$700K+</option>
-              </select>
-            </div>
-            <div className="form-group form-group-full">
-              <label className="form-label">Project Type</label>
-              <div className="checkbox-grid">
-                {PROJECT_TYPE_OPTIONS.map(option => (
-                  <label
-                    key={option}
-                    className={`checkbox-item ${form.type.includes(option) ? 'active' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={form.type.includes(option)}
-                      onChange={() => toggleProjectType(option)}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="form-group form-group-full">
-              <label className="form-label">Notes</label>
-              <textarea
-                className="form-input form-textarea"
-                placeholder="Initial notes about this lead..."
-                value={form.notes}
-                onChange={e => updateField('notes', e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Follow-up Date</label>
-              <input
-                className="form-input"
-                type="date"
-                value={form.followupDate}
-                onChange={e => updateField('followupDate', e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Follow-up Time</label>
-              <input
-                className="form-input"
-                type="time"
-                value={form.followupTime}
-                onChange={e => updateField('followupTime', e.target.value)}
-              />
-            </div>
-            <div className="form-group form-group-full">
-              <label className="form-label">Urgent</label>
-              <label className={`checkbox-item urgent-toggle ${form.urgent ? 'active' : ''}`}>
                 <input
                   type="checkbox"
-                  checked={form.urgent}
-                  onChange={event => setForm(prev => ({ ...prev, urgent: event.target.checked }))}
+                  className="size-3.5 accent-teal-600"
+                  checked={form.type.includes(option)}
+                  onChange={() => toggleProjectType(option)}
                 />
-                <span>Mark this lead as urgent</span>
+                <span>{option}</span>
               </label>
-            </div>
-            <div className="form-group form-group-full">
-              <label className="form-label">History</label>
-              <div className="history-entry-grid">
-                <div className="form-group">
-                  <label className="form-label">Action</label>
-                  <input
-                    className="form-input"
-                    placeholder="e.g. Called client"
-                    value={historyDraft.action}
-                    onChange={e => setHistoryDraft(prev => ({ ...prev, action: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Type</label>
-                  <select
-                    className="form-select-custom"
-                    value={historyDraft.type}
-                    onChange={e => setHistoryDraft(prev => ({ ...prev, type: e.target.value as HistoryItem['type'] }))}
-                  >
-                    {HISTORY_TYPE_OPTIONS.map(option => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Action Date</label>
-                  <input
-                    className="form-input"
-                    type="datetime-local"
-                    value={historyDraft.actionDate}
-                    onChange={e => setHistoryDraft(prev => ({ ...prev, actionDate: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group form-group-full">
-                  <label className="form-label">Detail</label>
-                  <textarea
-                    className="form-input form-textarea"
-                    placeholder="Add details about the action taken..."
-                    value={historyDraft.detail}
-                    onChange={e => setHistoryDraft(prev => ({ ...prev, detail: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="history-actions">
-                <button
-                  type="button"
-                  className="btn-outline-custom"
-                  onClick={addHistoryEntry}
-                >
-                  <Plus size={14} /> Add History Entry
-                </button>
-              </div>
-              {form.historyEntries.length > 0 && (
-                <div className="history-list">
-                  {form.historyEntries.map((entry, index) => (
-                    <div key={`${entry.action}-${index}`} className="history-entry">
-                      <div className="history-entry-meta">
-                        <span className="history-entry-title">{entry.action || 'Note'}</span>
-                        <span className="history-entry-detail">{entry.detail || 'No details provided.'}</span>
-                        {entry.actionDate ? (
-                          <span className="history-entry-date">{new Date(entry.actionDate).toLocaleString()}</span>
-                        ) : (
-                          <span className="history-entry-date">No date set</span>
-                        )}
-                      </div>
-                      <div className="history-entry-actions">
-                        <span className="history-entry-badge">{entry.type}</span>
-                        <button
-                          type="button"
-                          className="history-remove-btn"
-                          onClick={() => removeHistoryEntry(index)}
-                          aria-label="Remove history entry"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="modal-actions">
-            <button
-              className={`btn-primary-custom ${adding ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-              onClick={() => onSubmit(form, false, "addingsection")}
-              disabled={!form.name.trim() || !form.phone.trim() || adding || addingwithReminder}
-            >
-              {adding ? (
-                <>
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Saving Lead ...
-                </>
-              ) : (
-                <><Check size={15} /> Save Lead</>
-              )
-              }
-
-            </button>
-            <button
-              className={`btn-outline-custom ${addingwithReminder ? 'cursor-not-allowed' : 'cursor pointer'}`}
-              onClick={() => onSubmit(form, true, "addingwithRemindersection")}
-              disabled={!form.name.trim() || !form.phone.trim() || adding || addingwithReminder}
-            >
-              {addingwithReminder ? (
-                <>
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#3ba6f1] border-t-transparent" />
-                  Saving & Setting Reminder ...
-                </>
-              ) : (
-                <><Bell size={15} /> Save & Set Reminder</>
-              )}
-            </button>
-            <button className="btn-outline-custom" onClick={onClose}>
-              Cancel
-            </button>
+            ))}
           </div>
         </div>
+
+        <div>
+          <label className={itemLabelClassName}>Notes</label>
+          <textarea
+            className={textareaClassName}
+            rows={3}
+            placeholder="Initial notes about this lead..."
+            value={form.notes}
+            onChange={e => updateField('notes', e.target.value)}
+          />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className={itemLabelClassName}>Follow-up Date</label>
+            <input
+              className={fieldClassName}
+              type="date"
+              value={form.followupDate}
+              onChange={e => updateField('followupDate', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={itemLabelClassName}>Follow-up Time</label>
+            <input
+              className={fieldClassName}
+              type="time"
+              value={form.followupTime}
+              onChange={e => updateField('followupTime', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <label className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <input
+            type="checkbox"
+            className="size-3.5 accent-teal-600"
+            checked={form.urgent}
+            onChange={event => setForm(prev => ({ ...prev, urgent: event.target.checked }))}
+          />
+          Mark this lead as urgent
+        </label>
+
+        <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <label className={sectionLabelClassName}>History</label>
+            <Button type="button" size="sm" variant="outline" onClick={addHistoryEntry}>
+              <Plus className="mr-1 size-3.5" /> Add Entry
+            </Button>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className={itemLabelClassName}>Action</label>
+              <input
+                className={fieldClassName}
+                placeholder="e.g. Called client"
+                value={historyDraft.action}
+                onChange={e => setHistoryDraft(prev => ({ ...prev, action: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className={itemLabelClassName}>Type</label>
+              <select
+                className={fieldClassName}
+                value={historyDraft.type}
+                onChange={e => setHistoryDraft(prev => ({ ...prev, type: e.target.value as HistoryItem['type'] }))}
+              >
+                {HISTORY_TYPE_OPTIONS.map(option => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={itemLabelClassName}>Action Date</label>
+              <input
+                className={fieldClassName}
+                type="datetime-local"
+                value={historyDraft.actionDate}
+                onChange={e => setHistoryDraft(prev => ({ ...prev, actionDate: e.target.value }))}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className={itemLabelClassName}>Detail</label>
+              <textarea
+                className={textareaClassName}
+                rows={2}
+                placeholder="Add details about the action taken..."
+                value={historyDraft.detail}
+                onChange={e => setHistoryDraft(prev => ({ ...prev, detail: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {form.historyEntries.length > 0 && (
+            <div className="space-y-2">
+              {form.historyEntries.map((entry, index) => (
+                <div
+                  key={`${entry.action}-${index}`}
+                  className="flex items-start justify-between gap-3 rounded-lg border border-border bg-background p-3"
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-sm font-semibold text-foreground">{entry.action || 'Note'}</p>
+                    <p className="text-xs text-muted-foreground">{entry.detail || 'No details provided.'}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {entry.actionDate ? new Date(entry.actionDate).toLocaleString() : 'No date set'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                      {entry.type}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => removeHistoryEntry(index)}
+                      aria-label="Remove history entry"
+                    >
+                      <X size={14} />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+          <Button
+            onClick={() => onSubmit(form, false, 'addingsection')}
+            disabled={!form.name.trim() || !form.phone.trim() || adding || addingwithReminder}
+          >
+            {adding ? (
+              <>
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Saving Lead...
+              </>
+            ) : (
+              <><Check size={15} /> Save Lead</>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onSubmit(form, true, 'addingwithRemindersection')}
+            disabled={!form.name.trim() || !form.phone.trim() || adding || addingwithReminder}
+          >
+            {addingwithReminder ? (
+              <>
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+                Saving & Setting Reminder...
+              </>
+            ) : (
+              <><Bell size={15} /> Save & Set Reminder</>
+            )}
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 

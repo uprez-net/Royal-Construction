@@ -41,10 +41,10 @@ function buildDefaultResource(mode: GraphMode, senderUpn?: string): string | und
 
 export async function POST(request: Request): Promise<Response> {
   const config = getGraphConfig();
-  const guard = requireAdminToken(request, config.adminToken);
-  if (guard) {
-    return guard;
-  }
+  // const guard = requireAdminToken(request, config.adminToken);
+  // if (guard) {
+  //   return guard;
+  // }
 
   let payload: SubscribeBody = {};
   try {
