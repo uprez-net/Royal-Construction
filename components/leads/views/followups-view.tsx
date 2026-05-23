@@ -547,22 +547,22 @@ function ModalShell({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0c0a09]/30 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onMouseDown={handleBackdropMouseDown}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-[16px] bg-white shadow-[0_12px_45px_rgba(17,12,46,0.12)] ring-1 ring-[#e5e7eb]`}
+        className={`flex max-h-[90vh] w-full flex-col ${maxWidthClass} rounded-xl bg-background shadow-lg ring-1 ring-border`}
       >
-        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-[#e5e7eb] px-5 py-3">
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
-            <h4 className={`text-[18px] font-medium tracking-[-0.016px] text-[#0c0a09] ${titleClassName ?? ''}`}>{title}</h4>
-            {subtitle ? <p className="mt-1 text-[13px] text-[#a8a29e]">{subtitle}</p> : null}
+            <h4 className={`text-base font-bold tracking-tight text-foreground ${titleClassName ?? ''}`}>{title}</h4>
+            {subtitle ? <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p> : null}
           </div>
           <button
             type="button"
-            className="rounded-full p-1.5 text-[#a8a29e] transition hover:bg-[#fafaf9] hover:text-[#78716c]"
+            className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
             onClick={onClose}
             aria-label="Close"
           >

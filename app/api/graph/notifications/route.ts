@@ -99,45 +99,83 @@ export async function POST(request: Request): Promise<Response> {
       console.log(`  tenantId: ${notification.tenantId ?? 'unknown'}`);
 
       if (graphClient && notification.resource) {
-        try {
-          const message = await graphClient.getMessageByResource(
-            notification.resource,
-            true,
-          );
-          const contentType = message.body?.contentType ?? 'text';
-          const content = message.body?.content ?? message.bodyPreview ?? '';
-          console.log(`  subject: ${message.subject}`);
-          console.log(`  from: ${message.from}`);
-          console.log(`  received: ${message.receivedDateTime}`);
-          console.log(
-            `  body(${contentType}): ${content || '[no body]'}`,
-          );
+        let message = null;
+        let attempt = 0;
+        const maxAttempts = 3;
 
-          const extracted = await extractLeadFromMessage(
-            message.subject ?? '',
-            content,
-          );
-          if (extracted) {
-            console.log(`  extractedLead: ${JSON.stringify(extracted)}`);
-            if(extracted.Status === false) {
-                 await prisma.lead.create({
-                  data:{
-                    name: extracted.Name,
-                    email: extracted.Email,
-                    phone: String(extracted.ContactNo),
-                    location: extracted.Address,
-                    sourceDetail: 'Website',
-                    stage: 'NEW',
-                    type: extracted.Type,
-                    notes:extracted.Info
-                  }
-                 })
-            }else{
-              console.log('Lead Extracted Found as Spam, Ignoring the lead');
+        while (attempt < maxAttempts) {
+          try {
+            message = await graphClient.getMessageByResource(
+              notification.resource,
+              true,
+            );
+            break; // Successfully fetched, exit the retry loop
+          } catch (error) {
+            attempt++;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.warn(`[Attempt ${attempt}/${maxAttempts}] Failed to fetch message details: ${errorMessage}`);
+            if (attempt < maxAttempts) {
+              console.log('Waiting 1500ms before retrying due to potential Graph indexing lag...');
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+            } else {
+              console.error('All attempts to fetch message details failed.');
             }
           }
-        } catch (error) {
-          console.error('Failed to fetch message details', error);
+        }
+
+        if (message) {
+          try {
+            const contentType = message.body?.contentType ?? 'text';
+            const content = message.body?.content ?? message.bodyPreview ?? '';
+            console.log(`  subject: ${message.subject}`);
+            console.log(`  from: ${message.from}`);
+            console.log(`  received: ${message.receivedDateTime}`);
+            console.log(
+              `  body(${contentType}): ${content || '[no body]'}`,
+            );
+
+            // Check if this message was already processed to prevent duplicates
+            if (message.id) {
+              const existingLead = await prisma.lead.findUnique({
+                where: { MicrosoftmessageId: message.id },
+              });
+              if (existingLead) {
+                console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
+                continue;
+              }
+            }
+
+            const extracted = await extractLeadFromMessage(
+              message.subject ?? '',
+              content,
+            );
+
+            if (extracted) {
+              console.log(`  extractedLead: ${JSON.stringify(extracted)}`);
+              if (extracted.Status === false) {
+                const phoneVal = extracted.ContactNo != null ? String(extracted.ContactNo) : '';
+                console.log('  Saving lead to database...');
+                const newLead = await prisma.lead.create({
+                  data: {
+                    name: extracted.Name || 'Unknown Lead',
+                    email: extracted.Email || '',
+                    phone: phoneVal,
+                    location: extracted.Address || '',
+                    sourceDetail: 'Website',
+                    stage: 'NEW',
+                    type: extracted.Type || [],
+                    notes: extracted.Info || '',
+                    MicrosoftmessageId: message.id,
+                  },
+                });
+                console.log(`  Lead successfully saved to database with ID: ${newLead.id} and MicrosoftmessageId: ${message.id}`);
+              } else {
+                console.log('  Lead Extracted Found as Spam, Ignoring the lead');
+              }
+            }
+          } catch (error) {
+            console.error('Failed to extract or save lead to database:', error);
+          }
         }
       }
     }

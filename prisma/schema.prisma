@@ -347,6 +347,8 @@ model Lead {
 
   urgent Boolean @default(false)
 
+  MicrosoftmessageId String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
