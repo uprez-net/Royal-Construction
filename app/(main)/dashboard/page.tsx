@@ -1,7 +1,7 @@
 "use client"
 import { MetricCard } from "@/components/common/metric-card"
 import { SectionCard } from "@/components/common/section-card"
-import { ProjectCard } from "@/components/project/project-card"
+import { Badge } from "@/components/ui/badge"
 import {
   activityItems,
   dashboardMetrics,
@@ -17,6 +17,24 @@ const activityIconMap = {
   info: { icon: CircleDot, className: "text-slate-400" },
 }
 
+const statusToneMap: Record<string, string> = {
+  "On Track": "bg-emerald-100 text-emerald-700",
+  ACTIVE: "bg-teal-100 text-teal-700",
+  ON_TRACK: "bg-emerald-100 text-emerald-700",
+  NEEDS_ATTENTION: "bg-amber-100 text-amber-700",
+  Delayed: "bg-red-100 text-red-700",
+  DELAYED: "bg-red-100 text-red-700",
+  COMPLETED: "bg-slate-100 text-slate-700",
+  "Pending Quote": "bg-amber-100 text-amber-700",
+}
+
+function formatStatus(status: string) {
+  return status
+    .split("_")
+    .map((p) => p.charAt(0) + p.slice(1).toLowerCase())
+    .join(" ")
+}
+
 export default function DashboardPage() {
   return (
     <div className="grid gap-6">
@@ -30,10 +48,34 @@ export default function DashboardPage() {
           title="Active projects"
           description="Current builds across all sites."
         >
-          <div className="grid gap-4 lg:grid-cols-3">
-            {dashboardProjects.map((project) => (
-              <ProjectCard key={project.name} {...project} />
-            ))}
+          <div className="divide-y divide-border/60">
+            {dashboardProjects.map((project) => {
+              const statusTone = statusToneMap[project.status] ?? "bg-slate-100 text-slate-700"
+              return (
+                <div key={project.name} className="flex items-center gap-4 py-3.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 flex items-center gap-2">
+                      <span className="text-sm font-medium leading-none text-foreground">{project.name}</span>
+                      <Badge className={cn("border-0 rounded-full px-2.5 py-0.5 text-xs font-medium", statusTone)}>
+                        {formatStatus(project.status)}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{project.client} · {project.stage}</p>
+                  </div>
+                  <div className="w-32 shrink-0 space-y-1.5">
+                    <div className="flex justify-end">
+                      <span className="font-mono text-xs font-medium text-muted-foreground">{project.progress}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted">
+                      <div className="h-1.5 rounded-full bg-teal-600" style={{ width: `${project.progress}%` }} />
+                    </div>
+                  </div>
+                  <div className="w-16 shrink-0 text-right font-mono text-sm font-medium text-foreground">
+                    {project.budget}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </SectionCard>
         <SectionCard

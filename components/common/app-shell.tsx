@@ -88,7 +88,7 @@ export function AppShell({
                 key={item.slug}
                 href={`/${item.slug}`}
                 className={cn(
-                  "group relative grid size-10 place-items-center rounded-2xl transition-colors hover:bg-white/10 hover:text-white",
+                  "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-white/10 hover:text-white",
                   item.slug === activeSlug && "bg-teal-500/15 text-teal-300",
                 )}
                 aria-label={item.label}
@@ -140,7 +140,7 @@ export function AppShell({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="relative size-10 rounded-2xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                    className="relative size-10 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                     onClick={() => setNotificationsOpen((value) => !value)}
                     aria-label="Notifications"
                   >
@@ -148,7 +148,7 @@ export function AppShell({
                     <span className="absolute right-1 top-1 size-2 rounded-full bg-orange-500" />
                   </Button>
                   {notificationsOpen ? (
-                    <div className="absolute right-0 top-[calc(100%+0.75rem)] w-80 overflow-hidden rounded-3xl border border-border bg-background text-foreground shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+                    <div className="absolute right-0 top-[calc(100%+0.75rem)] w-80 overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
                       <div className="border-b border-border px-4 py-3">
                         <p className="font-semibold">Notifications</p>
                         <p className="text-xs text-muted-foreground">
@@ -159,7 +159,7 @@ export function AppShell({
                         {tickerItems.map((item) => (
                           <div
                             key={item}
-                            className="rounded-2xl px-3 py-2 text-sm hover:bg-muted/60"
+                            className="rounded-md px-3 py-2 text-sm hover:bg-muted/60"
                           >
                             {item}
                           </div>
