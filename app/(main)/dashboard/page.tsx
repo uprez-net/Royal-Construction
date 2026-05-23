@@ -1,13 +1,21 @@
 "use client"
-import { MetricCard } from "@/components/common/metric-card";
-import { SectionCard } from "@/components/common/section-card";
-import { ProjectCard } from "@/components/project/project-card";
+import { MetricCard } from "@/components/common/metric-card"
+import { SectionCard } from "@/components/common/section-card"
+import { ProjectCard } from "@/components/project/project-card"
 import {
+  activityItems,
   dashboardMetrics,
   dashboardProjects,
-  tickerItems,
-} from "@/lib/mock-data";
-import { Clock3 } from "lucide-react";
+} from "@/lib/mock-data"
+import { AlertTriangle, Calendar, CheckCircle2, CircleDot } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+const activityIconMap = {
+  progress: { icon: CheckCircle2, className: "text-emerald-600" },
+  warning: { icon: AlertTriangle, className: "text-amber-500" },
+  upcoming: { icon: Calendar, className: "text-teal-600" },
+  info: { icon: CircleDot, className: "text-slate-400" },
+}
 
 export default function DashboardPage() {
   return (
@@ -20,7 +28,7 @@ export default function DashboardPage() {
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
         <SectionCard
           title="Active projects"
-          description="The same card model powers grid, list, and detail screens."
+          description="Current builds across all sites."
         >
           <div className="grid gap-4 lg:grid-cols-3">
             {dashboardProjects.map((project) => (
@@ -32,19 +40,19 @@ export default function DashboardPage() {
           title="Live activity"
           description="Notifications, follow-ups, and operational updates."
         >
-          <div className="space-y-3">
-            {tickerItems.map((item) => (
-              <div
-                key={item}
-                className="flex items-start gap-3 rounded-2xl border border-border/70 bg-background/60 p-3"
-              >
-                <Clock3 className="mt-0.5 size-4 text-teal-600" />
-                <p className="text-sm text-muted-foreground">{item}</p>
-              </div>
-            ))}
+          <div className="divide-y divide-border/60">
+            {activityItems.map((item) => {
+              const { icon: Icon, className } = activityIconMap[item.type]
+              return (
+                <div key={item.text} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                  <Icon className={cn("mt-0.5 size-4 flex-shrink-0", className)} />
+                  <p className="text-sm leading-snug text-muted-foreground">{item.text}</p>
+                </div>
+              )
+            })}
           </div>
         </SectionCard>
       </div>
     </div>
-  );
+  )
 }

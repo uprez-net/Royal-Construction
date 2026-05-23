@@ -78,7 +78,7 @@ export function AppShell({
         }}
       />
       <div className="flex min-h-screen">
-        <aside className="hidden w-16 shrink-0 border-r border-white/10 bg-slate-950 text-slate-300 shadow-[6px_0_28px_rgba(15,23,42,0.12)] md:flex md:flex-col md:items-center md:py-4">
+        <aside className="hidden w-16 shrink-0 border-r border-white/10 bg-[oklch(0.16_0.03_249.8)] text-slate-300 shadow-[6px_0_28px_rgba(15,23,42,0.12)] md:flex md:flex-col md:items-center md:py-4">
           <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-white">
             <Image src="/favicon.ico" alt="Royal Constructions Logo" width={32} height={32} />
           </div>
@@ -103,7 +103,7 @@ export function AppShell({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 border-b border-white/60 bg-slate-950 text-white shadow-[0_10px_30px_rgba(15,23,42,0.18)] backdrop-blur">
+          <header className="sticky top-0 z-30 border-b border-white/60 bg-[oklch(0.16_0.03_249.8)] text-white shadow-[0_10px_30px_rgba(15,23,42,0.18)] backdrop-blur">
             <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-4">
                 <div>
@@ -172,13 +172,13 @@ export function AppShell({
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      className="rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                      className="rounded-lg border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
                       asChild
                     >
                       <Link href="/sign-in">Sign in</Link>
                     </Button>
                     <Button
-                      className="rounded-2xl bg-teal-500 text-slate-950 hover:bg-teal-400"
+                      className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
                       asChild
                     >
                       <Link href="/sign-up">Sign up</Link>
