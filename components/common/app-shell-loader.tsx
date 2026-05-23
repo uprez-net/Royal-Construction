@@ -34,7 +34,7 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
 
           <div className="flex flex-1 flex-col items-center gap-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="size-10 rounded-2xl bg-white/10" />
+              <div key={i} className="size-10 rounded-lg bg-white/10" />
             ))}
           </div>
         </aside>
@@ -61,7 +61,7 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
                   <div className="mt-1 h-3 w-10 rounded bg-white/10" />
                 </div>
 
-                <div className="grid size-10 place-items-center rounded-2xl border border-white/10 bg-white/5">
+                <div className="grid size-10 place-items-center rounded-lg border border-white/10 bg-white/5">
                   <Bell className="size-4 text-slate-500" />
                 </div>
 
