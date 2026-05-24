@@ -30,6 +30,19 @@ function textResponse(status: number, body: string): Response {
   });
 }
 
+async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
+  if (!messageId) return false;
+  try {
+    const existingLead = await prisma.lead.findUnique({
+      where: { MicrosoftmessageId: messageId },
+    });
+    return existingLead !== null;
+  } catch (error) {
+    console.error(`Error checking if messageId ${messageId} is processed:`, error);
+    return false;
+  }
+}
+
 function handleValidationToken(request: Request): Response | null {
   const { searchParams } = new URL(request.url);
   const validationToken = searchParams.get('validationToken');
@@ -134,15 +147,10 @@ export async function POST(request: Request): Promise<Response> {
               `  body(${contentType}): ${content || '[no body]'}`,
             );
 
-            // Check if this message was already processed to prevent duplicates
-            if (message.id) {
-              const existingLead = await prisma.lead.findUnique({
-                where: { MicrosoftmessageId: message.id },
-              });
-              if (existingLead) {
-                console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
-                continue;
-              }
+            // Check if this message was already processed before calling the LLM extraction
+            if (message.id && await isMessageAlreadyProcessed(message.id)) {
+              console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
+              continue;
             }
 
             const extracted = await extractLeadFromMessage(
@@ -153,6 +161,12 @@ export async function POST(request: Request): Promise<Response> {
             if (extracted) {
               console.log(`  extractedLead: ${JSON.stringify(extracted)}`);
               if (extracted.Status === false) {
+                // Double-check one final time right before saving to prevent race conditions from concurrent webhook calls
+                if (message.id && await isMessageAlreadyProcessed(message.id)) {
+                  console.log(`  Lead with MicrosoftmessageId: ${message.id} was already processed while extracting. Aborting database save.`);
+                  continue;
+                }
+
                 const phoneVal = extracted.ContactNo != null ? String(extracted.ContactNo) : '';
                 console.log('  Saving lead to database...');
                 const newLead = await prisma.lead.create({
