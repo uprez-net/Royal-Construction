@@ -46,3 +46,8 @@ next-env.d.ts
 /.clerk/
 
 .vercel
+.playwright-mcp/
+.omc/
+.impeccable/
+package-lock.json
+*.png
