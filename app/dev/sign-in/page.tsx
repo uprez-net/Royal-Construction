@@ -1,6 +1,6 @@
 "use client"
 
-import { useSignIn } from "@clerk/nextjs"
+import { useSignIn } from "@clerk/nextjs/legacy"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useRef } from "react"
 import { Suspense } from "react"
@@ -26,7 +26,7 @@ function DevSignInInner() {
     signIn
       .create({ strategy: "ticket", ticket: token })
       .then(async (attempt) => {
-        if (attempt.status !== "complete") throw new Error(attempt.status)
+        if (attempt.status !== "complete") throw new Error(attempt.status ?? "incomplete")
         await setActive({ session: attempt.createdSessionId })
         router.replace(redirectUrl)
       })
