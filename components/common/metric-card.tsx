@@ -32,7 +32,7 @@ export function MetricCard({
         <div className="flex items-start justify-between gap-4">
           <div>
             <CardDescription>{label}</CardDescription>
-            <CardTitle className="mt-2 text-3xl font-semibold tracking-tight">{value}</CardTitle>
+            <CardTitle className="mt-2 font-heading text-3xl font-semibold tracking-tight">{value}</CardTitle>
           </div>
           {Icon ? (
             <div className={cn("grid size-11 place-items-center rounded-2xl", toneMap[tone])}>

@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -66,8 +65,7 @@ export function ProjectCard(props: ProjectCardProps) {
   const statusTone = statusToneMap[props.status] ?? "bg-slate-100 text-slate-700"
   const href = isLive ? `/projects/${props.id}` : "/projects"
   const card = (
-    <Card className="overflow-hidden border-border/70 bg-white/95 shadow-sm transition-transform duration-200 hover:-translate-y-1">
-      <div className="h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-orange-400" />
+    <Card className="overflow-hidden border-border/70 bg-white/95 shadow-sm transition-colors duration-150 hover:border-border">
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -104,10 +102,6 @@ export function ProjectCard(props: ProjectCardProps) {
           <span>End date</span>
           <span className="font-mono font-medium text-foreground">{isLive ? dateFormat.format(new Date(props.estimatedEndDate)) : props.stage}</span>
         </div>
-        <span className={cn("inline-flex items-center gap-2 text-sm font-medium text-teal-700 hover:text-teal-900", isLive && "justify-end")}>
-          Open details
-          <ArrowRight className="size-4" />
-        </span>
       </CardContent>
     </Card>
   )

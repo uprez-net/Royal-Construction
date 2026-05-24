@@ -3,22 +3,16 @@ import { SignIn } from "@clerk/nextjs"
 
 function SignInFallback() {
   return (
-    <div className="flex min-h-125 items-center justify-center">
-      Loading...
+    <div className="flex min-h-[31.25rem] items-center justify-center">
+      <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
     </div>
   )
 }
 
 export default function SignInPage() {
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-border bg-background shadow-sm">
-      <Suspense fallback={<SignInFallback />}>
-        <SignIn
-          routing="path"
-          path="/sign-in"
-          signUpUrl="/sign-up"
-        />
-      </Suspense>
-    </div>
+    <Suspense fallback={<SignInFallback />}>
+      <SignIn routing="path" path="/sign-in" signUpUrl="/sign-up" />
+    </Suspense>
   )
 }

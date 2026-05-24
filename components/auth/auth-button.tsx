@@ -12,13 +12,13 @@ async function AuthContent() {
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
-          className="rounded-2xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+          className="rounded-lg border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
           asChild
         >
           <Link href="/sign-in">Sign in</Link>
         </Button>
         <Button
-          className="rounded-2xl bg-teal-500 text-slate-950 hover:bg-teal-400"
+          className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
           asChild
         >
           <Link href="/sign-up">Sign up</Link>

@@ -216,6 +216,13 @@ export const tickerItems = [
   "Worker attendance: 53/56 checked in today",
 ];
 
+export const activityItems = [
+  { type: "progress" as const, text: "Frame stage 65% complete — Penrith Residence" },
+  { type: "warning" as const, text: "Invoice overdue: Berala Duplex variation" },
+  { type: "upcoming" as const, text: "Architect sketches due tomorrow — Castle Hill Villa" },
+  { type: "info" as const, text: "Worker attendance: 53/56 checked in today" },
+];
+
 export const projectOverviewMock = {
   // buildingType: "Double Storey 4BR + Study",
   // lotSize: "620 sqm",
