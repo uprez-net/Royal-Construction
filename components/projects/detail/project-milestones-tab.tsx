@@ -11,6 +11,7 @@ import {
   Plus,
   FilePenLine,
   Play,
+  ChevronDown,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,7 @@ import type {
   MilestoneWithFilesTradiesUpdates,
   ProjectDetail,
   TradieScheduleListItem,
+  TradieScheduleWithTradieAndMilestone,
   UIMilestone,
 } from "@/types/project";
 
@@ -31,6 +33,14 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { toast } from "sonner";
 import { MilestoneStatus } from "@prisma/client";
+import { useMemo, type ReactNode } from "react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 const convertToVisualMilestone = (
   milestones: MilestoneWithFilesTradiesUpdates[],
@@ -58,18 +68,357 @@ const convertToVisualMilestone = (
   return rootMilestones;
 };
 
+function getMilestoneTone(status: string) {
+  if (status === "DONE") {
+    return {
+      className: "border-green-200/70 bg-green-50/60",
+      pill: "success" as const,
+    };
+  }
+
+  if (status === "ACTIVE") {
+    return {
+      className: "border-amber-200/70 bg-amber-50/50",
+      pill: "warning" as const,
+    };
+  }
+
+  return {
+    className: "border-border/70 bg-slate-50/70",
+    pill: "neutral" as const,
+  };
+}
+
+function MilestoneMetaLine({
+  icon,
+  children,
+}: {
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{children}</span>
+    </div>
+  );
+}
+
+function MilestoneActionGroup({
+  milestone,
+  onOpenAddUpdateModal,
+  onStatusUpdate,
+  onStartMilestone,
+  onSendInvoice,
+}: {
+  milestone: UIMilestone;
+  onOpenAddUpdateModal: (id: string) => void;
+  onStatusUpdate: (id: string) => void;
+  onStartMilestone: (id: string) => void;
+  onSendInvoice: () => void;
+}) {
+  if (milestone.status === "PENDING" && milestone.childrenMilestones.length === 0) {
+    return (
+      <Button size="sm" onClick={() => onStartMilestone(milestone.id)}>
+        <Play className="mr-1 h-4 w-4" />
+        Start Milestone
+      </Button>
+    );
+  }
+
+  if (milestone.status === "ACTIVE") {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button size="sm" onClick={() => onOpenAddUpdateModal(milestone.id)}>
+          <Camera className="mr-1 h-4 w-4" />
+          Add Photo
+        </Button>
+
+        <Button size="sm" onClick={() => onStatusUpdate(milestone.id)}>
+          <FilePenLine className="mr-1 h-4 w-4" />
+          Update Status
+        </Button>
+      </div>
+    );
+  }
+
+  if (milestone.status === "DONE") {
+    return (
+      <Button variant="outline" size="sm" onClick={onSendInvoice}>
+        <Send className="mr-1 h-4 w-4" />
+        Invoice
+      </Button>
+    );
+  }
+
+  return null;
+}
+
+function MilestoneCard({
+  milestone,
+  project,
+  depth = 0,
+  tradieAlertsByMilestone,
+  onOpenAddUpdateModal,
+  onStatusUpdate,
+  onStartMilestone,
+  onSendReminder,
+  onSendInvoice,
+  onOpenViewPicture,
+}: {
+  milestone: UIMilestone;
+  project: ProjectDetail;
+  depth?: number;
+  tradieAlertsByMilestone: Record<string, TradieScheduleWithTradieAndMilestone[]>;
+  onOpenAddUpdateModal: (id: string) => void;
+  onStatusUpdate: (id: string) => void;
+  onStartMilestone: (id: string) => void;
+  onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
+  onSendInvoice: () => void;
+  onOpenViewPicture: (imageUrl: string) => void;
+}) {
+  const tone = getMilestoneTone(milestone.status);
+  const hasChildren = milestone.childrenMilestones.length > 0;
+  const isCompact = depth > 0;
+  const milestonePictures = !isCompact
+    ? milestone.files.filter((file) => file.fileType.startsWith("image/"))
+    : [];
+  const nextTradies = tradieAlertsByMilestone[milestone.id] ?? [];
+  const budgetShare = Number(project.totalBudget)
+    ? (Number(milestone.budget) / Number(project.totalBudget)) * 100
+    : 0;
+
+  return (
+    <article
+      className={cn(
+        "group relative overflow-hidden rounded-[12px] border p-4 transition-all hover:shadow-sm",
+        tone.className,
+        isCompact && "p-3",
+        depth > 0 && "ml-4 border-l-[3px]",
+      )}
+    >
+      {depth > 0 ? (
+        <span className="absolute -left-2.5 top-5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
+      ) : null}
+
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className={cn("font-bold text-slate-900", isCompact ? "text-[13px]" : "text-[14px]")}>{milestone.name}</p>
+
+            <StatusPill tone={tone.pill}>{formatStatus(milestone.status)}</StatusPill>
+
+            {hasChildren ? (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-slate-600">
+                {milestone.childrenMilestones.length} sub{milestone.childrenMilestones.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
+
+            {!isCompact && milestonePictures.length > 0 ? (
+              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-teal-700">
+                {milestonePictures.length} photo{milestonePictures.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </div>
+
+          <div className={cn("mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5", isCompact && "gap-x-3")}>
+            <MilestoneMetaLine icon={<Calendar className="h-3.5 w-3.5" />}>
+              Target: {dateFormat.format(new Date(milestone.targetDate))}
+            </MilestoneMetaLine>
+
+            {milestone.actualDate ? (
+              <MilestoneMetaLine icon={<CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}>
+                Actual: {dateFormat.format(new Date(milestone.actualDate))}
+              </MilestoneMetaLine>
+            ) : null}
+
+            <MilestoneMetaLine icon={<DollarSign className="h-3.5 w-3.5" />}>
+              {currency.format(Number(milestone.budget))} ({budgetShare.toFixed(2)}%)
+            </MilestoneMetaLine>
+
+            {milestone.tradieSchedules.length > 0 ? (
+              <MilestoneMetaLine icon={<Users className="h-3.5 w-3.5" />}>
+                {milestone.tradieSchedules
+                  .map((schedule) => `${schedule.tradie.name} - ${schedule.tradie.trade}`)
+                  .join(", ")}
+              </MilestoneMetaLine>
+            ) : null}
+          </div>
+        </div>
+
+        <MilestoneActionGroup
+          milestone={milestone}
+          onOpenAddUpdateModal={onOpenAddUpdateModal}
+          onStatusUpdate={onStatusUpdate}
+          onStartMilestone={onStartMilestone}
+          onSendInvoice={onSendInvoice}
+        />
+      </div>
+
+      {!isCompact && milestonePictures.length > 0 ? (
+        <div className="mt-3 grid grid-cols-4 gap-1.5">
+          {Array.from({ length: Math.min(milestonePictures.length, 4) }).map((_, i) => (
+            <div
+              key={i}
+              className="group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
+              onClick={() => onOpenViewPicture(milestonePictures[i].url)}
+            >
+              <Image
+                src={milestonePictures[i].url}
+                alt={`Photo ${i + 1}`}
+                className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                loading="lazy"
+                width={800}
+                height={600}
+              />
+            </div>
+          ))}
+          {milestonePictures.length > 4 ? (
+            <div className="flex aspect-4/3 cursor-pointer items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600">
+              +{milestonePictures.length - 4}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!isCompact && nextTradies.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {nextTradies.map((t) => (
+            <div
+              key={`tradie-alert-${t.id}`}
+              className="flex items-center gap-3 rounded-xl border border-amber-200/50 bg-amber-50 p-3.5 dark:border-amber-900/40 dark:bg-amber-950/20"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                <Wrench className="h-4 w-4" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold">
+                  Next: {t.tradie.name} ({t.tradie.trade})
+                </div>
+
+                <div className="text-[11px] text-muted-foreground">
+                  Scheduled {dateFormat.format(new Date(t.scheduledDate))} {!['CONFIRMED', 'COMPLETED'].includes(t.status) && "— Not confirmed!"}
+                </div>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  onSendReminder({
+                    id: t.id,
+                    tradieId: t.tradieId,
+                    milestoneId: t.milestoneId ?? undefined,
+                    scheduledDate: new Date(t.scheduledDate).toISOString(),
+                    status: t.status,
+                    company: t.tradie.company,
+                    tradieName: t.tradie.name,
+                    tradeType: t.tradie.tradeType,
+                    projectId: t.projectId,
+                    projectName: project.name,
+                    taskLabel: `${milestone.name} - ${t.tradie.trade}`,
+                    durationDays: t.durationDays,
+                    updatedAt: new Date(t.updatedAt).toISOString(),
+                    contact: {
+                      email: t.tradie.email,
+                      phone: t.tradie.phone,
+                    },
+                    siteManager: {
+                      name: project.siteManager?.name ?? "Site Manager",
+                      email: project.siteManager?.email ?? "Site Manager Email",
+                      phone: project.siteManager?.phone ?? "Site Manager Phone",
+                    },
+                  } satisfies TradieScheduleListItem)
+                }
+              >
+                <Bell className="mr-1 h-4 w-4" />
+                Remind
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {hasChildren ? (
+        <Collapsible defaultOpen={milestone.childrenMilestones.length <= 3}>
+          <div className="mt-4 rounded-[14px] border border-dashed border-border/70 bg-white/60 px-3 py-2.5">
+            <CollapsibleTrigger asChild>
+              <button className="group flex w-full items-center justify-between gap-3 text-left text-[12px] font-semibold text-slate-700 transition-colors hover:text-teal-700">
+                <span className="flex items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-600">
+                    Children
+                  </span>
+                  <span>
+                    {milestone.childrenMilestones.length} milestone{milestone.childrenMilestones.length === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <ChevronDown className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+              </button>
+            </CollapsibleTrigger>
+
+            <CollapsibleContent>
+              <ScrollArea className="mt-3 max-h-80 pr-2">
+                <div className="space-y-2">
+                  {milestone.childrenMilestones.map((child) => (
+                    <MilestoneCard
+                      key={child.id}
+                      milestone={child}
+                      project={project}
+                      depth={depth + 1}
+                      tradieAlertsByMilestone={tradieAlertsByMilestone}
+                      onOpenAddUpdateModal={onOpenAddUpdateModal}
+                      onStatusUpdate={onStatusUpdate}
+                      onStartMilestone={onStartMilestone}
+                      onSendReminder={onSendReminder}
+                      onSendInvoice={onSendInvoice}
+                      onOpenViewPicture={onOpenViewPicture}
+                    />
+                  ))}
+                </div>
+              </ScrollArea>
+            </CollapsibleContent>
+          </div>
+        </Collapsible>
+      ) : null}
+    </article>
+  );
+}
+
 export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   const dispatch = useAppDispatch();
-  const visualMilestones = convertToVisualMilestone(project.milestones);
-  const tradieAlerts = project.tradieSchedules.filter(
-    (schedule) =>
-      schedule.status === "PENDING_RESPONSE" ||
-      schedule.status === "NO_RESPONSE" ||
-      schedule.status === "DECLINED",
+  const visualMilestones = useMemo(
+    () => convertToVisualMilestone(project.milestones),
+    [project.milestones],
+  );
+  const tradieAlerts = useMemo(
+    () =>
+      project.tradieSchedules.filter(
+        (schedule) =>
+          schedule.status === "PENDING_RESPONSE" ||
+          schedule.status === "NO_RESPONSE" ||
+          schedule.status === "DECLINED",
+      ),
+    [project.tradieSchedules],
   );
 
-  const milestoneChartData: ProjectMilestoneMix[] = project.milestones.reduce(
-    (acc, milestone) => {
+  const tradieAlertsByMilestone = useMemo(() => {
+    return tradieAlerts.reduce<Record<string, TradieScheduleWithTradieAndMilestone[]>>(
+      (acc, schedule) => {
+        if (!schedule.milestoneId) {
+          return acc;
+        }
+
+        acc[schedule.milestoneId] = acc[schedule.milestoneId] ?? [];
+        acc[schedule.milestoneId].push(schedule);
+        return acc;
+      },
+      {},
+    );
+  }, [tradieAlerts]);
+
+  const milestoneChartData: ProjectMilestoneMix[] = useMemo(() => {
+    return project.milestones.reduce((acc, milestone) => {
       const statusKey =
         milestone.status === "DONE"
           ? "Completed"
@@ -94,9 +443,8 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
       }
 
       return acc;
-    },
-    [] as ProjectMilestoneMix[],
-  );
+    }, [] as ProjectMilestoneMix[]);
+  }, [project.milestones]);
 
   const handleOpenAddUpdateModal = (id: string) => {
     dispatch(
@@ -122,6 +470,10 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     dispatch(
       openModal({ type: "addMilestone", payload: { projectId: project.id } }),
     );
+  };
+
+  const handleOpenViewPicture = (imageUrl: string) => {
+    dispatch(openModal({ type: "viewPicture", payload: { imageUrl } }));
   };
 
   const handleStatusUpdate = (milestoneId: string) => {
@@ -174,352 +526,25 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-5">
-          {visualMilestones.map((milestone) => {
-            const hasChildren = milestone.childrenMilestones.length > 0;
-            const children = milestone.childrenMilestones;
-            const isDone = milestone.status === "DONE";
-            const isActive = milestone.status === "ACTIVE";
-            const milestonePictures = milestone.files.filter((file) =>
-              file.fileType.startsWith("image/"),
-            );
-            const nextTradies = tradieAlerts.filter(
-              (alert) => alert.milestoneId === milestone.id,
-            );
-
-            const tradieAlert =
-              nextTradies.length > 0
-                ? nextTradies.map((t) => (
-                    <div
-                      key={`tradie-alert-${t.id}`}
-                      className="mb-2.5 flex items-center gap-3 rounded-xl border border-amber-200/50 bg-amber-50 p-3.5 dark:border-amber-900/40 dark:bg-amber-950/20"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                        <Wrench className="h-4 w-4" />
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="text-xs font-semibold">
-                          Next: {t.tradie.name} ({t.tradie.trade})
-                        </div>
-
-                        <div className="text-[11px] text-muted-foreground">
-                          Scheduled{" "}
-                          {dateFormat.format(new Date(t.scheduledDate))}{" "}
-                          {!["CONFIRMED", "COMPLETED"].includes(t.status) &&
-                            "— Not confirmed!"}
-                        </div>
-                      </div>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          handleSendReminder({
-                            id: t.id,
-                            tradieId: t.tradieId,
-                            milestoneId: t.milestoneId ?? undefined,
-                            scheduledDate: t.scheduledDate.toISOString(),
-                            status: t.status,
-                            company: t.tradie.company,
-                            tradieName: t.tradie.name,
-                            tradeType: t.tradie.tradeType,
-                            projectId: t.projectId,
-                            projectName: project.name,
-                            taskLabel: `${milestone.name} - ${t.tradie.trade}`,
-                            durationDays: t.durationDays,
-                            updatedAt: new Date(t.updatedAt).toISOString(),
-                            contact: {
-                              email: t.tradie.email,
-                              phone: t.tradie.phone,
-                            },
-                            siteManager: {
-                              name: project.siteManager?.name ?? "Site Manager",
-                              email:
-                                project.siteManager?.email ??
-                                "Site Manager Email",
-                              phone:
-                                project.siteManager?.phone ??
-                                "Site Manager Phone",
-                            },
-                          } satisfies TradieScheduleListItem)
-                        }
-                      >
-                        <Bell className="mr-1 h-4 w-4" />
-                        Remind
-                      </Button>
-                    </div>
-                  ))
-                : null;
-
-            return (
-              <article
-                key={milestone.id}
-                className={`group relative overflow-hidden rounded-[10px] border p-4 transition-all hover:shadow-sm ${
-                  isDone
-                    ? "border-l-[3px] border-l-green-600 border-border bg-white"
-                    : isActive
-                      ? "border-l-[3px] border-l-amber-500 border-amber-200/50 bg-amber-50/30"
-                      : "border-l-[3px] border-l-border border-border bg-slate-50/50 opacity-80"
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-[14px] font-bold text-slate-900">
-                        {milestone.name}
-                      </p>
-                      {isActive && (
-                        <StatusPill tone="warning">Active</StatusPill>
-                      )}
-                      {isDone && (
-                        <StatusPill tone="success">
-                          {formatStatus(milestone.status)}
-                        </StatusPill>
-                      )}
-                      {!isDone && !isActive && (
-                        <StatusPill tone="neutral">
-                          {formatStatus(milestone.status)}
-                        </StatusPill>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-[12.5px] text-muted-foreground mt-1.5">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" />
-                        <span>
-                          Target:{" "}
-                          {dateFormat.format(new Date(milestone.targetDate))}
-                        </span>
-                      </div>
-
-                      {milestone.actualDate && (
-                        <div className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                          <span>
-                            Actual:{" "}
-                            {dateFormat.format(new Date(milestone.actualDate))}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-1">
-                        <DollarSign className="h-3.5 w-3.5" />
-                        <span>
-                          {currency.format(Number(milestone.budget))}{" "}
-                          {`(${(
-                            (Number(milestone.budget) /
-                              Number(project.totalBudget)) *
-                            100
-                          ).toFixed(2)}
-                          %)`}
-                        </span>
-                      </div>
-
-                      {milestone.tradieSchedules.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          <Users className="h-3.5 w-3.5" />
-                          <span>
-                            {" "}
-                            {milestone.tradieSchedules
-                              .map(
-                                (s) => `${s.tradie.name} - ${s.tradie.trade}`,
-                              )
-                              .join(", ")}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-1">
-                    {(milestone.status === "PENDING" && milestone.childrenMilestones.length === 0) && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleStartMilestone(milestone.id)}
-                      >
-                        <Play className="mr-1 h-4 w-4" />
-                        Start Milestone
-                      </Button>
-                    )}
-
-                    {milestone.status === "ACTIVE" && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          onClick={() => handleOpenAddUpdateModal(milestone.id)}
-                        >
-                          <Camera className="mr-1 h-4 w-4" />
-                          Add Photo
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          onClick={() => handleStatusUpdate(milestone.id)}
-                        >
-                          <FilePenLine className="mr-1 h-4 w-4" />
-                          Update Status
-                        </Button>
-                      </div>
-                    )}
-
-                    {milestone.status === "DONE" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSendInvoice}
-                      >
-                        <Send className="mr-1 h-4 w-4" />
-                        Invoice
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {milestonePictures.length > 0 && (
-                  <div className="mt-3 grid grid-cols-4 gap-1.5">
-                    {Array.from({
-                      length: Math.min(milestonePictures.length, 4),
-                    }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
-                        onClick={() =>
-                          dispatch(
-                            openModal({
-                              type: "viewPicture",
-                              payload: { imageUrl: milestonePictures[i].url },
-                            }),
-                          )
-                        }
-                      >
-                        <Image
-                          src={milestonePictures[i].url}
-                          alt={`Photo ${i + 1}`}
-                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                          loading="lazy"
-                          width={800}
-                          height={600}
-                        />
-                      </div>
-                    ))}
-                    {milestonePictures.length > 4 && (
-                      <div className="flex aspect-4/3 cursor-pointer items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600">
-                        +{milestonePictures.length - 4}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {tradieAlert}
-
-                {/* CHILD MILESTONES */}
-                {hasChildren && (
-                  <div className="relative mt-5 pl-6">
-                    {/* vertical connector */}
-                    <div className="absolute left-2 top-0 bottom-0 w-px bg-border" />
-
-                    <div className="space-y-3">
-                      {children.map((child) => {
-                        const childDone = child.status === "DONE";
-                        const childActive = child.status === "ACTIVE";
-
-                        return (
-                          <div
-                            key={child.id}
-                            className={`relative rounded-xl border px-3 py-3 transition-colors ${
-                              childDone
-                                ? "border-green-200/60 bg-green-50/40"
-                                : childActive
-                                  ? "border-amber-200/60 bg-amber-50/40"
-                                  : "border-border/60 bg-muted/30"
-                            }`}
-                          >
-                            {/* connector dot */}
-                            <div className="absolute -left-[22px] top-5 h-3 w-3 rounded-full border-2 border-background bg-primary" />
-
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="truncate text-[13px] font-semibold">
-                                    {child.name}
-                                  </p>
-
-                                  <StatusPill
-                                    tone={
-                                      childDone
-                                        ? "success"
-                                        : childActive
-                                          ? "warning"
-                                          : "neutral"
-                                    }
-                                  >
-                                    {formatStatus(child.status)}
-                                  </StatusPill>
-                                </div>
-
-                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {dateFormat.format(
-                                      new Date(child.targetDate),
-                                    )}
-                                  </div>
-
-                                  <div className="flex items-center gap-1">
-                                    <DollarSign className="h-3 w-3" />
-                                    {currency.format(Number(child.budget))}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {child.status === "ACTIVE" && (
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    size="sm"
-                                    onClick={() =>
-                                      handleOpenAddUpdateModal(milestone.id)
-                                    }
-                                  >
-                                    <Camera className="mr-1 h-4 w-4" />
-                                    Add Photo
-                                  </Button>
-
-                                  <Button
-                                    size="sm"
-                                    onClick={() =>
-                                      handleStatusUpdate(milestone.id)
-                                    }
-                                  >
-                                    <FilePenLine className="mr-1 h-4 w-4" />
-                                    Update Status
-                                  </Button>
-                                </div>
-                              )}
-
-                              {milestone.status === "PENDING" && (
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    handleStartMilestone(milestone.id)
-                                  }
-                                >
-                                  <Play className="mr-1 h-4 w-4" />
-                                  Start Milestone
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </article>
-            );
-          })}
+          {visualMilestones.map((milestone) => (
+            <MilestoneCard
+              key={milestone.id}
+              milestone={milestone}
+              project={project}
+              tradieAlertsByMilestone={tradieAlertsByMilestone}
+              onOpenAddUpdateModal={handleOpenAddUpdateModal}
+              onStatusUpdate={handleStatusUpdate}
+              onStartMilestone={handleStartMilestone}
+              onSendReminder={handleSendReminder}
+              onSendInvoice={handleSendInvoice}
+              onOpenViewPicture={handleOpenViewPicture}
+            />
+          ))}
         </CardContent>
       </Card>
 
       <div className="space-y-4">
-        <Card className="border-amber-200/60 bg-gradient-to-br from-[#FEF9C3] to-[#FFF3E0] shadow-sm rounded-xl">
+        <Card className="border-amber-200/60 bg-linear-to-br from-[#FEF9C3] to-[#FFF3E0] shadow-sm rounded-xl">
           <CardHeader className="border-b border-amber-200/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.06em] text-[#D97706]">
               <Bell className="size-4" />
@@ -562,7 +587,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                           id: schedule.id,
                           tradieId: schedule.tradieId,
                           milestoneId: schedule.milestoneId ?? undefined,
-                          scheduledDate: schedule.scheduledDate.toISOString(),
+                          scheduledDate: new Date(schedule.scheduledDate).toISOString(),
                           status: schedule.status,
                           company: schedule.tradie.company,
                           tradieName: schedule.tradie.name,
