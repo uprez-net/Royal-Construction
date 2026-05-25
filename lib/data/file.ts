@@ -6,16 +6,18 @@ interface SaveFileParams {
     userId: string;
     projectId: string;
     milestoneId?: string;
+    fileId?: string;
     fileUrl: string;
     fileName: string;
     fileType: string;
     fileSize: number;
 }
 
-export async function saveFile({ userId, projectId, milestoneId, fileUrl, fileName, fileType, fileSize }: SaveFileParams) {
+export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, fileName, fileType, fileSize }: SaveFileParams) {
     try {
         const newFile = await prisma.file.create({
             data: {
+                id: fileId,
                 uploadedBy: userId,
                 projectId,
                 milestoneId,

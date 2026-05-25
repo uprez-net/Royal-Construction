@@ -62,6 +62,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         userId: user.id,
                         projectId: payload.projectId,
                         milestoneId: payload.milestoneId ?? undefined,
+                        fileId: payload.fileId ?? undefined,
                         fileUrl: blob.url,
                         fileName: payload.fileName,
                         fileType: blob.contentType,

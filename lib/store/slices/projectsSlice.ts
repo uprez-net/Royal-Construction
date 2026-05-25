@@ -3,6 +3,7 @@ import { createAsyncThunk, createSelector, createSlice, type PayloadAction } fro
 import type { RootState } from "@/lib/store";
 import type { ProjectDetailTabKey } from "@/types/ui";
 import {
+  MilestoneWithFilesTradiesUpdates,
   SafeMaterial,
   SafeVariation,
   TradieScheduleListItem,
@@ -13,12 +14,14 @@ import {
   type ProjectMutationState,
   type ProjectUploadRecord,
   type ProjectWithStats,
+  type SafeMilestone,
 } from "@/types/project";
+import type { File as ProjectFiles } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
-import { AddMaterialInput } from "@/utils/validators/material";
 import type { CreateScheduleRequest } from "./tradiesSlice";
+import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData } from "@/utils/validators";
 
-type MutationKey = "createProject" | "createVariation" | "addUpdate" | "addMaterial" | "createTradieSchedule";
+type MutationKey = "createProject" | "createVariation" | "addUpdate" | "addMaterial" | "createTradieSchedule" | "addMilestone" | "updateMilestone" | "addMilestonePhotos";
 
 type ProjectsMutationState = Record<MutationKey, ProjectMutationState>;
 
@@ -54,6 +57,9 @@ const initialMutationState = (): ProjectsMutationState => ({
   addUpdate: { status: "idle", error: null },
   addMaterial: { status: "idle", error: null },
   createTradieSchedule: { status: "idle", error: null },
+  addMilestone: { status: "idle", error: null },
+  updateMilestone: { status: "idle", error: null },
+  addMilestonePhotos: { status: "idle", error: null },
 });
 
 const initialState: ProjectsState = {
@@ -179,6 +185,72 @@ export const createTradieScheduleForProject = createAsyncThunk<
   );
 
   return response.data;
+});
+
+export const addProjectMilestone = createAsyncThunk<
+  MilestoneWithFilesTradiesUpdates,
+  MilestoneCreationData & { projectId: string },
+  { rejectValue: string }
+>("projects/addMilestone", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    const response = await fetchJson<MilestoneWithFilesTradiesUpdates>(
+      `/api/projects/${projectId}/milestones`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      "Unable to add milestone to project",
+    );
+
+    return response.data;
+  } catch (error) {
+    return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to add milestone to project");
+  }
+});
+
+export const updateProjectMilestoneStatus = createAsyncThunk<
+  SafeMilestone,
+  MilestoneUpdateData & { projectId: string; milestoneId: string },
+  { rejectValue: string }
+>("projects/updateMilestoneStatus", async ({ projectId, milestoneId, ...payload }, thunkApi) => {
+  try {
+    const response = await fetchJson<SafeMilestone>(
+      `/api/projects/${projectId}/milestones/${milestoneId}/updates`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      "Unable to update milestone",
+    );
+
+    return response.data;
+  } catch (error) {
+    return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to update milestone");
+  }
+});
+
+export const addMilestonePhotos = createAsyncThunk<
+  { id: string; projectId: string; files: ProjectFiles[] },
+  MilestonePictureUploadData & { projectId: string; milestoneId: string },
+  { rejectValue: string }
+>("projects/addMilestonePhotos", async ({ projectId, milestoneId, ...payload }, thunkApi) => {
+  try {
+    const response = await fetchJson<{ id: string; projectId: string; files: ProjectFiles[] }>(
+      `/api/projects/${projectId}/milestones/${milestoneId}/add-photos`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      "Unable to add photos to milestone",
+    );
+
+    return response.data;
+  } catch (error) {
+    return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to add photos to milestone");
+  }
 });
 
 const projectsSlice = createSlice({
@@ -408,8 +480,60 @@ const projectsSlice = createSlice({
           status: "failed",
           error: (action.payload as string | null) ?? action.error.message ?? "Failed to create tradie schedule",
         };
+      })
+      .addCase(addProjectMilestone.pending, (state) => {
+        state.mutations.addMilestone = { status: "pending", error: null };
+      })
+      .addCase(addProjectMilestone.fulfilled, (state, action) => {
+        state.mutations.addMilestone = { status: "succeeded", error: null };
+        if (state.activeProject?.id === action.payload.projectId) {
+          state.activeProject.milestones.push(action.payload);
+        }
+      })
+      .addCase(addProjectMilestone.rejected, (state, action) => {
+        state.mutations.addMilestone = {
+          status: "failed",
+          error: action.payload ?? action.error.message ?? "Unable to add milestone to project",
+        };
+      })
+      .addCase(updateProjectMilestoneStatus.pending, (state) => {
+        state.mutations.updateMilestone = { status: "pending", error: null };
+      })
+      .addCase(updateProjectMilestoneStatus.fulfilled, (state, action) => {
+        state.mutations.updateMilestone = { status: "succeeded", error: null };
+        if (state.activeProject?.id === action.payload.projectId) {
+          const milestoneIndex = state.activeProject.milestones.findIndex((m) => m.id === action.meta.arg.milestoneId);
+          if (milestoneIndex !== -1) {
+            state.activeProject!.milestones[milestoneIndex] = { ...state.activeProject!.milestones[milestoneIndex], ...action.payload };
+          }
+        }
+      })
+      .addCase(updateProjectMilestoneStatus.rejected, (state, action) => {
+        state.mutations.updateMilestone = {
+          status: "failed",
+          error: action.payload ?? action.error.message ?? "Unable to update milestone status",
+        };
+      })
+      .addCase(addMilestonePhotos.pending, (state) => {
+        state.mutations.addMilestonePhotos = { status: "pending", error: null };
+      })
+      .addCase(addMilestonePhotos.fulfilled, (state, action) => {
+        state.mutations.addMilestonePhotos = { status: "succeeded", error: null };
+        if (state.activeProject?.id === action.payload.projectId) {
+          const milestone = state.activeProject.milestones.find((m) => m.id === action.payload.id);
+          if (milestone) {
+            milestone.files.push(...action.payload.files);
+          }
+          state.activeProject.files.push(...action.payload.files);
+        }
+      })
+      .addCase(addMilestonePhotos.rejected, (state, action) => {
+        state.mutations.addMilestonePhotos = {
+          status: "failed",
+          error: action.payload ?? action.error.message ?? "Unable to add photos to milestone",
+        };
       });
-  },
+    }
 });
 
 export const {

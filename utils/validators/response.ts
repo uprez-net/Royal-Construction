@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Standardized API response utilities
@@ -224,7 +224,7 @@ export function conflictResponse(
  * Returns either typed data or error response
  */
 export async function parseBodyWithResponse<T extends z.ZodSchema>(
-  request: Request,
+  request: NextRequest,
   schema: T
 ): Promise<
   | { success: true; data: z.infer<T> }

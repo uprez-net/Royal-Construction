@@ -47,6 +47,7 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import { ClientPayload } from "@/utils/validators";
 import { Input } from "../ui/input";
+import { formatFileSize, buildBlobPath  } from "@/utils/formatters";
 
 const maxFiles = 5;
 
@@ -59,26 +60,6 @@ type QueuedUploadFile = {
   error: string | null;
   url: string | null;
 };
-
-function formatFileSize(size: number) {
-  if (size < 1024) {
-    return `${size} B`;
-  }
-
-  if (size < 1024 * 1024) {
-    return `${Math.round(size / 1024)} KB`;
-  }
-
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function sanitizeFileName(fileName: string) {
-  return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
-}
-
-function buildBlobPath(projectId: string, fileId: string, fileName: string) {
-  return `projects/${projectId}/${fileId}-${sanitizeFileName(fileName)}`;
-}
 
 export function AddUpdateModal({
   projectId,

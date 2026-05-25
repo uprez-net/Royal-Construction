@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { toast } from "sonner";
+import { MilestoneStatus } from "@prisma/client";
 
 const convertToVisualMilestone = (
   milestones: MilestoneWithFilesTradiesUpdates[],
@@ -136,7 +137,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     dispatch(
       openModal({
         type: "updateMilestoneStatus",
-        payload: { milestoneId, newStatus: "ACTIVE" },
+        payload: { milestoneId, newStatus: MilestoneStatus.ACTIVE },
       }),
     );
   };

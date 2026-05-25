@@ -29,10 +29,13 @@ import {
   updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
-import { TradieScheduleStatus } from "@prisma/client";
+import { MilestoneStatus, TradieScheduleStatus } from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
 import { PreviewPictureModal } from "../common/preview-picture-modal";
+import UpdateMilestoneModal from "../projects/detail/update-milestone-modal";
+import AddMilestoneModal from "../projects/detail/add-milestone-modal";
+import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -270,17 +273,41 @@ export function ModalManager() {
       const { projectId: addMilestoneProjectId } = modal.payload as {
         projectId: string;
       };
-      return null; // TODO: add addMilestone modal
+      return (
+        <AddMilestoneModal
+          projectId={addMilestoneProjectId}
+          isOpen
+          onClose={handleClose}
+        />
+      );
     case "updateMilestoneStatus":
-      const { milestoneId: updateMilestoneStatusId } = modal.payload as {
+      const { milestoneId: updateMilestoneStatusId, newStatus, projectId: updateMilestoneStatusProjectId } = modal.payload as {
+        projectId: string;
         milestoneId: string;
+        newStatus: MilestoneStatus;
       };
-      return null; // TODO: add updateMilestoneStatus modal
+      return (
+        <UpdateMilestoneModal
+          milestoneId={updateMilestoneStatusId}
+          projectId={updateMilestoneStatusProjectId}
+          status={newStatus}
+          isOpen
+          onClose={handleClose}
+        />
+      );
     case "addMilestonePicture":
-      const { milestoneId: addMilestonePictureId } = modal.payload as {
+      const { milestoneId: addMilestonePictureId, projectId: addMilestonePictureProjectId } = modal.payload as {
         milestoneId: string;
+        projectId: string;
       };
-      return null; // TODO: add addMilestonePicture modal
+      return (
+        <AddMilestonePictureModal
+          milestoneId={addMilestonePictureId}
+          projectId={addMilestonePictureProjectId}
+          isOpen
+          onClose={handleClose}
+        />
+      );
     default:
       return null;
   }

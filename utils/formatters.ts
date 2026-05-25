@@ -79,3 +79,12 @@ export function variationStatusTone(status: VariationStatus) {
 
   return "warning" as const;
 }
+
+
+export function sanitizeFileName(fileName: string) {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
+}
+
+export function buildBlobPath(projectId: string, fileId: string, fileName: string, milestoneId?: string) {
+  return `projects/${projectId}/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
+}
