@@ -13,7 +13,15 @@ import {
   MilestonePictureUploadData,
   milestonePictureUploadSchema,
 } from "@/utils/validators";
-import { ChangeEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  type ChangeEvent,
+  type SubmitEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { toast } from "sonner";
 import {
@@ -25,7 +33,14 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import { upload } from "@vercel/blob/client";
 import { buildBlobPath, formatFileSize } from "@/utils/formatters";
-import { AlertCircle, CheckCircle2, CloudUpload } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  CloudUpload,
+  Loader2,
+  Upload,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const maxFiles = 5;
 
@@ -99,20 +114,25 @@ export default function AddMilestonePictureModal({
     if (!open) onClose();
   };
 
-  const handleSubmit = async (data: MilestonePictureUploadData) => {
+  const handleSubmit = async (e: SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (queuedFiles.length === 0) {
+      toast.error("Please select at least one photo to upload.");
+      return;
+    }
     try {
-      const validatedData = milestonePictureUploadSchema.safeParse(data);
-      if (!validatedData.success) {
-        throw new Error(
-          "Validation failed: " +
-            validatedData.error.issues.map((e) => e.message).join(", "),
-        );
-      }
+      const photos =
+        queuedFiles.length > 0
+          ? await Promise.all(
+              queuedFiles.map((queuedFile) => uploadQueuedFile(queuedFile)),
+            )
+          : [];
+
       await dispatch(
         addMilestonePhotos({
           projectId,
           milestoneId,
-          ...validatedData.data,
+          fileIds: photos.map((p) => p.id),
         }),
       ).unwrap();
       toast.success("Milestone picture uploaded successfully");
@@ -239,7 +259,10 @@ export default function AddMilestonePictureModal({
         ),
       );
 
-      return blob.url;
+      return {
+        url: blob.url,
+        id: queuedFile.id,
+      };
     } finally {
       delete uploadControllersRef.current[queuedFile.id];
     }
@@ -255,7 +278,11 @@ export default function AddMilestonePictureModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form>
+        <form
+          onSubmit={(data) =>
+            startTransition(async () => await handleSubmit(data))
+          }
+        >
           <div className="space-y-1.5">
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Attach Photos
@@ -322,6 +349,29 @@ export default function AddMilestonePictureModal({
               ))}
             </div>
           )}
+
+          <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              className="h-9 rounded-[7px] px-3.5 text-[12.5px] font-medium transition-all hover:border-teal-600 hover:bg-slate-50 hover:text-teal-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={isPending || queuedFiles.length === 0}
+              className="h-9 rounded-[7px] bg-[#0D9488] px-3.5 text-[12.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#0F766E] hover:shadow-[0_4px_12px_rgba(13,148,136,0.3)]"
+            >
+              {isPending ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Upload className="mr-1.5 size-4" />
+              )}
+              Upload Photos
+            </Button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

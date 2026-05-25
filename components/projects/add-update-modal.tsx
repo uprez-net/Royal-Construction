@@ -1,13 +1,13 @@
 "use client";
 
 import {
+  SubmitEvent,
   useEffect,
   useMemo,
   useRef,
   useState,
   useTransition,
   type ChangeEvent,
-  type FormEvent,
 } from "react";
 import {
   Loader2,
@@ -47,7 +47,7 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import { ClientPayload } from "@/utils/validators";
 import { Input } from "../ui/input";
-import { formatFileSize, buildBlobPath  } from "@/utils/formatters";
+import { formatFileSize, buildBlobPath } from "@/utils/formatters";
 
 const maxFiles = 5;
 
@@ -80,7 +80,9 @@ export function AddUpdateModal({
   const mutation = useAppSelector(
     (state) => state.projects.mutations.addUpdate,
   );
-  const [milestoneId, setMilestoneId] = useState<string | undefined>(initialMilestoneId);
+  const [milestoneId, setMilestoneId] = useState<string | undefined>(
+    initialMilestoneId,
+  );
   const [notes, setNotes] = useState("");
   const [updatedNotesTitle, setUpdatedNotesTitle] = useState("");
   const [queuedFiles, setQueuedFiles] = useState<QueuedUploadFile[]>([]);
@@ -259,7 +261,7 @@ export function AddUpdateModal({
     }
   };
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedNotes = notes.trim();
@@ -353,7 +355,12 @@ export function AddUpdateModal({
           </div>
         </DialogHeader>
 
-        <form className="space-y-4 px-6 pb-6 pt-5" onSubmit={(data) => startTransition(async() => await handleSubmit(data))}>
+        <form
+          className="space-y-4 px-6 pb-6 pt-5"
+          onSubmit={(data) =>
+            startTransition(async () => await handleSubmit(data))
+          }
+        >
           <div className="space-y-1.5">
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Milestone
