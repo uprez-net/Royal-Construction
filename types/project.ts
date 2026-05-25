@@ -1,4 +1,4 @@
-import { Milestone, Project, Tradie, Variation, File, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material } from "@prisma/client";
+import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material } from "@prisma/client";
 
 export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize"> {
   totalBudget: string;
@@ -46,7 +46,7 @@ export interface SafeMilestone extends Omit<Milestone, "spend" | "budget"> {
 }
 
 export interface MilestoneWithFilesTradiesUpdates extends SafeMilestone {
-  files: File[];
+  files: ProjectFile[];
   siteUpdates: SiteUpdateWithAuthor[];
   tradieSchedules: TradieScheduleWithTradie[];
 }
@@ -84,7 +84,7 @@ export interface ProjectDetail extends SafeProject {
   siteUpdates: SiteUpdateWithAuthorAndMilestone[];
   variations: SafeVariation[];
   tradieSchedules: TradieScheduleWithTradieAndMilestone[];
-  files: File[];
+  files: ProjectFile[];
   materials: SafeMaterial[];
 }
 
@@ -285,6 +285,7 @@ export type CreateProjectRequest = {
   startDate: string;
   estimatedEndDate?: string | null;
   notes?: string;
+  quoteFile?: File | null;
 };
 
 export type CreateVariationRequest = {

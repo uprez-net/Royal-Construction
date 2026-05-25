@@ -88,12 +88,56 @@ export const createProject = createAsyncThunk<
   { rejectValue: string }
 >("projects/createProject", async (payload, thunkApi) => {
   try {
+    const formData = new FormData();
+    formData.append("name", payload.name);
+    formData.append("propertyType", payload.propertyType);
+    formData.append("customerMode", payload.customerMode);
+    formData.append("location", payload.location);
+    formData.append("budget", String(payload.budget));
+    formData.append("lotSize", String(payload.lotSize));
+    formData.append("startDate", payload.startDate);
+
+    if (payload.customerId) {
+      formData.append("customerId", payload.customerId);
+    }
+
+    if (payload.customerName) {
+      formData.append("customerName", payload.customerName);
+    }
+
+    if (payload.customerPhone) {
+      formData.append("customerPhone", payload.customerPhone);
+    }
+
+    if (payload.customerEmail) {
+      formData.append("customerEmail", payload.customerEmail);
+    }
+
+    if (payload.council) {
+      formData.append("council", payload.council);
+    }
+
+    if (payload.siteManagerId) {
+      formData.append("siteManagerId", payload.siteManagerId);
+    }
+
+    if (payload.estimatedEndDate) {
+      formData.append("estimatedEndDate", payload.estimatedEndDate);
+    }
+
+    if (payload.notes) {
+      formData.append("notes", payload.notes);
+    }
+
+    if (payload.quoteFile) {
+      formData.append("quoteFile", payload.quoteFile);
+    }
+
     const response = await fetchJson<ProjectDetail>(
       "/api/projects",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
       },
       "Unable to create project",
     );
@@ -533,7 +577,7 @@ const projectsSlice = createSlice({
           error: action.payload ?? action.error.message ?? "Unable to add photos to milestone",
         };
       });
-    }
+  }
 });
 
 export const {

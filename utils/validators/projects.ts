@@ -89,6 +89,9 @@ const baseProjectSchema = z.object({
     .optional(),
 
   customerEmail: emailSchema.optional(),
+  quoteFile: z
+    .instanceof(File)
+    .optional(),
 });
 
 /**
@@ -145,6 +148,14 @@ export const createProjectSchema = baseProjectSchema
           code: z.ZodIssueCode.custom,
           path: ["customerEmail"],
           message: "Customer email is required",
+        });
+      }
+
+      if (!data.quoteFile) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quoteFile"],
+          message: "Quote file is required",
         });
       }
     }

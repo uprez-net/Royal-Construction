@@ -376,6 +376,7 @@ export function CreateProjectModal({
               startDate: values.startDate,
               estimatedEndDate: values.estimatedEndDate || null,
               notes: values.notes,
+              quoteFile: values.quoteFile,
             };
 
       try {

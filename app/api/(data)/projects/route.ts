@@ -93,6 +93,9 @@ export async function POST(request: NextRequest) {
 
     const siteManagerId = projectData.siteManagerId?.trim() || null;
     let siteManager = null;
+    // Quote file handling can be implemented here if needed, e.g., saving to storage and linking to project
+    const qutoeFile = projectData.quoteFile;
+    console.log("Received quote file:", qutoeFile?.name);
 
     if (siteManagerId) {
       siteManager = await getSiteManagerById(siteManagerId);
