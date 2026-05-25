@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Eye, Send, Download, Receipt } from "lucide-react";
+import { Plus, Eye, Send, Download, Receipt, Search, Files } from "lucide-react";
 import { StatusPill } from "@/components/common/status-pill";
-import { quoteRequestsMock } from "@/lib/mock-data";
 
-import { currency } from "@/utils/formatters";
+import { currency, dataTimeFormat, formatFileSize } from "@/utils/formatters";
 import { ProjectDetail } from "@/types/project";
 import { DataTable } from "@/components/common/data-table";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
 
 function getQuoteTypeTone(type: string) {
   if (type === "Initial") return "purple" as const;
@@ -19,92 +20,77 @@ interface ProjectQuotesTabProps {
 }
 
 export function ProjectQuotesTab({ project }: ProjectQuotesTabProps) {
-  const newProject = project.milestones.length === 0;
-  const quoteRequests = newProject ? [] : quoteRequestsMock;
+  const files = project.files;
+  const [query, setQuery] = useState("");
 
   return (
     <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
       <CardHeader className="border-b border-border/60 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
-            Project Quotations
+            Project Documents
           </CardTitle>
-          <Button
-            size="sm"
-            className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
-          >
-            <Plus className="mr-1 size-4" />
-            Create Quote
-          </Button>
+          <div className="flex gap-2">
+            <div className="relative w-full sm:w-[220px] transition-all focus-within:w-[280px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-[13px] -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search documents..."
+                className="pl-[32px] h-9 text-[12.5px] rounded-lg bg-white"
+                aria-label="Search documents"
+              />
+            </div>
+            <Button
+              size="sm"
+              className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
+            >
+              <Plus className="mr-1 size-4" />
+              Upload Document
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0 px-0 pb-0">
         <div className="overflow-x-auto">
           <DataTable
             headers={[
-              "Quote #",
+              "Document #",
+              "Name",
+              "Size",
               "Type",
-              "Date",
-              "Description",
-              "Amount",
-              "GST",
-              "Total",
-              "Sent",
-              "Approved",
-              "Status",
+              "Milestone",
+              "Uploaded At",
               <div key="action" className="text-right">
                 Action
               </div>,
             ]}
-            rows={quoteRequests.map((quote) => [
+            rows={files.map((file, index) => [
               <span
-                key={`${quote.id}-number`}
+                key={`${file.id}-number`}
                 className="font-semibold text-slate-900"
               >
-                {quote.quoteNumber}
+                {index + 1}
               </span>,
-
-              <StatusPill
-                key={`${quote.id}-type`}
-                tone={getQuoteTypeTone(quote.type)}
-              >
-                {quote.type}
+              <span key={`${file.id}-name`}>{file.filename}</span>,
+              <StatusPill key={`${file.id}-type`} tone={"primary"}>
+                {file.fileType}
               </StatusPill>,
-
-              <span key={`${quote.id}-date`}>{quote.createdOn}</span>,
-
-              <span key={`${quote.id}-description`} className="text-slate-700">
-                {quote.description}
+              <span key={`${file.id}-size`}>
+                {formatFileSize(file.filesize)}
               </span>,
-
-              <span key={`${quote.id}-amount`}>
-                {currency.format(quote.amount)}
+              <span key={`${file.id}-milestone`}>
+                {file.milestoneId
+                  ? project.milestones.find((m) => m.id === file.milestoneId)
+                      ?.name
+                  : "—"}
               </span>,
-
-              <span key={`${quote.id}-gst`}>{currency.format(quote.gst)}</span>,
-
-              <span
-                key={`${quote.id}-total`}
-                className="font-medium text-slate-900"
-              >
-                {currency.format(quote.amount + quote.gst)}
+              <span key={`${file.id}-uploadedAt`}>
+                {dataTimeFormat.format(new Date(file.createdAt))}
               </span>,
-
-              <span key={`${quote.id}-sent`}>{quote.sentOn}</span>,
-
-              <span key={`${quote.id}-approved`}>
-                {quote.approvedOn ?? "-"}
-              </span>,
-
-              <StatusPill
-                key={`${quote.id}-status`}
-                tone={quote.status === "Approved" ? "success" : "warning"}
-              >
-                {quote.status}
-              </StatusPill>,
 
               <div
-                key={`${quote.id}-actions`}
+                key={`${file.id}-actions`}
                 className="flex justify-end gap-1.5"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -122,24 +108,24 @@ export function ProjectQuotesTab({ project }: ProjectQuotesTabProps) {
               </div>,
             ])}
             onRowClick={(rowIndex) => {
-              const quote = quoteRequests[rowIndex];
+              const file = files[rowIndex];
 
-              // handle quote click
-              console.log(quote);
+              // handle file click
+              console.log(file);
             }}
             emptyState={
               <div className="flex flex-col items-center justify-center gap-3">
                 <div className="flex size-12 items-center justify-center">
-                  <Receipt className="size-5 text-muted-foreground" />
+                  <Files className="size-5 text-muted-foreground" />
                 </div>
 
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-foreground">
-                    No Quote Data available yet.
+                    No Document available yet.
                   </p>
 
                   <p className="text-xs text-muted-foreground">
-                    Your Quote details will appear here.
+                    Your Project related documents will appear here.
                   </p>
                 </div>
               </div>

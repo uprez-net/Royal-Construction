@@ -19,6 +19,8 @@ import { ProjectVariationsTab } from "./project-variations-tab";
 import { ProjectWorkersTab } from "./project-workers-tab";
 import { ProjectSiteUpdatesTab } from "./project-site-updates-tab";
 import { ProjectTradiesTab } from "./project-tradies-tab";
+import { ProjectHistoryTabs } from "./project-history-tabs";
+import { ProjectCommunicationTabs } from "./project-communication-tabs";
 
 export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
   const dispatch = useAppDispatch();
@@ -59,11 +61,17 @@ export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
       {detailUi.activeTab === "workers" ? (
         <ProjectWorkersTab project={project} />
       ) : null}
-      {detailUi.activeTab === "quotes" ? (
+      {detailUi.activeTab === "docs" ? (
         <ProjectQuotesTab project={project} />
       ) : null}
       {detailUi.activeTab === "variations" ? (
         <ProjectVariationsTab project={project} />
+      ) : null}
+      {detailUi.activeTab === "history" ? (
+        <ProjectHistoryTabs project={project} />
+      ) : null}
+      {detailUi.activeTab === "communications" ? (
+        <ProjectCommunicationTabs project={project} />
       ) : null}
     </section>
   );

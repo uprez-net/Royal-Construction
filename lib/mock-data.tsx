@@ -1,18 +1,18 @@
 import {
-  Banknote,
+  // Banknote,
   BarChart3,
-  CalendarDays,
-  CircleDot,
+  // CalendarDays,
+  // CircleDot,
   ClipboardList,
-  ChartNoAxesCombined,
-  FileText,
+  // ChartNoAxesCombined,
+  // FileText,
   Hammer,
   LayoutDashboard,
-  MessagesSquare,
-  PencilRuler,
+  // MessagesSquare,
+  // PencilRuler,
   ReceiptText,
-  ShieldCheck,
-  ShoppingCart,
+  // ShieldCheck,
+  // ShoppingCart,
   Users,
 } from "lucide-react";
 import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, ProjectPaymentItem, QuoteRequestItem, WorkerAttendanceItem } from "@/types/ui";
@@ -24,56 +24,56 @@ export const navigationItems: NavItem[] = [
     icon: <LayoutDashboard className="size-4" />,
   },
   { slug: "leads", label: "Leads", icon: <Users className="size-4" /> },
-  {
-    slug: "quotations",
-    label: "Quotations",
-    icon: <ReceiptText className="size-4" />,
-  },
-  {
-    slug: "catalogue",
-    label: "Catalogue",
-    icon: <ShoppingCart className="size-4" />,
-  },
+  // {
+  //   slug: "quotations",
+  //   label: "Quotations",
+  //   icon: <ReceiptText className="size-4" />,
+  // },
+  // {
+  //   slug: "catalogue",
+  //   label: "Catalogue",
+  //   icon: <ShoppingCart className="size-4" />,
+  // },
   {
     slug: "projects",
     label: "Projects",
     icon: <ClipboardList className="size-4" />,
   },
-  {
-    slug: "milestones",
-    label: "Milestones",
-    icon: <CalendarDays className="size-4" />,
-  },
-  {
-    slug: "sitemanager",
-    label: "Site Managers",
-    icon: <ShieldCheck className="size-4" />,
-  },
-  {
-    slug: "architect",
-    label: "Architect",
-    icon: <PencilRuler className="size-4" />,
-  },
-  {
-    slug: "government",
-    label: "Govt & Certifiers",
-    icon: <Banknote className="size-4" />,
-  },
+  // {
+  //   slug: "milestones",
+  //   label: "Milestones",
+  //   icon: <CalendarDays className="size-4" />,
+  // },
+  // {
+  //   slug: "sitemanager",
+  //   label: "Site Managers",
+  //   icon: <ShieldCheck className="size-4" />,
+  // },
+  // {
+  //   slug: "architect",
+  //   label: "Architect",
+  //   icon: <PencilRuler className="size-4" />,
+  // },
+  // {
+  //   slug: "government",
+  //   label: "Govt & Certifiers",
+  //   icon: <Banknote className="size-4" />,
+  // },
   {
     slug: "tradie",
     label: "Tradie Coordination",
     icon: <Hammer className="size-4" />,
   },
-  {
-    slug: "financials",
-    label: "Financials",
-    icon: <ChartNoAxesCombined className="size-4" />,
-  },
-  {
-    slug: "chatbot",
-    label: "Customer Chatbot",
-    icon: <MessagesSquare className="size-4" />,
-  },
+  // {
+  //   slug: "financials",
+  //   label: "Financials",
+  //   icon: <ChartNoAxesCombined className="size-4" />,
+  // },
+  // {
+  //   slug: "chatbot",
+  //   label: "Customer Chatbot",
+  //   icon: <MessagesSquare className="size-4" />,
+  // },
 ];
 
 export const dashboardMetrics = [

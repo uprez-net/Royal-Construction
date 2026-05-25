@@ -12,6 +12,8 @@ import {
   QrCode,
   FileText,
   ArrowLeftRight,
+  History,
+  Mail,
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
 import { useMemo } from "react";
@@ -24,8 +26,10 @@ const TabIcons: Record<ProjectDetailTabKey, React.ElementType> = {
   updates: Camera,
   tradies: Wrench,
   workers: QrCode,
-  quotes: FileText,
+  history: History,
+  docs: FileText,
   variations: ArrowLeftRight,
+  communications: Mail,
 };
 
 const generateProjectDetailTabs = (
@@ -80,7 +84,9 @@ const generateProjectDetailTabs = (
         tradieAlerts > 4 ? "danger" : tradieAlerts > 2 ? "warning" : "neutral",
     },
     { key: "workers", label: "Workers & QR" },
-    { key: "quotes", label: "Quotes" },
+    { key: "docs", label: "Documents" },
+    { key: "history", label: "History" },
+    { key: "communications", label: "Communications" },
     {
       key: "variations",
       label: "Variations",

@@ -14,7 +14,9 @@ export type ProjectDetailTabKey =
   | "updates"
   | "tradies"
   | "workers"
-  | "quotes"
+  | "docs"
+  | "history"
+  | "communications"
   | "variations";
 
 export type ProjectDetailKpi = {
