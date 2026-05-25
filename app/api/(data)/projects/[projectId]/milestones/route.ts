@@ -5,6 +5,8 @@ import { NextRequest } from "next/server";
 import { milestoneCreationSchema } from "@/utils/validators";
 import { Prisma } from "@prisma/client";
 import { MilestoneWithFilesTradiesUpdates } from "@/types/project";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 export async function GET(
   _request: NextRequest,
@@ -59,6 +61,8 @@ export async function POST(
       parentId: creationData.parentId,
     }
   });
+
+  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
   return successResponse({
     ...newMilestone,

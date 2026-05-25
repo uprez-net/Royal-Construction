@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 import { milestonePictureUploadSchema, parseBodyWithResponse, successResponse } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 export async function POST(
     request: NextRequest,
@@ -30,6 +32,8 @@ export async function POST(
             id: { in: fileIds },
         },
     });
+
+    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
     return successResponse({ id: milestoneId, projectId, files: addedFiles });
 }

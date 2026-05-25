@@ -2,13 +2,15 @@ import { NextRequest } from "next/server";
 import { milestoneUpdateSchema, parseBodyWithResponse, successResponse } from "@/utils/validators";
 import { prisma } from "@/lib/prisma";
 import { SafeMilestone } from "@/types/project";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ projectId: string; milestoneId: string }> },
 ) {
-    const { milestoneId } = await params;
+    const { projectId, milestoneId } = await params;
     const validationResult = await parseBodyWithResponse(request, milestoneUpdateSchema);
     if (!validationResult.success) {
         return validationResult.response;
@@ -22,6 +24,8 @@ export async function PATCH(
         },
         data: updateData,
     });
+
+    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
     
     return successResponse({
         ...updatedMilestone,
