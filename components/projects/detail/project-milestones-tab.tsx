@@ -448,7 +448,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
 
   const handleOpenAddUpdateModal = (id: string) => {
     dispatch(
-      openModal({ type: "addMilestonePicture", payload: { milestoneId: id } }),
+      openModal({ type: "addMilestonePicture", payload: { milestoneId: id, projectId: project.id } }),
     );
   };
 
@@ -480,7 +480,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     dispatch(
       openModal({
         type: "updateMilestoneStatus",
-        payload: { milestoneId },
+        payload: { milestoneId, projectId: project.id },
       }),
     );
   };
@@ -489,7 +489,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     dispatch(
       openModal({
         type: "updateMilestoneStatus",
-        payload: { milestoneId, newStatus: MilestoneStatus.ACTIVE },
+        payload: { milestoneId, projectId: project.id, newStatus: MilestoneStatus.ACTIVE },
       }),
     );
   };
