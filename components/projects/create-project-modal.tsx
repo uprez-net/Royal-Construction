@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,6 +38,7 @@ import { toast } from "sonner";
 
 import type { AddressSuggestion } from "@/types/data";
 import { fetchJson } from "@/utils/fetch";
+import { UploadDropzone } from "../common/upload-dropzone";
 
 const customerLookupPageSize = 10;
 const siteManagerLookupPageSize = 10;
@@ -72,6 +73,7 @@ const formSchema = z
     newCustomerName: z.string().optional(),
     newCustomerPhone: z.string().optional(),
     newCustomerEmail: z.string().optional(),
+    quoteFile: z.instanceof(File).optional(),
 
     location: z.string().min(1, "Location is required"),
 
@@ -126,6 +128,14 @@ const formSchema = z
           code: z.ZodIssueCode.custom,
           path: ["newCustomerEmail"],
           message: "Customer email is required",
+        });
+      }
+
+      if (!data.quoteFile) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quoteFile"],
+          message: "Quote file is required",
         });
       }
     }
@@ -295,14 +305,17 @@ export function CreateProjectModal({
 
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetchJson<{ suggestions: AddressSuggestion[], count: number }>(
+        const response = await fetchJson<{
+          suggestions: AddressSuggestion[];
+          count: number;
+        }>(
           `/api/address?query=${encodeURIComponent(location)}`,
           { method: "GET" },
           "Error fetching location suggestions",
-           controller.signal,
+          controller.signal,
         );
 
-        const data = response.data
+        const data = response.data;
 
         setLocationSuggestions(data.suggestions);
       } catch (error) {
@@ -574,6 +587,52 @@ export function CreateProjectModal({
                 {errors.newCustomerEmail && (
                   <p className="text-sm text-destructive">
                     {errors.newCustomerEmail.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2 md:col-span-2 w-full">
+                <label className="text-sm font-medium">Quote File *</label>
+                <Controller
+                  control={control}
+                  name="quoteFile"
+                  render={({ field }) => (
+                    <UploadDropzone
+                      label="Attach Quote"
+                      summary={
+                        field.value ? field.value.name : "No file selected"
+                      }
+                      helperText="Files upload directly from the browser and stay visible below while they sync."
+                      files={
+                        field.value
+                          ? [
+                              {
+                                id: "quote-file",
+                                file: field.value,
+                                previewUrl: "",
+                                progress: 100,
+                                status: "uploaded",
+                                error: null,
+                                url: null,
+                              },
+                            ]
+                          : []
+                      }
+                      accept=".pdf,.xlsx,.xls"
+                      maxFiles={1}
+                      disabled={isSubmitting}
+                      isLoading={isSubmitting}
+                      onFilesSelected={(files) => {
+                        const file = files[0] ?? null;
+                        field.onChange(file);
+                      }}
+                    />
+                  )}
+                />
+
+                {errors.quoteFile && (
+                  <p className="text-sm text-destructive">
+                    {errors.quoteFile.message}
                   </p>
                 )}
               </div>
