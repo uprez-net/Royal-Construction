@@ -13,9 +13,10 @@ import {
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
 import { SafeVariation } from "@/types/project";
+import { NextRequest } from "next/server";
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const resolvedParams = await params;

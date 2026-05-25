@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { NextRequest } from "next/server";
 
 /**
  * Common reusable validators and utilities across all API routes
@@ -339,7 +340,7 @@ export function parseRouteParams(
  * Safe JSON parse wrapper
  */
 export async function safeParseBody<T extends z.ZodSchema>(
-  request: Request,
+  request: NextRequest,
   schema: T
 ): Promise<
   | { success: true; data: z.infer<T> }

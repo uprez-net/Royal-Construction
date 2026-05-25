@@ -7,16 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { v4 as uuid } from "uuid";
 import {
   ClientPayload,
   milestonePictureUploadSchema,
 } from "@/utils/validators";
 import {
-  type ChangeEvent,
   type SubmitEvent,
   useEffect,
-  useMemo,
   useRef,
   useState,
   useTransition,
@@ -32,27 +29,13 @@ import {
   updateProjectUploadProgress,
 } from "@/lib/store/slices/projectsSlice";
 import { upload } from "@vercel/blob/client";
-import { buildBlobPath, formatFileSize } from "@/utils/formatters";
-import {
-  AlertCircle,
-  CheckCircle2,
-  CloudUpload,
-  Loader2,
-  Upload,
-} from "lucide-react";
+import { buildBlobPath } from "@/utils/formatters";
+import { AlertCircle, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { UploadDropzone } from "@/components/common/upload-dropzone";
+import { useUploadQueue, type QueuedUploadFile } from "@/hooks/use-upload-queue";
 
 const maxFiles = 5;
-
-type QueuedUploadFile = {
-  id: string;
-  file: File;
-  previewUrl: string;
-  progress: number;
-  status: "queued" | "uploading" | "uploaded" | "failed";
-  error: string | null;
-  url: string | null;
-};
 
 interface AddMilestonePictureProps {
   milestoneId: string;
@@ -69,42 +52,30 @@ export default function AddMilestonePictureModal({
 }: AddMilestonePictureProps) {
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
-  const [queuedFiles, setQueuedFiles] = useState<QueuedUploadFile[]>([]);
+  const {
+    files: queuedFiles,
+    completedCount: completedUploadCount,
+    addFiles,
+    resetQueue,
+    markUploading,
+    updateProgress,
+    markUploaded,
+    markFailed,
+  } = useUploadQueue({ maxFiles });
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const queuedFilesRef = useRef<QueuedUploadFile[]>([]);
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
-  const completedUploadCount = useMemo(
-    () => queuedFiles.filter((file) => file.status === "uploaded").length,
-    [queuedFiles],
-  );
 
   const resetForm = () => {
     Object.values(uploadControllersRef.current).forEach((controller) =>
       controller.abort(),
     );
     uploadControllersRef.current = {};
-    queuedFilesRef.current.forEach((file) =>
-      URL.revokeObjectURL(file.previewUrl),
-    );
-    queuedFilesRef.current = [];
-    setQueuedFiles([]);
+    resetQueue();
     dispatch(clearProjectUploads(projectId));
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
   };
 
   useEffect(() => {
-    queuedFilesRef.current = queuedFiles;
-  }, [queuedFiles]);
-
-  useEffect(() => {
     return () => {
-      queuedFilesRef.current.forEach((file) =>
-        URL.revokeObjectURL(file.previewUrl),
-      );
       Object.values(uploadControllersRef.current).forEach((controller) =>
         controller.abort(),
       );
@@ -189,34 +160,6 @@ export default function AddMilestonePictureModal({
     }
   };
 
-  const handleFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-
-    if (files.length === 0) {
-      return;
-    }
-
-    setQueuedFiles((current) => {
-      const nextFiles = [...current];
-
-      files.slice(0, Math.max(maxFiles - current.length, 0)).forEach((file) => {
-        nextFiles.push({
-          id: uuid(),
-          file,
-          previewUrl: URL.createObjectURL(file),
-          progress: 0,
-          status: "queued",
-          error: null,
-          url: null,
-        });
-      });
-
-      return nextFiles;
-    });
-
-    event.target.value = "";
-  };
-
   const uploadQueuedFile = async (queuedFile: QueuedUploadFile) => {
     const controller = new AbortController();
     uploadControllersRef.current[queuedFile.id] = controller;
@@ -230,13 +173,7 @@ export default function AddMilestonePictureModal({
       }),
     );
 
-    setQueuedFiles((current) =>
-      current.map((file) =>
-        file.id === queuedFile.id
-          ? { ...file, status: "uploading", progress: 0, error: null }
-          : file,
-      ),
-    );
+    markUploading(queuedFile.id);
 
     try {
       const blob = await upload(
@@ -267,18 +204,7 @@ export default function AddMilestonePictureModal({
               }),
             );
 
-            setQueuedFiles((current) =>
-              current.map((file) =>
-                file.id === queuedFile.id
-                  ? {
-                      ...file,
-                      status: "uploading",
-                      progress: percentage,
-                      error: null,
-                    }
-                  : file,
-              ),
-            );
+            updateProgress(queuedFile.id, percentage);
           },
         },
       );
@@ -291,19 +217,7 @@ export default function AddMilestonePictureModal({
         }),
       );
 
-      setQueuedFiles((current) =>
-        current.map((file) =>
-          file.id === queuedFile.id
-            ? {
-                ...file,
-                status: "uploaded",
-                progress: 100,
-                url: blob.url,
-                error: null,
-              }
-            : file,
-        ),
-      );
+      markUploaded(queuedFile.id, blob.url);
 
       return {
         url: blob.url,
@@ -321,17 +235,7 @@ export default function AddMilestonePictureModal({
         }),
       );
 
-      setQueuedFiles((current) =>
-        current.map((file) =>
-          file.id === queuedFile.id
-            ? {
-                ...file,
-                status: "failed",
-                error: message,
-              }
-            : file,
-        ),
-      );
+      markFailed(queuedFile.id, message);
 
       throw error instanceof Error ? error : new Error(message);
     } finally {
@@ -365,74 +269,22 @@ export default function AddMilestonePictureModal({
           ) : null}
 
           <div className="space-y-1.5">
-            <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-              Attach Photos
-            </label>
-            <div
-              className="group cursor-pointer rounded-[16px] border-2 border-dashed border-border/80 bg-slate-50/40 p-6 text-center transition-all hover:border-teal-600 hover:bg-teal-50/40"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <CloudUpload className="mx-auto mb-2 size-8 text-muted-foreground transition-colors group-hover:text-teal-600" />
-              <span className="text-sm font-medium text-slate-600 transition-colors group-hover:text-teal-700">
-                {queuedFiles.length > 0
+            <UploadDropzone
+              label="Attach Photos"
+              summary={
+                queuedFiles.length > 0
                   ? `${queuedFiles.length} photo${queuedFiles.length === 1 ? "" : "s"} selected · ${completedUploadCount} uploaded`
-                  : "Click to upload photos (max 5)"}
-              </span>
-              <p className="mt-1.5 text-xs text-slate-500">
-                Choose multiple images at once. Upload progress stays visible below.
-              </p>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
+                  : "Click to upload photos (max 5)"
+              }
+              helperText="Choose multiple images at once. Upload progress stays visible below."
+              files={queuedFiles}
               accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleFileSelection}
+              maxFiles={maxFiles}
+              disabled={isPending}
+              isLoading={isPending}
+              onFilesSelected={addFiles}
             />
           </div>
-
-          {queuedFiles.length > 0 && (
-            <div className="space-y-2 rounded-[14px] border border-border/70 bg-slate-50/60 p-3.5">
-              {queuedFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="rounded-[12px] border border-border/70 bg-white p-3 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900">
-                        {file.file.name}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {formatFileSize(file.file.size)}
-                      </p>
-                    </div>
-                    <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-600">
-                      {file.status === "uploaded" ? (
-                        <CheckCircle2 className="size-3.5 text-emerald-600" />
-                      ) : null}
-                      {file.status === "failed" ? (
-                        <AlertCircle className="size-3.5 text-destructive" />
-                      ) : null}
-                      {file.status}
-                    </div>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-teal-600 transition-all"
-                      style={{ width: `${file.progress}%` }}
-                    />
-                  </div>
-                  {file.error ? (
-                    <p className="mt-1 text-xs text-destructive">
-                      {file.error}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
 
           <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
             <Button

@@ -86,5 +86,10 @@ export function sanitizeFileName(fileName: string) {
 }
 
 export function buildBlobPath(projectId: string, fileId: string, fileName: string, milestoneId?: string) {
-  return `projects/${projectId}/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
+  if(milestoneId) {
+    return `projects/${projectId}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
+  }
+  else {
+    return `projects/${projectId}/${fileId}-${sanitizeFileName(fileName)}`;
+  }
 }

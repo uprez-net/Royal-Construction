@@ -10,8 +10,9 @@ import {
 } from "@/utils/validators";
 import { revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
+import { NextRequest } from "next/server";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const body = await parseBodyWithResponse(request, createTradieScheduleSchema);
   if (!body.success) return body.response;
 

@@ -12,6 +12,7 @@ import {
   errorResponse,
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
+import { NextRequest } from "next/server";
 
 const variationUpdateSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED"]),
@@ -23,7 +24,7 @@ const variationParamSchema = z.object({
 });
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ projectId: string; variationId: string }> },
 ) {
   const resolvedParams = await params;

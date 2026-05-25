@@ -19,12 +19,13 @@ import {
   notFoundResponse,
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
+import { NextRequest } from "next/server";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB per image
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { userId } = await auth();

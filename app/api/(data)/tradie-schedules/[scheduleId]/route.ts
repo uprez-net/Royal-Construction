@@ -10,13 +10,14 @@ import {
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
+import { NextRequest } from "next/server";
 
 const ScheduleParamSchema = z.object({
   scheduleId: z.string().trim().min(1, "Schedule ID is required"),
 });
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ scheduleId: string }> },
 ) {
   const resolvedParams = await params;

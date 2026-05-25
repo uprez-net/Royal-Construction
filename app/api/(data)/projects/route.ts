@@ -17,8 +17,9 @@ import {
   errorResponse,
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
+import { NextRequest } from "next/server";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const mode = url.searchParams.get("mode");
 
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
   return successResponse(projects);
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
     return unauthorizedResponse();
