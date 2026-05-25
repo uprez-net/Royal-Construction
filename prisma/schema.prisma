@@ -93,20 +93,24 @@ model Milestone {
   order           Int
   description     String?
   targetDate      DateTime
+  startDate       DateTime?
   actualDate      DateTime?
   budget          Decimal         @default(10000) @db.Decimal(12, 2)
   spend           Decimal?        @db.Decimal(12, 2)
   status          MilestoneStatus @default(PENDING)
   isPhotoRequired Boolean         @default(false)
+  parentId        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  siteUpdates     SiteUpdate[]
-  tradieSchedules TradieSchedule[]
-  files           File[]           @relation("MilestoneFiles")
-  activityLogs    ActivityLog[]
-  tradies         Tradie[]         @relation("TradieMilestones")
+  siteUpdates        SiteUpdate[]
+  tradieSchedules    TradieSchedule[]
+  activityLogs       ActivityLog[]
+  files              File[]           @relation("MilestoneFiles")
+  tradies            Tradie[]         @relation("TradieMilestones")
+  parentMilestone    Milestone?       @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  childrenMilestones Milestone[]      @relation("MilestoneHierarchy")
 
   @@unique([projectId, order])
   @@index([projectId])

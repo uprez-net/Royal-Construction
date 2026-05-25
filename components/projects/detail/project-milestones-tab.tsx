@@ -8,13 +8,21 @@ import {
   Camera,
   Send,
   Wrench,
+  Plus,
+  FilePenLine,
+  Play,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill } from "@/components/common/status-pill";
 import { DonutChartCard } from "@/components/charts/donut-chart-card";
 import type { ProjectMilestoneMix } from "@/types/ui";
-import type { ProjectDetail, TradieScheduleListItem } from "@/types/project";
+import type {
+  MilestoneWithFilesTradiesUpdates,
+  ProjectDetail,
+  TradieScheduleListItem,
+  UIMilestone,
+} from "@/types/project";
 
 import { currency, dateFormat, formatStatus } from "@/utils/formatters";
 import Image from "next/image";
@@ -23,8 +31,35 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { toast } from "sonner";
 
+const convertToVisualMilestone = (
+  milestones: MilestoneWithFilesTradiesUpdates[],
+): UIMilestone[] => {
+  const milestoneMap: Record<string, UIMilestone> = {};
+
+  // First pass to create all milestones in the map
+  milestones.forEach((m) => {
+    milestoneMap[m.id] = { ...m, childrenMilestones: [] };
+  });
+
+  // Second pass to assign children to their parents
+  const rootMilestones: UIMilestone[] = [];
+  Object.values(milestoneMap).forEach((milestone) => {
+    if (milestone.parentId) {
+      const parent = milestoneMap[milestone.parentId];
+      if (parent) {
+        parent.childrenMilestones.push(milestone);
+      }
+    } else {
+      rootMilestones.push(milestone);
+    }
+  });
+
+  return rootMilestones;
+};
+
 export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   const dispatch = useAppDispatch();
+  const visualMilestones = convertToVisualMilestone(project.milestones);
   const tradieAlerts = project.tradieSchedules.filter(
     (schedule) =>
       schedule.status === "PENDING_RESPONSE" ||
@@ -64,7 +99,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
 
   const handleOpenAddUpdateModal = (id: string) => {
     dispatch(
-      openModal({ type: "addUpdate", payload: { project, milestoneId: id } }),
+      openModal({ type: "addMilestonePicture", payload: { milestoneId: id } }),
     );
   };
 
@@ -78,6 +113,30 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
       openModal({
         type: "tradieReminder",
         payload: { schedule: tradieReminder },
+      }),
+    );
+  };
+
+  const handleAddMilestone = () => {
+    dispatch(
+      openModal({ type: "addMilestone", payload: { projectId: project.id } }),
+    );
+  };
+
+  const handleStatusUpdate = (milestoneId: string) => {
+    dispatch(
+      openModal({
+        type: "updateMilestoneStatus",
+        payload: { milestoneId },
+      }),
+    );
+  };
+
+  const handleStartMilestone = (milestoneId: string) => {
+    dispatch(
+      openModal({
+        type: "updateMilestoneStatus",
+        payload: { milestoneId, newStatus: "ACTIVE" },
       }),
     );
   };
@@ -106,9 +165,17 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
               </span>
             </div>
           </div>
+          <div className="flex items-center justify-end gap-2 mt-6">
+            <Button size="sm" onClick={() => handleAddMilestone()}>
+              <Plus className="mr-1 h-4 w-4" />
+              Add Milestone
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-5">
-          {project.milestones.map((milestone) => {
+          {visualMilestones.map((milestone) => {
+            const hasChildren = milestone.childrenMilestones.length > 0;
+            const children = milestone.childrenMilestones;
             const isDone = milestone.status === "DONE";
             const isActive = milestone.status === "ACTIVE";
             const milestonePictures = milestone.files.filter((file) =>
@@ -263,14 +330,34 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                   </div>
 
                   <div className="flex gap-1">
-                    {milestone.status === "ACTIVE" && (
+                    {(milestone.status === "PENDING" && milestone.childrenMilestones.length === 0) && (
                       <Button
                         size="sm"
-                        onClick={() => handleOpenAddUpdateModal(milestone.id)}
+                        onClick={() => handleStartMilestone(milestone.id)}
                       >
-                        <Camera className="mr-1 h-4 w-4" />
-                        Add Photo
+                        <Play className="mr-1 h-4 w-4" />
+                        Start Milestone
                       </Button>
+                    )}
+
+                    {milestone.status === "ACTIVE" && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          onClick={() => handleOpenAddUpdateModal(milestone.id)}
+                        >
+                          <Camera className="mr-1 h-4 w-4" />
+                          Add Photo
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          onClick={() => handleStatusUpdate(milestone.id)}
+                        >
+                          <FilePenLine className="mr-1 h-4 w-4" />
+                          Update Status
+                        </Button>
+                      </div>
                     )}
 
                     {milestone.status === "DONE" && (
@@ -321,6 +408,109 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                   </div>
                 )}
                 {tradieAlert}
+
+                {/* CHILD MILESTONES */}
+                {hasChildren && (
+                  <div className="relative mt-5 pl-6">
+                    {/* vertical connector */}
+                    <div className="absolute left-2 top-0 bottom-0 w-px bg-border" />
+
+                    <div className="space-y-3">
+                      {children.map((child) => {
+                        const childDone = child.status === "DONE";
+                        const childActive = child.status === "ACTIVE";
+
+                        return (
+                          <div
+                            key={child.id}
+                            className={`relative rounded-xl border px-3 py-3 transition-colors ${
+                              childDone
+                                ? "border-green-200/60 bg-green-50/40"
+                                : childActive
+                                  ? "border-amber-200/60 bg-amber-50/40"
+                                  : "border-border/60 bg-muted/30"
+                            }`}
+                          >
+                            {/* connector dot */}
+                            <div className="absolute -left-[22px] top-5 h-3 w-3 rounded-full border-2 border-background bg-primary" />
+
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="truncate text-[13px] font-semibold">
+                                    {child.name}
+                                  </p>
+
+                                  <StatusPill
+                                    tone={
+                                      childDone
+                                        ? "success"
+                                        : childActive
+                                          ? "warning"
+                                          : "neutral"
+                                    }
+                                  >
+                                    {formatStatus(child.status)}
+                                  </StatusPill>
+                                </div>
+
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {dateFormat.format(
+                                      new Date(child.targetDate),
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1">
+                                    <DollarSign className="h-3 w-3" />
+                                    {currency.format(Number(child.budget))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {child.status === "ACTIVE" && (
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      handleOpenAddUpdateModal(milestone.id)
+                                    }
+                                  >
+                                    <Camera className="mr-1 h-4 w-4" />
+                                    Add Photo
+                                  </Button>
+
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      handleStatusUpdate(milestone.id)
+                                    }
+                                  >
+                                    <FilePenLine className="mr-1 h-4 w-4" />
+                                    Update Status
+                                  </Button>
+                                </div>
+                              )}
+
+                              {milestone.status === "PENDING" && (
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    handleStartMilestone(milestone.id)
+                                  }
+                                >
+                                  <Play className="mr-1 h-4 w-4" />
+                                  Start Milestone
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </article>
             );
           })}

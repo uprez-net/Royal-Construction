@@ -15,6 +15,9 @@ export type ModalType =
   | "projectDetail"
   | "addMaterial"
   | "viewPicture"
+  | "addMilestone"
+  | "addMilestonePicture"
+  | "updateMilestoneStatus"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;

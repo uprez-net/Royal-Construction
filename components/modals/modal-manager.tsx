@@ -266,6 +266,21 @@ export function ModalManager() {
       return (
         <PreviewPictureModal open onClose={handleClose} imageUrl={imageUrl} />
       );
+    case "addMilestone":
+      const { projectId: addMilestoneProjectId } = modal.payload as {
+        projectId: string;
+      };
+      return null; // TODO: add addMilestone modal
+    case "updateMilestoneStatus":
+      const { milestoneId: updateMilestoneStatusId } = modal.payload as {
+        milestoneId: string;
+      };
+      return null; // TODO: add updateMilestoneStatus modal
+    case "addMilestonePicture":
+      const { milestoneId: addMilestonePictureId } = modal.payload as {
+        milestoneId: string;
+      };
+      return null; // TODO: add addMilestonePicture modal
     default:
       return null;
   }

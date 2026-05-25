@@ -300,3 +300,7 @@ export type AddProjectUpdateRequest = {
   milestoneId?: string | null;
   photoUrls: string[];
 };
+
+export interface UIMilestone extends MilestoneWithFilesTradiesUpdates {
+  childrenMilestones: UIMilestone[];
+}
