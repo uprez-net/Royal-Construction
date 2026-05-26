@@ -1,6 +1,6 @@
 import { TradieScheduleStatus } from "@prisma/client";
 import { getCachedTradieCoordinationDashboard, getCachedTradies } from "@/lib/data/tradies";
-import prisma from "@/lib/prisma";
+import { createTradieSchedule } from "@/lib/data/tradieSchedules";
 import {
   createTradieScheduleSchema,
   tradieCoordinationListQuerySchema,
@@ -17,22 +17,7 @@ export async function POST(request: NextRequest) {
   if (!body.success) return body.response;
 
   const data = body.data;
-
-  const schedule = await prisma.tradieSchedule.create({
-    data: {
-      tradieId: data.tradieId,
-      projectId: data.projectId,
-      milestoneId: data.milestoneId || null,
-      scheduledDate: data.scheduledDate,
-      durationDays: data.durationDays ?? 1,
-      status: TradieScheduleStatus.PENDING,
-    },
-    include: {
-      tradie: true,
-      project: true,
-      milestone: true,
-    },
-  });
+  const schedule = await createTradieSchedule(data);
 
   revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
   return successResponse(schedule, { status: 201 });

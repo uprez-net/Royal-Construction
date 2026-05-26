@@ -203,3 +203,9 @@ export const createLeadSchema = z.object({
 });
 
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
+
+export const leadParamSchema = z.object({
+  leadId: z.string().trim().min(1, "Lead ID is required"),
+});
+
+export type LeadParam = z.infer<typeof leadParamSchema>;

@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { milestonePictureUploadSchema, parseBodyWithResponse, successResponse } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
+import { addPhotosToMilestone } from "@/lib/data/milestones";
 
 export async function POST(
     request: NextRequest,
@@ -16,24 +17,9 @@ export async function POST(
 
     const { fileIds } = validationResult.data;
 
-    await prisma.milestone.update({
-        where: {
-            id: milestoneId,
-        },
-        data: {
-            files: {
-                connect: fileIds.map((fileId: string) => ({ id: fileId })),
-            },
-        }
-    });
-
-    const addedFiles = await prisma.file.findMany({
-        where: {
-            id: { in: fileIds },
-        },
-    });
+    const result = await addPhotosToMilestone(projectId, milestoneId, fileIds as string[]);
 
     revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
-    return successResponse({ id: milestoneId, projectId, files: addedFiles });
+    return successResponse(result);
 }

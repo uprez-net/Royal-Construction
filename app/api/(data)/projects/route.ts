@@ -3,8 +3,8 @@ import { revalidateTag } from "next/cache";
 
 import prisma from "@/lib/prisma";
 import { getCachedProjectById, getCachedProjects, getCachedProjectsForLookup } from "@/lib/data/projects";
+import { createProject } from "@/lib/data/projectsWrite";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
-import { getSiteManagerById } from "@/lib/data/siteManagers";
 import {
   createProjectSchema,
   projectListQuerySchema,
@@ -18,6 +18,7 @@ import {
 } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
 import { NextRequest } from "next/server";
+import { getSiteManagerById } from "@/lib/data/siteManagers";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -104,29 +105,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const project = await prisma.project.create({
-      data: {
-        name: projectData.name,
-        buildingType: projectData.propertyType,
-        description: projectData.notes?.trim() || null,
-        customerId,
-        location: projectData.location,
-        siteManagerId: siteManager?.id ?? null,
-        totalBudget: String(projectData.budget),
-        lotSize: String(projectData.lotSize),
-        startDate: projectData.startDate,
-        estimatedEndDate: projectData.estimatedEndDate || projectData.startDate,
-        requirements: {
-          notes: projectData.notes?.trim() || null,
-          customerMode,
-        },
-      },
-    });
+    const projectId = await createProject(projectData);
 
     revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-    revalidateTag(`project-${project.id}`, CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
-    const createdProject = await getCachedProjectById(project.id);
+    const createdProject = await getCachedProjectById(projectId);
 
     if (!createdProject) {
       return errorResponse("Project was created but could not be loaded", {

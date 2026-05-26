@@ -2,7 +2,7 @@ import { VariationStatus } from "@prisma/client";
 import { z } from "zod";
 
 import prisma from "@/lib/prisma";
-import { applyVariationDelay } from "@/lib/utils/apply-variation-delay";
+import { updateVariationStatus } from "@/lib/data/variations";
 import { revalidateTag } from "next/cache";
 import {
   parseRouteParamsWithResponse,
@@ -43,23 +43,7 @@ export async function PATCH(
 
   const { projectId, variationId } = routeParams.data;
   try {
-    const variation = await prisma.variation.update({
-      where: { id: variationId },
-      data:
-        body.data.status === "APPROVED"
-          ? {
-            status: VariationStatus.APPROVED,
-            approvedDate: new Date(),
-          }
-          : {
-            status: VariationStatus.REJECTED,
-            approvedDate: null,
-          },
-    });
-
-    if (body.data.status === "APPROVED") {
-      await applyVariationDelay(variation.id);
-    }
+    const variation = await updateVariationStatus(variationId, body.data.status);
 
     revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 

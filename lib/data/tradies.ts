@@ -762,3 +762,29 @@ export async function getCachedTradieCoordinationDashboard(
 
   return getTradieCoordinationDashboard(query);
 }
+
+export async function getTradiesForLookup(limit = 20, search = "") {
+  try {
+    const where = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { company: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { tradeType: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          ],
+        }
+      : undefined;
+
+    const tradies = await prisma.tradie.findMany({
+      where,
+      take: limit,
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, company: true, tradeType: true, phone: true, email: true },
+    });
+
+    return tradies;
+  } catch (error) {
+    console.error("Error fetching tradies for lookup:", error);
+    return [];
+  }
+}

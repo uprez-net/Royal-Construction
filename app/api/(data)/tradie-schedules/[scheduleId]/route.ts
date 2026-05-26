@@ -1,7 +1,7 @@
 import { TradieScheduleStatus } from "@prisma/client";
 import { z } from "zod";
 
-import prisma from "@/lib/prisma";
+import { updateTradieSchedule } from "@/lib/data/tradieSchedules";
 import {
   updateTradieScheduleSchema,
   parseRouteParamsWithResponse,
@@ -30,23 +30,8 @@ export async function PATCH(
   const body = await parseBodyWithResponse(request, updateTradieScheduleSchema);
   if (!body.success) return body.response;
 
-  const requiresReplacement = body.data.status === TradieScheduleStatus.DECLINED;
-
-  const schedule = await prisma.tradieSchedule.update({
-    where: { id: routeParams.data.scheduleId },
-    data: {
-      status: body.data.status,
-    },
-    include: {
-      tradie: true,
-      project: true,
-      milestone: true,
-    },
-  });
+  const result = await updateTradieSchedule(routeParams.data.scheduleId, { status: body.data.status });
 
   revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
-  return successResponse({
-    schedule,
-    requiresReplacement,
-  });
+  return successResponse(result);
 }

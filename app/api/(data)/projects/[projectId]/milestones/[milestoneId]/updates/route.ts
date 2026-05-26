@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { SafeMilestone } from "@/types/project";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
+import { updateMilestone } from "@/lib/data/milestones";
 
 
 export async function PATCH(
@@ -18,18 +19,9 @@ export async function PATCH(
 
     const updateData = validationResult.data;
 
-    const updatedMilestone = await prisma.milestone.update({
-        where: {
-            id: milestoneId,
-        },
-        data: updateData,
-    });
+    const updated = await updateMilestone(milestoneId, updateData);
 
     revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
-    
-    return successResponse({
-        ...updatedMilestone,
-        budget: updatedMilestone.budget.toString(),
-        spend: updatedMilestone.spend?.toString()
-    } as SafeMilestone);
+
+    return successResponse(updated as SafeMilestone);
 }

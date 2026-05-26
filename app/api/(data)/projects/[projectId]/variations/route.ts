@@ -2,6 +2,7 @@ import { VariationStatus } from "@prisma/client";
 
 import { getProjectById } from "@/lib/data/projects";
 import prisma from "@/lib/prisma";
+import { createVariation } from "@/lib/data/variations";
 import { revalidateTag } from "next/cache";
 import {
   createVariationSchema,
@@ -31,21 +32,9 @@ export async function POST(
 
   const projectId = routeParams.data.projectId;
 
-  const variation = await prisma.variation.create({
-    data: {
-      projectId: projectId,
-      description: body.data.description,
-      cost: body.data.cost,
-      requestedDate: body.data.requestedDate || new Date(),
-      status: VariationStatus.PENDING,
-    },
-  });
+  const variation = await createVariation(projectId, body.data);
 
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
-  const safeVariation = {
-    ...variation,
-    cost: variation.cost.toString(),
-  } satisfies SafeVariation;
 
-  return successResponse(safeVariation, { status: 201 });
+  return successResponse(variation, { status: 201 });
 }

@@ -6,6 +6,7 @@ import {
   successResponse,
   errorResponse,
 } from "@/utils/validators";
+import { getTradiesForLookup } from "@/lib/data/tradies";
 
 export async function GET(request: Request) {
   try {
@@ -41,19 +42,7 @@ export async function GET(request: Request) {
         }
       : undefined;
 
-    const tradies = await prisma.tradie.findMany({
-      where,
-      take: limit,
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        company: true,
-        tradeType: true,
-        phone: true,
-        email: true,
-      },
-    });
+    const tradies = await getTradiesForLookup(limit, search);
 
     return successResponse(tradies);
   } catch (error) {

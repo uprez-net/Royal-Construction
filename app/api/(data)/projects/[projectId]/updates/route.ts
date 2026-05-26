@@ -7,6 +7,7 @@ import { revalidateTag } from "next/cache";
 import { getProjectById } from "@/lib/data/projects";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
+import { createProjectUpdate } from "@/lib/data/projectUpdates";
 import {
   createProjectUpdateSchema,
   projectParamSchema,
@@ -114,37 +115,7 @@ export async function POST(
         })
       : null;
 
-    await prisma.$transaction(async (tx) => {
-      await tx.siteUpdate.create({
-        data: {
-          projectId: projectId,
-          milestoneId,
-          authorId: user.id,
-          notes,
-          photoUrls,
-        },
-      });
-
-      await tx.activityLog.create({
-        data: {
-          projectId: projectId,
-          milestoneId,
-          authorId: user.id,
-          type: "site-update",
-          message: `Site update posted for ${projectId}`,
-        },
-      });
-
-      if (milestone?.isPhotoRequired && milestoneId) {
-        await tx.milestone.update({
-          where: { id: milestoneId },
-          data: {
-            status: "DONE",
-            actualDate: new Date(),
-          },
-        });
-      }
-    });
+    await createProjectUpdate({ projectId, milestoneId, authorId: user.id, notes, photoUrls });
 
     if (milestone?.isPhotoRequired && milestoneId) {
       console.log(`[NOTIFICATION] Client notified for milestone ${milestoneId}`);
