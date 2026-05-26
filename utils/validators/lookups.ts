@@ -33,6 +33,22 @@ export const customerLookupQuerySchema = z
   })
   .strict();
 
+export const customerLookupResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.string(),
+      phone: z.string(),
+      createdAt: z.date(),
+    })
+  ),
+  page: z.number(),
+  limit: z.number(),
+  totalCount: z.number(),
+  totalPages: z.number(),
+})
+
 export type CustomerLookupQuery = z.infer<typeof customerLookupQuerySchema>;
 
 /**
