@@ -57,7 +57,6 @@ import {
     AddressSuggestion,
 } from "@/utils/validators";
 import { createVariationSchema as createVariationToolSchema } from "@/utils/validators/projects";
-import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp";
 import { fetchJson } from "@/utils/fetch";
 
 const emptyInputSchema = z.object({}).strict();
