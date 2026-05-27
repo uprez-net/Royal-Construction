@@ -5,6 +5,7 @@ import { HistoryItem, Lead, LeadSource, LeadStage, ProjectType } from '@/lib/lea
 import { EmailTemplate } from '@/lib/leads/types';
 import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
 import { deleteLead, sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
+import { renderEmailHtml } from '@/lib/leads/render-email-html';
 
 interface TableViewProps {
   leads: Lead[];
@@ -28,6 +29,58 @@ interface LeadDetailFormData {
   urgent: boolean;
   lostReason: string;
   historyEntries: HistoryItem[];
+}
+
+interface ReactEmailPreviewProps {
+  category: string;
+  lead: Lead | null;
+}
+
+function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
+  const [html, setHtml] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    renderEmailHtml(category, lead)
+      .then((result) => {
+        if (!cancelled) {
+          setHtml(result || '');
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [category, lead]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[480px] items-center justify-center rounded-lg border border-border bg-muted/10">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
+      </div>
+    );
+  }
+
+  if (!html) {
+    return <div className="py-8 text-center text-xs text-muted-foreground">No preview available</div>;
+  }
+ console.log('Rendered email HTML:', html);
+  return (
+    <div className="overflow-hidden rounded-lg border border-border" style={{ height: 480 }}>
+      <iframe
+        title={`${category} Email Preview`}
+        srcDoc={html}
+        className="w-full h-full"
+        sandbox="allow-same-origin allow-scripts"
+        style={{ border: 'none' }}
+      />
+    </div>
+  );
 }
 
 /* ── Source icon helper ────────────────────────────── */
@@ -76,7 +129,6 @@ function SourceIcon({ source }: { source: string }) {
     );
   }
 
-  // Walk-in or default
   return (
     <svg className="source-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -98,72 +150,26 @@ function formatFollowup(date: string | null, time?: string | null): string {
 }
 
 const MOVABLE_STAGES: LeadStage[] = [
-  'New',
-  'Contacted',
-  'Meeting Scheduled',
-  'In Follow-up',
-  'Qualified',
-  'Quoted',
-  'Negotiating',
-  'Won',
-  'Converted',
-  'No Response',
-  'Cancelled',
-  'Disqualified',
-  'Lost',
+  'New', 'Contacted', 'Meeting Scheduled', 'In Follow-up', 'Qualified', 'Quoted', 'Negotiating', 'Won', 'Converted', 'No Response', 'Cancelled', 'Disqualified', 'Lost',
 ];
 
 const LEAD_SOURCE_OPTIONS: LeadSource[] = [
-  'Google Ads',
-  'Referral',
-  'Facebook Ads',
-  'Walk-in',
-  'Repeat Client',
-  'Website',
-  'Personal',
-  'Business',
+  'Google Ads', 'Referral', 'Facebook Ads', 'Walk-in', 'Repeat Client', 'Website', 'Personal', 'Business',
 ];
 
 const LEAD_STAGE_OPTIONS: LeadStage[] = [
-  'New',
-  'Contacted',
-  'Qualified',
-  'Quoted',
-  'Negotiating',
-  'Won',
-  'Lost',
-  'Meeting Scheduled',
-  'In Follow-up',
-  'No Response',
-  'Converted',
-  'Cancelled',
-  'Disqualified',
+  'New', 'Contacted', 'Qualified', 'Quoted', 'Negotiating', 'Won', 'Lost', 'Meeting Scheduled', 'In Follow-up', 'No Response', 'Converted', 'Cancelled', 'Disqualified',
 ];
 
 const PROJECT_TYPE_OPTIONS: ProjectType[] = [
-  'Not Specified',
-  'New Home',
-  'Duplex',
-  'Renovation',
-  'Granny Flat',
-  'Townhouse',
-  'Dual Occupancy',
-  'Single Storey',
-  'Double Storey',
-  'House and Granny',
-  'Knockdown and rebuild',
-  'House + land package',
+  'Not Specified', 'New Home', 'Duplex', 'Renovation', 'Granny Flat', 'Townhouse', 'Dual Occupancy', 'Single Storey', 'Double Storey', 'House and Granny', 'Knockdown and rebuild', 'House + land package',
 ];
 
 const HISTORY_TYPE_OPTIONS: HistoryItem['type'][] = [
-  'system',
-  'call',
-  'email',
-  'referral',
+  'system', 'call', 'email', 'referral',
 ];
 
-
-
+// ── Hydrate Subject Placeholders (Body hydration handled by React Email Components) ──
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
 
 function formatShortDate(date: Date): string {
@@ -171,13 +177,14 @@ function formatShortDate(date: Date): string {
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-function hydrateTemplate(text: string, lead: Lead): string {
+function hydrateSubject(text: string, lead: Lead): string {
+  const typeStr = Array.isArray(lead.type) ? lead.type[0] ?? 'New Home Build' : lead.type;
   const values: Record<string, string> = {
     name: lead.name,
     location: lead.location,
-    type: lead.type,
+    type: typeStr,
     phone: lead.phone,
-    project: `${lead.type} at ${lead.location}`,
+    project: `${typeStr} at ${lead.location}`,
     notes: lead.notes || 'Previous discussion details',
     amount: lead.budget !== 'Not Discussed' ? lead.budget : 'TBD',
     duration: '6-8 months',
@@ -193,42 +200,21 @@ function hydrateTemplate(text: string, lead: Lead): string {
   return text.replace(PLACEHOLDER_PATTERN, (_, key) => values[key] ?? `{${key}}`);
 }
 
-function buildEmailDraft(template: EmailTemplate, lead: Lead) {
-  return {
-    subject: hydrateTemplate(template.subject, lead),
-    body: hydrateTemplate(getTemplateHtml(template), lead),
-  };
-}
-
-function getTemplateHtml(template: EmailTemplate) {
-  const html = template.content?.trim();
-  return html ? html : template.body;
-}
-
 function previewTemplateText(text: string) {
   return text.replace(PLACEHOLDER_PATTERN, '...');
 }
 
 function getTemplateDescription(template: EmailTemplate): string {
   switch (template.category) {
-    case 'Welcome':
-      return 'Welcome new clients to Royal Constructions. Outlines the initial phases of the home building project, first steps, consultation details, and client portal setup.';
-    case 'Quotation':
-      return 'Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.';
-    case 'Follow-up':
-      return 'Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.';
-    case 'Catalogue':
-      return 'Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.';
-    case 'Variation':
-      return 'Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.';
-    case 'Promotion':
-      return 'Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.';
-    case 'Meeting':
-      return 'Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.';
-    case 'Update':
-      return 'Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.';
-    default:
-      return 'Curated and professionally designed email template adhering to brand standards to streamline client communications.';
+    case 'Welcome': return 'Welcome new clients to Royal Constructions. Outlines the initial phases of the home building project, first steps, consultation details, and client portal setup.';
+    case 'Quotation': return 'Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.';
+    case 'Follow-up': return 'Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.';
+    case 'Catalogue': return 'Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.';
+    case 'Variation': return 'Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.';
+    case 'Promotion': return 'Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.';
+    case 'Meeting': return 'Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.';
+    case 'Update': return 'Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.';
+    default: return 'Curated and professionally designed email template adhering to brand standards to streamline client communications.';
   }
 }
 
@@ -247,43 +233,23 @@ interface ModalShellProps {
 }
 
 function ModalShell({
-  open,
-  onClose,
-  title,
-  subtitle,
-  maxWidthClass = 'max-w-[520px]',
-  titleClassName,
-  children,
+  open, onClose, title, subtitle, maxWidthClass = 'max-w-[520px]', titleClassName, children,
 }: ModalShellProps) {
   if (!open) return null;
 
   const handleBackdropMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.target === event.currentTarget) {
-      onClose();
-    }
+    if (event.target === event.currentTarget) onClose();
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={handleBackdropMouseDown}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        className={`flex max-h-[90vh] w-full flex-col ${maxWidthClass} rounded-xl bg-background shadow-lg ring-1 ring-border`}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onMouseDown={handleBackdropMouseDown} role="dialog" aria-modal="true">
+      <div className={`flex max-h-[90vh] w-full flex-col ${maxWidthClass} rounded-xl bg-background shadow-lg ring-1 ring-border`}>
         <div className="shrink-0 flex items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
             <h4 className={`text-base font-bold tracking-tight text-foreground ${titleClassName ?? ''}`}>{title}</h4>
             {subtitle ? <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p> : null}
           </div>
-          <button
-            type="button"
-            className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
         </div>
@@ -294,9 +260,7 @@ function ModalShell({
 }
 
 export default function TableView({
-  leads,
-  onLeadUpdate,
-  onLeadDelete,
+  leads, onLeadUpdate, onLeadDelete,
 }: TableViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
@@ -308,8 +272,7 @@ export default function TableView({
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [emailSubject, setEmailSubject] = useState('');
-  const [emailBody, setEmailBody] = useState('');
-  const emailBodyRef = React.useRef<HTMLDivElement>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const [editFollowupLead, setEditFollowupLead] = useState<Lead | null>(null);
   const [followupDate, setFollowupDate] = useState('');
@@ -323,18 +286,14 @@ export default function TableView({
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
   const [detailForm, setDetailForm] = useState<LeadDetailFormData | null>(null);
   const [detailBaseline, setDetailBaseline] = useState<LeadDetailFormData | null>(null);
-
-  const [historyDraft, setHistoryDraft] = useState<{ action: string, detail: string, type: HistoryItem['type'] }>({
-    action: '',
-    detail: '',
-    type: 'call',
-  });
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Toast state
+  const [historyDraft, setHistoryDraft] = useState<{ action: string, detail: string, type: HistoryItem['type'] }>({
+    action: '', detail: '', type: 'call',
+  });
+
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
 
-  /* ── Toast helper ────────────────────── */
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -345,35 +304,19 @@ export default function TableView({
 
   const normalizeTypes = (types: string | string[] | null | undefined): ProjectType[] => {
     if (!types) return ['Not Specified'];
-    if (Array.isArray(types)) {
-      return types.length > 0 ? (types as ProjectType[]) : ['Not Specified'];
-    }
-    const normalized = types
-      .split(',')
-      .map(type => type.trim())
-      .filter(Boolean);
+    if (Array.isArray(types)) return types.length > 0 ? (types as ProjectType[]) : ['Not Specified'];
+    const normalized = types.split(',').map(type => type.trim()).filter(Boolean);
     return normalized.length > 0 ? (normalized as ProjectType[]) : ['Not Specified'];
   };
 
   const openDetailModal = (lead: Lead) => {
     const baseline: LeadDetailFormData = {
-      name: lead.name,
-      phone: lead.phone,
-      email: lead.email,
-      location: lead.location,
-      sourceDetail: (lead.sourceDetail || lead.source) as LeadSource,
-      stage: lead.stage,
-      assigned: lead.assigned || '',
-      budget: lead.budget || '',
-      type: normalizeTypes(lead.type),
-      notes: lead.notes || '',
-      followupDate: lead.followupDate || '',
-      followupTime: lead.followupTime || '',
-      urgent: Boolean(lead.urgent),
-      lostReason: lead.lostReason || '',
-      historyEntries: lead.history || [],
+      name: lead.name, phone: lead.phone, email: lead.email, location: lead.location,
+      sourceDetail: (lead.sourceDetail || lead.source) as LeadSource, stage: lead.stage,
+      assigned: lead.assigned || '', budget: lead.budget || '', type: normalizeTypes(lead.type),
+      notes: lead.notes || '', followupDate: lead.followupDate || '', followupTime: lead.followupTime || '',
+      urgent: Boolean(lead.urgent), lostReason: lead.lostReason || '', historyEntries: lead.history || [],
     };
-
     setDetailLead(lead);
     setDetailForm(baseline);
     setDetailBaseline(baseline);
@@ -381,10 +324,7 @@ export default function TableView({
   };
 
   const closeDetailModal = () => {
-    setDetailLead(null);
-    setDetailForm(null);
-    setDetailBaseline(null);
-    setShowDeleteConfirm(false);
+    setDetailLead(null); setDetailForm(null); setDetailBaseline(null); setShowDeleteConfirm(false);
     setHistoryDraft({ action: '', detail: '', type: 'call' });
   };
 
@@ -392,19 +332,12 @@ export default function TableView({
     if (!historyDraft.action.trim() && !historyDraft.detail.trim()) return;
     const now = new Date();
     const newEntry: HistoryItem = {
-      action: historyDraft.action,
-      detail: historyDraft.detail,
-      type: historyDraft.type,
-      date: now.toISOString().slice(0, 10),
-      time: now.toTimeString().slice(0, 5),
+      action: historyDraft.action, detail: historyDraft.detail, type: historyDraft.type,
+      date: now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5),
     };
     setDetailForm(prev => prev ? { ...prev, historyEntries: [...prev.historyEntries, newEntry] } : prev);
     setHistoryDraft({ action: '', detail: '', type: 'call' });
   };
-
-  // const removeHistoryEntry = (index: number) => {
-  //   setDetailForm(prev => prev ? { ...prev, historyEntries: prev.historyEntries.filter((_, idx) => idx !== index) } : prev);
-  // };
 
   const hasDetailChanges = useMemo(() => {
     if (!detailForm || !detailBaseline) return false;
@@ -415,394 +348,176 @@ export default function TableView({
     setDetailForm(prev => {
       if (!prev) return prev;
       const exists = prev.type.includes(value);
-      if (value === 'Not Specified') {
-        return { ...prev, type: ['Not Specified'] };
-      }
-
+      if (value === 'Not Specified') return { ...prev, type: ['Not Specified'] };
       const withoutNotSpecified = prev.type.filter(item => item !== 'Not Specified');
-      const next = exists
-        ? withoutNotSpecified.filter(item => item !== value)
-        : [...withoutNotSpecified, value];
-
+      const next = exists ? withoutNotSpecified.filter(item => item !== value) : [...withoutNotSpecified, value];
       return { ...prev, type: next.length > 0 ? next : ['Not Specified'] };
     });
   };
 
   const handleDetailUpdate = async () => {
     if (!detailLead || !detailForm) return;
-
     if (detailForm.stage === 'Lost' && !detailForm.lostReason.trim()) {
-      showToast('Please provide a reason for the lost lead.', 'info');
-      return;
+      showToast('Please provide a reason for the lost lead.', 'info'); return;
     }
-
     setIsUpdating(true);
     const normalizedTypes = detailForm.type.length > 0 ? detailForm.type : ['Not Specified'];
     const typeValue: string = normalizedTypes.join(', ');
     const updates: Partial<Lead> = {
-      name: detailForm.name,
-      phone: detailForm.phone,
-      email: detailForm.email,
-      location: detailForm.location,
-      source: detailForm.sourceDetail,
-      sourceDetail: detailForm.sourceDetail,
-      stage: detailForm.stage,
-      assigned: detailForm.assigned,
-      budget: detailForm.budget,
-      type: typeValue,
-      notes: detailForm.notes,
-      followupDate: detailForm.followupDate,
-      followupTime: detailForm.followupTime,
-      urgent: detailForm.urgent,
-      lostReason: detailForm.stage === 'Lost' ? detailForm.lostReason : '',
-      history: detailForm.historyEntries as any, // Passed down if service supports it
+      name: detailForm.name, phone: detailForm.phone, email: detailForm.email, location: detailForm.location,
+      source: detailForm.sourceDetail, sourceDetail: detailForm.sourceDetail, stage: detailForm.stage,
+      assigned: detailForm.assigned, budget: detailForm.budget, type: typeValue, notes: detailForm.notes,
+      followupDate: detailForm.followupDate, followupTime: detailForm.followupTime, urgent: detailForm.urgent,
+      lostReason: detailForm.stage === 'Lost' ? detailForm.lostReason : '', history: detailForm.historyEntries as any,
     };
-
     try {
       const updated = await updateLead(detailLead.id, updates);
       if (!updated) return;
-      onLeadUpdate(updated);
-      openDetailModal(updated);
-      showToast('Lead updated');
-      closeDetailModal();
+      onLeadUpdate(updated); openDetailModal(updated); showToast('Lead updated'); closeDetailModal();
     } catch (error) {
-      console.error('Failed to update lead', error);
-      showToast('Failed to update lead', 'info');
-    } finally {
-      setIsUpdating(false);
-    }
+      console.error('Failed to update lead', error); showToast('Failed to update lead', 'info');
+    } finally { setIsUpdating(false); }
   };
 
   const handleDetailDelete = async () => {
     if (!detailLead) return;
-    try {
-      await deleteLead(detailLead.id);
-      onLeadDelete(detailLead.id);
-      setShowDeleteConfirm(false);
-      closeDetailModal();
-      showToast('Lead deleted');
-    } catch (error) {
-      console.error('Failed to delete lead', error);
-    }
+    try { await deleteLead(detailLead.id); onLeadDelete(detailLead.id); setShowDeleteConfirm(false); closeDetailModal(); showToast('Lead deleted'); }
+    catch (error) { console.error('Failed to delete lead', error); }
   };
 
   const filteredLeads = useMemo(() => {
     let filtered = leads;
-
-    // Apply search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        lead =>
-          lead.name.toLowerCase().includes(term) ||
-          lead.phone.includes(term) ||
-          lead.location.toLowerCase().includes(term) ||
-          lead.email.toLowerCase().includes(term)
-      );
+      filtered = filtered.filter(lead => lead.name.toLowerCase().includes(term) || lead.phone.includes(term) || lead.location.toLowerCase().includes(term) || lead.email.toLowerCase().includes(term));
     }
-
-    // Apply stage filter
-    if (!activeFilters.includes('all')) {
-      filtered = filtered.filter(lead => activeFilters.includes(lead.stage));
-    }
-
+    if (!activeFilters.includes('all')) { filtered = filtered.filter(lead => activeFilters.includes(lead.stage)); }
     return filtered;
   }, [leads, searchTerm, activeFilters]);
 
   const toggleFilter = (stage: string) => {
     setActiveFilters(prev => {
-      if (stage === 'all') {
-        return prev.includes('all') ? [] : ['all'];
-      }
-
+      if (stage === 'all') return prev.includes('all') ? [] : ['all'];
       const updated = prev.filter(f => f !== 'all');
-      if (updated.includes(stage)) {
-        return updated.filter(f => f !== stage);
-      }
+      if (updated.includes(stage)) return updated.filter(f => f !== stage);
       return [...updated, stage];
     });
   };
 
   const stageStyles: Record<LeadStage, string> = {
-    New: 'stage-badge-info',
-    Contacted: 'stage-badge-warning',
-    Qualified: 'stage-badge-purple',
-    Quoted: 'stage-badge-accent',
-    Negotiating: 'stage-badge-pink',
-    Won: 'stage-badge-success',
-    Lost: 'stage-badge-danger',
-    'Meeting Scheduled': 'stage-badge-info',
-    'In Follow-up': 'stage-badge-warning',
-    'No Response': 'stage-badge-danger',
-    Converted: 'stage-badge-success',
-    Cancelled: 'stage-badge-danger',
-    Disqualified: 'stage-badge-danger',
+    New: 'stage-badge-info', Contacted: 'stage-badge-warning', Qualified: 'stage-badge-purple', Quoted: 'stage-badge-accent',
+    Negotiating: 'stage-badge-pink', Won: 'stage-badge-success', Lost: 'stage-badge-danger', 'Meeting Scheduled': 'stage-badge-info',
+    'In Follow-up': 'stage-badge-warning', 'No Response': 'stage-badge-danger', Converted: 'stage-badge-success', Cancelled: 'stage-badge-danger', Disqualified: 'stage-badge-danger',
   };
 
-  // const openStatusModal = (lead: Lead) => {
-  //   setStatusLead(lead);
-  //   setStatusStage(lead.stage);
-  //   setStatusNotes('');
-  // };
-
-  const closeStatusModal = () => {
-    setStatusLead(null);
-  };
+  const closeStatusModal = () => setStatusLead(null);
 
   const openEmailTemplates = (lead: Lead) => {
-    setEmailLead(lead);
-    setShowEmailTemplates(true);
-    setSelectedTemplate(null);
-    setEmailSubject('');
-    setEmailBody('');
+    setEmailLead(lead); setShowEmailTemplates(true); setSelectedTemplate(null); setEmailSubject('');
   };
+  const closeEmailTemplates = () => setShowEmailTemplates(false);
+  const closeSendEmail = () => { setShowSendEmail(false); setSelectedTemplate(null); };
 
-  const closeEmailTemplates = () => {
-    setShowEmailTemplates(false);
-  };
-
-  const closeSendEmail = () => {
-    setShowSendEmail(false);
-    setSelectedTemplate(null);
-  };
-
-  const openFollowupModal = (lead: Lead) => {
-    setEditFollowupLead(lead);
-    setFollowupDate(lead.followupDate || '');
-    setFollowupTime(lead.followupTime || '');
-  };
-
-  const closeFollowupModal = () => {
-    setEditFollowupLead(null);
-  };
+  const openFollowupModal = (lead: Lead) => { setEditFollowupLead(lead); setFollowupDate(lead.followupDate || ''); setFollowupTime(lead.followupTime || ''); };
+  const closeFollowupModal = () => setEditFollowupLead(null);
 
   const handleUpdateFollowup = async () => {
     if (!editFollowupLead) return;
     try {
-      const updatedLead = await updateLead(editFollowupLead.id, {
-        followupDate,
-        followupTime,
-      });
+      const updatedLead = await updateLead(editFollowupLead.id, { followupDate, followupTime });
       if (!updatedLead) return;
-      onLeadUpdate(updatedLead);
-      showToast(`Updated follow-up for ${updatedLead.name}`, 'success');
-      closeFollowupModal();
-    } catch (error) {
-      console.error('Failed to update follow-up', error);
-    }
+      onLeadUpdate(updatedLead); showToast(`Updated follow-up for ${updatedLead.name}`, 'success'); closeFollowupModal();
+    } catch (error) { console.error('Failed to update follow-up', error); }
   };
 
-  const openAssignedModal = (lead: Lead) => {
-    setEditAssignedLead(lead);
-    setAssignedPerson(lead.assigned || '');
-  };
-
-  const closeAssignedModal = () => {
-    setEditAssignedLead(null);
-  };
+  const openAssignedModal = (lead: Lead) => { setEditAssignedLead(lead); setAssignedPerson(lead.assigned || ''); };
+  const closeAssignedModal = () => setEditAssignedLead(null);
 
   const handleUpdateAssigned = async () => {
     if (!editAssignedLead) return;
     try {
-      const updatedLead = await updateLead(editAssignedLead.id, {
-        assigned: assignedPerson,
-      });
+      const updatedLead = await updateLead(editAssignedLead.id, { assigned: assignedPerson });
       if (!updatedLead) return;
-      onLeadUpdate(updatedLead);
-      showToast(`Assigned ${assignedPerson} to ${updatedLead.name}`, 'success');
-      closeAssignedModal();
-    } catch (error) {
-      console.error('Failed to update assigned', error);
-    }
+      onLeadUpdate(updatedLead); showToast(`Assigned ${assignedPerson} to ${updatedLead.name}`, 'success'); closeAssignedModal();
+    } catch (error) { console.error('Failed to update assigned', error); }
   };
 
   const handleTemplateSelect = (template: EmailTemplate) => {
     if (!emailLead) return;
-    const draft = buildEmailDraft(template, emailLead);
     setSelectedTemplate(template);
-    setEmailSubject(draft.subject);
-    setEmailBody(draft.body);
+    setEmailSubject(hydrateSubject(template.subject, emailLead));
     setShowEmailTemplates(false);
     setShowSendEmail(true);
   };
 
   const handleMoveStage = async () => {
     if (!statusLead) return;
-    if (statusStage === statusLead.stage) {
-      closeStatusModal();
-      return;
-    }
-
+    if (statusStage === statusLead.stage) { closeStatusModal(); return; }
     const now = new Date();
     const historyEntry: Lead['history'][number] = {
-      date: now.toISOString().slice(0, 10),
-      time: now.toTimeString().slice(0, 5),
-      action: 'Stage changed',
-      detail: `Moved from "${statusLead.stage}" to "${statusStage}".${statusNotes ? ` ${statusNotes}` : ''}`,
-      type: 'system',
+      date: now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), action: 'Stage changed',
+      detail: `Moved from "${statusLead.stage}" to "${statusStage}".${statusNotes ? ` ${statusNotes}` : ''}`, type: 'system',
     };
-
     const updatedLead: Lead = {
-      ...statusLead,
-      stage: statusStage,
-      history: [...statusLead.history, historyEntry],
-      followupDate: statusStage === 'Won' ? '' : statusLead.followupDate,
-      followupTime: statusStage === 'Won' ? '' : statusLead.followupTime,
-      followupNotes: statusStage === 'Won' ? '' : statusLead.followupNotes,
-      urgent: statusStage === 'Won' ? false : statusLead.urgent,
+      ...statusLead, stage: statusStage, history: [...statusLead.history, historyEntry],
+      followupDate: statusStage === 'Won' ? '' : statusLead.followupDate, followupTime: statusStage === 'Won' ? '' : statusLead.followupTime,
+      followupNotes: statusStage === 'Won' ? '' : statusLead.followupNotes, urgent: statusStage === 'Won' ? false : statusLead.urgent,
     };
     try {
-      const savedLead = await updateLead(statusLead.id, {
-        stage: updatedLead.stage,
-        followupDate: updatedLead.followupDate,
-        followupTime: updatedLead.followupTime,
-        followupNotes: updatedLead.followupNotes,
-        urgent: updatedLead.urgent,
-      });
+      const savedLead = await updateLead(statusLead.id, { stage: updatedLead.stage, followupDate: updatedLead.followupDate, followupTime: updatedLead.followupTime, followupNotes: updatedLead.followupNotes, urgent: updatedLead.urgent });
       if (!savedLead) return;
-      onLeadUpdate({ ...savedLead, history: updatedLead.history });
-      closeStatusModal();
-    } catch (error) {
-      console.error('Failed to move stage', error);
-    }
+      onLeadUpdate({ ...savedLead, history: updatedLead.history }); closeStatusModal();
+    } catch (error) { console.error('Failed to move stage', error); }
   };
 
   const handleSendEmail = async () => {
-    if (!emailLead) return;
-    const now = new Date();
-    const historyEntry: Lead['history'][number] = {
-      date: now.toISOString().slice(0, 10),
-      time: now.toTimeString().slice(0, 5),
-      action: 'Email sent',
-      detail: `Subject: ${emailSubject}`,
-      type: 'email',
-    };
+    if (!emailLead || !selectedTemplate) return;
+    setSendingEmail(true);
+    try {
+      const finalHtmlBody = await renderEmailHtml(selectedTemplate.category, emailLead);
+      if (!finalHtmlBody) { showToast('Failed to generate email content', 'info'); setSendingEmail(false); return; }
 
-    const finalBody = emailBodyRef.current ? emailBodyRef.current.innerHTML : emailBody;
-    const sendCampaign = await sendEmailToLead(
-      emailLead.email,
-      emailSubject,
-      hydrateTemplate(finalBody, emailLead)
-    );
-
-    if (sendCampaign) {
-      showToast(`Email sent to ${emailLead.name} Successfully`, 'success');
-      const updatedLead: Lead = {
-        ...emailLead,
-        history: [...emailLead.history, historyEntry],
-      };
-      onLeadUpdate(updatedLead);
-    } else {
-      showToast(`Failed to send email to ${emailLead.name}`, 'info');
-    }
-    closeSendEmail();
+      const sendCampaign = await sendEmailToLead(emailLead.email, emailSubject, finalHtmlBody);
+      if (sendCampaign) {
+        showToast(`Email sent to ${emailLead.name} Successfully`, 'success');
+        const now = new Date();
+        const historyEntry: Lead['history'][number] = { date: now.toISOString().slice(0, 10), time: now.toTimeString().slice(0, 5), action: 'Email sent', detail: `Subject: ${emailSubject}`, type: 'email' };
+        const updatedLead: Lead = { ...emailLead, history: [...emailLead.history, historyEntry] };
+        onLeadUpdate(updatedLead);
+      } else { showToast(`Failed to send email to ${emailLead.name}`, 'info'); }
+    } catch (error) {
+      console.error('Error sending email:', error); showToast('An unexpected error occurred', 'info');
+    } finally { setSendingEmail(false); closeSendEmail(); }
   };
 
-  const handleCall = (lead: Lead) => {
-    const dial = dialablePhone(lead.phone);
-    if (!dial) return;
-    window.location.href = `tel:${dial}`;
-  };
+  const handleCall = (lead: Lead) => { const dial = dialablePhone(lead.phone); if (!dial) return; window.location.href = `tel:${dial}`; };
 
   const handleExport = () => {
-    const leadHeader = [
-      'leadId',
-      'name',
-      'phone',
-      'email',
-      'location',
-      'SourceDetail',
-      'Stage',
-      'assigned',
-      'budget',
-      'notes',
-      'FollowupsDate',
-      'FollowupTime',
-      'type',
-      'lostReason',
-      'urgent',
-    ];
-
+    const leadHeader = ['leadId', 'name', 'phone', 'email', 'location', 'SourceDetail', 'Stage', 'assigned', 'budget', 'notes', 'FollowupsDate', 'FollowupTime', 'type', 'lostReason', 'urgent'];
     const leadRows = filteredLeads.map(lead => {
-      const normalized = normalizeTypes(lead.type).filter(
-        type => type !== 'Not Specified',
-      );
-      const typeValue = normalized.join(', ');
-
-      return [
-        lead.id,
-        lead.name,
-        lead.phone,
-        lead.email,
-        lead.location,
-        lead.sourceDetail,
-        lead.stage,
-        lead.assigned || '',
-        lead.budget,
-        lead.notes || '',
-        lead.followupDate || '',
-        lead.followupTime || '',
-        typeValue,
-        lead.lostReason || '',
-        lead.urgent ? 'true' : 'false',
-      ];
+      const normalized = normalizeTypes(lead.type).filter(type => type !== 'Not Specified');
+      return [lead.id, lead.name, lead.phone, lead.email, lead.location, lead.sourceDetail, lead.stage, lead.assigned || '', lead.budget, lead.notes || '', lead.followupDate || '', lead.followupTime || '', normalized.join(', '), lead.lostReason || '', lead.urgent ? 'true' : 'false'];
     });
-
-    const historyHeader = [
-      'leadId',
-      'action',
-      'detail',
-      'type',
-      'actionDate',
-    ];
-
-    const historyRows = filteredLeads.flatMap(lead =>
-      (lead.history ?? []).map(entry => [
-        lead.id,
-        entry.action,
-        entry.detail,
-        entry.type,
-        `${entry.date} ${entry.time}`.trim(),
-      ]),
-    );
-
+    const historyHeader = ['leadId', 'action', 'detail', 'type', 'actionDate'];
+    const historyRows = filteredLeads.flatMap(lead => (lead.history ?? []).map(entry => [lead.id, entry.action, entry.detail, entry.type, `${entry.date} ${entry.time}`.trim()]));
     const workbook = XLSX.utils.book_new();
-    const leadSheet = XLSX.utils.aoa_to_sheet([
-      leadHeader,
-      ...leadRows,
-    ]);
-    const historySheet = XLSX.utils.aoa_to_sheet([
-      historyHeader,
-      ...historyRows,
-    ]);
-
-    XLSX.utils.book_append_sheet(workbook, leadSheet, 'Lead Data');
-    XLSX.utils.book_append_sheet(workbook, historySheet, 'History');
-
-    XLSX.writeFile(
-      workbook,
-      `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`,
-    );
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([leadHeader, ...leadRows]), 'Lead Data');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([historyHeader, ...historyRows]), 'History');
+    XLSX.writeFile(workbook, `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
     <div className="table-view">
-
       {/* ═══ TOAST NOTIFICATIONS ═══ */}
       {toasts.length > 0 && (
         <div className="toast-container">
           {toasts.map(toast => (
             <div key={toast.id} className={`toast-item toast-${toast.type}`}>
-              <div className="toast-icon-wrapper" style={{
-                background: toast.type === 'success' ? 'rgba(22,163,74,0.1)' : 'rgba(37,99,235,0.1)',
-                color: toast.type === 'success' ? '#16A34A' : '#2563EB',
-              }}>
+              <div className="toast-icon-wrapper" style={{ background: toast.type === 'success' ? 'rgba(22,163,74,0.1)' : 'rgba(37,99,235,0.1)', color: toast.type === 'success' ? '#16A34A' : '#2563EB' }}>
                 {toast.type === 'success' ? <Check size={15} /> : <Bell size={15} />}
               </div>
               <span className="toast-msg">{toast.message}</span>
-              <button className="toast-close" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}>
-                <X size={14} />
-              </button>
+              <button className="toast-close" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}><X size={14} /></button>
             </div>
           ))}
         </div>
@@ -813,181 +528,58 @@ export default function TableView({
           <div className="table-header-row">
             <h3 className="table-title">All Leads</h3>
             <div className="table-filters">
-              <div className="search-box">
-                <Search size={16} />
-                <input
-                  type="text"
-                  placeholder="Search leads..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
-              </div>
+              <div className="search-box"><Search size={16} /><input type="text" placeholder="Search leads..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
               <div className="filter-chips">
-                {[
-                  'all',
-                  'New',
-                  'Contacted',
-                  'Meeting Scheduled',
-                  'In Follow-up',
-                  'Qualified',
-                  'Quoted',
-                  'Negotiating',
-                  'Won',
-                  'Converted',
-                  'No Response',
-                  'Cancelled',
-                  'Disqualified',
-                  'Lost',
-                ].map(stage => (
-                  <button
-                    key={stage}
-                    className={`filter-chip ${activeFilters.includes(stage) ? 'active' : ''
-                      }`}
-                    onClick={() => toggleFilter(stage)}
-                  >
-                    {stage === 'all' ? 'All' : stage}
-                  </button>
+                {['all', 'New', 'Contacted', 'Meeting Scheduled', 'In Follow-up', 'Qualified', 'Quoted', 'Negotiating', 'Won', 'Converted', 'No Response', 'Cancelled', 'Disqualified', 'Lost'].map(stage => (
+                  <button key={stage} className={`filter-chip ${activeFilters.includes(stage) ? 'active' : ''}`} onClick={() => toggleFilter(stage)}>{stage === 'all' ? 'All' : stage}</button>
                 ))}
               </div>
-              <button className="btn-export" onClick={handleExport}>
-                <Download size={14} />
-                Export
-              </button>
+              <button className="btn-export" onClick={handleExport}><Download size={14} />Export</button>
             </div>
           </div>
         </div>
 
         {filteredLeads.length === 0 ? (
-          <div className="table-empty">
-            <Search size={32} />
-            <p>No leads match your search.</p>
-          </div>
+          <div className="table-empty"><Search size={32} /><p>No leads match your search.</p></div>
         ) : (
           <div className="table-wrapper">
             <table className="leads-table">
               <thead>
                 <tr>
-                  <th className="col-lead">Lead</th>
-                  <th className="col-phone">Phone</th>
-                  <th className="col-location">Location</th>
-                  <th className="col-source">Source Detail</th>
-                  <th className="col-stage">Stage</th>
-                  <th className="col-followup">Follow-up</th>
-                  <th className="col-assigned">Assigned</th>
-                  <th className="col-actions">Actions</th>
+                  <th className="col-lead">Lead</th><th className="col-phone">Phone</th><th className="col-location">Location</th><th className="col-source">Source Detail</th><th className="col-stage">Stage</th><th className="col-followup">Follow-up</th><th className="col-assigned">Assigned</th><th className="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLeads.map(lead => (
-                  <tr
-                    key={lead.id}
-                    className={lead.urgent ? 'urgent-row bg-rose-50/50' : ''}
-                    
-                  >
+                  <tr key={lead.id} className={lead.urgent ? 'urgent-row bg-rose-50/50' : ''} onClick={() => openDetailModal(lead)}>
                     <td className="col-lead">
                       <div className="cell-name">
                         {lead.urgent && <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />}
-                        <div className="cell-name-text">
-                          <strong>{lead.name}</strong>
-                          <small>{lead.email}</small>
-                        </div>
+                        <div className="cell-name-text"><strong>{lead.name}</strong><small>{lead.email}</small></div>
                       </div>
                     </td>
                     <td className="col-phone">{lead.phone}</td>
                     <td className="col-location">{lead.location}</td>
                     <td className="col-source-detail">{lead.sourceDetail}</td>
-                    {/* <td className="col-source">
-                      <span className="source-with-icon">
-                        <SourceIcon source={lead.source} />
-                        <span className="source-label">{lead.source}</span>
-                      </span>
-                    </td> */}
-                    <td className="col-stage">
-                      <span className={`stage-badge ${stageStyles[lead.stage]}`}>
-                        {lead.stage}
-                      </span>
-                    </td>
+                    <td className="col-stage"><span className={`stage-badge ${stageStyles[lead.stage]}`}>{lead.stage}</span></td>
                     <td className="col-followup">
                       {!lead.followupDate && !lead.followupTime ? (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"
-                          onClick={(e) => { e.stopPropagation(); openFollowupModal(lead); }}
-                          title="Set Follow-up"
-                        >
-                          <Calendar size={12} />
-                          <span>Set date</span>
-                        </button>
+                        <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]" onClick={(e) => { e.stopPropagation(); openFollowupModal(lead); }} title="Set Follow-up"><Calendar size={12} /><span>Set date</span></button>
                       ) : (
-                        <span
-                          className={`followup-date-text cursor-pointer transition-colors hover:text-[#0D9488] ${lead.urgent ? 'followup-urgent text-rose-600 font-semibold hover:text-rose-700' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); openFollowupModal(lead); }}
-                        >
-                          {formatFollowup(lead.followupDate, lead.followupTime)}
-                        </span>
+                        <span className={`followup-date-text cursor-pointer transition-colors hover:text-[#0D9488] ${lead.urgent ? 'followup-urgent text-rose-600 font-semibold hover:text-rose-700' : ''}`} onClick={(e) => { e.stopPropagation(); openFollowupModal(lead); }}>{formatFollowup(lead.followupDate, lead.followupTime)}</span>
                       )}
                     </td>
                     <td className="col-assigned">
                       {!lead.assigned ? (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"
-                          onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}
-                          title="Assign Lead"
-                        >
-                          <UserPlus size={12} />
-                          <span>Assign</span>
-                        </button>
+                        <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]" onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }} title="Assign Lead"><UserPlus size={12} /><span>Assign</span></button>
                       ) : (
-                        <span
-                          className="assigned-name cursor-pointer hover:text-[#0D9488] transition-colors"
-                          onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}
-                        >
-                          {lead.assigned}
-                        </span>
+                        <span className="assigned-name cursor-pointer hover:text-[#0D9488] transition-colors" onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}>{lead.assigned}</span>
                       )}
                     </td>
                     <td className="col-actions">
                       <div className="action-buttons">
-                        {!['Won', 'Lost'].includes(lead.stage) && (
-                          <button
-                            type="button"
-                            className="action-btn-icon"
-                            title="Call"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleCall(lead);
-                            }}
-                          >
-                            <Phone size={15} />
-                          </button>
-                        )}
-                        {lead.email ? (
-                          <button
-                            type="button"
-                            className="action-btn-icon"
-                            title="Follow-up Email"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openEmailTemplates(lead);
-                            }}
-                          >
-                            <Mail size={15} />
-                          </button>
-                        ) : null}
-                        {!['Won', 'Lost'].includes(lead.stage) && (
-                          <button
-                            type="button"
-                            className="action-btn-icon"
-                            title="Edit Lead"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openDetailModal(lead);
-                            }}
-                          >
-                            <Edit size={15} />
-                          </button>
-                        )}
+                        {!['Won', 'Lost'].includes(lead.stage) && (<button type="button" className="action-btn-icon" title="Call" onClick={(event) => { event.stopPropagation(); handleCall(lead); }}><Phone size={15} /></button>)}
+                        {lead.email ? (<button type="button" className="action-btn-icon" title="Follow-up Email" onClick={(event) => { event.stopPropagation(); openEmailTemplates(lead); }}><Mail size={15} /></button>) : null}
                       </div>
                     </td>
                   </tr>
@@ -998,476 +590,102 @@ export default function TableView({
         )}
       </div>
 
-      <ModalShell
-        open={!!detailLead}
-        onClose={closeDetailModal}
-        title={detailLead ? detailLead.name : 'Lead Details'}
-        subtitle={detailLead ? `${detailLead.location} | ${detailLead.phone}` : undefined}
-        maxWidthClass="max-w-[860px]"
-      >
+      {/* Detail Modal */}
+      <ModalShell open={!!detailLead} onClose={closeDetailModal} title={detailLead ? detailLead.name : 'Lead Details'} subtitle={detailLead ? `${detailLead.location} | ${detailLead.phone}` : undefined} maxWidthClass="max-w-[860px]">
         {detailLead && detailForm && (
           <div className="space-y-5">
-            {detailForm.stage === 'Won' && (
-              <div className="status-banner status-banner-success">
-                <span className="status-banner-title">Status: Won</span>
-                <span className="status-banner-text">This lead is marked as won.</span>
-              </div>
-            )}
-            {detailForm.stage === 'Lost' && (
-              <div className="status-banner status-banner-danger">
-                <span className="status-banner-title">Status: Lost</span>
-                <span className="status-banner-text">
-                  {detailForm.lostReason ? `Reason: ${detailForm.lostReason}` : 'Add a reason before updating.'}
-                </span>
-              </div>
-            )}
-
+            {detailForm.stage === 'Won' && (<div className="status-banner status-banner-success"><span className="status-banner-title">Status: Won</span><span className="status-banner-text">This lead is marked as won.</span></div>)}
+            {detailForm.stage === 'Lost' && (<div className="status-banner status-banner-danger"><span className="status-banner-title">Status: Lost</span><span className="status-banner-text">{detailForm.lostReason ? `Reason: ${detailForm.lostReason}` : 'Add a reason before updating.'}</span></div>)}
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Name</label>
-                <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.name}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, name: event.target.value } : prev)}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Phone</label>
-                <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.phone}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, phone: event.target.value } : prev)}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Email</label>
-                <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.email}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, email: event.target.value } : prev)}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Location</label>
-                <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.location}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, location: event.target.value } : prev)}
-                />
-              </div>
+              <div><label className="text-xs font-medium text-[#78716c]">Name</label><input className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.name} onChange={event => setDetailForm(prev => prev ? { ...prev, name: event.target.value } : prev)} /></div>
+              <div><label className="text-xs font-medium text-[#78716c]">Phone</label><input className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.phone} onChange={event => setDetailForm(prev => prev ? { ...prev, phone: event.target.value } : prev)} /></div>
+              <div><label className="text-xs font-medium text-[#78716c]">Email</label><input className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.email} onChange={event => setDetailForm(prev => prev ? { ...prev, email: event.target.value } : prev)} /></div>
+              <div><label className="text-xs font-medium text-[#78716c]">Location</label><input className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.location} onChange={event => setDetailForm(prev => prev ? { ...prev, location: event.target.value } : prev)} /></div>
             </div>
-
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Source Detail</label>
-                <select
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.sourceDetail}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, sourceDetail: event.target.value as LeadSource } : prev)}
-                >
-                  {LEAD_SOURCE_OPTIONS.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Stage</label>
-                <select
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.stage}
-                  onChange={event => setDetailForm(prev => {
-                    if (!prev) return prev;
-                    const nextStage = event.target.value as LeadStage;
-                    return {
-                      ...prev,
-                      stage: nextStage,
-                      lostReason: nextStage === 'Lost' ? prev.lostReason : '',
-                    };
-                  })}
-                >
-                  {LEAD_STAGE_OPTIONS.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
+              <div><label className="text-xs font-medium text-[#78716c]">Source Detail</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.sourceDetail} onChange={event => setDetailForm(prev => prev ? { ...prev, sourceDetail: event.target.value as LeadSource } : prev)}>{LEAD_SOURCE_OPTIONS.map(option => (<option key={option} value={option}>{option}</option>))}</select></div>
+              <div><label className="text-xs font-medium text-[#78716c]">Stage</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.stage} onChange={event => setDetailForm(prev => { if (!prev) return prev; const nextStage = event.target.value as LeadStage; return { ...prev, stage: nextStage, lostReason: nextStage === 'Lost' ? prev.lostReason : '' }; })}>{LEAD_STAGE_OPTIONS.map(option => (<option key={option} value={option}>{option}</option>))}</select></div>
             </div>
-
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Assigned</label>
-                <select
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.assigned}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, assigned: event.target.value } : prev)}
-                >
-                  <option value="">Unassigned</option>
-                  {["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(person => (
-                    <option key={person} value={person}>{person}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Budget</label>
-                <select
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.budget}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, budget: event.target.value } : prev)}
-                >
-                  {['Not Discussed', '$200K - $350K', '$350K - $500K', '$500K - $700K', '$700K+'].map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </div>
+              <div><label className="text-xs font-medium text-[#78716c]">Assigned</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.assigned} onChange={event => setDetailForm(prev => prev ? { ...prev, assigned: event.target.value } : prev)}><option value="">Unassigned</option>{["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(person => (<option key={person} value={person}>{person}</option>))}</select></div>
+              <div><label className="text-xs font-medium text-[#78716c]">Budget</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.budget} onChange={event => setDetailForm(prev => prev ? { ...prev, budget: event.target.value } : prev)}>{['Not Discussed', '$200K - $350K', '$350K - $500K', '$500K - $700K', '$700K+'].map(option => (<option key={option} value={option}>{option}</option>))}</select></div>
             </div>
-
-            <div>
-              <label className="text-xs font-medium text-[#78716c]">Project Type</label>
-              <div className="checkbox-grid mt-2">
-                {PROJECT_TYPE_OPTIONS.map(option => (
-                  <label
-                    key={option}
-                    className={`checkbox-item ${detailForm.type.includes(option) ? 'active' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={detailForm.type.includes(option)}
-                      onChange={() => toggleDetailType(option)}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
+            <div><label className="text-xs font-medium text-[#78716c]">Project Type</label><div className="checkbox-grid mt-2">{PROJECT_TYPE_OPTIONS.map(option => (<label key={option} className={`checkbox-item ${detailForm.type.includes(option) ? 'active' : ''}`}><input type="checkbox" checked={detailForm.type.includes(option)} onChange={() => toggleDetailType(option)} /><span>{option}</span></label>))}</div></div>
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Follow-up Date</label>
-                <input
-                  type="date"
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.followupDate}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, followupDate: event.target.value } : prev)}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Follow-up Time</label>
-                <input
-                  type="time"
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.followupTime}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, followupTime: event.target.value } : prev)}
-                />
-              </div>
+              <div><label className="text-xs font-medium text-[#78716c]">Follow-up Date</label><input type="date" className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.followupDate} onChange={event => setDetailForm(prev => prev ? { ...prev, followupDate: event.target.value } : prev)} /></div>
+              <div><label className="text-xs font-medium text-[#78716c]">Follow-up Time</label><input type="time" className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.followupTime} onChange={event => setDetailForm(prev => prev ? { ...prev, followupTime: event.target.value } : prev)} /></div>
             </div>
-
-            <div>
-              <label className="text-xs font-medium text-[#78716c]">Notes</label>
-              <textarea
-                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                rows={4}
-                value={detailForm.notes}
-                onChange={event => setDetailForm(prev => prev ? { ...prev, notes: event.target.value } : prev)}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                id="urgent-checkbox"
-                type="checkbox"
-                checked={detailForm.urgent}
-                onChange={event => setDetailForm(prev => prev ? { ...prev, urgent: event.target.checked } : prev)}
-              />
-              <label htmlFor="urgent-checkbox" className="text-xs font-medium text-[#78716c]">
-                Urgent
-              </label>
-            </div>
-
-            {/* {detailForm.stage === 'Lost' && (
-              <div>
-                <label className="text-xs font-medium text-[#78716c]">Lost Reason</label>
-                <input
-                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.lostReason}
-                  onChange={event => setDetailForm(prev => prev ? { ...prev, lostReason: event.target.value } : prev)}
-                />
-              </div>
-            )} */}
-
+            <div><label className="text-xs font-medium text-[#78716c]">Notes</label><textarea className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" rows={4} value={detailForm.notes} onChange={event => setDetailForm(prev => prev ? { ...prev, notes: event.target.value } : prev)} /></div>
+            <div className="flex items-center gap-2"><input id="urgent-checkbox" type="checkbox" checked={detailForm.urgent} onChange={event => setDetailForm(prev => prev ? { ...prev, urgent: event.target.checked } : prev)} /><label htmlFor="urgent-checkbox" className="text-xs font-medium text-[#78716c]">Urgent</label></div>
+            
             <div>
               <label className="text-xs font-medium text-[#78716c]">History</label>
-              {detailLead.history.length === 0 ? (
-                <div className="mt-2 text-xs text-[#a8a29e]">No history recorded yet.</div>
-              ) : (
+              {detailLead.history.length === 0 ? (<div className="mt-2 text-xs text-[#a8a29e]">No history recorded yet.</div>) : (
                 <div className="history-list mt-2">
                   {detailLead.history.map((entry, index) => (
                     <div key={`${entry.date}-${entry.time}-${index}`} className="history-entry">
-                      <div className="history-entry-meta">
-                        <div className="history-entry-title">{entry.action}</div>
-                        <div className="history-entry-detail">{entry.detail}</div>
-                        <div className="history-entry-date">{entry.date} {entry.time}</div>
-                      </div>
-                      <div className="history-entry-actions">
-                        <span className="history-entry-badge">{entry.type}</span>
-                      </div>
+                      <div className="history-entry-meta"><div className="history-entry-title">{entry.action}</div><div className="history-entry-detail">{entry.detail}</div><div className="history-entry-date">{entry.date} {entry.time}</div></div>
+                      <div className="history-entry-actions"><span className="history-entry-badge">{entry.type}</span></div>
                     </div>
                   ))}
                 </div>
               )}
-
-              {/* Add New History Form */}
               <div className="mt-4 rounded-[8px] border border-[#e5e7eb] bg-[#fafaf9] p-3">
                 <h5 className="mb-3 text-xs font-medium text-[#0c0a09]">Add New History Entry</h5>
-                {detailForm.historyEntries.length > 0 && (
-                  <div className="mb-4 space-y-2">
-                    {detailForm.historyEntries.map((entry, idx) => (
-                      <div key={idx} className="flex items-start justify-between rounded-[6px] border border-[#e5e7eb] bg-white p-2 text-xs">
-                        <div>
-                          <div className="font-medium text-[#0c0a09]">{entry.action} <span className="font-normal text-[#a8a29e]">({entry.type})</span></div>
-                          {entry.detail && <div className="mt-0.5 text-[#78716c]">{entry.detail}</div>}
-                          <div className="mt-1 text-[10px] text-[#a8a29e]">{entry.date} {entry.time}</div>
-                        </div>
-                        {/* <button type="button" onClick={() => removeHistoryEntry(idx)} className="text-[#a8a29e] hover:text-red-500">
-                          <X size={14} />
-                        </button> */}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
+                {detailForm.historyEntries.length > 0 && (<div className="mb-4 space-y-2">{detailForm.historyEntries.map((entry, idx) => (<div key={idx} className="flex items-start justify-between rounded-[6px] border border-[#e5e7eb] bg-white p-2 text-xs"><div><div className="font-medium text-[#0c0a09]">{entry.action} <span className="font-normal text-[#a8a29e]">({entry.type})</span></div>{entry.detail && <div className="mt-0.5 text-[#78716c]">{entry.detail}</div>}<div className="mt-1 text-[10px] text-[#a8a29e]">{entry.date} {entry.time}</div></div></div>))}</div>)}
                 <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-[#e5e7eb]">
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-medium text-[#78716c]">Action</label>
-                    <input
-                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]"
-                      placeholder="e.g. Left a voicemail"
-                      value={historyDraft.action}
-                      onChange={e => setHistoryDraft(prev => ({ ...prev, action: e.target.value }))}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-medium text-[#78716c]">Detail</label>
-                    <textarea
-                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]"
-                      placeholder="Additional context..."
-                      rows={2}
-                      value={historyDraft.detail}
-                      onChange={e => setHistoryDraft(prev => ({ ...prev, detail: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-medium text-[#78716c]">Type</label>
-                    <select
-                      className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]"
-                      value={historyDraft.type}
-                      onChange={e => setHistoryDraft(prev => ({ ...prev, type: e.target.value as HistoryItem['type'] }))}
-                    >
-                      {HISTORY_TYPE_OPTIONS.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      className="w-full rounded-[4px] bg-[#0c0a09] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#292524] disabled:opacity-50"
-                      onClick={addHistoryEntry}
-                      disabled={!historyDraft.action.trim() && !historyDraft.detail.trim()}
-                    >
-                      Add Entry
-                    </button>
-                  </div>
+                  <div className="sm:col-span-2"><label className="text-[11px] font-medium text-[#78716c]">Action</label><input className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]" placeholder="e.g. Left a voicemail" value={historyDraft.action} onChange={e => setHistoryDraft(prev => ({ ...prev, action: e.target.value }))} /></div>
+                  <div className="sm:col-span-2"><label className="text-[11px] font-medium text-[#78716c]">Detail</label><textarea className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]" placeholder="Additional context..." rows={2} value={historyDraft.detail} onChange={e => setHistoryDraft(prev => ({ ...prev, detail: e.target.value }))} /></div>
+                  <div><label className="text-[11px] font-medium text-[#78716c]">Type</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]" value={historyDraft.type} onChange={e => setHistoryDraft(prev => ({ ...prev, type: e.target.value as HistoryItem['type'] }))}>{HISTORY_TYPE_OPTIONS.map(opt => (<option key={opt} value={opt}>{opt}</option>))}</select></div>
+                  <div className="flex items-end"><button type="button" className="w-full rounded-[4px] bg-[#0c0a09] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#292524] disabled:opacity-50" onClick={addHistoryEntry} disabled={!historyDraft.action.trim() && !historyDraft.detail.trim()}>Add Entry</button></div>
                 </div>
               </div>
             </div>
 
             {detailForm.stage === 'Lost' && (
               <div className="col-span-1 rounded-[8px] border border-red-200 bg-red-50 p-4 md:col-span-2">
-                <label className="text-sm font-medium text-red-900">
-                  Reason for Lost <span className="text-red-500">*</span>
-                </label>
-                <input
-                  className={`mt-1 w-full rounded-[4px] border ${!detailForm.lostReason.trim() ? 'border-red-400 ring-1 ring-red-400/20' : 'border-[#d6d3d1]'} bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200`}
-                  placeholder="e.g. Went with competitor, Price ..."
-                  value={detailForm.lostReason}
-                  onChange={e => setDetailForm({ ...detailForm, lostReason: e.target.value })}
-                />
-                {!detailForm.lostReason.trim() && (
-                  <p className="mt-1.5 text-xs text-red-600 font-medium">This is required when marking a lead as Lost.</p>
-                )}
+                <label className="text-sm font-medium text-red-900">Reason for Lost <span className="text-red-500">*</span></label>
+                <input className={`mt-1 w-full rounded-[4px] border ${!detailForm.lostReason.trim() ? 'border-red-400 ring-1 ring-red-400/20' : 'border-[#d6d3d1]'} bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200`} placeholder="e.g. Went with competitor, Price ..." value={detailForm.lostReason} onChange={e => setDetailForm({ ...detailForm, lostReason: e.target.value })} />
+                {!detailForm.lostReason.trim() && (<p className="mt-1.5 text-xs text-red-600 font-medium">This is required when marking a lead as Lost.</p>)}
               </div>
             )}
 
             <div className="flex flex-wrap gap-2 pt-2">
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleDetailUpdate}
-                disabled={!hasDetailChanges || isUpdating}
-              >
-                {isUpdating ? (
-                  <>
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Updating...
-                  </>
-                ) : (
-                  'Update Lead'
-                )}
+              <button type="button" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] disabled:cursor-not-allowed disabled:opacity-60" onClick={handleDetailUpdate} disabled={!hasDetailChanges || isUpdating}>
+                {isUpdating ? (<><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />Updating...</>) : 'Update Lead'}
               </button>
-              {['Won', 'Lost'].includes(detailLead.stage) && (
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-full border border-[#fecaca] bg-[#fee2e2] px-4 py-2 text-xs font-medium text-[#b91c1c] transition hover:border-[#fca5a5]"
-                  onClick={() => setShowDeleteConfirm(true)}
-                >
-                  Delete Lead
-                </button>
-              )}
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
-                onClick={closeDetailModal}
-              >
-                Close
-              </button>
+              {['Won', 'Lost'].includes(detailLead.stage) && (<button type="button" className="inline-flex items-center justify-center rounded-full border border-[#fecaca] bg-[#fee2e2] px-4 py-2 text-xs font-medium text-[#b91c1c] transition hover:border-[#fca5a5]" onClick={() => setShowDeleteConfirm(true)}>Delete Lead</button>)}
+              <button type="button" className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]" onClick={closeDetailModal}>Close</button>
             </div>
           </div>
         )}
       </ModalShell>
 
-      <ModalShell
-        open={showDeleteConfirm && !!detailLead}
-        onClose={() => setShowDeleteConfirm(false)}
-        title="Delete Lead"
-        maxWidthClass="max-w-[420px]"
-      >
+      <ModalShell open={showDeleteConfirm && !!detailLead} onClose={() => setShowDeleteConfirm(false)} title="Delete Lead" maxWidthClass="max-w-[420px]">
         <div className="space-y-4">
-          <p className="text-sm text-[#78716c]">
-            This will permanently delete {detailLead?.name}. This action cannot be undone.
-          </p>
+          <p className="text-sm text-[#78716c]">This will permanently delete {detailLead?.name}. This action cannot be undone.</p>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full bg-[#dc2626] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#b91c1c]"
-              onClick={handleDetailDelete}
-            >
-              Delete
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
-              onClick={() => setShowDeleteConfirm(false)}
-            >
-              Cancel
-            </button>
+            <button type="button" className="inline-flex items-center justify-center rounded-full bg-[#dc2626] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#b91c1c]" onClick={handleDetailDelete}>Delete</button>
+            <button type="button" className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
           </div>
         </div>
       </ModalShell>
 
-      {/* <ModalShell
-        open={!!statusLead}
-        onClose={closeStatusModal}
-        title={statusLead ? `Move: ${statusLead.name}` : 'Change Stage'}
-        maxWidthClass="max-w-[420px]"
-      >
-        {statusLead && (
-          <div className="space-y-4">
-            <div>
-              <div className="text-xs font-medium text-[#a8a29e]">Current Stage</div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {MOVABLE_STAGES.map(stage => (
-                  <span
-                    key={stage}
-                    className={`rounded-full border px-2 py-0.5 text-[11px] ${stage === statusLead.stage
-                      ? 'border-[#CCFBF1] bg-[#CCFBF1]/30 text-[#0D9488] font-medium'
-                      : 'border-[#e5e7eb] bg-[#fafaf9] text-[#78716c]'
-                      }`}
-                  >
-                    {stage}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-[#78716c]">Move to Stage</label>
-              <select
-                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                value={statusStage}
-                onChange={event => setStatusStage(event.target.value as LeadStage)}
-              >
-                {MOVABLE_STAGES.map(stage => (
-                  <option key={stage} value={stage} disabled={stage === statusLead.stage}>
-                    {stage} {stage === statusLead.stage ? '(current)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-[#78716c]">Notes (optional)</label>
-              <textarea
-                className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                rows={3}
-                placeholder="Why are you moving this lead?"
-                value={statusNotes}
-                onChange={event => setStatusNotes(event.target.value)}
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
-                onClick={handleMoveStage}
-              >
-                <ArrowRight size={14} />
-                Move Lead
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
-                onClick={closeStatusModal}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-      </ModalShell> */}
-
-      <ModalShell
-        open={showEmailTemplates}
-        onClose={closeEmailTemplates}
-        title="Email Templates"
-        subtitle="Select a template to send to the lead"
-        maxWidthClass="max-w-[720px]"
-      >
+      {/* Email Templates Modal */}
+      <ModalShell open={showEmailTemplates} onClose={closeEmailTemplates} title="Email Templates" subtitle="Select a template to send to the lead" maxWidthClass="max-w-[720px]">
         <div className="space-y-4">
           {emailLead ? (
-            <div className="rounded-[10px] border border-[#CCFBF1] bg-[#CCFBF1]/30 px-4 py-3 text-sm text-[#0c0a09]">
-              Sending to: <span className="font-medium">{emailLead.name}</span> -{' '}
-              {emailLead.email || 'No email'}
-            </div>
+            <div className="rounded-[10px] border border-[#CCFBF1] bg-[#CCFBF1]/30 px-4 py-3 text-sm text-[#0c0a09]">Sending to: <span className="font-medium">{emailLead.name}</span> - {emailLead.email || 'No email'}</div>
           ) : (
-            <div className="rounded-[10px] border border-[#e5e7eb] bg-[#fafaf9] px-4 py-3 text-sm text-[#78716c]">
-              Select a template, then choose a lead to send it to.
-            </div>
+            <div className="rounded-[10px] border border-[#e5e7eb] bg-[#fafaf9] px-4 py-3 text-sm text-[#78716c]">Select a template, then choose a lead to send it to.</div>
           )}
           <div className="max-h-[60vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {EMAIL_TEMPLATES.map(template => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => handleTemplateSelect(template)}
-                  className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#0D9488] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]"
-                >
-                  <div className="text-[11px] font-medium uppercase tracking-[0.048px] text-[#a8a29e]">
-                    {template.category}
-                  </div>
-                  <div className="mt-1 text-[15px] font-medium text-[#0c0a09]">
-                    {previewTemplateText(template.subject)}
-                  </div>
-                  <div className="mt-2 text-xs leading-relaxed text-[#78716c]">
-                    {getTemplateDescription(template)}
-                  </div>
+                <button key={template.id} type="button" onClick={() => handleTemplateSelect(template)} className="group rounded-[10px] border border-[#e5e7eb] bg-white p-4 text-left shadow-[rgba(0,0,0,0.05)_0px_1px_2px_0px] transition hover:-translate-y-0.5 hover:border-[#0D9488] hover:shadow-[rgba(0,0,0,0.05)_0px_4px_16px_0px]">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.048px] text-[#a8a29e]">{template.category}</div>
+                  <div className="mt-1 text-[15px] font-medium text-[#0c0a09]">{previewTemplateText(template.subject)}</div>
+                  <div className="mt-2 text-xs leading-relaxed text-[#78716c]">{getTemplateDescription(template)}</div>
                 </button>
               ))}
             </div>
@@ -1475,156 +693,42 @@ export default function TableView({
         </div>
       </ModalShell>
 
-      <ModalShell
-        open={showSendEmail}
-        onClose={closeSendEmail}
-        title="Send Email"
-        subtitle={emailLead ? `To: ${emailLead.name} (${emailLead.email || 'No email'})` : undefined}
-        maxWidthClass="max-w-[600px]"
-      >
+      {/* Send Email Modal */}
+      <ModalShell open={showSendEmail} onClose={closeSendEmail} title="Send Email" subtitle={emailLead ? `To: ${emailLead.name} (${emailLead.email || 'No email'})` : undefined} maxWidthClass="max-w-[600px]">
         <div className="space-y-4">
+          <div><label className="text-xs font-medium text-[#78716c]">To</label><input className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-[#fafaf9] px-3 py-2 text-sm text-[#78716c]" value={emailLead?.email || emailLead?.name || ''} readOnly /></div>
+          {selectedTemplate ? (<div className="flex items-center justify-between rounded-[4px] border border-[#e5e7eb] bg-[#fafaf9] px-3 py-2 text-xs text-[#78716c]"><span>Template</span><span className="font-medium text-[#0c0a09]">{selectedTemplate.category}</span></div>) : null}
+          <div><label className="text-xs font-medium text-[#78716c]">Subject</label><input className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={emailSubject} readOnly /></div>
           <div>
-            <label className="text-xs font-medium text-[#78716c]">To</label>
-            <input
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-[#fafaf9] px-3 py-2 text-sm text-[#78716c]"
-              value={emailLead?.email || emailLead?.name || ''}
-              readOnly
-            />
-          </div>
-          {selectedTemplate ? (
-            <div className="flex items-center justify-between rounded-[4px] border border-[#e5e7eb] bg-[#fafaf9] px-3 py-2 text-xs text-[#78716c]">
-              <span>Template</span>
-              <span className="font-medium text-[#0c0a09]">{selectedTemplate.category}</span>
-            </div>
-          ) : null}
-          <div>
-            <label className="text-xs font-medium text-[#78716c]">Subject</label>
-            <input
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-              value={emailSubject}
-              onChange={event => setEmailSubject(event.target.value)}
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#78716c]">Body (HTML Preview)</label>
-              <span className="text-[11px] text-[#a8a29e]">Click to edit</span>
-            </div>
-            <div
-              key={selectedTemplate?.id}
-              ref={emailBodyRef}
-              className="email-html-preview"
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              aria-multiline="true"
-              dangerouslySetInnerHTML={{ __html: emailBody }}
-            />
+            <label className="text-xs font-medium text-muted-foreground">Email Preview</label>
+            {selectedTemplate ? (<div className="mt-2"><ReactEmailIframe category={selectedTemplate.category} lead={emailLead ?? null} /></div>) : (<div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">Select a template to preview</div>)}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
-              onClick={handleSendEmail}
-              disabled={!emailSubject.trim()}
-            >
-              <Mail size={14} />
-              Send Email
+            <button type="button" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSendEmail} disabled={!emailSubject.trim() || sendingEmail}>
+              {sendingEmail ? (<><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />Sending...</>) : (<><Mail size={14} />Send Email</>)}
             </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
-              onClick={closeSendEmail}
-            >
-              Cancel
-            </button>
+            <button type="button" className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]" onClick={closeSendEmail} disabled={sendingEmail}>Cancel</button>
           </div>
         </div>
       </ModalShell>
 
-      <ModalShell
-        open={!!editFollowupLead}
-        onClose={closeFollowupModal}
-        title="Set Follow-up"
-        subtitle={editFollowupLead ? `For ${editFollowupLead.name}` : undefined}
-        maxWidthClass="max-w-[400px]"
-      >
+      <ModalShell open={!!editFollowupLead} onClose={closeFollowupModal} title="Set Follow-up" subtitle={editFollowupLead ? `For ${editFollowupLead.name}` : undefined} maxWidthClass="max-w-[400px]">
         <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-[#78716c]">Date</label>
-            <input
-              type="date"
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-              value={followupDate}
-              onChange={event => setFollowupDate(event.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-[#78716c]">Time</label>
-            <input
-              type="time"
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-              value={followupTime}
-              onChange={event => setFollowupTime(event.target.value)}
-            />
-          </div>
+          <div><label className="text-xs font-medium text-[#78716c]">Date</label><input type="date" className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={followupDate} onChange={event => setFollowupDate(event.target.value)} /></div>
+          <div><label className="text-xs font-medium text-[#78716c]">Time</label><input type="time" className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={followupTime} onChange={event => setFollowupTime(event.target.value)} /></div>
           <div className="flex flex-wrap gap-2 pt-2">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
-              onClick={handleUpdateFollowup}
-              disabled={!followupDate}
-            >
-              Save Follow-up
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
-              onClick={closeFollowupModal}
-            >
-              Cancel
-            </button>
+            <button type="button" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]" onClick={handleUpdateFollowup} disabled={!followupDate}>Save Follow-up</button>
+            <button type="button" className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]" onClick={closeFollowupModal}>Cancel</button>
           </div>
         </div>
       </ModalShell>
 
-      <ModalShell
-        open={!!editAssignedLead}
-        onClose={closeAssignedModal}
-        title="Assign Lead"
-        subtitle={editAssignedLead ? `Assign ${editAssignedLead.name} to:` : undefined}
-        maxWidthClass="max-w-[400px]"
-      >
+      <ModalShell open={!!editAssignedLead} onClose={closeAssignedModal} title="Assign Lead" subtitle={editAssignedLead ? `Assign ${editAssignedLead.name} to:` : undefined} maxWidthClass="max-w-[400px]">
         <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-[#78716c]">Assigned To</label>
-            <select
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-              value={assignedPerson}
-              onChange={event => setAssignedPerson(event.target.value)}
-            >
-              <option value="" disabled>Select a person</option>
-              {["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(person => (
-                <option key={person} value={person}>{person}</option>
-              ))}
-            </select>
-          </div>
+          <div><label className="text-xs font-medium text-[#78716c]">Assigned To</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={assignedPerson} onChange={event => setAssignedPerson(event.target.value)}><option value="" disabled>Select a person</option>{["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(person => (<option key={person} value={person}>{person}</option>))}</select></div>
           <div className="flex flex-wrap gap-2 pt-2">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
-              onClick={handleUpdateAssigned}
-              disabled={!assignedPerson}
-            >
-              Save Assignment
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
-              onClick={closeAssignedModal}
-            >
-              Cancel
-            </button>
+            <button type="button" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]" onClick={handleUpdateAssigned} disabled={!assignedPerson}>Save Assignment</button>
+            <button type="button" className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]" onClick={closeAssignedModal}>Cancel</button>
           </div>
         </div>
       </ModalShell>
