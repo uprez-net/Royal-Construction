@@ -58,6 +58,10 @@ import {
 } from "@/utils/validators";
 import { createVariationSchema as createVariationToolSchema } from "@/utils/validators/projects";
 import { fetchJson } from "@/utils/fetch";
+import { put } from "@vercel/blob"
+import { buildBlobPath } from "@/utils/formatters";
+import { v4 as uuid } from "uuid";
+import { saveFile } from "@/lib/data/file";
 
 const emptyInputSchema = z.object({}).strict();
 
@@ -163,7 +167,7 @@ const handler = createMcpHandler((server) => {
             outputSchema: projectDetailResponseSchema,
         },
         async (params, extra) => {
-            const clerkId = extra.authInfo?.extra?.userId as string | undefined;
+            const clerkId = extra.authInfo?.clientId as string | undefined;
             if (!clerkId) {
                 throw new Error("Authenticated user is required");
             }
@@ -357,9 +361,43 @@ const handler = createMcpHandler((server) => {
 
             const data = response.data;
 
-            return {
-                content: [{ type: "text", text: JSON.stringify(data) }],
-            };
+            return toToolResult(data);
+        }
+    );
+
+    server.registerTool(
+        "upload_file",
+        {
+            description: "Upload a file and get back its ID for association with milestones and projects",
+            inputSchema: z.object({
+                file: z.instanceof(File).describe("The file to upload"),
+                projectId: z.string().trim().min(1).describe("The ID of the project to associate the file with"),
+                milestoneId: z.string().trim().min(1).optional().describe("The ID of the milestone to associate the file with"),
+            }),
+            outputSchema: z.object({
+                fileId: z.string().describe("The ID of the uploaded file"),
+            }),
+        },
+        async ({ file, projectId, milestoneId }, extra) => {
+            const userId = extra.authInfo?.clientId as string | undefined;
+            if (!userId) {
+                throw new Error("Authenticated user is required");
+            }
+            const fileId = uuid();
+            const pathname = buildBlobPath(projectId, fileId, file.name, milestoneId);
+            const blob = await put(pathname, file, { access: "public" });
+            await saveFile({
+                userId,
+                projectId: projectId,
+                milestoneId: milestoneId ?? undefined,
+                fileId: fileId,
+                fileUrl: blob.url,
+                fileName: file.name,
+                fileType: blob.contentType,
+                fileSize: file.size,
+            });
+
+            return toToolResult({ fileId });
         }
     );
 },
@@ -384,7 +422,7 @@ const verifyToken = async (
 
         return {
             token: bearerToken,
-            clientId: payload.sub,
+            clientId: payload.userId,
             scopes: ["read:stuff"],
             extra: payload,
         };
