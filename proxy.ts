@@ -2,7 +2,13 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth"
 
-const isPublicRoute = createRouteMatcher(["/api/webhook/clerk(.*)", "/api/graph(.*)"])
+const isPublicRoute = createRouteMatcher([
+  "/api/webhook/clerk(.*)",
+  "/api/graph(.*)",
+  '/.well-known/oauth-authorization-server(.*)',
+  '/.well-known/oauth-protected-resource(.*)',
+  '/api/mcp(.*)',
+])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
 

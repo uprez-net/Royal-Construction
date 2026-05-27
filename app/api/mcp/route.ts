@@ -1,5 +1,3 @@
-import { verifyToken as clerkTokenVerification } from "@clerk/nextjs/server";
-import { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
 
@@ -62,6 +60,8 @@ import { put } from "@vercel/blob"
 import { buildBlobPath } from "@/utils/formatters";
 import { v4 as uuid } from "uuid";
 import { saveFile } from "@/lib/data/file";
+import { auth } from '@clerk/nextjs/server'
+import { verifyClerkToken } from '@clerk/mcp-tools/next'
 
 const emptyInputSchema = z.object({}).strict();
 
@@ -166,8 +166,8 @@ const handler = createMcpHandler((server) => {
             inputSchema: projectUpdateToolSchema,
             outputSchema: projectDetailResponseSchema,
         },
-        async (params, extra) => {
-            const clerkId = extra.authInfo?.clientId as string | undefined;
+        async (params, { authInfo }) => {
+            const clerkId = authInfo?.extra?.userId as string | undefined;
             if (!clerkId) {
                 throw new Error("Authenticated user is required");
             }
@@ -378,8 +378,8 @@ const handler = createMcpHandler((server) => {
                 fileId: z.string().describe("The ID of the uploaded file"),
             }),
         },
-        async ({ file, projectId, milestoneId }, extra) => {
-            const userId = extra.authInfo?.clientId as string | undefined;
+        async ({ file, projectId, milestoneId }, { authInfo }) => {
+            const userId = authInfo?.extra?.userId as string | undefined;
             if (!userId) {
                 throw new Error("Authenticated user is required");
             }
@@ -411,30 +411,15 @@ const handler = createMcpHandler((server) => {
         basePath: "/api/mcp",
     });
 
-const verifyToken = async (
-    req: Request,
-    bearerToken?: string,
-): Promise<AuthInfo | undefined> => {
-    if (!bearerToken) return undefined;
 
-    try {
-        const payload = await clerkTokenVerification(bearerToken, {});
-
-        return {
-            token: bearerToken,
-            clientId: payload.userId,
-            scopes: ["read:stuff"],
-            extra: payload,
-        };
-    } catch {
-        return undefined;
-    }
-};
-
-const authHandler = withMcpAuth(handler, verifyToken, {
-    required: true,
-    requiredScopes: ["read:stuff"],
-    resourceMetadataPath: "/.well-known/oauth-protected-resource",
-});
+const authHandler = withMcpAuth(handler,
+    async (_, token) => {
+        const clerkAuth = await auth({ acceptsToken: 'oauth_token' })
+        return verifyClerkToken(clerkAuth, token)
+    },
+    {
+        required: true,
+        resourceMetadataPath: "/.well-known/oauth-protected-resource",
+    });
 
 export { authHandler as GET, authHandler as POST, authHandler as DELETE };
