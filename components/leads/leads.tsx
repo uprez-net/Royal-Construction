@@ -8,44 +8,77 @@ import {
   CircleX,
   Mail,
   Plus,
-  Columns3,
   Table2,
   BarChart3,
   X,
   Check,
   Bell,
 } from 'lucide-react';
-import { HistoryItem, Lead, LeadStage, LeadSource, BudgetRange, ProjectType, LeadsStats } from '@/lib/leads/types';
+import { HistoryItem, Lead, LeadStage, LeadSource, BudgetRange, ProjectType, LeadsStats, EmailTemplate } from '@/lib/leads/types';
 import { createLead, fetchLeads, fetchLeadsStats, sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
-import PipelineView from './views/pipeline-view';
 import TableView from './views/table-view';
 import FollowupsView from './views/followups-view';
 import AnalyticsView from './views/analytics-view';
-import { EmailTemplate } from '@/lib/leads/types';
 import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MetricCard } from '@/components/common/metric-card';
 import { cn } from '@/lib/utils';
+import { renderEmailHtml } from '@/lib/leads/render-email-html';
 
-type TabType = 'pipeline' | 'table' | 'followups' | 'analytics';
+type TabType = 'table' | 'followups' | 'analytics';
 
-/* ── Simulate lead data ────────────────────── */
-const simNames = [
-  'Sunita Kaur', 'Andrew Nguyen', 'Gurpreet Nagra', 'Kuldeep Johal',
-  'Sarah Mitchell', 'Harjit Bains', 'David Park', 'Amandeep Sidhu',
-  'Tom Bradley', 'Navjot Grewal',
-];
-const simLocations = [
-  'Blacktown, NSW', 'Parramatta, NSW', 'Campbelltown, NSW', 'Castle Hill, NSW',
-  'Epping, NSW', 'Penrith, NSW', 'Liverpool, NSW', 'Bankstown, NSW',
-];
-const simKeywords = [
-  'builder near me', 'home builder NSW', 'custom home builder',
-  'duplex builder Sydney', 'affordable home builder', 'new home construction',
-];
-let simIndex = 0;
-let nextId = 100;
+interface ReactEmailPreviewProps {
+  category: string;
+  lead: Lead | null;
+}
+
+function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
+  const [html, setHtml] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    renderEmailHtml(category, lead)
+      .then((result) => {
+        if (!cancelled) {
+          setHtml(result || '');
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [category, lead]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[480px] items-center justify-center rounded-lg border border-border bg-muted/10">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
+      </div>
+    );
+  }
+
+  if (!html) {
+    return <div className="py-8 text-center text-xs text-muted-foreground">No preview available</div>;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border" style={{ height: 480 }}>
+      <iframe
+        title={`${category} Email Preview`}
+        srcDoc={html}
+        className="w-full h-full"
+        sandbox="allow-same-origin allow-scripts"
+        style={{ border: 'none' }}
+      />
+    </div>
+  );
+}
 
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
 
@@ -55,12 +88,14 @@ function formatShortDate(date: Date): string {
 }
 
 function hydrateTemplate(text: string, lead: Lead): string {
+  const leadType = Array.isArray(lead.type) ? lead.type[0] ?? 'New Home Build' : lead.type ?? 'New Home Build';
+  
   const values: Record<string, string> = {
     name: lead.name,
     location: lead.location,
-    type: lead.type,
+    type: leadType,
     phone: lead.phone,
-    project: `${lead.type} at ${lead.location}`,
+    project: `${leadType} at ${lead.location}`,
     notes: lead.notes || 'Previous discussion details',
     amount: lead.budget !== 'Not Discussed' ? lead.budget : 'TBD',
     duration: '6-8 months',
@@ -74,18 +109,6 @@ function hydrateTemplate(text: string, lead: Lead): string {
   };
 
   return text.replace(PLACEHOLDER_PATTERN, (_, key) => values[key] ?? `{${key}}`);
-}
-
-function buildEmailDraft(template: EmailTemplate) {
-  return {
-    subject: template.subject,
-    body: getTemplateHtml(template),
-  };
-}
-
-function getTemplateHtml(template: EmailTemplate) {
-  const html = template.content?.trim();
-  return html ? html : template.body;
 }
 
 function previewTemplateText(text: string) {
@@ -150,7 +173,7 @@ function ModalShell({
       aria-modal="true"
     >
       <div
-      className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-xl bg-background shadow-lg ring-1 ring-border`}
+        className={`flex max-h-[90vh] flex-col w-full ${maxWidthClass} rounded-xl bg-background shadow-lg ring-1 ring-border`}
       >
         <div className="shrink-0 flex items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
@@ -175,23 +198,20 @@ function ModalShell({
 export default function Leads() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('pipeline');
+  const [activeTab, setActiveTab] = useState<TabType>('table');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal states
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [emailSubject, setEmailSubject] = useState('');
-  const [emailBody, setEmailBody] = useState('');
-  const emailBodyRef = React.useRef<HTMLDivElement>(null);
+  const [sendingCampaign, setSendingCampaign] = useState(false);
 
   const [adding, setAdding] = useState(false);
   const [addingWithReminder, setAddingWithReminder] = useState(false);
 
-  // Toast state
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
 
   useEffect(() => {
@@ -231,10 +251,8 @@ export default function Leads() {
     });
   }, []);
 
-  const handleLeadUpdate = async (
-    updatedLead: Lead
-  ): Promise<boolean> => {
-    const updatedLeadData = await updateLead(updatedLead.id, updatedLead)
+  const handleLeadUpdate = async (updatedLead: Lead): Promise<boolean> => {
+    const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
     if (updatedLeadData) {
       setLeads(prev => {
         const updated = prev.map(lead => (lead.id === updatedLead.id ? updatedLead : lead));
@@ -243,7 +261,7 @@ export default function Leads() {
       });
       return true;
     } else {
-      return false
+      return false;
     }
   };
 
@@ -263,7 +281,6 @@ export default function Leads() {
     });
   };
 
-  /* ── Toast helper ────────────────────── */
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -276,7 +293,6 @@ export default function Leads() {
     setShowEmailTemplates(true);
     setSelectedTemplate(null);
     setEmailSubject('');
-    setEmailBody('');
   };
 
   const closeEmailTemplates = () => {
@@ -289,115 +305,68 @@ export default function Leads() {
   };
 
   const handleTemplateSelect = (template: EmailTemplate) => {
-    const draft = buildEmailDraft(template);
     setSelectedTemplate(template);
-    setEmailSubject(draft.subject);
-    setEmailBody(draft.body);
+    setEmailSubject(template.subject);
     setShowEmailTemplates(false);
     setShowSendEmail(true);
   };
 
-  const handleSendEmail = () => {
-    console.log('Sending email with subject:', emailSubject);
-    const targets = leads.filter(lead => lead.email);
-    if (targets.length === 0) {
-      showToast('No leads with email found', 'info');
-      return;
-    }
-    console.log(`Email will be sent to ${targets.length} leads:`, targets.map(t => t.email));
+  const handleSendEmail = async () => {
+    if (!selectedTemplate || emailTargets.length === 0) return;
+    setSendingCampaign(true);
+
+    let successCount = 0;
     const now = new Date();
-    void (async () => {
+
+    try {
       const updated = await Promise.all(
         leads.map(async (lead) => {
           if (!lead.email) return lead;
 
-          const subject = hydrateTemplate(emailSubject, lead);
+          try {
+            const subject = hydrateTemplate(emailSubject, lead);
+            const finalHtmlBody = await renderEmailHtml(selectedTemplate.category, lead);
 
-          const historyEntry: Lead["history"][number] = {
-            date: now.toISOString().slice(0, 10),
-            time: now.toTimeString().slice(0, 5),
-            action: "Email sent",
-            detail: `Subject: ${subject}`,
-            type: "email",
-          };
+            if (!finalHtmlBody) {
+              console.error(`Failed to generate email content for ${lead.email}`);
+              return lead;
+            }
 
-          console.log(
-            `Sending email to ${lead.email} with subject: ${subject}`
-          );
+            const sendCampaign = await sendEmailToLead(lead.email, subject, finalHtmlBody);
 
-          const finalBody = emailBodyRef.current ? emailBodyRef.current.innerHTML : emailBody;
-          const sendCampaign = await sendEmailToLead(
-            lead.email,
-            subject,
-            hydrateTemplate(finalBody, lead)
-          );
-
-          if (sendCampaign) {
-            return {
-              ...lead,
-              history: [...lead.history, historyEntry],
-            };
+            if (sendCampaign) {
+              successCount++;
+              const historyEntry: Lead["history"][number] = {
+                date: now.toISOString().slice(0, 10),
+                time: now.toTimeString().slice(0, 5),
+                action: "Email sent",
+                detail: `Subject: ${subject}`,
+                type: "email",
+              };
+              return { ...lead, history: [...lead.history, historyEntry] };
+            } else {
+              console.error(`Failed to send email to ${lead.email}`);
+              return lead;
+            }
+          } catch (error) {
+            console.error(`Error processing lead ${lead.email}:`, error);
+            return lead;
           }
-
-          console.error(`Failed to send email to ${lead.email}`);
-
-          return lead;
         })
       );
 
-      recalcStats(updated);
       setLeads(updated);
-    })();
-
-    showToast(`Email sent to ${targets.length} leads`, 'success');
-    closeSendEmail();
+      recalcStats(updated);
+      showToast(`Campaign sent to ${successCount} of ${emailTargets.length} leads`, 'success');
+    } catch (error) {
+      console.error('Campaign error:', error);
+      showToast('An unexpected error occurred during the campaign', 'info');
+    } finally {
+      setSendingCampaign(false);
+      closeSendEmail();
+    }
   };
 
-  /* ── Simulate New Lead ────────────────── */
-  // const simulateNewLead = () => {
-  //   const name = simNames[simIndex % simNames.length];
-  //   const loc = simLocations[simIndex % simLocations.length];
-  //   const kw = simKeywords[simIndex % simKeywords.length];
-  //   simIndex++;
-
-  //   const phone = '04' + Math.floor(10000000 + Math.random() * 90000000).toString().replace(/(\d{2})(\d{3})(\d{3})/, '$1 $2 $3');
-  //   const today = new Date().toISOString().split('T')[0];
-
-  //   const newLead: Lead = {
-  //     id: nextId++,
-  //     name,
-  //     phone,
-  //     email: name.toLowerCase().replace(' ', '.') + '@email.com',
-  //     location: loc,
-  //     source: 'Google Ads',
-  //     sourceDetail: kw,
-  //     stage: 'New',
-  //     assigned: 'Guri Singh',
-  //     budget: 'Not Discussed',
-  //     type: 'Not Specified',
-  //     notes: `Auto-captured from Google Ads — keyword: "${kw}". Awaiting initial contact.`,
-  //     followupDate: today,
-  //     followupTime: '10:00',
-  //     followupNotes: '',
-  //     history: [
-  //       {
-  //         date: today,
-  //         time: new Date().toTimeString().slice(0, 5),
-  //         action: 'Lead captured',
-  //         detail: `Auto-captured from Google Ads — keyword: ${kw}`,
-  //         type: 'system',
-  //       },
-  //     ],
-  //     created: today,
-  //     urgent: false,
-  //   };
-
-  //   handleNewLead(newLead);
-  //   showToast(`New lead auto-captured from Google Ads: ${name}`, 'success');
-  //   showToast(`Notification sent: ${name} — ${loc}`, 'info');
-  // };
-
-  /* ── Add Lead Submit ────────────────── */
   const submitNewLead = async (formData: AddLeadFormData, setReminder: boolean, sectionRunning: string) => {
     if (sectionRunning === "addingsection") {
       setAdding(true);
@@ -405,7 +374,6 @@ export default function Leads() {
       setAddingWithReminder(true);
     }
     const today = new Date();
-    const todayDate = today.toISOString().split('T')[0];
     const historyEntries = formData.historyEntries.map(entry => ({
       action: entry.action.trim() || 'Note',
       detail: entry.detail.trim(),
@@ -439,7 +407,7 @@ export default function Leads() {
       showToast(`Lead added: ${formData.name}`, 'success');
       if (setReminder) {
         showToast(
-          `Reminder set for ${formData.followupDate || todayDate} at ${formData.followupTime || '10:00'}`,
+          `Reminder set for ${formData.followupDate || today.toISOString().split('T')[0]} at ${formData.followupTime || '10:00'}`,
           'info'
         );
       }
@@ -470,7 +438,6 @@ export default function Leads() {
 
   return (
     <div className="leads-container space-y-6">
-      {/* Header — matches Tradies hero card */}
       <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
         <CardContent className="relative p-6">
           <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
@@ -484,7 +451,7 @@ export default function Leads() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={openEmailTemplates}>
-                <Mail className="mr-2 size-4" /> Email Templates
+                <Mail className="mr-2 size-4" /> Email Campaign
               </Button>
               <Button onClick={() => setShowAddLeadModal(true)}>
                 <Plus className="mr-2 size-4" /> Add Lead Manually
@@ -494,7 +461,6 @@ export default function Leads() {
         </CardContent>
       </Card>
 
-      {/* Stats Grid — uses shared MetricCard */}
       {stats && !loading && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
@@ -528,11 +494,9 @@ export default function Leads() {
         </div>
       )}
 
-      {/* Tab Navigation + Content — matches Tradies card style */}
       <Card className="border-border/70 bg-white/95 shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-5 py-3">
           {([
-            { key: 'pipeline' as TabType, label: 'Pipeline View', Icon: Columns3 },
             { key: 'table' as TabType, label: 'Table View', Icon: Table2 },
             { key: 'followups' as TabType, label: 'Follow-ups', Icon: Clock },
             { key: 'analytics' as TabType, label: 'Analytics', Icon: BarChart3 },
@@ -566,13 +530,6 @@ export default function Leads() {
             </div>
           ) : (
             <>
-              {activeTab === 'pipeline' && (
-                <PipelineView
-                  leads={leads}
-                  onLeadUpdate={handleLeadUpdate}
-                  onLeadDelete={handleLeadDelete}
-                />
-              )}
               {activeTab === 'table' && (
                 <TableView
                   leads={leads}
@@ -592,7 +549,6 @@ export default function Leads() {
         </CardContent>
       </Card>
 
-      {/* ═══ ADD LEAD MODAL ═══ */}
       {showAddLeadModal && (
         <AddLeadModal
           onClose={() => setShowAddLeadModal(false)}
@@ -602,11 +558,10 @@ export default function Leads() {
         />
       )}
 
-      {/* ═══ EMAIL TEMPLATES MODAL ═══ */}
       <ModalShell
         open={showEmailTemplates}
         onClose={closeEmailTemplates}
-        title="Email Templates"
+        title="Email Campaign Templates"
         subtitle="Select a template to send to the leads"
         maxWidthClass="max-w-[720px]"
       >
@@ -642,7 +597,7 @@ export default function Leads() {
       <ModalShell
         open={showSendEmail}
         onClose={closeSendEmail}
-        title="Send Email"
+        title="Send Email Campaign"
         subtitle={`To: ${emailTargets.length} leads with email`}
         maxWidthClass="max-w-[600px]"
       >
@@ -662,49 +617,57 @@ export default function Leads() {
               <span className="font-medium text-foreground">{selectedTemplate.category}</span>
             </div>
           ) : null}
-          <p className="text-xs text-muted-foreground">
-            Placeholders like {'{name}'} and {'{location}'} will be filled per lead.
-          </p>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Subject</label>
             <input
               className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10"
               value={emailSubject}
-              onChange={event => setEmailSubject(event.target.value)}
+              readOnly
             />
           </div>
           <div>
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Body (HTML Preview)</label>
-              <span className="text-[11px] text-muted-foreground">Click to edit</span>
-            </div>
-            <div
-              key={selectedTemplate?.id}
-              ref={emailBodyRef}
-              className="email-html-preview"
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              aria-multiline="true"
-              dangerouslySetInnerHTML={{ __html: emailBody }}
-            />
+            <label className="text-xs font-medium text-muted-foreground">Email Preview</label>
+            <p className="text-[11px] text-muted-foreground mb-2">
+              Preview shows data for the first lead. All emails will be personalized per lead.
+            </p>
+            {selectedTemplate ? (
+              <div className="mt-0">
+                <ReactEmailIframe category={selectedTemplate.category} lead={emailTargets[0] ?? null} />
+              </div>
+            ) : (
+              <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+                Select a template to preview
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={handleSendEmail}
-              disabled={!emailSubject.trim() || emailTargets.length === 0}
+              disabled={!emailSubject.trim() || emailTargets.length === 0 || sendingCampaign}
             >
-              <Mail className="mr-1.5 size-3.5" />
-              Send Email
+              {sendingCampaign ? (
+                <>
+                  <div className="mr-1.5 h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-1.5 size-3.5" />
+                  Send Campaign
+                </>
+              )}
             </Button>
-            <Button variant="outline" onClick={closeSendEmail}>
+            <Button
+              variant="outline"
+              onClick={closeSendEmail}
+              disabled={sendingCampaign}
+            >
               Cancel
             </Button>
           </div>
         </div>
       </ModalShell>
 
-      {/* ═══ TOAST NOTIFICATIONS ═══ */}
       {toasts.length > 0 && (
         <div className="toast-container">
           {toasts.map(toast => (
@@ -726,8 +689,6 @@ export default function Leads() {
     </div>
   );
 }
-
-
 
 /* ══════════════════════════════════════════════
    ADD LEAD MODAL
@@ -781,7 +742,6 @@ const LEAD_STAGE_OPTIONS: LeadStage[] = [
   'Quoted',
   'Negotiating',
   'Won',
-  // 'Lost',
   'Meeting Scheduled',
   'In Follow-up',
   'No Response',
@@ -1176,4 +1136,3 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
     </ModalShell>
   );
 }
-

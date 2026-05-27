@@ -1,16 +1,72 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, Bell, Check, Clock, Globe, Mail, Phone, Users, Wallet, X } from 'lucide-react';
 import { Lead, LeadStage } from '@/lib/leads/types';
 import { EmailTemplate } from '@/lib/leads/types';
 import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
 import { sendEmailToLead } from '@/lib/leads/leads-service';
 
+import { renderEmailHtml } from '@/lib/leads/render-email-html';
+import { Button } from '@/components/ui/button';
+
 interface PipelineViewProps {
   leads: Lead[];
   onLeadUpdate: (lead: Lead) => Promise<boolean>;
   onLeadDelete: (leadId: number) => void;
+}
+
+interface ReactEmailPreviewProps {
+  category: string;
+  lead: Lead | null;
+}
+
+function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
+  const [html, setHtml] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    // Call the Server Action to render the email on the server
+    renderEmailHtml(category, lead)
+      .then((result) => {
+        if (!cancelled) {
+          setHtml(result || '');
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [category, lead]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[480px] items-center justify-center rounded-lg border border-border bg-muted/10">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
+      </div>
+    );
+  }
+
+  if (!html) {
+    return <div className="py-8 text-center text-xs text-muted-foreground">No preview available</div>;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border" style={{ height: 480 }}>
+      <iframe
+        title={`${category} Email Preview`}
+        srcDoc={html}
+        className="w-full h-full"
+        sandbox="allow-same-origin allow-scripts"
+        style={{ border: 'none' }}
+      />
+    </div>
+  );
 }
 
 const STAGES: LeadStage[] = [
@@ -135,7 +191,7 @@ function buildEmailDraft(template: EmailTemplate, lead: Lead) {
 
 function getTemplateHtml(template: EmailTemplate) {
   const html = template.content?.trim();
-  return html ? html : template.body;
+  return html || template.body || '';
 }
 
 function previewTemplateText(text: string) {
@@ -1062,24 +1118,21 @@ export default function PipelineView({
             <input
               className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
               value={emailSubject}
-              onChange={event => setEmailSubject(event.target.value)}
+              // onChange={event => setEmailSubject(event.target.value)}
+              readOnly
             />
           </div>
           <div>
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#78716c]">Body (HTML Preview)</label>
-              <span className="text-[11px] text-[#a8a29e]">Click to edit</span>
-            </div>
-            <div
-              key={selectedTemplate?.id}
-              ref={emailBodyRef}
-              className="email-html-preview"
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              aria-multiline="true"
-              dangerouslySetInnerHTML={{ __html: emailBody }}
-            />
+            <label className="text-xs font-medium text-muted-foreground">Email Preview</label>
+            {selectedTemplate ? (
+              <div className="mt-2">
+                <ReactEmailIframe category={selectedTemplate.category} lead={emailLead ?? null} />
+              </div>
+            ) : (
+              <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+                Select a template to preview
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <button

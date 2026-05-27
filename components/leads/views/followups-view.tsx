@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, Phone, Mail, CheckCircle, X, Check, Bell, Clock, User, AlertCircle } from 'lucide-react';
 import { EmailTemplate, Lead } from '@/lib/leads/types';
 import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
 import { sendEmailToLead } from '@/lib/leads/leads-service';
+import { renderEmailHtml } from '@/lib/leads/render-email-html';
+import { Button } from '@/components/ui/button';
 
 interface FollowupsViewProps {
   leads: Lead[];
@@ -10,8 +12,60 @@ interface FollowupsViewProps {
   onLeadDelete: (leadId: number) => void;
 }
 
+interface ReactEmailPreviewProps {
+  category: string;
+  lead: Lead | null;
+}
+
 function dialablePhone(phone: string) {
   return phone.replace(/[^0-9+]/g, '');
+}
+
+function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
+  const [html, setHtml] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    renderEmailHtml(category, lead)
+      .then((result) => {
+        if (!cancelled) {
+          setHtml(result || '');
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [category, lead]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[480px] items-center justify-center rounded-lg border border-border bg-muted/10">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
+      </div>
+    );
+  }
+
+  if (!html) {
+    return <div className="py-8 text-center text-xs text-muted-foreground">No preview available</div>;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border" style={{ height: 480 }}>
+      <iframe
+        title={`${category} Email Preview`}
+        srcDoc={html}
+        className="w-full h-full"
+        sandbox="allow-same-origin allow-scripts"
+        style={{ border: 'none' }}
+      />
+    </div>
+  );
 }
 
 const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
@@ -26,6 +80,55 @@ const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> =
 
 function getStageConfig(stage: string) {
   return STAGE_CONFIG[stage] || { bg: 'rgba(100,116,139,0.08)', color: '#64748B', dot: '#64748B' };
+}
+
+// ── Hydrate Subject Placeholders ────────────────────────────────────────────
+const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
+
+function formatShortDate(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function hydrateSubject(text: string, lead: Lead): string {
+  const typeStr = Array.isArray(lead.type) ? lead.type[0] ?? 'New Home Build' : lead.type;
+  const values: Record<string, string> = {
+    name: lead.name,
+    location: lead.location,
+    type: typeStr,
+    phone: lead.phone,
+    project: `${typeStr} at ${lead.location}`,
+    notes: lead.notes || 'Previous discussion details',
+    amount: lead.budget !== 'Not Discussed' ? lead.budget : 'TBD',
+    duration: '6-8 months',
+    date: formatShortDate(new Date()),
+    time: '10:00 AM',
+    milestone: 'Foundation Complete',
+    nextMilestone: 'Frame Stage',
+    originalAmount: '$480,000',
+    variationAmount: '$4,500',
+    revisedAmount: '$484,500',
+  };
+
+  return text.replace(PLACEHOLDER_PATTERN, (_, key) => values[key] ?? `{${key}}`);
+}
+
+function previewTemplateText(text: string) {
+  return text.replace(PLACEHOLDER_PATTERN, '...');
+}
+
+function getTemplateDescription(template: EmailTemplate): string {
+  switch (template.category) {
+    case 'Welcome': return 'Welcome new clients to Royal Constructions. Outlines the initial phases of the home building project, first steps, consultation details, and client portal setup.';
+    case 'Quotation': return 'Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.';
+    case 'Follow-up': return 'Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.';
+    case 'Catalogue': return 'Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.';
+    case 'Variation': return 'Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.';
+    case 'Promotion': return 'Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.';
+    case 'Meeting': return 'Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.';
+    case 'Update': return 'Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.';
+    default: return 'Curated and professionally designed email template adhering to brand standards to streamline client communications.';
+  }
 }
 
 export default function FollowupsView({ leads, onLeadUpdate, onLeadDelete }: FollowupsViewProps) {
@@ -162,22 +265,16 @@ interface ModalShellProps {
 }
 
 function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemProps) {
-
-
-  const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
-
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [emailSubject, setEmailSubject] = useState('');
-  const [emailBody, setEmailBody] = useState('');
-  const emailBodyRef = React.useRef<HTMLDivElement>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   // Toast state
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
 
-  /* ── Toast helper ────────────────────── */
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -197,7 +294,6 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
     setShowEmailTemplates(true);
     setSelectedTemplate(null);
     setEmailSubject('');
-    setEmailBody('');
   };
 
   const closeEmailTemplates = () => {
@@ -206,115 +302,62 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
 
   const handleTemplateSelect = (template: EmailTemplate) => {
     if (!emailLead) return;
-    const draft = buildEmailDraft(template, emailLead);
     setSelectedTemplate(template);
-    setEmailSubject(draft.subject);
-    setEmailBody(draft.body);
+    setEmailSubject(hydrateSubject(template.subject, emailLead));
     setShowEmailTemplates(false);
     setShowSendEmail(true);
   };
 
   const handleSendEmail = async () => {
-    if (!emailLead) return;
-    const now = new Date();
-    const historyEntry: Lead['history'][number] = {
-      date: now.toISOString().slice(0, 10),
-      time: now.toTimeString().slice(0, 5),
-      action: 'Email sent',
-      detail: `Subject: ${emailSubject}`,
-      type: 'email',
-    };
+    if (!emailLead || !selectedTemplate) return;
+    setSendingEmail(true);
 
-    const finalBody = emailBodyRef.current ? emailBodyRef.current.innerHTML : emailBody;
-    const sendCampaign = await sendEmailToLead(
-      emailLead.email,
-      emailSubject,
-      hydrateTemplate(finalBody, emailLead)
-    );
+    try {
+      const finalHtmlBody = await renderEmailHtml(selectedTemplate.category, emailLead);
 
-    if (sendCampaign) {
-      showToast(`Email sent to ${emailLead.name} Successfully`, 'success');
-      const updatedLead: Lead = {
-        ...emailLead,
-        history: [...emailLead.history, historyEntry],
-      };
-      onLeadUpdate(updatedLead);
-    } else {
-      showToast(`Failed to send email to ${emailLead.name}`, 'info');
+      if (!finalHtmlBody) {
+        showToast('Failed to generate email content', 'info');
+        setSendingEmail(false);
+        return;
+      }
+
+      const sendCampaign = await sendEmailToLead(
+        emailLead.email,
+        emailSubject,
+        finalHtmlBody
+      );
+
+      if (sendCampaign) {
+        showToast(`Email sent to ${emailLead.name} Successfully`, 'success');
+        const now = new Date();
+        const historyEntry: Lead['history'][number] = {
+          date: now.toISOString().slice(0, 10),
+          time: now.toTimeString().slice(0, 5),
+          action: 'Email sent',
+          detail: `Subject: ${emailSubject}`,
+          type: 'email',
+        };
+        const updatedLead: Lead = {
+          ...emailLead,
+          history: [...emailLead.history, historyEntry],
+        };
+        onLeadUpdate(updatedLead);
+      } else {
+        showToast(`Failed to send email to ${emailLead.name}`, 'info');
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      showToast('An unexpected error occurred', 'info');
+    } finally {
+      setSendingEmail(false);
+      closeSendEmail();
     }
-    closeSendEmail();
   };
 
   const closeSendEmail = () => {
     setShowSendEmail(false);
     setSelectedTemplate(null);
   };
-
-  function formatShortDate(date: Date): string {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
-  }
-
-  function hydrateTemplate(text: string, lead: Lead): string {
-    const values: Record<string, string> = {
-      name: lead.name,
-      location: lead.location,
-      type: lead.type,
-      phone: lead.phone,
-      project: `${lead.type} at ${lead.location}`,
-      notes: lead.notes || 'Previous discussion details',
-      amount: lead.budget !== 'Not Discussed' ? lead.budget : 'TBD',
-      duration: '6-8 months',
-      date: formatShortDate(new Date()),
-      time: '10:00 AM',
-      milestone: 'Foundation Complete',
-      nextMilestone: 'Frame Stage',
-      originalAmount: '$480,000',
-      variationAmount: '$4,500',
-      revisedAmount: '$484,500',
-    };
-
-    return text.replace(PLACEHOLDER_PATTERN, (_, key) => values[key] ?? `{${key}}`);
-  }
-
-  function buildEmailDraft(template: EmailTemplate, lead: Lead) {
-    return {
-      subject: hydrateTemplate(template.subject, lead),
-      body: hydrateTemplate(getTemplateHtml(template), lead),
-    };
-  }
-
-  function getTemplateHtml(template: EmailTemplate) {
-    const html = template.content?.trim();
-    return html ? html : template.body;
-  }
-
-  function previewTemplateText(text: string) {
-    return text.replace(PLACEHOLDER_PATTERN, '...');
-  }
-
-  function getTemplateDescription(template: EmailTemplate): string {
-    switch (template.category) {
-      case 'Welcome':
-        return 'Welcome new clients to Royal Constructions. Outlines the initial phases of the home building project, first steps, consultation details, and client portal setup.';
-      case 'Quotation':
-        return 'Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.';
-      case 'Follow-up':
-        return 'Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.';
-      case 'Catalogue':
-        return 'Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.';
-      case 'Variation':
-        return 'Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.';
-      case 'Promotion':
-        return 'Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.';
-      case 'Meeting':
-        return 'Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.';
-      case 'Update':
-        return 'Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.';
-      default:
-        return 'Curated and professionally designed email template adhering to brand standards to streamline client communications.';
-    }
-  }
 
   const stageConfig = getStageConfig(lead.stage);
   const todayStr = new Date().toISOString().split('T')[0];
@@ -385,6 +428,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
           </div>
         </div>
       </ModalShell>
+
       <ModalShell
         open={showSendEmail}
         onClose={closeSendEmail}
@@ -394,7 +438,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
       >
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-[#78716c]">To</label>
+            <label className="text-xs font-medium text-muted-foreground">To</label>
             <input
               className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-[#fafaf9] px-3 py-2 text-sm text-[#78716c]"
               value={emailLead?.email || emailLead?.name || ''}
@@ -402,49 +446,55 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
             />
           </div>
           {selectedTemplate ? (
-            <div className="flex items-center justify-between rounded-[4px] border border-[#e5e7eb] bg-[#fafaf9] px-3 py-2 text-xs text-[#78716c]">
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <span>Template</span>
-              <span className="font-medium text-[#0c0a09]">{selectedTemplate.category}</span>
+              <span className="font-medium text-foreground">{selectedTemplate.category}</span>
             </div>
           ) : null}
           <div>
-            <label className="text-xs font-medium text-[#78716c]">Subject</label>
+            <label className="text-xs font-medium text-muted-foreground">Subject</label>
             <input
-              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
+              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10"
               value={emailSubject}
-              onChange={event => setEmailSubject(event.target.value)}
+              readOnly
             />
           </div>
           <div>
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-[#78716c]">Body (HTML Preview)</label>
-              <span className="text-[11px] text-[#a8a29e]">Click to edit</span>
-            </div>
-            <div
-              key={selectedTemplate?.id}
-              ref={emailBodyRef}
-              className="email-html-preview"
-              contentEditable
-              suppressContentEditableWarning
-              role="textbox"
-              aria-multiline="true"
-              dangerouslySetInnerHTML={{ __html: emailBody }}
-            />
+            <label className="text-xs font-medium text-muted-foreground">Email Preview</label>
+            {selectedTemplate ? (
+              <div className="mt-2">
+                <ReactEmailIframe category={selectedTemplate.category} lead={emailLead ?? null} />
+              </div>
+            ) : (
+              <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+                Select a template to preview
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleSendEmail}
-              disabled={!emailSubject.trim()}
+              disabled={!emailSubject.trim() || sendingEmail}
             >
-              <Mail size={14} />
-              Send Email
+              {sendingEmail ? (
+                <>
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail size={14} />
+                  Send Email
+                </>
+              )}
             </button>
             <button
               type="button"
               className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
               onClick={closeSendEmail}
+              disabled={sendingEmail}
             >
               Cancel
             </button>
