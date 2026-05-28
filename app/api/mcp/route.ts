@@ -65,20 +65,20 @@ import { verifyClerkToken } from '@clerk/mcp-tools/next'
 
 const emptyInputSchema = z.object({}).strict();
 
-const projectUpdateToolSchema = projectParamSchema.merge(createProjectUpdateSchema);
+const projectUpdateToolSchema = projectParamSchema.extend(createProjectUpdateSchema.shape);
 const projectCreateToolSchema = createProjectSchema;
-const leadUpdateToolSchema = leadParamSchema.merge(updateLeadSchema);
+const leadUpdateToolSchema = leadParamSchema.extend(updateLeadSchema.shape);
 const leadDeleteToolSchema = leadParamSchema;
-const milestoneCreateToolSchema = projectParamSchema.merge(milestoneCreationSchema);
-const milestoneUpdateToolSchema = milestoneParamSchema.merge(milestoneUpdateSchema);
+const milestoneCreateToolSchema = projectParamSchema.extend(milestoneCreationSchema.shape);
+const milestoneUpdateToolSchema = milestoneParamSchema.extend(milestoneUpdateSchema.shape);
 const addPhotosToolSchema = z.object({
     projectId: z.string().trim().min(1),
     milestoneId: z.string().trim().min(1),
     fileIds: z.array(z.string().trim().min(1)).min(1),
 });
-const variationCreateToolSchema = projectParamSchema.merge(createVariationToolSchema);
-const variationUpdateToolSchema = variationParamSchema.merge(z.object({ status: z.enum(["APPROVED", "REJECTED"]) }));
-const tradieScheduleUpdateToolSchema = scheduleParamSchema.merge(updateTradieScheduleSchema);
+const variationCreateToolSchema = projectParamSchema.extend(createVariationToolSchema.shape);
+const variationUpdateToolSchema = variationParamSchema.extend({ status: z.enum(["APPROVED", "REJECTED"]) });
+const tradieScheduleUpdateToolSchema = scheduleParamSchema.extend(updateTradieScheduleSchema.shape);
 
 const toToolResult = <T>(data: T) => ({
     structuredContent: data as { [key: string]: unknown },
@@ -93,7 +93,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: customerLookupQuerySchema,
             outputSchema: customerLookupResponseSchema,
         },
-        async (params) => toToolResult(await getCachedCustomersForDropdown(params.page, params.limit, params.q || params.search)),
+        async (params) => {
+            try {
+                return toToolResult(await getCachedCustomersForDropdown(params.page, params.limit, params.q || params.search))
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching customers ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -103,7 +111,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: siteManagerLookupQuerySchema,
             outputSchema: siteManagerLookupResponseSchema,
         },
-        async (params) => toToolResult(await getCachedSiteManagersForDropdown(params.page, params.limit, params.q || params.search)),
+        async (params) => {
+            try {
+                return toToolResult(await getCachedSiteManagersForDropdown(params.page, params.limit, params.q || params.search))
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching site managers ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -113,7 +129,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: tradieSearchQuerySchema,
             outputSchema: tradiesResponseSchema,
         },
-        async (params) => toToolResult(await getTradiesForLookup(params.limit, params.q || params.search)),
+        async (params) => {
+            try {
+                return toToolResult(await getTradiesForLookup(params.limit, params.q || params.search))
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching tradies ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -123,7 +147,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: projectListQuerySchema,
             outputSchema: projectsResponseSchema,
         },
-        async (params) => toToolResult(await getCachedProjects(params)),
+        async (params) => {
+            try {
+                return toToolResult(await getCachedProjects(params));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching projects ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -133,7 +165,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: projectLookupQuerySchema,
             outputSchema: projectLookupResponseSchema,
         },
-        async (params) => toToolResult(await getCachedProjectsForLookup(params.page, params.limit, params.q)),
+        async (params) => {
+            try {
+                return toToolResult(await getCachedProjectsForLookup(params.page, params.limit, params.q));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching projects for lookup ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -143,7 +183,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: projectParamSchema,
             outputSchema: projectDetailResponseSchema,
         },
-        async (params) => toToolResult(await getCachedProjectById(params.projectId)),
+        async (params) => {
+            try {
+                return toToolResult(await getCachedProjectById(params.projectId));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching project ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -154,8 +202,14 @@ const handler = createMcpHandler((server) => {
             outputSchema: projectDetailResponseSchema,
         },
         async (params) => {
-            const projectId = await createProject(params);
-            return toToolResult(await getCachedProjectById(projectId));
+            try {
+                const projectId = await createProject(params);
+                return toToolResult(await getCachedProjectById(projectId));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error creating project ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
         },
     );
 
@@ -168,17 +222,22 @@ const handler = createMcpHandler((server) => {
         },
         async (params, { authInfo }) => {
             const clerkId = authInfo?.extra?.userId as string | undefined;
-            if (!clerkId) {
-                throw new Error("Authenticated user is required");
-            }
+            try {
+                if (!clerkId) {
+                    throw new Error("Authenticated user is required");
+                }
 
-            const user = await getUserByClerkIdCached(clerkId);
-            if (!user) {
-                throw new Error("User not found");
+                const user = await getUserByClerkIdCached(clerkId);
+                if (!user) {
+                    throw new Error("User not found");
+                }
+                await createProjectUpdate({ ...params, authorId: user.id });
+                return toToolResult(await getCachedProjectById(params.projectId));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error creating project update ${error instanceof Error ? error.message : String(error)}` }],
+                }
             }
-
-            await createProjectUpdate({ ...params, authorId: user.id });
-            return toToolResult(await getCachedProjectById(params.projectId));
         },
     );
 
@@ -189,7 +248,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: variationCreateToolSchema,
             outputSchema: variationResponseSchema,
         },
-        async (params) => toToolResult(await createVariation(params.projectId, params)),
+        async (params) => {
+            try {
+                return toToolResult(await createVariation(params.projectId, params));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error creating variation ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -199,7 +266,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: variationUpdateToolSchema,
             outputSchema: variationResponseSchema,
         },
-        async (params) => toToolResult(await updateVariationStatus(params.variationId, params.status)),
+        async (params) => {
+            try {
+                return toToolResult(await updateVariationStatus(params.variationId, params.status));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error updating variation status ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -209,7 +284,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: projectParamSchema,
             outputSchema: z.array(milestoneResponseSchema),
         },
-        async (params) => toToolResult(await getMilestonesByProject(params.projectId)),
+        async (params) => {
+            try {
+                return toToolResult(await getMilestonesByProject(params.projectId));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching milestones ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -219,7 +302,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: milestoneCreateToolSchema,
             outputSchema: milestoneDetailResponseSchema,
         },
-        async (params) => toToolResult(await createMilestone(params.projectId, params)),
+        async (params) => {
+            try {
+                return toToolResult(await createMilestone(params.projectId, params));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error creating milestone ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -229,7 +320,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: addPhotosToolSchema,
             outputSchema: milestoneAddPhotosResponseSchema,
         },
-        async (params) => toToolResult(await addPhotosToMilestone(params.projectId, params.milestoneId, params.fileIds)),
+        async (params) => {
+            try {
+                return toToolResult(await addPhotosToMilestone(params.projectId, params.milestoneId, params.fileIds));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error adding milestone photos ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -239,7 +338,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: milestoneUpdateToolSchema,
             outputSchema: milestoneUpdateResponseSchema,
         },
-        async (params) => toToolResult(await updateMilestone(params.milestoneId, params)),
+        async (params) => {
+            try {
+                return toToolResult(await updateMilestone(params.milestoneId, params));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error updating milestone ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -249,7 +356,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: emptyInputSchema,
             outputSchema: leadsResponseSchema,
         },
-        async () => toToolResult(await getLeads()),
+        async () => {
+            try {
+                return toToolResult(await getLeads());
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching leads ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -259,7 +374,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: createLeadSchema,
             outputSchema: leadResponseSchema,
         },
-        async (params) => toToolResult(await createLead(params)),
+        async (params) => {
+            try {
+                return toToolResult(await createLead(params));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error creating lead ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -270,8 +393,14 @@ const handler = createMcpHandler((server) => {
             outputSchema: leadResponseSchema,
         },
         async (params) => {
-            const { leadId, ...updates } = params;
-            return toToolResult(await updateLead(Number(leadId), updates));
+            try {
+                const { leadId, ...updates } = params;
+                return toToolResult(await updateLead(Number(leadId), updates));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error updating lead ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
         },
     );
 
@@ -282,7 +411,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: leadDeleteToolSchema,
             outputSchema: deleteLeadResponseSchema,
         },
-        async (params) => toToolResult(await deleteLead(Number(params.leadId))),
+        async (params) => {
+            try {
+                return toToolResult(await deleteLead(Number(params.leadId)));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error deleting lead ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -292,7 +429,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: emptyInputSchema,
             outputSchema: tradiesResponseSchema,
         },
-        async () => toToolResult(await getCachedTradies()),
+        async () => {
+            try {
+                return toToolResult(await getCachedTradies());
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching tradies ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -302,7 +447,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: tradieCoordinationListQuerySchema,
             outputSchema: tradieCoordinationResponseSchema,
         },
-        async (params) => toToolResult(await getCachedTradieCoordinationDashboard(params)),
+        async (params) => {
+            try {
+                return toToolResult(await getCachedTradieCoordinationDashboard(params));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching tradie coordination data ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -312,7 +465,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: createTradieScheduleSchema,
             outputSchema: tradieScheduleWriteResponseSchema,
         },
-        async (params) => toToolResult(await createTradieSchedule(params)),
+        async (params) => {
+            try {
+                return toToolResult(await createTradieSchedule(params));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error creating tradie schedule ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
 
     server.registerTool(
@@ -323,8 +484,14 @@ const handler = createMcpHandler((server) => {
             outputSchema: updateTradieScheduleResponseSchema,
         },
         async (params) => {
-            const { scheduleId, ...updates } = params;
-            return toToolResult(await updateTradieSchedule(scheduleId, updates));
+            try {
+                const { scheduleId, ...updates } = params;
+                return toToolResult(await updateTradieSchedule(scheduleId, updates));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error updating tradie schedule ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
         },
     );
 
@@ -335,7 +502,15 @@ const handler = createMcpHandler((server) => {
             inputSchema: addMaterialSchema,
             outputSchema: materialResponseSchema,
         },
-        async (params) => toToolResult(await addMaterialToProject(params.projectId, params.materialData)),
+        async (params) => {
+            try {
+                return toToolResult(await addMaterialToProject(params.projectId, params.materialData));
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error adding material ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
+        },
     );
     server.registerTool(
         "address_council_lookup",
@@ -348,20 +523,26 @@ const handler = createMcpHandler((server) => {
             },
         },
         async ({ query, limit }) => {
-            const trimmedQuery = query.trim();
+            try {
+                const trimmedQuery = query.trim();
 
-            const response = await fetchJson<{
-                suggestions: AddressSuggestion[];
-                count: number;
-            }>(
-                `/api/address?query=${encodeURIComponent(trimmedQuery)}&limit=${limit ?? 5}`,
-                { method: "GET" },
-                "Error fetching location suggestions"
-            );
+                const response = await fetchJson<{
+                    suggestions: AddressSuggestion[];
+                    count: number;
+                }>(
+                    `/api/address?query=${encodeURIComponent(trimmedQuery)}&limit=${limit ?? 5}`,
+                    { method: "GET" },
+                    "Error fetching location suggestions"
+                );
 
-            const data = response.data;
+                const data = response.data;
 
-            return toToolResult(data);
+                return toToolResult(data);
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error fetching address suggestions ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
         }
     );
 
@@ -380,24 +561,30 @@ const handler = createMcpHandler((server) => {
         },
         async ({ file, projectId, milestoneId }, { authInfo }) => {
             const userId = authInfo?.extra?.userId as string | undefined;
-            if (!userId) {
-                throw new Error("Authenticated user is required");
-            }
-            const fileId = uuid();
-            const pathname = buildBlobPath(projectId, fileId, file.name, milestoneId);
-            const blob = await put(pathname, file, { access: "public" });
-            await saveFile({
-                userId,
-                projectId: projectId,
-                milestoneId: milestoneId ?? undefined,
-                fileId: fileId,
-                fileUrl: blob.url,
-                fileName: file.name,
-                fileType: blob.contentType,
-                fileSize: file.size,
-            });
+            try {
+                if (!userId) {
+                    throw new Error("Authenticated user is required");
+                }
+                const fileId = uuid();
+                const pathname = buildBlobPath(projectId, fileId, file.name, milestoneId);
+                const blob = await put(pathname, file, { access: "public" });
+                await saveFile({
+                    userId,
+                    projectId: projectId,
+                    milestoneId: milestoneId ?? undefined,
+                    fileId: fileId,
+                    fileUrl: blob.url,
+                    fileName: file.name,
+                    fileType: blob.contentType,
+                    fileSize: file.size,
+                });
 
-            return toToolResult({ fileId });
+                return toToolResult({ fileId });
+            } catch (error) {
+                return {
+                    content: [{ type: "text" as const, text: `Error uploading file ${error instanceof Error ? error.message : String(error)}` }],
+                }
+            }
         }
     );
 },
@@ -408,7 +595,7 @@ const handler = createMcpHandler((server) => {
         },
     },
     {
-        basePath: "/api/mcp",
+        basePath: "/api",
     });
 
 
