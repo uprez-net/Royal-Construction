@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
       Html,
       Head,
@@ -34,6 +33,33 @@ const URLS = {
       facebookPage: "https://www.facebook.com/royalconstructionsau/",
       instagramPage: "https://www.instagram.com/royalconstructionsau/",
 };
+
+const PROJECT_BRIEF_ITEMS = [
+      {
+            title: "Land information",
+            description: "Let us know whether you already own the land, are reviewing a block, or are still searching.",
+      },
+      {
+            title: "Budget range",
+            description: "Share the budget you are working toward so we can guide the right design and specification level.",
+      },
+      {
+            title: "Build type",
+            description: "Tell us if this is a new home, duplex, knockdown rebuild, extension, renovation, or another build type.",
+      },
+      {
+            title: "Location or address",
+            description: "Provide the suburb, lot details, or full site address if you already have it.",
+      },
+      {
+            title: "Timeline",
+            description: "Share when you would like to start design, approvals, construction, or move in.",
+      },
+      {
+            title: "Existing documents and ideas",
+            description: "Send any plans, surveys, council notes, inspiration images, sketches, or design ideas you already have.",
+      },
+];
 
 // ─── Responsive + Font Styles ───────────────────────────────────────────────
 
@@ -96,7 +122,7 @@ function Step({
                   }}
             >
                   <Row>
-                        <Column className="pt-[3px]" style={{ width: 44 }} verticalAlign="top">
+                        <Column className="pt-[3px]" style={{ width: 44, verticalAlign: "top" }}>
                               <Text
                                     className="text-[22px] leading-none font-medium text-rc-gold m-0"
                                     style={{ fontFamily: FONTS.condensed }}
@@ -218,8 +244,8 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                         <Body className="bg-rc-dark m-0 p-0 text-sm leading-relaxed tracking-[0.3px]" style={{ fontFamily: FONTS.body, fontWeight: 350 }}>
                               {/* ── Preheader ── */}
                               <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-                                    Welcome to Royal Constructions — Your Home Building Journey Starts
-                                    Here
+                                    Thanks for your interest in Royal Constructions - send your project
+                                    details and book a builder calendar slot.
                                     <div>
                                           &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏
                                     </div>
@@ -280,9 +306,10 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                                   maxWidth: 490,
                                                             }}
                                                       >
-                                                            Dear {name}, thank you for choosing Royal Constructions for
-                                                            your home building project in NSW. We're excited to partner
-                                                            with you on this journey to bring your dream home to life.
+                                                            Dear {name}, thank you for your interest in building with
+                                                            Royal Constructions. To take the next step, please reply
+                                                            with any project details you already have so our team can
+                                                            prepare the right advice before your consultation.
                                                       </Text>
                                                 </Column>
                                           </Row>
@@ -298,6 +325,48 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                             width={592}
                                                             className="block outline-none border-none no-underline w-full max-w-[592px] rounded"
                                                       />
+                                                </Column>
+                                          </Row>
+                                    </Section>
+
+                                    {/* ── Project Details Request ── */}
+                                    <Section
+                                          className="mobile_px-4 mobile_pt-10"
+                                          style={{ padding: "3rem 1.5rem 0" }}
+                                    >
+                                          <Row>
+                                                <Column className="bg-rc-card rounded border border-rc-border" style={{ padding: "1.5rem" }}>
+                                                      <Text
+                                                            className="mobile_font-24 text-rc-white m-0 mb-4 uppercase"
+                                                            style={{
+                                                                  fontFamily: FONTS.condensed,
+                                                                  fontWeight: 500,
+                                                                  fontSize: 28,
+                                                                  lineHeight: 1,
+                                                                  letterSpacing: "0.4px",
+                                                            }}
+                                                      >
+                                                            To take it further
+                                                      </Text>
+                                                      <Text
+                                                            className="text-sm leading-relaxed tracking-[0.3px] text-rc-text m-0 mb-4"
+                                                            style={{ fontFamily: FONTS.body, fontWeight: 350 }}
+                                                      >
+                                                            Please reply with whatever information you already have.
+                                                            It is okay if some details are still undecided.
+                                                      </Text>
+                                                      {PROJECT_BRIEF_ITEMS.map((item) => (
+                                                            <Text
+                                                                  key={item.title}
+                                                                  className="text-sm leading-relaxed tracking-[0.2px] text-rc-text m-0 mb-3"
+                                                                  style={{ fontFamily: FONTS.body, fontWeight: 350 }}
+                                                            >
+                                                                  <span className="text-rc-gold" style={{ fontWeight: 500 }}>
+                                                                        {item.title}:
+                                                                  </span>{" "}
+                                                                  {item.description}
+                                                            </Text>
+                                                      ))}
                                                 </Column>
                                           </Row>
                                     </Section>
@@ -328,20 +397,20 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                     {/* ── Steps ── */}
                                     <Step
                                           number="01"
-                                          title="Schedule a Consultation"
-                                          description="We'll arrange a detailed on-site consultation to understand your vision, lifestyle needs, and design preferences."
+                                          title="Send Your Project Details"
+                                          description="Reply with your land information, budget, build type, address or location, timeline, and any documents or design ideas you already have."
                                           showBorder
                                     />
                                     <Step
                                           number="02"
-                                          title="Receive Your Quotation"
-                                          description="Our team will prepare a comprehensive, transparent quotation tailored specifically to your project scope and budget."
+                                          title="Book the Builder Calendar"
+                                          description="Use the booking link below for quick reference so the builder has a consultation slot reserved on the calendar."
                                           showBorder
                                     />
                                     <Step
                                           number="03"
-                                          title="Access Your Client Portal"
-                                          description="You'll receive login details to track progress, view updates, and communicate with our team in real time."
+                                          title="Review the Next Steps"
+                                          description="Our team will review your information, clarify anything missing, and guide you through design, quotation, and approval next steps."
                                           showBorder={false}
                                     />
 
@@ -361,8 +430,9 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                                               className="text-rc-gold m-0 text-[13px] leading-relaxed tracking-[0.2px]"
                                                                               style={{ fontFamily: FONTS.body, fontWeight: 400 }}
                                                                         >
-                                                                              Our team will be in touch within 24 hours to arrange
-                                                                              your first consultation.
+                                                                              For quick reference, use the link below to add the
+                                                                              booking to the builder calendar. You can also reply
+                                                                              directly to this email with your project details.
                                                                         </Text>
                                                                   </Column>
                                                             </Row>
@@ -392,9 +462,9 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                       </Text>
 
                                                       <GetStartedCard
-                                                            title="Book Your Consultation"
-                                                            description="Take the first step—schedule your initial consultation with our building experts."
-                                                            linkLabel="Book Now"
+                                                            title="Add Booking to the Builder Calendar"
+                                                            description="Reserve a consultation slot so the builder can review your project details with you."
+                                                            linkLabel="Book on Calendar"
                                                             linkHref={bookingUrl}
                                                             showBorder
                                                       />

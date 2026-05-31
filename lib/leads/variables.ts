@@ -3,7 +3,7 @@ import { EmailTemplate } from './types';
 export const EMAIL_TEMPLATES: EmailTemplate[] = [
   {
     id: 1, //welcome-email.tsx
-    subject: 'Welcome to BuildPro - Your Home Building Journey Starts Here',
+    subject: 'Welcome to Royal Constructions - Next Steps for Your Build',
     category: 'Welcome',
   },
   {
