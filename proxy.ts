@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   '/.well-known/oauth-authorization-server(.*)',
   '/.well-known/oauth-protected-resource(.*)',
   '/api/mcp(.*)',
+  "/api/cron(.*)",
 ])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
