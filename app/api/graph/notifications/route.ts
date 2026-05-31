@@ -2,6 +2,7 @@ import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
 import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
+import { renderEmailHtml } from '@/lib/leads/render-email-html';
 
 // export const runtime = 'nodejs';
 
@@ -183,6 +184,47 @@ export async function POST(request: Request): Promise<Response> {
                   },
                 });
                 console.log(`  Lead successfully saved to database with ID: ${newLead.id} and MicrosoftmessageId: ${message.id}`);
+                // After data Create Successfully Now give the Welcome Email Message to this client if Email and Name are present
+                // ═══════════════════════════════════════════════════════
+                // SEND WELCOME EMAIL AUTOMATICALLY
+                // ═══════════════════════════════════════════════════════
+                if (newLead.email && newLead.name && graphClient) {
+                  console.log('  Sending welcome email to new lead...');
+                  try {
+                    // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
+                    const leadPreview = {
+                      name: newLead.name,
+                      email: newLead.email,
+                      type: newLead.type,
+                      location: newLead.location,
+                      notes: newLead.notes ?? undefined,
+                      budget: newLead.budget ?? undefined,
+                    };
+
+                    // 2. Generate the HTML body using your React Email template
+                    const htmlBody = await renderEmailHtml('Welcome', leadPreview);
+
+                    if (htmlBody) {
+                      // 2. Define the subject line
+                      const emailSubject = 'Welcome to Royal Constructions — Your Home Building Journey Starts Here';
+
+                      // 3. Send the email directly using the existing Graph Client
+                      await graphClient.sendMail({
+                        to: newLead.email,
+                        subject: emailSubject,
+                        body: htmlBody
+                      });
+
+                      console.log(`  ✅ Welcome email successfully sent to ${newLead.email}`);
+                    } else {
+                      console.warn('  ⚠️ Failed to render welcome email HTML. No email sent.');
+                    }
+                  } catch (emailError) {
+                    // We catch this error separately so that an email failure 
+                    // doesn't crash the webhook and prevent the lead from being saved
+                    console.error('  ❌ Failed to send welcome email:', emailError);
+                  }
+                }
               } else {
                 console.log('  Lead Extracted Found as Spam, Ignoring the lead');
               }

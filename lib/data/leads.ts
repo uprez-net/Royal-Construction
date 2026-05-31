@@ -3,6 +3,9 @@ import { mapLead, stageToPrismaMap, historyTypeToPrisma } from "@/types/lead";
 import type { Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import type { Lead as UiLead } from "@/lib/leads/types";
+import { renderEmailHtml } from "../leads/render-email-html";
+import { getGraphConfig } from "../graph/config";
+import { createGraphContext } from "../graph/client";
 
 export async function getLeads(): Promise<UiLead[]> {
   try {
@@ -67,6 +70,49 @@ export async function createLead(input: CreateLeadInput): Promise<UiLead> {
     },
     include: { history: { orderBy: { actionDate: "asc" } } },
   });
+
+  // ═══════════════════════════════════════════════════════
+  // SEND WELCOME EMAIL TO MANUALLY CREATED LEADS
+  // ═══════════════════════════════════════════════════════
+  if (created.email && created.name) {
+    console.log(`[Lead ${created.id}] Sending welcome email to newly created lead...`);
+    try {
+      // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
+      const leadPreview = {
+        name: created.name,
+        email: created.email,
+        type: created.type,
+        location: created.location,
+        notes: created.notes ?? undefined,
+        budget: created.budget ?? undefined,
+      };
+
+      // 2. Generate the HTML body using your React Email template
+      const htmlBody = await renderEmailHtml('Welcome', leadPreview);
+
+      if (htmlBody) {
+        // 3. Initialize Graph Client
+        const config = getGraphConfig();
+        const graphClient = await createGraphContext(config);
+
+        // 4. Define the subject line
+        const emailSubject = 'Welcome to Royal Constructions — Your Home Building Journey Starts Here';
+
+        // 5. Send the email directly using the Graph Client
+        await graphClient.sendMail({
+          to: created.email,
+          subject: emailSubject,
+          body: htmlBody
+        });
+
+        console.log(`[Lead ${created.id}] ✅ Welcome email successfully sent to ${created.email}`);
+      } else {
+        console.warn(`[Lead ${created.id}] ⚠️ Failed to render welcome email HTML. No email sent.`);
+      }
+    } catch (emailError) {
+      console.error(`[Lead ${created.id}] ❌ Failed to send welcome email:`, emailError);
+    }
+  }
 
   return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] });
 }

@@ -35,9 +35,10 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
     case 'Follow-up':
       component = <FollowUpEmail name={name} type={type} location={location} notes={notes} />;
       break;
-    case 'Welcome':
+        case 'Welcome':
       {
-        let bookingUrl = `${baseUrl}/api/graph/book-consultant`;
+        // Point to the frontend page instead of the API route
+        let bookingUrl = `${baseUrl}/book-consultation`;
         if (lead?.email) {
           const params = new URLSearchParams({
             name: lead.name ?? name,
@@ -45,7 +46,7 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
           });
           bookingUrl += `?${params.toString()}`;
         } else {
-          bookingUrl = `${baseUrl}/contact`;
+          bookingUrl = `${baseUrl}/contact`; // Fallback
         }
 
         component = <WelcomeEmail name={name} bookingUrl={bookingUrl} />;
