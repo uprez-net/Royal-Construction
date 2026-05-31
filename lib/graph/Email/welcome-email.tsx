@@ -40,8 +40,8 @@ const PROJECT_BRIEF_ITEMS = [
             description: "Let us know whether you already own the land, are reviewing a block, or are still searching.",
       },
       {
-            title: "Budget range",
-            description: "Share the budget you are working toward so we can guide the right design and specification level.",
+            title: "Project priorities",
+            description: "Share what matters most to you, such as layout, finishes, number of rooms, outdoor space, or energy efficiency.",
       },
       {
             title: "Build type",
@@ -374,7 +374,7 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                       >
                                                             Dear {name}, thank you for your interest in building with
                                                             Royal Constructions. The next step is to book an appointment
-                                                            with the builder, then reply with any project details you
+                                                            with the builder, then reply with any project ideas you
                                                             already have so we can prepare before your consultation.
                                                       </Text>
                                                 </Column>
@@ -473,7 +473,7 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                     <Step
                                           number="02"
                                           title="Meet With the Builder"
-                                          description="Use the consultation to discuss your goals, site details, budget expectations, and preferred timeline."
+                                          description="Use the consultation to discuss your goals, site details, priorities, and preferred timeline."
                                           showBorder
                                     />
                                     <Step
