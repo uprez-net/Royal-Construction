@@ -201,6 +201,72 @@ function GetStartedCard({
       );
 }
 
+function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
+      return (
+            <Section
+                  className="mobile_px-4 mobile_pt-10"
+                  style={{ padding: "3rem 1.5rem 0" }}
+            >
+                  <Row>
+                        <Column className="bg-rc-card rounded border border-rc-gold" style={{ padding: "1.5rem" }}>
+                              <Text
+                                    className="text-rc-gold m-0 mb-3 uppercase"
+                                    style={{
+                                          fontFamily: FONTS.condensed,
+                                          fontWeight: 500,
+                                          fontSize: 18,
+                                          lineHeight: 1,
+                                          letterSpacing: "0.6px",
+                                    }}
+                              >
+                                    First action
+                              </Text>
+                              <Text
+                                    className="mobile_font-24 text-rc-white m-0 mb-4 uppercase"
+                                    style={{
+                                          fontFamily: FONTS.condensed,
+                                          fontWeight: 500,
+                                          fontSize: 30,
+                                          lineHeight: 1,
+                                          letterSpacing: "0.4px",
+                                    }}
+                              >
+                                    Book your appointment with the builder
+                              </Text>
+                              <Text
+                                    className="text-sm leading-relaxed tracking-[0.3px] text-rc-text m-0 mb-5"
+                                    style={{ fontFamily: FONTS.body, fontWeight: 350 }}
+                              >
+                                    Please use the link below to add a consultation to the builder calendar.
+                                    This gives the team a fixed time to review your project and answer your
+                                    questions.
+                              </Text>
+                              <Link
+                                    href={bookingUrl}
+                                    target="_blank"
+                                    className="bg-rc-gold text-rc-dark no-underline inline-block rounded"
+                                    style={{
+                                          fontFamily: FONTS.body,
+                                          fontWeight: 700,
+                                          fontSize: 15,
+                                          lineHeight: 1.4,
+                                          padding: "0.875rem 1.25rem",
+                                    }}
+                              >
+                                    Book Appointment
+                              </Link>
+                              <Text
+                                    className="text-rc-muted m-0 mt-4 text-[12px] leading-relaxed tracking-[0.2px]"
+                                    style={{ fontFamily: FONTS.body, fontWeight: 300 }}
+                              >
+                                    If no suitable time is available, reply to this email and we will help arrange one.
+                              </Text>
+                        </Column>
+                  </Row>
+            </Section>
+      );
+}
+
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 interface WelcomeEmailProps {
@@ -307,9 +373,9 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                             }}
                                                       >
                                                             Dear {name}, thank you for your interest in building with
-                                                            Royal Constructions. To take the next step, please reply
-                                                            with any project details you already have so our team can
-                                                            prepare the right advice before your consultation.
+                                                            Royal Constructions. The next step is to book an appointment
+                                                            with the builder, then reply with any project details you
+                                                            already have so we can prepare before your consultation.
                                                       </Text>
                                                 </Column>
                                           </Row>
@@ -329,10 +395,12 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                           </Row>
                                     </Section>
 
+                                    <AppointmentBookingCard bookingUrl={bookingUrl} />
+
                                     {/* ── Project Details Request ── */}
                                     <Section
                                           className="mobile_px-4 mobile_pt-10"
-                                          style={{ padding: "3rem 1.5rem 0" }}
+                                          style={{ padding: "2rem 1.5rem 0" }}
                                     >
                                           <Row>
                                                 <Column className="bg-rc-card rounded border border-rc-border" style={{ padding: "1.5rem" }}>
@@ -346,14 +414,15 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                                   letterSpacing: "0.4px",
                                                             }}
                                                       >
-                                                            To take it further
+                                                            Before your appointment
                                                       </Text>
                                                       <Text
                                                             className="text-sm leading-relaxed tracking-[0.3px] text-rc-text m-0 mb-4"
                                                             style={{ fontFamily: FONTS.body, fontWeight: 350 }}
                                                       >
-                                                            Please reply with whatever information you already have.
-                                                            It is okay if some details are still undecided.
+                                                            Please reply with whatever details you already have so
+                                                            we can prepare for the consultation. It is okay if some
+                                                            items are still undecided.
                                                       </Text>
                                                       {PROJECT_BRIEF_ITEMS.map((item) => (
                                                             <Text
@@ -397,14 +466,14 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                     {/* ── Steps ── */}
                                     <Step
                                           number="01"
-                                          title="Send Your Project Details"
-                                          description="Reply with your land information, budget, build type, address or location, timeline, and any documents or design ideas you already have."
+                                          title="Share Your Project Details"
+                                          description="Reply with whatever details you already have so the builder can review them before the appointment."
                                           showBorder
                                     />
                                     <Step
                                           number="02"
-                                          title="Book the Builder Calendar"
-                                          description="Use the booking link below for quick reference so the builder has a consultation slot reserved on the calendar."
+                                          title="Meet With the Builder"
+                                          description="Use the consultation to discuss your goals, site details, budget expectations, and preferred timeline."
                                           showBorder
                                     />
                                     <Step
@@ -430,9 +499,9 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                                               className="text-rc-gold m-0 text-[13px] leading-relaxed tracking-[0.2px]"
                                                                               style={{ fontFamily: FONTS.body, fontWeight: 400 }}
                                                                         >
-                                                                              For quick reference, use the link below to add the
-                                                                              booking to the builder calendar. You can also reply
-                                                                              directly to this email with your project details.
+                                                                              The booking button above is the appointment action.
+                                                                              These next steps show how we prepare once your time is
+                                                                              reserved.
                                                                         </Text>
                                                                   </Column>
                                                             </Row>
@@ -462,18 +531,18 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                       </Text>
 
                                                       <GetStartedCard
-                                                            title="Add Booking to the Builder Calendar"
-                                                            description="Reserve a consultation slot so the builder can review your project details with you."
-                                                            linkLabel="Book on Calendar"
-                                                            linkHref={bookingUrl}
+                                                            title="Explore Our Portfolio"
+                                                            description="Browse completed projects across NSW for inspiration and ideas for your new home."
+                                                            linkLabel="View Projects"
+                                                            linkHref={URLS.website}
                                                             showBorder
                                                       />
 
                                                       <GetStartedCard
-                                                            title="Explore Our Portfolio"
-                                                            description="Browse our completed projects across NSW for inspiration and ideas for your new home."
-                                                            linkLabel="View Projects"
-                                                            linkHref={URLS.website}
+                                                            title="Contact the Team"
+                                                            description="Have a question before your appointment? Reply to this email or contact our office."
+                                                            linkLabel="Email Us"
+                                                            linkHref="mailto:info@royalconstructions.com.au"
                                                             showBorder={false}
                                                       />
 

@@ -118,7 +118,7 @@ function previewTemplateText(text: string) {
 function getTemplateDescription(template: EmailTemplate): string {
   switch (template.category) {
     case 'Welcome':
-      return 'Welcome new clients to Royal Constructions. Requests land information, budget, build type, location, timeline, existing documents, design ideas, and provides the builder calendar booking link.';
+      return 'Welcome new clients to Royal Constructions. Makes the builder appointment booking the first action, then requests land information, budget, build type, location, timeline, existing documents, and design ideas.';
     case 'Quotation':
       return 'Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.';
     case 'Follow-up':
