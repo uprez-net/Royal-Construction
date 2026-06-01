@@ -1,5 +1,6 @@
 import { createChatMessages, createOrGetChatSession, MessageData, updateChatMessages } from "@/lib/data/chat";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import { fetchLeadInfoTool } from "@/lib/tools/fetch-lead-info";
 import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { ChatMessageAI } from "@/types/chat";
@@ -103,6 +104,7 @@ export async function POST(request: NextRequest) {
                     tools: {
                         lineItemTool: lineItemTool(dataStream),
                         offerFileTool: offerFileTool(dataStream),
+                        fetchLeadInfoTool: fetchLeadInfoTool,
                     }
                 });
 
@@ -155,10 +157,10 @@ export async function POST(request: NextRequest) {
 
                 // Bulk save all new messages at once
                 if (newMessages.length > 0) {
-                    await createChatMessages(newMessages);
+                    await createChatMessages(newMessages, chat.leadId);
                 }
                 if (messagesToUpdate.length > 0) {
-                    await updateChatMessages(messagesToUpdate);
+                    await updateChatMessages(messagesToUpdate, chat.leadId);
                 }
             },
             onError: (error) => {

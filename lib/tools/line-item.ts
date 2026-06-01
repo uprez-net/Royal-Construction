@@ -25,5 +25,10 @@ export const lineItemTool = ( dataStream: UIMessageStreamWriter<ChatMessageAI> )
                 totalPrice: params.unitPrice * params.quantity,
             },
         });
+
+        return {
+            message: `Line item ${params.id} processed successfully.`,
+            description: `Added/Updated line item: ${params.item}, ${params.quantity} ${params.unit} at $${params.unitPrice} each.`
+        }
     }
 })

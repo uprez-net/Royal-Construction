@@ -1,3 +1,4 @@
+import { fetchLeadInfoTool } from "@/lib/tools/fetch-lead-info";
 import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { ChatMessage, ChatSession } from "@prisma/client";
@@ -17,6 +18,7 @@ export type ChatTools = {
     // Define your tools here, for example:
     lineItemTool: lineItemTool;
     offerFileTool: offerFileTool;
+    fetchLeadInfoTool: InferUITool<typeof fetchLeadInfoTool>;
 }
 
 export type ChatMessageAI = UIMessage<
