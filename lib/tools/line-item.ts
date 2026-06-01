@@ -1,9 +1,8 @@
-import { ChatMessageAI } from "@/types/chat";
 import { tool, UIMessageStreamWriter } from "ai";
 import z from "zod";
 
 
-export const lineItemTool = ( dataStream: UIMessageStreamWriter<ChatMessageAI> ) => tool({
+export const lineItemTool = ( dataStream: UIMessageStreamWriter ) => tool({
     description: "Handles addition and update of new line item to the UI table",
     inputSchema: z.object({
         id: z.string().describe("Unique identifier for the line item, used for updates"),

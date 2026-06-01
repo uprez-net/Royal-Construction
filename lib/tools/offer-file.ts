@@ -1,8 +1,7 @@
-import { ChatMessageAI } from "@/types/chat";
 import { tool, UIMessageStreamWriter } from "ai";
 import z from "zod";
 
-export const offerFileTool = (dataStream: UIMessageStreamWriter<ChatMessageAI>) => tool({
+export const offerFileTool = (dataStream: UIMessageStreamWriter) => tool({
     description: "Handles generation and update of sections of offer file in the UI",
     inputSchema: z.object({
         termsAndConditions: z.string().describe("Terms and conditions for the offer").optional(),
