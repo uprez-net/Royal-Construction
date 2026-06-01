@@ -11,14 +11,15 @@ export const messageMetadataSchema = z.object({
 
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 
+// Inline the tool UI types to avoid circular type alias references
 type lineItemToolUI = InferUITool<ReturnType<typeof createLineItemTool>>;
 type offerFileToolUI = InferUITool<ReturnType<typeof createOfferFileTool>>;
 
 export type ChatTools = {
-    // Define your tools here, for example:
-    lineItemTool: lineItemToolUI;
-    offerFileTool: offerFileToolUI;
-    fetchLeadInfoTool: InferUITool<typeof createFetchLeadInfoTool>;
+  // Define your tools here, for example:
+  lineItemTool: lineItemToolUI;
+  offerFileTool: offerFileToolUI;
+  fetchLeadInfoTool: InferUITool<typeof createFetchLeadInfoTool>;
 }
 
 export type ChatMessageAI = UIMessage<
@@ -28,5 +29,5 @@ export type ChatMessageAI = UIMessage<
 >;
 
 export interface ChatSessionWithMessages extends ChatSession {
-    messages: ChatMessage[];
+  messages: ChatMessage[];
 }
