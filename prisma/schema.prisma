@@ -191,24 +191,24 @@ model Tradie {
 }
 
 model File {
-  id            String   @id @default(uuid())
-  projectId     String?
-  milestoneId   String?
-  quoteId       String?
-  chatSessionId String?
-  filename      String
-  fileType      String
-  filesize      Int
-  url           String
-  uploadedBy    String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(uuid())
+  projectId   String?
+  milestoneId String?
+  quoteId     String?
+  leadId      Int?
+  filename    String
+  fileType    String
+  filesize    Int
+  url         String
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  project     Project?     @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
-  milestone   Milestone?   @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  quote       Quote?       @relation("QuoteFiles", fields: [quoteId], references: [id], onDelete: Cascade)
-  User        User         @relation("UserFiles", fields: [uploadedBy], references: [id])
-  chatSession ChatSession? @relation("ChatSessionFiles", fields: [chatSessionId], references: [id])
+  project   Project?   @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone? @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  quote     Quote?     @relation("QuoteFiles", fields: [quoteId], references: [id], onDelete: Cascade)
+  lead      Lead?      @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
+  User      User       @relation("UserFiles", fields: [uploadedBy], references: [id])
 
   @@index([projectId])
   @@index([milestoneId])
@@ -370,6 +370,7 @@ model Lead {
   quotes       Quote[]
   chatSessions ChatSession[]
   history      LeadHistory[]
+  files        File[]        @relation("LeadFiles")
 
   @@index([stage])
   @@index([assigned])
@@ -438,7 +439,6 @@ model ChatSession {
   updatedAt DateTime @updatedAt
 
   messages ChatMessage[]
-  files    File[]        @relation("ChatSessionFiles")
   lead     Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])

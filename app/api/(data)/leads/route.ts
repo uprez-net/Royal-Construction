@@ -1,8 +1,12 @@
-import { badRequestResponse, createLeadSchema, errorResponse, successResponse } from "@/utils/validators";
+import { badRequestResponse, createLeadSchema, errorResponse, leadLookupParamSchema, parseSearchParamsWithResponse, successResponse } from "@/utils/validators";
 import { getLeads, createLead } from "@/lib/data/leads";
+import { NextRequest } from "next/server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
   try {
+    const params = parseSearchParamsWithResponse(url, leadLookupParamSchema);
+    if (!params.success) return params.response;
     const leads = await getLeads();
     return successResponse(leads);
   } catch (error) {
@@ -14,7 +18,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const json = await request.json();
     const parsed = createLeadSchema.safeParse(json);

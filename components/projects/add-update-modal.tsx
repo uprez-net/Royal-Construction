@@ -135,7 +135,12 @@ export function AddUpdateModal({
 
     try {
       const blob = await upload(
-        buildBlobPath(projectId, queuedFile.id, queuedFile.file.name),
+        buildBlobPath({
+          fileId: queuedFile.id,
+          fileName: queuedFile.file.name,
+          projectId,
+          milestoneId: milestoneId ?? undefined,
+        }),
         queuedFile.file,
         {
           access: "public",

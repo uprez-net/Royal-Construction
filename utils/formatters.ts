@@ -85,11 +85,18 @@ export function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
 }
 
-export function buildBlobPath(projectId: string, fileId: string, fileName: string, milestoneId?: string) {
+interface BlobPathParams {
+  fileId: string;
+  fileName: string;
+  milestoneId?: string;
+  projectId?: string;
+}
+
+export function buildBlobPath({fileId, fileName, milestoneId, projectId}: BlobPathParams) {
   if(milestoneId) {
-    return `projects/${projectId}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
+    return `projects/${projectId ?? "Unknown"}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
   }
   else {
-    return `projects/${projectId}/${fileId}-${sanitizeFileName(fileName)}`;
+    return `projects/${projectId ?? "Unknown"}/${fileId}-${sanitizeFileName(fileName)}`;
   }
 }

@@ -25,7 +25,7 @@ export function QuoteHeader() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={() => dispatch(openModal({ type: "scheduleTradie" }))}
+              onClick={() => dispatch(openModal({ type: "createOfferFile" }))}
             >
               <Plus className="mr-2 size-4" />
               Create Offer-Letter

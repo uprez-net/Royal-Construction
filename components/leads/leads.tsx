@@ -225,7 +225,7 @@ export default function Leads() {
         fetchLeads(),
         fetchLeadsStats(),
       ]);
-      setLeads(leadsData);
+      setLeads(leadsData.items);
       setStats(statsData);
       setError(null);
     } catch (err) {
