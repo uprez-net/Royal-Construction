@@ -1,5 +1,7 @@
 import prisma from "@/lib/prisma";
 import type { CreateProjectUpdateInput } from "@/utils/validators";
+import { revalidateTag } from "next/cache";
+import { CACHE_PROFILES } from "@/types/cache";
 
 export async function createProjectUpdate(input: {
   projectId: string;
@@ -36,6 +38,8 @@ export async function createProjectUpdate(input: {
       await tx.milestone.update({ where: { id: milestoneId }, data: { status: "DONE", actualDate: new Date() } });
     }
   });
+
+  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
   return {
     milestoneWasPhotoRequired: Boolean(milestone?.isPhotoRequired),

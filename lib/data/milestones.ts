@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import type { MilestoneCreationData, MilestoneUpdateData } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 export async function getMilestonesByProject(projectId: string) {
   const milestones = await prisma.milestone.findMany({
@@ -31,6 +33,9 @@ export async function createMilestone(projectId: string, data: MilestoneCreation
     },
   });
 
+
+  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+
   return {
     ...newMilestone,
     budget: newMilestone.budget.toString(),
@@ -45,6 +50,7 @@ export async function addPhotosToMilestone(projectId: string, milestoneId: strin
   await prisma.milestone.update({ where: { id: milestoneId }, data: { files: { connect: fileIds.map((id) => ({ id })) } } });
 
   const addedFiles = await prisma.file.findMany({ where: { id: { in: fileIds } } });
+  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
   return { id: milestoneId, projectId, files: addedFiles };
 }
@@ -57,6 +63,7 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
   };
 
   const updated = await prisma.milestone.update({ where: { id: milestoneId }, data: normalizedUpdateData });
+  revalidateTag(`project-${updated.projectId}`, CACHE_PROFILES.MEDIUM);
 
   return {
     ...updated,

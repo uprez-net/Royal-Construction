@@ -1,9 +1,5 @@
-import { VariationStatus } from "@prisma/client";
 import { z } from "zod";
-
-import prisma from "@/lib/prisma";
 import { updateVariationStatus } from "@/lib/data/variations";
-import { revalidateTag } from "next/cache";
 import {
   parseRouteParamsWithResponse,
   parseBodyWithResponse,
@@ -11,7 +7,6 @@ import {
   badRequestResponse,
   errorResponse,
 } from "@/utils/validators";
-import { CACHE_PROFILES } from "@/types/cache";
 import { NextRequest } from "next/server";
 
 const variationUpdateSchema = z.object({
@@ -41,11 +36,9 @@ export async function PATCH(
     return badRequestResponse("Invalid request body");
   }
 
-  const { projectId, variationId } = routeParams.data;
+  const { variationId } = routeParams.data;
   try {
     const variation = await updateVariationStatus(variationId, body.data.status);
-
-    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
     return successResponse(variation);
   } catch (error) {
