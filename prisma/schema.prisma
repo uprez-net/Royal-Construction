@@ -48,6 +48,36 @@ enum MaterialStatus {
   INSTALLED
 }
 
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTED
+  NEGOTIATING
+  WON
+  LOST
+  MEETING_SCHEDULED
+  IN_FOLLOW_UP
+  NO_RESPONSE
+  CONVERTED
+  CANCELLED
+  DISQUALIFIED
+}
+
+enum HistoryType {
+  SYSTEM
+  CALL
+  EMAIL
+  REFERRAL
+}
+
+enum QuoteStatus {
+  SENT
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 model Project {
   id               String   @id @default(uuid())
   name             String
@@ -161,20 +191,24 @@ model Tradie {
 }
 
 model File {
-  id          String   @id @default(uuid())
-  projectId   String
-  milestoneId String?
-  filename    String
-  fileType    String
-  filesize    Int
-  url         String
-  uploadedBy  String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(uuid())
+  projectId     String?
+  milestoneId   String?
+  quoteId       String?
+  chatSessionId String?
+  filename      String
+  fileType      String
+  filesize      Int
+  url           String
+  uploadedBy    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  project   Project    @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
-  milestone Milestone? @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  User      User       @relation("UserFiles", fields: [uploadedBy], references: [id])
+  project     Project?     @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone   Milestone?   @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  quote       Quote?       @relation("QuoteFiles", fields: [quoteId], references: [id], onDelete: Cascade)
+  User        User         @relation("UserFiles", fields: [uploadedBy], references: [id])
+  chatSession ChatSession? @relation("ChatSessionFiles", fields: [chatSessionId], references: [id])
 
   @@index([projectId])
   @@index([milestoneId])
@@ -300,29 +334,6 @@ model User {
   @@index([clerkId])
 }
 
-enum LeadStage {
-  NEW
-  CONTACTED
-  QUALIFIED
-  QUOTED
-  NEGOTIATING
-  WON
-  LOST
-  MEETING_SCHEDULED
-  IN_FOLLOW_UP
-  NO_RESPONSE
-  CONVERTED
-  CANCELLED
-  DISQUALIFIED
-}
-
-enum HistoryType {
-  SYSTEM
-  CALL
-  EMAIL
-  REFERRAL
-}
-
 model Lead {
   id Int @id @default(autoincrement())
 
@@ -356,7 +367,9 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  history LeadHistory[]
+  quotes       Quote[]
+  chatSessions ChatSession[]
+  history      LeadHistory[]
 
   @@index([stage])
   @@index([assigned])
@@ -380,4 +393,66 @@ model LeadHistory {
 
   @@index([leadId])
   @@index([type])
+}
+
+model Quote {
+  id          String      @id @default(uuid())
+  leadId      Int
+  quoteStatus QuoteStatus @default(PENDING)
+
+  amount      Decimal @db.Decimal(12, 2)
+  gstAmount   Decimal @db.Decimal(12, 2)
+  totalAmount Decimal @db.Decimal(12, 2)
+
+  sentAt     DateTime?
+  acceptedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quoteItems QuoteItem[]
+  files      File[]      @relation("QuoteFiles")
+  lead       Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model QuoteItem {
+  id          String  @id @default(uuid())
+  quoteId     String
+  description String
+  quantity    Int
+  unit        String
+  unitPrice   Decimal @db.Decimal(10, 2)
+  totalPrice  Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+}
+
+model ChatSession {
+  id     String @id @default(uuid())
+  leadId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatMessage[]
+  files    File[]        @relation("ChatSessionFiles")
+  lead     Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+model ChatMessage {
+  id        String @id @default(uuid())
+  sessionId String
+  role      String
+  content   Json
+
+  timestamp DateTime @default(now())
+
+  chatSession ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }
