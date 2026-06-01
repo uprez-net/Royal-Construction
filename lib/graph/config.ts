@@ -6,6 +6,7 @@ export interface GraphConfig {
   clientId: string;
   clientSecret: string;
   senderUpn?: string;
+  senderUserId: string;
   defaultRecipient: string;
   defaultSubject: string;
   defaultBody: string;
@@ -54,6 +55,7 @@ export function getGraphConfig(): GraphConfig {
     clientId: requireEnv('AZURE_CLIENT_ID'),
     clientSecret: requireEnv('AZURE_CLIENT_SECRET'),
     senderUpn: process.env.BUSINESS_EMAIL || process.env.GRAPH_SENDER_UPN,
+    senderUserId: process.env.GRAPH_SENDER_USER_ID || '',
     defaultRecipient: process.env.DEMO_RECIPIENT || 'your-recipient@contoso.com',
     defaultSubject: process.env.DEMO_SUBJECT || 'Hello from Microsoft Graph',
     defaultBody:
