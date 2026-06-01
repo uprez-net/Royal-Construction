@@ -8,7 +8,7 @@ product
 
 Construction business owners and project managers, often the same person in a small-to-medium company. They're running the whole operation simultaneously: quoting incoming leads, coordinating tradies across active builds, tracking milestone progress, reviewing financials, and handling government compliance. The job context is high-stakes and time-pressured. They're glancing at a dashboard between site visits, not sitting at a desk for 8 hours.
 
-## Product Purpose
+## Product Purposes
 
 End-to-end construction management for the people who build things. Covers the full operational arc: lead capture, quoting, project execution, tradie scheduling, milestone tracking, financials, and government compliance. The chatbot layer adds AI-assisted lookups and workflow shortcuts. Success looks like a business owner who closes the day knowing exactly where every job stands without chasing down information.
 
