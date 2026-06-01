@@ -24,11 +24,11 @@ export const navigationItems: NavItem[] = [
     icon: <LayoutDashboard className="size-4" />,
   },
   { slug: "leads", label: "Leads", icon: <Users className="size-4" /> },
-  // {
-  //   slug: "quotations",
-  //   label: "Quotations",
-  //   icon: <ReceiptText className="size-4" />,
-  // },
+  {
+    slug: "quotations",
+    label: "Quotations",
+    icon: <ReceiptText className="size-4" />,
+  },
   // {
   //   slug: "catalogue",
   //   label: "Catalogue",
