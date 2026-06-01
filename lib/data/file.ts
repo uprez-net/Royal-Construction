@@ -41,3 +41,23 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
     }
 
 }
+
+export async function getFilesByLeadId(leadId: number) {
+    try {
+        const files = await prisma.file.findMany({
+            where: {
+                leadId,
+            },
+        });
+
+        return {
+            success: true,
+            count: files.length,
+            files,
+        }
+    }
+    catch (error) {
+        console.error('Error fetching files for lead', error);
+        throw error;
+    }
+}

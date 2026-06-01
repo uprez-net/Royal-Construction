@@ -1,6 +1,7 @@
 import { createChatMessages, createOrGetChatSession, MessageData, updateChatMessages } from "@/lib/data/chat";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-import { fetchLeadInfoTool } from "@/lib/tools/fetch-lead-info";
+import { fetchLeadFilesTool, fetchLeadInfoTool } from "@/lib/tools/fetch-lead-info";
+import { FileProcessingTool } from "@/lib/tools/file-tools";
 import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { ChatMessageAI } from "@/types/chat";
@@ -105,6 +106,8 @@ export async function POST(request: NextRequest) {
                         lineItemTool: lineItemTool(dataStream),
                         offerFileTool: offerFileTool(dataStream),
                         fetchLeadInfoTool: fetchLeadInfoTool,
+                        fileProcessingTool: FileProcessingTool,
+                        fetchLeadFilesTool: fetchLeadFilesTool,
                     }
                 });
 

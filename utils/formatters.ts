@@ -100,3 +100,29 @@ export function buildBlobPath({fileId, fileName, milestoneId, projectId}: BlobPa
     return `projects/${projectId ?? "Unknown"}/${fileId}-${sanitizeFileName(fileName)}`;
   }
 }
+
+export async function streamToBase64(
+  stream: ReadableStream<Uint8Array>
+): Promise<string> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+
+  // merge chunks
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const merged = new Uint8Array(totalLength);
+
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  // Node.js way
+  return Buffer.from(merged).toString("base64");
+}

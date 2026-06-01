@@ -1,4 +1,5 @@
-import { fetchLeadInfoTool as createFetchLeadInfoTool } from "@/lib/tools/fetch-lead-info";
+import { fetchLeadInfoTool as createFetchLeadInfoTool, fetchLeadFilesTool } from "@/lib/tools/fetch-lead-info";
+import { FileProcessingTool } from "@/lib/tools/file-tools";
 import { lineItemTool as createLineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool as createOfferFileTool } from "@/lib/tools/offer-file";
 import { ChatMessage, ChatSession } from "@prisma/client";
@@ -20,6 +21,8 @@ export type ChatTools = {
   lineItemTool: lineItemToolUI;
   offerFileTool: offerFileToolUI;
   fetchLeadInfoTool: InferUITool<typeof createFetchLeadInfoTool>;
+  fileProcessingTool: InferUITool<typeof FileProcessingTool>;
+  fetchLeadFilesTool: InferUITool<typeof fetchLeadFilesTool>;
 }
 
 export type ChatMessageAI = UIMessage<
