@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 
-export async function createOrGetChatSession(leadId: number, userId: string): Promise<ChatSessionWithMessages> {
+export async function createOrGetChatSession(leadId: number): Promise<ChatSessionWithMessages> {
     try {
         const existingSession = await prisma.chatSession.findFirst({
             where: { leadId },
@@ -18,7 +18,6 @@ export async function createOrGetChatSession(leadId: number, userId: string): Pr
         const newSession = await prisma.chatSession.create({
             data: {
                 leadId,
-                userId,
             },
             include: { messages: true },
         });
