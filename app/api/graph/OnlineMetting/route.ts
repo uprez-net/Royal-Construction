@@ -3,32 +3,32 @@ import { ClientSecretCredential } from '@azure/identity';
 import { getGraphConfig } from '@/lib/graph/config';
 
 export async function POST(req: NextRequest): Promise<Response> {
-  try {
-    const body = await req.json();
-    const { name = 'Client', email, startDateTime } = body;
+      try {
+            const body = await req.json();
+            const { name = 'Client', email, startDateTime } = body;
 
-    if (!email || !startDateTime) {
-      return NextResponse.json({ error: 'Missing email or startDateTime' }, { status: 400 });
-    }
+            if (!email || !startDateTime) {
+                  return NextResponse.json({ error: 'Missing email or startDateTime' }, { status: 400 });
+            }
 
-    const config = getGraphConfig();
-    if (config.mode !== 'app-only' || !config.senderUpn) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-    }
+            const config = getGraphConfig();
+            if (config.mode !== 'app-only' || !config.senderUpn) {
+                  return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+            }
 
-    const credential = new ClientSecretCredential(config.tenantId, config.clientId, config.clientSecret);
-    const tokenResult = await credential.getToken('https://graph.microsoft.com/.default');
-    const accessToken = tokenResult?.token;
+            const credential = new ClientSecretCredential(config.tenantId, config.clientId, config.clientSecret);
+            const tokenResult = await credential.getToken('https://graph.microsoft.com/.default');
+            const accessToken = tokenResult?.token;
 
-    if (!accessToken) throw new Error('Unable to acquire Graph access token');
+            if (!accessToken) throw new Error('Unable to acquire Graph access token');
 
-    const start = new Date(startDateTime);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    const endDateTime = end.toISOString();
+            const start = new Date(startDateTime);
+            const end = new Date(start.getTime() + 60 * 60 * 1000);
+            const endDateTime = end.toISOString();
 
-    const formattedDate = start.toLocaleDateString('en-AU', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
+            const formattedDate = start.toLocaleDateString('en-AU', {
+                  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            });
 
     // ══════════════════════════════════════════════════════════════
     // STEP 0: GET THE USER GUID (From ENV instead of API call)
@@ -102,11 +102,11 @@ export async function POST(req: NextRequest): Promise<Response> {
         </a>
       </div>`;
 
-    const event = {
-      subject: `Consultation with ${name} - Royal Constructions`,
-      body: {
-        contentType: 'HTML',
-        content: `
+            const event = {
+                  subject: `Consultation with ${name} - Royal Constructions`,
+                  body: {
+                        contentType: 'HTML',
+                        content: `
           <div style="font-family: Arial, sans-serif; color: #333333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0;">
             <div style="background-color: #0C1829; padding: 30px; text-align: center; border-bottom: 4px solid #C9A84C;">
               <h1 style="color: #C9A84C; margin: 0; font-size: 24px; letter-spacing: 1px;">ROYAL CONSTRUCTIONS</h1>
@@ -127,14 +127,14 @@ export async function POST(req: NextRequest): Promise<Response> {
             </div>
           </div>
         `,
-      },
-      start: { dateTime: startDateTime, timeZone: 'Australia/Sydney' },
-      end: { dateTime: endDateTime, timeZone: 'Australia/Sydney' },
-      location: { displayName: 'Microsoft Teams Meeting' },
-      attendees: [{ emailAddress: { address: email, name }, type: 'required' }],
-      isOnlineMeeting: true,
-      onlineMeetingProvider: 'teamsForBusiness',
-    };
+                  },
+                  start: { dateTime: startDateTime, timeZone: 'Australia/Sydney' },
+                  end: { dateTime: endDateTime, timeZone: 'Australia/Sydney' },
+                  location: { displayName: 'Microsoft Teams Meeting' },
+                  attendees: [{ emailAddress: { address: email, name }, type: 'required' }],
+                  isOnlineMeeting: true,
+                  onlineMeetingProvider: 'teamsForBusiness',
+            };
 
     const response = await fetch(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
@@ -149,20 +149,20 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
     );
 
-    if (!response.ok) {
-      const detail = await response.text();
-      console.error('Graph event create failed:', detail);
-      return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
-    }
+            if (!response.ok) {
+                  const detail = await response.text();
+                  console.error('Graph event create failed:', detail);
+                  return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
+            }
 
-    const eventData = await response.json();
-    const finalJoinUrl = joinUrl || eventData?.onlineMeeting?.joinUrl || null;
-    console.log('Graph event created successfully. Final Join URL:', finalJoinUrl);
+            const eventData = await response.json();
+            const finalJoinUrl = joinUrl || eventData?.onlineMeeting?.joinUrl || null;
+            console.log('Graph event created successfully. Final Join URL:', finalJoinUrl);
 
-    return NextResponse.json({ success: true, joinUrl: finalJoinUrl });
+            return NextResponse.json({ success: true, joinUrl: finalJoinUrl });
 
-  } catch (error) {
-    console.error('Book consultant failed', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
+      } catch (error) {
+            console.error('Book consultant failed', error);
+            return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+      }
 }

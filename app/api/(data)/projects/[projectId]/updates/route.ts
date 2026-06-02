@@ -2,8 +2,6 @@ import { randomUUID } from "crypto";
 
 import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
-import { revalidateTag } from "next/cache";
-
 import { getProjectById } from "@/lib/data/projects";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
@@ -19,7 +17,6 @@ import {
   badRequestResponse,
   notFoundResponse,
 } from "@/utils/validators";
-import { CACHE_PROFILES } from "@/types/cache";
 import { NextRequest } from "next/server";
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -120,8 +117,6 @@ export async function POST(
     if (milestone?.isPhotoRequired && milestoneId) {
       console.log(`[NOTIFICATION] Client notified for milestone ${milestoneId}`);
     }
-
-    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
     const updatedProject = await getProjectById(projectId);
 

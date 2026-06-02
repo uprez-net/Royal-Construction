@@ -2,6 +2,8 @@ import prisma from "@/lib/prisma";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
 import type { CreateProjectInput } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 export async function createProject(projectData: CreateProjectInput) {
   const customerMode = projectData.customerMode;
@@ -56,6 +58,10 @@ export async function createProject(projectData: CreateProjectInput) {
       },
     },
   });
+
+
+  revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+  revalidateTag(`project-${project.id}`, CACHE_PROFILES.MEDIUM);
 
   return project.id;
 }

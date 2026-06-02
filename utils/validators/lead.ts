@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { LeadSource, LeadStage } from "@/lib/leads/types";
+import { paginationSchema } from "./common";
 
 export const leadStages = [
   "New",
@@ -209,3 +210,8 @@ export const leadParamSchema = z.object({
 });
 
 export type LeadParam = z.infer<typeof leadParamSchema>;
+
+export const leadLookupParamSchema = z.object({
+  ...paginationSchema.shape,
+  q: z.string().trim().default(""),
+})

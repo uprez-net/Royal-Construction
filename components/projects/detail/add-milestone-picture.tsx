@@ -33,7 +33,10 @@ import { buildBlobPath } from "@/utils/formatters";
 import { AlertCircle, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadDropzone } from "@/components/common/upload-dropzone";
-import { useUploadQueue, type QueuedUploadFile } from "@/hooks/use-upload-queue";
+import {
+  useUploadQueue,
+  type QueuedUploadFile,
+} from "@/hooks/use-upload-queue";
 
 const maxFiles = 5;
 
@@ -124,7 +127,9 @@ export default function AddMilestonePictureModal({
 
       if (!validatedPayload.success) {
         throw new Error(
-          validatedPayload.error.issues.map((issue) => issue.message).join(", "),
+          validatedPayload.error.issues
+            .map((issue) => issue.message)
+            .join(", "),
         );
       }
 
@@ -177,12 +182,12 @@ export default function AddMilestonePictureModal({
 
     try {
       const blob = await upload(
-        buildBlobPath(
+        buildBlobPath({
+          fileId: queuedFile.id,
+          fileName: queuedFile.file.name,
           projectId,
-          queuedFile.id,
-          queuedFile.file.name,
           milestoneId,
-        ),
+        }),
         queuedFile.file,
         {
           access: "public",
@@ -251,7 +256,8 @@ export default function AddMilestonePictureModal({
             Add Milestone Picture
           </DialogTitle>
           <DialogDescription className="text-[13px] text-slate-500">
-            Upload progress photos for this milestone and keep attachments tied to the project timeline.
+            Upload progress photos for this milestone and keep attachments tied
+            to the project timeline.
           </DialogDescription>
         </DialogHeader>
 

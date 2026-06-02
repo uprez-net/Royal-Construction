@@ -1,4 +1,4 @@
-import type { ProjectStatus, VariationStatus } from "@prisma/client";
+import type { ProjectStatus, Role, VariationStatus } from "@prisma/client";
 
 export const currency = new Intl.NumberFormat("en-AU", {
   style: "currency",
@@ -85,11 +85,52 @@ export function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
 }
 
-export function buildBlobPath(projectId: string, fileId: string, fileName: string, milestoneId?: string) {
+interface BlobPathParams {
+  fileId: string;
+  fileName: string;
+  milestoneId?: string;
+  projectId?: string;
+}
+
+export function buildBlobPath({fileId, fileName, milestoneId, projectId}: BlobPathParams) {
   if(milestoneId) {
-    return `projects/${projectId}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
+    return `projects/${projectId ?? "Unknown"}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
   }
   else {
-    return `projects/${projectId}/${fileId}-${sanitizeFileName(fileName)}`;
+    return `projects/${projectId ?? "Unknown"}/${fileId}-${sanitizeFileName(fileName)}`;
   }
+}
+
+export async function streamToBase64(
+  stream: ReadableStream<Uint8Array>
+): Promise<string> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+
+  // merge chunks
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const merged = new Uint8Array(totalLength);
+
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  // Node.js way
+  return Buffer.from(merged).toString("base64");
+}
+
+export const RoleLabelRecord: Partial<Record<Role, string>> & { undefined: string } = {
+  ADMIN: "Admin",
+  SITE_MANAGER: "Site Manager",
+  GUEST: "Guest",
+  CUSTOMER: "Customer",
+  undefined: "No role",
 }

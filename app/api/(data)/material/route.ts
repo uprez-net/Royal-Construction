@@ -1,9 +1,6 @@
 import { addMaterialToProject } from "@/lib/data/material";
-import { getProjectById } from "@/lib/data/projects";
-import { CACHE_PROFILES } from "@/types/cache";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { addMaterialSchema } from "@/utils/validators/material";
-import { revalidateTag } from "next/cache";
 import { NextRequest } from "next/server";
 
 
@@ -25,7 +22,6 @@ export async function POST(req: NextRequest) {
         const { projectId, materialData } = parsed.data;
         const material = await addMaterialToProject(projectId, materialData);
 
-        revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
         return successResponse(
             material,

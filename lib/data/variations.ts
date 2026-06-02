@@ -2,6 +2,8 @@ import prisma from "@/lib/prisma";
 import { VariationStatus } from "@prisma/client";
 import { applyVariationDelay } from "@/lib/utils/apply-variation-delay";
 import type { CreateVariationInput } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 type VariationStatusInput = "APPROVED" | "REJECTED";
 
@@ -15,6 +17,8 @@ export async function createVariation(projectId: string, input: CreateVariationI
       status: VariationStatus.PENDING,
     },
   });
+
+  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
   return {
     ...variation,
@@ -31,6 +35,7 @@ export async function updateVariationStatus(variationId: string, status: Variati
   if (status === "APPROVED") {
     await applyVariationDelay(variation.id);
   }
+  revalidateTag(`project-${variation.projectId}`, CACHE_PROFILES.MEDIUM);
 
   return variation;
 }

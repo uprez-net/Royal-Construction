@@ -33,7 +33,13 @@ export default clerkMiddleware(async (auth, request) => {
 
   if (!isPublicRoute(request) && !isAuthRoute(request)) await auth.protect()
 
-  const { userId } = await auth()
+  const { userId, sessionClaims } = await auth()
+  if(sessionClaims?.public_metadata.role === "GUEST") {
+    return new Response(null, {
+      status: 302,
+      headers: { location: "/guest" },
+    })
+  }
   if (isAuthRoute(request) && userId) {
     return new Response(null, {
       status: 302,

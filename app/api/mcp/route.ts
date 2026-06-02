@@ -566,7 +566,12 @@ const handler = createMcpHandler((server) => {
                     throw new Error("Authenticated user is required");
                 }
                 const fileId = uuid();
-                const pathname = buildBlobPath(projectId, fileId, file.name, milestoneId);
+                const pathname = buildBlobPath({
+                    fileId: fileId,
+                    fileName: file.name,
+                    projectId,
+                    milestoneId,
+                });
                 const blob = await put(pathname, file, { access: "public" });
                 await saveFile({
                     userId,

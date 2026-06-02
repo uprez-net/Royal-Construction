@@ -28,7 +28,7 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
   const project = `${type} at ${location}`;
   const amount = (lead?.budget && lead.budget !== 'Not Discussed') ? lead.budget : 'TBD';
   const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const baseUrl = 'https://royal-construction-chi.vercel.app';
 
   let component: React.ReactElement | null = null;
 

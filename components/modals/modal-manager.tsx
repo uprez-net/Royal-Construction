@@ -36,6 +36,7 @@ import { PreviewPictureModal } from "../common/preview-picture-modal";
 import UpdateMilestoneModal from "../projects/detail/update-milestone-modal";
 import AddMilestoneModal from "../projects/detail/add-milestone-modal";
 import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
+import { CreateOfferFileModal } from "../quotes/create-offer-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -281,7 +282,11 @@ export function ModalManager() {
         />
       );
     case "updateMilestoneStatus":
-      const { milestoneId: updateMilestoneStatusId, newStatus, projectId: updateMilestoneStatusProjectId } = modal.payload as {
+      const {
+        milestoneId: updateMilestoneStatusId,
+        newStatus,
+        projectId: updateMilestoneStatusProjectId,
+      } = modal.payload as {
         projectId: string;
         milestoneId: string;
         newStatus: MilestoneStatus;
@@ -296,7 +301,10 @@ export function ModalManager() {
         />
       );
     case "addMilestonePicture":
-      const { milestoneId: addMilestonePictureId, projectId: addMilestonePictureProjectId } = modal.payload as {
+      const {
+        milestoneId: addMilestonePictureId,
+        projectId: addMilestonePictureProjectId,
+      } = modal.payload as {
         milestoneId: string;
         projectId: string;
       };
@@ -308,6 +316,8 @@ export function ModalManager() {
           onClose={handleClose}
         />
       );
+    case "createOfferFile":
+      return <CreateOfferFileModal open onClose={handleClose} />;
     default:
       return null;
   }

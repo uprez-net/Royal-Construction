@@ -1,6 +1,7 @@
 import type { ApiSuccessResponse } from '@/utils/validators';
 import { HistoryItem, Lead, LeadsStats } from './types';
 import { fetchJson } from '@/utils/fetch';
+import { PaginatedLeadsResult } from '../data/leads';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
   actionDate: string;
@@ -19,29 +20,23 @@ export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type'
 
 // ── Fetch all leads ──
 
-export async function fetchLeads(): Promise<Lead[]> {
-  const response = await fetch('/api/leads', {
-    cache: 'no-store',
-  });
+export async function fetchLeads(): Promise<PaginatedLeadsResult> {
+  const data = await fetchJson<PaginatedLeadsResult>(
+    `/api/leads?q=&limit=100`, // Fetch all leads without filtering
+    { method: "GET", cache: 'no-store' },
+    "Failed to fetch leads",
+  )
 
-  if (!response.ok) {
+  if (!data.success) {
     throw new Error('Failed to fetch leads');
   }
 
-  const payload = (await response.json()) as
-    | ApiSuccessResponse<Lead[]>
-    | { success: false; error?: string };
-
-  if (!payload.success) {
-    throw new Error(payload.error ?? 'Failed to fetch leads');
-  }
-
-  return payload.data;
+  return data.data;
 }
 
 export async function fetchLead(id: number): Promise<Lead | null> {
 
-  const leads = await fetchLeads();
+  const { items: leads } = await fetchLeads();
   return leads.find(lead => lead.id === id) || null;
 }
 
@@ -50,7 +45,7 @@ export async function fetchLeadsStats(): Promise<LeadsStats> {
   // const response = await fetch('/api/leads/stats');
   // return response.json();
 
-  const leads = await fetchLeads();
+  const { items: leads } = await fetchLeads();
 
   const isConverted = (stage: string) => stage === 'Won' || stage === 'Converted';
   const isLost = (stage: string) => stage === 'Lost' || stage === 'Cancelled' || stage === 'Disqualified';

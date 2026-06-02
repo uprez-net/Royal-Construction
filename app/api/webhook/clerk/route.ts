@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
                 await updateUserMetadata(id, {
                     publicMetadata: {
                         role: newUser.role,
-                        customerId: newUser.customerId,
+                        ...(newUser.customerId && { customerId: newUser.customerId }) || {},
                     },
                     privateMetadata: {
                         applicationUserId: newUser.userId,
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
                 } = evt.data;
 
                 const updatedEmail = updatedEmailAddresses[0]?.email_address;
-                const role = public_metadata?.role as Role || Role.CUSTOMER;
+                const role = public_metadata?.role as Role || Role.GUEST;
 
                 await updateUser(updatedId, {
                     name: `${updatedFirstName} ${updatedLastName}`,
