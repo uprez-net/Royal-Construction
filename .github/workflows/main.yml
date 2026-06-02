@@ -109,7 +109,7 @@ jobs:
       # Setup PNPM
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
-      
+
       # Setup Node.js with caching for PNPM
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -124,7 +124,7 @@ jobs:
 
       # Migrate the database before building and deploying
       - name: Run Prisma migrate
-        run: pnpm prisma:migrate:deploy
+        run: pnpm prisma:migrate-deploy
 
       # Run Prisma generate to ensure generated client is up to date
       - name: Run Prisma generate
@@ -145,7 +145,7 @@ jobs:
       # Deploy prebuilt output
       - name: Deploy to Vercel
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-  
+
   vercel-deploy-staging:
     if: github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
@@ -188,7 +188,7 @@ jobs:
       # Setup PNPM
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
-        
+
       # Setup Node.js with caching for PNPM
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -199,7 +199,12 @@ jobs:
 
       # Install dependencies
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run:
+          pnpm install --frozen-lockfile
+
+      # Migrate the database before building and deploying
+      - name: Run Prisma migrate
+        run: pnpm prisma:migrate-deploy
 
       # Run Prisma generate to ensure generated client is up to date
       - name: Run Prisma generate
