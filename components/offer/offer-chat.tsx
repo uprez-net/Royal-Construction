@@ -60,10 +60,8 @@ export function OfferChat() {
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-20 w-[40vw] min-w-[320px] max-w-150",
-        "bg-[#1a1f26]/95 backdrop-blur-xl border-r border-white/10",
-        "transition-transform duration-300 ease-in-out flex flex-col",
-        "translate-x-0",
+        "flex h-full min-h-0 w-full flex-col",
+        "bg-[#1a1f26]/95 backdrop-blur-xl",
       )}
     >
       {/* Header */}

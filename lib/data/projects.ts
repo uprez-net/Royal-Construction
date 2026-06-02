@@ -214,8 +214,8 @@ export async function getProjects(query?: ProjectListQuery): Promise<PaginatedPr
     console.error("Error fetching projects:", error);
     return {
       items: [],
-      page: 1,
-      limit: 12,
+      page: query?.page ?? 1,
+      limit: query?.limit ?? 12,
       totalCount: 0,
       totalPages: 1,
     };

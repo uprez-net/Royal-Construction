@@ -12,9 +12,9 @@ export function OfferFileCanvas() {
   const { offerFile, lineItems } = useChatContext();
   const [tabId, setTabId] = useState<"file" | "line-items">("file");
   return (
-    <div className="relative h-full w-full overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Screen Tabs */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 pb-4">
+      <div className="shrink-0 flex items-center gap-1 border-b border-border/70 px-3 py-2">
         {(["file", "line-items"] as const).map((tab) => {
           const active = tabId === tab;
 
@@ -43,9 +43,13 @@ export function OfferFileCanvas() {
         })}
       </div>
 
-      {tabId === "file" && <OfferFileTemplate {...offerFile} />}
+      {tabId === "file" && (
+        <div className="min-h-0 flex-1 overflow-hidden p-4">
+          <OfferFileTemplate {...offerFile} />
+        </div>
+      )}
       {tabId === "line-items" && (
-        <div className="px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
           {/* render line items in a table here */}
           <DataTable
             headers={[

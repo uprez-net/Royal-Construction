@@ -258,7 +258,7 @@ export function OfferFileTemplate({
     <iframe
       title="Offer Preview"
       srcDoc={html}
-      className="h-full w-full rounded-xl border bg-white"
+      className="block h-full min-h-0 w-full rounded-xl border bg-white"
     />
   );
 }

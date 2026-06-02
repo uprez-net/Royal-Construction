@@ -21,14 +21,15 @@ export function OfferClient({
       initialMessages={initialMessages}
       leadId={leadId}
     >
-      <main className="absolute inset-0 z-0">
-        <div className="relative h-full basis-[30%] min-w-0 border-l border-white/10">
+      <div className="grid h-full min-h-0 grid-cols-12">
+        <div className="col-span-4 min-w-0 min-h-0 border-r border-slate-200/60">
           <OfferChat />
         </div>
-        <div className="relative h-full basis-[70%] min-w-0">
+
+         <div className="col-span-8 min-w-0 min-h-0 bg-slate-50/30">
           <OfferFileCanvas />
         </div>
-      </main>
+      </div>
     </ChatProvider>
   );
 }
