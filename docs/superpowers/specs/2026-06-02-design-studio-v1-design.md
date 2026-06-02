@@ -85,6 +85,24 @@ Minimum structured brief fields:
 
 The assistant should avoid over-structuring early lead intake. If the source data comes from a lead note, keep the note intact and derive assumptions beside it.
 
+## Model Strategy
+
+V1 should use separate model lanes for plan intelligence, facade imagery, and preview rendering.
+
+Plan generation should use `gemini-2.5-pro` through the existing `ai` and `@ai-sdk/google` stack. The model's job is to convert a brief into a validated JSON concept-plan model, not to draw the final plan directly. `gemini-2.5-flash` can be used for lower-cost chat turns, brief summarization, and draft iterations, but saved plan versions should be generated or repaired through `gemini-2.5-pro` because practical reports show Flash can be less reliable for strict JSON output.
+
+Facade concept generation should use Google Imagen through the AI SDK:
+
+- `imagen-4.0-generate-001` for normal facade concept images.
+- `imagen-4.0-ultra-generate-001` when the team needs a more polished client-facing concept.
+- `imagen-4.0-fast-generate-001` for cheaper draft exploration.
+
+If the workflow needs image editing from uploaded references, use a Gemini image model such as `gemini-2.5-flash-image` behind an explicit facade-edit action. Treat preview image models as optional until production stability is proven.
+
+3D rendering should not be generated directly by an AI model in V1. The app should render previews deterministically from Royal's JSON plan model. Start with an SVG/isometric or simple React-rendered 3D-style preview; introduce `three` and `@react-three/fiber` only if V1 needs true WebGL walkthrough-style preview.
+
+Every saved model output must pass schema validation before persistence. Invalid or incomplete model output should be shown as a repairable draft, not saved as a design version.
+
 ## In-House Editor Direction
 
 V1 should not depend on a hosted floor-plan editor. Because CAD is explicitly out of vision, the editor only needs to support concept planning: room blocks, dimensions, doors, windows, adjacency, labels, facade direction, notes, versioning, and visual handoff.
@@ -108,6 +126,8 @@ Facade concepts should be generated as visual options derived from the structure
 - reviewer notes
 
 Facade output must be labeled as concept imagery. The UI should avoid implying that the image is measured, compliant, or construction-ready.
+
+The facade model choice should be stored with each concept so the team can compare outputs across model versions without losing provenance.
 
 ## Data Model
 
@@ -225,6 +245,7 @@ Minimum test coverage for implementation:
 
 - structured brief schema validation
 - concept plan schema validation
+- model-output repair path for invalid JSON or missing required fields
 - create session route auth and validation
 - save design version route auth and validation
 - facade concept creation route auth and validation
@@ -237,6 +258,7 @@ Manual verification should include:
 - create a concept linked to a lead or project
 - generate a structured brief from notes
 - generate an editable plan from the brief
+- reject or repair invalid model output before saving
 - edit room blocks, labels, dimensions, doors, windows, and notes
 - handle invalid plan data cleanly
 - save a plan snapshot from the in-house editor
@@ -277,7 +299,6 @@ Phase 4: Review workflow
 
 ## Open Decisions
 
-- Which image model/provider Royal wants to use for facade concepts.
 - Whether unlinked design sessions should be allowed in production or only in development/admin mode.
 - Whether selected design outputs should appear in project activity immediately or only after explicit approval.
 - Whether true WebGL 3D preview is needed in V1, or whether an isometric/elevation preview is enough.
@@ -289,6 +310,8 @@ Phase 4: Review workflow
 - Planner 5D public B2B docs show iframe plus REST API, AI floor-plan recognition, and CAD export, but access is enterprise-provisioned and CAD is out of V1 scope.
 - OpenPlans/OpenGeometry aligns more closely with owned implementation than hosted editors, but its pre-1.0 status makes it a later evaluation rather than a V1 dependency.
 - React Three Fiber and Three.js remain relevant for a future owned 3D preview surface if Royal later chooses to build more rendering in-house.
+- Vercel AI SDK documentation supports object generation with schemas, Google provider object generation, and Google Imagen image generation through `generateImage`.
+- Reddit discussion was useful as a practical caution, not a primary authority: recent Gemini Flash JSON complaints argue against relying on Flash for saved structured plans, and architecture-rendering threads reinforce that AI images are best for concept visualization rather than measured architectural truth.
 
 ## References
 
@@ -298,3 +321,8 @@ Phase 4: Review workflow
 - https://support.planner5d.com/en/articles/15189751-planner-5d-b2b-api-technical-overview
 - https://opengeometry-io-openplans.mintlify.app/
 - https://github.com/pmndrs/react-three-fiber/blob/master/docs/getting-started/your-first-scene.mdx?plain=1#L9
+- https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-object
+- https://ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai#model-capabilities
+- https://ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai#imagen-models
+- https://www.reddit.com/r/GeminiAI/comments/1teo9z7/gemini_25_flash_cannot_output_json/
+- https://www.reddit.com/r/StableDiffusion/comments/1bjsn96/whats_your_opinion_on_ai_rendering_tools_for/
