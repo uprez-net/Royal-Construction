@@ -1,6 +1,5 @@
 import { OfferClient } from "@/components/offer/offer-client";
 import { getChatByLeadId } from "@/lib/data/chat";
-import { cn } from "@/lib/utils";
 import { convertToUIMessage } from "@/utils/chat";
 import { Suspense } from "react";
 
@@ -13,14 +12,8 @@ async function OfferCreationContent({
   const chat = await getChatByLeadId(parseInt(leadId));
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-background">
-      <div
-        className={cn(
-          "relative h-screen w-screen overflow-hidden",
-          "bg-[#0f1419] text-[#f7f9fc] antialiased",
-        )}
-      >
-        {/* Main canvas */}
+    <div className="flex h-full min-h-0 w-full flex-1">
+      <section className="flex h-full min-h-0 w-full flex-1 overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 shadow-sm backdrop-blur">
         <OfferClient
           leadId={leadId}
           chatId={chat?.id}
@@ -28,7 +21,7 @@ async function OfferCreationContent({
             chat?.messages ? [...convertToUIMessage(chat.messages)] : []
           }
         />
-      </div>
+      </section>
     </div>
   );
 }

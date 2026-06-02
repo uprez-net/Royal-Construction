@@ -16,12 +16,13 @@ export function OfferFileTemplate({
 
 <style>
   :root {
-    --primary: #111827;
-    --muted: #6b7280;
-    --border: #e5e7eb;
+    --primary: #0f172a;
+    --muted: #64748b;
+    --border: #dbe4ee;
     --surface: #f8fafc;
-    --success: #16a34a;
-    --danger: #dc2626;
+    --paper: #ffffff;
+    --success: #0f9d7a;
+    --danger: #d14343;
   }
 
   * {
@@ -31,25 +32,31 @@ export function OfferFileTemplate({
   }
 
   body {
-    font-family:
-      Inter,
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      sans-serif;
-    background: white;
+    font-family: "Aptos", "Segoe UI", system-ui, -apple-system, sans-serif;
+    background:
+      radial-gradient(circle at top, rgba(13, 148, 136, 0.08), transparent 30%),
+      linear-gradient(180deg, #eef3f8 0%, #f8fafc 100%);
     color: var(--primary);
-    line-height: 1.7;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-y: auto;
+    padding: 24px 18px 28px;
   }
 
   .container {
-    max-width: 900px;
-    margin: auto;
-    padding: 48px;
+    width: min(100%, 760px);
+    margin: 0 auto;
+    padding: 32px 28px 36px;
+    background: var(--paper);
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 24px;
+    box-shadow:
+      0 20px 60px rgba(15, 23, 42, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
   }
 
   .header {
-    margin-bottom: 48px;
+    margin-bottom: 28px;
   }
 
   .badge {
@@ -57,25 +64,31 @@ export function OfferFileTemplate({
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 12px;
+    padding: 5px 11px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
 
   .title {
-    font-size: 42px;
+    font-size: 34px;
+    line-height: 1.08;
     font-weight: 700;
-    margin-bottom: 8px;
+    letter-spacing: -0.03em;
+    margin-bottom: 10px;
   }
 
   .subtitle {
     color: var(--muted);
+    font-size: 15px;
   }
 
   .section {
-    margin-bottom: 36px;
-    padding-bottom: 24px;
+    margin-bottom: 26px;
+    padding-bottom: 22px;
     border-bottom: 1px solid var(--border);
   }
 
@@ -84,16 +97,16 @@ export function OfferFileTemplate({
   }
 
   .section-title {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 16px;
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 12px;
   }
 
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 16px;
+    padding: 16px 18px;
   }
 
   ul {
@@ -102,8 +115,8 @@ export function OfferFileTemplate({
 
   li {
     display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 8px;
     align-items: flex-start;
   }
 
@@ -123,23 +136,24 @@ export function OfferFileTemplate({
   }
 
   .footer {
-    margin-top: 48px;
-    padding-top: 24px;
+    margin-top: 30px;
+    padding-top: 18px;
     border-top: 1px solid var(--border);
     color: var(--muted);
-    font-size: 14px;
+    font-size: 12px;
   }
 
   .signature {
-    margin-top: 60px;
+    margin-top: 36px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 48px;
+    gap: 28px;
   }
 
   .signature-line {
     border-top: 1px solid var(--primary);
-    padding-top: 8px;
+    padding-top: 10px;
+    font-size: 13px;
   }
 </style>
 </head>
@@ -258,7 +272,7 @@ export function OfferFileTemplate({
     <iframe
       title="Offer Preview"
       srcDoc={html}
-      className="h-full w-full rounded-xl border bg-white"
+      className="block h-full min-h-0 w-[50vw] rounded-2xl border border-slate-200/60 bg-white shadow-sm"
     />
   );
 }

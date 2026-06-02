@@ -12,7 +12,6 @@ import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
 import { Bot, SendHorizonalIcon, SparklesIcon } from "lucide-react";
 import { Textarea } from "../ui/textarea";
-import { ScrollArea } from "../ui/scroll-area";
 import { Response } from "../chat/response";
 import remarkGfm from "remark-gfm";
 import { ToolResult } from "../chat/tool-result";
@@ -55,21 +54,18 @@ export function OfferChat() {
     if (isAtBottom) {
       scrollToBottom("auto");
     }
-  }, [messages]);
+  }, [messages, isAtBottom, scrollToBottom]);
 
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-20 w-[40vw] min-w-[320px] max-w-150",
-        "bg-[#1a1f26]/95 backdrop-blur-xl border-r border-white/10",
-        "transition-transform duration-300 ease-in-out flex flex-col",
-        "translate-x-0",
+        "flex h-full min-h-0 w-full flex-col overflow-hidden",
+        "bg-[#1a1f26]/95 backdrop-blur-xl",
       )}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-[#242b33]">
+      <div className="shrink-0 border-b border-white/10 bg-[#242b33] px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-linear-to-br from-[#0d7377] to-[#095456] flex items-center justify-center font-serif font-bold text-lg text-white">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-linear-to-br from-[#0d7377] to-[#095456] font-serif text-lg font-bold text-white">
             RC
           </div>
           <span className="font-serif text-xl font-semibold text-[#f7f9fc]">
@@ -77,13 +73,12 @@ export function OfferChat() {
           </span>
         </div>
       </div>
-      {/* Chat messages */}
-      <div className="flex-1 min-h-0">
-        <ScrollArea
-          className="h-full px-4 py-3 overflow-hidden"
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <div
           ref={viewportRef}
+          className="h-full min-h-0 overflow-y-auto px-4 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 pb-3">
             {messages.map(
               (msg) =>
                 msg.parts.some(
@@ -96,26 +91,24 @@ export function OfferChat() {
                       msg.role === "user" ? "justify-end" : "justify-start",
                     )}
                   >
-                    {/* Agent Avatar */}
                     {msg.role !== "user" && (
-                      <Avatar className="h-8 w-8 mt-0.5 border border-[#0d7377] bg-[#242b33]">
+                      <Avatar className="mt-0.5 h-8 w-8 border border-[#0d7377] bg-[#242b33]">
                         <AvatarFallback className="bg-[#0d7377] text-white">
                           <Bot className="h-4 w-4" />
                         </AvatarFallback>
                       </Avatar>
                     )}
-                    {/* Message Bubble */}
                     <div
                       className={cn(
                         "max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed",
                         msg.role === "user"
                           ? "bg-[#0d7377]/20 text-[#f7f9fc]"
-                          : "bg-[#242b33] text-[#f7f9fc] border border-[#0d7377]/30",
+                          : "border border-[#0d7377]/30 bg-[#242b33] text-[#f7f9fc]",
                       )}
                     >
                       {msg.parts.map((part, i) =>
                         part.type === "text" ? (
-                          <div key={i} className="m-0 p-0 w-full">
+                          <div key={i} className="m-0 w-full p-0">
                             <Response
                               controls={{ table: true }}
                               remarkPlugins={[remarkGfm]}
@@ -135,15 +128,14 @@ export function OfferChat() {
             )}
             {status === "streaming" && <ThinkingMessage />}
             {error && (
-              <div className="max-w-[85%] rounded-lg bg-red-100/70 text-red-900 self-center px-3 py-2 text-sm leading-relaxed">
+              <div className="max-w-[85%] self-center rounded-lg bg-red-100/70 px-3 py-2 text-sm leading-relaxed text-red-900">
                 {error.message ||
                   "An error occurred while processing your chat."}
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
-      {/* Composer */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -151,7 +143,7 @@ export function OfferChat() {
           sendMessage({ parts: [{ type: "text", text: input }] });
           setInput("");
         }}
-        className="border-t border-white/10 px-4 py-3 bg-[#242b33]"
+        className="shrink-0 border-t border-white/10 bg-[#242b33] px-4 py-3"
       >
         <div className="relative">
           <Textarea
@@ -177,7 +169,7 @@ export function OfferChat() {
                 }
               }
             }}
-            className="resize-none pr-12 rounded-lg border border-white/10 bg-[#1a1f26]/80 text-sm focus-visible:ring-0"
+            className="resize-none pr-12 rounded-lg border border-white/10 bg-[#1a1f26]/80 text-white text-sm focus-visible:ring-0"
           />
           <Button
             type="submit"

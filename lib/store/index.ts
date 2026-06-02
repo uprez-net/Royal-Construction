@@ -5,6 +5,7 @@ import projectsReducer from "./slices/projectsSlice";
 import siteManagersReducer from "./slices/siteManagersSlice";
 import tradiesReducer from "./slices/tradiesSlice";
 import uiReducer from "./slices/uiSlice";
+import quotesReducer from "./slices/quotesSlice";
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     projects: projectsReducer,
     siteManagers: siteManagersReducer,
     tradies: tradiesReducer,
+    quotes: quotesReducer,
     ui: uiReducer,
   },
   middleware: (getDefaultMiddleware) =>

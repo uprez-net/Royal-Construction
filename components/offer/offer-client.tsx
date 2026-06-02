@@ -2,7 +2,7 @@
 import { ChatProvider } from "@/context/ChatContext";
 import { OfferChat } from "./offer-chat";
 import { OfferFileCanvas } from "./offer-file";
-import { ChatMessageAI } from "@/types/chat";
+import { ChatMessageAI, STARTING_AGENT_MESSAGE } from "@/types/chat";
 
 interface OfferClientProps {
   leadId: string;
@@ -18,17 +18,23 @@ export function OfferClient({
   return (
     <ChatProvider
       chatId={chatId}
-      initialMessages={initialMessages}
+      initialMessages={initialMessages.length > 0 ? initialMessages : [{
+        id: "initial-message",
+        role: "assistant",
+        parts: [{ type: "text", text: STARTING_AGENT_MESSAGE }],
+        metadata: { createdAt: new Date().toISOString() },
+      }]}
       leadId={leadId}
     >
-      <main className="absolute inset-0 z-0">
-        <div className="relative h-full basis-[30%] min-w-0 border-l border-white/10">
+      <div className="grid h-full min-h-0 min-w-0 grid-cols-1 lg:grid-cols-12">
+        <div className="flex min-h-0 min-w-0 overflow-hidden border-slate-200/60 lg:col-span-4 lg:border-r">
           <OfferChat />
         </div>
-        <div className="relative h-full basis-[70%] min-w-0">
+
+        <div className="flex min-h-0 min-w-0 overflow-hidden bg-slate-50/30 lg:col-span-8">
           <OfferFileCanvas />
         </div>
-      </main>
+      </div>
     </ChatProvider>
   );
 }

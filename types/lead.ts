@@ -1,4 +1,5 @@
 import type {
+    ChatSession,
     HistoryType as PrismaHistoryType,
     Lead as PrismaLead,
     LeadHistory as PrismaLeadHistory,
@@ -82,7 +83,7 @@ export function mapHistory(history: PrismaLeadHistory): HistoryItem {
 }
 
 export function mapLead(
-    lead: PrismaLead & { history: PrismaLeadHistory[] }
+    lead: PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] }
 ): UiLead {
     return {
         id: lead.id,
@@ -104,5 +105,6 @@ export function mapLead(
         history: lead.history.map(mapHistory),
         created: toDateOnly(lead.createdAt) ?? "",
         urgent: lead.urgent,
+        creatingOffer: lead.chatSessions.length > 0,
     };
 }

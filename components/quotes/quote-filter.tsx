@@ -1,20 +1,57 @@
 "use client";
-import { Card, CardHeader } from "@/components/ui/card";
+import { CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
 import { Input } from "../ui/input";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { fetchQuotes } from "@/lib/store/slices/quotesSlice";
 
 type TabId = "all" | "pending" | "approved" | "rejected" | "sent";
 
 interface QuoteFilterProps {
-  tabCounts: Record<TabId, number>;
-  totalCount: number;
+  initialTabCounts: Record<TabId, number>;
+  initialTotalCount: number;
 }
 
-export function QuoteFilter({ tabCounts, totalCount }: QuoteFilterProps) {
+export function QuoteFilter({
+  initialTabCounts,
+  initialTotalCount,
+}: QuoteFilterProps) {
+  const dispatch = useAppDispatch();
+  const { quotes } = useAppSelector((state) => state.quotes);
   const [searchInput, setSearchInput] = useState("");
   const [tabId, setTabId] = useState("all");
+  const { tabCounts, totalCount } = useMemo(() => {
+    if (quotes.items.length === 0) {
+      return {
+        tabCounts: initialTabCounts,
+        totalCount: initialTotalCount,
+      };
+    }
+    const counts: Record<TabId, number> = {
+      all: quotes.totalCount,
+      pending: quotes.items.filter((q) => q.quoteStatus === "PENDING").length,
+      approved: quotes.items.filter((q) => q.quoteStatus === "ACCEPTED").length,
+      rejected: quotes.items.filter((q) => q.quoteStatus === "REJECTED").length,
+      sent: quotes.items.filter((q) => q.quoteStatus === "SENT").length,
+    };
+    return {
+      tabCounts: counts,
+      totalCount: quotes.totalCount,
+    };
+  }, [quotes]);
+
+  const handleSearchChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchInput(query);
+    if (query.trim() === "") return;
+    try {
+      await dispatch(fetchQuotes({ q: query })).unwrap();
+    } catch (error) {
+      console.error("Error searching quotes", error);
+    }
+  };
 
   return (
     <CardHeader className="border-b border-border/70 px-5 py-4">
@@ -74,7 +111,7 @@ export function QuoteFilter({ tabCounts, totalCount }: QuoteFilterProps) {
               className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
               placeholder="Search quotes..."
               value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
+              onChange={handleSearchChange}
             />
           </div>
 
