@@ -6,7 +6,7 @@ export interface GraphConfig {
   clientId: string;
   clientSecret: string;
   senderUpn?: string;
-  senderUserId: string;
+  senderUserId?: string;
   defaultRecipient: string;
   defaultSubject: string;
   defaultBody: string;
