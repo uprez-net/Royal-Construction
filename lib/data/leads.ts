@@ -6,7 +6,7 @@ import type { Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
-import { Prisma } from "@prisma/client";
+import { Prisma, ChatSession } from "@prisma/client";
 
 const defaultLookupPageSize = 10;
 
@@ -38,7 +38,10 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
   try {
     const leads = await prisma.lead.findMany({
       where,
-      include: { history: { orderBy: { actionDate: "asc" } } },
+      include: { 
+        history: { orderBy: { actionDate: "asc" } },
+        chatSessions: true, 
+      },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
       take: safeLimit,
@@ -46,7 +49,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     const totalCount = await prisma.lead.count({ where });
 
     return {
-      items: leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] })),
+      items: leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] })),
       page: safePage,
       limit: safeLimit,
       totalCount,
@@ -111,7 +114,7 @@ export async function createLead(input: CreateLeadInput): Promise<UiLead> {
       urgent: input.urgent ?? false,
       history: { create: historyCreate },
     },
-    include: { history: { orderBy: { actionDate: "asc" } } },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
   });
 
   // ═══════════════════════════════════════════════════════
@@ -157,7 +160,7 @@ export async function createLead(input: CreateLeadInput): Promise<UiLead> {
     }
   }
 
-  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] });
+  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] });
 }
 
 export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
@@ -208,10 +211,10 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
-    include: { history: { orderBy: { actionDate: "asc" } } },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
   });
 
-  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] });
+  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] });
 }
 
 export async function deleteLead(id: number) {
