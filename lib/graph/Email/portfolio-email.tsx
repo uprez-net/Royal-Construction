@@ -22,7 +22,7 @@ const FONTS = {
 const URLS = {
       logo: "https://royal-construction-chi.vercel.app/logo-1024x713.png",
       heroImage:
-            "https://royalconstructions.com.au/wp-content/smush-webp/2026/04/main-4-1024x683.png.webp",
+            "https://royalconstructions.com.au/wp-content/smush-webp/2026/04/CUSTOM-DESIGN_CUSTOM_DUAL-OCCUPANCY_FINAL_V2-1024x683.jpg.webp",
       facebook: "https://royal-construction-chi.vercel.app/facebook.svg",
       instagram: "https://royal-construction-chi.vercel.app/instagram.svg",
       mbaLogo: "https://royal-construction-chi.vercel.app/image-78.png",
@@ -32,34 +32,9 @@ const URLS = {
       contact: "https://royalconstructions.com.au/contact/",
       facebookPage: "https://www.facebook.com/royalconstructionsau/",
       instagramPage: "https://www.instagram.com/royalconstructionsau/",
+      builderProfile:
+            "https://royal-construction-chi.vercel.app/Royal_Constructions_Builder_Profile_1.pdf",
 };
-
-const PROJECT_BRIEF_ITEMS = [
-      {
-            title: "Land information",
-            description: "Let us know whether you already own the land, are reviewing a block, or are still searching.",
-      },
-      {
-            title: "Project priorities",
-            description: "Share what matters most to you, such as layout, finishes, number of rooms, outdoor space, or energy efficiency.",
-      },
-      {
-            title: "Build type",
-            description: "Tell us if this is a new home, duplex, knockdown rebuild, extension, renovation, or another build type.",
-      },
-      {
-            title: "Location or address",
-            description: "Provide the suburb, lot details, or full site address if you already have it.",
-      },
-      {
-            title: "Timeline",
-            description: "Share when you would like to start design, approvals, construction, or move in.",
-      },
-      {
-            title: "Existing documents and ideas",
-            description: "Send any plans, surveys, council notes, inspiration images, sketches, or design ideas you already have.",
-      },
-];
 
 // ─── Responsive + Font Styles ───────────────────────────────────────────────
 
@@ -100,181 +75,38 @@ const FONT_FACES_CSS = `
   src: url(https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fMZg.ttf) format('truetype');
 }`;
 
-// ─── Step Sub-Component ─────────────────────────────────────────────────────
+// ─── Credential Item Sub-Component ──────────────────────────────────────────
 
-function Step({
-      number,
-      title,
-      description,
-      showBorder = true,
-}: {
-      number: string;
-      title: string;
-      description: string;
-      showBorder?: boolean;
-}) {
+function CredentialItem({ text }: { text: string }) {
       return (
-            <Section
-                  className="mobile_px-4 mobile_py-8"
-                  style={{
-                        padding: "2.5rem 1.5rem",
-                        borderBottom: showBorder ? "1px solid #1B2D45" : undefined,
-                  }}
-            >
-                  <Row>
-                        <Column className="pt-[3px]" style={{ width: 44, verticalAlign: "top" }}>
-                              <Text
-                                    className="text-[22px] leading-none font-medium text-rc-gold m-0"
-                                    style={{ fontFamily: FONTS.condensed }}
-                              >
-                                    {number}
-                              </Text>
-                        </Column>
-
-                        <Column className="pl-3">
-                              <Text
-                                    className="text-lg leading-tight font-medium text-rc-white m-0 mb-2"
-                                    style={{ fontFamily: FONTS.condensed }}
-                              >
-                                    {title}
-                              </Text>
-                              <Text
-                                    className="text-sm leading-relaxed tracking-[0.3px] font-light text-rc-text m-0"
-                                    style={{ fontFamily: FONTS.body, fontWeight: 350 }}
-                              >
-                                    {description}
-                              </Text>
-                        </Column>
-                  </Row>
-            </Section>
-      );
-}
-
-// ─── Get Started Card Sub-Component ─────────────────────────────────────────
-
-function GetStartedCard({
-      title,
-      description,
-      linkLabel,
-      linkHref,
-      showBorder = true,
-}: {
-      title: string;
-      description: string;
-      linkLabel: string;
-      linkHref: string;
-      showBorder?: boolean;
-}) {
-      return (
-            <Section
-                  className="mobile_py-8"
-                  style={{
-                        padding: "2.5rem 0",
-                        borderBottom: showBorder ? "1px solid #1B2D45" : undefined,
-                  }}
-            >
-                  <Row>
-                        <Column>
-                              <Text
-                                    className="text-xl leading-tight font-medium text-rc-white m-0 mb-3"
-                                    style={{ fontFamily: FONTS.condensed }}
-                              >
-                                    {title}
-                              </Text>
-                              <Text
-                                    className="text-sm leading-relaxed tracking-[0.3px] text-rc-text m-0 mb-4"
-                                    style={{ fontFamily: FONTS.body, fontWeight: 350 }}
-                              >
-                                    {description}
-                              </Text>
-                              <Link
-                                    href={linkHref}
-                                    target="_blank"
-                                    className="text-rc-gold no-underline text-[15px] leading-relaxed tracking-[-0.075px]"
-                                    style={{ fontFamily: FONTS.body, fontWeight: 450 }}
-                              >
-                                    {linkLabel}&nbsp;→
-                              </Link>
-                        </Column>
-                  </Row>
-            </Section>
-      );
-}
-
-function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
-      return (
-            <Section
-                  className="mobile_px-4 mobile_pt-10"
-                  style={{ padding: "3rem 1.5rem 0" }}
-            >
-                  <Row>
-                        <Column className="bg-rc-card rounded border border-rc-gold" style={{ padding: "1.5rem" }}>
-                              <Text
-                                    className="text-rc-gold m-0 mb-3 uppercase"
-                                    style={{
-                                          fontFamily: FONTS.condensed,
-                                          fontWeight: 500,
-                                          fontSize: 18,
-                                          lineHeight: 1,
-                                          letterSpacing: "0.6px",
-                                    }}
-                              >
-                                    First action
-                              </Text>
-                              <Text
-                                    className="mobile_font-24 text-rc-white m-0 mb-4 uppercase"
-                                    style={{
-                                          fontFamily: FONTS.condensed,
-                                          fontWeight: 500,
-                                          fontSize: 30,
-                                          lineHeight: 1,
-                                          letterSpacing: "0.4px",
-                                    }}
-                              >
-                                    Book your appointment with the builder
-                              </Text>
-                              <Text
-                                    className="text-sm leading-relaxed tracking-[0.3px] text-rc-text m-0 mb-5"
-                                    style={{ fontFamily: FONTS.body, fontWeight: 350 }}
-                              >
-                                    Please use the link below to add a consultation to the builder calendar.
-                                    This gives the team a fixed time to review your project and answer your
-                                    questions.
-                              </Text>
-                              <Link
-                                    href={bookingUrl}
-                                    target="_blank"
-                                    className="bg-rc-gold text-rc-dark no-underline inline-block rounded"
-                                    style={{
-                                          fontFamily: FONTS.body,
-                                          fontWeight: 700,
-                                          fontSize: 15,
-                                          lineHeight: 1.4,
-                                          padding: "0.875rem 1.25rem",
-                                    }}
-                              >
-                                    Book Appointment
-                              </Link>
-                              <Text
-                                    className="text-rc-muted m-0 mt-4 text-[12px] leading-relaxed tracking-[0.2px]"
-                                    style={{ fontFamily: FONTS.body, fontWeight: 300 }}
-                              >
-                                    If no suitable time is available, reply to this email and we will help arrange one.
-                              </Text>
-                        </Column>
-                  </Row>
-            </Section>
+            <Row style={{ marginBottom: "0.625rem" }}>
+                  <Column style={{ width: 24, verticalAlign: "top", paddingTop: "2px" }}>
+                        <Text
+                              className="text-rc-gold m-0 text-[16px] leading-none"
+                              style={{ fontFamily: FONTS.body }}
+                        >
+                              ✓
+                        </Text>
+                  </Column>
+                  <Column className="pl-2">
+                        <Text
+                              className="text-sm leading-relaxed tracking-[0.3px] text-rc-text m-0"
+                              style={{ fontFamily: FONTS.body, fontWeight: 350 }}
+                        >
+                              {text}
+                        </Text>
+                  </Column>
+            </Row>
       );
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-interface WelcomeEmailProps {
+interface PortfolioEmailProps {
       name?: string;
-      bookingUrl?: string;
 }
 
-export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.contact }: WelcomeEmailProps) {
+export default function PortfolioEmail({ name = "Homeowner" }: PortfolioEmailProps) {
       return (
             <Tailwind
                   config={{
@@ -311,8 +143,8 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                         <Body className="bg-rc-dark m-0 p-0 text-sm leading-relaxed tracking-[0.3px]" style={{ fontFamily: FONTS.body, fontWeight: 350 }}>
                               {/* ── Preheader ── */}
                               <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-                                    Thanks for your interest in Royal Constructions - send your project
-                                    details and book a builder calendar slot.
+                                    Royal Constructions — Our Builder Profile, Licences, and Project
+                                    Portfolio attached for your review.
                                     <div>
                                           &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏
                                     </div>
@@ -320,7 +152,9 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
 
                               {/* ── Main Container ── */}
                               <Container className="max-w-[640px] bg-rc-container mx-auto">
-                                    {/* ── Logo Header ── */}
+                                    {/* ══════════════════════════════════════════════════════════════════
+                         HEADER (identical to welcome email)
+                    ══════════════════════════════════════════════════════════════════ */}
                                     <Section className="bg-rc-light">
                                           <Row>
                                                 <Column className="py-5 px-6">
@@ -340,7 +174,9 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                           </Row>
                                     </Section>
 
-                                    {/* ── Hero Section ── */}
+                                    {/* ══════════════════════════════════════════════════════════════════
+                         HERO SECTION
+                    ══════════════════════════════════════════════════════════════════ */}
                                     <Section
                                           className="mobile_px-4 mobile_pt-10 mobile_pb-8"
                                           style={{ padding: "4rem 1.5rem 3rem" }}
@@ -357,9 +193,9 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                                   letterSpacing: "-1.5px",
                                                             }}
                                                       >
-                                                            Welcome to
+                                                            Builder Profile
                                                             <br />
-                                                            Royal Constructions
+                                                            &amp; Portfolio
                                                       </Text>
 
                                                       <Text
@@ -373,10 +209,28 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                                   maxWidth: 490,
                                                             }}
                                                       >
-                                                            Dear {name}, thank you for your interest in building with
-                                                            Royal Constructions. The next step is to book an appointment
-                                                            with the builder, then reply with any project ideas you
-                                                            already have so we can prepare before your consultation.
+                                                            Hi {name}, thank you for your interest in building with
+                                                            Royal Constructions.
+                                                      </Text>
+
+                                                      <Text
+                                                            className="mobile_max-w-full text-rc-text m-0 mt-4"
+                                                            style={{
+                                                                  fontFamily: FONTS.body,
+                                                                  fontWeight: 350,
+                                                                  fontSize: 14,
+                                                                  lineHeight: 1.7,
+                                                                  letterSpacing: "0.3px",
+                                                                  maxWidth: 490,
+                                                            }}
+                                                      >
+                                                            To give you complete peace of mind, I have attached our
+                                                            official{" "}
+                                                            <span className="text-rc-white" style={{ fontWeight: 500 }}>
+                                                                  Builder Profile
+                                                            </span>
+                                                            . Inside, you will find our comprehensive company
+                                                            overview, including:
                                                       </Text>
                                                 </Column>
                                           </Row>
@@ -387,7 +241,7 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                           <Row>
                                                 <Column>
                                                       <Img
-                                                            alt="Luxury Home by Royal Constructions"
+                                                            alt="Royal Constructions Portfolio"
                                                             src={URLS.heroImage}
                                                             width={592}
                                                             className="block outline-none border-none no-underline w-full max-w-[592px] rounded"
@@ -396,17 +250,32 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                           </Row>
                                     </Section>
 
-                                    <AppointmentBookingCard bookingUrl={bookingUrl} />
-
-                                    {/* ── Project Details Request ── */}
+                                    {/* ══════════════════════════════════════════════════════════════════
+                         CREDENTIALS CARD
+                    ══════════════════════════════════════════════════════════════════ */}
                                     <Section
                                           className="mobile_px-4 mobile_pt-10"
-                                          style={{ padding: "2rem 1.5rem 0" }}
+                                          style={{ padding: "3rem 1.5rem 0" }}
                                     >
                                           <Row>
-                                                <Column className="bg-rc-card rounded border border-rc-border" style={{ padding: "1.5rem" }}>
+                                                <Column
+                                                      className="bg-rc-card rounded border border-rc-gold"
+                                                      style={{ padding: "1.5rem" }}
+                                                >
                                                       <Text
-                                                            className="mobile_font-24 text-rc-white m-0 mb-4 uppercase"
+                                                            className="text-rc-gold m-0 mb-3 uppercase"
+                                                            style={{
+                                                                  fontFamily: FONTS.condensed,
+                                                                  fontWeight: 500,
+                                                                  fontSize: 18,
+                                                                  lineHeight: 1,
+                                                                  letterSpacing: "0.6px",
+                                                            }}
+                                                      >
+                                                            What&apos;s inside
+                                                      </Text>
+                                                      <Text
+                                                            className="mobile_font-24 text-rc-white m-0 mb-5 uppercase"
                                                             style={{
                                                                   fontFamily: FONTS.condensed,
                                                                   fontWeight: 500,
@@ -415,79 +284,45 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                                   letterSpacing: "0.4px",
                                                             }}
                                                       >
-                                                            Before your appointment
+                                                            Our Builder Profile Includes
                                                       </Text>
+
+                                                      <CredentialItem text="Our NSW Builder's Licence & Insurances" />
+                                                      <CredentialItem text="Master Builders Association Accreditations" />
+                                                      <CredentialItem text="A detailed list of our active and recently completed projects across Greater Sydney" />
+
                                                       <Text
-                                                            className="text-sm leading-relaxed tracking-[0.3px] text-rc-text m-0 mb-4"
+                                                            className="text-sm leading-relaxed tracking-[0.3px] text-rc-text m-0 mt-5 mb-6"
                                                             style={{ fontFamily: FONTS.body, fontWeight: 350 }}
                                                       >
-                                                            Please reply with whatever details you already have so
-                                                            we can prepare for the consultation. It is okay if some
-                                                            items are still undecided.
+                                                            We manage every project from approval through to handover
+                                                            with no outsourcing of responsibility, ensuring consistency
+                                                            and quality on every job.
                                                       </Text>
-                                                      {PROJECT_BRIEF_ITEMS.map((item) => (
-                                                            <Text
-                                                                  key={item.title}
-                                                                  className="text-sm leading-relaxed tracking-[0.2px] text-rc-text m-0 mb-3"
-                                                                  style={{ fontFamily: FONTS.body, fontWeight: 350 }}
-                                                            >
-                                                                  <span className="text-rc-gold" style={{ fontWeight: 500 }}>
-                                                                        {item.title}:
-                                                                  </span>{" "}
-                                                                  {item.description}
-                                                            </Text>
-                                                      ))}
-                                                </Column>
-                                          </Row>
-                                    </Section>
 
-                                    {/* ── "What Happens Next" Heading ── */}
-                                    <Section
-                                          className="mobile_px-4 mobile_pt-10"
-                                          style={{ padding: "4rem 1.5rem 0" }}
-                                    >
-                                          <Row>
-                                                <Column>
-                                                      <Text
-                                                            className="mobile_font-24 text-rc-white m-0 mb-10 uppercase"
+                                                      {/* ── Primary CTA ── */}
+                                                      <Link
+                                                            href={URLS.builderProfile}
+                                                            target="_blank"
+                                                            className="bg-rc-gold text-rc-dark no-underline inline-block rounded"
                                                             style={{
-                                                                  fontFamily: FONTS.condensed,
-                                                                  fontWeight: 500,
-                                                                  fontSize: 32,
-                                                                  lineHeight: 0.9,
-                                                                  letterSpacing: "0.4px",
+                                                                  fontFamily: FONTS.body,
+                                                                  fontWeight: 700,
+                                                                  fontSize: 15,
+                                                                  lineHeight: 1.4,
+                                                                  padding: "0.875rem 1.25rem",
                                                             }}
                                                       >
-                                                            What happens next
-                                                      </Text>
+                                                            Download / View Builder Profile
+                                                      </Link>
                                                 </Column>
                                           </Row>
                                     </Section>
 
-                                    {/* ── Steps ── */}
-                                    <Step
-                                          number="01"
-                                          title="Share Your Project Details"
-                                          description="Reply with whatever details you already have so the builder can review them before the appointment."
-                                          showBorder
-                                    />
-                                    <Step
-                                          number="02"
-                                          title="Meet With the Builder"
-                                          description="Use the consultation to discuss your goals, site details, priorities, and preferred timeline."
-                                          showBorder
-                                    />
-                                    <Step
-                                          number="03"
-                                          title="Review the Next Steps"
-                                          description="Our team will review your information, clarify anything missing, and guide you through design, quotation, and approval next steps."
-                                          showBorder={false}
-                                    />
-
-                                    {/* ── 24 Hour Notice ── */}
+                                    {/* ── Reply Prompt ── */}
                                     <Section
                                           className="mobile_px-4"
-                                          style={{ padding: "0.5rem 1.5rem 3rem" }}
+                                          style={{ padding: "2rem 1.5rem 0" }}
                                     >
                                           <Row>
                                                 <Column
@@ -497,82 +332,13 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                             <Row>
                                                                   <Column>
                                                                         <Text
-                                                                              className="text-rc-gold m-0 text-[13px] leading-relaxed tracking-[0.2px]"
-                                                                              style={{ fontFamily: FONTS.body, fontWeight: 400 }}
+                                                                              className="text-rc-text m-0 text-[13px] leading-relaxed tracking-[0.2px]"
+                                                                              style={{ fontFamily: FONTS.body, fontWeight: 350 }}
                                                                         >
-                                                                              The booking button above is the appointment action.
-                                                                              These next steps show how we prepare once your time is
-                                                                              reserved.
-                                                                        </Text>
-                                                                  </Column>
-                                                            </Row>
-                                                      </Section>
-                                                </Column>
-                                          </Row>
-                                    </Section>
-
-                                    {/* ── Get Started Section ── */}
-                                    <Section
-                                          className="mobile_px-4 mobile_pb-10"
-                                          style={{ padding: "0 1.5rem 3.5rem" }}
-                                    >
-                                          <Row>
-                                                <Column>
-                                                      <Text
-                                                            className="mobile_font-24 text-rc-white m-0 mb-2 uppercase"
-                                                            style={{
-                                                                  fontFamily: FONTS.condensed,
-                                                                  fontWeight: 500,
-                                                                  fontSize: 32,
-                                                                  lineHeight: 0.9,
-                                                                  letterSpacing: "0.4px",
-                                                            }}
-                                                      >
-                                                            Get started
-                                                      </Text>
-
-                                                      <GetStartedCard
-                                                            title="Explore Our Portfolio"
-                                                            description="Browse completed projects across NSW for inspiration and ideas for your new home."
-                                                            linkLabel="View Projects"
-                                                            linkHref={"https://royalconstructions.com.au/projects/"}
-                                                            showBorder
-                                                      />
-
-                                                      <GetStartedCard
-                                                            title="Contact the Team"
-                                                            description="Have a question before your appointment? Reply to this email or contact our office."
-                                                            linkLabel="Email Us"
-                                                            linkHref="mailto:info@royalconstructions.com.au"
-                                                            showBorder={false}
-                                                      />
-
-                                                      {/* ── Need Help ── */}
-                                                      <Section className="pt-10">
-                                                            <Row>
-                                                                  <Column>
-                                                                        <Text
-                                                                              className="text-rc-white m-0 mb-0.5 text-[15px] leading-relaxed tracking-[-0.075px]"
-                                                                              style={{ fontFamily: FONTS.body, fontWeight: 450 }}
-                                                                        >
-                                                                              Questions?
-                                                                        </Text>
-                                                                        <Text
-                                                                              className="mobile_max-w-full text-rc-text m-0 text-[13px] leading-relaxed tracking-[0.2px]"
-                                                                              style={{
-                                                                                    fontFamily: FONTS.body,
-                                                                                    fontWeight: 300,
-                                                                                    maxWidth: 490,
-                                                                              }}
-                                                                        >
-                                                                              Our team is here to help. Reach out at{" "}
-                                                                              <Link
-                                                                                    href="mailto:info@royalconstructions.com.au"
-                                                                                    className="text-rc-gold no-underline"
-                                                                              >
-                                                                                    info@royalconstructions.com.au
-                                                                              </Link>{" "}
-                                                                              or call{" "}
+                                                                              Please feel free to review the attached document.
+                                                                              If you have any questions or are ready to discuss
+                                                                              your specific project requirements, simply reply to
+                                                                              this email or call us on{" "}
                                                                               <Link
                                                                                     href="tel:1300832355"
                                                                                     className="text-rc-gold no-underline"
@@ -588,10 +354,12 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                           </Row>
                                     </Section>
 
-                                    {/* ── Sign-off ── */}
+                                    {/* ══════════════════════════════════════════════════════════════════
+                         SIGN-OFF (identical to welcome email)
+                    ══════════════════════════════════════════════════════════════════ */}
                                     <Section
                                           className="mobile_px-4"
-                                          style={{ padding: "0 1.5rem 3rem" }}
+                                          style={{ padding: "3rem 1.5rem 3rem" }}
                                     >
                                           <Row>
                                                 <Column
@@ -626,8 +394,8 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                     </Section>
 
                                     {/* ══════════════════════════════════════════════════════════════════
-                 FOOTER
-            ══════════════════════════════════════════════════════════════════ */}
+                         FOOTER (identical to welcome email)
+                    ══════════════════════════════════════════════════════════════════ */}
                                     <Section className="border-t border-rc-border bg-rc-footer">
                                           <Row>
                                                 <Column
@@ -803,7 +571,7 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                                         <Row>
                                                                               <Column className="p-5">
                                                                                     <Text
-                                                                                          className="text-[#1A2A42] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
+                                                                                          className="text-[#1B2D45] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
                                                                                           style={{ fontFamily: FONTS.body, fontWeight: 500 }}
                                                                                     >
                                                                                           Accredited by

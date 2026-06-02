@@ -9,6 +9,7 @@ import SpecialOfferEmail from '@/lib/graph/Email/special-offer-email';
 import VariationQuoteEmail from '@/lib/graph/Email/variation-quote-email';
 import ProjectUpdateEmail from '@/lib/graph/Email/project-update-email';
 import MaterialCatalogueEmail from '@/lib/graph/Email/material-catalogue-email';
+import PortfolioEmail from '@/lib/graph/Email/portfolio-email';
 
 interface LeadPreview {
   name?: string;
@@ -69,6 +70,9 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
       break;
     case 'Catalogue':
       component = <MaterialCatalogueEmail name={name} />;
+      break;
+    case 'Portfolio':
+      component = <PortfolioEmail name={name} />;
       break;
     default:
       return '';

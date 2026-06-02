@@ -37,7 +37,7 @@ const URLS = {
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
 const ICONS = {
-      trend: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='23 6 13.5 15.5 8.5 10.5 1 18'%3E%3C/polyline%3E%3Cpolyline points='17 6 23 6 23 12'%3E%3C/polyline%3E%3C/svg%3E`,
+      trend: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='23 6 13.5 15.5 8.5 10.5 1 18'%3E%3C/polyline%3E%3Cpolyline points='17 6 23 6 23 12'%3E%3C/polyline%3E%3C/svg%3E`,
 };
 
 // ─── Responsive + Font Styles ───────────────────────────────────────────────
@@ -244,7 +244,7 @@ function Footer() {
                                                 <Row>
                                                       <Column className="p-5">
                                                             <Text
-                                                                  className="text-[#1A2A42] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
+                                                                  className="text-[#1B2D45] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
                                                                   style={{ fontFamily: FONTS.body, fontWeight: 500 }}
                                                             >
                                                                   Accredited by
@@ -312,18 +312,18 @@ export default function VariationQuoteEmail({
                               extend: {
                                     colors: {
                                           rc: {
-                                                dark: "#070E1A",
-                                                container: "#0C1829",
-                                                card: "#0F1E33",
+                                                dark: "#0B1623",
+                                                container: "#0E1C2F",
+                                                card: "#122440",
                                                 cardAlt: "#111D30",
-                                                border: "#1A2A42",
-                                                footer: "#0A1525",
-                                                gold: "#C9A84C",
+                                                border: "#1B2D45",
+                                                footer: "#091320",
+                                                gold: "#C6923A",
                                                 white: "#FFFFFF",
-                                                text: "#B8C4D6",
-                                                muted: "#8A9BB5",
-                                                dimmed: "#3D5070",
-                                                light: "#F5F6F8",
+                                                text: "#B0BFCF",
+                                                muted: "#7E93AB",
+                                                dimmed: "#3A4E68",
+                                                light: "#F7F6F2",
                                                 label: "#6B7F9E",
                                           },
                                     },
@@ -402,7 +402,7 @@ export default function VariationQuoteEmail({
                                     {/* ── Variation Comparison Card ── */}
                                     <Section className="mobile_px-4" style={{ padding: "0 1.5rem 2.5rem" }}>
                                           <Row>
-                                                <Column className="bg-rc-card rounded-md overflow-hidden" style={{ border: "1px solid #1A2A42" }}>
+                                                <Column className="bg-rc-card rounded-md overflow-hidden" style={{ border: "1px solid #1B2D45" }}>
 
                                                       {/* Card Header */}
                                                       <Row>
@@ -433,7 +433,7 @@ export default function VariationQuoteEmail({
                                                                                           fontWeight: 500,
                                                                                           fontSize: 18,
                                                                                           lineHeight: 1.2,
-                                                                                          color: "#B8C4D6",
+                                                                                          color: "#B0BFCF",
                                                                                           textDecoration: "line-through",
                                                                                           textDecorationColor: "#6B7F9E",
                                                                                     }}
@@ -462,7 +462,7 @@ export default function VariationQuoteEmail({
                                                                               </Row>
                                                                         </Column>
                                                                         <Column className="mobile_amount_stack text-right">
-                                                                              <Text className="m-0" style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 20, lineHeight: 1.2, color: "#C9A84C" }}>
+                                                                              <Text className="m-0" style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 20, lineHeight: 1.2, color: "#C6923A" }}>
                                                                                     + {variationAmount}
                                                                               </Text>
                                                                         </Column>

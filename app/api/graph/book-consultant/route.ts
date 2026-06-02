@@ -158,12 +158,12 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const eventData = await response.json();
-    console.log('---------Event created:', eventData);
+    //console.log('---------Event created:', eventData);
     // ═══════════════════════════════════════════════════════
     // EXTRACT THE TEAMS MEETING LINK
     // ═══════════════════════════════════════════════════════
     const joinUrl = eventData?.onlineMeeting?.joinUrl || null;
-    console.log('Graph event created successfully. Join URL:', joinUrl);
+    //console.log('Graph event created successfully. Join URL:', joinUrl);
 
     const trimmedNotes = typeof notes === 'string' ? notes.trim() : '';
     const appointmentLabel = `${formattedDate} at ${start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} (AEST)`;

@@ -73,7 +73,7 @@ function QuoteRow({
 }) {
       return (
             <Row
-                  style={{ borderBottom: showBorder ? "1px solid #1A2A42" : undefined }}
+                  style={{ borderBottom: showBorder ? "1px solid #1B2D45" : undefined }}
             >
                   <Column
                         className="py-4 px-6"
@@ -95,7 +95,7 @@ function QuoteRow({
                                     lineHeight: isAmount ? 1.1 : 1.4,
                                     fontWeight: isAmount ? 500 : 450,
                                     letterSpacing: isAmount ? undefined : "0.2px",
-                                    color: isAmount ? "#C9A84C" : "#FFFFFF",
+                                    color: isAmount ? "#C6923A" : "#FFFFFF",
                               }}
                         >
                               {value}
@@ -119,7 +119,7 @@ function ProceedStep({
       return (
             <Row
                   style={{
-                        borderBottom: showBorder ? "1px solid #1A2A42" : undefined,
+                        borderBottom: showBorder ? "1px solid #1B2D45" : undefined,
                         paddingBottom: showBorder ? "1.75rem" : 0,
                         marginBottom: showBorder ? "1.75rem" : 0,
                   }}
@@ -135,7 +135,7 @@ function ProceedStep({
                               cellPadding="0"
                               cellSpacing="0"
                               role="presentation"
-                              style={{ backgroundColor: "#C9A84C", borderRadius: "50%" }}
+                              style={{ backgroundColor: "#C6923A", borderRadius: "50%" }}
                         >
                               <tr>
                                     <td
@@ -150,7 +150,7 @@ function ProceedStep({
                                                 style={{
                                                       fontFamily: FONTS.condensed,
                                                       fontWeight: 500,
-                                                      color: "#0C1829",
+                                                      color: "#0E1C2F",
                                                 }}
                                           >
                                                 {num}
@@ -169,7 +169,7 @@ function ProceedStep({
                         </Text>
                         <Text
                               className="m-0 text-[13px] leading-relaxed tracking-[0.2px]"
-                              style={{ fontFamily: FONTS.body, fontWeight: 350, color: "#B8C4D6" }}
+                              style={{ fontFamily: FONTS.body, fontWeight: 350, color: "#B0BFCF" }}
                         >
                               {description}
                         </Text>
@@ -355,7 +355,7 @@ function Footer() {
                                                 <Row>
                                                       <Column className="p-5">
                                                             <Text
-                                                                  className="text-[#1A2A42] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
+                                                                  className="text-[#1B2D45] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
                                                                   style={{ fontFamily: FONTS.body, fontWeight: 500 }}
                                                             >
                                                                   Accredited by
@@ -425,17 +425,17 @@ export default function QuotationEmail({
                               extend: {
                                     colors: {
                                           rc: {
-                                                dark: "#070E1A",
-                                                container: "#0C1829",
-                                                card: "#0F1E33",
-                                                border: "#1A2A42",
-                                                footer: "#0A1525",
-                                                gold: "#C9A84C",
+                                                dark: "#0B1623",
+                                                container: "#0E1C2F",
+                                                card: "#122440",
+                                                border: "#1B2D45",
+                                                footer: "#091320",
+                                                gold: "#C6923A",
                                                 white: "#FFFFFF",
-                                                text: "#B8C4D6",
-                                                muted: "#8A9BB5",
-                                                dimmed: "#3D5070",
-                                                light: "#F5F6F8",
+                                                text: "#B0BFCF",
+                                                muted: "#7E93AB",
+                                                dimmed: "#3A4E68",
+                                                light: "#F7F6F2",
                                           },
                                     },
                               },
@@ -536,7 +536,7 @@ export default function QuotationEmail({
                                           <Row>
                                                 <Column
                                                       className="bg-rc-card rounded-md overflow-hidden"
-                                                      style={{ border: "1px solid #1A2A42" }}
+                                                      style={{ border: "1px solid #1B2D45" }}
                                                 >
                                                       {/* Card Header */}
                                                       <Row>

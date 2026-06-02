@@ -38,9 +38,9 @@ const URLS = {
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
 const ICONS = {
-  star: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'%3E%3C/polygon%3E%3C/svg%3E`,
-  tree: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 8c.7-1 1-2.2 1-3.5C18 2.5 16.5 1 14.5 1c-1 0-1.8.4-2.5 1C11.3 1.4 10.5 1 9.5 1 7.5 1 6 2.5 6 4.5 6 5.8 6.3 7 7 8'%3E%3C/path%3E%3Cpath d='M12 2v20'%3E%3C/path%3E%3Cpath d='M7 8h10l-5 8-5-8z'%3E%3C/path%3E%3C/svg%3E`,
-  clock: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
+  star: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'%3E%3C/polygon%3E%3C/svg%3E`,
+  tree: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 8c.7-1 1-2.2 1-3.5C18 2.5 16.5 1 14.5 1c-1 0-1.8.4-2.5 1C11.3 1.4 10.5 1 9.5 1 7.5 1 6 2.5 6 4.5 6 5.8 6.3 7 7 8'%3E%3C/path%3E%3Cpath d='M12 2v20'%3E%3C/path%3E%3Cpath d='M7 8h10l-5 8-5-8z'%3E%3C/path%3E%3C/svg%3E`,
+  clock: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
   clockDark: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%230C1829' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 16 14'%3E%3C/polyline%3E%3C/svg%3E`,
 };
 
@@ -93,7 +93,7 @@ function OfferCard({
     >
       <Section
         className="bg-rc-card rounded-md"
-        style={{ border: "1px solid #1A2A42", height: "100%" }}
+        style={{ border: "1px solid #1B2D45", height: "100%" }}
       >
         <Row>
           <Column className="py-6 px-4 text-center">
@@ -117,7 +117,7 @@ function OfferCard({
                   <Column className="bg-rc-gold rounded-sm">
                     <Text
                       className="m-0 uppercase tracking-[0.5px]"
-                      style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 11, lineHeight: 1, color: "#0C1829", padding: "0.25rem 0.5rem" }}
+                      style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 11, lineHeight: 1, color: "#0E1C2F", padding: "0.25rem 0.5rem" }}
                     >
                       {badge}
                     </Text>
@@ -127,7 +127,7 @@ function OfferCard({
             ) : (
               <Section className="mx-auto" style={{ display: "inline-block" }}>
                 <Row>
-                  <Column className="rounded-sm" style={{ backgroundColor: "#1A2A42", border: "1px solid #2A3E5C" }}>
+                  <Column className="rounded-sm" style={{ backgroundColor: "#1B2D45", border: "1px solid #2A3E5C" }}>
                     <Text
                       className="m-0 uppercase tracking-[0.5px] text-rc-gold"
                       style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 11, lineHeight: 1, padding: "0.25rem 0.5rem" }}
@@ -322,7 +322,7 @@ function Footer() {
                 <Row>
                   <Column className="p-5">
                     <Text
-                      className="text-[#1A2A42] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
+                      className="text-[#1B2D45] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
                       style={{ fontFamily: FONTS.body, fontWeight: 500 }}
                     >
                       Accredited by
@@ -384,17 +384,17 @@ export default function SpecialOfferEmail({
           extend: {
             colors: {
               rc: {
-                dark: "#070E1A",
-                container: "#0C1829",
-                card: "#0F1E33",
-                border: "#1A2A42",
-                footer: "#0A1525",
-                gold: "#C9A84C",
+                dark: "#0B1623",
+                container: "#0E1C2F",
+                card: "#122440",
+                border: "#1B2D45",
+                footer: "#091320",
+                gold: "#C6923A",
                 white: "#FFFFFF",
-                text: "#B8C4D6",
-                muted: "#8A9BB5",
-                dimmed: "#3D5070",
-                light: "#F5F6F8",
+                text: "#B0BFCF",
+                muted: "#7E93AB",
+                dimmed: "#3A4E68",
+                light: "#F7F6F2",
                 label: "#6B7F9E",
               },
             },
@@ -471,7 +471,7 @@ export default function SpecialOfferEmail({
             <Section className="mobile_px-4" style={{ padding: "2.5rem 1.5rem 3rem" }}>
               <Row>
                 <Column className="text-center">
-                  <Section className="bg-rc-card rounded-lg mx-auto" style={{ border: "1px solid #1A2A42", display: "inline-block" }}>
+                  <Section className="bg-rc-card rounded-lg mx-auto" style={{ border: "1px solid #1B2D45", display: "inline-block" }}>
                     <Row>
                       <Column className="py-8 px-12 text-center">
                         <Text
@@ -482,7 +482,7 @@ export default function SpecialOfferEmail({
                         </Text>
                         <Text
                           className="mobile_font-56 m-0"
-                          style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 56, lineHeight: 1, color: "#C9A84C", letterSpacing: "-1px" }}
+                          style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 56, lineHeight: 1, color: "#C6923A", letterSpacing: "-1px" }}
                         >
                           {savingsAmount}
                         </Text>
@@ -535,7 +535,7 @@ export default function SpecialOfferEmail({
                             <Column verticalAlign="middle">
                               <Text
                                 className="m-0 uppercase tracking-[0.8px]"
-                                style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 14, lineHeight: 1, color: "#0C1829" }}
+                                style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 14, lineHeight: 1, color: "#0E1C2F" }}
                               >
                                 Confirm within 7 days to unlock this offer
                               </Text>
