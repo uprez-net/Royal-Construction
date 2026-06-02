@@ -1,4 +1,4 @@
-import type { ProjectStatus, VariationStatus } from "@prisma/client";
+import type { ProjectStatus, Role, VariationStatus } from "@prisma/client";
 
 export const currency = new Intl.NumberFormat("en-AU", {
   style: "currency",
@@ -125,4 +125,12 @@ export async function streamToBase64(
 
   // Node.js way
   return Buffer.from(merged).toString("base64");
+}
+
+export const RoleLabelRecord: Partial<Record<Role, string>> & { undefined: string } = {
+  ADMIN: "Admin",
+  SITE_MANAGER: "Site Manager",
+  GUEST: "Guest",
+  CUSTOMER: "Customer",
+  undefined: "No role",
 }

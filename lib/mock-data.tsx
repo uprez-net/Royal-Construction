@@ -74,6 +74,11 @@ export const navigationItems: NavItem[] = [
   //   label: "Customer Chatbot",
   //   icon: <MessagesSquare className="size-4" />,
   // },
+  {
+    slug: "team",
+    label: "Team Management",
+    icon: <Users className="size-4" />,
+  }
 ];
 
 export const dashboardMetrics = [

@@ -1,5 +1,3 @@
-import prisma from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import {
   tradieSearchQuerySchema,
   parseSearchParamsWithResponse,
@@ -16,31 +14,6 @@ export async function GET(request: Request) {
 
     const search = params.data.search || params.data.q || "";
     const limit = params.data.limit;
-
-    const where: Prisma.TradieWhereInput | undefined = search
-      ? {
-          OR: [
-            {
-              name: {
-                contains: search,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              company: {
-                contains: search,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              tradeType: {
-                contains: search,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-          ],
-        }
-      : undefined;
 
     const tradies = await getTradiesForLookup(limit, search);
 
