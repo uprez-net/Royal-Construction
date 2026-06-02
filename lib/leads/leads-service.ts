@@ -6,7 +6,7 @@ export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' 
   actionDate: string;
 }
 
-export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type'> & {
+export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer'> & {
   type?: string | string[];
   history?: LeadHistoryInput[];
 };
