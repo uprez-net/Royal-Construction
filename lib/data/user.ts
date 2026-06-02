@@ -5,7 +5,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { Role } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
 
-export async function createUser(name: string, email: string, clerkId: string, phone: string, role: Role = Role.CUSTOMER) {
+export async function createUser(name: string, email: string, clerkId: string, phone: string, role: Role = Role.GUEST) {
     try {
         let customerId: string | null = null;
         const newUser = await prisma.user.create({
@@ -63,6 +63,7 @@ export async function getUserByClerkId(clerkId: string) {
 export async function updateUser(clerkId: string, updates: Partial<{ name: string; email: string; phone: string; role: Role }>) {
     try {
         // Remove undefined fields
+        let customerId: string | null = null;
         const filteredUpdates = Object.fromEntries(
             Object.entries(updates).filter(([, value]) => value !== undefined)
         );
@@ -72,11 +73,29 @@ export async function updateUser(clerkId: string, updates: Partial<{ name: strin
             data: filteredUpdates,
         });
 
+        if (updates.role === Role.CUSTOMER) {
+            const customer = await prisma.customer.create({
+                data: {
+                    userId: user.id,
+                    email: user.email,
+                    name: user.name,
+                    phone: user.phone,
+                }
+            });
+
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { customerId: customer.id },
+            });
+            customerId = customer.id;
+        }
+
         return {
             success: true,
             message: "User updated successfully",
             userId: user.id,
             role: user.role,
+            customerId,
         };
     } catch (error) {
         console.error("Error updating user:", error);

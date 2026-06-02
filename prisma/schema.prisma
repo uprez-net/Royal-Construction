@@ -7,6 +7,7 @@ datasource db {
 }
 
 enum Role {
+  GUEST
   ADMIN
   CUSTOMER
   SITE_MANAGER
@@ -295,7 +296,7 @@ model ActivityLog {
 
 model Customer {
   id     String @id @default(uuid())
-  userId String @unique
+  userId String? @unique
   name   String
   email  String @unique
   phone  String @unique
@@ -304,7 +305,7 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   projects Project[] @relation("CustomerProjects")
-  user     User      @relation("CustomerUsers", fields: [userId], references: [id], onDelete: Cascade)
+  user     User?      @relation("CustomerUsers", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@index([phone])
