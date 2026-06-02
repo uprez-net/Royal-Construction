@@ -74,7 +74,6 @@ jobs:
     environment: Preview
 
     env:
-      NODE_ENV: "production"
       DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
@@ -125,11 +124,11 @@ jobs:
 
       # Migrate the database before building and deploying
       - name: Run Prisma migrate
-        run: pnpm dlx prisma migrate deploy
+        run: pnpm prisma:migrate:deploy
 
       # Run Prisma generate to ensure generated client is up to date
       - name: Run Prisma generate
-        run: pnpm dlx prisma generate
+        run: pnpm prisma:generate
 
       # Install Vercel CLI only on main branch
       - name: Install Vercel CLI
@@ -154,7 +153,6 @@ jobs:
     environment: Preview
 
     env:
-      NODE_ENV: "production"
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
@@ -205,7 +203,7 @@ jobs:
 
       # Run Prisma generate to ensure generated client is up to date
       - name: Run Prisma generate
-        run: pnpm dlx prisma generate
+        run: pnpm prisma:generate
 
       # Install Vercel CLI only on staging branch
       - name: Install Vercel CLI
