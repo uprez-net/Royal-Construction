@@ -233,7 +233,7 @@ export default function Leads() {
         fetchLeadsStats(),
       ]);
       console.log('Stats data loaded:', leadsData, statsData);
-      setLeads(leadsData);
+      setLeads(leadsData.items);
       setStats(statsData);
       setError(null);
     } catch (err) {
