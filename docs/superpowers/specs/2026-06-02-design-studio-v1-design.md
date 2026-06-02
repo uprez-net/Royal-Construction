@@ -4,12 +4,13 @@
 
 Royal Construction needs one internal interface where team members can turn a lead or project brief into early floor-plan concepts, facade concepts, and reviewable design versions. V1 should ship as an upgrade to the existing `Architect` area, not as a separate app.
 
-The approved direction is in-house-first: Royal owns the AI brief, interactive concept editor, project integration, versions, facade concepts, comments, and approval workflow. CAD integration and vendor floor-plan editor dependencies are explicitly out of scope and not part of the product vision for this version.
+The approved direction is in-house-first and Illoca-inspired: Royal owns a "tracing paper" style intelligent canvas where staff can sketch, mark up, prompt, and iteratively refine concept plans. Royal owns the AI brief, interactive concept editor, project integration, versions, facade concepts, comments, and approval workflow. CAD integration and vendor floor-plan editor dependencies are explicitly out of scope and not part of the product vision for this version.
 
 ## Goals
 
 - Give staff one place to create and refine early design concepts from lead or project details.
 - Support an interactive workflow with chat-assisted brief capture and a visual floor-plan editor.
+- Support sketch, markup, and prompt-driven plan refinement in one canvas.
 - Generate structured design data that can be saved, versioned, reviewed, and attached to a lead or project.
 - Generate facade concept prompts and images for visual discussion.
 - Keep construction-grade responsibility clear: V1 outputs are concept/planning artifacts, not permit-ready plans.
@@ -24,6 +25,7 @@ The approved direction is in-house-first: Royal owns the AI brief, interactive c
 - Full CAD-grade floor-plan editor behavior.
 - Treating generated facade images as measurable construction drawings.
 - Replacing architects, certifiers, or drafting partners.
+- Matching Illoca's BIM/Revit export promise in V1.
 
 ## Users
 
@@ -42,11 +44,23 @@ The UI should follow the existing operations-heavy Royal style: dense, dashboard
 
 Design Studio V1 has three primary panes:
 
-1. Brief and AI chat
-2. Interactive concept plan editor
+1. Brief, AI chat, and agent actions
+2. Tracing Paper canvas for sketches, markups, and concept-plan editing
 3. Versions, facade concepts, and review activity
 
 On desktop, the interface can use a resizable split layout. On small screens, it should collapse into tabs: Brief, Plan, Facades, Review.
+
+## Illoca-Inspired Product Pattern
+
+Illoca's public product direction is useful because it treats AI design as an intelligent canvas rather than a one-shot image generator. Royal should adopt the workflow pattern, not the CAD/BIM scope:
+
+- Augmented sketch: rough sketches, spatial diagrams, and uploaded references become editable concept plans.
+- Prompted plans: staff can ask the assistant to create plan options or fill in unfinished areas.
+- Agentic refinement: staff can redline or mark up an area and ask for a targeted edit.
+- Adaptive massing: Royal can show simple in-house 3D/isometric massing previews from the plan model.
+- Instant facades: staff can generate facade concept options from the selected plan and material direction.
+
+For V1, the core principle is "intent in, structured concept model out." The interface should feel like tracing paper over a project brief: quick, visual, and iterative, while still keeping human review and editable plan data at the center.
 
 ## Core Workflow
 
@@ -55,10 +69,11 @@ On desktop, the interface can use a resizable split layout. On small screens, it
 3. The AI assistant asks for missing basics such as project type, bedrooms, bathrooms, storeys, block constraints, must-have spaces, facade style, and budget sensitivity.
 4. The assistant turns the conversation into a structured design brief.
 5. Royal creates a design session and generates an editable concept plan from the structured brief.
-6. The team edits rooms, labels, dimensions, doors, windows, and notes inside Royal's in-house concept editor.
-7. The system saves snapshots and visible metadata against the design session.
-8. The team generates facade concept prompts and images from the approved brief and selected plan version.
-9. Reviewers comment, compare versions, and mark a version as preferred or approved for handoff.
+6. The team sketches, marks up, or edits rooms, labels, dimensions, doors, windows, and notes inside Royal's in-house concept editor.
+7. The team can select an area and ask the agent for a targeted refinement, such as "make the alfresco larger" or "move the garage to the left."
+8. The system saves snapshots and visible metadata against the design session.
+9. The team generates facade concept prompts and images from the approved brief and selected plan version.
+10. Reviewers comment, compare versions, and mark a version as preferred or approved for handoff.
 
 ## AI Behavior
 
@@ -85,6 +100,8 @@ Minimum structured brief fields:
 
 The assistant should avoid over-structuring early lead intake. If the source data comes from a lead note, keep the note intact and derive assumptions beside it.
 
+The assistant should support scoped canvas actions. Each action should include the selected canvas target, user instruction, proposed JSON patch, natural-language rationale, and validation result before the change becomes a saved version.
+
 ## Model Strategy
 
 V1 should use separate model lanes for plan intelligence, facade imagery, and preview rendering.
@@ -107,7 +124,7 @@ Every saved model output must pass schema validation before persistence. Invalid
 
 V1 should not depend on a hosted floor-plan editor. Because CAD is explicitly out of vision, the editor only needs to support concept planning: room blocks, dimensions, doors, windows, adjacency, labels, facade direction, notes, versioning, and visual handoff.
 
-The lowest-risk in-house path is a deterministic SVG-based plan editor backed by a JSON design model. SVG gives Royal enough control for selectable rooms, draggable/resizable blocks, labels, dimension guides, grid snapping, print/export previews, and fast implementation in the existing React app. It avoids a canvas scene graph dependency for V1 while keeping the model clean enough to move to canvas or WebGL later.
+The lowest-risk in-house path is a deterministic SVG-based tracing-paper editor backed by a JSON design model. SVG gives Royal enough control for selectable rooms, draggable/resizable blocks, labels, dimension guides, redline markup, grid snapping, print/export previews, and fast implementation in the existing React app. It avoids a canvas scene graph dependency for V1 while keeping the model clean enough to move to canvas or WebGL later.
 
 The 3D preview should be lightweight and generated from the same plan model. V1 can start with an isometric/elevation preview or a simple React-rendered 3D-style preview. If true WebGL preview becomes necessary, `three` plus `@react-three/fiber` is the preferred later dependency because it is React-native and documented around a parent-sized `Canvas`. It should not be required for the first implementation slice unless visual testing proves the simpler preview is insufficient.
 
@@ -164,6 +181,28 @@ Recommended Prisma-level concepts:
   - `createdById`
   - timestamps
 
+- `DesignMarkup`
+  - `id`
+  - `designSessionId`
+  - `designVersionId`
+  - `authorId`
+  - `markupType`
+  - `geometry` as JSON
+  - `instruction`
+  - `appliedAgentActionId`
+  - timestamps
+
+- `DesignAgentAction`
+  - `id`
+  - `designSessionId`
+  - `designVersionId`
+  - `targetMarkupId`
+  - `instruction`
+  - `proposedPatch` as JSON
+  - `validationResult` as JSON
+  - `status`
+  - timestamps
+
 - `FacadeConcept`
   - `id`
   - `designSessionId`
@@ -194,6 +233,8 @@ Route handlers should own authenticated mutation boundaries:
 - `POST /api/design-studio/sessions/:id/brief`
 - `POST /api/design-studio/sessions/:id/versions`
 - `POST /api/design-studio/sessions/:id/render`
+- `POST /api/design-studio/sessions/:id/markups`
+- `POST /api/design-studio/sessions/:id/agent-actions`
 - `POST /api/design-studio/sessions/:id/facades`
 - `POST /api/design-studio/sessions/:id/comments`
 
@@ -209,6 +250,8 @@ Recommended feature folder:
 - `components/design-studio/concept-plan-editor.tsx`
 - `components/design-studio/concept-plan-canvas.tsx`
 - `components/design-studio/concept-plan-tools.tsx`
+- `components/design-studio/concept-markup-tools.tsx`
+- `components/design-studio/agent-action-panel.tsx`
 - `components/design-studio/concept-preview-panel.tsx`
 - `components/design-studio/design-version-panel.tsx`
 - `components/design-studio/facade-concept-panel.tsx`
@@ -225,6 +268,9 @@ Required V1 states:
 - AI brief generation pending state
 - concept plan generation pending state
 - invalid plan model state
+- markup drawing/editing state
+- agent action pending state
+- proposed patch review state
 - save snapshot pending state
 - facade generation pending state
 - preview/render unavailable state
@@ -246,6 +292,7 @@ Minimum test coverage for implementation:
 - structured brief schema validation
 - concept plan schema validation
 - model-output repair path for invalid JSON or missing required fields
+- agent action patch validation before applying markup-driven edits
 - create session route auth and validation
 - save design version route auth and validation
 - facade concept creation route auth and validation
@@ -260,6 +307,9 @@ Manual verification should include:
 - generate an editable plan from the brief
 - reject or repair invalid model output before saving
 - edit room blocks, labels, dimensions, doors, windows, and notes
+- draw a markup over a room or area
+- ask the agent to refine only the marked-up area
+- review and apply or reject the proposed patch
 - handle invalid plan data cleanly
 - save a plan snapshot from the in-house editor
 - generate and select a facade concept
@@ -273,6 +323,7 @@ Phase 1: Planning-mode V1
 - session persistence
 - in-house JSON plan model
 - basic SVG concept plan editor
+- basic sketch/redline markup layer
 - facade prompt storage
 
 Phase 2: In-house editor refinement
@@ -280,6 +331,7 @@ Phase 2: In-house editor refinement
 - grid snapping and scale controls
 - room resize and drag interactions
 - door/window placement
+- scoped agent refinements from selected markups
 - version snapshot capture
 - plan preview image capture
 
@@ -302,10 +354,12 @@ Phase 4: Review workflow
 - Whether unlinked design sessions should be allowed in production or only in development/admin mode.
 - Whether selected design outputs should appear in project activity immediately or only after explicit approval.
 - Whether true WebGL 3D preview is needed in V1, or whether an isometric/elevation preview is enough.
+- Whether the first markup tools should support freehand redlines only, or freehand plus shapes/arrows.
 
 ## Source Notes
 
 - drafted.ai provides useful UX inspiration for AI house plans, filters, floorplan previews, exterior renders, and downloads, but no public API dependency was identified.
+- Illoca Tracing Paper provides the strongest product-pattern reference: sketch, markup, prompt, agentic refinement, simple massing, and instant facades on an intelligent canvas. Royal should adopt the interaction pattern while excluding Illoca's BIM/Revit/CAD export scope from V1.
 - Floorplanner public docs show useful benchmark behavior for embedded editing and export, but the product direction no longer requires a vendor editor for V1.
 - Planner 5D public B2B docs show iframe plus REST API, AI floor-plan recognition, and CAD export, but access is enterprise-provisioned and CAD is out of V1 scope.
 - OpenPlans/OpenGeometry aligns more closely with owned implementation than hosted editors, but its pre-1.0 status makes it a later evaluation rather than a V1 dependency.
@@ -316,6 +370,7 @@ Phase 4: Review workflow
 ## References
 
 - https://www.drafted.ai/
+- https://illoca.com/
 - https://floorplanner.readme.io/reference/getting-started
 - https://floorplanner.readme.io/reference/embedding-the-editor-v2
 - https://support.planner5d.com/en/articles/15189751-planner-5d-b2b-api-technical-overview
