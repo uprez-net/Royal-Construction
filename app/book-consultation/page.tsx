@@ -22,6 +22,10 @@ const BRAND = {
 };
 
 const LOGO_URL = 'https://royal-construction-chi.vercel.app/logo-1024x713.png';
+const NOTES_HELPER =
+  'Include land size/status, project scope, room counts, granny flat needs, facade/material preferences, timeline, approval status, and quoting/readiness status.';
+const SAMPLE_NOTE =
+  'I am looking at a 550 square meter block. I want a 2 bedroom, 2 toilet main build with a rendered facade, plus one granny flat with 2 bedrooms and 1 toilet. I would like wooden flooring and a brick veneer setup. I am serious and want to start next month once approvals are in place. The plan is not approved yet, and I am still comparing different numbers and getting quotations.';
 
 function generateDays() {
   const days = [];
@@ -47,9 +51,12 @@ const timeSlots = generateTimeSlots();
 
 function BookingContent() {
   const searchParams = useSearchParams();
-  const name = searchParams.get('name') || 'Client';
-  const email = searchParams.get('email');
+  const initialName = searchParams.get('name') || '';
+  const initialEmail = searchParams.get('email') || '';
 
+  const [clientName, setClientName] = useState(initialName);
+  const [clientEmail, setClientEmail] = useState(initialEmail);
+  const [notes, setNotes] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [busySlots, setBusySlots] = useState<string[]>([]);
@@ -81,7 +88,18 @@ function BookingContent() {
   }, []);
 
   const handleBook = async () => {
-    if (!selectedDate || !selectedTime || !email) return;
+    const trimmedName = clientName.trim();
+    const trimmedEmail = clientEmail.trim();
+
+    if (!trimmedName || !trimmedEmail) {
+      setError('Please enter your name and email to continue.');
+      return;
+    }
+
+    if (!selectedDate || !selectedTime) {
+      setError('Please select a date and time slot.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -94,7 +112,7 @@ function BookingContent() {
       const res = await fetch('/api/graph/book-consultant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, startDateTime }),
+        body: JSON.stringify({ name: trimmedName, email: trimmedEmail, startDateTime, notes: notes.trim() }),
       });
       const data = await res.json();
       if (data.success) {
@@ -131,17 +149,25 @@ function BookingContent() {
     return `${hour12}:00 ${ampm}`;
   };
 
-  if (!email) {
-    return (
-      <div style={{ backgroundColor: BRAND.dark, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: BRAND.text, fontFamily: 'Inter, Arial, sans-serif' }}>
-        <div style={{ textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📧</div>
-          <p style={{ fontSize: 16 }}>Missing email parameter.</p>
-          <p style={{ fontSize: 13, color: BRAND.muted }}>Please use the link provided in your email.</p>
-        </div>
-      </div>
-    );
-  }
+  const displayName = clientName.trim() || 'Client';
+  const labelStyle = { fontSize: 11, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase' as const, letterSpacing: '0.5px' };
+  const inputStyle = {
+    width: '100%',
+    borderRadius: 10,
+    border: `1.5px solid ${BRAND.border}`,
+    backgroundColor: BRAND.container,
+    color: BRAND.white,
+    padding: '12px 12px',
+    fontSize: 13,
+    outline: 'none',
+  };
+  const textareaStyle = {
+    ...inputStyle,
+    minHeight: 120,
+    resize: 'vertical' as const,
+    lineHeight: 1.5,
+  };
+  const helperTextStyle = { fontSize: 12, color: BRAND.dimmed, lineHeight: 1.6 };
 
   if (booked) {
     return (
@@ -165,7 +191,7 @@ function BookingContent() {
           <div style={{ marginTop: 30, padding: '16px 20px', backgroundColor: BRAND.container, borderRadius: 10, border: `1px solid ${BRAND.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
               <Video size={16} color={BRAND.gold} />
-              <span style={{ fontSize: 13, color: BRAND.muted }}>An invite has also been sent to {email}</span>
+              <span style={{ fontSize: 13, color: BRAND.muted }}>An invite has also been sent to {clientEmail}</span>
             </div>
           </div>
         </div>
@@ -202,7 +228,7 @@ function BookingContent() {
           </div>
           <h1 style={{ color: BRAND.white, fontSize: 28, fontWeight: 700, margin: '0 0 8px', letterSpacing: '-0.5px' }}>Book Your Consultation</h1>
           <p style={{ color: BRAND.muted, fontSize: 14, margin: 0 }}>
-            Welcome, <strong style={{ color: BRAND.gold }}>{name}</strong>. Choose a date and time below.
+            Welcome, <strong style={{ color: BRAND.gold }}>{displayName}</strong>. Choose a date and time below.
           </p>
         </div>
 
@@ -214,6 +240,72 @@ function BookingContent() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+            {/* ═══ CONTACT DETAILS ═══ */}
+            <div style={{ backgroundColor: BRAND.card, borderRadius: 14, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: BRAND.gold }} />
+                  <h3 style={{ margin: 0, color: BRAND.white, fontSize: 15, fontWeight: 600, letterSpacing: '0.3px' }}>Your Details</h3>
+                </div>
+                <p style={{ ...helperTextStyle, marginTop: 0, marginBottom: 16 }}>Confirm your contact details so we can send the invite.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                  <div>
+                    <label htmlFor="booking-name" style={labelStyle}>Full Name</label>
+                    <input
+                      id="booking-name"
+                      name="name"
+                      autoComplete="name"
+                      type="text"
+                      value={clientName}
+                      onChange={(event) => setClientName(event.target.value)}
+                      placeholder="e.g. Jaswinder Singh"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="booking-email" style={labelStyle}>Email</label>
+                    <input
+                      id="booking-email"
+                      name="email"
+                      autoComplete="email"
+                      type="email"
+                      value={clientEmail}
+                      onChange={(event) => setClientEmail(event.target.value)}
+                      placeholder="e.g. name@email.com"
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ═══ NOTES ═══ */}
+            <div style={{ backgroundColor: BRAND.card, borderRadius: 14, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: BRAND.gold }} />
+                  <h3 style={{ margin: 0, color: BRAND.white, fontSize: 15, fontWeight: 600, letterSpacing: '0.3px' }}>Project Notes</h3>
+                </div>
+                <p style={{ ...helperTextStyle, marginTop: 0, marginBottom: 12 }}>{NOTES_HELPER}</p>
+              </div>
+              <div style={{ padding: '0 24px 20px' }}>
+                <label htmlFor="booking-notes" style={labelStyle}>Notes</label>
+                <textarea
+                  id="booking-notes"
+                  name="notes"
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Example sample notes: I am looking at a 550 square meter block. I want a 2 bedroom, 2 toilet main build with a rendered facade, plus one granny flat with 2 bedrooms and 1 toilet. I would like wooden flooring and a brick veneer setup. I am serious and want to start next month once approvals are in place. The plan is not approved yet, and I am still comparing different numbers and getting quotations."
+                  rows={5}
+                  style={textareaStyle}
+                />
+                {/* <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 10, backgroundColor: BRAND.container, border: `1px solid ${BRAND.border}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Sample note</div>
+                  <p style={{ margin: 0, fontSize: 12, color: BRAND.text, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{SAMPLE_NOTE}</p>
+                </div> */}
+              </div>
+            </div>
 
             {/* ═══ DATE SELECTION ═══ */}
             <div style={{ backgroundColor: BRAND.card, borderRadius: 14, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>

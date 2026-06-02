@@ -61,7 +61,7 @@ export async function fetchLeadsStats(): Promise<LeadsStats> {
     contacted: leads.filter(l => l.stage === 'Contacted').length,
     qualified: leads.filter(l => l.stage === 'Qualified').length,
     conversion: leads.filter(l => isConverted(l.stage)).length,
-    pendingFollowup: leads.filter(l => !isConverted(l.stage) && !isLost(l.stage)).length,
+    pendingFollowup: leads.filter(l => l.stage == 'In Follow-up').length,
     lost: leads.filter(l => isLost(l.stage)).length,
   };
 

@@ -667,10 +667,10 @@ export default function ProjectUpdateEmail({
                                                             Kind regards,
                                                       </Text>
                                                       <Text className="text-rc-gold m-0 mb-0.5 text-base leading-relaxed" style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}>
-                                                            Guri Singh
+                                                            Gurpinder Uppal
                                                       </Text>
                                                       <Text className="text-rc-text m-0 text-[13px] leading-relaxed" style={{ fontFamily: FONTS.body, fontWeight: 300 }}>
-                                                            Royal Constructions NSW
+                                                            Royal Constructions Pty Ltd
                                                       </Text>
                                                 </Column>
                                           </Row>

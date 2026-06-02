@@ -31,28 +31,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
 
     // ══════════════════════════════════════════════════════════════
-    // STEP 0: RESOLVE EMAIL (UPN) TO AZURE AD OBJECT ID (GUID)
-    // The /onlineMeetings endpoint strictly requires a GUID for App-Only auth
+    // STEP 0: GET THE USER GUID (From ENV instead of API call)
     // ══════════════════════════════════════════════════════════════
-    let senderGuid = '';
-    try {
-      const userResponse = await fetch(
-        `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}?$select=id`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
+    const senderGuid = config.senderUserId; // Pulling directly from .env
 
-      if (userResponse.ok) {
-        const userData = await userResponse.json();
-        senderGuid = userData?.id || '';
-        console.log(`Resolved UPN ${config.senderUpn} to GUID: ${senderGuid}`);
-      } else {
-        const errDetail = await userResponse.text();
-        console.error('⚠️ Failed to resolve user GUID:', errDetail);
-      }
-    } catch (resolveError) {
-      console.error('⚠️ Error resolving user GUID:', resolveError);
+    if (!senderGuid) {
+      console.error('⚠️ GRAPH_SENDER_USER_ID is missing from environment variables. Cannot create Teams meeting link.');
+    } else {
+      console.log(`Using cached GUID from ENV: ${senderGuid}`);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -61,6 +47,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     let joinUrl = '';
     if (senderGuid) {
       try {
+        // ... (keep your existing onlineMeetingResponse fetch code here)
         const onlineMeetingResponse = await fetch(
           `https://graph.microsoft.com/v1.0/users/${senderGuid}/onlineMeetings`,
           {
@@ -79,7 +66,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
         if (onlineMeetingResponse.ok) {
           const meetingData = await onlineMeetingResponse.json();
-          joinUrl = meetingData?.joinWebUrl || ''; 
+          joinUrl = meetingData?.joinWebUrl || '';
           console.log('✅ Successfully generated Teams Join URL:', joinUrl);
         } else {
           const errDetail = await onlineMeetingResponse.text();
@@ -93,16 +80,27 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // STEP 2: CREATE THE CALENDAR EVENT
+    // ENFORCEMENT: ABORT IF TEAMS LINK FAILED
+    // If no joinUrl, do NOT create the calendar event.
     // ══════════════════════════════════════════════════════════════
-    
-    const joinButtonHtml = joinUrl 
-      ? `<div style="text-align: center; margin: 25px 0;">
-           <a href="${joinUrl}" target="_blank" style="background-color: #4A154B; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">
-             Join Microsoft Teams Meeting
-           </a>
-         </div>` 
-      : `<p style="text-align: center; color: #555;">A Teams meeting link will be added to your calendar invite shortly.</p>`;
+    if (!joinUrl) {
+      console.error('❌ Aborting calendar creation: Teams meeting link could not be generated.');
+      return NextResponse.json(
+        { error: 'Failed to generate Microsoft Teams meeting link. The calendar event was not created.' },
+        { status: 500 }
+      );
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // STEP 2: CREATE THE CALENDAR EVENT (Only runs if joinUrl exists)
+    // ══════════════════════════════════════════════════════════════
+
+    const joinButtonHtml = `
+      <div style="text-align: center; margin: 25px 0;">
+        <a href="${joinUrl}" target="_blank" style="background-color: #4A154B; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">
+          Join Microsoft Teams Meeting
+        </a>
+      </div>`;
 
     const event = {
       subject: `Consultation with ${name} - Royal Constructions`,
@@ -138,15 +136,14 @@ export async function POST(req: NextRequest): Promise<Response> {
       onlineMeetingProvider: 'teamsForBusiness',
     };
 
-    // Note: We still use the UPN (email) for the /events endpoint as it is more reliable there
     const response = await fetch(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
       {
         method: 'POST',
-        headers: { 
-          Authorization: `Bearer ${accessToken}`, 
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          'Prefer': 'include=onlinemeeting' 
+          'Prefer': 'include=onlinemeeting'
         },
         body: JSON.stringify(event),
       }

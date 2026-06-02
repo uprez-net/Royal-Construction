@@ -534,7 +534,7 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                             title="Explore Our Portfolio"
                                                             description="Browse completed projects across NSW for inspiration and ideas for your new home."
                                                             linkLabel="View Projects"
-                                                            linkHref={URLS.website}
+                                                            linkHref={"https://royalconstructions.com.au/projects/"}
                                                             showBorder
                                                       />
 
@@ -612,13 +612,13 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                             className="text-rc-gold m-0 text-base leading-relaxed"
                                                             style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}
                                                       >
-                                                            Guri Singh
+                                                            Gurpinder Uppal
                                                       </Text>
                                                       <Text
                                                             className="text-rc-text m-0 text-[13px] leading-relaxed"
                                                             style={{ fontFamily: FONTS.body, fontWeight: 300 }}
                                                       >
-                                                            Royal Constructions NSW
+                                                            Royal Constructions Pty Ltd
                                                       </Text>
                                                 </Column>
                                           </Row>
