@@ -39,8 +39,8 @@ const ICONS = {
       checkDark: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230C1829' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E`,
       checkDarkSmall: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%230C1829' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E`,
       checkGoldSmall: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230C1829' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E`,
-      calendar: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E`,
-      camera: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Ccircle cx='12' cy='13' r='4'%3E%3C/circle%3E%3C/svg%3E`,
+      calendar: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E`,
+      camera: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'%3E%3C/path%3E%3Ccircle cx='12' cy='13' r='4'%3E%3C/circle%3E%3C/svg%3E`,
 };
 
 // ─── Responsive + Font Styles ───────────────────────────────────────────────
@@ -97,8 +97,8 @@ function ProgressStep({
                                           borderRadius: "50%",
                                           textAlign: "center",
                                           verticalAlign: "middle",
-                                          backgroundColor: isCompleted ? "#C9A84C" : "#0C1829",
-                                          border: isCompleted ? "none" : `2px solid ${isCurrent ? "#C9A84C" : "#1A2A42"}`,
+                                          backgroundColor: isCompleted ? "#C6923A" : "#0E1C2F",
+                                          border: isCompleted ? "none" : `2px solid ${isCurrent ? "#C6923A" : "#1B2D45"}`,
                                     }}
                               >
                                     {isCompleted ? (
@@ -111,7 +111,7 @@ function ProgressStep({
                                                                   width: 8,
                                                                   height: 8,
                                                                   borderRadius: "50%",
-                                                                  backgroundColor: isCurrent ? "#C9A84C" : "#1A2A42",
+                                                                  backgroundColor: isCurrent ? "#C6923A" : "#1B2D45",
                                                                   fontSize: 0,
                                                                   lineHeight: 0,
                                                             }}
@@ -127,7 +127,7 @@ function ProgressStep({
                         style={{
                               fontFamily: FONTS.condensed,
                               fontWeight: 500,
-                              color: isCompleted ? "#C9A84C" : isCurrent ? "#FFFFFF" : "#6B7F9E",
+                              color: isCompleted ? "#C6923A" : isCurrent ? "#FFFFFF" : "#6B7F9E",
                         }}
                   >
                         {label}
@@ -313,7 +313,7 @@ function Footer() {
                                                 <Row>
                                                       <Column className="p-5">
                                                             <Text
-                                                                  className="text-[#1A2A42] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
+                                                                  className="text-[#1B2D45] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
                                                                   style={{ fontFamily: FONTS.body, fontWeight: 500 }}
                                                             >
                                                                   Accredited by
@@ -395,17 +395,17 @@ export default function ProjectUpdateEmail({
                               extend: {
                                     colors: {
                                           rc: {
-                                                dark: "#070E1A",
-                                                container: "#0C1829",
-                                                card: "#0F1E33",
-                                                border: "#1A2A42",
-                                                footer: "#0A1525",
-                                                gold: "#C9A84C",
+                                                dark: "#0B1623",
+                                                container: "#0E1C2F",
+                                                card: "#122440",
+                                                border: "#1B2D45",
+                                                footer: "#091320",
+                                                gold: "#C6923A",
                                                 white: "#FFFFFF",
-                                                text: "#B8C4D6",
-                                                muted: "#8A9BB5",
-                                                dimmed: "#3D5070",
-                                                light: "#F5F6F8",
+                                                text: "#B0BFCF",
+                                                muted: "#7E93AB",
+                                                dimmed: "#3A4E68",
+                                                light: "#F7F6F2",
                                                 label: "#6B7F9E",
                                           },
                                     },
@@ -453,7 +453,7 @@ export default function ProjectUpdateEmail({
                                                                   <Column verticalAlign="middle">
                                                                         <Text
                                                                               className="m-0 uppercase tracking-[1px]"
-                                                                              style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 12, lineHeight: 1, color: "#0C1829" }}
+                                                                              style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 12, lineHeight: 1, color: "#0E1C2F" }}
                                                                         >
                                                                               Milestone Achieved
                                                                         </Text>
@@ -497,7 +497,7 @@ export default function ProjectUpdateEmail({
                                     {/* ── Milestone Card ── */}
                                     <Section className="mobile_px-4" style={{ padding: "0 1.5rem 2.5rem" }}>
                                           <Row>
-                                                <Column className="bg-rc-card rounded-md overflow-hidden" style={{ border: "1px solid #1A2A42" }}>
+                                                <Column className="bg-rc-card rounded-md overflow-hidden" style={{ border: "1px solid #1B2D45" }}>
 
                                                       {/* Card Header */}
                                                       <Row>
@@ -565,9 +565,9 @@ export default function ProjectUpdateEmail({
                                                       </Text>
 
                                                       {/* Progress Bar */}
-                                                      <Section className="mb-8" style={{ backgroundColor: "#1A2A42", borderRadius: 100, height: 6, fontSize: 0, lineHeight: 0 }}>
+                                                      <Section className="mb-8" style={{ backgroundColor: "#1B2D45", borderRadius: 100, height: 6, fontSize: 0, lineHeight: 0 }}>
                                                             <Row>
-                                                                  <Column style={{ backgroundColor: "#C9A84C", borderRadius: 100, height: 6, width: filledWidth, fontSize: 0, lineHeight: 0 }} />
+                                                                  <Column style={{ backgroundColor: "#C6923A", borderRadius: 100, height: 6, width: filledWidth, fontSize: 0, lineHeight: 0 }} />
                                                                   <Column style={{ width: emptyWidth, fontSize: 0, lineHeight: 0 }} />
                                                             </Row>
                                                       </Section>
@@ -593,7 +593,7 @@ export default function ProjectUpdateEmail({
                                     {/* ── Photo Updates Card ── */}
                                     <Section className="mobile_px-4" style={{ padding: "0 1.5rem 2.5rem" }}>
                                           <Row>
-                                                <Column className="bg-rc-card rounded-md" style={{ border: "1px solid #1A2A42" }}>
+                                                <Column className="bg-rc-card rounded-md" style={{ border: "1px solid #1B2D45" }}>
                                                       <Section className="p-6">
                                                             <Row>
                                                                   <Column className="pr-4" verticalAlign="top" style={{ width: 36 }}>
@@ -603,7 +603,7 @@ export default function ProjectUpdateEmail({
                                                                         <Text className="m-0 mb-1.5" style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 15, lineHeight: 1.2, color: "#FFFFFF" }}>
                                                                               Photo Updates Available
                                                                         </Text>
-                                                                        <Text className="m-0 mb-4" style={{ fontFamily: FONTS.body, fontWeight: 350, fontSize: 13, lineHeight: 1.5, letterSpacing: "0.2px", color: "#8A9BB5" }}>
+                                                                        <Text className="m-0 mb-4" style={{ fontFamily: FONTS.body, fontWeight: 350, fontSize: 13, lineHeight: 1.5, letterSpacing: "0.2px", color: "#7E93AB" }}>
                                                                               See the latest progress photos from your site on the client portal.
                                                                         </Text>
                                                                         <Link
@@ -667,10 +667,10 @@ export default function ProjectUpdateEmail({
                                                             Kind regards,
                                                       </Text>
                                                       <Text className="text-rc-gold m-0 mb-0.5 text-base leading-relaxed" style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}>
-                                                            Guri Singh
+                                                            Gurpinder Uppal
                                                       </Text>
                                                       <Text className="text-rc-text m-0 text-[13px] leading-relaxed" style={{ fontFamily: FONTS.body, fontWeight: 300 }}>
-                                                            Royal Constructions NSW
+                                                            Royal Constructions Pty Ltd
                                                       </Text>
                                                 </Column>
                                           </Row>

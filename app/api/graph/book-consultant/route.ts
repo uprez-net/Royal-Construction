@@ -1,14 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ClientSecretCredential } from '@azure/identity';
 import { getGraphConfig } from '@/lib/graph/config';
+import { createLead, findLeadByEmail, updateLead } from '@/lib/data/leads';
+import type { HistoryItem } from '@/lib/leads/types';
+
+const NOTE_ACTION = 'NOTE';
+const NOTE_SOURCE_DETAIL = 'Book consultation form';
+
+const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
+const toTimeOnly = (date: Date) => date.toTimeString().slice(0, 5);
+
+function upsertNoteHistory(existing: HistoryItem[], nextNote: HistoryItem) {
+  const noteIndex = existing.findIndex(entry => entry.action.trim().toLowerCase() === 'note');
+  if (noteIndex === -1) {
+    return [...existing, nextNote];
+  }
+
+  return existing.map((entry, index) => (index === noteIndex ? nextNote : entry));
+}
+
+async function upsertBookingNotes({
+  name,
+  email,
+  notes,
+  noteDetail,
+}: {
+  name: string;
+  email: string;
+  notes: string;
+  noteDetail: string;
+}) {
+  const now = new Date();
+  const noteEntry: HistoryItem = {
+    date: toDateOnly(now),
+    time: toTimeOnly(now),
+    action: NOTE_ACTION,
+    detail: noteDetail,
+    type: 'system',
+  };
+
+  const existingLead = await findLeadByEmail(email);
+  if (existingLead) {
+    const updatedHistory = upsertNoteHistory(existingLead.history, noteEntry);
+    const updatedNotes = notes.length > 0 ? notes : existingLead.notes;
+    await updateLead(existingLead.id, { notes: updatedNotes, history: updatedHistory });
+    return;
+  }
+
+  await createLead(
+    {
+      name: name.trim() || 'Client',
+      phone: '',
+      email: email.trim(),
+      location: '',
+      source: 'Website',
+      sourceDetail: NOTE_SOURCE_DETAIL,
+      stage: 'Meeting Scheduled',
+      budget: 'Not Discussed',
+      type: ['Not Specified'],
+      notes,
+      followupNotes: '',
+      urgent: false,
+      history: [
+        {
+          action: NOTE_ACTION,
+          detail: noteDetail,
+          type: 'system',
+          actionDate: now,
+        },
+      ],
+    },
+    { skipWelcomeEmail: true }
+  );
+}
 
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     const body = await req.json();
-    const { name = 'Client', email, startDateTime } = body;
+    const { name = 'Client', email, startDateTime, notes } = body;
 
-    if (!email || !startDateTime) {
-      return NextResponse.json({ error: 'Missing email or startDateTime' }, { status: 400 });
+    if (!name || !email || !startDateTime) {
+      return NextResponse.json({ error: 'Missing name, email, or startDateTime' }, { status: 400 });
     }
 
     const config = getGraphConfig();
@@ -86,12 +158,30 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const eventData = await response.json();
-    console.log('---------Event created:', eventData);
+    //console.log('---------Event created:', eventData);
     // ═══════════════════════════════════════════════════════
     // EXTRACT THE TEAMS MEETING LINK
     // ═══════════════════════════════════════════════════════
     const joinUrl = eventData?.onlineMeeting?.joinUrl || null;
-    console.log('Graph event created successfully. Join URL:', joinUrl);
+    //console.log('Graph event created successfully. Join URL:', joinUrl);
+
+    const trimmedNotes = typeof notes === 'string' ? notes.trim() : '';
+    const appointmentLabel = `${formattedDate} at ${start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} (AEST)`;
+    const noteDetail = trimmedNotes.length > 0
+      ? `${trimmedNotes}\n\nAppointment: ${appointmentLabel}`
+      : `Appointment: ${appointmentLabel}`;
+
+    try {
+      await upsertBookingNotes({
+        name,
+        email,
+        notes: trimmedNotes,
+        noteDetail,
+      });
+    } catch (leadError) {
+      console.error('Failed to save booking notes to lead', leadError);
+      return NextResponse.json({ error: 'Failed to save booking notes' }, { status: 500 });
+    }
 
     // Return the joinUrl to your frontend
     return NextResponse.json({ success: true, joinUrl });

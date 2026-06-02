@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   UserPlus,
   CircleCheckBig,
@@ -13,7 +13,10 @@ import {
   X,
   Check,
   Bell,
+  Search,
+  Download,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { HistoryItem, Lead, LeadStage, LeadSource, BudgetRange, ProjectType, LeadsStats, EmailTemplate } from '@/lib/leads/types';
 import { createLead, fetchLeads, fetchLeadsStats, sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
 import TableView from './views/table-view';
@@ -25,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { MetricCard } from '@/components/common/metric-card';
 import { cn } from '@/lib/utils';
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
+import { LeadMetricCard } from '../common/lead-onclick-metric-card';
 
 type TabType = 'table' | 'followups' | 'analytics';
 
@@ -89,7 +93,7 @@ function formatShortDate(date: Date): string {
 
 function hydrateTemplate(text: string, lead: Lead): string {
   const leadType = Array.isArray(lead.type) ? lead.type[0] ?? 'New Home Build' : lead.type ?? 'New Home Build';
-  
+
   const values: Record<string, string> = {
     name: lead.name,
     location: lead.location,
@@ -201,6 +205,7 @@ export default function Leads() {
   const [activeTab, setActiveTab] = useState<TabType>('table');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
@@ -208,6 +213,8 @@ export default function Leads() {
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
   const [emailSubject, setEmailSubject] = useState('');
   const [sendingCampaign, setSendingCampaign] = useState(false);
+
+  const [activeMetric, setActiveMetric] = useState<string | null>(null);
 
   const [adding, setAdding] = useState(false);
   const [addingWithReminder, setAddingWithReminder] = useState(false);
@@ -225,7 +232,8 @@ export default function Leads() {
         fetchLeads(),
         fetchLeadsStats(),
       ]);
-      setLeads(leadsData.items);
+      console.log('Stats data loaded:', leadsData, statsData);
+      setLeads(leadsData);
       setStats(statsData);
       setError(null);
     } catch (err) {
@@ -246,7 +254,7 @@ export default function Leads() {
       contacted: currentLeads.filter(l => l.stage === 'Contacted').length,
       qualified: currentLeads.filter(l => l.stage === 'Qualified').length,
       conversion: currentLeads.filter(l => isConverted(l.stage)).length,
-      pendingFollowup: currentLeads.filter(l => !isConverted(l.stage) && !isLost(l.stage)).length,
+      pendingFollowup: currentLeads.filter(l => l.stage == 'In Follow-up').length,
       lost: currentLeads.filter(l => isLost(l.stage)).length,
     });
   }, []);
@@ -271,6 +279,11 @@ export default function Leads() {
       recalcStats(updated);
       return updated;
     });
+  };
+
+  const handleMetricClick = (metric: string) => {
+    // Toggle off if clicking the same metric, otherwise set active
+    setActiveMetric(prev => prev === metric ? null : metric);
   };
 
   const handleNewLead = (newLead: Lead) => {
@@ -436,9 +449,61 @@ export default function Leads() {
   const emailTargets = leads.filter(lead => lead.email);
   const emailTargetList = emailTargets.map(lead => lead.email).filter(Boolean).join(', ');
 
+  // Update your filteredLeads to respect the activeMetric (as shown in previous answer)
+  const filteredLeads = useMemo(() => {
+    let result = leads;
+
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(lead =>
+        lead.name.toLowerCase().includes(term) ||
+        lead.phone.includes(term) ||
+        lead.location.toLowerCase().includes(term) ||
+        lead.email.toLowerCase().includes(term)
+      );
+    }
+
+    if (activeMetric) {
+      const isConverted = (stage: string) => stage === 'Won' || stage === 'Converted';
+      const isLost = (stage: string) => stage === 'Lost' || stage === 'Cancelled' || stage === 'Disqualified';
+
+      if (activeMetric === 'converted') {
+        result = result.filter(l => isConverted(l.stage));
+      } else if (activeMetric === 'pendingFollowup') {
+        result = result.filter(l => l.stage === 'In Follow-up');
+      } else if (activeMetric === 'lost') {
+        result = result.filter(l => isLost(l.stage));
+      }
+    }
+
+    return result;
+  }, [leads, searchTerm, activeMetric]);
+
+
+  const normalizeTypes = (types: string | string[] | null | undefined): string[] => {
+    if (!types) return ['Not Specified'];
+    if (Array.isArray(types)) return types.length > 0 ? types : ['Not Specified'];
+    const normalized = types.split(',').map(type => type.trim()).filter(Boolean);
+    return normalized.length > 0 ? normalized : ['Not Specified'];
+  };
+
+  const handleExport = () => {
+    const leadHeader = ['leadId', 'name', 'phone', 'email', 'location', 'SourceDetail', 'Stage', 'assigned', 'budget', 'notes', 'FollowupsDate', 'FollowupTime', 'type', 'lostReason', 'urgent'];
+    const leadRows = filteredLeads.map(lead => {
+      const normalized = normalizeTypes(lead.type).filter(type => type !== 'Not Specified');
+      return [lead.id, lead.name, lead.phone, lead.email, lead.location, lead.sourceDetail, lead.stage, lead.assigned || '', lead.budget, lead.notes || '', lead.followupDate || '', lead.followupTime || '', normalized.join(', '), lead.lostReason || '', lead.urgent ? 'true' : 'false'];
+    });
+    const historyHeader = ['leadId', 'action', 'detail', 'type', 'actionDate'];
+    const historyRows = filteredLeads.flatMap(lead => (lead.history ?? []).map(entry => [lead.id, entry.action, entry.detail, entry.type, `${entry.date} ${entry.time}`.trim()]));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([leadHeader, ...leadRows]), 'Lead Data');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([historyHeader, ...historyRows]), 'History');
+    XLSX.writeFile(workbook, `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
     <div className="leads-container space-y-6">
-      <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
+      <Card className="max-w-3xl overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
         <CardContent className="relative p-6">
           <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
@@ -463,33 +528,41 @@ export default function Leads() {
 
       {stats && !loading && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
+          <LeadMetricCard
             label="Total Leads"
             value={String(stats.total)}
             note="All leads in the pipeline"
             tone="primary"
             icon={UserPlus}
+            onClick={() => handleMetricClick('total')}
+            active={activeMetric === 'total'}
           />
-          <MetricCard
+          <LeadMetricCard
             label={`Converted (${conversionRate}%)`}
             value={String(stats.conversion)}
             note="Won and converted leads"
             tone="success"
             icon={CircleCheckBig}
+            onClick={() => handleMetricClick('converted')}
+            active={activeMetric === 'converted'}
           />
-          <MetricCard
+          <LeadMetricCard
             label="Pending Follow-up"
             value={String(stats.pendingFollowup)}
             note="Leads awaiting next action"
             tone="warning"
             icon={Clock}
+            onClick={() => handleMetricClick('pendingFollowup')}
+            active={activeMetric === 'pendingFollowup'}
           />
-          <MetricCard
+          <LeadMetricCard
             label="Lost Leads"
             value={String(stats.lost)}
             note="Lost, cancelled or disqualified"
             tone="danger"
             icon={CircleX}
+            onClick={() => handleMetricClick('lost')}
+            active={activeMetric === 'lost'}
           />
         </div>
       )}
@@ -521,6 +594,23 @@ export default function Leads() {
               </button>
             );
           })}
+          {!loading && (
+            <div className="ml-auto flex items-center gap-3">
+              <div className="search-box" style={{ flex: 1 }}>
+                <Search size={16} />
+                <input
+                  type="text"
+                  placeholder="Search leads..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <button className="btn-export" onClick={handleExport}>
+                <Download size={14} />
+                Export
+              </button>
+            </div>
+          )}
         </div>
         <CardContent className="pt-5">
           {loading ? (
@@ -532,14 +622,16 @@ export default function Leads() {
             <>
               {activeTab === 'table' && (
                 <TableView
-                  leads={leads}
+                  leads={filteredLeads}
                   onLeadUpdate={handleLeadUpdate}
                   onLeadDelete={handleLeadDelete}
+                  activeMetric={activeMetric}
+                  onActiveMetricChange={setActiveMetric}
                 />
               )}
               {activeTab === 'followups' &&
                 <FollowupsView
-                  leads={leads}
+                  leads={filteredLeads}
                   onLeadUpdate={handleLeadUpdate}
                   onLeadDelete={handleLeadDelete}
                 />}

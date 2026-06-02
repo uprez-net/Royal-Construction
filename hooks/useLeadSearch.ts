@@ -3,7 +3,6 @@
 import { fetchJson } from "@/utils/fetch";
 import { useEffect, useState } from "react";
 import type { Lead as UiLead } from "@/lib/leads/types";
-import { PaginatedLeadsResult } from "@/lib/data/leads";
 
 
 export function useLeadSearch(initialQuery = "") {
@@ -18,17 +17,16 @@ export function useLeadSearch(initialQuery = "") {
             setLoading(true);
             setError(null);
             const q = encodeURIComponent(query.trim());
-            fetchJson<PaginatedLeadsResult>(
+            fetchJson<UiLead[]>(
                 `/api/leads?q=${q}&limit=50`,
                 { method: "GET" },
                 "Failed to fetch leads",
                 controller.signal
             )
                 .then((res) => {
-                    const { items } = res.data;
+                    const items = res.data;
                     setItems(Array.isArray(items) ? items : []);
-                }
-                )
+                })
                 .catch((err) => {
                     if (err.name === "AbortError") return;
                     console.error("useLeadSearch error", err);

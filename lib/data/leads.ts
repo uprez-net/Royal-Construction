@@ -67,11 +67,29 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
   }
 }
 
+type CreateLeadOptions = {
+  skipWelcomeEmail?: boolean;
+};
+
 export async function findLeadById(id: number) {
   return prisma.lead.findUnique({ where: { id }, include: { history: { orderBy: { actionDate: "asc" } } } });
 }
 
-export async function createLead(input: CreateLeadInput): Promise<UiLead> {
+export async function findLeadByEmail(email: string): Promise<UiLead | null> {
+  const trimmed = email.trim();
+  if (!trimmed) return null;
+
+  const lead = await prisma.lead.findFirst({
+    where: { email: { equals: trimmed, mode: "insensitive" } },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+  });
+
+  if (!lead) return null;
+
+  return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[] });
+}
+
+export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
 
@@ -120,7 +138,7 @@ export async function createLead(input: CreateLeadInput): Promise<UiLead> {
   // ═══════════════════════════════════════════════════════
   // SEND WELCOME EMAIL TO MANUALLY CREATED LEADS
   // ═══════════════════════════════════════════════════════
-  if (created.email && created.name) {
+  if (!options?.skipWelcomeEmail && created.email && created.name) {
     console.log(`[Lead ${created.id}] Sending welcome email to newly created lead...`);
     try {
       // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
