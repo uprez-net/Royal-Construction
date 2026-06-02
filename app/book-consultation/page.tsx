@@ -63,19 +63,34 @@ function BookingContent() {
   const [error, setError] = useState<string | null>(null);
   const [joinLink, setJoinLink] = useState<string | null>(null);
 
+  const [busySlotsMap, setBusySlotsMap] = useState<Record<string, string[]>>({});
+
   const timeSlots = generateTimeSlots(selectedDate);
 
   useEffect(() => {
     async function fetchCalendar() {
       try {
-        const res = await fetch('/api/graph/read-calender-dateTime?days=14');
+        // Fetch 60 days instead of 14
+        const res = await fetch('/api/graph/read-calender-dateTime?days=60');
         const data = await res.json();
+
         if (data.success) {
-          const busy = data.events.map((event: any) => {
-            const startDate = new Date(event.start.dateTime);
-            return `${startDate.toISOString().split('T')[0]}T${startDate.toTimeString().slice(0, 5)}`;
+          const map: Record<string, string[]> = {};
+
+          data.events.forEach((event: any) => {
+            if (!event.start?.dateTime) return;
+
+            // Graph API returns "2024-08-01T14:00:00" because of the Prefer header
+            const [datePart, timePart] = event.start.dateTime.split('T');
+            const time = timePart.slice(0, 5); // "14:00"
+
+            if (!map[datePart]) map[datePart] = [];
+            if (!map[datePart].includes(time)) {
+              map[datePart].push(time);
+            }
           });
-          setBusySlots(busy);
+
+          setBusySlotsMap(map);
         }
       } catch (err) {
         console.error('Failed to fetch calendar', err);
@@ -126,9 +141,30 @@ function BookingContent() {
     }
   };
 
+  // const isSlotBusy = (date: Date, time: string) => {
+  //   const dateStr = date.toISOString().split('T')[0];
+  //   return busySlots.includes(`${dateStr}T${time}`);
+  // };
+
+  // Format date safely to YYYY-MM-DD without timezone offset shifting
+  const formatToDateKey = (date: Date) => {
+    return date.toLocaleDateString('sv-SE'); // sv-SE locale formats as YYYY-MM-DD
+  };
+
+  // Check if a specific time slot is already booked
   const isSlotBusy = (date: Date, time: string) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return busySlots.includes(`${dateStr}T${time}`);
+    const dateKey = formatToDateKey(date);
+    return (busySlotsMap[dateKey] || []).includes(time);
+  };
+
+  // Check if ALL available time slots for a date are booked
+  const isDateFullyBooked = (date: Date) => {
+    const dateKey = formatToDateKey(date);
+    const expectedSlots = generateTimeSlots(date);
+    const bookedSlots = busySlotsMap[dateKey] || [];
+
+    // If it's a weekend/weekday and all expected slots are in the booked array, it's full
+    return expectedSlots.length > 0 && expectedSlots.every(slot => bookedSlots.includes(slot));
   };
 
   const formatDateLong = (date: Date) => {
@@ -275,16 +311,17 @@ function BookingContent() {
               </div>
 
               <div style={{ padding: '0 24px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, alignItems: 'start' }}>
-                
+
                 {/* Left Column: Date Picker */}
                 <div style={{ borderRight: `1px solid ${BRAND.border}`, paddingRight: 32, display: 'flex', justifyContent: 'center' }}>
                   <DatePicker
                     selected={selectedDate}
                     onChange={(date: Date | null) => {
                       setSelectedDate(date);
-                      setSelectedTime(null); 
+                      setSelectedTime(null);
                     }}
                     minDate={new Date(new Date().setDate(new Date().getDate() + 1))}
+                    filterDate={(date: Date) => !isDateFullyBooked(date)} // <-- ADD THIS: Disables full dates
                     inline
                     calendarClassName="royal-booking-calendar"
                   />
@@ -498,10 +535,11 @@ function BookingContent() {
         
         /* Disabled Dates */
         .royal-booking-calendar .react-datepicker__day--disabled {
-          color: #475569 !important;
+          color: #334155 !important; /* Darker gray text */
           background-color: transparent !important;
           border-color: transparent !important;
-          opacity: 0.5 !important;
+          opacity: 0.4 !important;
+          cursor: not-allowed !important;
         }
         
         /* Hide Days Outside Current Month */

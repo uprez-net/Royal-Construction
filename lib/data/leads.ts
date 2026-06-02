@@ -7,9 +7,19 @@ import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
 
-export async function getLeads(): Promise<UiLead[]> {
+export async function getLeads(query?: string): Promise<UiLead[]> {
+  const search = query?.trim() ?? "";
+  const where = search.length > 0
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" as const } },
+          { location: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
+    : undefined;
   try {
     const leads = await prisma.lead.findMany({
+      where,
       include: { history: { orderBy: { actionDate: "asc" } } },
       orderBy: { createdAt: "desc" },
     });
