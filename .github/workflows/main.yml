@@ -125,11 +125,11 @@ jobs:
 
       # Migrate the database before building and deploying
       - name: Run Prisma migrate
-        run: pnpm prisma:migrate-deploy
+        run: pnpm dlx prisma migrate deploy
 
       # Run Prisma generate to ensure generated client is up to date
       - name: Run Prisma generate
-        run: pnpm prisma:generate
+        run: pnpm dlx prisma generate
 
       # Install Vercel CLI only on main branch
       - name: Install Vercel CLI
@@ -205,7 +205,7 @@ jobs:
 
       # Run Prisma generate to ensure generated client is up to date
       - name: Run Prisma generate
-        run: pnpm prisma:generate
+        run: pnpm dlx prisma generate
 
       # Install Vercel CLI only on staging branch
       - name: Install Vercel CLI
