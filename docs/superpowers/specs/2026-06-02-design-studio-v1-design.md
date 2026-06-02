@@ -4,7 +4,7 @@
 
 Royal Construction needs one internal interface where team members can turn a lead or project brief into early floor-plan concepts, facade concepts, and reviewable design versions. V1 should ship as an upgrade to the existing `Architect` area, not as a separate app.
 
-The approved direction is a hybrid: Royal owns the AI brief, project integration, versions, facade concepts, comments, and approval workflow; a mature vendor editor owns the first interactive floor-plan editing experience. CAD integration is explicitly out of scope and not part of the product vision for this version.
+The approved direction is in-house-first: Royal owns the AI brief, interactive concept editor, project integration, versions, facade concepts, comments, and approval workflow. CAD integration and vendor floor-plan editor dependencies are explicitly out of scope and not part of the product vision for this version.
 
 ## Goals
 
@@ -13,14 +13,15 @@ The approved direction is a hybrid: Royal owns the AI brief, project integration
 - Generate structured design data that can be saved, versioned, reviewed, and attached to a lead or project.
 - Generate facade concept prompts and images for visual discussion.
 - Keep construction-grade responsibility clear: V1 outputs are concept/planning artifacts, not permit-ready plans.
-- Avoid custom CAD/editor complexity until Royal has validated the workflow.
+- Build the concept-planning experience in-house without depending on Floorplanner, Planner 5D, drafted.ai, or another hosted floor-plan editor.
 
 ## Non-Goals
 
 - CAD integration, CAD export, DWG, DXF, IFC, Revit, or BIM workflows.
 - Permit-ready architectural drawings.
 - Council compliance or automated code/regulation certification.
-- Full custom floor-plan editor implementation in V1.
+- Vendor floor-plan editor embeds or account-gated editor SDKs.
+- Full CAD-grade floor-plan editor behavior.
 - Treating generated facade images as measurable construction drawings.
 - Replacing architects, certifiers, or drafting partners.
 
@@ -42,7 +43,7 @@ The UI should follow the existing operations-heavy Royal style: dense, dashboard
 Design Studio V1 has three primary panes:
 
 1. Brief and AI chat
-2. Interactive floor-plan editor
+2. Interactive concept plan editor
 3. Versions, facade concepts, and review activity
 
 On desktop, the interface can use a resizable split layout. On small screens, it should collapse into tabs: Brief, Plan, Facades, Review.
@@ -53,8 +54,8 @@ On desktop, the interface can use a resizable split layout. On small screens, it
 2. They select an existing lead or project, or start an unlinked concept.
 3. The AI assistant asks for missing basics such as project type, bedrooms, bathrooms, storeys, block constraints, must-have spaces, facade style, and budget sensitivity.
 4. The assistant turns the conversation into a structured design brief.
-5. Royal creates a design session and, when vendor credentials are available, creates or opens the linked vendor editor project.
-6. The team edits the plan interactively in the embedded editor.
+5. Royal creates a design session and generates an editable concept plan from the structured brief.
+6. The team edits rooms, labels, dimensions, doors, windows, and notes inside Royal's in-house concept editor.
 7. The system saves snapshots and visible metadata against the design session.
 8. The team generates facade concept prompts and images from the approved brief and selected plan version.
 9. Reviewers comment, compare versions, and mark a version as preferred or approved for handoff.
@@ -84,15 +85,15 @@ Minimum structured brief fields:
 
 The assistant should avoid over-structuring early lead intake. If the source data comes from a lead note, keep the note intact and derive assumptions beside it.
 
-## Vendor Editor Direction
+## In-House Editor Direction
 
-Floorplanner is the recommended first vendor spike because public documentation shows an embeddable editor, project/token flow, editor state access, 2D/3D view switching, update callbacks, and export hooks.
+V1 should not depend on a hosted floor-plan editor. Because CAD is explicitly out of vision, the editor only needs to support concept planning: room blocks, dimensions, doors, windows, adjacency, labels, facade direction, notes, versioning, and visual handoff.
 
-Planner 5D remains a possible later evaluation if Royal wants white-label enterprise planner features, AI floor-plan recognition, or a vendor-managed product catalogue. It is not the recommended V1 default because its B2B API is provisioned through enterprise onboarding.
+The lowest-risk in-house path is a deterministic SVG-based plan editor backed by a JSON design model. SVG gives Royal enough control for selectable rooms, draggable/resizable blocks, labels, dimension guides, grid snapping, print/export previews, and fast implementation in the existing React app. It avoids a canvas scene graph dependency for V1 while keeping the model clean enough to move to canvas or WebGL later.
 
-drafted.ai should be treated as product inspiration for prompt/filter-driven house-plan generation, floorplan previews, exterior renders, and download-oriented UX. No public API dependency should be assumed from the current evidence.
+The 3D preview should be lightweight and generated from the same plan model. V1 can start with an isometric/elevation preview or a simple React-rendered 3D-style preview. If true WebGL preview becomes necessary, `three` plus `@react-three/fiber` is the preferred later dependency because it is React-native and documented around a parent-sized `Canvas`. It should not be required for the first implementation slice unless visual testing proves the simpler preview is insufficient.
 
-OpenPlans/OpenGeometry is a promising future owned-editor path because it supports web floor-plan primitives and headless generation from JSON, but its docs describe it as pre-1.0 and subject to breaking changes. It should not block V1.
+Floorplanner, Planner 5D, OpenPlans/OpenGeometry, and drafted.ai remain useful benchmark references, but they are not V1 dependencies. OpenPlans/OpenGeometry is the only evaluated option that aligns with owned implementation, but its docs describe it as pre-1.0 and subject to breaking changes, so it should not be adopted before the first in-house editor proves the core workflow.
 
 ## Facade Concepts
 
@@ -135,10 +136,9 @@ Recommended Prisma-level concepts:
   - `id`
   - `designSessionId`
   - `versionNumber`
-  - `vendor`
-  - `vendorProjectId`
-  - `vendorDesignId`
+  - `editorMode`
   - `planState` as JSON
+  - `renderState` as JSON
   - `previewImageKey`
   - `threeDPreviewImageKey`
   - `createdById`
@@ -172,8 +172,8 @@ Route handlers should own authenticated mutation boundaries:
 - `GET /api/design-studio/sessions`
 - `GET /api/design-studio/sessions/:id`
 - `POST /api/design-studio/sessions/:id/brief`
-- `POST /api/design-studio/sessions/:id/vendor-token`
 - `POST /api/design-studio/sessions/:id/versions`
+- `POST /api/design-studio/sessions/:id/render`
 - `POST /api/design-studio/sessions/:id/facades`
 - `POST /api/design-studio/sessions/:id/comments`
 
@@ -186,12 +186,15 @@ Recommended feature folder:
 - `components/design-studio/design-studio-client.tsx`
 - `components/design-studio/design-brief-chat.tsx`
 - `components/design-studio/design-brief-summary.tsx`
-- `components/design-studio/floorplanner-embed.tsx`
+- `components/design-studio/concept-plan-editor.tsx`
+- `components/design-studio/concept-plan-canvas.tsx`
+- `components/design-studio/concept-plan-tools.tsx`
+- `components/design-studio/concept-preview-panel.tsx`
 - `components/design-studio/design-version-panel.tsx`
 - `components/design-studio/facade-concept-panel.tsx`
 - `components/design-studio/design-review-feed.tsx`
 
-The page should stay server-first where possible, then hydrate the interactive studio client. Large editor state should not be pushed through global Redux unless cross-page coordination becomes necessary.
+The page should stay server-first where possible, then hydrate the interactive studio client. Large editor state should stay local to the editor with explicit save/version actions. It should not be pushed through global Redux unless cross-page coordination becomes necessary.
 
 ## States
 
@@ -200,20 +203,18 @@ Required V1 states:
 - empty state for no sessions
 - create-session loading state
 - AI brief generation pending state
-- vendor editor unavailable state
-- vendor token expired state
+- concept plan generation pending state
+- invalid plan model state
 - save snapshot pending state
 - facade generation pending state
-- export unavailable state
+- preview/render unavailable state
 - review/comment error state
 
-Vendor credential absence should not block the whole page. The team should still be able to create a structured brief and facade prompts in a fallback planning mode.
+The editor should have a fallback planning mode if AI plan generation fails. The team should still be able to create a structured brief, add rooms manually, save notes, and generate facade prompts.
 
 ## Security And Privacy
 
 - Design Studio routes must be authenticated.
-- Vendor tokens must be short-lived and generated server-side.
-- External provider IDs and URLs should be stored as metadata, not trusted as authorization.
 - Uploaded references and generated images should use existing blob/upload patterns.
 - AI prompts should avoid sending unrelated customer or project data.
 - Generated images and AI assumptions should be auditable from the design session.
@@ -223,19 +224,22 @@ Vendor credential absence should not block the whole page. The team should still
 Minimum test coverage for implementation:
 
 - structured brief schema validation
+- concept plan schema validation
 - create session route auth and validation
 - save design version route auth and validation
 - facade concept creation route auth and validation
 - helper mapping from Prisma records to DTOs
-- UI smoke test for empty state, brief mode, vendor unavailable mode, and loaded session mode
+- UI smoke test for empty state, brief mode, editor mode, invalid plan mode, and loaded session mode
 
 Manual verification should include:
 
 - create an unlinked concept
 - create a concept linked to a lead or project
 - generate a structured brief from notes
-- handle vendor unavailable state cleanly
-- save a plan snapshot when a vendor editor payload is available
+- generate an editable plan from the brief
+- edit room blocks, labels, dimensions, doors, windows, and notes
+- handle invalid plan data cleanly
+- save a plan snapshot from the in-house editor
 - generate and select a facade concept
 
 ## Rollout
@@ -245,16 +249,17 @@ Phase 1: Planning-mode V1
 - Design Studio route and UI shell
 - structured brief chat
 - session persistence
-- fallback mock editor panel
+- in-house JSON plan model
+- basic SVG concept plan editor
 - facade prompt storage
 
-Phase 2: Vendor editor spike
+Phase 2: In-house editor refinement
 
-- Floorplanner sandbox credentials
-- server-side token route
-- embedded editor
-- state/update callback capture
-- preview/export metadata capture
+- grid snapping and scale controls
+- room resize and drag interactions
+- door/window placement
+- version snapshot capture
+- plan preview image capture
 
 Phase 3: Facade concept generation
 
@@ -272,16 +277,17 @@ Phase 4: Review workflow
 
 ## Open Decisions
 
-- Which provider account will supply Floorplanner sandbox credentials.
 - Which image model/provider Royal wants to use for facade concepts.
 - Whether unlinked design sessions should be allowed in production or only in development/admin mode.
 - Whether selected design outputs should appear in project activity immediately or only after explicit approval.
+- Whether true WebGL 3D preview is needed in V1, or whether an isometric/elevation preview is enough.
 
 ## Source Notes
 
-- Floorplanner public docs show embedded editor, short-lived tokens, editor state access, update callbacks, 2D/3D view control, and export hooks.
-- Planner 5D public B2B docs show iframe plus REST API, AI floor-plan recognition, and CAD export, but access is enterprise-provisioned and CAD is out of V1 scope.
 - drafted.ai provides useful UX inspiration for AI house plans, filters, floorplan previews, exterior renders, and downloads, but no public API dependency was identified.
+- Floorplanner public docs show useful benchmark behavior for embedded editing and export, but the product direction no longer requires a vendor editor for V1.
+- Planner 5D public B2B docs show iframe plus REST API, AI floor-plan recognition, and CAD export, but access is enterprise-provisioned and CAD is out of V1 scope.
+- OpenPlans/OpenGeometry aligns more closely with owned implementation than hosted editors, but its pre-1.0 status makes it a later evaluation rather than a V1 dependency.
 - React Three Fiber and Three.js remain relevant for a future owned 3D preview surface if Royal later chooses to build more rendering in-house.
 
 ## References
