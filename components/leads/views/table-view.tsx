@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Phone, Mail, ArrowRight, Edit, Download, Users, X, Bell, Check, Calendar, UserPlus } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Phone, Mail, ArrowRight, Edit, Users, X, Bell, Check, Calendar, UserPlus, Search } from 'lucide-react';
+
 import { HistoryItem, Lead, LeadSource, LeadStage, ProjectType } from '@/lib/leads/types';
 import { EmailTemplate } from '@/lib/leads/types';
 import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
@@ -11,6 +11,8 @@ interface TableViewProps {
   leads: Lead[];
   onLeadUpdate: (lead: Lead) => void;
   onLeadDelete: (leadId: number) => void;
+  activeMetric?: string | null;
+  onActiveMetricChange?: (metric: string | null) => void;
 }
 
 interface LeadDetailFormData {
@@ -69,7 +71,7 @@ function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
   if (!html) {
     return <div className="py-8 text-center text-xs text-muted-foreground">No preview available</div>;
   }
- console.log('Rendered email HTML:', html);
+  console.log('Rendered email HTML:', html);
   return (
     <div className="overflow-hidden rounded-lg border border-border" style={{ height: 480 }}>
       <iframe
@@ -260,9 +262,8 @@ function ModalShell({
 }
 
 export default function TableView({
-  leads, onLeadUpdate, onLeadDelete,
+  leads, onLeadUpdate, onLeadDelete, activeMetric, onActiveMetricChange
 }: TableViewProps) {
-  const [searchTerm, setSearchTerm] = useState('');
   const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
   const [statusLead, setStatusLead] = useState<Lead | null>(null);
   const [statusStage, setStatusStage] = useState<LeadStage>('New');
@@ -293,6 +294,20 @@ export default function TableView({
   });
 
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
+
+  useEffect(() => {
+    if (activeMetric) {
+      if (activeMetric === 'total') {
+        setActiveFilters(['all']);
+      } else if (activeMetric === 'converted') {
+        setActiveFilters(['Won', 'Converted']);
+      } else if (activeMetric === 'pendingFollowup') {
+        setActiveFilters(['In Follow-up']);
+      } else if (activeMetric === 'lost') {
+        setActiveFilters(['Lost', 'Cancelled', 'Disqualified']);
+      }
+    }
+  }, [activeMetric]);
 
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Date.now() + Math.random();
@@ -387,15 +402,16 @@ export default function TableView({
 
   const filteredLeads = useMemo(() => {
     let filtered = leads;
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(lead => lead.name.toLowerCase().includes(term) || lead.phone.includes(term) || lead.location.toLowerCase().includes(term) || lead.email.toLowerCase().includes(term));
-    }
     if (!activeFilters.includes('all')) { filtered = filtered.filter(lead => activeFilters.includes(lead.stage)); }
     return filtered;
-  }, [leads, searchTerm, activeFilters]);
+  }, [leads, activeFilters]);
 
   const toggleFilter = (stage: string) => {
+    // If user manually clicks a stage chip, disable the active Metric Card
+    if (onActiveMetricChange) {
+      onActiveMetricChange(null);
+    }
+
     setActiveFilters(prev => {
       if (stage === 'all') return prev.includes('all') ? [] : ['all'];
       const updated = prev.filter(f => f !== 'all');
@@ -492,19 +508,7 @@ export default function TableView({
 
   const handleCall = (lead: Lead) => { const dial = dialablePhone(lead.phone); if (!dial) return; window.location.href = `tel:${dial}`; };
 
-  const handleExport = () => {
-    const leadHeader = ['leadId', 'name', 'phone', 'email', 'location', 'SourceDetail', 'Stage', 'assigned', 'budget', 'notes', 'FollowupsDate', 'FollowupTime', 'type', 'lostReason', 'urgent'];
-    const leadRows = filteredLeads.map(lead => {
-      const normalized = normalizeTypes(lead.type).filter(type => type !== 'Not Specified');
-      return [lead.id, lead.name, lead.phone, lead.email, lead.location, lead.sourceDetail, lead.stage, lead.assigned || '', lead.budget, lead.notes || '', lead.followupDate || '', lead.followupTime || '', normalized.join(', '), lead.lostReason || '', lead.urgent ? 'true' : 'false'];
-    });
-    const historyHeader = ['leadId', 'action', 'detail', 'type', 'actionDate'];
-    const historyRows = filteredLeads.flatMap(lead => (lead.history ?? []).map(entry => [lead.id, entry.action, entry.detail, entry.type, `${entry.date} ${entry.time}`.trim()]));
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([leadHeader, ...leadRows]), 'Lead Data');
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([historyHeader, ...historyRows]), 'History');
-    XLSX.writeFile(workbook, `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
+
 
   return (
     <div className="table-view">
@@ -526,15 +530,13 @@ export default function TableView({
       <div className="table-card">
         <div className="table-header">
           <div className="table-header-row">
-            <h3 className="table-title">All Leads</h3>
+            {/* <h3 className="table-title">All Leads</h3> */}
             <div className="table-filters">
-              <div className="search-box"><Search size={16} /><input type="text" placeholder="Search leads..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
               <div className="filter-chips">
                 {['all', 'New', 'Contacted', 'Meeting Scheduled', 'In Follow-up', 'Qualified', 'Quoted', 'Negotiating', 'Won', 'Converted', 'No Response', 'Cancelled', 'Disqualified', 'Lost'].map(stage => (
                   <button key={stage} className={`filter-chip ${activeFilters.includes(stage) ? 'active' : ''}`} onClick={() => toggleFilter(stage)}>{stage === 'all' ? 'All' : stage}</button>
                 ))}
               </div>
-              <button className="btn-export" onClick={handleExport}><Download size={14} />Export</button>
             </div>
           </div>
         </div>
@@ -617,7 +619,7 @@ export default function TableView({
             </div>
             <div><label className="text-xs font-medium text-[#78716c]">Notes</label><textarea className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" rows={4} value={detailForm.notes} onChange={event => setDetailForm(prev => prev ? { ...prev, notes: event.target.value } : prev)} /></div>
             <div className="flex items-center gap-2"><input id="urgent-checkbox" type="checkbox" checked={detailForm.urgent} onChange={event => setDetailForm(prev => prev ? { ...prev, urgent: event.target.checked } : prev)} /><label htmlFor="urgent-checkbox" className="text-xs font-medium text-[#78716c]">Urgent</label></div>
-            
+
             <div>
               <label className="text-xs font-medium text-[#78716c]">History</label>
               {detailLead.history.length === 0 ? (<div className="mt-2 text-xs text-[#a8a29e]">No history recorded yet.</div>) : (

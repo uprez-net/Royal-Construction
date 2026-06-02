@@ -22,7 +22,7 @@ const FONTS = {
 const URLS = {
       logo: "https://royal-construction-chi.vercel.app/logo-1024x713.png",
       heroImage:
-            "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=592&h=340&fit=crop&auto=format",
+            "https://royalconstructions.com.au/wp-content/smush-webp/2026/04/main-4-1024x683.png.webp",
       facebook: "https://royal-construction-chi.vercel.app/facebook.svg",
       instagram: "https://royal-construction-chi.vercel.app/instagram.svg",
       mbaLogo: "https://royal-construction-chi.vercel.app/image-78.png",
@@ -118,7 +118,7 @@ function Step({
                   className="mobile_px-4 mobile_py-8"
                   style={{
                         padding: "2.5rem 1.5rem",
-                        borderBottom: showBorder ? "1px solid #1A2A42" : undefined,
+                        borderBottom: showBorder ? "1px solid #1B2D45" : undefined,
                   }}
             >
                   <Row>
@@ -170,7 +170,7 @@ function GetStartedCard({
                   className="mobile_py-8"
                   style={{
                         padding: "2.5rem 0",
-                        borderBottom: showBorder ? "1px solid #1A2A42" : undefined,
+                        borderBottom: showBorder ? "1px solid #1B2D45" : undefined,
                   }}
             >
                   <Row>
@@ -282,17 +282,18 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                               extend: {
                                     colors: {
                                           rc: {
-                                                dark: "#070E1A",
-                                                container: "#0C1829",
-                                                card: "#0F1E33",
-                                                border: "#1A2A42",
-                                                footer: "#0A1525",
-                                                gold: "#C9A84C",
+                                                dark: "#0B1623",
+                                                container: "#0E1C2F",
+                                                card: "#122440",
+                                                border: "#1B2D45",
+                                                footer: "#091320",
+                                                gold: "#C6923A",
+                                                "gold-light": "#D4A034",
                                                 white: "#FFFFFF",
-                                                text: "#B8C4D6",
-                                                muted: "#8A9BB5",
-                                                dimmed: "#3D5070",
-                                                light: "#F5F6F8",
+                                                text: "#B0BFCF",
+                                                muted: "#7E93AB",
+                                                dimmed: "#3A4E68",
+                                                light: "#F7F6F2",
                                           },
                                     },
                               },
@@ -534,7 +535,7 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                             title="Explore Our Portfolio"
                                                             description="Browse completed projects across NSW for inspiration and ideas for your new home."
                                                             linkLabel="View Projects"
-                                                            linkHref={URLS.website}
+                                                            linkHref={"https://royalconstructions.com.au/projects/"}
                                                             showBorder
                                                       />
 
@@ -612,13 +613,13 @@ export default function WelcomeEmail({ name = "Homeowner", bookingUrl = URLS.con
                                                             className="text-rc-gold m-0 text-base leading-relaxed"
                                                             style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}
                                                       >
-                                                            Guri Singh
+                                                            Gurpinder Uppal
                                                       </Text>
                                                       <Text
                                                             className="text-rc-text m-0 text-[13px] leading-relaxed"
                                                             style={{ fontFamily: FONTS.body, fontWeight: 300 }}
                                                       >
-                                                            Royal Constructions NSW
+                                                            Royal Constructions Pty Ltd
                                                       </Text>
                                                 </Column>
                                           </Row>

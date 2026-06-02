@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { TradieScheduleStatus } from "@prisma/client";
 import type { CreateTradieScheduleInput, UpdateTradieScheduleInput } from "@/utils/validators";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 export async function createTradieSchedule(input: CreateTradieScheduleInput) {
   const schedule = await prisma.tradieSchedule.create({
@@ -14,7 +16,8 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
     },
     include: { tradie: true, project: true, milestone: true },
   });
-
+  revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+  
   return schedule;
 }
 
@@ -26,6 +29,8 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
   });
 
   const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
+
+  revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
 
   return { schedule, requiresReplacement };
 }

@@ -1,7 +1,4 @@
 import { auth } from "@clerk/nextjs/server";
-import { revalidateTag } from "next/cache";
-
-import prisma from "@/lib/prisma";
 import { getCachedProjectById, getCachedProjects, getCachedProjectsForLookup } from "@/lib/data/projects";
 import { createProject } from "@/lib/data/projectsWrite";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
@@ -16,7 +13,6 @@ import {
   parseBodyWithResponse,
   errorResponse,
 } from "@/utils/validators";
-import { CACHE_PROFILES } from "@/types/cache";
 import { NextRequest } from "next/server";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
 
@@ -106,9 +102,6 @@ export async function POST(request: NextRequest) {
     }
 
     const projectId = await createProject(projectData);
-
-    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
     const createdProject = await getCachedProjectById(projectId);
 

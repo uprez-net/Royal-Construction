@@ -1,4 +1,3 @@
-import { TradieScheduleStatus } from "@prisma/client";
 import { z } from "zod";
 
 import { updateTradieSchedule } from "@/lib/data/tradieSchedules";
@@ -8,8 +7,6 @@ import {
   parseBodyWithResponse,
   successResponse,
 } from "@/utils/validators";
-import { CACHE_PROFILES } from "@/types/cache";
-import { revalidateTag } from "next/cache";
 import { NextRequest } from "next/server";
 
 const ScheduleParamSchema = z.object({
@@ -32,6 +29,5 @@ export async function PATCH(
 
   const result = await updateTradieSchedule(routeParams.data.scheduleId, { status: body.data.status });
 
-  revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
   return successResponse(result);
 }

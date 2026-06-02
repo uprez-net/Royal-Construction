@@ -37,9 +37,9 @@ const URLS = {
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
 const ICONS = {
-      chat: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3C/svg%3E`,
-      phone: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'%3E%3C/path%3E%3C/svg%3E`,
-      mail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'%3E%3C/path%3E%3Cpolyline points='22,6 12,13 2,6'%3E%3C/polyline%3E%3C/svg%3E`,
+      chat: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3C/svg%3E`,
+      phone: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'%3E%3C/path%3E%3C/svg%3E`,
+      mail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'%3E%3C/path%3E%3Cpolyline points='22,6 12,13 2,6'%3E%3C/polyline%3E%3C/svg%3E`,
 };
 
 // ─── Responsive + Font Styles ───────────────────────────────────────────────
@@ -245,7 +245,7 @@ function Footer() {
                                                 <Row>
                                                       <Column className="p-5">
                                                             <Text
-                                                                  className="text-[#1A2A42] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
+                                                                  className="text-[#1B2D45] m-0 mb-4 text-[10px] leading-relaxed tracking-[0.8px] uppercase"
                                                                   style={{ fontFamily: FONTS.body, fontWeight: 500 }}
                                                             >
                                                                   Accredited by
@@ -311,17 +311,17 @@ export default function FollowUpEmail({
                               extend: {
                                     colors: {
                                           rc: {
-                                                dark: "#070E1A",
-                                                container: "#0C1829",
-                                                card: "#0F1E33",
-                                                border: "#1A2A42",
-                                                footer: "#0A1525",
-                                                gold: "#C9A84C",
+                                                dark: "#0B1623",
+                                                container: "#0E1C2F",
+                                                card: "#122440",
+                                                border: "#1B2D45",
+                                                footer: "#091320",
+                                                gold: "#C6923A",
                                                 white: "#FFFFFF",
-                                                text: "#B8C4D6",
-                                                muted: "#8A9BB5",
-                                                dimmed: "#3D5070",
-                                                light: "#F5F6F8",
+                                                text: "#B0BFCF",
+                                                muted: "#7E93AB",
+                                                dimmed: "#3A4E68",
+                                                light: "#F7F6F2",
                                                 label: "#6B7F9E",
                                                 highlight: "#D0DAE8",
                                           },
@@ -402,7 +402,7 @@ export default function FollowUpEmail({
                                     {/* ── Discussion Notes Card ── */}
                                     <Section className="mobile_px-4" style={{ padding: "0 1.5rem 3rem" }}>
                                           <Row>
-                                                <Column className="bg-rc-card rounded-md overflow-hidden" style={{ border: "1px solid #1A2A42" }}>
+                                                <Column className="bg-rc-card rounded-md overflow-hidden" style={{ border: "1px solid #1B2D45" }}>
                                                       {/* Card Header */}
                                                       <Row className="border-b border-rc-border">
                                                             <Column className="py-4 px-6">
@@ -488,7 +488,7 @@ export default function FollowUpEmail({
                                                       <Row>
                                                             {/* Phone Card */}
                                                             <Column style={{ width: "48%", verticalAlign: "top", paddingRight: "4%" }}>
-                                                                  <Section className="bg-rc-card rounded-md" style={{ border: "1px solid #1A2A42" }}>
+                                                                  <Section className="bg-rc-card rounded-md" style={{ border: "1px solid #1B2D45" }}>
                                                                         <Row>
                                                                               <Column className="p-5 text-center">
                                                                                     <Img alt="" height={24} src={ICONS.phone} width={24} className="block outline-none border-none mx-auto mb-3" />
@@ -509,7 +509,7 @@ export default function FollowUpEmail({
 
                                                             {/* Email Card */}
                                                             <Column style={{ width: "48%", verticalAlign: "top" }}>
-                                                                  <Section className="bg-rc-card rounded-md" style={{ border: "1px solid #1A2A42" }}>
+                                                                  <Section className="bg-rc-card rounded-md" style={{ border: "1px solid #1B2D45" }}>
                                                                         <Row>
                                                                               <Column className="p-5 text-center">
                                                                                     <Img alt="" height={24} src={ICONS.mail} width={24} className="block outline-none border-none mx-auto mb-3" />
@@ -559,10 +559,10 @@ export default function FollowUpEmail({
                                                             Best regards,
                                                       </Text>
                                                       <Text className="text-rc-gold m-0 mb-0.5 text-base leading-relaxed" style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}>
-                                                            Guri Singh
+                                                            Gurpinder Uppal
                                                       </Text>
                                                       <Text className="text-rc-text m-0 text-[13px] leading-relaxed" style={{ fontFamily: FONTS.body, fontWeight: 300 }}>
-                                                            Royal Constructions NSW
+                                                            Royal Constructions Pty Ltd
                                                       </Text>
                                                 </Column>
                                           </Row>

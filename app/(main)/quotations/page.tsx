@@ -1,41 +1,50 @@
-import { DataTable } from "@/components/common/data-table";
-import { SectionCard } from "@/components/common/section-card";
-import { quoteRows } from "@/lib/mock-data";
-import { ReceiptText } from "lucide-react";
+import { QuoteFilter } from "@/components/quotes/quote-filter";
+import { QuoteHeader } from "@/components/quotes/quote-header";
+import { QuoteKPI } from "@/components/quotes/quote-kpi";
+import { QuoteTable } from "@/components/quotes/quote-table";
+import { Card } from "@/components/ui/card";
+import { getQuoteKPIsCached, getQuotesCached } from "@/lib/data/quotes";
 
-export default function QuotationsPage() {
+export default async function QuotationsPage() {
+  const [quoteKPIs, quotes] = await Promise.all([
+    getQuoteKPIsCached(),
+    getQuotesCached(1, 10),
+  ]);
+
   return (
-    <SectionCard
-      title="Quotation management"
-      description="Reusable row components support tables, previews, and approval workflows."
-    >
-      <DataTable
-        headers={["Quote", "Client", "Value", "Status", "Expiry"]}
-        rows={quoteRows.map((row) => [
-          row.quote,
-          row.client,
-          row.value,
-          row.status,
-          row.expiry,
-        ])}
-        emptyState={
-          <div className="flex flex-col items-center justify-center gap-3">
-            <div className="flex size-12 items-center justify-center">
-              <ReceiptText className="size-5 text-muted-foreground" />
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">
-                No quotations available
-              </p>
-
-              <p className="text-xs text-muted-foreground">
-                Your Quotations will appear here.
-              </p>
-            </div>
-          </div>
-        }
+    <div className="space-y-6">
+      <QuoteHeader />
+      <QuoteKPI
+        activeQuotes={{
+          total: quoteKPIs.allQuotes.total,
+          trendDelta: quoteKPIs.allQuotes.trendDelta,
+        }}
+        approvedQuotes={{
+          total: quoteKPIs.approvedQuotes.total,
+          trendDelta: quoteKPIs.approvedQuotes.trendDelta,
+        }}
+        pendingQuotes={{
+          total: quoteKPIs.pendingQuotes.total,
+          trendDelta: quoteKPIs.pendingQuotes.trendDelta,
+        }}
+        activeVariationQuotes={{
+          total: quoteKPIs.sentQuotes.total,
+          trendDelta: quoteKPIs.sentQuotes.trendDelta,
+        }}
       />
-    </SectionCard>
+      <Card className="border-border/70 bg-white/95 shadow-sm">
+        <QuoteFilter
+          initialTabCounts={{
+            all: quoteKPIs.allQuotes.total,
+            pending: quoteKPIs.pendingQuotes.total,
+            approved: quoteKPIs.approvedQuotes.total,
+            rejected: quoteKPIs.rejectedQuotes.total,
+            sent: quoteKPIs.sentQuotes.total,
+          }}
+          initialTotalCount={quoteKPIs.allQuotes.total}
+        />
+        <QuoteTable serverQuotes={quotes} />
+      </Card>
+    </div>
   );
 }

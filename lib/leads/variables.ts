@@ -41,4 +41,9 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     subject: 'Project Update - Milestone Completed at {location}',
     category: 'Update',
   },
+  {
+    id: 9, //portfolio-email.tsx
+    subject: 'Royal Constructions - Our Builder Profile & Project Portfolio',
+    category: 'Portfolio',
+  },
 ];

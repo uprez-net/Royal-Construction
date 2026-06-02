@@ -64,6 +64,7 @@ export interface Lead {
   history: HistoryItem[];
   created: string;
   urgent: boolean;
+  creatingOffer: boolean;
 }
 
 export interface LeadsStats {

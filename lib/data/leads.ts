@@ -6,26 +6,90 @@ import type { Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
+import { Prisma, ChatSession } from "@prisma/client";
 
-export async function getLeads(): Promise<UiLead[]> {
+const defaultLookupPageSize = 10;
+
+function normalizeSearch(search?: string) {
+  return search?.trim() ?? "";
+}
+
+export interface PaginatedLeadsResult {
+  items: UiLead[];
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedLeadsResult> {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
+  const search = normalizeSearch(query);
+
+  const where: Prisma.LeadWhereInput | undefined = search.length > 0
+    ? {
+      OR: [
+        { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      ],
+    }
+    : undefined;
   try {
     const leads = await prisma.lead.findMany({
-      include: { history: { orderBy: { actionDate: "asc" } } },
+      where,
+      include: { 
+        history: { orderBy: { actionDate: "asc" } },
+        chatSessions: true, 
+      },
       orderBy: { createdAt: "desc" },
+      skip: (safePage - 1) * safeLimit,
+      take: safeLimit,
     });
+    const totalCount = await prisma.lead.count({ where });
 
-    return leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] }));
+    return {
+      items: leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] })),
+      page: safePage,
+      limit: safeLimit,
+      totalCount,
+      totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
+    };
   } catch (error) {
     console.error("Error fetching leads:", error);
-    return [];
+    return {
+      items: [],
+      page: 1,
+      limit: defaultLookupPageSize,
+      totalCount: 0,
+      totalPages: 0,
+    };
   }
 }
+
+type CreateLeadOptions = {
+  skipWelcomeEmail?: boolean;
+};
 
 export async function findLeadById(id: number) {
   return prisma.lead.findUnique({ where: { id }, include: { history: { orderBy: { actionDate: "asc" } } } });
 }
 
-export async function createLead(input: CreateLeadInput): Promise<UiLead> {
+export async function findLeadByEmail(email: string): Promise<UiLead | null> {
+  const trimmed = email.trim();
+  if (!trimmed) return null;
+
+  const lead = await prisma.lead.findFirst({
+    where: { email: { equals: trimmed, mode: "insensitive" } },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+  });
+
+  if (!lead) return null;
+
+  return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[] });
+}
+
+export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
 
@@ -68,13 +132,13 @@ export async function createLead(input: CreateLeadInput): Promise<UiLead> {
       urgent: input.urgent ?? false,
       history: { create: historyCreate },
     },
-    include: { history: { orderBy: { actionDate: "asc" } } },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
   });
 
   // ═══════════════════════════════════════════════════════
   // SEND WELCOME EMAIL TO MANUALLY CREATED LEADS
   // ═══════════════════════════════════════════════════════
-  if (created.email && created.name) {
+  if (!options?.skipWelcomeEmail && created.email && created.name) {
     console.log(`[Lead ${created.id}] Sending welcome email to newly created lead...`);
     try {
       // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
@@ -114,7 +178,7 @@ export async function createLead(input: CreateLeadInput): Promise<UiLead> {
     }
   }
 
-  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] });
+  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] });
 }
 
 export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
@@ -165,10 +229,10 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
-    include: { history: { orderBy: { actionDate: "asc" } } },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
   });
 
-  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] });
+  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] });
 }
 
 export async function deleteLead(id: number) {

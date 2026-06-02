@@ -1,9 +1,6 @@
 import { NextRequest } from "next/server";
 import { milestoneUpdateSchema, parseBodyWithResponse, successResponse } from "@/utils/validators";
-import { prisma } from "@/lib/prisma";
 import { SafeMilestone } from "@/types/project";
-import { CACHE_PROFILES } from "@/types/cache";
-import { revalidateTag } from "next/cache";
 import { updateMilestone } from "@/lib/data/milestones";
 
 
@@ -20,8 +17,6 @@ export async function PATCH(
     const updateData = validationResult.data;
 
     const updated = await updateMilestone(milestoneId, updateData);
-
-    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
     return successResponse(updated as SafeMilestone);
 }

@@ -2,6 +2,8 @@ import prisma from "../prisma";
 import { Prisma } from "@prisma/client";
 import { MaterialInput } from "@/utils/validators/material";
 import { SafeMaterial } from "@/types/project";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
 
 export async function addMaterialToProject(projectId: string, materialData: MaterialInput): Promise<SafeMaterial> {
     try {
@@ -16,6 +18,9 @@ export async function addMaterialToProject(projectId: string, materialData: Mate
                 totalCost: new Prisma.Decimal(materialData.totalCost),
             },
         });
+
+
+        revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
         return {
             ...newMaterial,

@@ -1,4 +1,3 @@
-import { TradieScheduleStatus } from "@prisma/client";
 import { getCachedTradieCoordinationDashboard, getCachedTradies } from "@/lib/data/tradies";
 import { createTradieSchedule } from "@/lib/data/tradieSchedules";
 import {
@@ -8,8 +7,6 @@ import {
   parseSearchParamsWithResponse,
   successResponse,
 } from "@/utils/validators";
-import { revalidateTag } from "next/cache";
-import { CACHE_PROFILES } from "@/types/cache";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -19,7 +16,6 @@ export async function POST(request: NextRequest) {
   const data = body.data;
   const schedule = await createTradieSchedule(data);
 
-  revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
   return successResponse(schedule, { status: 201 });
 }
 

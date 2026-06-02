@@ -149,8 +149,9 @@ export const clientPayloadSchema = z.object({
     fileId: z.string().optional(),
     fileName: z.string().trim().min(1, 'File name is required').max(255),
     fileSize: z.number().max(UPLOAD_CONSTRAINTS.maxFileSizeBytes, `File size must be less than ${UPLOAD_CONSTRAINTS.maxFileSizeBytes} bytes`),
-    projectId: z.string().trim().min(1, 'Project ID is required'),
+    projectId: z.string().trim().min(1, 'Project ID is required').optional(),
     milestoneId: z.string().trim().optional().nullable(),
+    leadId: z.coerce.string().trim().optional(),
 });
 
 export type ClientPayload = z.infer<typeof clientPayloadSchema>;

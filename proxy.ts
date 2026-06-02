@@ -9,6 +9,7 @@ const isPublicRoute = createRouteMatcher([
   '/.well-known/oauth-protected-resource(.*)',
   '/api/mcp(.*)',
   "/api/cron(.*)",
+  "/book-consultation"
 ])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
@@ -32,7 +33,13 @@ export default clerkMiddleware(async (auth, request) => {
 
   if (!isPublicRoute(request) && !isAuthRoute(request)) await auth.protect()
 
-  const { userId } = await auth()
+  const { userId, sessionClaims } = await auth()
+  if(sessionClaims?.public_metadata.role === "GUEST") {
+    return new Response(null, {
+      status: 302,
+      headers: { location: "/guest" },
+    })
+  }
   if (isAuthRoute(request) && userId) {
     return new Response(null, {
       status: 302,

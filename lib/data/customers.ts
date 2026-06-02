@@ -104,28 +104,13 @@ export async function findCustomerByContact(email?: string | null, phone?: strin
 }
 
 export async function createCustomerForProject(input: { name: string; email: string; phone: string }) {
-    const user = await prisma.user.create({
-        data: {
-            name: input.name,
-            email: input.email,
-            phone: input.phone,
-            clerkId: crypto.randomUUID(),
-            role: Role.CUSTOMER,
-        },
-    });
 
     const customer = await prisma.customer.create({
         data: {
-            userId: user.id,
             name: input.name,
             email: input.email,
             phone: input.phone,
         },
-    });
-
-    await prisma.user.update({
-        where: { id: user.id },
-        data: { customerId: customer.id },
     });
 
     revalidateTag("customers", CACHE_PROFILES.MEDIUM);

@@ -104,7 +104,7 @@ function TrendBadge({ value }: { value: number }) {
       ].join(" ")}
     >
       {isPositive ? "+" : ""}
-      {value}
+      {value}%
     </span>
   );
 }

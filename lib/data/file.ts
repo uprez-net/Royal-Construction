@@ -4,16 +4,17 @@ import prisma from '@/lib/prisma';
 
 interface SaveFileParams {
     userId: string;
-    projectId: string;
+    projectId?: string;
     milestoneId?: string;
     fileId?: string;
     fileUrl: string;
     fileName: string;
     fileType: string;
     fileSize: number;
+    leadId?: string;
 }
 
-export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, fileName, fileType, fileSize }: SaveFileParams) {
+export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, fileName, fileType, fileSize, leadId }: SaveFileParams) {
     try {
         const newFile = await prisma.file.create({
             data: {
@@ -24,7 +25,8 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
                 url: fileUrl,
                 filename: fileName,
                 fileType,
-                filesize: fileSize
+                filesize: fileSize,
+                leadId: leadId ? parseInt(leadId) : null,
             }
         });
 
@@ -38,4 +40,24 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
         throw error;
     }
 
+}
+
+export async function getFilesByLeadId(leadId: number) {
+    try {
+        const files = await prisma.file.findMany({
+            where: {
+                leadId,
+            },
+        });
+
+        return {
+            success: true,
+            count: files.length,
+            files,
+        }
+    }
+    catch (error) {
+        console.error('Error fetching files for lead', error);
+        throw error;
+    }
 }

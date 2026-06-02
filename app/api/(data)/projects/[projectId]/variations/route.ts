@@ -1,19 +1,11 @@
-import { VariationStatus } from "@prisma/client";
-
-import { getProjectById } from "@/lib/data/projects";
-import prisma from "@/lib/prisma";
 import { createVariation } from "@/lib/data/variations";
-import { revalidateTag } from "next/cache";
 import {
   createVariationSchema,
   projectParamSchema,
   parseRouteParamsWithResponse,
   parseBodyWithResponse,
   successResponse,
-  errorResponse,
 } from "@/utils/validators";
-import { CACHE_PROFILES } from "@/types/cache";
-import { SafeVariation } from "@/types/project";
 import { NextRequest } from "next/server";
 
 export async function POST(
@@ -33,8 +25,6 @@ export async function POST(
   const projectId = routeParams.data.projectId;
 
   const variation = await createVariation(projectId, body.data);
-
-  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
   return successResponse(variation, { status: 201 });
 }
