@@ -232,7 +232,7 @@ export default function Leads() {
         fetchLeads(),
         fetchLeadsStats(),
       ]);
-      console.log('Stats data loaded:', statsData);
+      console.log('Stats data loaded:', leadsData, statsData);
       setLeads(leadsData);
       setStats(statsData);
       setError(null);

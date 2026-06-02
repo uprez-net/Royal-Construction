@@ -6,61 +6,18 @@ import type { Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
-import { Prisma } from "@prisma/client";
 
-const defaultLookupPageSize = 10;
-
-function normalizeSearch(search?: string) {
-  return search?.trim() ?? "";
-}
-
-export interface PaginatedLeadsResult {
-  items: UiLead[];
-  page: number;
-  limit: number;
-  totalCount: number;
-  totalPages: number;
-}
-
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedLeadsResult> {
-  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
-  const search = normalizeSearch(query);
-
-  const where: Prisma.LeadWhereInput | undefined = search.length > 0
-    ? {
-      OR: [
-        { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
-      ],
-    }
-    : undefined;
+export async function getLeads(): Promise<UiLead[]> {
   try {
     const leads = await prisma.lead.findMany({
-      where,
       include: { history: { orderBy: { actionDate: "asc" } } },
       orderBy: { createdAt: "desc" },
-      skip: (safePage - 1) * safeLimit,
-      take: safeLimit,
     });
-    const totalCount = await prisma.lead.count({ where });
 
-    return {
-      items: leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] })),
-      page: safePage,
-      limit: safeLimit,
-      totalCount,
-      totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
-    };
+    return leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] }));
   } catch (error) {
     console.error("Error fetching leads:", error);
-    return {
-      items: [],
-      page: 1,
-      limit: defaultLookupPageSize,
-      totalCount: 0,
-      totalPages: 0,
-    };
+    return [];
   }
 }
 
