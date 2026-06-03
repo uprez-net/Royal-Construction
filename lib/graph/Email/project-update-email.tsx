@@ -357,23 +357,6 @@ export default function ProjectUpdateEmail({
                                           </Row>
                                     </Section>
 
-                                    {/* ── Questions ── */}
-                                    <Section className="mobile_px-4" style={{ padding: "0 1.5rem 3rem" }}>
-                                          <Row>
-                                                <Column>
-                                                      <Text className="text-rc-white m-0 mb-1 text-[15px] leading-relaxed tracking-[-0.075px]" style={{ fontFamily: FONTS.body, fontWeight: 450 }}>
-                                                            Questions about your build?
-                                                      </Text>
-                                                      <Text className="mobile_max-w-full text-rc-text m-0 text-[13px] leading-relaxed tracking-[0.2px]" style={{ fontFamily: FONTS.body, fontWeight: 300, maxWidth: 490 }}>
-                                                            If you have any questions, do not hesitate to reach out at{" "}
-                                                            <Link href="mailto:info@royalconstructions.com.au" className="text-rc-gold no-underline">info@royalconstructions.com.au</Link>{" "}
-                                                            or call{" "}
-                                                            <Link href="tel:1300832355" className="text-rc-gold no-underline">1300 832 355</Link>.
-                                                      </Text>
-                                                </Column>
-                                          </Row>
-                                    </Section>
-
                                     {/* ── Sign-off ── */}
                                     <Section className="mobile_px-4" style={{ padding: "0 1.5rem 3rem" }}>
                                           <Row>

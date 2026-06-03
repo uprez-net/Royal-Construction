@@ -25,61 +25,39 @@ import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
 
-const CUSTOM_HOME_BENEFITS = [
-  'Design a home around your lifestyle',
-  'Build on your land, your way',
-  'Create a layout that truly works for you',
-  'Choose finishes that reflect your style',
-  'Build a home that suits your future plans',
-];
-
-const BUILD_PROCESS_STEPS = [
+const PROJECT_BRIEF_ITEMS = [
   {
-    number: '01',
-    title: 'Complimentary Consultation & Site Assessment',
+    title: 'Land information',
     description:
-      'We review your block, discuss your goals, and explore what’s possible based on your land and budget.',
+      'Let us know whether you already own the land, are reviewing a block, or are still searching.',
   },
   {
-    number: '02',
-    title: 'Budget Planning',
+    title: 'Project priorities',
     description:
-      'We provide clear guidance on costs, allowances, and options so you can make informed decisions early.',
+      'Share what matters most to you, such as layout, finishes, number of rooms, outdoor space, or energy efficiency.',
   },
   {
-    number: '03',
-    title: 'Custom Design',
+    title: 'Build type',
     description:
-      'Your home is thoughtfully designed to maximise space, light, and flow — tailored to how you live.',
+      'Tell us if this is a new home, duplex, knockdown rebuild, extension, renovation, or another build type.',
   },
   {
-    number: '04',
-    title: 'Approvals & Preparations',
-    description:
-      'We manage council approvals and required documentation to keep things moving smoothly.',
+    title: 'Location or address',
+    description: 'Provide the suburb, lot details, or full site address if you already have it.',
   },
   {
-    number: '05',
-    title: 'Construction & Quality',
+    title: 'Timeline',
     description:
-      'Our hands-on team oversees construction from start to finish, working with trusted trades and suppliers.',
+      'Share when you would like to start design, approvals, construction, or move in.',
   },
   {
-    number: '06',
-    title: 'Inspection & Handover',
+    title: 'Existing documents and ideas',
     description:
-      'Before handover, we complete final inspections to ensure everything meets our quality standards.',
+      'Send any plans, surveys, council notes, inspiration images, sketches, or design ideas you already have.',
   },
 ];
 
-const APPOINTMENT_PREP_ITEMS = [
-  { title: 'Land or location', description: 'Suburb, block details, or address if you have it.' },
-  { title: 'Build type & priorities', description: 'New home, duplex, KDR, rooms, finishes, outdoor space.' },
-  { title: 'Timeline', description: 'When you hope to start design, approvals, or construction.' },
-  { title: 'Plans & ideas', description: 'Any sketches, inspiration images, surveys, or council notes.' },
-];
-
-function ProcessStep({
+function Step({
   number,
   title,
   description,
@@ -94,7 +72,7 @@ function ProcessStep({
     <Section
       style={{
         padding: '1.5rem 0',
-        borderBottom: showBorder ? `1px solid #E2E8F0` : undefined,
+        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
       }}
     >
       <Row>
@@ -114,7 +92,7 @@ function ProcessStep({
         </Column>
         <Column style={{ paddingLeft: 12 }}>
           <Text
-            className="m-0 mb-2 uppercase"
+            className="m-0 mb-2"
             style={{
               fontFamily: FONTS.condensed,
               fontWeight: 500,
@@ -140,6 +118,140 @@ function ProcessStep({
         </Column>
       </Row>
     </Section>
+  );
+}
+
+function GetStartedCard({
+  title,
+  description,
+  linkLabel,
+  linkHref,
+  showBorder = true,
+}: {
+  title: string;
+  description: string;
+  linkLabel: string;
+  linkHref: string;
+  showBorder?: boolean;
+}) {
+  return (
+    <Section
+      style={{
+        padding: '1.5rem 0',
+        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
+      }}
+    >
+      <Row>
+        <Column>
+          <Text
+            className="m-0 mb-3"
+            style={{
+              fontFamily: FONTS.condensed,
+              fontWeight: 500,
+              fontSize: 20,
+              color: RC_COLORS.textOnLight,
+            }}
+          >
+            {title}
+          </Text>
+          <Text
+            className="m-0 mb-3"
+            style={{
+              fontFamily: FONTS.body,
+              fontWeight: 350,
+              fontSize: 14,
+              lineHeight: 1.65,
+              color: RC_COLORS.textMutedOnLight,
+            }}
+          >
+            {description}
+          </Text>
+          <Link
+            href={linkHref}
+            target="_blank"
+            style={{
+              fontFamily: FONTS.body,
+              fontWeight: 450,
+              fontSize: 15,
+              color: RC_COLORS.gold,
+              textDecoration: 'none',
+            }}
+          >
+            {linkLabel}&nbsp;→
+          </Link>
+        </Column>
+      </Row>
+    </Section>
+  );
+}
+
+function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
+  return (
+    <EmailSectionWhite style={{ padding: '2rem 1.5rem' }}>
+      <Section
+        style={{
+          backgroundColor: RC_COLORS.light,
+          borderRadius: 6,
+          border: `2px solid ${RC_COLORS.gold}`,
+          padding: '1.5rem',
+        }}
+      >
+        <Row>
+          <Column>
+            <Text
+              className="m-0 mb-3 uppercase"
+              style={{
+                fontFamily: FONTS.condensed,
+                fontWeight: 500,
+                fontSize: 13,
+                letterSpacing: '0.6px',
+                color: RC_COLORS.gold,
+              }}
+            >
+              First action
+            </Text>
+            <Text
+              className="m-0 mb-4 uppercase"
+              style={{
+                fontFamily: FONTS.condensed,
+                fontWeight: 500,
+                fontSize: 26,
+                lineHeight: 1.1,
+                color: RC_COLORS.textOnLight,
+              }}
+            >
+              Book your appointment with the builder
+            </Text>
+            <Text
+              className="m-0 mb-5"
+              style={{
+                fontFamily: FONTS.body,
+                fontWeight: 350,
+                fontSize: 14,
+                lineHeight: 1.65,
+                color: RC_COLORS.textMutedOnLight,
+              }}
+            >
+              Please use the link below to add a consultation to the builder calendar. This gives
+              the team a fixed time to review your project and answer your questions.
+            </Text>
+            <EmailCtaButton href={bookingUrl} label="Book Appointment" align="left" />
+            <Text
+              className="m-0 mt-4"
+              style={{
+                fontFamily: FONTS.body,
+                fontWeight: 350,
+                fontSize: 12,
+                lineHeight: 1.6,
+                color: RC_COLORS.textMutedOnLight,
+              }}
+            >
+              If no suitable time is available, reply to this email and we will help arrange one.
+            </Text>
+          </Column>
+        </Row>
+      </Section>
+    </EmailSectionWhite>
   );
 }
 
@@ -173,7 +285,8 @@ export default function WelcomeEmail({
           }}
         >
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-            Book your free site assessment with Royal Constructions — custom homes across NSW.
+            Thanks for your interest in Royal Constructions — send your project details and book a
+            builder calendar slot.
             <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
           </div>
 
@@ -183,68 +296,45 @@ export default function WelcomeEmail({
           >
             <EmailHeader showGoldBar />
 
-            {/* Cream — hero copy (matches site hero on light background) */}
-            <EmailSectionLight style={{ padding: '2rem 1.5rem 1.5rem' }}>
-              <Text
-                className="m-0 mb-3 uppercase"
-                style={{
-                  fontFamily: FONTS.body,
-                  fontWeight: 500,
-                  fontSize: 11,
-                  letterSpacing: '1.2px',
-                  color: RC_COLORS.gold,
-                }}
-              >
-                Welcome, {name}
-              </Text>
+            {/* Hero — original welcome copy */}
+            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
               <Text
                 className="mobile_font-40 m-0 uppercase"
                 style={{
                   fontFamily: FONTS.condensed,
                   fontWeight: 500,
-                  fontSize: 42,
-                  lineHeight: 1.05,
-                  letterSpacing: '-0.8px',
+                  fontSize: 48,
+                  lineHeight: 1,
+                  letterSpacing: '-1.2px',
                   color: RC_COLORS.textOnLight,
                 }}
               >
-                Custom Homes
+                Welcome to
+                <br />
+                Royal Constructions
               </Text>
               <Text
-                className="m-0 mt-4"
+                className="m-0 mt-8"
                 style={{
                   fontFamily: FONTS.body,
                   fontWeight: 350,
-                  fontSize: 15,
+                  fontSize: 14,
                   lineHeight: 1.7,
+                  letterSpacing: '0.3px',
                   color: RC_COLORS.textMutedOnLight,
-                  maxWidth: 480,
+                  maxWidth: 490,
                 }}
               >
-                Design and build a home that reflects your lifestyle, your land, and the way you
-                want to live.
-              </Text>
-              <EmailCtaButton href={bookingUrl} label="Book Free Site Assessment" />
-              <Text className="m-0 mt-4" style={{ fontSize: 13, lineHeight: 1.6 }}>
-                <Link
-                  href={RC_URLS.projects}
-                  target="_blank"
-                  style={{
-                    fontFamily: FONTS.body,
-                    fontWeight: 450,
-                    color: RC_COLORS.gold,
-                    textDecoration: 'none',
-                  }}
-                >
-                  Explore our work&nbsp;→
-                </Link>
+                Dear {name}, thank you for your interest in building with Royal Constructions. The
+                next step is to book an appointment with the builder, then reply with any project
+                ideas you already have so we can prepare before your consultation.
               </Text>
             </EmailSectionLight>
 
-            {/* White — hero image */}
+            {/* Hero image */}
             <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>
               <Img
-                alt="Royal Constructions custom home build"
+                alt="Luxury home by Royal Constructions"
                 src={RC_URLS.heroDefault}
                 width={592}
                 style={{
@@ -257,58 +347,13 @@ export default function WelcomeEmail({
               />
             </EmailSectionWhite>
 
-            {/* Cream — benefits */}
-            <EmailSectionLight>
-              <Text
-                className="m-0 mb-4 uppercase"
-                style={{
-                  fontFamily: FONTS.condensed,
-                  fontWeight: 500,
-                  fontSize: 28,
-                  lineHeight: 1.1,
-                  color: RC_COLORS.textOnLight,
-                  letterSpacing: '0.2px',
-                }}
-              >
-                Build a Home That&apos;s Truly Yours
-              </Text>
-              <Text
-                className="m-0 mb-5"
-                style={{
-                  fontFamily: FONTS.body,
-                  fontWeight: 350,
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  color: RC_COLORS.textMutedOnLight,
-                }}
-              >
-                With Royal Constructions, your home isn&apos;t adapted from a standard design.
-                It&apos;s carefully considered from the ground up — with clear communication and
-                honest advice from design through to handover.
-              </Text>
-              {CUSTOM_HOME_BENEFITS.map((benefit) => (
-                <Text
-                  key={benefit}
-                  className="m-0 mb-2.5"
-                  style={{
-                    fontFamily: FONTS.body,
-                    fontSize: 14,
-                    lineHeight: 1.55,
-                    color: RC_COLORS.textOnLight,
-                  }}
-                >
-                  <span style={{ color: RC_COLORS.gold, fontWeight: 600 }}>✓&nbsp;</span>
-                  {benefit}
-                </Text>
-              ))}
-              <EmailCtaButton href={RC_URLS.customHomes} label="Build With Us" align="left" />
-            </EmailSectionLight>
+            <AppointmentBookingCard bookingUrl={bookingUrl} />
 
-            {/* White — before consultation */}
-            <EmailSectionWhite>
+            {/* Before your appointment — original 6-item brief */}
+            <EmailSectionLight style={{ padding: '2rem 1.5rem' }}>
               <Section
                 style={{
-                  backgroundColor: RC_COLORS.light,
+                  backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
                   border: '1px solid #E2E8F0',
                   padding: '1.5rem',
@@ -317,15 +362,16 @@ export default function WelcomeEmail({
                 <Row>
                   <Column>
                     <Text
-                      className="m-0 mb-3 uppercase"
+                      className="m-0 mb-4 uppercase"
                       style={{
                         fontFamily: FONTS.condensed,
                         fontWeight: 500,
-                        fontSize: 22,
+                        fontSize: 26,
+                        lineHeight: 1,
                         color: RC_COLORS.textOnLight,
                       }}
                     >
-                      Before your consultation
+                      Before your appointment
                     </Text>
                     <Text
                       className="m-0 mb-4"
@@ -337,13 +383,13 @@ export default function WelcomeEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      Reply with whatever you already know — it&apos;s fine if some details are
-                      still undecided. This helps us prepare for your appointment.
+                      Please reply with whatever details you already have so we can prepare for the
+                      consultation. It is okay if some items are still undecided.
                     </Text>
-                    {APPOINTMENT_PREP_ITEMS.map((item) => (
+                    {PROJECT_BRIEF_ITEMS.map((item) => (
                       <Text
                         key={item.title}
-                        className="m-0 mb-2.5"
+                        className="m-0 mb-3"
                         style={{
                           fontFamily: FONTS.body,
                           fontSize: 14,
@@ -358,10 +404,71 @@ export default function WelcomeEmail({
                   </Column>
                 </Row>
               </Section>
+            </EmailSectionLight>
+
+            {/* What happens next — original 3 steps */}
+            <EmailSectionWhite style={{ padding: '2.5rem 1.5rem 1rem' }}>
+              <Text
+                className="m-0 mb-6 uppercase"
+                style={{
+                  fontFamily: FONTS.condensed,
+                  fontWeight: 500,
+                  fontSize: 28,
+                  lineHeight: 1,
+                  color: RC_COLORS.textOnLight,
+                }}
+              >
+                What happens next
+              </Text>
+              <Step
+                number="01"
+                title="Share Your Project Details"
+                description="Reply with whatever details you already have so the builder can review them before the appointment."
+              />
+              <Step
+                number="02"
+                title="Meet With the Builder"
+                description="Use the consultation to discuss your goals, site details, priorities, and preferred timeline."
+              />
+              <Step
+                number="03"
+                title="Review the Next Steps"
+                description="Our team will review your information, clarify anything missing, and guide you through design, quotation, and approval next steps."
+                showBorder={false}
+              />
             </EmailSectionWhite>
 
-            {/* Cream — build process */}
-            <EmailSectionLight>
+            {/* Booking context notice */}
+            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+              <Section
+                style={{
+                  backgroundColor: RC_COLORS.white,
+                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  padding: '1rem 1.25rem',
+                }}
+              >
+                <Row>
+                  <Column>
+                    <Text
+                      className="m-0"
+                      style={{
+                        fontFamily: FONTS.body,
+                        fontWeight: 400,
+                        fontSize: 13,
+                        lineHeight: 1.65,
+                        color: RC_COLORS.textMutedOnLight,
+                      }}
+                    >
+                      The booking button above is the appointment action. These next steps show how
+                      we prepare once your time is reserved.
+                    </Text>
+                  </Column>
+                </Row>
+              </Section>
+            </EmailSectionLight>
+
+            {/* Get started */}
+            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -372,153 +479,40 @@ export default function WelcomeEmail({
                   color: RC_COLORS.textOnLight,
                 }}
               >
-                Our Custom Home Build Process
+                Get started
               </Text>
-              {BUILD_PROCESS_STEPS.map((step, index) => (
-                <ProcessStep
-                  key={step.number}
-                  number={step.number}
-                  title={step.title}
-                  description={step.description}
-                  showBorder={index < BUILD_PROCESS_STEPS.length - 1}
-                />
-              ))}
-              <EmailCtaButton href={bookingUrl} label="Book Consultation" align="center" />
-            </EmailSectionLight>
-
-            {/* White — testimonial */}
-            <EmailSectionWhite style={{ padding: '2rem 1.5rem' }}>
-              <Text
-                className="m-0 mb-4 italic"
-                style={{
-                  fontFamily: FONTS.body,
-                  fontWeight: 350,
-                  fontSize: 14,
-                  lineHeight: 1.75,
-                  color: RC_COLORS.textMutedOnLight,
-                }}
-              >
-                &ldquo;We built our first home with Royal Constructions and couldn&apos;t be happier.
-                They delivered exactly what they promised — on time and with excellent quality.
-                The whole process felt smooth, and we always felt looked after.&rdquo;
-              </Text>
-              <Text
-                className="m-0"
-                style={{
-                  fontFamily: FONTS.condensed,
-                  fontWeight: 500,
-                  fontSize: 15,
-                  color: RC_COLORS.gold,
-                }}
-              >
-                Sajina B. — Oran Park, NSW
-              </Text>
+              <GetStartedCard
+                title="Explore Our Portfolio"
+                description="Browse completed projects across NSW for inspiration and ideas for your new home."
+                linkLabel="View Projects"
+                linkHref={RC_URLS.projects}
+              />
+              <GetStartedCard
+                title="Contact the Team"
+                description="Have a question before your appointment? Reply to this email or contact our office."
+                linkLabel="Email Us"
+                linkHref={`mailto:${RC_URLS.email}`}
+                showBorder={false}
+              />
             </EmailSectionWhite>
 
-            {/* White — book consultation (site-style light CTA, no navy block) */}
-            <EmailSectionWhite style={{ padding: '2rem 1.5rem 2.5rem', textAlign: 'center' }}>
-              <Section
-                style={{
-                  backgroundColor: RC_COLORS.light,
-                  borderRadius: 6,
-                  border: `2px solid ${RC_COLORS.gold}`,
-                  padding: '2rem 1.5rem',
-                  textAlign: 'center',
-                }}
-              >
+            {/* Sign-off */}
+            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
                 <Row>
                   <Column>
-                    <Text
-                      className="m-0 mb-3 uppercase"
-                      style={{
-                        fontFamily: FONTS.condensed,
-                        fontWeight: 500,
-                        fontSize: 22,
-                        color: RC_COLORS.textOnLight,
-                      }}
-                    >
-                      Book a Consultation
-                    </Text>
                     <Text
                       className="m-0 mb-5"
                       style={{
                         fontFamily: FONTS.body,
+                        fontWeight: 350,
                         fontSize: 14,
                         lineHeight: 1.65,
                         color: RC_COLORS.textMutedOnLight,
-                        maxWidth: 440,
-                        marginLeft: 'auto',
-                        marginRight: 'auto',
                       }}
                     >
-                      Get clear, obligation-free advice from an experienced builder who understands
-                      your goals, site, and budget.
+                      We look forward to building something extraordinary with you.
                     </Text>
-                    <EmailCtaButton
-                      href={bookingUrl}
-                      label="Book Free Site Assessment"
-                      align="center"
-                    />
-                  </Column>
-                </Row>
-              </Section>
-            </EmailSectionWhite>
-
-            {/* Cream — explore + sign-off */}
-            <EmailSectionLight style={{ padding: '2rem 1.5rem 2.5rem' }}>
-              <Text
-                className="m-0 mb-2 uppercase"
-                style={{
-                  fontFamily: FONTS.condensed,
-                  fontSize: 20,
-                  color: RC_COLORS.textOnLight,
-                }}
-              >
-                Explore more
-              </Text>
-              <Text className="m-0 mb-1" style={{ fontSize: 14 }}>
-                <Link
-                  href={RC_URLS.projects}
-                  style={{ color: RC_COLORS.gold, textDecoration: 'none' }}
-                >
-                  View projects&nbsp;→
-                </Link>
-              </Text>
-              <Text className="m-0 mb-6" style={{ fontSize: 14 }}>
-                <Link
-                  href={RC_URLS.customHomes}
-                  style={{ color: RC_COLORS.gold, textDecoration: 'none' }}
-                >
-                  Custom homes&nbsp;→
-                </Link>
-              </Text>
-              <Text
-                className="m-0 mb-4"
-                style={{
-                  fontSize: 14,
-                  lineHeight: 1.65,
-                  color: RC_COLORS.textMutedOnLight,
-                }}
-              >
-                Questions? Email{' '}
-                <Link
-                  href={`mailto:${RC_URLS.email}`}
-                  style={{ color: RC_COLORS.gold, textDecoration: 'none' }}
-                >
-                  {RC_URLS.email}
-                </Link>{' '}
-                or call{' '}
-                <Link
-                  href={`tel:${RC_URLS.phone}`}
-                  style={{ color: RC_COLORS.gold, textDecoration: 'none' }}
-                >
-                  {RC_URLS.phoneDisplay}
-                </Link>
-                .
-              </Text>
-              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
-                <Row>
-                  <Column>
                     <Text
                       className="m-0 mb-1"
                       style={{ fontSize: 14, color: RC_COLORS.textOnLight }}

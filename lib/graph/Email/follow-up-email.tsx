@@ -27,8 +27,6 @@ import { EmailHeader } from "./email-header";
 
 const ICONS = {
       chat: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3C/svg%3E`,
-      phone: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'%3E%3C/path%3E%3C/svg%3E`,
-      mail: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z'%3E%3C/path%3E%3Cpolyline points='22,6 12,13 2,6'%3E%3C/polyline%3E%3C/svg%3E`,
 };
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -174,71 +172,6 @@ export default function FollowUpEmail({
                                                       >
                                                             Schedule a Call
                                                       </Button>
-                                                </Column>
-                                          </Row>
-                                    </Section>
-
-                                    {/* ── Or Reach Out Directly ── */}
-                                    <Section className="mobile_px-4" style={{ padding: "0 1.5rem 3rem" }}>
-                                          <Row>
-                                                <Column className="text-center">
-                                                      <Text
-                                                            className="text-rc-label m-0 uppercase text-xs leading-relaxed tracking-[0.4px]"
-                                                            style={{ fontFamily: FONTS.body, fontWeight: 300 }}
-                                                      >
-                                                            Or reach out directly
-                                                      </Text>
-                                                </Column>
-                                          </Row>
-                                    </Section>
-
-                                    {/* ── Contact Cards ── */}
-                                    <Section className="mobile_px-4" style={{ padding: "0 1.5rem 3rem" }}>
-                                          <Row>
-                                                <Column>
-                                                      <Row>
-                                                            {/* Phone Card */}
-                                                            <Column style={{ width: "48%", verticalAlign: "top", paddingRight: "4%" }}>
-                                                                  <Section className="bg-rc-card rounded-md" style={{ border: "1px solid #1B2D45" }}>
-                                                                        <Row>
-                                                                              <Column className="p-5 text-center">
-                                                                                    <Img alt="" height={24} src={ICONS.phone} width={24} className="block outline-none border-none mx-auto mb-3" />
-                                                                                    <Text className="text-rc-label m-0 mb-2 uppercase text-[11px] leading-none tracking-[0.6px]" style={{ fontFamily: FONTS.body, fontWeight: 500 }}>
-                                                                                          Call us
-                                                                                    </Text>
-                                                                                    <Link
-                                                                                          href="tel:1300832355"
-                                                                                          className="text-rc-white no-underline text-[15px] leading-tight"
-                                                                                          style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}
-                                                                                    >
-                                                                                          1300 832 355
-                                                                                    </Link>
-                                                                              </Column>
-                                                                        </Row>
-                                                                  </Section>
-                                                            </Column>
-
-                                                            {/* Email Card */}
-                                                            <Column style={{ width: "48%", verticalAlign: "top" }}>
-                                                                  <Section className="bg-rc-card rounded-md" style={{ border: "1px solid #1B2D45" }}>
-                                                                        <Row>
-                                                                              <Column className="p-5 text-center">
-                                                                                    <Img alt="" height={24} src={ICONS.mail} width={24} className="block outline-none border-none mx-auto mb-3" />
-                                                                                    <Text className="text-rc-label m-0 mb-2 uppercase text-[11px] leading-none tracking-[0.6px]" style={{ fontFamily: FONTS.body, fontWeight: 500 }}>
-                                                                                          Email us
-                                                                                    </Text>
-                                                                                    <Link
-                                                                                          href="mailto:info@royalconstructions.com.au"
-                                                                                          className="text-rc-white no-underline text-[13px] leading-tight"
-                                                                                          style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}
-                                                                                    >
-                                                                                          info@royalconstructions.com.au
-                                                                                    </Link>
-                                                                              </Column>
-                                                                        </Row>
-                                                                  </Section>
-                                                            </Column>
-                                                      </Row>
                                                 </Column>
                                           </Row>
                                     </Section>

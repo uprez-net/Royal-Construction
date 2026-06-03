@@ -182,15 +182,7 @@ export default function PortfolioEmail({ name = "Homeowner" }: PortfolioEmailPro
                                                                         >
                                                                               Please feel free to review the attached document.
                                                                               If you have any questions or are ready to discuss
-                                                                              your specific project requirements, simply reply to
-                                                                              this email or call us on{" "}
-                                                                              <Link
-                                                                                    href="tel:1300832355"
-                                                                                    className="text-rc-gold no-underline"
-                                                                              >
-                                                                                    1300 832 355
-                                                                              </Link>
-                                                                              .
+                                                                              your project, simply reply to this email.
                                                                         </Text>
                                                                   </Column>
                                                             </Row>
