@@ -280,6 +280,8 @@ export default function Leads() {
   const [analyticsData, setAnalyticsData] = useState<LeadAnalyticsData>({
     sourceData: [],
     conversionData: [],
+    monthlyTrend: [],
+    lostReasons: [],
   });
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
