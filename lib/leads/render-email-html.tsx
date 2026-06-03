@@ -28,8 +28,6 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
   const project = `${type} at ${location}`;
   const amount = (lead?.budget && lead.budget !== 'Not Discussed') ? lead.budget : 'TBD';
   const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
-  const baseUrl = 'https://royal-construction-chi.vercel.app';
-
   let component: React.ReactElement | null = null;
 
   switch (category) {
@@ -38,16 +36,13 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
       break;
         case 'Welcome':
       {
-        // Point to the frontend page instead of the API route
-        let bookingUrl = `${baseUrl}/book-consultation`;
+        let bookingUrl = 'https://royalconstructions.com.au/book-consultation/';
         if (lead?.email) {
           const params = new URLSearchParams({
             name: lead.name ?? name,
             email: lead.email,
           });
           bookingUrl += `?${params.toString()}`;
-        } else {
-          bookingUrl = `${baseUrl}/contact`; // Fallback
         }
 
         component = <WelcomeEmail name={name} bookingUrl={bookingUrl} />;
