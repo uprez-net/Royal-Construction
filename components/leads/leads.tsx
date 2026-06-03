@@ -200,7 +200,9 @@ function ModalShell({
 }
 
 export default function Leads() {
+  const pageLimit = 50;
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [stats, setStats] = useState<LeadsStats | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('table');
   const [loading, setLoading] = useState(true);
@@ -215,27 +217,61 @@ export default function Leads() {
   const [sendingCampaign, setSendingCampaign] = useState(false);
 
   const [activeMetric, setActiveMetric] = useState<string | null>(null);
+  const [hydratingLeads, setHydratingLeads] = useState(false);
+  const [hydrationProgress, setHydrationProgress] = useState<{ loaded: number; total: number }>({ loaded: 0, total: 0 });
 
   const [adding, setAdding] = useState(false);
   const [addingWithReminder, setAddingWithReminder] = useState(false);
 
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
 
-  useEffect(() => {
-    loadData();
+  const refreshStats = useCallback(async () => {
+    const statsData = await fetchLeadsStats();
+    setStats(statsData);
   }, []);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [leadsData, statsData] = await Promise.all([
-        fetchLeads(),
-        fetchLeadsStats(),
-      ]);
-      console.log('Stats data loaded:', leadsData, statsData);
-      setLeads(leadsData.items);
-      setStats(statsData);
+      const firstPage = await fetchLeads({ page: 1, limit: pageLimit, q: '' });
+      setLeads(firstPage.items);
+      setCurrentPage(1);
       setError(null);
+      setHydrationProgress({ loaded: 1, total: firstPage.totalPages });
+
+      await refreshStats();
+      setLoading(false);
+
+      if (firstPage.totalPages > 1) {
+        setHydratingLeads(true);
+        const batchSize = 3;
+        const remainingPages = Array.from({ length: firstPage.totalPages - 1 }, (_, index) => index + 2);
+
+        for (let index = 0; index < remainingPages.length; index += batchSize) {
+          const batchPages = remainingPages.slice(index, index + batchSize);
+          const batchResponses = await Promise.all(
+            batchPages.map((page) => fetchLeads({ page, limit: pageLimit, q: '' })),
+          );
+
+          const batchItems = batchResponses.flatMap((response) => response.items);
+          setLeads((prev) => {
+            const seen = new Set(prev.map((lead) => lead.id));
+            const next = [...prev];
+            for (const lead of batchItems) {
+              if (!seen.has(lead.id)) {
+                next.push(lead);
+                seen.add(lead.id);
+              }
+            }
+            return next;
+          });
+
+          const loadedPages = Math.min(firstPage.totalPages, 1 + index + batchPages.length);
+          setHydrationProgress({ loaded: loadedPages, total: firstPage.totalPages });
+        }
+
+        setHydratingLeads(false);
+      }
     } catch (err) {
       setError('Failed to load leads data');
       console.error(err);
@@ -244,53 +280,55 @@ export default function Leads() {
     }
   };
 
-  const recalcStats = useCallback((currentLeads: Lead[]) => {
-    const isConverted = (stage: string) => stage === 'Won' || stage === 'Converted';
-    const isLost = (stage: string) => stage === 'Lost' || stage === 'Cancelled' || stage === 'Disqualified';
-
-    setStats({
-      total: currentLeads.length,
-      new: currentLeads.filter(l => l.stage === 'New').length,
-      contacted: currentLeads.filter(l => l.stage === 'Contacted').length,
-      qualified: currentLeads.filter(l => l.stage === 'Qualified').length,
-      conversion: currentLeads.filter(l => isConverted(l.stage)).length,
-      pendingFollowup: currentLeads.filter(l => l.stage == 'In Follow-up').length,
-      lost: currentLeads.filter(l => isLost(l.stage)).length,
-    });
+  useEffect(() => {
+    loadData();
   }, []);
 
   const handleLeadUpdate = async (updatedLead: Lead): Promise<boolean> => {
     const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
     if (updatedLeadData) {
       setLeads(prev => {
-        const updated = prev.map(lead => (lead.id === updatedLead.id ? updatedLead : lead));
-        recalcStats(updated);
-        return updated;
+        return prev.map(lead => (lead.id === updatedLead.id ? updatedLead : lead));
       });
+      await refreshStats();
       return true;
     } else {
       return false;
     }
   };
 
-  const handleLeadDelete = (leadId: number) => {
+  const handleLeadDelete = async (leadId: number) => {
     setLeads(prev => {
-      const updated = prev.filter(lead => lead.id !== leadId);
-      recalcStats(updated);
-      return updated;
+      return prev.filter(lead => lead.id !== leadId);
     });
+    await refreshStats();
   };
 
   const handleMetricClick = (metric: string) => {
     // Toggle off if clicking the same metric, otherwise set active
+    setCurrentPage(1);
     setActiveMetric(prev => prev === metric ? null : metric);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(prev => (prev === page ? prev : page));
+  }, []);
+
+  const reloadCurrentData = () => {
+    loadData();
   };
 
   const handleNewLead = (newLead: Lead) => {
     setLeads(prev => {
-      const updated = [newLead, ...prev];
-      recalcStats(updated);
-      return updated;
+      return [newLead, ...prev];
+    });
+    refreshStats().catch((error) => {
+      console.error('Failed to refresh leads stats', error);
     });
   };
 
@@ -369,7 +407,7 @@ export default function Leads() {
       );
 
       setLeads(updated);
-      recalcStats(updated);
+      await refreshStats();
       showToast(`Campaign sent to ${successCount} of ${emailTargets.length} leads`, 'success');
     } catch (error) {
       console.error('Campaign error:', error);
@@ -436,7 +474,7 @@ export default function Leads() {
     return (
       <div className="leads-error-container">
         <div className="leads-error-message">{error}</div>
-        <button className="btn-primary-custom" onClick={loadData}>
+        <button className="btn-primary-custom" onClick={reloadCurrentData}>
           Try Again
         </button>
       </div>
@@ -455,12 +493,16 @@ export default function Leads() {
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      result = result.filter(lead =>
-        lead.name.toLowerCase().includes(term) ||
-        lead.phone.includes(term) ||
-        lead.location.toLowerCase().includes(term) ||
-        lead.email.toLowerCase().includes(term)
-      );
+      result = result.filter((lead) => {
+        const typeText = Array.isArray(lead.type) ? lead.type.join(' ') : lead.type;
+        return (
+          lead.name.toLowerCase().includes(term) ||
+          lead.phone.toLowerCase().includes(term) ||
+          lead.location.toLowerCase().includes(term) ||
+          lead.email.toLowerCase().includes(term) ||
+          typeText.toLowerCase().includes(term)
+        );
+      });
     }
 
     if (activeMetric) {
@@ -478,6 +520,27 @@ export default function Leads() {
 
     return result;
   }, [leads, searchTerm, activeMetric]);
+
+  const totalFilteredPages = Math.max(1, Math.ceil(filteredLeads.length / pageLimit));
+
+  useEffect(() => {
+    if (currentPage > totalFilteredPages) {
+      setCurrentPage(totalFilteredPages);
+    }
+  }, [currentPage, totalFilteredPages]);
+
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * pageLimit;
+    return filteredLeads.slice(start, start + pageLimit);
+  }, [filteredLeads, currentPage, pageLimit]);
+
+  const paginationConfig = useMemo(() => ({
+    page: currentPage,
+    limit: pageLimit,
+    totalCount: filteredLeads.length,
+    totalPages: totalFilteredPages,
+    onPageChange: handlePageChange,
+  }), [currentPage, pageLimit, filteredLeads.length, totalFilteredPages, handlePageChange]);
 
 
   const normalizeTypes = (types: string | string[] | null | undefined): string[] => {
@@ -567,6 +630,12 @@ export default function Leads() {
         </div>
       )}
 
+      {hydratingLeads && !loading ? (
+        <div className="rounded-lg border border-teal-100 bg-teal-50/40 px-4 py-2 text-xs text-teal-700">
+          Syncing leads in background: page {hydrationProgress.loaded} of {hydrationProgress.total}
+        </div>
+      ) : null}
+
       <Card className="border-border/70 bg-white/95 shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-5 py-3">
           {([
@@ -602,7 +671,7 @@ export default function Leads() {
                   type="text"
                   placeholder="Search leads..."
                   value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
+                  onChange={e => handleSearchChange(e.target.value)}
                 />
               </div>
               <button className="btn-export" onClick={handleExport}>
@@ -622,18 +691,20 @@ export default function Leads() {
             <>
               {activeTab === 'table' && (
                 <TableView
-                  leads={filteredLeads}
+                  leads={paginatedLeads}
                   onLeadUpdate={handleLeadUpdate}
                   onLeadDelete={handleLeadDelete}
                   activeMetric={activeMetric}
                   onActiveMetricChange={setActiveMetric}
+                  pagination={paginationConfig}
                 />
               )}
               {activeTab === 'followups' &&
                 <FollowupsView
-                  leads={filteredLeads}
+                  leads={paginatedLeads}
                   onLeadUpdate={handleLeadUpdate}
                   onLeadDelete={handleLeadDelete}
+                  pagination={paginationConfig}
                 />}
               {activeTab === 'analytics' && <AnalyticsView leads={leads} />}
             </>

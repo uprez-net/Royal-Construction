@@ -5,11 +5,27 @@ import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
 import { sendEmailToLead } from '@/lib/leads/leads-service';
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
 import { Button } from '@/components/ui/button';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 interface FollowupsViewProps {
   leads: Lead[];
   onLeadUpdate: (lead: Lead) => void;
   onLeadDelete: (leadId: number) => void;
+  pagination: {
+    page: number;
+    limit: number;
+    totalCount: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+  };
 }
 
 interface ReactEmailPreviewProps {
@@ -131,7 +147,7 @@ function getTemplateDescription(template: EmailTemplate): string {
   }
 }
 
-export default function FollowupsView({ leads, onLeadUpdate, onLeadDelete }: FollowupsViewProps) {
+export default function FollowupsView({ leads, onLeadUpdate, onLeadDelete, pagination }: FollowupsViewProps) {
   const upcomingFollowups = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return leads
@@ -156,6 +172,27 @@ export default function FollowupsView({ leads, onLeadUpdate, onLeadDelete }: Fol
       },
     };
   }, [leads, pendingFollowups, upcomingFollowups]);
+
+  const paginationItems = useMemo(() => {
+    const currentPage = pagination.page;
+    const totalPages = pagination.totalPages;
+
+    if (totalPages <= 1) return totalPages === 1 ? [1] : [];
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+
+    const items: Array<number | 'ellipsis'> = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    if (start > 2) items.push('ellipsis');
+    for (let page = start; page <= end; page += 1) items.push(page);
+    if (end < totalPages - 1) items.push('ellipsis');
+    items.push(totalPages);
+
+    return items;
+  }, [pagination.page, pagination.totalPages]);
+
+  const shouldShowPagination = pagination.totalPages > 1;
 
   return (
     <div className="followups-view">
@@ -243,6 +280,62 @@ export default function FollowupsView({ leads, onLeadUpdate, onLeadDelete }: Fol
           </div>
         </div>
       </div>
+      {pagination.totalCount > 0 && (
+        <div className="mt-4 space-y-3 border-t border-border/70 px-2 pt-4">
+          <div className="text-center text-xs text-muted-foreground">
+            Page {pagination.page} of {pagination.totalPages} • {pagination.totalCount} total leads
+          </div>
+          {shouldShowPagination ? (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (pagination.page === 1) return;
+                      pagination.onPageChange(Math.max(1, pagination.page - 1));
+                    }}
+                    aria-disabled={pagination.page === 1}
+                  />
+                </PaginationItem>
+                {paginationItems.map((item, index) =>
+                  item === 'ellipsis' ? (
+                    <PaginationItem key={`ellipsis-${index}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
+                    <PaginationItem key={item}>
+                      <PaginationLink
+                        href="#"
+                        isActive={item === pagination.page}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          if (item === pagination.page) return;
+                          pagination.onPageChange(item);
+                        }}
+                      >
+                        {item}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ),
+                )}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (pagination.page >= pagination.totalPages) return;
+                      pagination.onPageChange(Math.min(pagination.totalPages, pagination.page + 1));
+                    }}
+                    aria-disabled={pagination.page >= pagination.totalPages}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

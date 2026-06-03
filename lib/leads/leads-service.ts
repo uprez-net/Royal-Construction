@@ -7,6 +7,12 @@ export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' 
   actionDate: string;
 }
 
+export interface FetchLeadsParams {
+  page?: number;
+  limit?: number;
+  q?: string;
+}
+
 export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer'> & {
   type?: string | string[];
   history?: LeadHistoryInput[];
@@ -20,9 +26,18 @@ export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type'
 
 // ── Fetch all leads ──
 
-export async function fetchLeads(): Promise<PaginatedLeadsResult> {
+export async function fetchLeads(params: FetchLeadsParams = {}): Promise<PaginatedLeadsResult> {
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 100;
+  const q = params.q ?? '';
+  const searchParams = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    q,
+  });
+
   const data = await fetchJson<PaginatedLeadsResult>(
-    `/api/leads?q=&limit=100`, // Fetch all leads without filtering
+    `/api/leads?${searchParams.toString()}`,
     { method: "GET", cache: 'no-store' },
     "Failed to fetch leads",
   )
@@ -41,26 +56,17 @@ export async function fetchLead(id: number): Promise<Lead | null> {
 }
 
 export async function fetchLeadsStats(): Promise<LeadsStats> {
-  // TODO: Replace with actual API call
-  // const response = await fetch('/api/leads/stats');
-  // return response.json();
+  const response = await fetchJson<LeadsStats>(
+    '/api/leads/stats',
+    { method: 'GET', cache: 'no-store' },
+    'Failed to fetch leads stats'
+  );
 
-  const { items: leads } = await fetchLeads();
+  if (!response.success) {
+    throw new Error('Failed to fetch leads stats');
+  }
 
-  const isConverted = (stage: string) => stage === 'Won' || stage === 'Converted';
-  const isLost = (stage: string) => stage === 'Lost' || stage === 'Cancelled' || stage === 'Disqualified';
-
-  const stats: LeadsStats = {
-    total: leads.length,
-    new: leads.filter(l => l.stage === 'New').length,
-    contacted: leads.filter(l => l.stage === 'Contacted').length,
-    qualified: leads.filter(l => l.stage === 'Qualified').length,
-    conversion: leads.filter(l => isConverted(l.stage)).length,
-    pendingFollowup: leads.filter(l => !isConverted(l.stage) && !isLost(l.stage)).length,
-    lost: leads.filter(l => isLost(l.stage)).length,
-  };
-
-  return Promise.resolve(stats);
+  return response.data;
 }
 
 export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {

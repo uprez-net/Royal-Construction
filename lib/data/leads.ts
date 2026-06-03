@@ -1,8 +1,8 @@
 import prisma from "@/lib/prisma";
-import { mapLead, stageToPrismaMap, historyTypeToPrisma } from "@/types/lead";
+import { mapLead, stageMap, stageToPrismaMap, historyTypeToPrisma, toDateOnly } from "@/types/lead";
 import type { Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
-import type { Lead as UiLead } from "@/lib/leads/types";
+import type { Lead as UiLead, LeadsStats } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
@@ -22,6 +22,60 @@ export interface PaginatedLeadsResult {
   totalPages: number;
 }
 
+export async function getLeadsStats(): Promise<LeadsStats> {
+  try {
+    // const [
+    //   total,
+    //   newCount,
+    //   contacted,
+    //   qualified,
+    //   conversion,
+    //   pendingFollowup,
+    //   lost,
+    // ] = await Promise.all([
+    //   prisma.lead.count(),
+    //   prisma.lead.count({ where: { stage: "NEW" } }),
+    //   prisma.lead.count({ where: { stage: "CONTACTED" } }),
+    //   prisma.lead.count({ where: { stage: "QUALIFIED" } }),
+    //   prisma.lead.count({ where: { stage: { in: ["WON", "CONVERTED"] } } }),
+    //   prisma.lead.count({ where: { stage: "IN_FOLLOW_UP" } }),
+    //   prisma.lead.count({ where: { stage: { in: ["LOST", "CANCELLED", "DISQUALIFIED"] } } }),
+    // ]);
+
+    const totalLeads = await prisma.lead.findMany({
+      select: { stage: true },
+    });
+
+    const newCount = totalLeads.filter((lead) => lead.stage === "NEW").length;
+    const contacted = totalLeads.filter((lead) => lead.stage === "CONTACTED").length;
+    const qualified = totalLeads.filter((lead) => lead.stage === "QUALIFIED").length;
+    const conversion = totalLeads.filter((lead) => ["WON", "CONVERTED"].includes(lead.stage)).length;
+    const pendingFollowup = totalLeads.filter((lead) => lead.stage === "IN_FOLLOW_UP").length;
+    const lost = totalLeads.filter((lead) => ["LOST", "CANCELLED", "DISQUALIFIED"].includes(lead.stage)).length;
+
+    return {
+      total: totalLeads.length,
+      new: newCount,
+      contacted,
+      qualified,
+      conversion,
+      pendingFollowup,
+      lost,
+    };
+  } catch (error) {
+    console.error("Error fetching leads stats:", error);
+    return {
+      total: 0,
+      new: 0,
+      contacted: 0,
+      qualified: 0,
+      conversion: 0,
+      pendingFollowup: 0,
+      lost: 0,
+    };
+  }
+}
+
 export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
@@ -38,9 +92,26 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
   try {
     const leads = await prisma.lead.findMany({
       where,
-      include: { 
-        history: { orderBy: { actionDate: "asc" } },
-        chatSessions: true, 
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        location: true,
+        source: true,
+        sourceDetail: true,
+        stage: true,
+        assigned: true,
+        budget: true,
+        type: true,
+        notes: true,
+        followupDate: true,
+        followupTime: true,
+        followupNotes: true,
+        lostReason: true,
+        urgent: true,
+        createdAt: true,
+        _count: { select: { chatSessions: true } },
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -49,7 +120,28 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     const totalCount = await prisma.lead.count({ where });
 
     return {
-      items: leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] })),
+      items: leads.map((lead) => ({
+        id: lead.id,
+        name: lead.name,
+        phone: lead.phone ?? "",
+        email: lead.email ?? "",
+        location: lead.location ?? "",
+        source: (lead.source ?? lead.sourceDetail ?? "Website") as UiLead["source"],
+        sourceDetail: lead.sourceDetail ?? "",
+        stage: stageMap[lead.stage],
+        assigned: lead.assigned ?? null,
+        budget: lead.budget ?? "Not Discussed",
+        type: lead.type.length > 0 ? lead.type.join(", ") : "Not Specified",
+        notes: lead.notes ?? "",
+        followupDate: toDateOnly(lead.followupDate),
+        followupTime: lead.followupTime ?? null,
+        followupNotes: lead.followupNotes ?? "",
+        lostReason: lead.lostReason ?? undefined,
+        history: [],
+        created: toDateOnly(lead.createdAt) ?? "",
+        urgent: lead.urgent,
+        creatingOffer: lead._count.chatSessions > 0,
+      })),
       page: safePage,
       limit: safeLimit,
       totalCount,
@@ -72,7 +164,7 @@ type CreateLeadOptions = {
 };
 
 export async function findLeadById(id: number) {
-  return prisma.lead.findUnique({ where: { id }, include: { history: { orderBy: { actionDate: "asc" } } } });
+  return prisma.lead.findUnique({ where: { id }, include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true } });
 }
 
 export async function findLeadByEmail(email: string): Promise<UiLead | null> {

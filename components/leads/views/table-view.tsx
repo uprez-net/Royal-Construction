@@ -6,6 +6,15 @@ import { EmailTemplate } from '@/lib/leads/types';
 import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
 import { deleteLead, sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 interface TableViewProps {
   leads: Lead[];
@@ -13,6 +22,13 @@ interface TableViewProps {
   onLeadDelete: (leadId: number) => void;
   activeMetric?: string | null;
   onActiveMetricChange?: (metric: string | null) => void;
+  pagination: {
+    page: number;
+    limit: number;
+    totalCount: number;
+    totalPages: number;
+    onPageChange: (page: number) => void;
+  };
 }
 
 interface LeadDetailFormData {
@@ -262,7 +278,7 @@ function ModalShell({
 }
 
 export default function TableView({
-  leads, onLeadUpdate, onLeadDelete, activeMetric, onActiveMetricChange
+  leads, onLeadUpdate, onLeadDelete, activeMetric, onActiveMetricChange, pagination,
 }: TableViewProps) {
   const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
   const [statusLead, setStatusLead] = useState<Lead | null>(null);
@@ -306,8 +322,9 @@ export default function TableView({
       } else if (activeMetric === 'lost') {
         setActiveFilters(['Lost', 'Cancelled', 'Disqualified']);
       }
+      pagination.onPageChange(1);
     }
-  }, [activeMetric]);
+  }, [activeMetric, pagination.onPageChange]);
 
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Date.now() + Math.random();
@@ -406,11 +423,34 @@ export default function TableView({
     return filtered;
   }, [leads, activeFilters]);
 
+  const currentPage = pagination.page;
+  const totalPages = pagination.totalPages;
+
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 1) return totalPages === 1 ? [1] : [];
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+
+    const items: Array<number | 'ellipsis'> = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    if (start > 2) items.push('ellipsis');
+    for (let page = start; page <= end; page += 1) items.push(page);
+    if (end < totalPages - 1) items.push('ellipsis');
+    items.push(totalPages);
+
+    return items;
+  }, [currentPage, totalPages]);
+
+  const paginatedLeads = filteredLeads;
+  const shouldShowPagination = pagination.totalPages > 1;
+
   const toggleFilter = (stage: string) => {
     // If user manually clicks a stage chip, disable the active Metric Card
     if (onActiveMetricChange) {
       onActiveMetricChange(null);
     }
+    pagination.onPageChange(1);
 
     setActiveFilters(prev => {
       if (stage === 'all') return prev.includes('all') ? [] : ['all'];
@@ -552,7 +592,7 @@ export default function TableView({
                 </tr>
               </thead>
               <tbody>
-                {filteredLeads.map(lead => (
+                {paginatedLeads.map(lead => (
                   <tr key={lead.id} className={lead.urgent ? 'urgent-row bg-rose-50/50' : ''} onClick={() => openDetailModal(lead)}>
                     <td className="col-lead">
                       <div className="cell-name">
@@ -588,6 +628,63 @@ export default function TableView({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {filteredLeads.length > 0 && (
+          <div className="space-y-3 border-t border-border/70 px-4 py-4">
+            <div className="text-center text-xs text-muted-foreground">
+              Page {currentPage} of {totalPages} • {pagination.totalCount} total leads
+            </div>
+            {shouldShowPagination ? (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (currentPage === 1) return;
+                        pagination.onPageChange(Math.max(1, currentPage - 1));
+                      }}
+                      aria-disabled={currentPage === 1}
+                    />
+                  </PaginationItem>
+                  {paginationItems.map((item, index) =>
+                    item === 'ellipsis' ? (
+                      <PaginationItem key={`ellipsis-${index}`}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    ) : (
+                      <PaginationItem key={item}>
+                        <PaginationLink
+                          href="#"
+                          isActive={item === currentPage}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            if (item === currentPage) return;
+                            pagination.onPageChange(item);
+                          }}
+                        >
+                          {item}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ),
+                  )}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (currentPage >= totalPages) return;
+                        pagination.onPageChange(Math.min(totalPages, currentPage + 1));
+                      }}
+                      aria-disabled={currentPage >= totalPages}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            ) : null}
           </div>
         )}
       </div>
