@@ -256,6 +256,7 @@ export default function Leads() {
   const [stats, setStats] = useState<LeadsStats | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("table");
   const [loading, setLoading] = useState(true);
+  const [loadingLeads, setLoadingLeads] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
@@ -300,20 +301,37 @@ export default function Leads() {
     page?: number;
     limit?: number;
     query?: string;
+    status?: string;
   }) => {
     try {
-      setLoading(true);
+      const status = query.status;
+      let statusFilter: LeadStage[] | undefined = undefined;
+      if (status) {
+        if (status === "total") {
+          statusFilter = [];
+        } else if (status === "converted") {
+          statusFilter = ["Won", "Converted"];
+        } else if (status === "pendingFollowup") {
+          statusFilter = ["In Follow-up"];
+        } else if (status === "lost") {
+          statusFilter = ["Lost", "Cancelled", "Disqualified"];
+        } else {
+          statusFilter = status.split(",") as LeadStage[];
+        }
+      }
+      setLoadingLeads(true);
       const leadsData = await fetchLeads({
         page: query.page || pageInfo.page,
         limit: query.limit || pageInfo.limit,
         q: query.query?.trim() ? query.query.trim() : undefined,
+        status: statusFilter,
       });
       setLeads(leadsData.items);
     } catch (err) {
       console.error(err);
       setError("Failed to refresh leads data");
     } finally {
-      setLoading(false);
+      setLoadingLeads(false);
     }
   };
 
@@ -344,6 +362,26 @@ export default function Leads() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    if (tab === "followups") {
+      refreshLeadsData({
+        page: 1,
+        limit: 10,
+        status: [
+          "New",
+          "Contacted",
+          "Qualified",
+          "Quoted",
+          "Negotiating",
+          "Meeting Scheduled",
+          "In Follow-up",
+          "No Response",
+        ].join(","),
+      });
     }
   };
 
@@ -389,9 +427,17 @@ export default function Leads() {
     });
   };
 
-  const handleMetricClick = (metric: string) => {
+  const handleMetricClick = (metric: string | null) => {
     // Toggle off if clicking the same metric, otherwise set active
-    setActiveMetric((prev) => (prev === metric ? null : metric));
+    setActiveMetric(metric);
+    refreshLeadsData({
+      page: 1,
+      limit: 10,
+      status: metric === "total" ? "total" : (metric ?? undefined),
+      query: debouncedSearchTerm.trim()
+        ? debouncedSearchTerm.trim()
+        : undefined,
+    });
   };
 
   const handleNewLead = (newLead: Lead) => {
@@ -578,26 +624,26 @@ export default function Leads() {
     .join(", ");
 
   // Update your filteredLeads to respect the activeMetric (as shown in previous answer)
-  const filteredLeads = useMemo(() => {
-    let result = leads;
+  // const filteredLeads = useMemo(() => {
+  //   let result = leads;
 
-    if (activeMetric) {
-      const isConverted = (stage: string) =>
-        stage === "Won" || stage === "Converted";
-      const isLost = (stage: string) =>
-        stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
+  //   if (activeMetric) {
+  //     const isConverted = (stage: string) =>
+  //       stage === "Won" || stage === "Converted";
+  //     const isLost = (stage: string) =>
+  //       stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
 
-      if (activeMetric === "converted") {
-        result = result.filter((l) => isConverted(l.stage));
-      } else if (activeMetric === "pendingFollowup") {
-        result = result.filter((l) => l.stage === "In Follow-up");
-      } else if (activeMetric === "lost") {
-        result = result.filter((l) => isLost(l.stage));
-      }
-    }
+  //     if (activeMetric === "converted") {
+  //       result = result.filter((l) => isConverted(l.stage));
+  //     } else if (activeMetric === "pendingFollowup") {
+  //       result = result.filter((l) => l.stage === "In Follow-up");
+  //     } else if (activeMetric === "lost") {
+  //       result = result.filter((l) => isLost(l.stage));
+  //     }
+  //   }
 
-    return result;
-  }, [leads, activeMetric]);
+  //   return result;
+  // }, [leads, activeMetric]);
 
   const normalizeTypes = (
     types: string | string[] | null | undefined,
@@ -630,7 +676,7 @@ export default function Leads() {
       "lostReason",
       "urgent",
     ];
-    const leadRows = filteredLeads.map((lead) => {
+    const leadRows = leads.map((lead) => {
       const normalized = normalizeTypes(lead.type).filter(
         (type) => type !== "Not Specified",
       );
@@ -653,7 +699,7 @@ export default function Leads() {
       ];
     });
     const historyHeader = ["leadId", "action", "detail", "type", "actionDate"];
-    const historyRows = filteredLeads.flatMap((lead) =>
+    const historyRows = leads.flatMap((lead) =>
       (lead.history ?? []).map((entry) => [
         lead.id,
         entry.action,
@@ -764,7 +810,7 @@ export default function Leads() {
             return (
               <button
                 key={key}
-                onClick={() => setActiveTab(key)}
+                onClick={() => handleTabChange(key)}
                 className={cn(
                   "group relative inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
                   active
@@ -810,16 +856,18 @@ export default function Leads() {
             <>
               {activeTab === "table" && (
                 <TableView
-                  leads={filteredLeads}
+                  loading={loadingLeads}
+                  leads={leads}
                   onLeadUpdate={handleLeadUpdate}
                   onLeadDelete={handleLeadDelete}
                   activeMetric={activeMetric}
-                  onActiveMetricChange={setActiveMetric}
+                  onActiveMetricChange={handleMetricClick}
                 />
               )}
               {activeTab === "followups" && (
                 <FollowupsView
-                  leads={filteredLeads}
+                  loading={loadingLeads}
+                  leads={leads}
                   onLeadUpdate={handleLeadUpdate}
                   onLeadDelete={handleLeadDelete}
                 />
@@ -830,7 +878,7 @@ export default function Leads() {
               {activeTab !== "analytics" && (
                 <LeadPagination
                   leads={{
-                    items: filteredLeads,
+                    items: leads,
                     page: pageInfo.page,
                     limit: pageInfo.limit,
                     totalCount: pageInfo.total,

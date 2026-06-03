@@ -1,5 +1,5 @@
 "use client";
-import { HistoryItem, Lead, LeadsStats } from './types';
+import { HistoryItem, Lead, LeadsStats, LeadStage } from './types';
 import { fetchJson } from '@/utils/fetch';
 import { findLeadById, getAnalyticsData, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
 
@@ -23,11 +23,12 @@ export async function fetchLeadAnalyticsData() {
   return getAnalyticsData();
 }
 
-export async function fetchLeads(params: { q?: string; limit?: number; page?: number }): Promise<PaginatedLeadsResult> {
+export async function fetchLeads(params: { q?: string; limit?: number; page?: number; status?: LeadStage[] }): Promise<PaginatedLeadsResult> {
   const query = new URLSearchParams();
   if (params.q?.trim()) query.append('q', params.q.trim());
   if (params.limit) query.append('limit', params.limit.toString());
   if (params.page) query.append('page', params.page.toString());
+  if (params.status) query.append('status', params.status.join(','));
   const data = await fetchJson<PaginatedLeadsResult>(
     `/api/leads?${query.toString()}`,
     { method: "GET", cache: 'no-store' },

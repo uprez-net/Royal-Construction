@@ -214,4 +214,5 @@ export type LeadParam = z.infer<typeof leadParamSchema>;
 export const leadLookupParamSchema = z.object({
   ...paginationSchema.shape,
   q: z.string().trim().default(""),
+  status: z.string().optional(),
 })

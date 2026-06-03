@@ -1,3 +1,5 @@
+import { LeadStage as DBLeadStage } from "@prisma/client";
+
 export type LeadStage =
   | 'New'
   | 'Contacted'
@@ -80,7 +82,23 @@ export interface LeadsStats {
 export interface EmailTemplate {
   id: number;
   subject: string;
-  content?:string;
+  content?: string;
   category: string;
   body?: string;
 }
+
+export const LeadStageToLeadStageDBMapping: Record<LeadStage, DBLeadStage> = {
+  New: DBLeadStage.NEW,
+  Contacted: DBLeadStage.CONTACTED,
+  Qualified: DBLeadStage.QUALIFIED,
+  Quoted: DBLeadStage.QUOTED,
+  Negotiating: DBLeadStage.NEGOTIATING,
+  Won: DBLeadStage.WON,
+  Lost: DBLeadStage.LOST,
+  "Meeting Scheduled": DBLeadStage.MEETING_SCHEDULED,
+  "In Follow-up": DBLeadStage.IN_FOLLOW_UP,
+  "No Response": DBLeadStage.NO_RESPONSE,
+  Converted: DBLeadStage.CONVERTED,
+  Cancelled: DBLeadStage.CANCELLED,
+  Disqualified: DBLeadStage.DISQUALIFIED
+};

@@ -1,7 +1,7 @@
 "use server";
 import prisma from "@/lib/prisma";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
-import type { Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
+import type { LeadStage, Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
@@ -24,7 +24,7 @@ export interface PaginatedLeadsResult {
   totalPages: number;
 }
 
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedLeadsResult> {
+export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[]): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
   const search = normalizeSearch(query);
@@ -39,7 +39,12 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     : undefined;
   try {
     const leads = await prisma.lead.findMany({
-      where,
+      where: {
+        ...where,
+        ...(status && status.length > 0
+          ? { stage: { in: status } }
+          : {}),
+      },
       include: {
         history: { orderBy: { actionDate: "asc" } },
         chatSessions: true,
