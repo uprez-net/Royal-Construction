@@ -108,3 +108,8 @@ export function mapLead(
         creatingOffer: lead.chatSessions.length > 0,
     };
 }
+
+export interface LeadAnalyticsData {
+    sourceData: { name: string; value: number }[];
+    conversionData: { source: string; total: number; won: number }[];
+}

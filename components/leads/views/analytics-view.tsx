@@ -1,6 +1,4 @@
 'use client';
-
-import React, { useMemo } from 'react';
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -26,10 +24,10 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from '@/components/ui/chart';
-import { Lead, LeadStage } from '@/lib/leads/types';
+import { LeadAnalyticsData } from '@/types/lead';
 
 interface AnalyticsViewProps {
-  leads: Lead[];
+  analytics: LeadAnalyticsData;
 }
 
 /* ── Color palette (matching reference) ─────── */
@@ -66,35 +64,7 @@ const LOST_REASONS_DATA = [
   { name: 'Not Ready', value: 6 },
 ];
 
-export default function AnalyticsView({ leads }: AnalyticsViewProps) {
-  const analytics = useMemo(() => {
-    /* Source distribution */
-    const sourceMap = leads.reduce((acc, lead) => {
-      acc[lead.source] = (acc[lead.source] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const sourceData = Object.entries(sourceMap)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, value]) => ({ name, value }));
-
-    /* Conversion by source */
-    const convMap = leads.reduce((acc, lead) => {
-      if (!acc[lead.source]) acc[lead.source] = { total: 0, won: 0 };
-      acc[lead.source].total++;
-      if (lead.stage === 'Won') acc[lead.source].won++;
-      return acc;
-    }, {} as Record<string, { total: number; won: number }>);
-
-    const conversionData = Object.entries(convMap).map(([source, stats]) => ({
-      source,
-      total: stats.total,
-      won: stats.won,
-    }));
-
-    return { sourceData, conversionData };
-  }, [leads]);
-
+export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
   /* ── Chart configs ─────────────────────────── */
   const sourceChartConfig: ChartConfig = {};
   analytics.sourceData.forEach(d => {

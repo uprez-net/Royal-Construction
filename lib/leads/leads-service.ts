@@ -1,7 +1,7 @@
-import type { ApiSuccessResponse } from '@/utils/validators';
+"use client";
 import { HistoryItem, Lead, LeadsStats } from './types';
 import { fetchJson } from '@/utils/fetch';
-import { PaginatedLeadsResult } from '../data/leads';
+import { findLeadById, getAnalyticsData, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
   actionDate: string;
@@ -19,10 +19,17 @@ export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type'
  */
 
 // ── Fetch all leads ──
+export async function fetchLeadAnalyticsData() {
+  return getAnalyticsData();
+}
 
-export async function fetchLeads(): Promise<PaginatedLeadsResult> {
+export async function fetchLeads(params: { q?: string; limit?: number; page?: number }): Promise<PaginatedLeadsResult> {
+  const query = new URLSearchParams();
+  if (params.q?.trim()) query.append('q', params.q.trim());
+  if (params.limit) query.append('limit', params.limit.toString());
+  if (params.page) query.append('page', params.page.toString());
   const data = await fetchJson<PaginatedLeadsResult>(
-    `/api/leads?q=&limit=100`, // Fetch all leads without filtering
+    `/api/leads?${query.toString()}`,
     { method: "GET", cache: 'no-store' },
     "Failed to fetch leads",
   )
@@ -35,9 +42,8 @@ export async function fetchLeads(): Promise<PaginatedLeadsResult> {
 }
 
 export async function fetchLead(id: number): Promise<Lead | null> {
-
-  const { items: leads } = await fetchLeads();
-  return leads.find(lead => lead.id === id) || null;
+  const lead = await findLeadById(id);
+  return lead;
 }
 
 export async function fetchLeadsStats(): Promise<LeadsStats> {
@@ -45,22 +51,7 @@ export async function fetchLeadsStats(): Promise<LeadsStats> {
   // const response = await fetch('/api/leads/stats');
   // return response.json();
 
-  const { items: leads } = await fetchLeads();
-
-  const isConverted = (stage: string) => stage === 'Won' || stage === 'Converted';
-  const isLost = (stage: string) => stage === 'Lost' || stage === 'Cancelled' || stage === 'Disqualified';
-
-  const stats: LeadsStats = {
-    total: leads.length,
-    new: leads.filter(l => l.stage === 'New').length,
-    contacted: leads.filter(l => l.stage === 'Contacted').length,
-    qualified: leads.filter(l => l.stage === 'Qualified').length,
-    conversion: leads.filter(l => isConverted(l.stage)).length,
-    pendingFollowup: leads.filter(l => !isConverted(l.stage) && !isLost(l.stage)).length,
-    lost: leads.filter(l => isLost(l.stage)).length,
-  };
-
-  return Promise.resolve(stats);
+  return getLeadsStats();
 }
 
 export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {

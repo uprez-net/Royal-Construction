@@ -1,8 +1,9 @@
+"use server";
 import prisma from "@/lib/prisma";
-import { mapLead, stageToPrismaMap, historyTypeToPrisma } from "@/types/lead";
+import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
 import type { Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
-import type { Lead as UiLead } from "@/lib/leads/types";
+import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
@@ -38,9 +39,9 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
   try {
     const leads = await prisma.lead.findMany({
       where,
-      include: { 
+      include: {
         history: { orderBy: { actionDate: "asc" } },
-        chatSessions: true, 
+        chatSessions: true,
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -71,8 +72,10 @@ type CreateLeadOptions = {
   skipWelcomeEmail?: boolean;
 };
 
-export async function findLeadById(id: number) {
-  return prisma.lead.findUnique({ where: { id }, include: { history: { orderBy: { actionDate: "asc" } } } });
+export async function findLeadById(id: number): Promise<UiLead | null> {
+  const lead = await prisma.lead.findUnique({ where: { id }, include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true } });
+  if (!lead) return null;
+  return mapLead(lead);
 }
 
 export async function findLeadByEmail(email: string): Promise<UiLead | null> {
@@ -238,4 +241,59 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
 export async function deleteLead(id: number) {
   await prisma.lead.delete({ where: { id } });
   return { success: true };
+}
+
+export async function getLeadsStats(): Promise<LeadsStats> {
+  const [totalLeads, newLeads, contactedLeads, qualifiedLeads, wonLeads, lostLeads, pendingFollowupLeads] = await Promise.all([
+    prisma.lead.count(),
+    prisma.lead.count({ where: { stage: "NEW" } }),
+    prisma.lead.count({ where: { stage: "CONTACTED" } }),
+    prisma.lead.count({ where: { stage: "QUALIFIED" } }),
+    prisma.lead.count({ where: { stage: { in: ["WON", "CONVERTED"] } } }),
+    prisma.lead.count({ where: { stage: { in: ["LOST", "CANCELLED", "DISQUALIFIED"] } } }),
+    prisma.lead.count({ where: { stage: { notIn: ["WON", "CONVERTED", "LOST", "CANCELLED", "DISQUALIFIED"] } } }),
+  ]);
+
+  return {
+    total: totalLeads,
+    new: newLeads,
+    contacted: contactedLeads,
+    qualified: qualifiedLeads,
+    conversion: wonLeads,
+    pendingFollowup: pendingFollowupLeads,
+    lost: lostLeads,
+  };
+}
+
+export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
+  const leads = await prisma.lead.findMany({
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+  });
+  const mappedLeads = leads.map((l) => mapLead(l));
+
+  /* Source distribution */
+  const sourceMap = mappedLeads.reduce((acc, lead) => {
+    acc[lead.source] = (acc[lead.source] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const sourceData = Object.entries(sourceMap)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value]) => ({ name, value }));
+
+  /* Conversion by source */
+  const convMap = mappedLeads.reduce((acc, lead) => {
+    if (!acc[lead.source]) acc[lead.source] = { total: 0, won: 0 };
+    acc[lead.source].total++;
+    if (lead.stage === 'Won') acc[lead.source].won++;
+    return acc;
+  }, {} as Record<string, { total: number; won: number }>);
+
+  const conversionData = Object.entries(convMap).map(([source, stats]) => ({
+    source,
+    total: stats.total,
+    won: stats.won,
+  }));
+
+  return { sourceData, conversionData };
 }

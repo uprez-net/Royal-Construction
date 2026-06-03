@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -15,22 +15,41 @@ import {
   Bell,
   Search,
   Download,
-} from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { HistoryItem, Lead, LeadStage, LeadSource, BudgetRange, ProjectType, LeadsStats, EmailTemplate } from '@/lib/leads/types';
-import { createLead, fetchLeads, fetchLeadsStats, sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
-import TableView from './views/table-view';
-import FollowupsView from './views/followups-view';
-import AnalyticsView from './views/analytics-view';
-import { EMAIL_TEMPLATES } from '@/lib/leads/variables';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { MetricCard } from '@/components/common/metric-card';
-import { cn } from '@/lib/utils';
-import { renderEmailHtml } from '@/lib/leads/render-email-html';
-import { LeadMetricCard } from '../common/lead-onclick-metric-card';
+} from "lucide-react";
+import * as XLSX from "xlsx";
+import {
+  HistoryItem,
+  Lead,
+  LeadStage,
+  LeadSource,
+  BudgetRange,
+  ProjectType,
+  LeadsStats,
+  EmailTemplate,
+} from "@/lib/leads/types";
+import {
+  createLead,
+  fetchLeadAnalyticsData,
+  fetchLeads,
+  fetchLeadsStats,
+  sendEmailToLead,
+  updateLead,
+} from "@/lib/leads/leads-service";
+import TableView from "./views/table-view";
+import FollowupsView from "./views/followups-view";
+import AnalyticsView from "./views/analytics-view";
+import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { MetricCard } from "@/components/common/metric-card";
+import { cn } from "@/lib/utils";
+import { renderEmailHtml } from "@/lib/leads/render-email-html";
+import { LeadMetricCard } from "../common/lead-onclick-metric-card";
+import { LeadPagination } from "./lead-pagination";
+import { useDebounce } from "@/hooks/use-debounce";
+import { LeadAnalyticsData } from "@/types/lead";
 
-type TabType = 'table' | 'followups' | 'analytics';
+type TabType = "table" | "followups" | "analytics";
 
 interface ReactEmailPreviewProps {
   category: string;
@@ -38,7 +57,7 @@ interface ReactEmailPreviewProps {
 }
 
 function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
-  const [html, setHtml] = useState<string>('');
+  const [html, setHtml] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,7 +67,7 @@ function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
     renderEmailHtml(category, lead)
       .then((result) => {
         if (!cancelled) {
-          setHtml(result || '');
+          setHtml(result || "");
           setLoading(false);
         }
       })
@@ -56,7 +75,9 @@ function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [category, lead]);
 
   if (loading) {
@@ -68,17 +89,24 @@ function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
   }
 
   if (!html) {
-    return <div className="py-8 text-center text-xs text-muted-foreground">No preview available</div>;
+    return (
+      <div className="py-8 text-center text-xs text-muted-foreground">
+        No preview available
+      </div>
+    );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border" style={{ height: 480 }}>
+    <div
+      className="overflow-hidden rounded-lg border border-border"
+      style={{ height: 480 }}
+    >
       <iframe
         title={`${category} Email Preview`}
         srcDoc={html}
         className="w-full h-full"
         sandbox="allow-same-origin allow-scripts"
-        style={{ border: 'none' }}
+        style={{ border: "none" }}
       />
     </div>
   );
@@ -87,12 +115,27 @@ function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
 
 function formatShortDate(date: Date): string {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function hydrateTemplate(text: string, lead: Lead): string {
-  const leadType = Array.isArray(lead.type) ? lead.type[0] ?? 'New Home Build' : lead.type ?? 'New Home Build';
+  const leadType = Array.isArray(lead.type)
+    ? (lead.type[0] ?? "New Home Build")
+    : (lead.type ?? "New Home Build");
 
   const values: Record<string, string> = {
     name: lead.name,
@@ -100,45 +143,48 @@ function hydrateTemplate(text: string, lead: Lead): string {
     type: leadType,
     phone: lead.phone,
     project: `${leadType} at ${lead.location}`,
-    notes: lead.notes || 'Previous discussion details',
-    amount: lead.budget !== 'Not Discussed' ? lead.budget : 'TBD',
-    duration: '6-8 months',
+    notes: lead.notes || "Previous discussion details",
+    amount: lead.budget !== "Not Discussed" ? lead.budget : "TBD",
+    duration: "6-8 months",
     date: formatShortDate(new Date()),
-    time: '10:00 AM',
-    milestone: 'Foundation Complete',
-    nextMilestone: 'Frame Stage',
-    originalAmount: '$480,000',
-    variationAmount: '$4,500',
-    revisedAmount: '$484,500',
+    time: "10:00 AM",
+    milestone: "Foundation Complete",
+    nextMilestone: "Frame Stage",
+    originalAmount: "$480,000",
+    variationAmount: "$4,500",
+    revisedAmount: "$484,500",
   };
 
-  return text.replace(PLACEHOLDER_PATTERN, (_, key) => values[key] ?? `{${key}}`);
+  return text.replace(
+    PLACEHOLDER_PATTERN,
+    (_, key) => values[key] ?? `{${key}}`,
+  );
 }
 
 function previewTemplateText(text: string) {
-  return text.replace(PLACEHOLDER_PATTERN, '...');
+  return text.replace(PLACEHOLDER_PATTERN, "...");
 }
 
 function getTemplateDescription(template: EmailTemplate): string {
   switch (template.category) {
-    case 'Welcome':
-      return 'Welcome new clients to Royal Constructions. Makes the builder appointment booking the first action, then requests land information, project priorities, build type, location, timeline, existing documents, and design ideas.';
-    case 'Quotation':
-      return 'Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.';
-    case 'Follow-up':
-      return 'Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.';
-    case 'Catalogue':
-      return 'Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.';
-    case 'Variation':
-      return 'Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.';
-    case 'Promotion':
-      return 'Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.';
-    case 'Meeting':
-      return 'Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.';
-    case 'Update':
-      return 'Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.';
+    case "Welcome":
+      return "Welcome new clients to Royal Constructions. Makes the builder appointment booking the first action, then requests land information, project priorities, build type, location, timeline, existing documents, and design ideas.";
+    case "Quotation":
+      return "Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.";
+    case "Follow-up":
+      return "Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.";
+    case "Catalogue":
+      return "Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.";
+    case "Variation":
+      return "Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.";
+    case "Promotion":
+      return "Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.";
+    case "Meeting":
+      return "Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.";
+    case "Update":
+      return "Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.";
     default:
-      return 'Curated and professionally designed email template adhering to brand standards to streamline client communications.';
+      return "Curated and professionally designed email template adhering to brand standards to streamline client communications.";
   }
 }
 
@@ -157,7 +203,7 @@ function ModalShell({
   onClose,
   title,
   subtitle,
-  maxWidthClass = 'max-w-[520px]',
+  maxWidthClass = "max-w-[520px]",
   titleClassName,
   children,
 }: ModalShellProps) {
@@ -181,8 +227,14 @@ function ModalShell({
       >
         <div className="shrink-0 flex items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
-            <h4 className={`text-base font-bold tracking-tight text-foreground ${titleClassName ?? ''}`}>{title}</h4>
-            {subtitle ? <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p> : null}
+            <h4
+              className={`text-base font-bold tracking-tight text-foreground ${titleClassName ?? ""}`}
+            >
+              {title}
+            </h4>
+            {subtitle ? (
+              <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -202,42 +254,91 @@ function ModalShell({
 export default function Leads() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('table');
+  const [activeTab, setActiveTab] = useState<TabType>("table");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-
+  const [searchTerm, setSearchTerm] = useState("");
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
-  const [emailSubject, setEmailSubject] = useState('');
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<EmailTemplate | null>(null);
+  const [emailSubject, setEmailSubject] = useState("");
   const [sendingCampaign, setSendingCampaign] = useState(false);
-
   const [activeMetric, setActiveMetric] = useState<string | null>(null);
-
   const [adding, setAdding] = useState(false);
   const [addingWithReminder, setAddingWithReminder] = useState(false);
-
-  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
+  const [toasts, setToasts] = useState<
+    { id: number; message: string; type: "success" | "info" }[]
+  >([]);
+  const [pageInfo, setPageInfo] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  });
+  const [analyticsData, setAnalyticsData] = useState<LeadAnalyticsData>({
+    sourceData: [],
+    conversionData: [],
+  });
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   useEffect(() => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const query = debouncedSearchTerm.trim();
+    if (query.length > 4) {
+      refreshLeadsData({ page: 1, limit: 10, query });
+    }
+  }, [debouncedSearchTerm]);
+
+  const refreshLeadsData = async (query: {
+    page?: number;
+    limit?: number;
+    query?: string;
+  }) => {
+    try {
+      setLoading(true);
+      const leadsData = await fetchLeads({
+        page: query.page || pageInfo.page,
+        limit: query.limit || pageInfo.limit,
+        q: query.query?.trim() ? query.query.trim() : undefined,
+      });
+      setLeads(leadsData.items);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to refresh leads data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const [leadsData, statsData] = await Promise.all([
-        fetchLeads(),
+      const [leadsData, statsData, analyticsData] = await Promise.all([
+        fetchLeads({
+          page: 1,
+          limit: 10,
+        }),
         fetchLeadsStats(),
+        fetchLeadAnalyticsData(),
       ]);
-      console.log('Stats data loaded:', leadsData, statsData);
+      console.log("Stats data loaded:", leadsData, statsData);
       setLeads(leadsData.items);
+      setPageInfo({
+        page: leadsData.page,
+        limit: leadsData.limit,
+        total: leadsData.totalCount,
+        totalPages: leadsData.totalPages,
+      });
       setStats(statsData);
+      setAnalyticsData(analyticsData);
       setError(null);
     } catch (err) {
-      setError('Failed to load leads data');
+      setError("Failed to load leads data");
       console.error(err);
     } finally {
       setLoading(false);
@@ -245,25 +346,30 @@ export default function Leads() {
   };
 
   const recalcStats = useCallback((currentLeads: Lead[]) => {
-    const isConverted = (stage: string) => stage === 'Won' || stage === 'Converted';
-    const isLost = (stage: string) => stage === 'Lost' || stage === 'Cancelled' || stage === 'Disqualified';
+    const isConverted = (stage: string) =>
+      stage === "Won" || stage === "Converted";
+    const isLost = (stage: string) =>
+      stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
 
     setStats({
       total: currentLeads.length,
-      new: currentLeads.filter(l => l.stage === 'New').length,
-      contacted: currentLeads.filter(l => l.stage === 'Contacted').length,
-      qualified: currentLeads.filter(l => l.stage === 'Qualified').length,
-      conversion: currentLeads.filter(l => isConverted(l.stage)).length,
-      pendingFollowup: currentLeads.filter(l => l.stage == 'In Follow-up').length,
-      lost: currentLeads.filter(l => isLost(l.stage)).length,
+      new: currentLeads.filter((l) => l.stage === "New").length,
+      contacted: currentLeads.filter((l) => l.stage === "Contacted").length,
+      qualified: currentLeads.filter((l) => l.stage === "Qualified").length,
+      conversion: currentLeads.filter((l) => isConverted(l.stage)).length,
+      pendingFollowup: currentLeads.filter((l) => l.stage == "In Follow-up")
+        .length,
+      lost: currentLeads.filter((l) => isLost(l.stage)).length,
     });
   }, []);
 
   const handleLeadUpdate = async (updatedLead: Lead): Promise<boolean> => {
     const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
     if (updatedLeadData) {
-      setLeads(prev => {
-        const updated = prev.map(lead => (lead.id === updatedLead.id ? updatedLead : lead));
+      setLeads((prev) => {
+        const updated = prev.map((lead) =>
+          lead.id === updatedLead.id ? updatedLead : lead,
+        );
         recalcStats(updated);
         return updated;
       });
@@ -274,8 +380,8 @@ export default function Leads() {
   };
 
   const handleLeadDelete = (leadId: number) => {
-    setLeads(prev => {
-      const updated = prev.filter(lead => lead.id !== leadId);
+    setLeads((prev) => {
+      const updated = prev.filter((lead) => lead.id !== leadId);
       recalcStats(updated);
       return updated;
     });
@@ -283,29 +389,29 @@ export default function Leads() {
 
   const handleMetricClick = (metric: string) => {
     // Toggle off if clicking the same metric, otherwise set active
-    setActiveMetric(prev => prev === metric ? null : metric);
+    setActiveMetric((prev) => (prev === metric ? null : metric));
   };
 
   const handleNewLead = (newLead: Lead) => {
-    setLeads(prev => {
+    setLeads((prev) => {
       const updated = [newLead, ...prev];
       recalcStats(updated);
       return updated;
     });
   };
 
-  const showToast = (message: string, type: 'success' | 'info' = 'success') => {
+  const showToast = (message: string, type: "success" | "info" = "success") => {
     const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   };
 
   const openEmailTemplates = () => {
     setShowEmailTemplates(true);
     setSelectedTemplate(null);
-    setEmailSubject('');
+    setEmailSubject("");
   };
 
   const closeEmailTemplates = () => {
@@ -338,14 +444,23 @@ export default function Leads() {
 
           try {
             const subject = hydrateTemplate(emailSubject, lead);
-            const finalHtmlBody = await renderEmailHtml(selectedTemplate.category, lead);
+            const finalHtmlBody = await renderEmailHtml(
+              selectedTemplate.category,
+              lead,
+            );
 
             if (!finalHtmlBody) {
-              console.error(`Failed to generate email content for ${lead.email}`);
+              console.error(
+                `Failed to generate email content for ${lead.email}`,
+              );
               return lead;
             }
 
-            const sendCampaign = await sendEmailToLead(lead.email, subject, finalHtmlBody);
+            const sendCampaign = await sendEmailToLead(
+              lead.email,
+              subject,
+              finalHtmlBody,
+            );
 
             if (sendCampaign) {
               successCount++;
@@ -365,30 +480,37 @@ export default function Leads() {
             console.error(`Error processing lead ${lead.email}:`, error);
             return lead;
           }
-        })
+        }),
       );
 
       setLeads(updated);
       recalcStats(updated);
-      showToast(`Campaign sent to ${successCount} of ${emailTargets.length} leads`, 'success');
+      showToast(
+        `Campaign sent to ${successCount} of ${emailTargets.length} leads`,
+        "success",
+      );
     } catch (error) {
-      console.error('Campaign error:', error);
-      showToast('An unexpected error occurred during the campaign', 'info');
+      console.error("Campaign error:", error);
+      showToast("An unexpected error occurred during the campaign", "info");
     } finally {
       setSendingCampaign(false);
       closeSendEmail();
     }
   };
 
-  const submitNewLead = async (formData: AddLeadFormData, setReminder: boolean, sectionRunning: string) => {
+  const submitNewLead = async (
+    formData: AddLeadFormData,
+    setReminder: boolean,
+    sectionRunning: string,
+  ) => {
     if (sectionRunning === "addingsection") {
       setAdding(true);
     } else if (sectionRunning === "addingwithRemindersection") {
       setAddingWithReminder(true);
     }
     const today = new Date();
-    const historyEntries = formData.historyEntries.map(entry => ({
-      action: entry.action.trim() || 'Note',
+    const historyEntries = formData.historyEntries.map((entry) => ({
+      action: entry.action.trim() || "Note",
       detail: entry.detail.trim(),
       type: entry.type,
       actionDate: entry.actionDate || today.toISOString(),
@@ -404,11 +526,11 @@ export default function Leads() {
       stage: formData.stage as LeadStage,
       assigned: formData.assigned,
       budget: formData.budget as BudgetRange,
-      type: formData.type.length > 0 ? formData.type : ['Not Specified'],
+      type: formData.type.length > 0 ? formData.type : ["Not Specified"],
       notes: formData.notes,
       followupDate: formData.followupDate || null,
       followupTime: formData.followupTime || null,
-      followupNotes: '',
+      followupNotes: "",
       urgent: formData.urgent,
       history: historyEntries,
     };
@@ -417,16 +539,16 @@ export default function Leads() {
       const createdLead = await createLead(payload);
       handleNewLead(createdLead);
       setShowAddLeadModal(false);
-      showToast(`Lead added: ${formData.name}`, 'success');
+      showToast(`Lead added: ${formData.name}`, "success");
       if (setReminder) {
         showToast(
-          `Reminder set for ${formData.followupDate || today.toISOString().split('T')[0]} at ${formData.followupTime || '10:00'}`,
-          'info'
+          `Reminder set for ${formData.followupDate || today.toISOString().split("T")[0]} at ${formData.followupTime || "10:00"}`,
+          "info",
         );
       }
     } catch (error) {
       console.error(error);
-      showToast('Failed to create lead. Please try again.', 'info');
+      showToast("Failed to create lead. Please try again.", "info");
     }
     setAdding(false);
     setAddingWithReminder(false);
@@ -443,62 +565,116 @@ export default function Leads() {
     );
   }
 
-  const conversionRate = stats && stats.total > 0
-    ? ((stats.conversion / stats.total) * 100).toFixed(1)
-    : '0.0';
-  const emailTargets = leads.filter(lead => lead.email);
-  const emailTargetList = emailTargets.map(lead => lead.email).filter(Boolean).join(', ');
+  const conversionRate =
+    stats && stats.total > 0
+      ? ((stats.conversion / stats.total) * 100).toFixed(1)
+      : "0.0";
+  const emailTargets = leads.filter((lead) => lead.email);
+  const emailTargetList = emailTargets
+    .map((lead) => lead.email)
+    .filter(Boolean)
+    .join(", ");
 
   // Update your filteredLeads to respect the activeMetric (as shown in previous answer)
   const filteredLeads = useMemo(() => {
     let result = leads;
 
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(lead =>
-        lead.name.toLowerCase().includes(term) ||
-        lead.phone.includes(term) ||
-        lead.location.toLowerCase().includes(term) ||
-        lead.email.toLowerCase().includes(term)
-      );
-    }
-
     if (activeMetric) {
-      const isConverted = (stage: string) => stage === 'Won' || stage === 'Converted';
-      const isLost = (stage: string) => stage === 'Lost' || stage === 'Cancelled' || stage === 'Disqualified';
+      const isConverted = (stage: string) =>
+        stage === "Won" || stage === "Converted";
+      const isLost = (stage: string) =>
+        stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
 
-      if (activeMetric === 'converted') {
-        result = result.filter(l => isConverted(l.stage));
-      } else if (activeMetric === 'pendingFollowup') {
-        result = result.filter(l => l.stage === 'In Follow-up');
-      } else if (activeMetric === 'lost') {
-        result = result.filter(l => isLost(l.stage));
+      if (activeMetric === "converted") {
+        result = result.filter((l) => isConverted(l.stage));
+      } else if (activeMetric === "pendingFollowup") {
+        result = result.filter((l) => l.stage === "In Follow-up");
+      } else if (activeMetric === "lost") {
+        result = result.filter((l) => isLost(l.stage));
       }
     }
 
     return result;
-  }, [leads, searchTerm, activeMetric]);
+  }, [leads, activeMetric]);
 
-
-  const normalizeTypes = (types: string | string[] | null | undefined): string[] => {
-    if (!types) return ['Not Specified'];
-    if (Array.isArray(types)) return types.length > 0 ? types : ['Not Specified'];
-    const normalized = types.split(',').map(type => type.trim()).filter(Boolean);
-    return normalized.length > 0 ? normalized : ['Not Specified'];
+  const normalizeTypes = (
+    types: string | string[] | null | undefined,
+  ): string[] => {
+    if (!types) return ["Not Specified"];
+    if (Array.isArray(types))
+      return types.length > 0 ? types : ["Not Specified"];
+    const normalized = types
+      .split(",")
+      .map((type) => type.trim())
+      .filter(Boolean);
+    return normalized.length > 0 ? normalized : ["Not Specified"];
   };
 
   const handleExport = () => {
-    const leadHeader = ['leadId', 'name', 'phone', 'email', 'location', 'SourceDetail', 'Stage', 'assigned', 'budget', 'notes', 'FollowupsDate', 'FollowupTime', 'type', 'lostReason', 'urgent'];
-    const leadRows = filteredLeads.map(lead => {
-      const normalized = normalizeTypes(lead.type).filter(type => type !== 'Not Specified');
-      return [lead.id, lead.name, lead.phone, lead.email, lead.location, lead.sourceDetail, lead.stage, lead.assigned || '', lead.budget, lead.notes || '', lead.followupDate || '', lead.followupTime || '', normalized.join(', '), lead.lostReason || '', lead.urgent ? 'true' : 'false'];
+    const leadHeader = [
+      "leadId",
+      "name",
+      "phone",
+      "email",
+      "location",
+      "SourceDetail",
+      "Stage",
+      "assigned",
+      "budget",
+      "notes",
+      "FollowupsDate",
+      "FollowupTime",
+      "type",
+      "lostReason",
+      "urgent",
+    ];
+    const leadRows = filteredLeads.map((lead) => {
+      const normalized = normalizeTypes(lead.type).filter(
+        (type) => type !== "Not Specified",
+      );
+      return [
+        lead.id,
+        lead.name,
+        lead.phone,
+        lead.email,
+        lead.location,
+        lead.sourceDetail,
+        lead.stage,
+        lead.assigned || "",
+        lead.budget,
+        lead.notes || "",
+        lead.followupDate || "",
+        lead.followupTime || "",
+        normalized.join(", "),
+        lead.lostReason || "",
+        lead.urgent ? "true" : "false",
+      ];
     });
-    const historyHeader = ['leadId', 'action', 'detail', 'type', 'actionDate'];
-    const historyRows = filteredLeads.flatMap(lead => (lead.history ?? []).map(entry => [lead.id, entry.action, entry.detail, entry.type, `${entry.date} ${entry.time}`.trim()]));
+    const historyHeader = ["leadId", "action", "detail", "type", "actionDate"];
+    const historyRows = filteredLeads.flatMap((lead) =>
+      (lead.history ?? []).map((entry) => [
+        lead.id,
+        entry.action,
+        entry.detail,
+        entry.type,
+        `${entry.date} ${entry.time}`.trim(),
+      ]),
+    );
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([leadHeader, ...leadRows]), 'Lead Data');
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([historyHeader, ...historyRows]), 'History');
-    XLSX.writeFile(workbook, `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([leadHeader, ...leadRows]),
+      "Lead Data",
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([historyHeader, ...historyRows]),
+      "History",
+    );
+    XLSX.writeFile(
+      workbook,
+      `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
   };
 
   return (
@@ -509,7 +685,9 @@ export default function Leads() {
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
           <div className="relative flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900">Lead Pipeline</h2>
+              <h2 className="text-lg font-extrabold text-slate-900">
+                Lead Pipeline
+              </h2>
               <p className="text-sm text-slate-600">
                 Google Ads auto-capture • Follow-up automation • Email templates
               </p>
@@ -534,8 +712,8 @@ export default function Leads() {
             note="All leads in the pipeline"
             tone="primary"
             icon={UserPlus}
-            onClick={() => handleMetricClick('total')}
-            active={activeMetric === 'total'}
+            onClick={() => handleMetricClick("total")}
+            active={activeMetric === "total"}
           />
           <LeadMetricCard
             label={`Converted (${conversionRate}%)`}
@@ -543,8 +721,8 @@ export default function Leads() {
             note="Won and converted leads"
             tone="success"
             icon={CircleCheckBig}
-            onClick={() => handleMetricClick('converted')}
-            active={activeMetric === 'converted'}
+            onClick={() => handleMetricClick("converted")}
+            active={activeMetric === "converted"}
           />
           <LeadMetricCard
             label="Pending Follow-up"
@@ -552,8 +730,8 @@ export default function Leads() {
             note="Leads awaiting next action"
             tone="warning"
             icon={Clock}
-            onClick={() => handleMetricClick('pendingFollowup')}
-            active={activeMetric === 'pendingFollowup'}
+            onClick={() => handleMetricClick("pendingFollowup")}
+            active={activeMetric === "pendingFollowup"}
           />
           <LeadMetricCard
             label="Lost Leads"
@@ -561,29 +739,35 @@ export default function Leads() {
             note="Lost, cancelled or disqualified"
             tone="danger"
             icon={CircleX}
-            onClick={() => handleMetricClick('lost')}
-            active={activeMetric === 'lost'}
+            onClick={() => handleMetricClick("lost")}
+            active={activeMetric === "lost"}
           />
         </div>
       )}
 
       <Card className="border-border/70 bg-white/95 shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-5 py-3">
-          {([
-            { key: 'table' as TabType, label: 'Table View', Icon: Table2 },
-            { key: 'followups' as TabType, label: 'Follow-ups', Icon: Clock },
-            { key: 'analytics' as TabType, label: 'Analytics', Icon: BarChart3 },
-          ] as const).map(({ key, label, Icon }) => {
+          {(
+            [
+              { key: "table" as TabType, label: "Table View", Icon: Table2 },
+              { key: "followups" as TabType, label: "Follow-ups", Icon: Clock },
+              {
+                key: "analytics" as TabType,
+                label: "Analytics",
+                Icon: BarChart3,
+              },
+            ] as const
+          ).map(({ key, label, Icon }) => {
             const active = activeTab === key;
             return (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
                 className={cn(
-                  'group relative inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200',
+                  "group relative inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
                   active
-                    ? 'bg-teal-50 text-teal-700 shadow-sm'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                    ? "bg-teal-50 text-teal-700 shadow-sm"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 )}
               >
                 <Icon className="size-4" />
@@ -602,7 +786,9 @@ export default function Leads() {
                   type="text"
                   placeholder="Search leads..."
                   value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                  }}
                 />
               </div>
               <button className="btn-export" onClick={handleExport}>
@@ -620,7 +806,7 @@ export default function Leads() {
             </div>
           ) : (
             <>
-              {activeTab === 'table' && (
+              {activeTab === "table" && (
                 <TableView
                   leads={filteredLeads}
                   onLeadUpdate={handleLeadUpdate}
@@ -629,13 +815,34 @@ export default function Leads() {
                   onActiveMetricChange={setActiveMetric}
                 />
               )}
-              {activeTab === 'followups' &&
+              {activeTab === "followups" && (
                 <FollowupsView
                   leads={filteredLeads}
                   onLeadUpdate={handleLeadUpdate}
                   onLeadDelete={handleLeadDelete}
-                />}
-              {activeTab === 'analytics' && <AnalyticsView leads={leads} />}
+                />
+              )}
+              {activeTab === "analytics" && (
+                <AnalyticsView analytics={analyticsData} />
+              )}
+              {activeTab !== "analytics" && (
+                <LeadPagination
+                  leads={{
+                    items: filteredLeads,
+                    page: pageInfo.page,
+                    limit: pageInfo.limit,
+                    totalCount: pageInfo.total,
+                    totalPages: pageInfo.totalPages,
+                  }}
+                  onPageChange={(page) =>
+                    refreshLeadsData({
+                      page,
+                      limit: pageInfo.limit,
+                      query: searchTerm,
+                    })
+                  }
+                />
+              )}
             </>
           )}
         </CardContent>
@@ -659,11 +866,13 @@ export default function Leads() {
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-teal-100 bg-teal-50/30 px-4 py-3 text-sm text-foreground">
-            Sending to: <span className="font-medium">{emailTargets.length}</span> leads with email
+            Sending to:{" "}
+            <span className="font-medium">{emailTargets.length}</span> leads
+            with email
           </div>
           <div className="max-h-[60vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {EMAIL_TEMPLATES.map(template => (
+              {EMAIL_TEMPLATES.map((template) => (
                 <button
                   key={template.id}
                   type="button"
@@ -695,22 +904,28 @@ export default function Leads() {
       >
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-muted-foreground">To</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              To
+            </label>
             <textarea
               className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
               rows={3}
-              value={emailTargetList || 'No leads with email'}
+              value={emailTargetList || "No leads with email"}
               readOnly
             />
           </div>
           {selectedTemplate ? (
             <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <span>Template</span>
-              <span className="font-medium text-foreground">{selectedTemplate.category}</span>
+              <span className="font-medium text-foreground">
+                {selectedTemplate.category}
+              </span>
             </div>
           ) : null}
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Subject</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              Subject
+            </label>
             <input
               className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10"
               value={emailSubject}
@@ -718,13 +933,19 @@ export default function Leads() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Email Preview</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              Email Preview
+            </label>
             <p className="text-[11px] text-muted-foreground mb-2">
-              Preview shows data for the first lead. All emails will be personalized per lead.
+              Preview shows data for the first lead. All emails will be
+              personalized per lead.
             </p>
             {selectedTemplate ? (
               <div className="mt-0">
-                <ReactEmailIframe category={selectedTemplate.category} lead={emailTargets[0] ?? null} />
+                <ReactEmailIframe
+                  category={selectedTemplate.category}
+                  lead={emailTargets[0] ?? null}
+                />
               </div>
             ) : (
               <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
@@ -735,7 +956,11 @@ export default function Leads() {
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={handleSendEmail}
-              disabled={!emailSubject.trim() || emailTargets.length === 0 || sendingCampaign}
+              disabled={
+                !emailSubject.trim() ||
+                emailTargets.length === 0 ||
+                sendingCampaign
+              }
             >
               {sendingCampaign ? (
                 <>
@@ -762,16 +987,31 @@ export default function Leads() {
 
       {toasts.length > 0 && (
         <div className="toast-container">
-          {toasts.map(toast => (
+          {toasts.map((toast) => (
             <div key={toast.id} className={`toast-item toast-${toast.type}`}>
-              <div className="toast-icon-wrapper" style={{
-                background: toast.type === 'success' ? 'rgba(22,163,74,0.1)' : 'rgba(37,99,235,0.1)',
-                color: toast.type === 'success' ? '#16A34A' : '#2563EB',
-              }}>
-                {toast.type === 'success' ? <Check size={15} /> : <Bell size={15} />}
+              <div
+                className="toast-icon-wrapper"
+                style={{
+                  background:
+                    toast.type === "success"
+                      ? "rgba(22,163,74,0.1)"
+                      : "rgba(37,99,235,0.1)",
+                  color: toast.type === "success" ? "#16A34A" : "#2563EB",
+                }}
+              >
+                {toast.type === "success" ? (
+                  <Check size={15} />
+                ) : (
+                  <Bell size={15} />
+                )}
               </div>
               <span className="toast-msg">{toast.message}</span>
-              <button className="toast-close" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}>
+              <button
+                className="toast-close"
+                onClick={() =>
+                  setToasts((prev) => prev.filter((t) => t.id !== toast.id))
+                }
+              >
                 <X size={14} />
               </button>
             </div>
@@ -805,107 +1045,118 @@ interface AddLeadFormData {
 interface HistoryEntryDraft {
   action: string;
   detail: string;
-  type: HistoryItem['type'];
+  type: HistoryItem["type"];
   actionDate: string;
 }
 
 interface AddLeadModalProps {
   onClose: () => void;
-  onSubmit: (data: AddLeadFormData, setReminder: boolean, sectionRunning: string) => void;
+  onSubmit: (
+    data: AddLeadFormData,
+    setReminder: boolean,
+    sectionRunning: string,
+  ) => void;
   adding: boolean;
   addingwithReminder: boolean;
 }
 
 const LEAD_SOURCE_OPTIONS: LeadSource[] = [
-  'Google Ads',
-  'Referral',
-  'Facebook Ads',
-  'Walk-in',
-  'Repeat Client',
-  'Website',
-  'Personal',
-  'Business',
+  "Google Ads",
+  "Referral",
+  "Facebook Ads",
+  "Walk-in",
+  "Repeat Client",
+  "Website",
+  "Personal",
+  "Business",
 ];
 
 const LEAD_STAGE_OPTIONS: LeadStage[] = [
-  'New',
-  'Contacted',
-  'Qualified',
-  'Quoted',
-  'Negotiating',
-  'Won',
-  'Meeting Scheduled',
-  'In Follow-up',
-  'No Response',
-  'Converted',
-  'Cancelled',
-  'Disqualified',
+  "New",
+  "Contacted",
+  "Qualified",
+  "Quoted",
+  "Negotiating",
+  "Won",
+  "Meeting Scheduled",
+  "In Follow-up",
+  "No Response",
+  "Converted",
+  "Cancelled",
+  "Disqualified",
 ];
 
 const PROJECT_TYPE_OPTIONS: ProjectType[] = [
-  'Not Specified',
-  'New Home',
-  'Duplex',
-  'Renovation',
-  'Granny Flat',
-  'Townhouse',
-  'Dual Occupancy',
-  'Single Storey',
-  'Double Storey',
-  'House and Granny',
-  'Knockdown and rebuild',
-  'House + land package',
+  "Not Specified",
+  "New Home",
+  "Duplex",
+  "Renovation",
+  "Granny Flat",
+  "Townhouse",
+  "Dual Occupancy",
+  "Single Storey",
+  "Double Storey",
+  "House and Granny",
+  "Knockdown and rebuild",
+  "House + land package",
 ];
 
-const HISTORY_TYPE_OPTIONS: HistoryItem['type'][] = [
-  'system',
-  'call',
-  'email',
-  'referral',
+const HISTORY_TYPE_OPTIONS: HistoryItem["type"][] = [
+  "system",
+  "call",
+  "email",
+  "referral",
 ];
 
-function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLeadModalProps) {
+function AddLeadModal({
+  onClose,
+  onSubmit,
+  adding,
+  addingwithReminder,
+}: AddLeadModalProps) {
   const [form, setForm] = useState<AddLeadFormData>({
-    name: '',
-    phone: '',
-    email: '',
-    location: '',
-    sourceDetail: 'Google Ads',
-    stage: 'New',
-    assigned: 'Guri Singh',
-    budget: 'Not Discussed',
-    type: ['Not Specified'],
-    notes: '',
-    followupDate: '',
-    followupTime: '10:00',
+    name: "",
+    phone: "",
+    email: "",
+    location: "",
+    sourceDetail: "Google Ads",
+    stage: "New",
+    assigned: "Guri Singh",
+    budget: "Not Discussed",
+    type: ["Not Specified"],
+    notes: "",
+    followupDate: "",
+    followupTime: "10:00",
     urgent: false,
     historyEntries: [],
   });
 
   const [historyDraft, setHistoryDraft] = useState<HistoryEntryDraft>({
-    action: '',
-    detail: '',
-    type: 'system',
-    actionDate: '',
+    action: "",
+    detail: "",
+    type: "system",
+    actionDate: "",
   });
 
   const updateField = (field: keyof AddLeadFormData, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const toggleProjectType = (value: ProjectType) => {
-    setForm(prev => {
+    setForm((prev) => {
       const exists = prev.type.includes(value);
-      if (value === 'Not Specified') {
-        return { ...prev, type: ['Not Specified'] };
+      if (value === "Not Specified") {
+        return { ...prev, type: ["Not Specified"] };
       }
 
-      const withoutNotSpecified = prev.type.filter(item => item !== 'Not Specified');
+      const withoutNotSpecified = prev.type.filter(
+        (item) => item !== "Not Specified",
+      );
       const next = exists
-        ? withoutNotSpecified.filter(item => item !== value)
+        ? withoutNotSpecified.filter((item) => item !== value)
         : [...withoutNotSpecified, value];
 
-      return { ...prev, type: next.length > 0 ? next : ['Not Specified'] };
+      return { ...prev, type: next.length > 0 ? next : ["Not Specified"] };
     });
   };
 
@@ -914,32 +1165,33 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
       return;
     }
 
-    setForm(prev => ({
+    setForm((prev) => ({
       ...prev,
       historyEntries: [...prev.historyEntries, { ...historyDraft }],
     }));
 
     setHistoryDraft({
-      action: '',
-      detail: '',
-      type: 'system',
-      actionDate: '',
+      action: "",
+      detail: "",
+      type: "system",
+      actionDate: "",
     });
   };
 
   const removeHistoryEntry = (index: number) => {
-    setForm(prev => ({
+    setForm((prev) => ({
       ...prev,
       historyEntries: prev.historyEntries.filter((_, idx) => idx !== index),
     }));
   };
 
   const fieldClassName =
-    'mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground shadow-none transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10';
+    "mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground shadow-none transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10";
   const textareaClassName =
-    'mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-none transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10';
-  const sectionLabelClassName = 'text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground';
-  const itemLabelClassName = 'text-xs font-medium text-muted-foreground';
+    "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-none transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10";
+  const sectionLabelClassName =
+    "text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground";
+  const itemLabelClassName = "text-xs font-medium text-muted-foreground";
 
   return (
     <ModalShell
@@ -957,7 +1209,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
               className={fieldClassName}
               placeholder="e.g. Jaswinder Singh"
               value={form.name}
-              onChange={e => updateField('name', e.target.value)}
+              onChange={(e) => updateField("name", e.target.value)}
             />
           </div>
           <div>
@@ -966,7 +1218,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
               className={fieldClassName}
               placeholder="e.g. 0412 345 678"
               value={form.phone}
-              onChange={e => updateField('phone', e.target.value)}
+              onChange={(e) => updateField("phone", e.target.value)}
             />
           </div>
           <div>
@@ -976,7 +1228,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
               placeholder="e.g. name@email.com"
               type="email"
               value={form.email}
-              onChange={e => updateField('email', e.target.value)}
+              onChange={(e) => updateField("email", e.target.value)}
             />
           </div>
           <div>
@@ -985,7 +1237,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
               className={fieldClassName}
               placeholder="e.g. Blacktown, NSW"
               value={form.location}
-              onChange={e => updateField('location', e.target.value)}
+              onChange={(e) => updateField("location", e.target.value)}
             />
           </div>
           <div>
@@ -993,10 +1245,12 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
             <select
               className={fieldClassName}
               value={form.sourceDetail}
-              onChange={e => updateField('sourceDetail', e.target.value)}
+              onChange={(e) => updateField("sourceDetail", e.target.value)}
             >
-              {LEAD_SOURCE_OPTIONS.map(option => (
-                <option key={option} value={option}>{option}</option>
+              {LEAD_SOURCE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
               ))}
             </select>
           </div>
@@ -1005,10 +1259,17 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
             <select
               className={fieldClassName}
               value={form.stage}
-              onChange={e => setForm(prev => ({ ...prev, stage: e.target.value as LeadStage }))}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  stage: e.target.value as LeadStage,
+                }))
+              }
             >
-              {LEAD_STAGE_OPTIONS.map(option => (
-                <option key={option} value={option}>{option}</option>
+              {LEAD_STAGE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
               ))}
             </select>
           </div>
@@ -1017,7 +1278,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
             <select
               className={fieldClassName}
               value={form.assigned}
-              onChange={e => updateField('assigned', e.target.value)}
+              onChange={(e) => updateField("assigned", e.target.value)}
             >
               <option>Guri Singh</option>
               <option>Amrit Singh</option>
@@ -1029,7 +1290,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
             <select
               className={fieldClassName}
               value={form.budget}
-              onChange={e => updateField('budget', e.target.value)}
+              onChange={(e) => updateField("budget", e.target.value)}
             >
               <option>Not Discussed</option>
               <option>$200K - $350K</option>
@@ -1043,14 +1304,14 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
         <div>
           <label className={sectionLabelClassName}>Project Type</label>
           <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {PROJECT_TYPE_OPTIONS.map(option => (
+            {PROJECT_TYPE_OPTIONS.map((option) => (
               <label
                 key={option}
                 className={cn(
-                  'inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all',
+                  "inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
                   form.type.includes(option)
-                    ? 'border-teal-600 bg-teal-50 text-teal-700'
-                    : 'border-border bg-background text-muted-foreground hover:border-teal-300 hover:bg-teal-50/40',
+                    ? "border-teal-600 bg-teal-50 text-teal-700"
+                    : "border-border bg-background text-muted-foreground hover:border-teal-300 hover:bg-teal-50/40",
                 )}
               >
                 <input
@@ -1072,7 +1333,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
             rows={3}
             placeholder="Initial notes about this lead..."
             value={form.notes}
-            onChange={e => updateField('notes', e.target.value)}
+            onChange={(e) => updateField("notes", e.target.value)}
           />
         </div>
 
@@ -1083,7 +1344,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
               className={fieldClassName}
               type="date"
               value={form.followupDate}
-              onChange={e => updateField('followupDate', e.target.value)}
+              onChange={(e) => updateField("followupDate", e.target.value)}
             />
           </div>
           <div>
@@ -1092,7 +1353,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
               className={fieldClassName}
               type="time"
               value={form.followupTime}
-              onChange={e => updateField('followupTime', e.target.value)}
+              onChange={(e) => updateField("followupTime", e.target.value)}
             />
           </div>
         </div>
@@ -1102,7 +1363,9 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
             type="checkbox"
             className="size-3.5 accent-teal-600"
             checked={form.urgent}
-            onChange={event => setForm(prev => ({ ...prev, urgent: event.target.checked }))}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, urgent: event.target.checked }))
+            }
           />
           Mark this lead as urgent
         </label>
@@ -1110,7 +1373,12 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
         <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
           <div className="flex items-center justify-between gap-2">
             <label className={sectionLabelClassName}>History</label>
-            <Button type="button" size="sm" variant="outline" onClick={addHistoryEntry}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addHistoryEntry}
+            >
               <Plus className="mr-1 size-3.5" /> Add Entry
             </Button>
           </div>
@@ -1122,7 +1390,12 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
                 className={fieldClassName}
                 placeholder="e.g. Called client"
                 value={historyDraft.action}
-                onChange={e => setHistoryDraft(prev => ({ ...prev, action: e.target.value }))}
+                onChange={(e) =>
+                  setHistoryDraft((prev) => ({
+                    ...prev,
+                    action: e.target.value,
+                  }))
+                }
               />
             </div>
             <div>
@@ -1130,10 +1403,17 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
               <select
                 className={fieldClassName}
                 value={historyDraft.type}
-                onChange={e => setHistoryDraft(prev => ({ ...prev, type: e.target.value as HistoryItem['type'] }))}
+                onChange={(e) =>
+                  setHistoryDraft((prev) => ({
+                    ...prev,
+                    type: e.target.value as HistoryItem["type"],
+                  }))
+                }
               >
-                {HISTORY_TYPE_OPTIONS.map(option => (
-                  <option key={option} value={option}>{option}</option>
+                {HISTORY_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1143,7 +1423,12 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
                 className={fieldClassName}
                 type="datetime-local"
                 value={historyDraft.actionDate}
-                onChange={e => setHistoryDraft(prev => ({ ...prev, actionDate: e.target.value }))}
+                onChange={(e) =>
+                  setHistoryDraft((prev) => ({
+                    ...prev,
+                    actionDate: e.target.value,
+                  }))
+                }
               />
             </div>
             <div className="md:col-span-2">
@@ -1153,7 +1438,12 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
                 rows={2}
                 placeholder="Add details about the action taken..."
                 value={historyDraft.detail}
-                onChange={e => setHistoryDraft(prev => ({ ...prev, detail: e.target.value }))}
+                onChange={(e) =>
+                  setHistoryDraft((prev) => ({
+                    ...prev,
+                    detail: e.target.value,
+                  }))
+                }
               />
             </div>
           </div>
@@ -1166,10 +1456,16 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
                   className="flex items-start justify-between gap-3 rounded-lg border border-border bg-background p-3"
                 >
                   <div className="min-w-0 space-y-0.5">
-                    <p className="text-sm font-semibold text-foreground">{entry.action || 'Note'}</p>
-                    <p className="text-xs text-muted-foreground">{entry.detail || 'No details provided.'}</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {entry.action || "Note"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {entry.detail || "No details provided."}
+                    </p>
                     <p className="text-[11px] text-muted-foreground">
-                      {entry.actionDate ? new Date(entry.actionDate).toLocaleString() : 'No date set'}
+                      {entry.actionDate
+                        ? new Date(entry.actionDate).toLocaleString()
+                        : "No date set"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1194,8 +1490,13 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
 
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
           <Button
-            onClick={() => onSubmit(form, false, 'addingsection')}
-            disabled={!form.name.trim() || !form.phone.trim() || adding || addingwithReminder}
+            onClick={() => onSubmit(form, false, "addingsection")}
+            disabled={
+              !form.name.trim() ||
+              !form.phone.trim() ||
+              adding ||
+              addingwithReminder
+            }
           >
             {adding ? (
               <>
@@ -1203,13 +1504,20 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
                 Saving Lead...
               </>
             ) : (
-              <><Check size={15} /> Save Lead</>
+              <>
+                <Check size={15} /> Save Lead
+              </>
             )}
           </Button>
           <Button
             variant="outline"
-            onClick={() => onSubmit(form, true, 'addingwithRemindersection')}
-            disabled={!form.name.trim() || !form.phone.trim() || adding || addingwithReminder}
+            onClick={() => onSubmit(form, true, "addingwithRemindersection")}
+            disabled={
+              !form.name.trim() ||
+              !form.phone.trim() ||
+              adding ||
+              addingwithReminder
+            }
           >
             {addingwithReminder ? (
               <>
@@ -1217,7 +1525,9 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
                 Saving & Setting Reminder...
               </>
             ) : (
-              <><Bell size={15} /> Save & Set Reminder</>
+              <>
+                <Bell size={15} /> Save & Set Reminder
+              </>
             )}
           </Button>
           <Button variant="outline" onClick={onClose}>
