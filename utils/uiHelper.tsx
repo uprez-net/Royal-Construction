@@ -32,6 +32,9 @@ export function getScreenTitle(slug: string) {
   if(!isNaN(parseInt(slug))) {
     return `Creating Offer for Lead #${slug}`;
   }
+  if(slug.trim() === "") {
+    return "Dashboard";
+  }
   const title = slug
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

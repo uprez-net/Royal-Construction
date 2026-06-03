@@ -112,4 +112,6 @@ export function mapLead(
 export interface LeadAnalyticsData {
     sourceData: { name: string; value: number }[];
     conversionData: { source: string; total: number; won: number }[];
+    monthlyTrend: { month: string; leads: number; converted: number }[];
+    lostReasons: { name: string; value: number }[];
 }

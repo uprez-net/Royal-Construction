@@ -1,4 +1,4 @@
-'use client';
+"use client";
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -15,7 +15,7 @@ import {
   Legend,
   Tooltip,
   ResponsiveContainer,
-} from 'recharts';
+} from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
@@ -23,8 +23,9 @@ import {
   ChartLegend,
   ChartLegendContent,
   type ChartConfig,
-} from '@/components/ui/chart';
-import { LeadAnalyticsData } from '@/types/lead';
+} from "@/components/ui/chart";
+import { LeadAnalyticsData } from "@/types/lead";
+import { randomColourHexGenerator } from "@/utils/generator";
 
 interface AnalyticsViewProps {
   analytics: LeadAnalyticsData;
@@ -32,63 +33,41 @@ interface AnalyticsViewProps {
 
 /* ── Color palette (matching reference) ─────── */
 const SOURCE_COLORS: Record<string, string> = {
-  'Google Ads': '#0D9488',
-  'Referral': '#16A34A',
-  'Facebook Ads': '#F59E0B',
-  'Walk-in': '#7C3AED',
-  'Website': '#475569',
-  'Repeat Client': '#0F172A',
-  'Personal': '#2563EB',
-  'Business': '#0F766E',
+  "Google Ads": "#0D9488",
+  Referral: "#16A34A",
+  "Facebook Ads": "#F59E0B",
+  "Walk-in": "#7C3AED",
+  Website: "#475569",
+  "Repeat Client": "#0F172A",
+  Personal: "#2563EB",
+  Business: "#0F766E",
 };
-
-const LOST_REASON_COLORS = ['#DC2626', '#F59E0B', '#3ba6f1', '#7C3AED', '#a8a29e'];
-
-/* ── Monthly trend mock data (as reference) ─── */
-const MONTHLY_TREND = [
-  { month: 'Jan', leads: 28, converted: 14 },
-  { month: 'Feb', leads: 30, converted: 15 },
-  { month: 'Mar', leads: 32, converted: 16 },
-  { month: 'Apr', leads: 34, converted: 17 },
-  { month: 'May', leads: 35, converted: 15 },
-  { month: 'Jun', leads: 40, converted: 18 },
-  { month: 'Jul', leads: 47, converted: 23 },
-];
-
-/* ── Lost reasons mock data (as reference) ──── */
-const LOST_REASONS_DATA = [
-  { name: 'Location Changed', value: 3 },
-  { name: 'Budget Constraints', value: 5 },
-  { name: 'Chose Competitor', value: 4 },
-  { name: 'Delayed Decision', value: 2 },
-  { name: 'Not Ready', value: 6 },
-];
 
 export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
   /* ── Chart configs ─────────────────────────── */
   const sourceChartConfig: ChartConfig = {};
-  analytics.sourceData.forEach(d => {
+  analytics.sourceData.forEach((d) => {
     sourceChartConfig[d.name] = {
       label: d.name,
-      color: SOURCE_COLORS[d.name] || '#94A3B8',
+      color: SOURCE_COLORS[d.name] || "#94A3B8",
     };
   });
 
   const trendChartConfig: ChartConfig = {
-    leads: { label: 'Leads', color: '#0D9488' },
-    converted: { label: 'Converted', color: '#16A34A' },
+    leads: { label: "Leads", color: "#0D9488" },
+    converted: { label: "Converted", color: "#16A34A" },
   };
 
   const convChartConfig: ChartConfig = {
-    total: { label: 'Total', color: '#0D9488' },
-    won: { label: 'Won', color: '#16A34A' },
+    total: { label: "Total", color: "#0D9488" },
+    won: { label: "Won", color: "#16A34A" },
   };
 
   const lostChartConfig: ChartConfig = {};
-  LOST_REASONS_DATA.forEach((d, i) => {
+  analytics.lostReasons.forEach((d) => {
     lostChartConfig[d.name] = {
       label: d.name,
-      color: LOST_REASON_COLORS[i % LOST_REASON_COLORS.length],
+      color: randomColourHexGenerator(d.name), // You can replace this with a fixed color if you want consistent colors for lost reasons
     };
   });
 
@@ -101,7 +80,11 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
             <h3 className="analytics-card-title">Lead Sources</h3>
           </div>
           <div className="analytics-card-body">
-            <ChartContainer config={sourceChartConfig} className="analytics-chart-container" style={{ height: 280 }}>
+            <ChartContainer
+              config={sourceChartConfig}
+              className="analytics-chart-container"
+              style={{ height: 280 }}
+            >
               <RechartsPieChart>
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Pie
@@ -118,7 +101,7 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                   {analytics.sourceData.map((entry) => (
                     <Cell
                       key={entry.name}
-                      fill={SOURCE_COLORS[entry.name] || '#94A3B8'}
+                      fill={SOURCE_COLORS[entry.name] || "#94A3B8"}
                     />
                   ))}
                 </Pie>
@@ -136,16 +119,40 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
             <h3 className="analytics-card-title">Monthly Lead Trend</h3>
           </div>
           <div className="analytics-card-body">
-            <ChartContainer config={trendChartConfig} className="analytics-chart-container" style={{ height: 280 }}>
-              <AreaChart data={MONTHLY_TREND}>
+            <ChartContainer
+              config={trendChartConfig}
+              className="analytics-chart-container"
+              style={{ height: 280 }}
+            >
+              <AreaChart data={analytics.monthlyTrend}>
                 <defs>
-                  <linearGradient id="leadsGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient
+                    id="leadsGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
                     <stop offset="0%" stopColor="#0D9488" stopOpacity={0.15} />
-                    <stop offset="100%" stopColor="#0D9488" stopOpacity={0.02} />
+                    <stop
+                      offset="100%"
+                      stopColor="#0D9488"
+                      stopOpacity={0.02}
+                    />
                   </linearGradient>
-                  <linearGradient id="convertedGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient
+                    id="convertedGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
                     <stop offset="0%" stopColor="#16A34A" stopOpacity={0.15} />
-                    <stop offset="100%" stopColor="#16A34A" stopOpacity={0.02} />
+                    <stop
+                      offset="100%"
+                      stopColor="#16A34A"
+                      stopOpacity={0.02}
+                    />
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke="#E2E8F0" />
@@ -153,23 +160,26 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                   dataKey="month"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: '#94A3B8' }}
+                  tick={{ fontSize: 11, fill: "#94A3B8" }}
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: '#94A3B8' }}
+                  tick={{ fontSize: 11, fill: "#94A3B8" }}
                   domain={[0, 50]}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} verticalAlign="top" />
+                <ChartLegend
+                  content={<ChartLegendContent />}
+                  verticalAlign="top"
+                />
                 <Area
                   type="monotone"
                   dataKey="leads"
                   stroke="#0D9488"
                   strokeWidth={2.5}
                   fill="url(#leadsGradient)"
-                  dot={{ r: 4, fill: '#0D9488', stroke: '#0D9488' }}
+                  dot={{ r: 4, fill: "#0D9488", stroke: "#0D9488" }}
                   activeDot={{ r: 5, strokeWidth: 2 }}
                 />
                 <Area
@@ -178,7 +188,7 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                   stroke="#16A34A"
                   strokeWidth={2.5}
                   fill="url(#convertedGradient)"
-                  dot={{ r: 4, fill: '#16A34A', stroke: '#16A34A' }}
+                  dot={{ r: 4, fill: "#16A34A", stroke: "#16A34A" }}
                   activeDot={{ r: 5, strokeWidth: 2 }}
                 />
               </AreaChart>
@@ -194,14 +204,18 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
             <h3 className="analytics-card-title">Conversion by Source</h3>
           </div>
           <div className="analytics-card-body">
-            <ChartContainer config={convChartConfig} className="analytics-chart-container" style={{ height: 280 }}>
+            <ChartContainer
+              config={convChartConfig}
+              className="analytics-chart-container"
+              style={{ height: 280 }}
+            >
               <RechartsBarChart data={analytics.conversionData}>
                 <CartesianGrid vertical={false} stroke="#E2E8F0" />
                 <XAxis
                   dataKey="source"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 10, fill: '#94A3B8' }}
+                  tick={{ fontSize: 10, fill: "#94A3B8" }}
                   interval={0}
                   angle={-15}
                   textAnchor="end"
@@ -210,11 +224,14 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: '#94A3B8' }}
+                  tick={{ fontSize: 11, fill: "#94A3B8" }}
                   allowDecimals={false}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} verticalAlign="top" />
+                <ChartLegend
+                  content={<ChartLegendContent />}
+                  verticalAlign="top"
+                />
                 <Bar
                   dataKey="total"
                   fill="#0D9488"
@@ -237,11 +254,15 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
             <h3 className="analytics-card-title">Lost Reasons</h3>
           </div>
           <div className="analytics-card-body">
-            <ChartContainer config={lostChartConfig} className="analytics-chart-container analytics-chart-donut" style={{ height: 280 }}>
+            <ChartContainer
+              config={lostChartConfig}
+              className="analytics-chart-container analytics-chart-donut"
+              style={{ height: 280 }}
+            >
               <RechartsPieChart>
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Pie
-                  data={LOST_REASONS_DATA}
+                  data={analytics.lostReasons}
                   dataKey="value"
                   nameKey="name"
                   cx="40%"
@@ -251,15 +272,17 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                   strokeWidth={0}
                   paddingAngle={1}
                 >
-                  {LOST_REASONS_DATA.map((entry, index) => (
-                    <Cell
-                      key={entry.name}
-                      fill={LOST_REASON_COLORS[index % LOST_REASON_COLORS.length]}
-                    />
+                  {Object.values(lostChartConfig).map((entry) => (
+                    <Cell key={entry.label as string} fill={entry.color} />
                   ))}
                 </Pie>
                 <ChartLegend
-                  content={<ChartLegendContent nameKey="name" className="analytics-lost-legend" />}
+                  content={
+                    <ChartLegendContent
+                      nameKey="name"
+                      className="analytics-lost-legend"
+                    />
+                  }
                   layout="vertical"
                   verticalAlign="middle"
                   align="right"

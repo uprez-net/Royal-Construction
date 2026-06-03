@@ -8,6 +8,7 @@ import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
 import { Prisma, ChatSession } from "@prisma/client";
+import { format, subMonths, startOfMonth } from "date-fns";
 
 const defaultLookupPageSize = 10;
 
@@ -266,34 +267,101 @@ export async function getLeadsStats(): Promise<LeadsStats> {
 }
 
 export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
-  const leads = await prisma.lead.findMany({
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
-  });
-  const mappedLeads = leads.map((l) => mapLead(l));
+  const [sourceRows, trendRows, lostReasonRows] = await Promise.all([
+    prisma.$queryRaw<
+      {
+        source: string;
+        total: bigint;
+        won: bigint;
+      }[]
+    >`
+    SELECT
+      COALESCE(source, "sourceDetail", 'Website') AS source,
+      COUNT(*) AS total,
+      COUNT(*) FILTER (
+        WHERE stage IN ('WON', 'CONVERTED')
+      ) AS won
+    FROM "Lead"
+    GROUP BY COALESCE(source, "sourceDetail", 'Website')
+    ORDER BY total DESC
+  `,
 
-  /* Source distribution */
-  const sourceMap = mappedLeads.reduce((acc, lead) => {
-    acc[lead.source] = (acc[lead.source] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+    prisma.$queryRaw<
+      {
+        month: Date;
+        leads: bigint;
+        converted: bigint;
+      }[]
+    >`
+    SELECT
+      DATE_TRUNC('month', "createdAt") AS month,
+      COUNT(*) AS leads,
+      COUNT(*) FILTER (
+        WHERE stage IN ('WON', 'CONVERTED')
+      ) AS converted
+    FROM "Lead"
+    WHERE "createdAt" >= ${startOfMonth(subMonths(new Date(), 11))}
+    GROUP BY DATE_TRUNC('month', "createdAt")
+    ORDER BY month ASC
+  `,
 
-  const sourceData = Object.entries(sourceMap)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, value]) => ({ name, value }));
+    prisma.$queryRaw<
+      {
+        name: string | null;
+        value: bigint;
+      }[]
+    >`
+    SELECT
+      COALESCE("lostReason", 'Unknown') AS name,
+      COUNT(*) AS value
+    FROM "Lead"
+    WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')
+    GROUP BY COALESCE("lostReason", 'Unknown')
+    ORDER BY value DESC
+  `,
+  ]);
 
-  /* Conversion by source */
-  const convMap = mappedLeads.reduce((acc, lead) => {
-    if (!acc[lead.source]) acc[lead.source] = { total: 0, won: 0 };
-    acc[lead.source].total++;
-    if (lead.stage === 'Won') acc[lead.source].won++;
-    return acc;
-  }, {} as Record<string, { total: number; won: number }>);
-
-  const conversionData = Object.entries(convMap).map(([source, stats]) => ({
-    source,
-    total: stats.total,
-    won: stats.won,
+  const sourceData = sourceRows.map((row) => ({
+    name: row.source,
+    value: Number(row.total),
   }));
 
-  return { sourceData, conversionData };
+  const conversionData = sourceRows.map((row) => ({
+    source: row.source,
+    total: Number(row.total),
+    won: Number(row.won),
+  }));
+
+  const monthlyTrendMap = new Map(
+    trendRows.map((row) => [
+      format(new Date(row.month), "MMM"),
+      {
+        leads: Number(row.leads),
+        converted: Number(row.converted),
+      },
+    ])
+  );
+
+  const monthlyTrend = Array.from({ length: 12 }, (_, i) => {
+    const date = subMonths(startOfMonth(new Date()), 11 - i);
+    const month = format(date, "MMM");
+
+    return {
+      month,
+      leads: monthlyTrendMap.get(month)?.leads ?? 0,
+      converted: monthlyTrendMap.get(month)?.converted ?? 0,
+    };
+  });
+
+  const lostReasons = lostReasonRows.map((row) => ({
+    name: row.name ?? "Unknown",
+    value: Number(row.value),
+  }));
+
+  return {
+    sourceData,
+    conversionData,
+    monthlyTrend,
+    lostReasons,
+  };
 }
