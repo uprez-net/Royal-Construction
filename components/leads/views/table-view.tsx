@@ -46,7 +46,13 @@ interface LeadDetailFormData {
   location: string;
   sourceDetail: LeadSource;
   stage: LeadStage;
-  assigned: string;
+  assignedId?: string | null; // <-- NEW: The User ID
+  assignedUser?: {
+    // <-- NEW: The populated User object from Prisma
+    id: string;
+    name: string;
+    email: string;
+  } | null;
   budget: string;
   type: ProjectType[];
   notes: string;
@@ -88,7 +94,7 @@ function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
 
   if (loading) {
     return (
-      <div className="flex h-[480px] items-center justify-center rounded-lg border border-border bg-muted/10">
+      <div className="flex h-120 items-center justify-center rounded-lg border border-border bg-muted/10">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
       </div>
     );
@@ -468,7 +474,6 @@ export default function TableView({
   activeMetric,
   onActiveMetricChange,
 }: TableViewProps) {
-  // const [activeFilters, setActiveFilters] = useState<string[]>(['all']);
   const [statusLead, setStatusLead] = useState<Lead | null>(null);
   const [statusStage, setStatusStage] = useState<LeadStage>("New");
   const [statusNotes, setStatusNotes] = useState("");
@@ -494,6 +499,9 @@ export default function TableView({
   const [detailBaseline, setDetailBaseline] =
     useState<LeadDetailFormData | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<
+    { id: string; name: string }[]
+  >([]);
 
   const [historyDraft, setHistoryDraft] = useState<{
     action: string;
@@ -534,6 +542,22 @@ export default function TableView({
     }
   }, [activeMetric]);
 
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const res = await fetch("/api/fetchallusers"); // Adjust path if your route is different
+        const data = await res.json();
+        console.log("Loaded users for assignment:", data);
+        if (data.users) {
+          setAvailableUsers(data.users);
+        }
+      } catch (err) {
+        console.error("Failed to load users for assignment", err);
+      }
+    }
+    loadUsers();
+  }, []);
+
   const showToast = (message: string, type: "success" | "info" = "success") => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -565,7 +589,8 @@ export default function TableView({
       location: lead.location,
       sourceDetail: (lead.sourceDetail || lead.source) as LeadSource,
       stage: lead.stage,
-      assigned: lead.assigned || "",
+      assignedId: lead.assignedId || null,
+      assignedUser: lead.assignedUser || null,
       budget: lead.budget || "",
       type: normalizeTypes(lead.type),
       notes: lead.notes || "",
@@ -646,7 +671,8 @@ export default function TableView({
       source: detailForm.sourceDetail,
       sourceDetail: detailForm.sourceDetail,
       stage: detailForm.stage,
-      assigned: detailForm.assigned,
+      assignedId: detailForm.assignedId || null,
+      assignedUser: detailForm.assignedUser || null,
       budget: detailForm.budget,
       type: typeValue,
       notes: detailForm.notes,
@@ -683,14 +709,6 @@ export default function TableView({
       console.error("Failed to delete lead", error);
     }
   };
-
-  // const filteredLeads = useMemo(() => {
-  //   let filtered = leads;
-  //   if (!activeFilters.includes("all")) {
-  //     filtered = filtered.filter((lead) => activeFilters.includes(lead.stage));
-  //   }
-  //   return filtered;
-  // }, [leads, activeFilters]);
 
   const toggleFilter = (stage: string) => {
     if (stage === "all") {
@@ -768,19 +786,31 @@ export default function TableView({
 
   const openAssignedModal = (lead: Lead) => {
     setEditAssignedLead(lead);
-    setAssignedPerson(lead.assigned || "");
+    setAssignedPerson(lead.assignedId || "");
   };
   const closeAssignedModal = () => setEditAssignedLead(null);
 
   const handleUpdateAssigned = async () => {
     if (!editAssignedLead) return;
     try {
+      // ONLY send assignedId to the backend. Do NOT send assignedUser.
+      // Prisma will automatically link the relation and return the populated user.
+      //console.log('Updating assigned person for lead', editAssignedLead.id, 'to user ID:', assignedPerson);
       const updatedLead = await updateLead(editAssignedLead.id, {
-        assigned: assignedPerson,
+        assignedId: assignedPerson || null,
       });
       if (!updatedLead) return;
+
+      // Get the name for the toast message from our local availableUsers list
+      const assignedUserName =
+        availableUsers.find((u) => u.id === assignedPerson)?.name ||
+        "Unassigned";
+
       onLeadUpdate(updatedLead);
-      showToast(`Assigned ${assignedPerson} to ${updatedLead.name}`, "success");
+      showToast(
+        `Assigned ${assignedUserName} to ${updatedLead.name}`,
+        "success",
+      );
       closeAssignedModal();
     } catch (error) {
       console.error("Failed to update assigned", error);
@@ -1037,7 +1067,7 @@ export default function TableView({
                         )}
                       </td>
                       <td className="col-assigned">
-                        {!lead.assigned ? (
+                        {!lead.assignedId ? (
                           <button
                             type="button"
                             className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"
@@ -1058,7 +1088,7 @@ export default function TableView({
                               openAssignedModal(lead);
                             }}
                           >
-                            {lead.assigned}
+                            {lead.assignedUser?.name}
                           </span>
                         )}
                       </td>
@@ -1098,10 +1128,7 @@ export default function TableView({
               ) : (
                 <tbody>
                   <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-16 text-center"
-                    >
+                    <td colSpan={8} className="px-4 py-16 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="flex size-12 items-center justify-center">
                           <RefreshCw className="animate-spin size-5 text-muted-foreground" />
@@ -1272,25 +1299,25 @@ export default function TableView({
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="text-xs font-medium text-[#78716c]">
-                  Assigned
+                  Assigned To
                 </label>
                 <select
                   className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-                  value={detailForm.assigned}
+                  value={detailForm.assignedId || ""} // USE THE ID AS THE VALUE
                   onChange={(event) =>
                     setDetailForm((prev) =>
-                      prev ? { ...prev, assigned: event.target.value } : prev,
+                      prev
+                        ? { ...prev, assignedId: event.target.value || null }
+                        : prev,
                     )
                   }
                 >
                   <option value="">Unassigned</option>
-                  {["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(
-                    (person) => (
-                      <option key={person} value={person}>
-                        {person}
-                      </option>
-                    ),
-                  )}
+                  {availableUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -1318,26 +1345,6 @@ export default function TableView({
                     </option>
                   ))}
                 </select>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-[#78716c]">
-                Project Type
-              </label>
-              <div className="checkbox-grid mt-2">
-                {PROJECT_TYPE_OPTIONS.map((option) => (
-                  <label
-                    key={option}
-                    className={`checkbox-item ${detailForm.type.includes(option) ? "active" : ""}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={detailForm.type.includes(option)}
-                      onChange={() => toggleDetailType(option)}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
               </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
@@ -1829,15 +1836,15 @@ export default function TableView({
             </label>
             <select
               className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-              value={assignedPerson}
+              value={assignedPerson} // This state holds the User ID
               onChange={(event) => setAssignedPerson(event.target.value)}
             >
               <option value="" disabled>
                 Select a person
               </option>
-              {["Guri Singh", "Amrit Singh", "Deepak Sharma"].map((person) => (
-                <option key={person} value={person}>
-                  {person}
+              {availableUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
                 </option>
               ))}
             </select>

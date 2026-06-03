@@ -7,6 +7,12 @@ export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' 
   actionDate: string;
 }
 
+export interface FetchLeadsParams {
+  page?: number;
+  limit?: number;
+  q?: string;
+}
+
 export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer'> & {
   type?: string | string[];
   history?: LeadHistoryInput[];
@@ -48,10 +54,6 @@ export async function fetchLead(id: number): Promise<Lead | null> {
 }
 
 export async function fetchLeadsStats(): Promise<LeadsStats> {
-  // TODO: Replace with actual API call
-  // const response = await fetch('/api/leads/stats');
-  // return response.json();
-
   return getLeadsStats();
 }
 
@@ -74,6 +76,7 @@ export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {
 }
 
 export async function updateLead(id: number, updates: Partial<Lead>): Promise<Lead | null> {
+  // console.log('Updating lead with id:', id, 'and updates:', updates);
   const response = await fetchJson<Lead>(
     `/api/leads/${id}`,
     {

@@ -20,7 +20,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: s
     if (!parsed.success) {
       return badRequestResponse(parsed.error.message);
     }
-
     const updated = await updateLead(id, parsed.data);
     return successResponse(updated);
   } catch (error) {

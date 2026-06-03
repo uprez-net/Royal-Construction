@@ -48,6 +48,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
       include: {
         history: { orderBy: { actionDate: "asc" } },
         chatSessions: true,
+        assignedUser: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -55,8 +56,10 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     });
     const totalCount = await prisma.lead.count({ where });
 
+    const items = leads.map((lead) => mapLead(lead as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null }));
+
     return {
-      items: leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] })),
+      items,
       page: safePage,
       limit: safeLimit,
       totalCount,
@@ -79,7 +82,16 @@ type CreateLeadOptions = {
 };
 
 export async function findLeadById(id: number): Promise<UiLead | null> {
-  const lead = await prisma.lead.findUnique({ where: { id }, include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true } });
+  const lead = await prisma.lead.findUnique({
+    where: { id },
+    include: {
+      history: {
+        orderBy: { actionDate: "asc" }
+      },
+      chatSessions: true,
+      assignedUser: { select: { id: true, name: true, email: true } }
+    }
+  });
   if (!lead) return null;
   return mapLead(lead);
 }
@@ -90,12 +102,16 @@ export async function findLeadByEmail(email: string): Promise<UiLead | null> {
 
   const lead = await prisma.lead.findFirst({
     where: { email: { equals: trimmed, mode: "insensitive" } },
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+    include: {
+      history: { orderBy: { actionDate: "asc" } },
+      chatSessions: true,
+      assignedUser: { select: { id: true, name: true, email: true } }
+    },
   });
 
   if (!lead) return null;
 
-  return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[] });
+  return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[]; assignedUser: { id: string; name: string; email: string } | null });
 }
 
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead> {
@@ -130,7 +146,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       source: input.source,
       sourceDetail: input.sourceDetail,
       stage: mappedStage,
-      assigned: input.assigned,
+      ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
       budget: input.budget,
       type: input.type ?? [],
       notes: input.notes,
@@ -141,7 +157,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       urgent: input.urgent ?? false,
       history: { create: historyCreate },
     },
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } } },
   });
 
   // ═══════════════════════════════════════════════════════
@@ -187,24 +203,12 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     }
   }
 
-  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] });
+  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 }
 
 export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
   const mappedStage = input.stage ? stageToPrismaMap[input.stage] : undefined;
-
-  const updateData: Partial<PrismaLead> & {
-    type?: string[];
-    history?: {
-      deleteMany: Record<string, never>;
-      create: Array<{
-        action: string;
-        detail: string;
-        type: "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL";
-        actionDate: Date;
-      }>;
-    };
-  } = {};
+  const updateData: Prisma.LeadUpdateInput = {};
 
   if (input.name !== undefined) updateData.name = String(input.name);
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
@@ -213,7 +217,12 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.source !== undefined) updateData.source = input.source;
   if (input.sourceDetail !== undefined) updateData.sourceDetail = input.sourceDetail;
   if (input.stage !== undefined) updateData.stage = mappedStage;
-  if (input.assigned !== undefined) updateData.assigned = input.assigned;
+  if (input.assignedId !== undefined) {
+    const nextAssignedId = input.assignedId?.trim();
+    updateData.assignedUser = nextAssignedId
+      ? { connect: { id: nextAssignedId } }
+      : { disconnect: true };
+  }
   if (input.budget !== undefined) updateData.budget = input.budget;
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
@@ -234,14 +243,15 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       })),
     };
   }
-
+  console.log('checking the Input Data', input);
+  console.log('222Updating lead with data:', updateData);
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } } },
   });
 
-  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] });
+  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 }
 
 export async function deleteLead(id: number) {

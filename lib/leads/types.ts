@@ -55,7 +55,12 @@ export interface Lead {
   source: LeadSource;
   sourceDetail: string;
   stage: LeadStage;
-  assigned: string | null;
+  assignedId?: string | null;          // <-- NEW: The User ID
+  assignedUser?: {                     // <-- NEW: The populated User object from Prisma
+    id: string;
+    name: string;
+    email: string;
+  } | null;
   budget: BudgetRange | string;
   type: string;
   notes: string;

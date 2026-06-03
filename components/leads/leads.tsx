@@ -41,7 +41,6 @@ import AnalyticsView from "./views/analytics-view";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MetricCard } from "@/components/common/metric-card";
 import { cn } from "@/lib/utils";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { LeadMetricCard } from "../common/lead-onclick-metric-card";
@@ -82,7 +81,7 @@ function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
 
   if (loading) {
     return (
-      <div className="flex h-[480px] items-center justify-center rounded-lg border border-border bg-muted/10">
+      <div className="flex h-120 items-center justify-center rounded-lg border border-border bg-muted/10">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
       </div>
     );
@@ -286,8 +285,9 @@ export default function Leads() {
   });
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  useEffect(() => {
-    loadData();
+  const refreshStats = useCallback(async () => {
+    const statsData = await fetchLeadsStats();
+    setStats(statsData);
   }, []);
 
   useEffect(() => {
@@ -296,6 +296,10 @@ export default function Leads() {
       refreshLeadsData({ page: 1, limit: 10, query });
     }
   }, [debouncedSearchTerm]);
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const refreshLeadsData = async (query: {
     page?: number;
@@ -327,6 +331,12 @@ export default function Leads() {
         status: statusFilter,
       });
       setLeads(leadsData.items);
+      setPageInfo({
+        page: leadsData.page,
+        limit: leadsData.limit,
+        total: leadsData.totalCount,
+        totalPages: leadsData.totalPages,
+      });
     } catch (err) {
       console.error(err);
       setError("Failed to refresh leads data");
@@ -370,7 +380,7 @@ export default function Leads() {
     if (tab === "followups") {
       refreshLeadsData({
         page: 1,
-        limit: 10,
+        limit: 50,
         status: [
           "New",
           "Contacted",
@@ -381,6 +391,11 @@ export default function Leads() {
           "In Follow-up",
           "No Response",
         ].join(","),
+      });
+    } else if (tab === "table") {
+      refreshLeadsData({
+        page: 1,
+        limit: 10,
       });
     }
   };
@@ -419,12 +434,13 @@ export default function Leads() {
     }
   };
 
-  const handleLeadDelete = (leadId: number) => {
+  const handleLeadDelete = async (leadId: number) => {
     setLeads((prev) => {
       const updated = prev.filter((lead) => lead.id !== leadId);
       recalcStats(updated);
       return updated;
     });
+    await refreshStats();
   };
 
   const handleMetricClick = (metric: string | null) => {
@@ -438,6 +454,14 @@ export default function Leads() {
         ? debouncedSearchTerm.trim()
         : undefined,
     });
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+  };
+
+  const reloadCurrentData = () => {
+    loadData();
   };
 
   const handleNewLead = (newLead: Lead) => {
@@ -572,7 +596,7 @@ export default function Leads() {
       source: formData.sourceDetail as LeadSource,
       sourceDetail: formData.sourceDetail,
       stage: formData.stage as LeadStage,
-      assigned: formData.assigned,
+      assignedId: formData.assignedId || null,
       budget: formData.budget as BudgetRange,
       type: formData.type.length > 0 ? formData.type : ["Not Specified"],
       notes: formData.notes,
@@ -606,7 +630,7 @@ export default function Leads() {
     return (
       <div className="leads-error-container">
         <div className="leads-error-message">{error}</div>
-        <button className="btn-primary-custom" onClick={loadData}>
+        <button className="btn-primary-custom" onClick={reloadCurrentData}>
           Try Again
         </button>
       </div>
@@ -688,7 +712,7 @@ export default function Leads() {
         lead.location,
         lead.sourceDetail,
         lead.stage,
-        lead.assigned || "",
+        lead.assignedUser?.name || "",
         lead.budget,
         lead.notes || "",
         lead.followupDate || "",
@@ -792,6 +816,12 @@ export default function Leads() {
           />
         </div>
       )}
+
+      {/* {hydratingLeads && !loading ? (
+        <div className="rounded-lg border border-teal-100 bg-teal-50/40 px-4 py-2 text-xs text-teal-700">
+          Syncing leads in background: page {hydrationProgress.loaded} of {hydrationProgress.total}
+        </div>
+      ) : null} */}
 
       <Card className="border-border/70 bg-white/95 shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-5 py-3">
@@ -1082,7 +1112,7 @@ interface AddLeadFormData {
   location: string;
   sourceDetail: LeadSource;
   stage: LeadStage;
-  assigned: string;
+  assignedId: string;
   budget: string;
   type: ProjectType[];
   notes: string;
@@ -1171,7 +1201,7 @@ function AddLeadModal({
     location: "",
     sourceDetail: "Google Ads",
     stage: "New",
-    assigned: "Guri Singh",
+    assignedId: "",
     budget: "Not Discussed",
     type: ["Not Specified"],
     notes: "",
@@ -1180,6 +1210,25 @@ function AddLeadModal({
     urgent: false,
     historyEntries: [],
   });
+
+  const [availableUsers, setAvailableUsers] = useState<
+    { id: string; name: string }[]
+  >([]);
+
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const res = await fetch("/api/fetchallusers");
+        const data = await res.json();
+        if (data.users) {
+          setAvailableUsers(data.users);
+        }
+      } catch (err) {
+        console.error("Failed to load users for assignment", err);
+      }
+    }
+    loadUsers();
+  }, []);
 
   const [historyDraft, setHistoryDraft] = useState<HistoryEntryDraft>({
     action: "",
@@ -1324,15 +1373,20 @@ function AddLeadModal({
             </select>
           </div>
           <div>
-            <label className={itemLabelClassName}>Assigned To</label>
+            <label className={itemLabelClassName}>Assigned To *</label>
             <select
               className={fieldClassName}
-              value={form.assigned}
-              onChange={(e) => updateField("assigned", e.target.value)}
+              value={form.assignedId}
+              onChange={(e) => updateField("assignedId", e.target.value)}
             >
-              <option>Guri Singh</option>
-              <option>Amrit Singh</option>
-              <option>Deepak Sharma</option>
+              <option value="" disabled>
+                Select a person
+              </option>
+              {availableUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
