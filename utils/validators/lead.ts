@@ -130,7 +130,7 @@ export const updateLeadSchema = z.object({
   source: nullableTrimmedString.optional(),
   sourceDetail: nullableTrimmedString.optional(),
 
-  assigned: nullableTrimmedString.optional(),
+  assignedId: nullableTrimmedString.optional(),
   budget: nullableTrimmedString.optional(),
 
   notes: nullableTrimmedString.optional(),
@@ -164,7 +164,7 @@ export const createLeadSchema = z.object({
 
   sourceDetail: nullableTrimmedString.optional(),
 
-  assigned: nullableTrimmedString.optional(),
+  assignedId: nullableTrimmedString.optional(),
 
   budget: nullableTrimmedString.optional(),
 

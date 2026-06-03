@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
         if (!params.success) {
             return params.response;
         }
+        console.log('Received GET /api/users with params:', params);
         const users = await clerkClient.users.getUserList({
             limit: params.data.limit,
             offset: (params.data.userPage - 1) * params.data.limit,

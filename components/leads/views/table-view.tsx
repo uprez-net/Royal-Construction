@@ -38,7 +38,12 @@ interface LeadDetailFormData {
   location: string;
   sourceDetail: LeadSource;
   stage: LeadStage;
-  assigned: string;
+  assignedId?: string | null;          // <-- NEW: The User ID
+  assignedUser?: {                     // <-- NEW: The populated User object from Prisma
+    id: string;
+    name: string;
+    email: string;
+  } | null;
   budget: string;
   type: ProjectType[];
   notes: string;
@@ -305,6 +310,8 @@ export default function TableView({
   const [detailBaseline, setDetailBaseline] = useState<LeadDetailFormData | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  const [availableUsers, setAvailableUsers] = useState<{ id: string; name: string }[]>([]);
+
   const [historyDraft, setHistoryDraft] = useState<{ action: string, detail: string, type: HistoryItem['type'] }>({
     action: '', detail: '', type: 'call',
   });
@@ -326,6 +333,22 @@ export default function TableView({
     }
   }, [activeMetric, pagination.onPageChange]);
 
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/fetchallusers'); // Adjust path if your route is different
+        const data = await res.json();
+        console.log('Loaded users for assignment:', data);
+        if (data.users) {
+          setAvailableUsers(data.users);
+        }
+      } catch (err) {
+        console.error('Failed to load users for assignment', err);
+      }
+    }
+    loadUsers();
+  }, []);
+
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -345,7 +368,7 @@ export default function TableView({
     const baseline: LeadDetailFormData = {
       name: lead.name, phone: lead.phone, email: lead.email, location: lead.location,
       sourceDetail: (lead.sourceDetail || lead.source) as LeadSource, stage: lead.stage,
-      assigned: lead.assigned || '', budget: lead.budget || '', type: normalizeTypes(lead.type),
+      assignedId: lead.assignedId || null, assignedUser: lead.assignedUser || null, budget: lead.budget || '', type: normalizeTypes(lead.type),
       notes: lead.notes || '', followupDate: lead.followupDate || '', followupTime: lead.followupTime || '',
       urgent: Boolean(lead.urgent), lostReason: lead.lostReason || '', historyEntries: lead.history || [],
     };
@@ -398,7 +421,7 @@ export default function TableView({
     const updates: Partial<Lead> = {
       name: detailForm.name, phone: detailForm.phone, email: detailForm.email, location: detailForm.location,
       source: detailForm.sourceDetail, sourceDetail: detailForm.sourceDetail, stage: detailForm.stage,
-      assigned: detailForm.assigned, budget: detailForm.budget, type: typeValue, notes: detailForm.notes,
+      assignedId: detailForm.assignedId || null, assignedUser: detailForm.assignedUser || null, budget: detailForm.budget, type: typeValue, notes: detailForm.notes,
       followupDate: detailForm.followupDate, followupTime: detailForm.followupTime, urgent: detailForm.urgent,
       lostReason: detailForm.stage === 'Lost' ? detailForm.lostReason : '', history: detailForm.historyEntries as any,
     };
@@ -486,16 +509,29 @@ export default function TableView({
     } catch (error) { console.error('Failed to update follow-up', error); }
   };
 
-  const openAssignedModal = (lead: Lead) => { setEditAssignedLead(lead); setAssignedPerson(lead.assigned || ''); };
+  const openAssignedModal = (lead: Lead) => { setEditAssignedLead(lead); setAssignedPerson(lead.assignedId || ''); };
   const closeAssignedModal = () => setEditAssignedLead(null);
 
   const handleUpdateAssigned = async () => {
     if (!editAssignedLead) return;
     try {
-      const updatedLead = await updateLead(editAssignedLead.id, { assigned: assignedPerson });
+      // ONLY send assignedId to the backend. Do NOT send assignedUser.
+      // Prisma will automatically link the relation and return the populated user.
+      //console.log('Updating assigned person for lead', editAssignedLead.id, 'to user ID:', assignedPerson);
+      const updatedLead = await updateLead(editAssignedLead.id, { 
+        assignedId: assignedPerson || null 
+      });
       if (!updatedLead) return;
-      onLeadUpdate(updatedLead); showToast(`Assigned ${assignedPerson} to ${updatedLead.name}`, 'success'); closeAssignedModal();
-    } catch (error) { console.error('Failed to update assigned', error); }
+      
+      // Get the name for the toast message from our local availableUsers list
+      const assignedUserName = availableUsers.find(u => u.id === assignedPerson)?.name || 'Unassigned';
+      
+      onLeadUpdate(updatedLead);
+      showToast(`Assigned ${assignedUserName} to ${updatedLead.name}`, 'success');
+      closeAssignedModal();
+    } catch (error) { 
+      console.error('Failed to update assigned', error); 
+    }
   };
 
   const handleTemplateSelect = (template: EmailTemplate) => {
@@ -612,10 +648,10 @@ export default function TableView({
                       )}
                     </td>
                     <td className="col-assigned">
-                      {!lead.assigned ? (
+                      {!lead.assignedId ? (
                         <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]" onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }} title="Assign Lead"><UserPlus size={12} /><span>Assign</span></button>
                       ) : (
-                        <span className="assigned-name cursor-pointer hover:text-[#0D9488] transition-colors" onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}>{lead.assigned}</span>
+                        <span className="assigned-name cursor-pointer hover:text-[#0D9488] transition-colors" onClick={(e) => { e.stopPropagation(); openAssignedModal(lead); }}>{lead.assignedUser?.name}</span>
                       )}
                     </td>
                     <td className="col-actions">
@@ -706,7 +742,19 @@ export default function TableView({
               <div><label className="text-xs font-medium text-[#78716c]">Stage</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.stage} onChange={event => setDetailForm(prev => { if (!prev) return prev; const nextStage = event.target.value as LeadStage; return { ...prev, stage: nextStage, lostReason: nextStage === 'Lost' ? prev.lostReason : '' }; })}>{LEAD_STAGE_OPTIONS.map(option => (<option key={option} value={option}>{option}</option>))}</select></div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <div><label className="text-xs font-medium text-[#78716c]">Assigned</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.assigned} onChange={event => setDetailForm(prev => prev ? { ...prev, assigned: event.target.value } : prev)}><option value="">Unassigned</option>{["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(person => (<option key={person} value={person}>{person}</option>))}</select></div>
+              <div>
+                <label className="text-xs font-medium text-[#78716c]">Assigned To</label>
+                <select
+                  className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
+                  value={detailForm.assignedId || ''} // USE THE ID AS THE VALUE
+                  onChange={event => setDetailForm(prev => prev ? { ...prev, assignedId: event.target.value || null } : prev)}
+                >
+                  <option value="">Unassigned</option>
+                  {availableUsers.map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
               <div><label className="text-xs font-medium text-[#78716c]">Budget</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={detailForm.budget} onChange={event => setDetailForm(prev => prev ? { ...prev, budget: event.target.value } : prev)}>{['Not Discussed', '$200K - $350K', '$350K - $500K', '$500K - $700K', '$700K+'].map(option => (<option key={option} value={option}>{option}</option>))}</select></div>
             </div>
             <div><label className="text-xs font-medium text-[#78716c]">Project Type</label><div className="checkbox-grid mt-2">{PROJECT_TYPE_OPTIONS.map(option => (<label key={option} className={`checkbox-item ${detailForm.type.includes(option) ? 'active' : ''}`}><input type="checkbox" checked={detailForm.type.includes(option)} onChange={() => toggleDetailType(option)} /><span>{option}</span></label>))}</div></div>
@@ -824,7 +872,19 @@ export default function TableView({
 
       <ModalShell open={!!editAssignedLead} onClose={closeAssignedModal} title="Assign Lead" subtitle={editAssignedLead ? `Assign ${editAssignedLead.name} to:` : undefined} maxWidthClass="max-w-[400px]">
         <div className="space-y-4">
-          <div><label className="text-xs font-medium text-[#78716c]">Assigned To</label><select className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]" value={assignedPerson} onChange={event => setAssignedPerson(event.target.value)}><option value="" disabled>Select a person</option>{["Guri Singh", "Amrit Singh", "Deepak Sharma"].map(person => (<option key={person} value={person}>{person}</option>))}</select></div>
+          <div>
+            <label className="text-xs font-medium text-[#78716c]">Assigned To</label>
+            <select
+              className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
+              value={assignedPerson} // This state holds the User ID
+              onChange={event => setAssignedPerson(event.target.value)}
+            >
+              <option value="" disabled>Select a person</option>
+              {availableUsers.map(user => (
+                <option key={user.id} value={user.id}>{user.name}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex flex-wrap gap-2 pt-2">
             <button type="button" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]" onClick={handleUpdateAssigned} disabled={!assignedPerson}>Save Assignment</button>
             <button type="button" className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]" onClick={closeAssignedModal}>Cancel</button>

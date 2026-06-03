@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const params = parseSearchParamsWithResponse(url, leadLookupParamSchema);
     if (!params.success) return params.response;
     const leads = await getLeads(params.data.page, params.data.limit, params.data.q);
+    console.log('Fetched leads with params:', params.data, 'Total leads fetched:', leads.items);
     return successResponse(leads);
   } catch (error) {
     console.error("/api/leads GET error", error);

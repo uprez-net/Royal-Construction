@@ -631,7 +631,7 @@ function FollowupItem({ lead, index, onLeadUpdate, onLeadDelete }: FollowupItemP
             </span>
             <span className="fu-meta-chip">
               <User size={12} />
-              {lead.assigned}
+              {lead.assignedUser?.name || 'Unassigned'}
             </span>
           </div>
         </div>

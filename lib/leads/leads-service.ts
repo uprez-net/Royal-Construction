@@ -88,6 +88,7 @@ export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {
 }
 
 export async function updateLead(id: number, updates: Partial<Lead>): Promise<Lead | null> {
+  // console.log('Updating lead with id:', id, 'and updates:', updates);
   const response = await fetchJson<Lead>(
     `/api/leads/${id}`,
     {

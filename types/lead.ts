@@ -83,8 +83,15 @@ export function mapHistory(history: PrismaLeadHistory): HistoryItem {
 }
 
 export function mapLead(
-    lead: PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] }
+    lead: PrismaLead & {
+        history: PrismaLeadHistory[];
+        chatSessions: ChatSession[];
+        assignedUser?: { id: string; name: string; email: string } | null;
+    }
 ): UiLead {
+    const assignedUserFromRelation = lead.assignedUser ?? null;
+    const assignedUserFallback = lead.assigned ? { id: "", name: lead.assigned, email: "" } : null;
+
     return {
         id: lead.id,
         name: lead.name,
@@ -94,7 +101,8 @@ export function mapLead(
         source: (lead.source ?? lead.sourceDetail ?? "Website") as UiLead["source"],
         sourceDetail: lead.sourceDetail ?? "",
         stage: stageMap[lead.stage],
-        assigned: lead.assigned ?? null,
+        assignedId: lead.assignedId ?? null,
+        assignedUser: assignedUserFromRelation ?? assignedUserFallback,
         budget: lead.budget ?? "Not Discussed",
         type: lead.type.length > 0 ? lead.type.join(", ") : "Not Specified",
         notes: lead.notes ?? "",

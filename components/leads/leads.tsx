@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { HistoryItem, Lead, LeadStage, LeadSource, BudgetRange, ProjectType, LeadsStats, EmailTemplate } from '@/lib/leads/types';
-import { createLead, fetchLeads, fetchLeadsStats, sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
+import { createLead, fetchLeads, fetchLeadsStats, sendEmailToLead } from '@/lib/leads/leads-service';
 import TableView from './views/table-view';
 import FollowupsView from './views/followups-view';
 import AnalyticsView from './views/analytics-view';
@@ -285,16 +285,9 @@ export default function Leads() {
   }, []);
 
   const handleLeadUpdate = async (updatedLead: Lead): Promise<boolean> => {
-    const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
-    if (updatedLeadData) {
-      setLeads(prev => {
-        return prev.map(lead => (lead.id === updatedLead.id ? updatedLead : lead));
-      });
-      await refreshStats();
-      return true;
-    } else {
-      return false;
-    }
+    setLeads(prev => prev.map(lead => (lead.id === updatedLead.id ? updatedLead : lead)));
+    await refreshStats();
+    return true;
   };
 
   const handleLeadDelete = async (leadId: number) => {
@@ -440,7 +433,7 @@ export default function Leads() {
       source: formData.sourceDetail as LeadSource,
       sourceDetail: formData.sourceDetail,
       stage: formData.stage as LeadStage,
-      assigned: formData.assigned,
+      assignedId: formData.assignedId || null,
       budget: formData.budget as BudgetRange,
       type: formData.type.length > 0 ? formData.type : ['Not Specified'],
       notes: formData.notes,
@@ -554,7 +547,7 @@ export default function Leads() {
     const leadHeader = ['leadId', 'name', 'phone', 'email', 'location', 'SourceDetail', 'Stage', 'assigned', 'budget', 'notes', 'FollowupsDate', 'FollowupTime', 'type', 'lostReason', 'urgent'];
     const leadRows = filteredLeads.map(lead => {
       const normalized = normalizeTypes(lead.type).filter(type => type !== 'Not Specified');
-      return [lead.id, lead.name, lead.phone, lead.email, lead.location, lead.sourceDetail, lead.stage, lead.assigned || '', lead.budget, lead.notes || '', lead.followupDate || '', lead.followupTime || '', normalized.join(', '), lead.lostReason || '', lead.urgent ? 'true' : 'false'];
+      return [lead.id, lead.name, lead.phone, lead.email, lead.location, lead.sourceDetail, lead.stage, lead.assignedUser?.name || '', lead.budget, lead.notes || '', lead.followupDate || '', lead.followupTime || '', normalized.join(', '), lead.lostReason || '', lead.urgent ? 'true' : 'false'];
     });
     const historyHeader = ['leadId', 'action', 'detail', 'type', 'actionDate'];
     const historyRows = filteredLeads.flatMap(lead => (lead.history ?? []).map(entry => [lead.id, entry.action, entry.detail, entry.type, `${entry.date} ${entry.time}`.trim()]));
@@ -863,7 +856,7 @@ interface AddLeadFormData {
   location: string;
   sourceDetail: LeadSource;
   stage: LeadStage;
-  assigned: string;
+  assignedId: string;
   budget: string;
   type: ProjectType[];
   notes: string;
@@ -943,7 +936,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
     location: '',
     sourceDetail: 'Google Ads',
     stage: 'New',
-    assigned: 'Guri Singh',
+    assignedId: '',
     budget: 'Not Discussed',
     type: ['Not Specified'],
     notes: '',
@@ -952,6 +945,23 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
     urgent: false,
     historyEntries: [],
   });
+
+  const [availableUsers, setAvailableUsers] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/fetchallusers');
+        const data = await res.json();
+        if (data.users) {
+          setAvailableUsers(data.users);
+        }
+      } catch (err) {
+        console.error('Failed to load users for assignment', err);
+      }
+    }
+    loadUsers();
+  }, []);
 
   const [historyDraft, setHistoryDraft] = useState<HistoryEntryDraft>({
     action: '',
@@ -1084,15 +1094,16 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
             </select>
           </div>
           <div>
-            <label className={itemLabelClassName}>Assigned To</label>
+            <label className={itemLabelClassName}>Assigned To *</label>
             <select
               className={fieldClassName}
-              value={form.assigned}
-              onChange={e => updateField('assigned', e.target.value)}
+              value={form.assignedId}
+              onChange={e => updateField('assignedId', e.target.value)}
             >
-              <option>Guri Singh</option>
-              <option>Amrit Singh</option>
-              <option>Deepak Sharma</option>
+              <option value="" disabled>Select a person</option>
+              {availableUsers.map(user => (
+                <option key={user.id} value={user.id}>{user.name}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -1266,7 +1277,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
           <Button
             onClick={() => onSubmit(form, false, 'addingsection')}
-            disabled={!form.name.trim() || !form.phone.trim() || adding || addingwithReminder}
+            disabled={!form.name.trim() || !form.phone.trim() || !form.assignedId || adding || addingwithReminder}
           >
             {adding ? (
               <>
@@ -1280,7 +1291,7 @@ function AddLeadModal({ onClose, onSubmit, adding, addingwithReminder }: AddLead
           <Button
             variant="outline"
             onClick={() => onSubmit(form, true, 'addingwithRemindersection')}
-            disabled={!form.name.trim() || !form.phone.trim() || adding || addingwithReminder}
+            disabled={!form.name.trim() || !form.phone.trim() || !form.assignedId || adding || addingwithReminder}
           >
             {addingwithReminder ? (
               <>
