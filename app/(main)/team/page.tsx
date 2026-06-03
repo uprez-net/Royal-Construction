@@ -11,12 +11,13 @@ import { Role } from "@prisma/client";
 import { useMemo, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Mail, RefreshCw, Users } from "lucide-react";
+import { Mail, RefreshCw, Users, X } from "lucide-react";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { useClerkManagement } from "@/hooks/use-clerk-management";
 import { toast } from "sonner";
@@ -110,42 +111,43 @@ export default function TeamManagementPage() {
               Invite
             </Button>
           </form>
+
+          <Tabs defaultValue="invite" className="w-full">
+            <TabsList className="mb-4 mt-3">
+              <TabsTrigger value="invite">Invitations</TabsTrigger>
+              <TabsTrigger value="members">Members</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="invite">
+              <InviteList
+                items={invites}
+                isLoaded={loading === false}
+                page={invitePage}
+                count={inviteCount}
+                total={inviteTotal}
+                setQuery={setQuery}
+                onPageChange={setInvitePage}
+                handleAction={(arg) => handleRevokeInvite(arg.invitationId)}
+              />
+            </TabsContent>
+
+            <TabsContent value="members">
+              <UserList
+                items={users}
+                isLoaded={loading === false}
+                page={userPage}
+                count={userCount}
+                total={userTotal}
+                setQuery={setQuery}
+                onPageChange={setUserPage}
+                handleAction={(arg) =>
+                  handleUpdateUserRole(arg.userId, arg.newRole)
+                }
+              />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
-      <Tabs defaultValue="invite" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="invite">Invitations</TabsTrigger>
-          <TabsTrigger value="members">Members</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="invite">
-          <InviteList
-            items={invites}
-            isLoaded={loading === false}
-            page={invitePage}
-            count={inviteCount}
-            total={inviteTotal}
-            setQuery={setQuery}
-            onPageChange={setInvitePage}
-            handleAction={(arg) => handleRevokeInvite(arg.invitationId)}
-          />
-        </TabsContent>
-
-        <TabsContent value="members">
-          <UserList
-            items={users}
-            isLoaded={loading === false}
-            page={userPage}
-            count={userCount}
-            total={userTotal}
-            setQuery={setQuery}
-            onPageChange={setUserPage}
-            handleAction={(arg) =>
-              handleUpdateUserRole(arg.userId, arg.newRole)
-            }
-          />
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }
@@ -166,15 +168,12 @@ function SelectRole({
 
   return (
     <Select
+      value={selectedRole}
       onValueChange={(val) => onValueChange(val as Role | undefined)}
       name={fieldName}
-      required
     >
       <SelectTrigger className="w-45">
-        <span>
-          {options.find((option) => option.value === selectedRole)?.label ||
-            "Select role"}
-        </span>
+        <SelectValue placeholder="Select role" />
       </SelectTrigger>
       <SelectContent>
         {options.map((option) => (
@@ -209,6 +208,7 @@ function UserList({
   handleAction,
 }: ListTabProps<User, { userId: string; newRole: Role }>) {
   const paginationItems = useMemo(() => {
+    if (!isLoaded || total === 0 || count === 0) return [1];
     const totalPages = Math.ceil(total / count);
 
     if (totalPages <= 7) {
@@ -358,6 +358,7 @@ function InviteList({
   handleAction,
 }: ListTabProps<Invitation, { invitationId: string }>) {
   const paginationItems = useMemo(() => {
+    if (!isLoaded || total === 0 || count === 0) return [1];
     const totalPages = Math.ceil(total / count);
 
     if (totalPages <= 7) {
@@ -382,7 +383,7 @@ function InviteList({
         {/* Search Bar */}
         <Input
           type="text"
-          placeholder="Search members..."
+          placeholder="Search invitations..."
           onChange={(e) => setQuery(e.target.value)}
           className="flex-1"
         />
@@ -402,10 +403,12 @@ function InviteList({
             <Button
               variant="outline"
               size="sm"
+              className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white disabled:border-red-300 disabled:text-red-300 disabled:hover:bg-transparent"
               onClick={() => handleAction({ invitationId: invite.id })}
               disabled={invite.status !== "pending"}
-            >
-              Revoke Invite
+            > 
+              <X className="mr-1 h-4 w-4" />
+              Revoke
             </Button>
           </div>,
         ])}
