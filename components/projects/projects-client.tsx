@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
+import * as XLSX from "xlsx";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -31,12 +31,15 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { setProjects } from "@/lib/store/slices/projectsSlice";
 import { clearProjectFilters, openModal } from "@/lib/store/slices/uiSlice";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
-
+import { compareAsc, isBefore } from "date-fns";
 import { EnhancedProjectCard } from "./enhanced-project-card";
 import { ProjectFilters } from "./project-filters";
 import { ProjectToolbar } from "./project-toolbar";
 import { fetchJson } from "@/utils/fetch";
-import { PaginatedProjectsResult } from "@/lib/data/projects";
+import {
+  getAllProjectsForExport,
+  PaginatedProjectsResult,
+} from "@/lib/data/projects";
 
 const statusConfig: Record<
   string,
@@ -176,7 +179,7 @@ export function ProjectsClient({
     dispatch,
   ]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const headers = [
       "Project",
       "Customer",
@@ -187,38 +190,52 @@ export function ProjectsClient({
       "Spent",
       "Progress",
       "Status",
+      "Next Up",
     ];
-    const rows = visibleProjects.map((project) => [
-      project.name,
-      project.customer.name,
-      project.location,
-      project.siteManager?.name || "—",
-      "—",
-      project.totalBudget,
-      project.spent,
-      `${project.progressPercent}%`,
-      project.status,
-    ]);
+    const allProjects = await getAllProjectsForExport(); // Implement this function to fetch all projects without pagination
+    const rows = allProjects.map((project) => {
+      const now = new Date();
 
-    const csv = [headers, ...rows]
-      .map((row) =>
-        row
-          .map((cell) =>
-            String(cell).includes(",") ? `"${cell}"` : String(cell),
-          )
-          .join(","),
-      )
-      .join("\n");
+      const currentMilestone = project.milestones.find(
+        (m) => m.status === "PENDING",
+      );
+      const StatusLabel = formatStatus(project.status);
 
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `projects-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+      const nextUpcomingMilestone = project.milestones
+        .filter(
+          (m) =>
+            m.id !== currentMilestone?.id &&
+            !isBefore(new Date(m.targetDate), now),
+        )
+        .sort((a, b) =>
+          compareAsc(new Date(a.targetDate), new Date(b.targetDate)),
+        )
+        .at(0);
+
+      return [
+        project.name,
+        project.customer.name,
+        project.location,
+        project.siteManager?.name || "—",
+        currentMilestone?.name || "—",
+        project.totalBudget,
+        project.spent,
+        `${project.progressPercent}%`,
+        StatusLabel,
+        nextUpcomingMilestone?.name || "—",
+      ];
+    });
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([headers, ...rows]),
+      "Projects Data",
+    );
+    XLSX.writeFile(
+      workbook,
+      `Royal_Consturction_Projects_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
   };
 
   return (
@@ -323,8 +340,8 @@ export function ProjectsClient({
                       openModal({
                         type: "projectDetail",
                         payload: { project, id },
-                      })
-                    )
+                      }),
+                    );
                   }}
                 />
               ))}
@@ -386,26 +403,26 @@ export function ProjectsClient({
                     openModal({
                       type: "projectDetail",
                       payload: { project },
-                    })
+                    }),
                   );
                 }
               }}
               emptyState={
-                  <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="flex size-12 items-center justify-center">
-                      <ToolCaseIcon className="size-5 text-muted-foreground" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-foreground">
-                        No Project data available
-                      </p>
-
-                      <p className="text-xs text-muted-foreground">
-                        Your Projects will appear here.
-                      </p>
-                    </div>
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <div className="flex size-12 items-center justify-center">
+                    <ToolCaseIcon className="size-5 text-muted-foreground" />
                   </div>
+
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      No Project data available
+                    </p>
+
+                    <p className="text-xs text-muted-foreground">
+                      Your Projects will appear here.
+                    </p>
+                  </div>
+                </div>
               }
             />
           )}
