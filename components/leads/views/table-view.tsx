@@ -615,7 +615,6 @@ export default function TableView({
         finalHtmlBody,
       );
       if (sendCampaign) {
-        showToast(`Email sent to ${emailLead.name} Successfully`, "success");
         const now = new Date();
         const historyEntry: Lead["history"][number] = {
           date: now.toISOString().slice(0, 10),
@@ -628,7 +627,10 @@ export default function TableView({
           ...emailLead,
           history: [...emailLead.history, historyEntry],
         };
-        onLeadUpdate(updatedLead);
+        const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
+        if (!updatedLeadData) return;
+        onLeadUpdate(updatedLeadData);
+        showToast(`Email sent to ${emailLead.name} Successfully`, "success");
       } else {
         showToast(`Failed to send email to ${emailLead.name}`, "info");
       }

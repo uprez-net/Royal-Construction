@@ -381,8 +381,8 @@ export default function Leads() {
   }, []);
 
   const handleLeadUpdate = async (updatedLead: Lead): Promise<boolean> => {
-    const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
-    if (updatedLeadData) {
+    //const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
+    if (updatedLead) {
       setLeads((prev) => {
         const updated = prev.map((lead) =>
           lead.id === updatedLead.id ? updatedLead : lead,
