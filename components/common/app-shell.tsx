@@ -61,10 +61,6 @@ export function AppShell({
     return () => window.clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [pathName]);
-
   const trail = useMemo(
     () => breadcrumbs ?? ["Home", title],
     [breadcrumbs, title],
@@ -155,6 +151,7 @@ export function AppShell({
                   {navigationItems.map((item) => (
                     <SheetClose key={item.slug} asChild>
                       <Link
+                        onClick={() => setMobileNavOpen(false)}
                         href={`/${item.slug}`}
                         className={cn(
                           "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-white/10 hover:text-white",
