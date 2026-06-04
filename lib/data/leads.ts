@@ -10,7 +10,7 @@ import { createGraphContext } from "../graph/client";
 import { Prisma, ChatSession } from "@prisma/client";
 import { format, subMonths, startOfMonth } from "date-fns";
 
-const defaultLookupPageSize = 10;
+const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
 function normalizeSearch(search?: string) {
   return search?.trim() ?? "";
@@ -22,6 +22,22 @@ export interface PaginatedLeadsResult {
   limit: number;
   totalCount: number;
   totalPages: number;
+}
+
+export async function getAllLeads(): Promise<UiLead[]> {
+  try {
+    const leads = await prisma.lead.findMany({
+      include: {
+        history: { orderBy: { actionDate: "asc" } },
+        chatSessions: true,
+        assignedUser: { select: { id: true, name: true, email: true } },
+      },
+    });
+    return leads.map((lead) => mapLead(lead));
+  } catch (error) {
+    console.error("Error fetching all leads:", error);
+    throw new Error("Failed to fetch leads");
+  }
 }
 
 export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[]): Promise<PaginatedLeadsResult> {

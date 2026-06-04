@@ -31,6 +31,7 @@ import {
   createLead,
   fetchLeadAnalyticsData,
   fetchLeads,
+  fetchAllLeads,
   fetchLeadsStats,
   sendEmailToLead,
   updateLead,
@@ -648,7 +649,7 @@ export default function Leads() {
     return normalized.length > 0 ? normalized : ["Not Specified"];
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const leadHeader = [
       "leadId",
       "name",
@@ -666,7 +667,8 @@ export default function Leads() {
       "lostReason",
       "urgent",
     ];
-    const leadRows = leads.map((lead) => {
+    const allLeads = await fetchAllLeads();
+    const leadRows = allLeads.map((lead) => {
       const normalized = normalizeTypes(lead.type).filter(
         (type) => type !== "Not Specified",
       );
@@ -689,7 +691,7 @@ export default function Leads() {
       ];
     });
     const historyHeader = ["leadId", "action", "detail", "type", "actionDate"];
-    const historyRows = leads.flatMap((lead) =>
+    const historyRows = allLeads.flatMap((lead) =>
       (lead.history ?? []).map((entry) => [
         lead.id,
         entry.action,
