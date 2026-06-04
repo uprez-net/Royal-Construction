@@ -321,14 +321,7 @@ export default function TableView({
         return ["Won", "Converted"];
       } else if (activeMetric.includes("pendingFollowup")) {
         return [
-          "New",
-          "Contacted",
-          "Qualified",
-          "Quoted",
-          "Negotiating",
-          "Meeting Scheduled",
           "In Follow-up",
-          "No Response",
         ];
       } else if (activeMetric.includes("lost")) {
         return ["Lost", "Cancelled", "Disqualified"];

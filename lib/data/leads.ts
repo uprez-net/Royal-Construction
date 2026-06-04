@@ -33,6 +33,8 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     ? {
       OR: [
         { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
         { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
       ],
     }
@@ -54,7 +56,14 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
       skip: (safePage - 1) * safeLimit,
       take: safeLimit,
     });
-    const totalCount = await prisma.lead.count({ where });
+    const totalCount = await prisma.lead.count({
+      where: {
+        ...where,
+        ...(status && status.length > 0
+          ? { stage: { in: status } }
+          : {}),
+      }
+    });
 
     const items = leads.map((lead) => mapLead(lead as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null }));
 
@@ -267,7 +276,7 @@ export async function getLeadsStats(): Promise<LeadsStats> {
     prisma.lead.count({ where: { stage: "QUALIFIED" } }),
     prisma.lead.count({ where: { stage: { in: ["WON", "CONVERTED"] } } }),
     prisma.lead.count({ where: { stage: { in: ["LOST", "CANCELLED", "DISQUALIFIED"] } } }),
-    prisma.lead.count({ where: { stage: { notIn: ["WON", "CONVERTED", "LOST", "CANCELLED", "DISQUALIFIED"] } } }),
+    prisma.lead.count({ where: { stage: { in: ["IN_FOLLOW_UP"] } } }),
   ]);
 
   return {

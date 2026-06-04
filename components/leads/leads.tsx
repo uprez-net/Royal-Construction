@@ -276,7 +276,7 @@ export default function Leads() {
         setLoadingLeads(false);
       }
     },
-    [pageInfo.page, pageInfo.limit],
+    [],
   );
 
   const loadData = async () => {
@@ -318,6 +318,13 @@ export default function Leads() {
           page: 1,
           limit: 10,
           query,
+        });
+      });
+    } else if (query.length === 0) {
+      void Promise.resolve().then(() => {
+        refreshLeadsData({
+          page: 1,
+          limit: 10,
         });
       });
     }
@@ -410,13 +417,14 @@ export default function Leads() {
     });
   };
 
-  const handlePageChange = async (page: number) => {
+  const handlePageChange = useCallback(async (page: number) => {
     await refreshLeadsData({
       page,
       limit: pageInfo.limit,
       query: searchTerm,
+      status:  activeMetric === "total" ? "total" : (activeMetric ?? undefined),
     });
-  };
+  }, [refreshLeadsData, activeMetric, pageInfo.limit, searchTerm]);
 
   const reloadCurrentData = () => {
     loadData();
