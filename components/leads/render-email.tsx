@@ -1,6 +1,8 @@
+"use client";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { Lead } from "@/lib/leads/types";
-import { Suspense, use } from "react";
+import { useQuery } from "@tanstack/react-query";
+
 
 interface ReactEmailPreviewProps {
   category: string;
@@ -14,30 +16,27 @@ const Spinner = () => (
 );
 
 export function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
-  const html = use(renderEmailHtml(category, lead));
+  const { data: html, isLoading } = useQuery({
+    queryKey: ["email-preview", category, lead?.id],
+    queryFn: () => renderEmailHtml(category, lead),
+  });
 
-  if (!html) {
-    return (
-      <div className="py-8 text-center text-xs text-muted-foreground">
-        No preview available
-      </div>
-    );
+  if(isLoading) {
+    return <Spinner />;
   }
 
   return (
-    <Suspense fallback={<Spinner />}>
       <div
         className="overflow-hidden rounded-lg border border-border"
         style={{ height: 480 }}
       >
         <iframe
           title={`${category} Email Preview`}
-          srcDoc={html}
+          srcDoc={html as unknown as string}
           className="w-full h-full"
           sandbox="allow-same-origin allow-scripts"
           style={{ border: "none" }}
         />
       </div>
-    </Suspense>
   );
 }
