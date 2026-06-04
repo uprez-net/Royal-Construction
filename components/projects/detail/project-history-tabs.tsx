@@ -1,7 +1,7 @@
 import { ProjectDetail } from "@/types/project";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/common/data-table";
-import { History, Plus, Search } from "lucide-react";
+import { History, Search } from "lucide-react";
 import { StatusPill } from "@/components/common/status-pill";
 import { dataTimeFormat } from "@/utils/formatters";
 import { Input } from "@/components/ui/input";

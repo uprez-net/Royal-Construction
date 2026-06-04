@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { Check, Clock, Calendar, Video, ArrowRight, Loader2 } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import Image from 'next/image';
 
 const BRAND = {
   dark: '#070E1A',
@@ -56,7 +57,6 @@ function BookingContent() {
   const [notes, setNotes] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [busySlots, setBusySlots] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [booked, setBooked] = useState<boolean>(false);
@@ -77,11 +77,12 @@ function BookingContent() {
         if (data.success) {
           const map: Record<string, string[]> = {};
 
-          data.events.forEach((event: any) => {
-            if (!event.start?.dateTime) return;
+          data.events.forEach((event: { subject?: string; start: unknown; end: unknown; isAllDay?: boolean }) => {
+            const dateTime = (event.start as { dateTime?: string })?.dateTime;
+            if (!dateTime) return;
 
             // Graph API returns "2024-08-01T14:00:00" because of the Prefer header
-            const [datePart, timePart] = event.start.dateTime.split('T');
+            const [datePart, timePart] = dateTime.split('T');
             const time = timePart.slice(0, 5); // "14:00"
 
             if (!map[datePart]) map[datePart] = [];
@@ -135,6 +136,7 @@ function BookingContent() {
         setError(data.error || 'Failed to book consultation.');
       }
     } catch (err) {
+      console.error('Booking failed', err);
       setError('An unexpected error occurred.');
     } finally {
       setSubmitting(false);
@@ -227,7 +229,7 @@ function BookingContent() {
       {/* ═══ HEADER ═══ */}
       <div style={{ backgroundColor: BRAND.lightBg, borderBottom: `1px solid #E2E8F0` }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <img src={LOGO_URL} alt="Royal Constructions" style={{ height: 48, width: 'auto', objectFit: 'contain' }} />
+          <Image height={1200} width={720} src={LOGO_URL} alt="Royal Constructions" style={{ height: 48, width: 'auto', objectFit: 'contain' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22C55E' }} />
             <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>Booking System</span>

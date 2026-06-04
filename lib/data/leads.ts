@@ -1,14 +1,16 @@
+"use server";
 import prisma from "@/lib/prisma";
-import { mapLead, stageToPrismaMap, historyTypeToPrisma } from "@/types/lead";
-import type { Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
+import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
+import type { LeadStage, Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
-import type { Lead as UiLead } from "@/lib/leads/types";
+import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
 import { Prisma, ChatSession } from "@prisma/client";
+import { format, subMonths, startOfMonth } from "date-fns";
 
-const defaultLookupPageSize = 10;
+const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
 function normalizeSearch(search?: string) {
   return search?.trim() ?? "";
@@ -22,7 +24,23 @@ export interface PaginatedLeadsResult {
   totalPages: number;
 }
 
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedLeadsResult> {
+export async function getAllLeads(): Promise<UiLead[]> {
+  try {
+    const leads = await prisma.lead.findMany({
+      include: {
+        history: { orderBy: { actionDate: "asc" } },
+        chatSessions: true,
+        assignedUser: { select: { id: true, name: true, email: true } },
+      },
+    });
+    return leads.map((lead) => mapLead(lead));
+  } catch (error) {
+    console.error("Error fetching all leads:", error);
+    throw new Error("Failed to fetch leads");
+  }
+}
+
+export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[]): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
   const search = normalizeSearch(query);
@@ -31,25 +49,42 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     ? {
       OR: [
         { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
         { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
       ],
     }
     : undefined;
   try {
     const leads = await prisma.lead.findMany({
-      where,
-      include: { 
+      where: {
+        ...where,
+        ...(status && status.length > 0
+          ? { stage: { in: status } }
+          : {}),
+      },
+      include: {
         history: { orderBy: { actionDate: "asc" } },
-        chatSessions: true, 
+        chatSessions: true,
+        assignedUser: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
       take: safeLimit,
     });
-    const totalCount = await prisma.lead.count({ where });
+    const totalCount = await prisma.lead.count({
+      where: {
+        ...where,
+        ...(status && status.length > 0
+          ? { stage: { in: status } }
+          : {}),
+      }
+    });
+
+    const items = leads.map((lead) => mapLead(lead as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null }));
 
     return {
-      items: leads.map((l) => mapLead(l as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] })),
+      items,
       page: safePage,
       limit: safeLimit,
       totalCount,
@@ -71,8 +106,19 @@ type CreateLeadOptions = {
   skipWelcomeEmail?: boolean;
 };
 
-export async function findLeadById(id: number) {
-  return prisma.lead.findUnique({ where: { id }, include: { history: { orderBy: { actionDate: "asc" } } } });
+export async function findLeadById(id: number): Promise<UiLead | null> {
+  const lead = await prisma.lead.findUnique({
+    where: { id },
+    include: {
+      history: {
+        orderBy: { actionDate: "asc" }
+      },
+      chatSessions: true,
+      assignedUser: { select: { id: true, name: true, email: true } }
+    }
+  });
+  if (!lead) return null;
+  return mapLead(lead);
 }
 
 export async function findLeadByEmail(email: string): Promise<UiLead | null> {
@@ -81,12 +127,16 @@ export async function findLeadByEmail(email: string): Promise<UiLead | null> {
 
   const lead = await prisma.lead.findFirst({
     where: { email: { equals: trimmed, mode: "insensitive" } },
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+    include: {
+      history: { orderBy: { actionDate: "asc" } },
+      chatSessions: true,
+      assignedUser: { select: { id: true, name: true, email: true } }
+    },
   });
 
   if (!lead) return null;
 
-  return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[] });
+  return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[]; assignedUser: { id: string; name: string; email: string } | null });
 }
 
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead> {
@@ -121,7 +171,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       source: input.source,
       sourceDetail: input.sourceDetail,
       stage: mappedStage,
-      assigned: input.assigned,
+      ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
       budget: input.budget,
       type: input.type ?? [],
       notes: input.notes,
@@ -132,7 +182,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       urgent: input.urgent ?? false,
       history: { create: historyCreate },
     },
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } } },
   });
 
   // ═══════════════════════════════════════════════════════
@@ -178,24 +228,12 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     }
   }
 
-  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] });
+  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 }
 
 export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
   const mappedStage = input.stage ? stageToPrismaMap[input.stage] : undefined;
-
-  const updateData: Partial<PrismaLead> & {
-    type?: string[];
-    history?: {
-      deleteMany: Record<string, never>;
-      create: Array<{
-        action: string;
-        detail: string;
-        type: "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL";
-        actionDate: Date;
-      }>;
-    };
-  } = {};
+  const updateData: Prisma.LeadUpdateInput = {};
 
   if (input.name !== undefined) updateData.name = String(input.name);
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
@@ -204,7 +242,12 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.source !== undefined) updateData.source = input.source;
   if (input.sourceDetail !== undefined) updateData.sourceDetail = input.sourceDetail;
   if (input.stage !== undefined) updateData.stage = mappedStage;
-  if (input.assigned !== undefined) updateData.assigned = input.assigned;
+  if (input.assignedId !== undefined) {
+    const nextAssignedId = input.assignedId?.trim();
+    updateData.assignedUser = nextAssignedId
+      ? { connect: { id: nextAssignedId } }
+      : { disconnect: true };
+  }
   if (input.budget !== undefined) updateData.budget = input.budget;
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
@@ -225,17 +268,140 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       })),
     };
   }
-
+  console.log('checking the Input Data', input);
+  console.log('222Updating lead with data:', updateData);
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } } },
   });
 
-  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] });
+  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 }
 
 export async function deleteLead(id: number) {
   await prisma.lead.delete({ where: { id } });
   return { success: true };
+}
+
+export async function getLeadsStats(): Promise<LeadsStats> {
+  const [totalLeads, newLeads, contactedLeads, qualifiedLeads, wonLeads, lostLeads, pendingFollowupLeads] = await Promise.all([
+    prisma.lead.count(),
+    prisma.lead.count({ where: { stage: "NEW" } }),
+    prisma.lead.count({ where: { stage: "CONTACTED" } }),
+    prisma.lead.count({ where: { stage: "QUALIFIED" } }),
+    prisma.lead.count({ where: { stage: { in: ["WON", "CONVERTED"] } } }),
+    prisma.lead.count({ where: { stage: { in: ["LOST", "CANCELLED", "DISQUALIFIED"] } } }),
+    prisma.lead.count({ where: { stage: { in: ["IN_FOLLOW_UP"] } } }),
+  ]);
+
+  return {
+    total: totalLeads,
+    new: newLeads,
+    contacted: contactedLeads,
+    qualified: qualifiedLeads,
+    conversion: wonLeads,
+    pendingFollowup: pendingFollowupLeads,
+    lost: lostLeads,
+  };
+}
+
+export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
+  const [sourceRows, trendRows, lostReasonRows] = await Promise.all([
+    prisma.$queryRaw<
+      {
+        source: string;
+        total: bigint;
+        won: bigint;
+      }[]
+    >`
+    SELECT
+      COALESCE(source, "sourceDetail", 'Website') AS source,
+      COUNT(*) AS total,
+      COUNT(*) FILTER (
+        WHERE stage IN ('WON', 'CONVERTED')
+      ) AS won
+    FROM "Lead"
+    GROUP BY COALESCE(source, "sourceDetail", 'Website')
+    ORDER BY total DESC
+  `,
+
+    prisma.$queryRaw<
+      {
+        month: Date;
+        leads: bigint;
+        converted: bigint;
+      }[]
+    >`
+    SELECT
+      DATE_TRUNC('month', "createdAt") AS month,
+      COUNT(*) AS leads,
+      COUNT(*) FILTER (
+        WHERE stage IN ('WON', 'CONVERTED')
+      ) AS converted
+    FROM "Lead"
+    WHERE "createdAt" >= ${startOfMonth(subMonths(new Date(), 11))}
+    GROUP BY DATE_TRUNC('month', "createdAt")
+    ORDER BY month ASC
+  `,
+
+    prisma.$queryRaw<
+      {
+        name: string | null;
+        value: bigint;
+      }[]
+    >`
+    SELECT
+      COALESCE("lostReason", 'Unknown') AS name,
+      COUNT(*) AS value
+    FROM "Lead"
+    WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')
+    GROUP BY COALESCE("lostReason", 'Unknown')
+    ORDER BY value DESC
+  `,
+  ]);
+
+  const sourceData = sourceRows.map((row) => ({
+    name: row.source,
+    value: Number(row.total),
+  }));
+
+  const conversionData = sourceRows.map((row) => ({
+    source: row.source,
+    total: Number(row.total),
+    won: Number(row.won),
+  }));
+
+  const monthlyTrendMap = new Map(
+    trendRows.map((row) => [
+      format(new Date(row.month), "MMM"),
+      {
+        leads: Number(row.leads),
+        converted: Number(row.converted),
+      },
+    ])
+  );
+
+  const monthlyTrend = Array.from({ length: 12 }, (_, i) => {
+    const date = subMonths(startOfMonth(new Date()), 11 - i);
+    const month = format(date, "MMM");
+
+    return {
+      month,
+      leads: monthlyTrendMap.get(month)?.leads ?? 0,
+      converted: monthlyTrendMap.get(month)?.converted ?? 0,
+    };
+  });
+
+  const lostReasons = lostReasonRows.map((row) => ({
+    name: row.name ?? "Unknown",
+    value: Number(row.value),
+  }));
+
+  return {
+    sourceData,
+    conversionData,
+    monthlyTrend,
+    lostReasons,
+  };
 }

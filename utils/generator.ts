@@ -21,3 +21,31 @@ export const randomPhoneNumberGenerator = (
 
   return `${countryCode}${number}`;
 };
+
+export const PIE_CHART_COLORS = [
+  "#0D9488", // Teal
+  "#2563EB", // Blue
+  "#16A34A", // Emerald
+  "#7C3AED", // Violet
+  "#D97706", // Amber
+  "#DC2626", // Red
+  "#0891B2", // Cyan
+  "#475569", // Slate
+  "#4B5563", // Gray
+  "#0F172A", // Dark Slate
+];
+
+/**
+ * Generates a random hex color based on a given key. The same key will always produce the same color.
+ * @param key - The input string used to generate the color. Different keys will produce different colors.
+ * @returns a hex color string in the format "#RRGGBB".
+ */
+export const randomColourHexGenerator = (key: string): string => {
+  // generate a random number in the range of available colors based on the key
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = key.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % PIE_CHART_COLORS.length;
+  return PIE_CHART_COLORS[index];
+}

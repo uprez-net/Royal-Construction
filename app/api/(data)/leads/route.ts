@@ -1,13 +1,15 @@
 import { badRequestResponse, createLeadSchema, errorResponse, leadLookupParamSchema, parseSearchParamsWithResponse, successResponse } from "@/utils/validators";
 import { getLeads, createLead } from "@/lib/data/leads";
 import { NextRequest } from "next/server";
+import { LeadStage, LeadStageToLeadStageDBMapping } from "@/lib/leads/types";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   try {
     const params = parseSearchParamsWithResponse(url, leadLookupParamSchema);
     if (!params.success) return params.response;
-    const leads = await getLeads(params.data.page, params.data.limit, params.data.q);
+    const statusFilterArray = params.data.status ? params.data.status.split(',').map(s => LeadStageToLeadStageDBMapping[(s.trim() as LeadStage)]) : undefined;
+    const leads = await getLeads(params.data.page, params.data.limit, params.data.q, statusFilterArray);
     return successResponse(leads);
   } catch (error) {
     console.error("/api/leads GET error", error);

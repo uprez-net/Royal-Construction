@@ -1,4 +1,3 @@
-import { mapLead, stageToPrismaMap } from "@/types/lead";
 import { badRequestResponse, errorResponse, notFoundResponse, successResponse, updateLeadSchema } from "@/utils/validators";
 import { findLeadById, updateLead, deleteLead } from "@/lib/data/leads";
 
@@ -20,7 +19,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: s
     if (!parsed.success) {
       return badRequestResponse(parsed.error.message);
     }
-
     const updated = await updateLead(id, parsed.data);
     return successResponse(updated);
   } catch (error) {

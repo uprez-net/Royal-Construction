@@ -1,19 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Eye, Send, Download, Receipt, Search, Files } from "lucide-react";
+import { Plus, Eye, Send, Download, Search, Files } from "lucide-react";
 import { StatusPill } from "@/components/common/status-pill";
 
-import { currency, dataTimeFormat, formatFileSize } from "@/utils/formatters";
+import { dataTimeFormat, formatFileSize } from "@/utils/formatters";
 import { ProjectDetail } from "@/types/project";
 import { DataTable } from "@/components/common/data-table";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-
-function getQuoteTypeTone(type: string) {
-  if (type === "Initial") return "purple" as const;
-  if (type === "Variation") return "primary" as const;
-  return "neutral" as const;
-}
 
 interface ProjectQuotesTabProps {
   project: ProjectDetail;

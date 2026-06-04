@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { ZoomIn, ZoomOut, RotateCcw, Move, X } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, X } from "lucide-react";
 
 interface PreviewPictureModalProps {
   open: boolean;
@@ -47,12 +47,6 @@ export function PreviewPictureModal({
       y: 0,
     });
   }, []);
-
-  useEffect(() => {
-    if (!open) {
-      resetView();
-    }
-  }, [open, resetView]);
 
   const clampScale = (value: number) => {
     return Math.min(Math.max(value, MIN_SCALE), MAX_SCALE);
@@ -118,6 +112,7 @@ export function PreviewPictureModal({
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
+      resetView();
       onClose();
     }
   };

@@ -46,7 +46,9 @@ export function QuotePagination({ quotes, onPageChange }: { quotes: PaginatedQuo
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    setCurrentPage((page) => Math.max(1, page - 1));
+                    const page = Math.max(1, currentPage - 1);
+                    setCurrentPage(page);
+                    onPageChange(page);
                   }}
                   aria-disabled={quotes.page === 1}
                 />
@@ -64,6 +66,7 @@ export function QuotePagination({ quotes, onPageChange }: { quotes: PaginatedQuo
                       onClick={(event) => {
                         event.preventDefault();
                         setCurrentPage(item);
+                        onPageChange(item);
                       }}
                     >
                       {item}
@@ -76,9 +79,9 @@ export function QuotePagination({ quotes, onPageChange }: { quotes: PaginatedQuo
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    setCurrentPage((page) =>
-                      Math.min(quotes.totalPages, page + 1),
-                    );
+                    const page = Math.min(quotes.totalPages, currentPage + 1);
+                    setCurrentPage(page);
+                    onPageChange(page);
                   }}
                   aria-disabled={quotes.page >= quotes.totalPages}
                 />

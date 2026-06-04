@@ -1,23 +1,6 @@
 import { createGraphContext, type EmailInput } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
-import { requireAdminToken } from '@/lib/graph/route-utils';
 import { successResponse, errorResponse, badRequestResponse } from '@/utils/validators';
-
-// export const runtime = 'nodejs';
-
-// function requireAdminToken(request: Request, adminToken: string): NextResponse | null {
-//   const authHeader = request.headers.get('authorization');
-//   if (!authHeader?.startsWith('Bearer ')) {
-//     return unauthorizedResponse();
-//   }
-
-//   const token = authHeader.slice(7);
-//   if (token !== adminToken) {
-//     return unauthorizedResponse();
-//   }
-
-//   return null;
-// }
 
 function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
   const trimmed = rawBody.trim();

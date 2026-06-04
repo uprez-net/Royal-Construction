@@ -28,7 +28,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
   },
   {
     id: 6, //special-offer-email.tsx
-    subject: 'Special Offer - Exclusive Discount for BuildPro Clients',
+    subject: 'Special Offer - Exclusive Discount for Royal Constructions Clients',
     category: 'Promotion',
   },
   {

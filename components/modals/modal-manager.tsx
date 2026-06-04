@@ -1,7 +1,4 @@
 "use client";
-
-import { useRouter } from "next/navigation";
-
 import { useAppSelector } from "@/lib/store/hooks";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { closeModal, openModal } from "@/lib/store/slices/uiSlice";

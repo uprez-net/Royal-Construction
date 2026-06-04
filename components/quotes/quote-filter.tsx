@@ -40,7 +40,7 @@ export function QuoteFilter({
       tabCounts: counts,
       totalCount: quotes.totalCount,
     };
-  }, [quotes]);
+  }, [quotes, initialTabCounts, initialTotalCount]);
 
   const handleSearchChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;

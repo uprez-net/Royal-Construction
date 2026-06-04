@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     // 2. Define Date Range (From start of today to X days in the future)
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     const futureDate = new Date(startOfDay);
     futureDate.setDate(futureDate.getDate() + daysToFetch);
 
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
     const data = await response.json();
 
     // 4. Format the response for the frontend
-    const events = (data.value || []).map((event: any) => ({
+    const events = (data.value ?? []).map((event: { subject?: string; start: unknown; end: unknown; isAllDay?: boolean }) => ({
       subject: event.subject || '(No Title)',
       start: event.start,
       end: event.end,

@@ -328,6 +328,7 @@ model User {
   siteManagerProjects Project[]     @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
+  assignedLeads       Lead[] @relation("LeadAssignee")
 
   @@index([email])
   @@index([phone])
@@ -347,6 +348,9 @@ model Lead {
   sourceDetail String?
 
   stage LeadStage @default(NEW)
+
+  assignedId   String?                                                            // <-- THE NEW FOREIGN KEY
+  assignedUser User?   @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
 
   assigned String?
 
@@ -374,7 +378,7 @@ model Lead {
   files        File[]        @relation("LeadFiles")
 
   @@index([stage])
-  @@index([assigned])
+  @@index([assignedId])
   @@index([createdAt])
 }
 

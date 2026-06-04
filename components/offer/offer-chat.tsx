@@ -54,7 +54,7 @@ export function OfferChat() {
     if (isAtBottom) {
       scrollToBottom("auto");
     }
-  }, [messages, isAtBottom, scrollToBottom]);
+  }, [messages, isAtBottom]);
 
   return (
     <aside
@@ -169,7 +169,7 @@ export function OfferChat() {
                 }
               }
             }}
-            className="resize-none pr-12 rounded-lg border border-white/10 bg-[#1a1f26]/80 text-white text-sm focus-visible:ring-0"
+            className="resize-none pr-12 rounded-lg border border-white/10 bg-[#1a1f26]/80 text-white  text-sm focus-visible:ring-0"
           />
           <Button
             type="submit"

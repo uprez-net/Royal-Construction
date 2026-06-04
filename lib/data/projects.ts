@@ -373,6 +373,39 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
   }
 }
 
+export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
+  try {
+    const projects = await prisma.project.findMany({
+      include: projectInclude,
+    });
+
+    const mapped = projects.map(({ variations, ...project }) => {
+      const milestoneCount = project.milestones.length;
+      const completedMilestoneCount = project.milestones.filter((milestone) => milestone.status === "DONE").length;
+      const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
+      const approvedVariationSpend = variations
+        .filter((variation) => variation.status === "APPROVED")
+        .reduce((sum, variation) => sum + Number(variation.cost), 0);
+
+      return {
+        ...project,
+        lotSize: project.lotSize?.toString() ?? undefined,
+        totalBudget: project.totalBudget.toString(),
+        spent: project.spent.toString(),
+        milestoneCount,
+        completedMilestoneCount,
+        progressPercent,
+        approvedVariationSpend: approvedVariationSpend.toString(),
+      };
+    });
+
+    return mapped;
+  } catch (error) {
+    console.error("Error fetching projects for export:", error);
+    return [];
+  }
+}
+
 export async function getProjectKPIs(): Promise<ProjectKPIs> {
   try {
     const [totalActive, onTrack, needsAttention, delayed] = await Promise.all([

@@ -8,7 +8,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ projectId: string; milestoneId: string }> },
 ) {
-    const { projectId, milestoneId } = await params;
+    const { milestoneId } = await params;
     const validationResult = await parseBodyWithResponse(request, milestoneUpdateSchema);
     if (!validationResult.success) {
         return validationResult.response;

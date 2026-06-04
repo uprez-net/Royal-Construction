@@ -8,6 +8,7 @@ import {
   // FileText,
   Hammer,
   LayoutDashboard,
+  Megaphone,
   // MessagesSquare,
   // PencilRuler,
   ReceiptText,
@@ -23,7 +24,7 @@ export const navigationItems: NavItem[] = [
     label: "Dashboard",
     icon: <LayoutDashboard className="size-4" />,
   },
-  { slug: "leads", label: "Leads", icon: <Users className="size-4" /> },
+  { slug: "leads", label: "Leads", icon: <Megaphone className="size-4" /> },
   {
     slug: "quotations",
     label: "Quotations",

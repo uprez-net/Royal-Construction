@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
-import { Hourglass, List, Loader2, Plus, Upload } from "lucide-react";
+import { Hourglass, List, Loader2, Plus } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -113,6 +113,7 @@ export function CreateOfferFileModal({
       toast.info("Redirecting to offer creation page...");
       router.push(`/quotations/${selectedLeadId}`);
     } catch (error) {
+      console.error("Error creating offer:", error);
       toast.error("Failed to create offer. Please try again.");
       return;
     }
