@@ -87,7 +87,7 @@ export function CreateVariationModal({
     }
 
     try {
-      const updatedProject = await dispatch(
+      await dispatch(
         createVariation({
           projectId,
           description: trimmedDescription,

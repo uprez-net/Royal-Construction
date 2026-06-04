@@ -56,45 +56,12 @@ type ToolPartWithOutput = ToolPartWithState & {
   state: "output-available";
   output: unknown;
 };
-type ToolPartWithError = ToolPartWithState & { state: "output-error" };
 
 /**
  * Known tool names (tightens switch statements).
  * If you add more named tools later, extend this union.
  */
 type KnownToolName = "lineItemTool" | "offerFileTool" | "fetchLeadInfoTool";
-
-/**
- * Your tool output schemas (define them once, use everywhere).
- * If you have real types in `@/types/ai`, replace these with imports.
- */
-type StrategyOutputData = {
-  strategyDiscovery?: {
-    summary?: string;
-    keyInsights?: string[];
-  };
-  [k: string]: unknown;
-};
-
-type ResearchOutputData = {
-  propertySearches?: {
-    query?: { suburb?: string };
-    listings?: unknown[];
-  };
-  suburbStatistics?: {
-    medianPrice?: { amount: number };
-    medianRentWeekly?: { amount: number };
-    grossRentalYieldPct?: number;
-    vacancyRatePct?: number;
-  };
-  [k: string]: unknown;
-};
-
-type AnalystOutputData = {
-  insights?: string;
-  recommendations?: string;
-  [k: string]: unknown;
-};
 
 /**
  * --------------
@@ -130,31 +97,6 @@ function isKnownToolName(name: string): name is KnownToolName {
     name === "offerFileTool" ||
     name === "fetchLeadInfoTool"
   );
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
-
-function asStrategyData(v: unknown): StrategyOutputData | null {
-  if (!isRecord(v)) return null;
-  // Lightweight structural check
-  if ("strategyDiscovery" in v && isRecord(v.strategyDiscovery))
-    return v as StrategyOutputData;
-  return null;
-}
-
-function asResearchData(v: unknown): ResearchOutputData | null {
-  if (!isRecord(v)) return null;
-  if ("propertySearches" in v || "suburbStatistics" in v)
-    return v as ResearchOutputData;
-  return null;
-}
-
-function asAnalystData(v: unknown): AnalystOutputData | null {
-  if (!isRecord(v)) return null;
-  if ("insights" in v || "recommendations" in v) return v as AnalystOutputData;
-  return null;
 }
 
 function toolNameFromType(type: ToolPart["type"]): string {
@@ -425,7 +367,7 @@ function GenericOutput({ data }: { data: unknown }) {
         className="
           text-xs text-white/60
           max-h-40 overflow-auto
-          whitespace-pre-wrap break-words
+          whitespace-pre-wrap wrap-break-word
           rounded-xl border border-white/10 bg-black/20
           p-3
           scrollbar-thin

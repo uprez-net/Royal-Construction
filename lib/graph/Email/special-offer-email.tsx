@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   Html,
   Head,
@@ -14,12 +13,11 @@ import {
   Tailwind,
 } from "@react-email/components";
 import {
-      FONTS,
-      RC_URLS,
-      RC_URLS_APP,
-      RESPONSIVE_CSS,
-      FONT_FACES_CSS,
-      TAILWIND_CONFIG,
+  FONTS,
+  RC_URLS,
+  RESPONSIVE_CSS,
+  FONT_FACES_CSS,
+  TAILWIND_CONFIG,
 } from "./email-theme";
 import { EmailFooter } from "./email-footer";
 import { EmailHeader } from "./email-header";
@@ -45,7 +43,7 @@ function OfferCard({
   mobileClass = "",
 }: {
   icon: string;
-  title: string;
+  title: string | React.ReactNode;
   badge: string;
   badgeVariant?: "solid" | "outline";
   mobileClass?: string;
@@ -70,7 +68,11 @@ function OfferCard({
             />
             <Text
               className="m-0 mb-2 text-[13px] leading-tight"
-              style={{ fontFamily: FONTS.condensed, fontWeight: 500, color: "#FFFFFF" }}
+              style={{
+                fontFamily: FONTS.condensed,
+                fontWeight: 500,
+                color: "#FFFFFF",
+              }}
             >
               {title}
             </Text>
@@ -81,7 +83,14 @@ function OfferCard({
                   <Column className="bg-rc-gold rounded-sm">
                     <Text
                       className="m-0 uppercase tracking-[0.5px]"
-                      style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 11, lineHeight: 1, color: "#0E1C2F", padding: "0.25rem 0.5rem" }}
+                      style={{
+                        fontFamily: FONTS.condensed,
+                        fontWeight: 500,
+                        fontSize: 11,
+                        lineHeight: 1,
+                        color: "#0E1C2F",
+                        padding: "0.25rem 0.5rem",
+                      }}
                     >
                       {badge}
                     </Text>
@@ -91,10 +100,22 @@ function OfferCard({
             ) : (
               <Section className="mx-auto" style={{ display: "inline-block" }}>
                 <Row>
-                  <Column className="rounded-sm" style={{ backgroundColor: "#1B2D45", border: "1px solid #2A3E5C" }}>
+                  <Column
+                    className="rounded-sm"
+                    style={{
+                      backgroundColor: "#1B2D45",
+                      border: "1px solid #2A3E5C",
+                    }}
+                  >
                     <Text
                       className="m-0 uppercase tracking-[0.5px] text-rc-gold"
-                      style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 11, lineHeight: 1, padding: "0.25rem 0.5rem" }}
+                      style={{
+                        fontFamily: FONTS.condensed,
+                        fontWeight: 500,
+                        fontSize: 11,
+                        lineHeight: 1,
+                        padding: "0.25rem 0.5rem",
+                      }}
                     >
                       {badge}
                     </Text>
@@ -132,19 +153,27 @@ export default function SpecialOfferEmail({
           <style>{FONT_FACES_CSS}</style>
         </Head>
 
-        <Body className="bg-rc-dark m-0 p-0 text-sm leading-relaxed tracking-[0.3px]" style={{ fontFamily: FONTS.body, fontWeight: 350 }}>
+        <Body
+          className="bg-rc-dark m-0 p-0 text-sm leading-relaxed tracking-[0.3px]"
+          style={{ fontFamily: FONTS.body, fontWeight: 350 }}
+        >
           {/* Preheader */}
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-            Exclusive upgrade package — confirm within 7 days to claim your offer
-            <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
+            Exclusive upgrade package — confirm within 7 days to claim your
+            offer
+            <div>
+              &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿
+            </div>
           </div>
 
           <Container className="max-w-[640px] bg-rc-container mx-auto">
-
             <EmailHeader showGoldBar />
 
-                                    {/* ── Hero ── */}
-            <Section className="mobile_px-4" style={{ padding: "3rem 1.5rem 0" }}>
+            {/* ── Hero ── */}
+            <Section
+              className="mobile_px-4"
+              style={{ padding: "3rem 1.5rem 0" }}
+            >
               <Row>
                 <Column className="text-center">
                   <Text
@@ -155,7 +184,13 @@ export default function SpecialOfferEmail({
                   </Text>
                   <Text
                     className="mobile_font-40 text-rc-white m-0 mb-6 uppercase"
-                    style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 48, lineHeight: 1, letterSpacing: "-1.4px" }}
+                    style={{
+                      fontFamily: FONTS.condensed,
+                      fontWeight: 500,
+                      fontSize: 48,
+                      lineHeight: 1,
+                      letterSpacing: "-1.4px",
+                    }}
                   >
                     Your Dream Home,
                     <br />
@@ -163,19 +198,36 @@ export default function SpecialOfferEmail({
                   </Text>
                   <Text
                     className="mobile_max-w-full text-rc-text m-0 mx-auto"
-                    style={{ fontFamily: FONTS.body, fontWeight: 350, fontSize: 14, lineHeight: 1.7, letterSpacing: "0.3px", maxWidth: 440 }}
+                    style={{
+                      fontFamily: FONTS.body,
+                      fontWeight: 350,
+                      fontSize: 14,
+                      lineHeight: 1.7,
+                      letterSpacing: "0.3px",
+                      maxWidth: 440,
+                    }}
                   >
-                    Dear {name}, as a valued Royal Constructions client, we're thrilled to offer you an exclusive upgrade package — on us.
+                    Dear {name}, as a valued Royal Constructions client, we&apos;re
+                    thrilled to offer you an exclusive upgrade package — on us.
                   </Text>
                 </Column>
               </Row>
             </Section>
 
             {/* ── Big Savings Callout ── */}
-            <Section className="mobile_px-4" style={{ padding: "2.5rem 1.5rem 3rem" }}>
+            <Section
+              className="mobile_px-4"
+              style={{ padding: "2.5rem 1.5rem 3rem" }}
+            >
               <Row>
                 <Column className="text-center">
-                  <Section className="bg-rc-card rounded-lg mx-auto" style={{ border: "1px solid #1B2D45", display: "inline-block" }}>
+                  <Section
+                    className="bg-rc-card rounded-lg mx-auto"
+                    style={{
+                      border: "1px solid #1B2D45",
+                      display: "inline-block",
+                    }}
+                  >
                     <Row>
                       <Column className="py-8 px-12 text-center">
                         <Text
@@ -186,7 +238,14 @@ export default function SpecialOfferEmail({
                         </Text>
                         <Text
                           className="mobile_font-56 m-0"
-                          style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 56, lineHeight: 1, color: "#C6923A", letterSpacing: "-1px" }}
+                          style={{
+                            fontFamily: FONTS.condensed,
+                            fontWeight: 500,
+                            fontSize: 56,
+                            lineHeight: 1,
+                            color: "#C6923A",
+                            letterSpacing: "-1px",
+                          }}
                         >
                           {savingsAmount}
                         </Text>
@@ -198,25 +257,46 @@ export default function SpecialOfferEmail({
             </Section>
 
             {/* ── 3 Offer Cards ── */}
-            <Section className="mobile_px-4" style={{ padding: "0 1.5rem 3rem" }}>
+            <Section
+              className="mobile_px-4"
+              style={{ padding: "0 1.5rem 3rem" }}
+            >
               <Row>
                 <OfferCard
                   icon={ICONS.star}
-                  title={<>FREE Premium<br />Kitchen Upgrade</>}
+                  title={
+                    <>
+                      FREE Premium
+                      <br />
+                      Kitchen Upgrade
+                    </>
+                  }
                   badge={`Value ${savingsAmount}`}
                   badgeVariant="solid"
                   mobileClass="mobile_offer_stack pr-2"
                 />
                 <OfferCard
                   icon={ICONS.tree}
-                  title={<>Complimentary<br />Landscaping Consult</>}
+                  title={
+                    <>
+                      Complimentary
+                      <br />
+                      Landscaping Consult
+                    </>
+                  }
                   badge="Free"
                   badgeVariant="outline"
                   mobileClass="mobile_offer_stack px-1"
                 />
                 <OfferCard
                   icon={ICONS.clock}
-                  title={<>Priority<br />Scheduling</>}
+                  title={
+                    <>
+                      Priority
+                      <br />
+                      Scheduling
+                    </>
+                  }
                   badge="Fast-Track"
                   badgeVariant="outline"
                   mobileClass="mobile_offer_stack mobile_offer_last pl-2"
@@ -225,21 +305,42 @@ export default function SpecialOfferEmail({
             </Section>
 
             {/* ── Urgency Bar ── */}
-            <Section className="mobile_px-4" style={{ padding: "0 1.5rem 2.5rem" }}>
+            <Section
+              className="mobile_px-4"
+              style={{ padding: "0 1.5rem 2.5rem" }}
+            >
               <Row>
                 <Column className="bg-rc-gold rounded-lg overflow-hidden">
                   <Section className="py-5 px-6">
                     <Row>
                       <Column className="text-center">
-                        <Section className="mx-auto" style={{ display: "inline-block" }}>
+                        <Section
+                          className="mx-auto"
+                          style={{ display: "inline-block" }}
+                        >
                           <Row>
-                            <Column className="pr-3" verticalAlign="middle">
-                              <Img alt="" height={20} src={ICONS.clockDark} width={20} className="block outline-none border-none" />
+                            <Column
+                              className="pr-3"
+                              style={{ verticalAlign: "middle" }}
+                            >
+                              <Img
+                                alt=""
+                                height={20}
+                                src={ICONS.clockDark}
+                                width={20}
+                                className="block outline-none border-none"
+                              />
                             </Column>
-                            <Column verticalAlign="middle">
+                            <Column style={{ verticalAlign: "middle" }}>
                               <Text
                                 className="m-0 uppercase tracking-[0.8px]"
-                                style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 14, lineHeight: 1, color: "#0E1C2F" }}
+                                style={{
+                                  fontFamily: FONTS.condensed,
+                                  fontWeight: 500,
+                                  fontSize: 14,
+                                  lineHeight: 1,
+                                  color: "#0E1C2F",
+                                }}
                               >
                                 Confirm within 7 days to unlock this offer
                               </Text>
@@ -254,17 +355,37 @@ export default function SpecialOfferEmail({
             </Section>
 
             {/* ── CTA ── */}
-            <Section className="mobile_px-4" style={{ padding: "0.5rem 1.5rem 2.5rem" }}>
+            <Section
+              className="mobile_px-4"
+              style={{ padding: "0.5rem 1.5rem 2.5rem" }}
+            >
               <Row>
                 <Column className="text-center">
-                  <Text className="text-rc-text m-0 mb-7" style={{ fontFamily: FONTS.body, fontWeight: 350, fontSize: 14, lineHeight: 1.7, letterSpacing: "0.3px" }}>
-                    Let's discuss how we can make your dream home even better.
+                  <Text
+                    className="text-rc-text m-0 mb-7"
+                    style={{
+                      fontFamily: FONTS.body,
+                      fontWeight: 350,
+                      fontSize: 14,
+                      lineHeight: 1.7,
+                      letterSpacing: "0.3px",
+                    }}
+                  >
+                    Let&apos;s discuss how we can make your dream home even
+                    better.
                   </Text>
                   <Button
                     href={claimUrl}
                     target="_blank"
                     className="bg-rc-gold text-rc-container no-underline uppercase tracking-[1px]"
-                    style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 15, lineHeight: 1, padding: "1rem 3rem", borderRadius: 4 }}
+                    style={{
+                      fontFamily: FONTS.condensed,
+                      fontWeight: 500,
+                      fontSize: 15,
+                      lineHeight: 1,
+                      padding: "1rem 3rem",
+                      borderRadius: 4,
+                    }}
                   >
                     Claim Your Offer
                   </Button>
@@ -273,30 +394,54 @@ export default function SpecialOfferEmail({
             </Section>
 
             {/* ── Terms ── */}
-            <Section className="mobile_px-4" style={{ padding: "0 1.5rem 3rem" }}>
+            <Section
+              className="mobile_px-4"
+              style={{ padding: "0 1.5rem 3rem" }}
+            >
               <Row>
                 <Column className="text-center">
-                  <Text className="text-rc-dimmed m-0 text-[11px] leading-relaxed tracking-[0.3px]" style={{ fontFamily: FONTS.body, fontWeight: 300 }}>
-                    Offer valid for new confirmations only. Kitchen upgrade applies to selected ranges.{" "}
-                    <Link href={RC_URLS.terms} target="_blank" className="text-rc-dimmed underline">
+                  <Text
+                    className="text-rc-dimmed m-0 text-[11px] leading-relaxed tracking-[0.3px]"
+                    style={{ fontFamily: FONTS.body, fontWeight: 300 }}
+                  >
+                    Offer valid for new confirmations only. Kitchen upgrade
+                    applies to selected ranges.{" "}
+                    <Link
+                      href={RC_URLS.terms}
+                      target="_blank"
+                      className="text-rc-dimmed underline"
+                    >
                       Full terms &amp; conditions
-                    </Link>.
+                    </Link>
+                    .
                   </Text>
                 </Column>
               </Row>
             </Section>
 
             {/* ── Sign-off ── */}
-            <Section className="mobile_px-4" style={{ padding: "0 1.5rem 3rem" }}>
+            <Section
+              className="mobile_px-4"
+              style={{ padding: "0 1.5rem 3rem" }}
+            >
               <Row>
                 <Column className="border-t border-rc-border pt-8">
-                  <Text className="text-rc-white m-0 mb-1 text-sm leading-relaxed" style={{ fontFamily: FONTS.body, fontWeight: 400 }}>
+                  <Text
+                    className="text-rc-white m-0 mb-1 text-sm leading-relaxed"
+                    style={{ fontFamily: FONTS.body, fontWeight: 400 }}
+                  >
                     Warm regards,
                   </Text>
-                  <Text className="text-rc-gold m-0 mb-0.5 text-base leading-relaxed" style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}>
+                  <Text
+                    className="text-rc-gold m-0 mb-0.5 text-base leading-relaxed"
+                    style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}
+                  >
                     Gurpinder Uppal
                   </Text>
-                  <Text className="text-rc-text m-0 text-[13px] leading-relaxed" style={{ fontFamily: FONTS.body, fontWeight: 300 }}>
+                  <Text
+                    className="text-rc-text m-0 text-[13px] leading-relaxed"
+                    style={{ fontFamily: FONTS.body, fontWeight: 300 }}
+                  >
                     Royal Constructions Pty Ltd
                   </Text>
                 </Column>
@@ -305,7 +450,6 @@ export default function SpecialOfferEmail({
 
             {/* ── Footer ── */}
             <EmailFooter />
-
           </Container>
         </Body>
       </Html>

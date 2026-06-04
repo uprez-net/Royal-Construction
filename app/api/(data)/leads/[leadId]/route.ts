@@ -1,4 +1,3 @@
-import { mapLead, stageToPrismaMap } from "@/types/lead";
 import { badRequestResponse, errorResponse, notFoundResponse, successResponse, updateLeadSchema } from "@/utils/validators";
 import { findLeadById, updateLead, deleteLead } from "@/lib/data/leads";
 

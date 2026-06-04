@@ -1,4 +1,4 @@
-import { createAsyncThunk, createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { PaginatedQuotesResult } from "@/types/quote";
 import { getQuotes } from "@/lib/data/quotes";
 
@@ -28,7 +28,7 @@ export const fetchQuotes = createAsyncThunk(
 
             return res;
         } catch (error) {
-            return thunkAPI.rejectWithValue("Failed to fetch quotes");
+            return thunkAPI.rejectWithValue(error instanceof Error ? error.message : "Failed to fetch quotes");
         }
     })
 

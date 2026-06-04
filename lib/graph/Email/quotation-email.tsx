@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
       Html,
       Head,
@@ -8,15 +7,12 @@ import {
       Row,
       Column,
       Text,
-      Link,
-      Img,
       Button,
       Tailwind,
 } from "@react-email/components";
 import {
       FONTS,
       RC_URLS,
-      RC_URLS_APP,
       RESPONSIVE_CSS,
       FONT_FACES_CSS,
       TAILWIND_CONFIG,
@@ -94,16 +90,14 @@ function ProceedStep({
             >
                   <Column
                         className="pt-[2px]"
-                        style={{ width: 40 }}
-                        verticalAlign="top"
+                        style={{ width: 40, verticalAlign: "top" }}
                   >
                         <table
                               width="28"
-                              height="28"
                               cellPadding="0"
                               cellSpacing="0"
                               role="presentation"
-                              style={{ backgroundColor: "#C6923A", borderRadius: "50%" }}
+                              style={{ backgroundColor: "#C6923A", borderRadius: "50%", height: 28 }}
                         >
                               <tr>
                                     <td

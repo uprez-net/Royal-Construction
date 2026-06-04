@@ -21,7 +21,7 @@ export function DataTable({
         <thead className="bg-muted/70 text-left text-xs uppercase tracking-[0.15em] text-muted-foreground">
           <tr>
             {headers.map((header, index) => (
-              <th key={index} className="px-4 py-3 font-medium">
+              <th key={`header-${index}`} className="px-4 py-3 font-medium">
                 {header}
               </th>
             ))}
@@ -32,7 +32,7 @@ export function DataTable({
           {rows.length > 0 ? (
             rows.map((row, rowIndex) => (
               <tr
-                key={rowIndex}
+                key={`row-${rowIndex}`}
                 className="border-t border-border/70 transition-colors hover:bg-muted/40"
                 onClick={
                   onRowClick
@@ -41,7 +41,7 @@ export function DataTable({
                 }
               >
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="px-4 py-3">
+                  <td key={`cell-${rowIndex}-${cellIndex}`} className="px-4 py-3">
                     {cell}
                   </td>
                 ))}

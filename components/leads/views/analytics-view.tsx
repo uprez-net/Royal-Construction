@@ -3,8 +3,6 @@ import {
   PieChart as RechartsPieChart,
   Pie,
   Cell,
-  LineChart as RechartsLineChart,
-  Line,
   BarChart as RechartsBarChart,
   Bar,
   XAxis,
@@ -12,9 +10,6 @@ import {
   CartesianGrid,
   Area,
   AreaChart,
-  Legend,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts";
 import {
   ChartContainer,

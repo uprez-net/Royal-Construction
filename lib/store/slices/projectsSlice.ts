@@ -485,7 +485,7 @@ const projectsSlice = createSlice({
           error: action.payload ?? action.error.message ?? "Unable to add material to project",
         };
       })
-      .addCase(createTradieScheduleForProject.pending, (state, action) => {
+      .addCase(createTradieScheduleForProject.pending, (state) => {
         state.mutations.createTradieSchedule = { status: "pending", error: null };
       })
       .addCase(createTradieScheduleForProject.fulfilled, (state, action) => {

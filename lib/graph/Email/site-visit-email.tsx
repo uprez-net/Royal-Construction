@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
       Html,
       Head,
@@ -16,7 +15,6 @@ import {
 import {
       FONTS,
       RC_URLS,
-      RC_URLS_APP,
       RESPONSIVE_CSS,
       FONT_FACES_CSS,
       TAILWIND_CONFIG,
@@ -52,7 +50,7 @@ function DetailRow({
             <Row style={{ borderBottom: showBorder ? "1px solid #1B2D45" : undefined }}>
                   <Column className="py-5 px-6">
                         <Row>
-                              <Column className="pt-[2px]" style={{ width: 36 }} verticalAlign="top">
+                              <Column className="pt-[2px]" style={{ width: 36, verticalAlign: "top" }}>
                                     <Img alt="" height={20} src={icon} width={20} className="block outline-none border-none" />
                               </Column>
                               <Column className="pl-3">
@@ -92,7 +90,7 @@ function ExpectItem({
                         marginBottom: showBorder ? "1.5rem" : 0,
                   }}
             >
-                  <Column className="pt-[2px]" style={{ width: 36 }} verticalAlign="top">
+                  <Column className="pt-[2px]" style={{ width: 36, verticalAlign: "top" }}>
                         <Img alt="" height={18} src={ICONS.check} width={18} className="block outline-none border-none" />
                   </Column>
                   <Column className="pl-3">
@@ -299,7 +297,7 @@ export default function SiteVisitEmail({
                                                       >
                                                             No worries — simply reply to this email or call us at{" "}
                                                             <Link href="tel:1300832355" className="text-rc-gold no-underline">1300 832 355</Link>{" "}
-                                                            and we'll find a time that works.
+                                                            and we&apos;ll find a time that works.
                                                       </Text>
                                                 </Column>
                                           </Row>

@@ -3,7 +3,6 @@ import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 import { successResponse, errorResponse } from "@/utils/validators";
 import { toDateOnly } from "@/types/lead";
-import { NextResponse } from "next/server";
 import FollowUpReminderEmail from "@/lib/graph/Email/follow-up-remainder";
 import { render } from "@react-email/components";
 

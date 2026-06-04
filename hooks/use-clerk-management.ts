@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { fetchJson } from "@/utils/fetch";
 import type { User, Invitation } from "@clerk/nextjs/server";
-import { toast } from "sonner";
 
 export function useClerkManagement(initialQuery = "", initialPage = 1) {
     const [query, setQuery] = useState(initialQuery);

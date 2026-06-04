@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Calendar,
   Phone,
   Mail,
-  CheckCircle,
   X,
   Check,
   Bell,
@@ -16,7 +15,7 @@ import { EmailTemplate, Lead } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
 import { sendEmailToLead } from "@/lib/leads/leads-service";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
-import { Button } from "@/components/ui/button";
+import { ReactEmailIframe } from "../render-email";
 
 interface FollowupsViewProps {
   loading: boolean;
@@ -25,69 +24,8 @@ interface FollowupsViewProps {
   onLeadDelete: (leadId: number) => void;
 }
 
-interface ReactEmailPreviewProps {
-  category: string;
-  lead: Lead | null;
-}
-
 function dialablePhone(phone: string) {
   return phone.replace(/[^0-9+]/g, "");
-}
-
-function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
-  const [html, setHtml] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-
-    renderEmailHtml(category, lead)
-      .then((result) => {
-        if (!cancelled) {
-          setHtml(result || "");
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [category, lead]);
-
-  if (loading) {
-    return (
-      <div className="flex h-[480px] items-center justify-center rounded-lg border border-border bg-muted/10">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
-      </div>
-    );
-  }
-
-  if (!html) {
-    return (
-      <div className="py-8 text-center text-xs text-muted-foreground">
-        No preview available
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="overflow-hidden rounded-lg border border-border"
-      style={{ height: 480 }}
-    >
-      <iframe
-        title={`${category} Email Preview`}
-        srcDoc={html}
-        className="w-full h-full"
-        sandbox="allow-same-origin allow-scripts"
-        style={{ border: "none" }}
-      />
-    </div>
-  );
 }
 
 const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> =
@@ -415,7 +353,7 @@ function FollowupItem({
   lead,
   index,
   onLeadUpdate,
-  onLeadDelete,
+  // onLeadDelete,
 }: FollowupItemProps) {
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);

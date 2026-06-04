@@ -1,7 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { getCachedProjectById, getCachedProjects, getCachedProjectsForLookup } from "@/lib/data/projects";
 import { createProject } from "@/lib/data/projectsWrite";
-import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
 import {
   createProjectSchema,
   projectListQuerySchema,
@@ -9,12 +8,10 @@ import {
   parseSearchParamsWithResponse,
   successResponse,
   unauthorizedResponse,
-  notFoundResponse,
   parseBodyWithResponse,
   errorResponse,
 } from "@/utils/validators";
 import { NextRequest } from "next/server";
-import { getSiteManagerById } from "@/lib/data/siteManagers";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -61,48 +58,7 @@ export async function POST(request: NextRequest) {
     if (!body.success) return body.response;
 
     const projectData = body.data;
-    const customerMode = projectData.customerMode;
-
-    let customerId = "";
-
-    if (customerMode === "existing") {
-      const existingCustomer = await findCustomerById(projectData.customerId!);
-      if (!existingCustomer) {
-        return notFoundResponse("Customer");
-      }
-      customerId = existingCustomer.id;
-    } else {
-      const existingCustomer = await findCustomerByContact(
-        projectData.customerEmail!,
-        projectData.customerPhone!,
-      );
-      if (existingCustomer) {
-        customerId = existingCustomer.id;
-      } else {
-        const createdCustomer = await createCustomerForProject({
-          name: projectData.customerName!,
-          email: projectData.customerEmail!,
-          phone: projectData.customerPhone!,
-        });
-        customerId = createdCustomer.id;
-      }
-    }
-
-    const siteManagerId = projectData.siteManagerId?.trim() || null;
-    let siteManager = null;
-    // Quote file handling can be implemented here if needed, e.g., saving to storage and linking to project
-    const qutoeFile = projectData.quoteFile;
-    console.log("Received quote file:", qutoeFile?.name);
-
-    if (siteManagerId) {
-      siteManager = await getSiteManagerById(siteManagerId);
-      if (!siteManager) {
-        return notFoundResponse("Site Manager");
-      }
-    }
-
     const projectId = await createProject(projectData);
-
     const createdProject = await getCachedProjectById(projectId);
 
     if (!createdProject) {

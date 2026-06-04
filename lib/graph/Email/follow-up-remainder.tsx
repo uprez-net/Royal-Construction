@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   Html,
   Head,
@@ -85,7 +84,7 @@ function DetailRow({
     <Row style={{ borderBottom: showBorder ? "1px solid #1B2D45" : undefined }}>
       <Column className="py-4 px-6">
         <Row>
-          <Column className="pt-[2px]" style={{ width: 36 }} verticalAlign="top">
+          <Column className="pt-[2px]" style={{ width: 36, verticalAlign: "top" }}>
             <Img alt="" height={20} src={icon} width={20} className="block outline-none border-none" />
           </Column>
           <Column className="pl-3">
@@ -368,7 +367,7 @@ export default function FollowUpReminderEmail({
                             💬 Context & Notes
                           </Text>
                           <Text className="text-rc-text m-0 text-[13px] leading-relaxed" style={{ fontFamily: FONTS.body, fontWeight: 350, fontStyle: 'italic' }}>
-                            "{followupNotes}"
+                            &ldquo;{followupNotes}&rdquo;
                           </Text>
                         </Column>
                       </Row>

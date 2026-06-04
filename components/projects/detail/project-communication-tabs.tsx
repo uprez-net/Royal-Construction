@@ -34,9 +34,7 @@ const toLabel = (value: string) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-export function ProjectCommunicationTabs({
-  project,
-}: ProjectCommunicationTabsProps) {
+export function ProjectCommunicationTabs({}: ProjectCommunicationTabsProps) {
   const communications: CommunicationEntry[] = [];
   const [query, setQuery] = useState("");
 

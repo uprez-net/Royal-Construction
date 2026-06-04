@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
         const chat = await createOrGetChatSession(leadId);
         const dbMessages = chat.messages;
-        let UIFormattedMessages: ChatMessageAI[] = [...convertToUIMessage(dbMessages), message as ChatMessageAI].filter(
+        const UIFormattedMessages: ChatMessageAI[] = [...convertToUIMessage(dbMessages), message as ChatMessageAI].filter(
             (msg): msg is ChatMessageAI =>
                 msg != null && msg.parts != null && msg.role != null,
         );

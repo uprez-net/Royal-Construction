@@ -78,6 +78,29 @@ export default function TeamManagementPage() {
       }
     });
   };
+
+  if (error) {
+    return (
+      <div className="container py-10">
+        <div className="flex flex-col items-center justify-center gap-3">
+          <div className="flex size-12 items-center justify-center">
+            <X className="size-5 text-red-600" />
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">
+              Failed to load team data
+            </p>
+            <p className="text-xs text-muted-foreground">
+              There was an error loading your team information. Please try again
+              later.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container py-10">
       <Card className="mb-8 w-full">
@@ -225,7 +248,7 @@ function UserList({
     items.push(totalPages);
 
     return items;
-  }, [page, total, count]);
+  }, [page, total, count, isLoaded]);
 
   return (
     <div className="w-full px-4 space-y-4">
@@ -247,7 +270,7 @@ function UserList({
           user.publicMetadata?.role
             ? RoleLabelRecord[user.publicMetadata?.role as Role]
             : "No role",
-          <div className="flex space-x-2">
+          <div className="flex space-x-2" key={`actions-${user.id}`}>
             <SelectRole
               fieldName={"role"}
               onValueChange={(newRole) =>
@@ -375,7 +398,7 @@ function InviteList({
     items.push(totalPages);
 
     return items;
-  }, [page, total, count]);
+  }, [page, total, count, isLoaded]);
 
   return (
     <div className="w-full px-4 space-y-4">
@@ -399,14 +422,14 @@ function InviteList({
           dateFormat.format(new Date(invite.createdAt)),
           invite.status.charAt(0).toUpperCase() +
             invite.status.slice(1).toLowerCase(),
-          <div className="flex space-x-2">
+          <div className="flex space-x-2" key={`actions-${invite.id}`}>
             <Button
               variant="outline"
               size="sm"
               className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white disabled:border-red-300 disabled:text-red-300 disabled:hover:bg-transparent"
               onClick={() => handleAction({ invitationId: invite.id })}
               disabled={invite.status !== "pending"}
-            > 
+            >
               <X className="mr-1 h-4 w-4" />
               Revoke
             </Button>

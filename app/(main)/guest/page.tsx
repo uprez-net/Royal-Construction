@@ -15,7 +15,7 @@ export default function GuestPage() {
 
           <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6 mb-6">
             <p className="text-slate-300 text-sm leading-relaxed">
-              We're reviewing your request for access to the CRM system. Please wait for approval from our team. This typically takes 1-2 business days.
+              We&apos;re reviewing your request for access to the CRM system. Please wait for approval from our team. This typically takes 1-2 business days.
             </p>
           </div>
 

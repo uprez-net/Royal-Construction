@@ -24,11 +24,11 @@ export function QuoteTable({
       return serverQuotes;
     }
     return stateQuotes;
-  }, [stateQuotes]);
+  }, [stateQuotes, serverQuotes]);
 
   useEffect(() => {
     dispatch(setQuotes(serverQuotes));
-  }, [quotes]);
+  }, [quotes, serverQuotes, dispatch]);
 
   const handlePageChange = async (page: number) => {
     try {

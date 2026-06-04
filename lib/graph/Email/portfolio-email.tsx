@@ -53,7 +53,7 @@ interface PortfolioEmailProps {
       name?: string;
 }
 
-export default function PortfolioEmail({ name = "Homeowner" }: PortfolioEmailProps) {
+export default function PortfolioEmail({}: PortfolioEmailProps) {
       return (
             <Tailwind config={TAILWIND_CONFIG}>
                   <Html lang="en" dir="ltr">

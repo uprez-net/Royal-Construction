@@ -1,6 +1,6 @@
 "use server";
 
-import { Role, type Customer } from "@prisma/client";
+import { type Customer } from "@prisma/client";
 import { revalidateTag, cacheTag, cacheLife } from "next/cache";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";

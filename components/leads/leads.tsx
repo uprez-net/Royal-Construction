@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -47,69 +47,11 @@ import { LeadMetricCard } from "../common/lead-onclick-metric-card";
 import { LeadPagination } from "./lead-pagination";
 import { useDebounce } from "@/hooks/use-debounce";
 import { LeadAnalyticsData } from "@/types/lead";
+import { ReactEmailIframe } from "./render-email";
 
 type TabType = "table" | "followups" | "analytics";
 
-interface ReactEmailPreviewProps {
-  category: string;
-  lead: Lead | null;
-}
 
-function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
-  const [html, setHtml] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-
-    renderEmailHtml(category, lead)
-      .then((result) => {
-        if (!cancelled) {
-          setHtml(result || "");
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [category, lead]);
-
-  if (loading) {
-    return (
-      <div className="flex h-120 items-center justify-center rounded-lg border border-border bg-muted/10">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
-      </div>
-    );
-  }
-
-  if (!html) {
-    return (
-      <div className="py-8 text-center text-xs text-muted-foreground">
-        No preview available
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="overflow-hidden rounded-lg border border-border"
-      style={{ height: 480 }}
-    >
-      <iframe
-        title={`${category} Email Preview`}
-        srcDoc={html}
-        className="w-full h-full"
-        sandbox="allow-same-origin allow-scripts"
-        style={{ border: "none" }}
-      />
-    </div>
-  );
-}
 
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
 
@@ -287,18 +229,9 @@ export default function Leads() {
 
   const refreshStats = useCallback(async () => {
     const statsData = await fetchLeadsStats();
+    const leadAnalyticsData = await fetchLeadAnalyticsData();
     setStats(statsData);
-  }, []);
-
-  useEffect(() => {
-    const query = debouncedSearchTerm.trim();
-    if (query.length > 4) {
-      refreshLeadsData({ page: 1, limit: 10, query });
-    }
-  }, [debouncedSearchTerm]);
-
-  useEffect(() => {
-    loadData();
+    setAnalyticsData(leadAnalyticsData);
   }, []);
 
   const refreshLeadsData = async (query: {
@@ -374,6 +307,17 @@ export default function Leads() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const query = debouncedSearchTerm.trim();
+    if (query.length > 4) {
+      refreshLeadsData({ page: 1, limit: 10, query });
+    }
+  }, [debouncedSearchTerm]);
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);

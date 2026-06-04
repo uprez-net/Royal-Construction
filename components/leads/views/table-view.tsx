@@ -2,9 +2,6 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   Phone,
   Mail,
-  ArrowRight,
-  Edit,
-  Users,
   X,
   Bell,
   Check,
@@ -29,6 +26,7 @@ import {
   updateLead,
 } from "@/lib/leads/leads-service";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
+import { ReactEmailIframe } from "../render-email";
 
 interface TableViewProps {
   loading: boolean;
@@ -63,178 +61,6 @@ interface LeadDetailFormData {
   historyEntries: HistoryItem[];
 }
 
-interface ReactEmailPreviewProps {
-  category: string;
-  lead: Lead | null;
-}
-
-function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
-  const [html, setHtml] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-
-    renderEmailHtml(category, lead)
-      .then((result) => {
-        if (!cancelled) {
-          setHtml(result || "");
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [category, lead]);
-
-  if (loading) {
-    return (
-      <div className="flex h-120 items-center justify-center rounded-lg border border-border bg-muted/10">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-teal-600" />
-      </div>
-    );
-  }
-
-  if (!html) {
-    return (
-      <div className="py-8 text-center text-xs text-muted-foreground">
-        No preview available
-      </div>
-    );
-  }
-  console.log("Rendered email HTML:", html);
-  return (
-    <div
-      className="overflow-hidden rounded-lg border border-border"
-      style={{ height: 480 }}
-    >
-      <iframe
-        title={`${category} Email Preview`}
-        srcDoc={html}
-        className="w-full h-full"
-        sandbox="allow-same-origin allow-scripts"
-        style={{ border: "none" }}
-      />
-    </div>
-  );
-}
-
-/* ── Source icon helper ────────────────────────────── */
-function SourceIcon({ source }: { source: string }) {
-  if (source === "Google Ads") {
-    return (
-      <svg
-        className="source-icon"
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="none"
-      >
-        <path
-          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-          fill="#4285F4"
-        />
-        <path
-          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-          fill="#34A853"
-        />
-        <path
-          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-          fill="#FBBC05"
-        />
-        <path
-          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-          fill="#EA4335"
-        />
-      </svg>
-    );
-  }
-
-  if (source === "Facebook Ads") {
-    return (
-      <svg
-        className="source-icon"
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="none"
-      >
-        <path
-          d="M24 12c0-6.627-5.373-12-12-12S0 5.373 0 12c0 5.99 4.388 10.954 10.125 11.854V15.47H7.078V12h3.047V9.356c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.234 2.686.234v2.953H15.83c-1.491 0-1.956.925-1.956 1.875V12h3.328l-.532 3.469h-2.796v8.385C19.612 22.954 24 17.99 24 12z"
-          fill="#1877F2"
-        />
-      </svg>
-    );
-  }
-
-  if (source === "Referral") {
-    return <Users size={16} className="source-icon source-icon-referral" />;
-  }
-
-  if (source === "Website") {
-    return (
-      <svg
-        className="source-icon"
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="2" y1="12" x2="22" y2="12" />
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-      </svg>
-    );
-  }
-
-  if (source === "Repeat Client") {
-    return (
-      <svg
-        className="source-icon"
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M17 1l4 4-4 4" />
-        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-        <path d="M7 23l-4-4 4-4" />
-        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg
-      className="source-icon"
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
 /* ── Format date helper ────────────────────────────── */
 function formatFollowup(date: string | null, time?: string | null): string {
   if (!date) return "";
@@ -260,21 +86,6 @@ function formatFollowup(date: string | null, time?: string | null): string {
   return `${day} ${month} ${year}${timeStr ? " " + timeStr : ""}`;
 }
 
-const MOVABLE_STAGES: LeadStage[] = [
-  "New",
-  "Contacted",
-  "Meeting Scheduled",
-  "In Follow-up",
-  "Qualified",
-  "Quoted",
-  "Negotiating",
-  "Won",
-  "Converted",
-  "No Response",
-  "Cancelled",
-  "Disqualified",
-  "Lost",
-];
 
 const LEAD_SOURCE_OPTIONS: LeadSource[] = [
   "Google Ads",
@@ -303,20 +114,6 @@ const LEAD_STAGE_OPTIONS: LeadStage[] = [
   "Disqualified",
 ];
 
-const PROJECT_TYPE_OPTIONS: ProjectType[] = [
-  "Not Specified",
-  "New Home",
-  "Duplex",
-  "Renovation",
-  "Granny Flat",
-  "Townhouse",
-  "Dual Occupancy",
-  "Single Storey",
-  "Double Storey",
-  "House and Granny",
-  "Knockdown and rebuild",
-  "House + land package",
-];
 
 const HISTORY_TYPE_OPTIONS: HistoryItem["type"][] = [
   "system",
@@ -474,9 +271,9 @@ export default function TableView({
   activeMetric,
   onActiveMetricChange,
 }: TableViewProps) {
-  const [statusLead, setStatusLead] = useState<Lead | null>(null);
-  const [statusStage, setStatusStage] = useState<LeadStage>("New");
-  const [statusNotes, setStatusNotes] = useState("");
+  // const [statusLead, setStatusLead] = useState<Lead | null>(null);
+  // const [statusStage, setStatusStage] = useState<LeadStage>("New");
+  // const [statusNotes, setStatusNotes] = useState("");
   const [emailLead, setEmailLead] = useState<Lead | null>(null);
   const [showEmailTemplates, setShowEmailTemplates] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
@@ -491,8 +288,6 @@ export default function TableView({
 
   const [editAssignedLead, setEditAssignedLead] = useState<Lead | null>(null);
   const [assignedPerson, setAssignedPerson] = useState("");
-
-  const [selectedLeads, setSelectedLeads] = useState<number[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detailLead, setDetailLead] = useState<Lead | null>(null);
   const [detailForm, setDetailForm] = useState<LeadDetailFormData | null>(null);
@@ -637,22 +432,6 @@ export default function TableView({
     return JSON.stringify(detailForm) !== JSON.stringify(detailBaseline);
   }, [detailForm, detailBaseline]);
 
-  const toggleDetailType = (value: ProjectType) => {
-    setDetailForm((prev) => {
-      if (!prev) return prev;
-      const exists = prev.type.includes(value);
-      if (value === "Not Specified")
-        return { ...prev, type: ["Not Specified"] };
-      const withoutNotSpecified = prev.type.filter(
-        (item) => item !== "Not Specified",
-      );
-      const next = exists
-        ? withoutNotSpecified.filter((item) => item !== value)
-        : [...withoutNotSpecified, value];
-      return { ...prev, type: next.length > 0 ? next : ["Not Specified"] };
-    });
-  };
-
   const handleDetailUpdate = async () => {
     if (!detailLead || !detailForm) return;
     if (detailForm.stage === "Lost" && !detailForm.lostReason.trim()) {
@@ -680,7 +459,7 @@ export default function TableView({
       followupTime: detailForm.followupTime,
       urgent: detailForm.urgent,
       lostReason: detailForm.stage === "Lost" ? detailForm.lostReason : "",
-      history: detailForm.historyEntries as any,
+      history: detailForm.historyEntries,
     };
     try {
       const updated = await updateLead(detailLead.id, updates);
@@ -746,8 +525,6 @@ export default function TableView({
     Cancelled: "stage-badge-danger",
     Disqualified: "stage-badge-danger",
   };
-
-  const closeStatusModal = () => setStatusLead(null);
 
   const openEmailTemplates = (lead: Lead) => {
     setEmailLead(lead);
@@ -823,45 +600,6 @@ export default function TableView({
     setEmailSubject(hydrateSubject(template.subject, emailLead));
     setShowEmailTemplates(false);
     setShowSendEmail(true);
-  };
-
-  const handleMoveStage = async () => {
-    if (!statusLead) return;
-    if (statusStage === statusLead.stage) {
-      closeStatusModal();
-      return;
-    }
-    const now = new Date();
-    const historyEntry: Lead["history"][number] = {
-      date: now.toISOString().slice(0, 10),
-      time: now.toTimeString().slice(0, 5),
-      action: "Stage changed",
-      detail: `Moved from "${statusLead.stage}" to "${statusStage}".${statusNotes ? ` ${statusNotes}` : ""}`,
-      type: "system",
-    };
-    const updatedLead: Lead = {
-      ...statusLead,
-      stage: statusStage,
-      history: [...statusLead.history, historyEntry],
-      followupDate: statusStage === "Won" ? "" : statusLead.followupDate,
-      followupTime: statusStage === "Won" ? "" : statusLead.followupTime,
-      followupNotes: statusStage === "Won" ? "" : statusLead.followupNotes,
-      urgent: statusStage === "Won" ? false : statusLead.urgent,
-    };
-    try {
-      const savedLead = await updateLead(statusLead.id, {
-        stage: updatedLead.stage,
-        followupDate: updatedLead.followupDate,
-        followupTime: updatedLead.followupTime,
-        followupNotes: updatedLead.followupNotes,
-        urgent: updatedLead.urgent,
-      });
-      if (!savedLead) return;
-      onLeadUpdate({ ...savedLead, history: updatedLead.history });
-      closeStatusModal();
-    } catch (error) {
-      console.error("Failed to move stage", error);
-    }
   };
 
   const handleSendEmail = async () => {

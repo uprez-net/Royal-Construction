@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
       Html,
       Head,
@@ -15,7 +14,6 @@ import {
 import {
       FONTS,
       RC_URLS,
-      RC_URLS_APP,
       RESPONSIVE_CSS,
       FONT_FACES_CSS,
       TAILWIND_CONFIG,
@@ -162,10 +160,10 @@ export default function ProjectUpdateEmail({
                                                 <Column className="text-center">
                                                       <Section className="mx-auto" style={{ display: "inline-block" }}>
                                                             <Row>
-                                                                  <Column className="pr-2" verticalAlign="middle">
+                                                                  <Column className="pr-2" style={{ verticalAlign: "middle" }}>
                                                                         <Img alt="" height={16} src={ICONS.checkDarkSmall} width={16} className="block outline-none border-none" />
                                                                   </Column>
-                                                                  <Column verticalAlign="middle">
+                                                                  <Column style={{ verticalAlign: "middle" }}>
                                                                         <Text
                                                                               className="m-0 uppercase tracking-[1px]"
                                                                               style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 12, lineHeight: 1, color: "#0E1C2F" }}
@@ -203,7 +201,7 @@ export default function ProjectUpdateEmail({
                                                       <Text className="mobile_max-w-full text-rc-text m-0" style={{ fontFamily: FONTS.body, fontWeight: 350, fontSize: 14, lineHeight: 1.7, letterSpacing: "0.3px", maxWidth: 480 }}>
                                                             Great news! Your project at{" "}
                                                             <span className="text-rc-white" style={{ fontWeight: 450 }}>{location}</span>{" "}
-                                                            has reached an important milestone. Here's a summary of the progress.
+                                                            has reached an important milestone. Here&apos;s a summary of the progress.
                                                       </Text>
                                                 </Column>
                                           </Row>
@@ -227,7 +225,7 @@ export default function ProjectUpdateEmail({
                                                       <Row className="border-b border-rc-border">
                                                             <Column className="pt-7 pb-5 px-6">
                                                                   <Row>
-                                                                        <Column className="pt-1" style={{ width: 40 }} verticalAlign="top">
+                                                                        <Column className="pt-1" style={{ width: 40, verticalAlign: "top" }}>
                                                                               <Section className="bg-rc-gold rounded-full" style={{ width: 28, height: 28 }}>
                                                                                     <Row>
                                                                                           <Column style={{ textAlign: "center", verticalAlign: "middle", height: 28 }}>
@@ -252,7 +250,7 @@ export default function ProjectUpdateEmail({
                                                       <Row>
                                                             <Column className="py-5 px-6">
                                                                   <Row>
-                                                                        <Column className="pt-[2px]" style={{ width: 40 }} verticalAlign="top">
+                                                                        <Column className="pt-[2px]" style={{ width: 40, verticalAlign: "top" }}>
                                                                               <Img alt="" height={20} src={ICONS.calendar} width={20} className="block outline-none border-none" />
                                                                         </Column>
                                                                         <Column className="pl-3">
@@ -311,10 +309,10 @@ export default function ProjectUpdateEmail({
                                                 <Column className="bg-rc-card rounded-md" style={{ border: "1px solid #1B2D45" }}>
                                                       <Section className="p-6">
                                                             <Row>
-                                                                  <Column className="pr-4" verticalAlign="top" style={{ width: 36 }}>
+                                                                  <Column className="pr-4" style={{ width: 36, verticalAlign: "top" }}>
                                                                         <Img alt="" height={28} src={ICONS.camera} width={28} className="block outline-none border-none" />
                                                                   </Column>
-                                                                  <Column verticalAlign="top">
+                                                                  <Column style={{ verticalAlign: "top" }}>
                                                                         <Text className="m-0 mb-1.5" style={{ fontFamily: FONTS.condensed, fontWeight: 500, fontSize: 15, lineHeight: 1.2, color: "#FFFFFF" }}>
                                                                               Photo Updates Available
                                                                         </Text>
@@ -348,7 +346,7 @@ export default function ProjectUpdateEmail({
                                                                         </Text>
                                                                         <Text className="text-rc-text m-0 text-sm leading-relaxed tracking-[0.2px]" style={{ fontFamily: FONTS.body, fontWeight: 400 }}>
                                                                               The next milestone is{" "}
-                                                                              <span className="text-rc-white" style={{ fontWeight: 450 }}>{nextMilestone}</span>. We'll keep you updated as your project progresses.
+                                                                              <span className="text-rc-white" style={{ fontWeight: 450 }}>{nextMilestone}</span>. We&apos;ll keep you updated as your project progresses.
                                                                         </Text>
                                                                   </Column>
                                                             </Row>
