@@ -87,7 +87,12 @@ export function AppShell({
       <div className="flex min-h-screen">
         <aside className="hidden w-16 shrink-0 border-r border-white/10 bg-[oklch(0.16_0.03_249.8)] text-slate-300 shadow-[6px_0_28px_rgba(15,23,42,0.12)] md:flex md:flex-col md:items-center md:py-4">
           <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-white">
-            <Image src="/favicon.ico" alt="Royal Constructions Logo" width={32} height={32} />
+            <Image
+              src="/favicon.ico"
+              alt="Royal Constructions Logo"
+              width={32}
+              height={32}
+            />
           </div>
           <nav className="flex flex-1 flex-col items-center gap-1">
             {navigationItems.map((item) => (
@@ -131,7 +136,6 @@ export function AppShell({
                       <SheetTitle className="font-heading truncate text-base font-semibold text-white">
                         Royal Constructions
                       </SheetTitle>
-                      <p className="text-xs text-slate-400">Navigation</p>
                     </div>
                   </div>
 
@@ -190,9 +194,22 @@ export function AppShell({
                 ) : (
                   <div className="border-t border-white/10 px-4 py-4">
                     <UserButton
+                      showName={true}
                       appearance={{
                         elements: {
                           avatarBox: "size-9",
+                          userButtonBox:
+                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-white",
+                          userButtonTrigger: "w-full",
+                          userButtonOuterIdentifier: "text-base text-white",
+                          userButtonAvatarBox: "w-8 h-8",
+                          rootBox: "w-full shadow-xs",
+                        },
+                        baseTheme: "dark",
+                      }}
+                      userProfileProps={{
+                        appearance: {
+                          baseTheme: "dark",
                         },
                       }}
                     />
@@ -276,23 +293,24 @@ export function AppShell({
                     </div>
                   ) : null}
                 </div>
-                {!isSignedIn ? (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      className="rounded-lg border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                      asChild
-                    >
-                      <Link href="/sign-in">Sign in</Link>
-                    </Button>
-                    <Button
-                      className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-                      asChild
-                    >
-                      <Link href="/sign-up">Sign up</Link>
-                    </Button>
-                  </div>
-                ) : (
+                <div className="hidden md:block">
+                  {!isSignedIn ? (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        className="rounded-lg border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                        asChild
+                      >
+                        <Link href="/sign-in">Sign in</Link>
+                      </Button>
+                      <Button
+                        className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                        asChild
+                      >
+                        <Link href="/sign-up">Sign up</Link>
+                      </Button>
+                    </div>
+                  ) : (
                     <UserButton
                       appearance={{
                         elements: {
@@ -300,7 +318,8 @@ export function AppShell({
                         },
                       }}
                     />
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </header>
