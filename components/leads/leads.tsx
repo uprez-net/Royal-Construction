@@ -51,8 +51,6 @@ import { ReactEmailIframe } from "./render-email";
 
 type TabType = "table" | "followups" | "analytics";
 
-
-
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
 
 function formatShortDate(date: Date): string {
@@ -234,49 +232,52 @@ export default function Leads() {
     setAnalyticsData(leadAnalyticsData);
   }, []);
 
-  const refreshLeadsData = async (query: {
-    page?: number;
-    limit?: number;
-    query?: string;
-    status?: string;
-  }) => {
-    try {
-      const status = query.status;
-      let statusFilter: LeadStage[] | undefined = undefined;
-      if (status) {
-        if (status === "total") {
-          statusFilter = [];
-        } else if (status === "converted") {
-          statusFilter = ["Won", "Converted"];
-        } else if (status === "pendingFollowup") {
-          statusFilter = ["In Follow-up"];
-        } else if (status === "lost") {
-          statusFilter = ["Lost", "Cancelled", "Disqualified"];
-        } else {
-          statusFilter = status.split(",") as LeadStage[];
+  const refreshLeadsData = useCallback(
+    async (query: {
+      page?: number;
+      limit?: number;
+      query?: string;
+      status?: string;
+    }) => {
+      try {
+        const status = query.status;
+        let statusFilter: LeadStage[] | undefined = undefined;
+        if (status) {
+          if (status === "total") {
+            statusFilter = [];
+          } else if (status === "converted") {
+            statusFilter = ["Won", "Converted"];
+          } else if (status === "pendingFollowup") {
+            statusFilter = ["In Follow-up"];
+          } else if (status === "lost") {
+            statusFilter = ["Lost", "Cancelled", "Disqualified"];
+          } else {
+            statusFilter = status.split(",") as LeadStage[];
+          }
         }
+        setLoadingLeads(true);
+        const leadsData = await fetchLeads({
+          page: query.page || pageInfo.page,
+          limit: query.limit || pageInfo.limit,
+          q: query.query?.trim() ? query.query.trim() : undefined,
+          status: statusFilter,
+        });
+        setLeads(leadsData.items);
+        setPageInfo({
+          page: leadsData.page,
+          limit: leadsData.limit,
+          total: leadsData.totalCount,
+          totalPages: leadsData.totalPages,
+        });
+      } catch (err) {
+        console.error(err);
+        setError("Failed to refresh leads data");
+      } finally {
+        setLoadingLeads(false);
       }
-      setLoadingLeads(true);
-      const leadsData = await fetchLeads({
-        page: query.page || pageInfo.page,
-        limit: query.limit || pageInfo.limit,
-        q: query.query?.trim() ? query.query.trim() : undefined,
-        status: statusFilter,
-      });
-      setLeads(leadsData.items);
-      setPageInfo({
-        page: leadsData.page,
-        limit: leadsData.limit,
-        total: leadsData.totalCount,
-        totalPages: leadsData.totalPages,
-      });
-    } catch (err) {
-      console.error(err);
-      setError("Failed to refresh leads data");
-    } finally {
-      setLoadingLeads(false);
-    }
-  };
+    },
+    [pageInfo.page, pageInfo.limit],
+  );
 
   const loadData = async () => {
     try {
@@ -310,13 +311,22 @@ export default function Leads() {
 
   useEffect(() => {
     const query = debouncedSearchTerm.trim();
+
     if (query.length > 4) {
-      refreshLeadsData({ page: 1, limit: 10, query });
+      void Promise.resolve().then(() => {
+        refreshLeadsData({
+          page: 1,
+          limit: 10,
+          query,
+        });
+      });
     }
-  }, [debouncedSearchTerm]);
+  }, [debouncedSearchTerm, refreshLeadsData]);
 
   useEffect(() => {
-    loadData();
+    void Promise.resolve().then(() => {
+      loadData();
+    });
   }, []);
 
   const handleTabChange = (tab: TabType) => {
@@ -400,8 +410,12 @@ export default function Leads() {
     });
   };
 
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
+  const handlePageChange = async (page: number) => {
+    await refreshLeadsData({
+      page,
+      limit: pageInfo.limit,
+      query: searchTerm,
+    });
   };
 
   const reloadCurrentData = () => {
@@ -858,13 +872,7 @@ export default function Leads() {
                     totalCount: pageInfo.total,
                     totalPages: pageInfo.totalPages,
                   }}
-                  onPageChange={(page) =>
-                    refreshLeadsData({
-                      page,
-                      limit: pageInfo.limit,
-                      query: searchTerm,
-                    })
-                  }
+                  onPageChange={handlePageChange}
                 />
               )}
             </>
