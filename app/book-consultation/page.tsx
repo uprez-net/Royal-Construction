@@ -198,11 +198,11 @@ function BookingContent() {
           </div>
           <h1 style={{ color: BRAND.text, margin: '0 0 12px', fontSize: 24, fontWeight: 500, fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase', letterSpacing: '-0.5px' }}>Consultation Booked</h1>
           <p style={{ color: BRAND.muted, marginTop: 0, fontSize: 14, lineHeight: 1.6 }}>Your meeting has been scheduled.</p>
-          {joinLink && (
+          {/* {joinLink && (
             <a href={joinLink} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 20, backgroundColor: BRAND.gold, color: BRAND.white, padding: '12px 24px', borderRadius: 4, fontWeight: 500, textDecoration: 'none', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: 15 }}>
               Join Teams Meeting
             </a>
-          )}
+          )} */}
           <div style={{ marginTop: 30, padding: '16px 20px', backgroundColor: '#F8FAFC', borderRadius: 4, border: `1px solid ${BRAND.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
               <Video size={16} color={BRAND.gold} />

@@ -33,7 +33,8 @@ import {
   fetchLeads,
   fetchAllLeads,
   fetchLeadsStats,
-  sendEmailToLead
+  sendEmailToLead,
+  FollowupMeetingCreation
 } from "@/lib/leads/leads-service";
 import TableView from "./views/table-view";
 import FollowupsView from "./views/followups-view";
@@ -365,23 +366,23 @@ export default function Leads() {
     }
   };
 
-  const recalcStats = useCallback((currentLeads: Lead[]) => {
-    const isConverted = (stage: string) =>
-      stage === "Won" || stage === "Converted";
-    const isLost = (stage: string) =>
-      stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
+  // const recalcStats = useCallback((currentLeads: Lead[]) => {
+  //   const isConverted = (stage: string) =>
+  //     stage === "Won" || stage === "Converted";
+  //   const isLost = (stage: string) =>
+  //     stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
 
-    setStats({
-      total: currentLeads.length,
-      new: currentLeads.filter((l) => l.stage === "New").length,
-      contacted: currentLeads.filter((l) => l.stage === "Contacted").length,
-      qualified: currentLeads.filter((l) => l.stage === "Qualified").length,
-      conversion: currentLeads.filter((l) => isConverted(l.stage)).length,
-      pendingFollowup: currentLeads.filter((l) => l.stage == "In Follow-up")
-        .length,
-      lost: currentLeads.filter((l) => isLost(l.stage)).length,
-    });
-  }, []);
+  //   setStats({
+  //     total: currentLeads.length,
+  //     new: currentLeads.filter((l) => l.stage === "New").length,
+  //     contacted: currentLeads.filter((l) => l.stage === "Contacted").length,
+  //     qualified: currentLeads.filter((l) => l.stage === "Qualified").length,
+  //     conversion: currentLeads.filter((l) => isConverted(l.stage)).length,
+  //     pendingFollowup: currentLeads.filter((l) => l.stage == "In Follow-up")
+  //       .length,
+  //     lost: currentLeads.filter((l) => isLost(l.stage)).length,
+  //   });
+  // }, []);
 
   const handleLeadUpdate = async (updatedLead: Lead): Promise<boolean> => {
     //const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
@@ -390,9 +391,10 @@ export default function Leads() {
         const updated = prev.map((lead) =>
           lead.id === updatedLead.id ? updatedLead : lead,
         );
-        recalcStats(updated);
+        // recalcStats(updated);\
         return updated;
       });
+      await refreshStats();
       return true;
     } else {
       return false;
@@ -402,7 +404,7 @@ export default function Leads() {
   const handleLeadDelete = async (leadId: number) => {
     setLeads((prev) => {
       const updated = prev.filter((lead) => lead.id !== leadId);
-      recalcStats(updated);
+      //recalcStats(updated);
       return updated;
     });
     await refreshStats();
@@ -426,7 +428,7 @@ export default function Leads() {
       page,
       limit: pageInfo.limit,
       query: searchTerm,
-      status:  activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+      status: activeMetric === "total" ? "total" : (activeMetric ?? undefined),
     });
   }, [refreshLeadsData, activeMetric, pageInfo.limit, searchTerm]);
 
@@ -434,12 +436,13 @@ export default function Leads() {
     loadData();
   };
 
-  const handleNewLead = (newLead: Lead) => {
+  const handleNewLead = async (newLead: Lead) => {
     setLeads((prev) => {
       const updated = [newLead, ...prev];
-      recalcStats(updated);
+      // recalcStats(updated);
       return updated;
     });
+    await refreshStats();
   };
 
   const showToast = (message: string, type: "success" | "info" = "success") => {
@@ -450,7 +453,7 @@ export default function Leads() {
     }, 4000);
   };
 
-  const openEmailTemplates = async() => {
+  const openEmailTemplates = async () => {
     const allLeads = await fetchAllLeads();
     setEmailTargets(allLeads.filter(lead => lead.email).map(lead => lead.email) as string[]);
     setEmailTargetList(allLeads.filter(lead => lead.email).map(lead => lead.email).join(", "));
@@ -529,7 +532,8 @@ export default function Leads() {
       );
 
       setLeads(updated);
-      recalcStats(updated);
+      // recalcStats(updated);
+      await refreshStats();
       showToast(
         `Campaign sent to ${successCount} of ${emailTargets.length} leads`,
         "success",
@@ -560,6 +564,23 @@ export default function Leads() {
       type: entry.type,
       actionDate: entry.actionDate || today.toISOString(),
     }));
+
+    if (formData.stage === 'In Follow-up') {
+      if (!formData.followupDate || !formData.followupTime) {
+        showToast("Please provide follow-up date and time for 'In Follow-up' stage", "info");
+        setAdding(false);
+        setAddingWithReminder(false);
+        return;
+      }
+      const createMeetingForFollowup = await FollowupMeetingCreation(formData.name, formData.email, formData.followupDate, formData.followupTime);
+      if (createMeetingForFollowup !== "Follow-up meeting successfully created") {
+        console.error("Failed to create follow-up meeting:", createMeetingForFollowup);
+        showToast("Failed to create follow-up meeting. Please try again.", "info");
+        setAdding(false);
+        setAddingWithReminder(false);
+        return;
+      }
+    }
 
     const payload = {
       name: formData.name,
@@ -1174,7 +1195,7 @@ function AddLeadModal({
     type: ["Not Specified"],
     notes: "",
     followupDate: "",
-    followupTime: "10:00",
+    followupTime: "",
     urgent: false,
     historyEntries: [],
   });
