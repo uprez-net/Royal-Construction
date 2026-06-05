@@ -13,6 +13,7 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
                     z.object({
                         id: z.string(),
                         item: z.string(),
+                        description: z.string(),
                         unitPrice: z.number(),
                         quantity: z.number(),
                         unit: z.string().optional(),
@@ -62,10 +63,16 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
                 customerLineItems.push({
                     id: it.id,
                     item: it.item,
+                    description: it.description,
                     unit: it.unit ?? "Unknown unit",
                     quantity: it.quantity,
                     unitPrice: +(sellingNet / it.quantity).toFixed(2),
                     totalPrice: totalPrice,
+                    gstRate,
+                    gstIncluded: false, // We always show prices to customer as GST exclusive for clarity, even if input was gstIncluded
+                    source: it.source,
+                    netLine: sellingNet,
+                    gstAmount,
                 });
             }
 
