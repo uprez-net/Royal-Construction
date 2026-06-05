@@ -1,4 +1,4 @@
-import { notificationSchemas } from "@/utils/validators/notification";
+import { notificationSchemas } from "@/utils/validators";
 import { z } from "zod";
 
 export type NotificationType = keyof typeof notificationSchemas;
