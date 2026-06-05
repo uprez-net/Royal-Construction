@@ -9,6 +9,8 @@ import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
 import { Prisma, ChatSession } from "@prisma/client";
 import { format, subMonths, startOfMonth } from "date-fns";
+import { createNotification } from "@/types/notification";
+import { triggerNotification } from "../notification/novu";
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
@@ -184,7 +186,21 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     },
     include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } } },
   });
+  const res = mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 
+  // ═══════════════════════════════════════════════════════
+  // SEND NOTIFICATION TO NOVU ABOUT NEW LEAD
+  // ═══════════════════════════════════════════════════════
+  const notificationPayload = createNotification("leadCreated", {
+    leadId: res.id.toString(),
+    leadType: res.type,
+    budget: res.budget ? (!isNaN(parseFloat(res.budget)) ? parseFloat(res.budget) : 0) : 0,
+    location: res.location ?? "Not specified",
+    customerName: res.name ?? "Not specified",
+    customerEmail: res.email ?? "Not specified",
+    customerPhone: res.phone ?? "Not specified"
+  })
+  await triggerNotification(notificationPayload);
   // ═══════════════════════════════════════════════════════
   // SEND WELCOME EMAIL TO MANUALLY CREATED LEADS
   // ═══════════════════════════════════════════════════════
@@ -228,7 +244,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     }
   }
 
-  return mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
+  return res
 }
 
 export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
@@ -276,7 +292,32 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } } },
   });
 
-  return mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
+  const res = mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
+  if (!res.assignedId) {
+    const notificationPayload = createNotification("leadUpdated", {
+      leadId: res.id.toString(),
+      leadType: res.type,
+      location: res.location ?? "Not specified",
+      customerName: res.name ?? "Not specified",
+      customerEmail: res.email ?? "Not specified",
+      customerPhone: res.phone ?? "Not specified",
+      status: res.stage,
+    })
+    await triggerNotification(notificationPayload);
+  } else {
+    const notificationPayload = createNotification("leadAssigned", {
+      leadId: res.id.toString(),
+      leadType: res.type,
+      location: res.location ?? "Not specified",
+      customerName: res.name ?? "Not specified",
+      customerEmail: res.email ?? "Not specified",
+      customerPhone: res.phone ?? "Not specified",
+      assignedTo: res.assignedUser?.name ?? "Unknown",
+    })
+    await triggerNotification(notificationPayload);
+  }
+
+  return res;
 }
 
 export async function deleteLead(id: number) {

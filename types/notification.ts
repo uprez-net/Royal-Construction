@@ -32,12 +32,6 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/leads`,
   }),
 
-  leadDeleted: (data) => ({
-    title: `Lead Deleted: LED-#${data.leadId} - ${data.customerName}`,
-    message: `${data.customerName}'s lead was deleted`,
-    url: `/leads`,
-  }),
-
   leadAssigned: (data) => ({
     title: `Lead Assigned: LED-#${data.leadId} - ${data.customerName}`,
     message: `${data.customerName}'s lead assigned to ${data.assignedTo}`,
@@ -65,6 +59,18 @@ export const notificationTemplates: NotificationTemplateFactory = {
   tradieScheduleUpdated: (data) => ({
     title: `Tradie Schedule Updated: ${data.projectName}`,
     message: `${data.tradieName}'s schedule is now ${data.status}`,
+    url: `/projects/${data.projectId}`,
+  }),
+  
+  variationCreated: (data) => ({
+    title: `Variation Created: ${data.projectName} for ${data.variationAmount}`,
+    message: `A new variation has been created asking for ${data.variationDescription}`,
+    url: `/projects/${data.projectId}`,
+  }),
+
+  variationUpdated: (data) => ({
+    title: `Variation Updated: ${data.projectName}`,
+    message: `A variation has been updated with status ${data.status}`,
     url: `/projects/${data.projectId}`,
   }),
 };

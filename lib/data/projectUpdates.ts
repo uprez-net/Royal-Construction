@@ -2,6 +2,8 @@ import prisma from "@/lib/prisma";
 import type { CreateProjectUpdateInput } from "@/utils/validators";
 import { revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
+import { createNotification } from "@/types/notification";
+import { triggerNotification } from "../notification/novu";
 
 export async function createProjectUpdate(input: {
   projectId: string;
@@ -13,7 +15,7 @@ export async function createProjectUpdate(input: {
     ? await prisma.milestone.findUnique({ where: { id: milestoneId }, select: { id: true, isPhotoRequired: true } })
     : null;
 
-  await prisma.$transaction(async (tx) => {
+  const updatedMilestone = await prisma.$transaction(async (tx) => {
     await tx.siteUpdate.create({
       data: {
         projectId: projectId,
@@ -35,9 +37,24 @@ export async function createProjectUpdate(input: {
     });
 
     if (milestone?.isPhotoRequired && milestoneId) {
-      await tx.milestone.update({ where: { id: milestoneId }, data: { status: "DONE", actualDate: new Date() } });
+      const updatedMilestone = await tx.milestone.update({
+        where: { id: milestoneId },
+        data: { status: "DONE", actualDate: new Date() },
+        include: { project: true }
+      });
+      return updatedMilestone;
     }
   });
+
+  if (updatedMilestone) {
+    const notificationPayload = createNotification("projectSiteUpdates", {
+      projectId: updatedMilestone.projectId,
+      projectName: updatedMilestone.project.name,
+      milestoneName: updatedMilestone.name,
+      updateNote: notes,
+    });
+    await triggerNotification(notificationPayload);
+  }
 
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
