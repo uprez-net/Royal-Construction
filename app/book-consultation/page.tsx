@@ -61,7 +61,7 @@ function BookingContent() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [booked, setBooked] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [joinLink, setJoinLink] = useState<string | null>(null);
+  // const [joinLink, setJoinLink] = useState<string | null>(null);
   const [busySlotsMap, setBusySlotsMap] = useState<Record<string, string[]>>({});
 
   const timeSlots = generateTimeSlots(selectedDate);
@@ -121,7 +121,7 @@ function BookingContent() {
       const data = await res.json();
       if (data.success) {
         setBooked(true);
-        setJoinLink(data.joinUrl);
+        // setJoinLink(data.joinUrl);
       } else {
         setError(data.error || 'Failed to book consultation.');
       }
