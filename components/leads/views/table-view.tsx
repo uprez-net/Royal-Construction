@@ -790,7 +790,7 @@ export default function TableView({
                         </span>
                       </td>
                       <td className="col-followup">
-                        {!lead.followupDate && !lead.followupTime ? (
+                        {(!lead.followupDate || !lead.followupTime) ? (
                           <button
                             type="button"
                             className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"

@@ -1424,7 +1424,7 @@ function AddLeadModal({
             <input
               className={fieldClassName}
               type="time"
-              value={form.followupTime}
+              // value={}
               onChange={(e) => updateField("followupTime", e.target.value)}
             />
           </div>
