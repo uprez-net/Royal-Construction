@@ -26,14 +26,22 @@ export const fetchLeadFilesTool = tool({
     }),
     execute: async (params) => {
         const files = await getFilesByLeadId(params.leadId);
-
-        if(files.success && files.count > 0) {
+        // Always return a consistent structured response. If no files found, return success: false with empty array.
+        if (files && files.success && files.count > 0) {
             return {
                 success: true,
                 message: `${files.count} file(s) retrieved successfully for the lead.`,
                 files: files.files,
+                count: files.count,
             };
         }
+
+        return {
+            success: false,
+            message: `No files found for lead ${params.leadId}.`,
+            files: [],
+            count: 0,
+        };
     }
 });
 

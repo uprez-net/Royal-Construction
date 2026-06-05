@@ -25,6 +25,12 @@ export type ChatTools = {
   fetchLeadFilesTool: InferUITool<typeof fetchLeadFilesTool>;
 }
 
+export type OfferFileToolOutput = offerFileToolUI["output"];
+export type LineItemToolOutput = lineItemToolUI["output"];
+export type FetchLeadInfoToolOutput = InferUITool<typeof createFetchLeadInfoTool>["output"];
+export type FetchLeadFilesToolOutput = InferUITool<typeof fetchLeadFilesTool>["output"];
+export type FileProcessingToolOutput = InferUITool<typeof FileProcessingTool>["output"];
+
 export type ChatMessageAI = UIMessage<
   MessageMetadata,
   UIDataTypes,
