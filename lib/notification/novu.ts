@@ -13,8 +13,8 @@ export async function triggerNotification(
         url: string
     }
 ) {
-    const allUsers = await getAllUserClerkIds();
     try {
+        const allUsers = await getAllUserClerkIds();
         await novu.trigger({
             workflowId: WORKFLOW_IDENTIFIER,
             to: allUsers.map((id) => ({ subscriberId: id })),
@@ -26,6 +26,6 @@ export async function triggerNotification(
         })
     } catch (error) {
         console.error("Error triggering notification:", error);
-        throw error;
+        return { success: false, error: "Failed to trigger notification" };
     }
 }
