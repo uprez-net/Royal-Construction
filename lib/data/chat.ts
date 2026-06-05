@@ -1,7 +1,7 @@
 "use server";
 import { ChatMessageAI, ChatSessionWithMessages } from "@/types/chat";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, File } from "@prisma/client";
 import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 
@@ -76,7 +76,12 @@ export async function updateChatMessages(messages: MessageData[], leadId: number
     }
 }
 
-export async function getChatByLeadId(leadId: number): Promise<ChatSessionWithMessages | null> {
+interface FetchChatResponse {
+    chatSession: ChatSessionWithMessages | null;
+    files: File[];
+}
+
+export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse> {
     "use cache";
     cacheTag(`chat-session-lead-${leadId}`);
     cacheLife(CACHE_PROFILES.SHORT);
@@ -85,7 +90,12 @@ export async function getChatByLeadId(leadId: number): Promise<ChatSessionWithMe
             where: { leadId },
             include: { messages: true },
         });
-        return chatSession;
+        
+        const leadFiles = await prisma.file.findMany({
+            where: { leadId },
+        });
+
+        return {chatSession, files: leadFiles};
     } catch (error) {
         console.error("Error fetching chat session by lead ID:", error);
         throw new Error("Failed to fetch chat session");

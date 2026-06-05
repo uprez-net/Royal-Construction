@@ -61,7 +61,7 @@ type ToolPartWithOutput = ToolPartWithState & {
  * Known tool names (tightens switch statements).
  * If you add more named tools later, extend this union.
  */
-type KnownToolName = "lineItemTool" | "offerFileTool" | "fetchLeadInfoTool";
+type KnownToolName = "lineItemTool" | "offerFileTool" | "fetchLeadInfoTool" | "FileProcessingTool";
 
 /**
  * --------------
@@ -95,7 +95,8 @@ function isKnownToolName(name: string): name is KnownToolName {
   return (
     name === "lineItemTool" ||
     name === "offerFileTool" ||
-    name === "fetchLeadInfoTool"
+    name === "fetchLeadInfoTool" || 
+    name === "FileProcessingTool"
   );
 }
 
@@ -199,10 +200,43 @@ function ToolOutput({
           />
         );
       }
+      case "FileProcessingTool": {
+        return (
+          <FileProcessingOutput
+            output={
+              output as { success: boolean; message: string }
+            }
+          />
+        );
+      }
     }
   }
 
   return <GenericOutput data={output} />;
+}
+
+function FileProcessingOutput({
+  output,
+}: {
+  output: {
+    success: boolean;
+    message: string;
+  };
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-[#242b33]/60 p-4">
+      <div className="flex items-start gap-2">
+        {output.success ? (
+          <CheckCircle2 className="h-5 w-5 text-green-400 mt-0.5 shrink-0" />
+        ) : (
+          <XCircle className="h-5 w-5 text-red-400 mt-0.5 shrink-0" />
+        )}
+        <div className="min-w-0">
+          <p className="font-medium text-white text-wrap">{output.message}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function FetchLeadInfoOutput({

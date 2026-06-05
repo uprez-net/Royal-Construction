@@ -24,6 +24,7 @@
     "@clerk/mcp-tools": "^0.5.0",
     "@clerk/nextjs": "^7.3.3",
     "@hookform/resolvers": "^5.2.2",
+    "@mistralai/mistralai": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@novu/api": "^3.17.0",
     "@novu/js": "^3.17.0",

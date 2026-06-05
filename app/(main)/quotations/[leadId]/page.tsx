@@ -9,7 +9,7 @@ async function OfferCreationContent({
   params: Promise<{ leadId: string }>;
 }) {
   const { leadId } = await params;
-  const chat = await getChatByLeadId(parseInt(leadId));
+  const { chatSession: chat, files } = await getChatByLeadId(parseInt(leadId));
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1">
@@ -20,6 +20,7 @@ async function OfferCreationContent({
           initialMessages={
             chat?.messages ? [...convertToUIMessage(chat.messages)] : []
           }
+          files={files}
         />
       </section>
     </div>

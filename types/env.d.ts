@@ -51,5 +51,8 @@ namespace NodeJS {
         // Novu
         NOVU_SECRET_KEY: string;
         NEXT_PUBLIC_NOVU_APP_IDENTIFIER: string;
+
+        // Mistral AI
+        MISTRAL_AI_KEY: string;
     }
 }
