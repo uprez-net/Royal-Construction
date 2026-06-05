@@ -19,7 +19,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
     },
     include: { tradie: true, project: true, milestone: true },
   });
-
+  const siteManagerId = schedule.project.siteManagerId;
   const notificationPayload = createNotification("tradieScheduleCreated", {
     tradieName: schedule.tradie.name,
     projectName: schedule.project.name,
@@ -29,7 +29,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
     tradieCompany: schedule.tradie.company ?? "Independent",
     scheduleDate: dateFormat.format(schedule.scheduledDate),
   });
-  await triggerNotification(notificationPayload);
+  await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
 
   revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
 
@@ -45,6 +45,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
 
   const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
   const statusLabel = schedule.status.split("_").map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(" ");
+  const siteManagerId = schedule.project.siteManagerId;
   const notificationPayload = createNotification("tradieScheduleUpdated", {
     tradieName: schedule.tradie.name,
     projectName: schedule.project.name,
@@ -55,7 +56,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
     scheduleDate: dateFormat.format(schedule.scheduledDate),
     status: statusLabel,
   });
-  await triggerNotification(notificationPayload);
+  await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
 
   revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
 

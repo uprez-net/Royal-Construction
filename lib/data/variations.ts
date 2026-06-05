@@ -20,17 +20,18 @@ export async function createVariation(projectId: string, input: CreateVariationI
     },
     include: {
       project: {
-        select: { name: true }
+        select: { name: true, siteManagerId: true }
       },
     }
   });
+  const siteManagerId = project.siteManagerId;
   const notificationPayload = createNotification("variationCreated", {
     projectId: variation.projectId,
     projectName: project.name,
     variationDescription: variation.description,
     variationAmount: variation.cost.toString(),
   });
-  await triggerNotification(notificationPayload);
+  await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
   return {
@@ -45,10 +46,11 @@ export async function updateVariationStatus(variationId: string, status: Variati
     data: status === "APPROVED" ? { status: VariationStatus.APPROVED, approvedDate: new Date() } : { status: VariationStatus.REJECTED, approvedDate: null },
     include: {
       project: {
-        select: { name: true }
+        select: { name: true, siteManagerId: true }
       },
     }
   });
+  const siteManagerId = project.siteManagerId;
 
   const notificationPayload = createNotification("variationUpdated", {
     projectId: variation.projectId,
@@ -57,7 +59,7 @@ export async function updateVariationStatus(variationId: string, status: Variati
     variationAmount: variation.cost.toString(),
     status: variation.status,
   });
-  await triggerNotification(notificationPayload);
+  await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
 
   if (status === "APPROVED") {
     await applyVariationDelay(variation.id);

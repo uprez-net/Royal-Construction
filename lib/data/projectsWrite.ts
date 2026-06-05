@@ -71,7 +71,7 @@ export async function createProject(projectData: CreateProjectInput) {
     customerEmail: project.customer.email,
     customerPhone: project.customer.phone,
   });
-  await triggerNotification(notificationPayload);
+  await triggerNotification(project.siteManagerId ? [project.siteManagerId] : [], notificationPayload);
 
 
   revalidateTag("projects", CACHE_PROFILES.MEDIUM);

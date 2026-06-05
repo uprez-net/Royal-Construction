@@ -53,7 +53,7 @@ export async function createProjectUpdate(input: {
       milestoneName: updatedMilestone.name,
       updateNote: notes,
     });
-    await triggerNotification(notificationPayload);
+    await triggerNotification(updatedMilestone.project.siteManagerId ? [updatedMilestone.project.siteManagerId] : [], notificationPayload);
   }
 
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);

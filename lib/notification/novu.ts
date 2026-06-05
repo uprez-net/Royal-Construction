@@ -1,12 +1,13 @@
 "use server";
 import { Novu } from "@novu/api";
-import { getAllUserClerkIds } from "../data/user";
+import { getAllUserClerkIds, resolveUserIdsToClerkIds } from "../data/user";
 
 const novu = new Novu({ secretKey: process.env.NOVU_SECRET_KEY });
 
 const WORKFLOW_IDENTIFIER = "royal-consturction";
 
 export async function triggerNotification(
+    userId: string[],
     content: {
         title: string,
         message: string,
@@ -14,10 +15,15 @@ export async function triggerNotification(
     }
 ) {
     try {
-        const allUsers = await getAllUserClerkIds();
+        let users: string[] = [];
+        if(userId.length === 0) {
+            users = await getAllUserClerkIds();
+        } else {
+            users = await resolveUserIdsToClerkIds(userId);
+        }
         await novu.trigger({
             workflowId: WORKFLOW_IDENTIFIER,
-            to: allUsers.map((id) => ({ subscriberId: id })),
+            to: users.map((id) => ({ subscriberId: id })),
             payload: {
                 subject: content.title,
                 body: content.message,

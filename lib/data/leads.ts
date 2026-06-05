@@ -200,7 +200,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     customerEmail: res.email ?? "Not specified",
     customerPhone: res.phone ?? "Not specified"
   })
-  await triggerNotification(notificationPayload);
+  await triggerNotification([], notificationPayload);
   // ═══════════════════════════════════════════════════════
   // SEND WELCOME EMAIL TO MANUALLY CREATED LEADS
   // ═══════════════════════════════════════════════════════
@@ -303,7 +303,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       customerPhone: res.phone ?? "Not specified",
       status: res.stage,
     })
-    await triggerNotification(notificationPayload);
+    await triggerNotification([], notificationPayload);
   } else {
     const notificationPayload = createNotification("leadAssigned", {
       leadId: res.id.toString(),
@@ -314,7 +314,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       customerPhone: res.phone ?? "Not specified",
       assignedTo: res.assignedUser?.name ?? "Unknown",
     })
-    await triggerNotification(notificationPayload);
+    await triggerNotification([res.assignedId],notificationPayload);
   }
 
   return res;
