@@ -8,26 +8,27 @@ import {
   Column,
   Text,
   Img,
-  Button,
   Tailwind,
-} from "@react-email/components";
+} from '@react-email/components';
 import {
   FONTS,
   RC_URLS,
+  RC_COLORS,
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from "./email-theme";
-import { EmailFooter } from "./email-footer";
-import { EmailHeader } from "./email-header";
+} from './email-theme';
+import { EmailFooter } from './email-footer';
+import { EmailHeader } from './email-header';
+import { EmailCtaButton } from './email-cta-button';
+import { EmailSectionLight } from './email-section-light';
+import { EmailSectionWhite } from './email-section-white';
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
 const ICONS = {
-  trend: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='23 6 13.5 15.5 8.5 10.5 1 18'%3E%3C/polyline%3E%3Cpolyline points='17 6 23 6 23 12'%3E%3C/polyline%3E%3C/svg%3E`,
+  trend: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='23 6 13.5 15.5 8.5 10.5 1 18'%3E%3C/polyline%3E%3Cpolyline points='17 6 23 6 23 12'%3E%3C/polyline%3E%3C/svg%3E`,
 };
-
-// ─── Responsive + Font Styles ───────────────────────────────────────────────
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -41,12 +42,12 @@ interface VariationQuoteEmailProps {
 }
 
 export default function VariationQuoteEmail({
-  name = "Client",
-  project = "Your Project",
-  originalAmount = "$0",
-  variationAmount = "$0",
-  revisedAmount = "$0",
-  approveUrl = RC_URLS.bookConsultation,
+  name = 'Client',
+  project = 'Your Project',
+  originalAmount = '$0',
+  variationAmount = '$0',
+  revisedAmount = '$0',
+  approveUrl = RC_URLS.website,
 }: VariationQuoteEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -59,131 +60,144 @@ export default function VariationQuoteEmail({
         </Head>
 
         <Body
-          className="bg-rc-dark m-0 p-0 text-sm leading-relaxed tracking-[0.3px]"
-          style={{ fontFamily: FONTS.body, fontWeight: 350 }}
+          className="m-0 p-0"
+          style={{
+            fontFamily: FONTS.body,
+            fontWeight: 350,
+            fontSize: 14,
+            backgroundColor: RC_COLORS.light,
+            margin: 0,
+          }}
         >
-          {/* Preheader */}
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-            Your quotation has been updated — review the variation and approve
-            to proceed
-            <div>
-              &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿
-            </div>
+            Your quotation has been updated — review the variation and approve to proceed
+            <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
           </div>
 
-          <Container className="max-w-[640px] bg-rc-container mx-auto">
-            <EmailHeader />
+          <Container className="max-w-[640px] mx-auto" style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}>
+            <EmailHeader showGoldBar />
 
             {/* ── Hero ── */}
-            <Section
-              className="mobile_px-4 mobile_pt-10"
-              style={{ padding: "3.5rem 1.5rem 2rem" }}
-            >
-              <Row>
-                <Column>
-                  <Text
-                    className="text-rc-gold m-0 mb-4 text-[11px] leading-none tracking-[1.2px] uppercase"
-                    style={{ fontFamily: FONTS.body, fontWeight: 500 }}
-                  >
-                    Variation
-                  </Text>
-                  <Text
-                    className="mobile_font-40 text-rc-white m-0 uppercase"
-                    style={{
-                      fontFamily: FONTS.condensed,
-                      fontWeight: 500,
-                      fontSize: 48,
-                      lineHeight: 1,
-                      letterSpacing: "-1.4px",
-                    }}
-                  >
-                    Quotation
-                    <br />
-                    Update
-                  </Text>
-                </Column>
-              </Row>
-            </Section>
+            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+              <Text
+                className="m-0 mb-4 uppercase"
+                style={{
+                  fontFamily: FONTS.body,
+                  fontWeight: 500,
+                  fontSize: 11,
+                  lineHeight: 1,
+                  letterSpacing: '1.2px',
+                  color: RC_COLORS.gold,
+                }}
+              >
+                Variation
+              </Text>
+              <Text
+                className="mobile_font-40 m-0 uppercase"
+                style={{
+                  fontFamily: FONTS.condensed,
+                  fontWeight: 500,
+                  fontSize: 48,
+                  lineHeight: 1,
+                  letterSpacing: '-1.4px',
+                  color: RC_COLORS.textOnLight,
+                }}
+              >
+                Quotation
+                <br />
+                Update
+              </Text>
+            </EmailSectionLight>
 
             {/* ── Intro ── */}
-            <Section
-              className="mobile_px-4"
-              style={{ padding: "0 1.5rem 2.5rem" }}
-            >
+            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
               <Row>
                 <Column>
                   <Text
-                    className="text-rc-text m-0 mb-5"
+                    className="m-0 mb-5"
                     style={{
                       fontFamily: FONTS.body,
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: "0.3px",
+                      letterSpacing: '0.3px',
+                      color: RC_COLORS.textMutedOnLight,
                     }}
                   >
                     Dear {name},
                   </Text>
                   <Text
-                    className="mobile_max-w-full text-rc-text m-0"
+                    className="mobile_max-w-full m-0"
                     style={{
                       fontFamily: FONTS.body,
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: "0.3px",
+                      letterSpacing: '0.3px',
+                      color: RC_COLORS.textMutedOnLight,
                       maxWidth: 480,
                     }}
                   >
-                    Following your recent selections from our catalogue, there
-                    are some variations to the original quotation for{" "}
-                    <span className="text-rc-white" style={{ fontWeight: 450 }}>
+                    Following your recent selections from our catalogue, there are some variations to the original quotation for{' '}
+                    <span style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}>
                       {project}
                     </span>
                     . Please review the updated breakdown below.
                   </Text>
                 </Column>
               </Row>
-            </Section>
+            </EmailSectionLight>
 
             {/* ── Variation Comparison Card ── */}
-            <Section
-              className="mobile_px-4"
-              style={{ padding: "0 1.5rem 2.5rem" }}
-            >
+            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
               <Row>
                 <Column
-                  className="bg-rc-card rounded-md overflow-hidden"
-                  style={{ border: "1px solid #1B2D45" }}
+                  className="rounded-md overflow-hidden"
+                  style={{ border: '1px solid #E2E8F0' }}
                 >
                   {/* Card Header */}
                   <Row>
-                    <Column className="bg-rc-gold py-3.5 px-6">
-                      <Text
-                        className="text-rc-container m-0 uppercase text-[13px] leading-none tracking-[0.6px]"
-                        style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}
-                      >
-                        Variation Summary
-                      </Text>
+                    <Column style={{ backgroundColor: RC_COLORS.gold }}>
+                      <Section className="py-3.5 px-6">
+                        <Text
+                          className="m-0 uppercase"
+                          style={{
+                            fontFamily: FONTS.condensed,
+                            fontWeight: 500,
+                            fontSize: 13,
+                            lineHeight: 1,
+                            letterSpacing: '0.6px',
+                            color: '#FFFFFF',
+                          }}
+                        >
+                          Variation Summary
+                        </Text>
+                      </Section>
                     </Column>
                   </Row>
 
                   {/* Row 1 — Original Quote */}
-                  <Row className="border-b border-rc-border">
+                  <Row style={{ borderBottom: '1px solid #E2E8F0' }}>
                     <Column className="py-5 px-6">
                       <Row>
                         <Column
                           className="mobile_amount_stack"
-                          style={{ width: "50%", verticalAlign: "middle" }}
+                          style={{ width: '50%', verticalAlign: 'middle' }}
                         >
                           <Text
-                            className="text-rc-label m-0 uppercase text-xs leading-relaxed tracking-[0.3px]"
-                            style={{ fontFamily: FONTS.body, fontWeight: 300 }}
+                            className="m-0 uppercase"
+                            style={{
+                              fontFamily: FONTS.body,
+                              fontWeight: 500,
+                              fontSize: 10,
+                              letterSpacing: '0.8px',
+                              color: RC_COLORS.textMutedOnLight,
+                            }}
                           >
                             Original Quote
                           </Text>
                         </Column>
-                        <Column className="mobile_amount_stack text-right">
+                        <Column className="mobile_amount_stack" style={{ textAlign: 'right' }}>
                           <Text
                             className="m-0"
                             style={{
@@ -191,9 +205,9 @@ export default function VariationQuoteEmail({
                               fontWeight: 500,
                               fontSize: 18,
                               lineHeight: 1.2,
-                              color: "#B0BFCF",
-                              textDecoration: "line-through",
-                              textDecorationColor: "#6B7F9E",
+                              color: RC_COLORS.dimmed, // Lighter slate for crossed out
+                              textDecoration: 'line-through',
+                              textDecorationColor: RC_COLORS.dimmed,
                             }}
                           >
                             {originalAmount}
@@ -204,32 +218,26 @@ export default function VariationQuoteEmail({
                   </Row>
 
                   {/* Row 2 — Variation Amount */}
-                  <Row className="border-b border-rc-border bg-rc-cardAlt">
+                  <Row style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: '#FDF6E3' }}> {/* Soft gold tint */}
                     <Column className="py-5 px-6">
                       <Row>
                         <Column
                           className="mobile_amount_stack"
-                          style={{ width: "50%", verticalAlign: "middle" }}
+                          style={{ width: '50%', verticalAlign: 'middle' }}
                         >
                           <Row>
-                            <Column
-                              className="pr-2"
-                              style={{ width: 20, verticalAlign: "middle" }}
-                            >
-                              <Img
-                                alt=""
-                                height={16}
-                                src={ICONS.trend}
-                                width={16}
-                                className="block outline-none border-none"
-                              />
+                            <Column className="pr-2" style={{ width: 20, verticalAlign: 'middle' }}>
+                              <Img alt="" height={16} src={ICONS.trend} width={16} className="block outline-none border-none" />
                             </Column>
-                            <Column style={{ verticalAlign: "middle" }}>
+                            <Column style={{ verticalAlign: 'middle' }}>
                               <Text
-                                className="text-rc-gold m-0 uppercase text-xs leading-relaxed tracking-[0.3px]"
+                                className="m-0 uppercase"
                                 style={{
                                   fontFamily: FONTS.body,
-                                  fontWeight: 300,
+                                  fontWeight: 500,
+                                  fontSize: 10,
+                                  letterSpacing: '0.8px',
+                                  color: RC_COLORS.gold,
                                 }}
                               >
                                 Variation
@@ -237,7 +245,7 @@ export default function VariationQuoteEmail({
                             </Column>
                           </Row>
                         </Column>
-                        <Column className="mobile_amount_stack text-right">
+                        <Column className="mobile_amount_stack" style={{ textAlign: 'right' }}>
                           <Text
                             className="m-0"
                             style={{
@@ -245,7 +253,7 @@ export default function VariationQuoteEmail({
                               fontWeight: 500,
                               fontSize: 20,
                               lineHeight: 1.2,
-                              color: "#C6923A",
+                              color: RC_COLORS.gold,
                             }}
                           >
                             + {variationAmount}
@@ -261,16 +269,22 @@ export default function VariationQuoteEmail({
                       <Row>
                         <Column
                           className="mobile_amount_stack"
-                          style={{ width: "50%", verticalAlign: "middle" }}
+                          style={{ width: '50%', verticalAlign: 'middle' }}
                         >
                           <Text
-                            className="text-rc-white m-0 uppercase text-[13px] leading-relaxed tracking-[0.3px]"
-                            style={{ fontFamily: FONTS.body, fontWeight: 450 }}
+                            className="m-0 uppercase"
+                            style={{
+                              fontFamily: FONTS.body,
+                              fontWeight: 600,
+                              fontSize: 13,
+                              letterSpacing: '0.3px',
+                              color: RC_COLORS.textOnLight,
+                            }}
                           >
                             Revised Total
                           </Text>
                         </Column>
-                        <Column className="mobile_amount_stack text-right">
+                        <Column className="mobile_amount_stack" style={{ textAlign: 'right' }}>
                           <Text
                             className="m-0"
                             style={{
@@ -278,7 +292,7 @@ export default function VariationQuoteEmail({
                               fontWeight: 500,
                               fontSize: 28,
                               lineHeight: 1,
-                              color: "#FFFFFF",
+                              color: RC_COLORS.textOnLight,
                             }}
                           >
                             {revisedAmount}
@@ -289,113 +303,109 @@ export default function VariationQuoteEmail({
                   </Row>
                 </Column>
               </Row>
-            </Section>
+            </EmailSectionWhite>
 
             {/* ── What Changed Notice ── */}
-            <Section
-              className="mobile_px-4"
-              style={{ padding: "0 1.5rem 3rem" }}
-            >
-              <Row>
-                <Column className="bg-rc-card rounded border-l-[3px] border-l-rc-gold">
-                  <Section className="py-4 px-5">
-                    <Row>
-                      <Column>
-                        <Text
-                          className="text-rc-text m-0 text-[13px] leading-relaxed tracking-[0.2px]"
-                          style={{ fontFamily: FONTS.body, fontWeight: 400 }}
-                        >
-                          This variation reflects your recent material and
-                          finish selections. As always, we&apos;re happy to{" "}
-                          <span
-                            className="text-rc-gold"
-                            style={{ fontWeight: 450 }}
-                          >
-                            walk you through
-                          </span>{" "}
-                          any changes in detail.
-                        </Text>
-                      </Column>
-                    </Row>
-                  </Section>
-                </Column>
-              </Row>
-            </Section>
+            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+              <Section
+                style={{
+                  backgroundColor: RC_COLORS.white,
+                  borderLeft: `3px solid ${RC_COLORS.gold}`,
+                  padding: '1rem 1.25rem',
+                }}
+              >
+                <Row>
+                  <Column>
+                    <Text
+                      className="m-0"
+                      style={{
+                        fontFamily: FONTS.body,
+                        fontWeight: 400,
+                        fontSize: 13,
+                        lineHeight: 1.65,
+                        color: RC_COLORS.textMutedOnLight,
+                      }}
+                    >
+                      This variation reflects your recent material and finish selections. As always, we&apos;re happy to{' '}
+                      <span style={{ fontWeight: 600, color: RC_COLORS.gold }}>
+                        walk you through
+                      </span>{' '}
+                      any changes in detail.
+                    </Text>
+                  </Column>
+                </Row>
+              </Section>
+            </EmailSectionLight>
 
             {/* ── Approve CTA ── */}
-            <Section
-              className="mobile_px-4"
-              style={{ padding: "0 1.5rem 2.5rem" }}
-            >
-              <Row>
-                <Column className="text-center">
-                  <Button
-                    href={approveUrl}
-                    target="_blank"
-                    className="bg-rc-gold text-rc-container no-underline uppercase tracking-[1px]"
-                    style={{
-                      fontFamily: FONTS.condensed,
-                      fontWeight: 500,
-                      fontSize: 15,
-                      lineHeight: 1,
-                      padding: "1rem 3rem",
-                      borderRadius: 4,
-                    }}
-                  >
-                    Approve Variation
-                  </Button>
-                </Column>
-              </Row>
-            </Section>
+            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
+              <Section style={{ textAlign: 'center' }}>
+                <EmailCtaButton href={approveUrl} label="Approve Variation" align="center" />
+              </Section>
+            </EmailSectionWhite>
 
             {/* ── Signed Copy Notice ── */}
-            <Section
-              className="mobile_px-4"
-              style={{ padding: "0 1.5rem 3rem" }}
-            >
+            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
               <Row>
                 <Column className="text-center">
                   <Text
-                    className="text-rc-label m-0 text-xs leading-relaxed tracking-[0.3px]"
-                    style={{ fontFamily: FONTS.body, fontWeight: 300 }}
+                    className="m-0"
+                    style={{
+                      fontFamily: FONTS.body,
+                      fontWeight: 350,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      letterSpacing: '0.3px',
+                      color: RC_COLORS.textMutedOnLight,
+                    }}
                   >
-                    A signed copy of the updated quotation is required to
-                    proceed with your project.
+                    A signed copy of the updated quotation is required to proceed with your project.
                   </Text>
                 </Column>
               </Row>
-            </Section>
+            </EmailSectionLight>
 
             {/* ── Sign-off ── */}
-            <Section
-              className="mobile_px-4"
-              style={{ padding: "0 1.5rem 3rem" }}
-            >
-              <Row>
-                <Column className="border-t border-rc-border pt-8">
-                  <Text
-                    className="text-rc-white m-0 mb-1 text-sm leading-relaxed"
-                    style={{ fontFamily: FONTS.body, fontWeight: 400 }}
-                  >
-                    Kind regards,
-                  </Text>
-                  <Text
-                    className="text-rc-gold m-0 mb-0.5 text-base leading-relaxed"
-                    style={{ fontFamily: FONTS.condensed, fontWeight: 500 }}
-                  >
-                    Gurpinder Uppal
-                  </Text>
-                  <Text
-                    className="text-rc-text m-0 text-[13px] leading-relaxed"
-                    style={{ fontFamily: FONTS.body, fontWeight: 300 }}
-                  >
-                    Royal Constructions Pty Ltd
-                  </Text>
-                </Column>
-              </Row>
-            </Section>
+            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
+                <Row>
+                  <Column>
+                    <Text
+                      className="m-0 mb-5"
+                      style={{
+                        fontFamily: FONTS.body,
+                        fontWeight: 350,
+                        fontSize: 14,
+                        lineHeight: 1.65,
+                        color: RC_COLORS.textMutedOnLight,
+                      }}
+                    >
+                      We look forward to your approval to proceed.
+                    </Text>
+                    <Text className="m-0 mb-1" style={{ fontSize: 14, color: RC_COLORS.textOnLight }}>
+                      Kind regards,
+                    </Text>
+                    <Text
+                      className="m-0"
+                      style={{
+                        fontFamily: FONTS.condensed,
+                        fontSize: 16,
+                        color: RC_COLORS.gold,
+                      }}
+                    >
+                      Gurpinder Uppal
+                    </Text>
+                    <Text
+                      className="m-0"
+                      style={{ fontSize: 13, color: RC_COLORS.textMutedOnLight }}
+                    >
+                      Royal Constructions Pty Ltd
+                    </Text>
+                  </Column>
+                </Row>
+              </Section>
+            </EmailSectionLight>
 
-            {/* ── Footer ── */}
             <EmailFooter />
           </Container>
         </Body>
