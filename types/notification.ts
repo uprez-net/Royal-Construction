@@ -23,19 +23,19 @@ export const notificationTemplates: NotificationTemplateFactory = {
   leadCreated: (data) => ({
     title: `New Lead: LED-#${data.leadId} - ${data.customerName}`,
     message: `Lead created for build type ${data.leadType} in ${data.location}`,
-    url: `/leads?query=${data.customerName}`,
+    url: `/leads?query=${encodeURIComponent(data.customerName)}`,
   }),
 
   leadUpdated: (data) => ({
     title: `Lead Updated: LED-#${data.leadId} - ${data.customerName}`,
     message: `${data.customerName}'s lead moved to ${data.status}`,
-    url: `/leads?status=${data.status}`,
+    url: `/leads?status=${encodeURIComponent(data.status)}`,
   }),
 
   leadAssigned: (data) => ({
     title: `Lead Assigned: LED-#${data.leadId} - ${data.customerName}`,
     message: `${data.customerName}'s lead assigned to ${data.assignedTo}`,
-    url: `/leads?query=${data.customerName}`,
+    url: `/leads?query=${encodeURIComponent(data.customerName)}`,
   }),
 
   projectCreated: (data) => ({

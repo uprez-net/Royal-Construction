@@ -106,7 +106,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
             <div className="flex items-center gap-3">
               <Inbox className="size-7 text-teal-300" />
               <div>
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
                   <p className="font-semibold">Notifications</p>
                   {unreadCount > 0 && (
                     <Badge
@@ -117,7 +117,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 mt-1">
                   Operational updates and reminders
                 </p>
               </div>
