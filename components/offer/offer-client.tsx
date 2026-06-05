@@ -35,7 +35,7 @@ export function OfferClient({
         </div>
 
         <div className="flex min-h-0 min-w-0 overflow-hidden bg-slate-50/30 lg:col-span-8">
-          <OfferFileCanvas files={files} />
+          <OfferFileCanvas files={files} leadId={leadId} />
         </div>
       </div>
     </ChatProvider>

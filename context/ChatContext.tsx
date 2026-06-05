@@ -18,11 +18,17 @@ interface ChatContextValue {
 
 export interface LineItem {
   id: string;
+  description: string;
   item: string;
   unitPrice: number;
   quantity: number;
   unit: string;
   totalPrice: number;
+  gstRate: number;
+  gstIncluded: boolean;
+  source?: string;
+  netLine: number;
+  gstAmount: number;
 }
 
 export interface OfferFile {
@@ -144,7 +150,15 @@ export const ChatProvider = ({
 
   return (
     <ChatContext.Provider
-      value={{ messages, status, sendMessage, setMessages, error, lineItems, offerFile }}
+      value={{
+        messages,
+        status,
+        sendMessage,
+        setMessages,
+        error,
+        lineItems,
+        offerFile,
+      }}
     >
       {children}
     </ChatContext.Provider>

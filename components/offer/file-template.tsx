@@ -1,12 +1,17 @@
 import { OfferFile } from "@/context/ChatContext";
 
+interface OfferFileTemplateProps extends OfferFile {
+  ref?: React.Ref<HTMLIFrameElement>;
+}
+
 export function OfferFileTemplate({
   projectDescription,
   paymentTerms,
   termsAndConditions,
   serviceInclusions = [],
   serviceExclusions = [],
-}: OfferFile) {
+  ref,
+}: OfferFileTemplateProps) {
   const html = `
 <!DOCTYPE html>
 <html>
@@ -270,6 +275,7 @@ export function OfferFileTemplate({
 
   return (
     <iframe
+      ref={ref}
       title="Offer Preview"
       srcDoc={html}
       className="block h-full min-h-0 w-[50vw] rounded-2xl border border-slate-200/60 bg-white shadow-sm"

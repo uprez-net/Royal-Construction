@@ -1,6 +1,6 @@
 "use server";
 import { Prisma } from "@prisma/client";
-import { cacheTag, cacheLife } from "next/cache";
+import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { PaginatedQuotesResult, QuoteKPIs, QuoteWithItems } from "@/types/quote";
@@ -313,4 +313,69 @@ export const getQuoteKPIsCached = async () => {
     cacheLife(CACHE_PROFILES.MEDIUM);
 
     return getQuoteKPIs();
+}
+
+interface CreateQuoteInput {
+    leadId: number;
+    amount: string;
+    gstAmount: string;
+    totalAmount: string;
+    quoteItems: {
+        item: string;
+        description: string;
+        quantity: number;
+        unitPrice: string;
+        totalPrice: string;
+        unit: string;
+    }[];
+}
+
+export const createQuote = async ({
+    leadId,
+    amount,
+    gstAmount,
+    totalAmount,
+    quoteItems
+}: CreateQuoteInput) => {
+    try {
+        const newQuote = await prisma.quote.create({
+            data: {
+                leadId,
+                amount: new Prisma.Decimal(amount),
+                gstAmount: new Prisma.Decimal(gstAmount),
+                totalAmount: new Prisma.Decimal(totalAmount),
+                quoteItems: {
+                    create: quoteItems.map(item => ({
+                        item: item.item,
+                        description: item.description,
+                        quantity: item.quantity,
+                        unitPrice: new Prisma.Decimal(item.unitPrice),
+                        totalPrice: new Prisma.Decimal(item.totalPrice),
+                        unit: item.unit,
+                    })),
+                },
+            },
+            include: {
+                quoteItems: true,
+            },
+        });
+
+        revalidateTag("quotes", CACHE_PROFILES.MEDIUM);
+        revalidateTag(`quote-${newQuote.id}`, CACHE_PROFILES.MEDIUM);
+
+        return {
+            ...newQuote,
+            amount: newQuote.amount.toString(),
+            gstAmount: newQuote.gstAmount.toString(),
+            totalAmount: newQuote.totalAmount.toString(),
+            items: newQuote.quoteItems.map(item => ({
+                ...item,
+                unitPrice: item.unitPrice.toString(),
+                totalPrice: item.totalPrice.toString(),
+            })) ?? [],
+        };
+    } catch (error) {
+        console.error("Error creating quote:", error);
+        throw new Error("Failed to create quote");
+    }
 }

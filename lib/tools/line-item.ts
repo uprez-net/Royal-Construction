@@ -9,6 +9,7 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
         inputSchema: z.object({
             id: z.string().describe("Unique identifier for the line item, used for updates"),
             item: z.string().describe("Description of the line item"),
+            description: z.string().describe("Detailed description of the line item"),
             unitPrice: z.number().describe("Unit price for the line item (numeric, as a decimal number)"),
             quantity: z.number().describe("Quantity for the line item"),
             unit: z.string().describe("Unit of measurement for the line item (e.g., 'each', 'lump sum', 'sqft', 'sqm')"),
@@ -40,6 +41,7 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
                 data: {
                     id: params.id,
                     item: params.item,
+                    description: params.description,
                     unitPrice: params.unitPrice,
                     quantity: params.quantity,
                     unit: params.unit,
@@ -58,6 +60,7 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
                 data: {
                     id: params.id,
                     item: params.item,
+                    description: params.description,
                     unitPrice: params.unitPrice,
                     quantity: params.quantity,
                     unit: params.unit,
@@ -65,6 +68,8 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
                     gstAmount,
                     totalPrice,
                     source: params.source,
+                    gstRate: params.gstRate,
+                    gstIncluded: !!params.gstIncluded,
                 },
             };
         },
