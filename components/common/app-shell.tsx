@@ -3,9 +3,9 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Bell, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
-import { navigationItems, tickerItems } from "@/lib/mock-data";
+import { navigationItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,9 @@ import { useAppSelector } from "@/lib/store/hooks";
 import { isUUID } from "@/utils/parser";
 import { getScreenTitle } from "@/utils/uiHelper";
 import Image from "next/image";
+import { Notifications } from "./notifications";
+import { NotificationProvider } from "@/context/NotificationContext";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function AppShell({
   isSignedIn,
@@ -34,7 +37,6 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [time, setTime] = useState("");
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
   const pathName = usePathname();
@@ -261,38 +263,11 @@ export function AppShell({
                   </div>
                   <div>AEST</div>
                 </div>
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative size-10 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
-                    onClick={() => setNotificationsOpen((value) => !value)}
-                    aria-label="Notifications"
-                  >
-                    <Bell className="size-4" />
-                    <span className="absolute right-1 top-1 size-2 rounded-full bg-orange-500" />
-                  </Button>
-                  {notificationsOpen ? (
-                    <div className="absolute right-0 top-[calc(100%+0.75rem)] w-80 overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-                      <div className="border-b border-border px-4 py-3">
-                        <p className="font-semibold">Notifications</p>
-                        <p className="text-xs text-muted-foreground">
-                          Operational updates and reminders
-                        </p>
-                      </div>
-                      <div className="space-y-1 p-2">
-                        {tickerItems.map((item) => (
-                          <div
-                            key={item}
-                            className="rounded-md px-3 py-2 text-sm hover:bg-muted/60"
-                          >
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
+                <NotificationProvider>
+                  <TooltipProvider>
+                    <Notifications />
+                  </TooltipProvider>
+                </NotificationProvider>
                 <div className="hidden md:block">
                   {!isSignedIn ? (
                     <div className="flex items-center gap-2">
