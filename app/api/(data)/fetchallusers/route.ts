@@ -13,7 +13,6 @@ export async function GET() {
                   }
             });
 
-            console.log("Total Users", Users.length);
             return new Response(JSON.stringify({ users: Users }), {
                   status: 200,
             });

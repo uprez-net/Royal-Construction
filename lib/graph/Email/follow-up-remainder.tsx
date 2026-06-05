@@ -12,7 +12,6 @@ import {
 } from '@react-email/components';
 import {
   FONTS,
-  RC_URLS,
   RC_COLORS,
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
