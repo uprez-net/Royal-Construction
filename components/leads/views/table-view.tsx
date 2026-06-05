@@ -27,7 +27,6 @@ import {
 } from "@/lib/leads/leads-service";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { ReactEmailIframe } from "../render-email";
-import { set } from "zod";
 
 interface TableViewProps {
   loading: boolean;

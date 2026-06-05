@@ -33,8 +33,7 @@ import {
   fetchLeads,
   fetchAllLeads,
   fetchLeadsStats,
-  sendEmailToLead,
-  updateLead,
+  sendEmailToLead
 } from "@/lib/leads/leads-service";
 import TableView from "./views/table-view";
 import FollowupsView from "./views/followups-view";
