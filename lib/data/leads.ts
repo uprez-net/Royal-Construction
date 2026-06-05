@@ -268,8 +268,8 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       })),
     };
   }
-  console.log('checking the Input Data', input);
-  console.log('222Updating lead with data:', updateData);
+  // console.log('checking the Input Data', input);
+  // console.log('222Updating lead with data:', updateData);
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,

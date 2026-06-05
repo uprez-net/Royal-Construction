@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { EmailTemplate, Lead } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
-import { sendEmailToLead } from "@/lib/leads/leads-service";
+import { sendEmailToLead, updateLead } from "@/lib/leads/leads-service";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { ReactEmailIframe } from "../render-email";
 
@@ -437,7 +437,9 @@ function FollowupItem({
           ...emailLead,
           history: [...emailLead.history, historyEntry],
         };
-        onLeadUpdate(updatedLead);
+        const updated = await updateLead(emailLead.id, updatedLead);
+        if (!updated) return;
+        onLeadUpdate(updated);
       } else {
         showToast(`Failed to send email to ${emailLead.name}`, "info");
       }
