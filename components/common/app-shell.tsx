@@ -22,6 +22,7 @@ import Image from "next/image";
 import { Notifications } from "./notifications";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export function AppShell({
   isSignedIn,
@@ -36,6 +37,7 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const [queryClient] = useState(() => new QueryClient());
   const [time, setTime] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
@@ -263,11 +265,13 @@ export function AppShell({
                   </div>
                   <div>AEST</div>
                 </div>
-                <NotificationProvider>
-                  <TooltipProvider>
-                    <Notifications />
-                  </TooltipProvider>
-                </NotificationProvider>
+                <QueryClientProvider client={queryClient}>
+                  <NotificationProvider>
+                    <TooltipProvider>
+                      <Notifications />
+                    </TooltipProvider>
+                  </NotificationProvider>
+                </QueryClientProvider>
                 <div className="hidden md:block">
                   {!isSignedIn ? (
                     <div className="flex items-center gap-2">

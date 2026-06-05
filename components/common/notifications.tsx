@@ -18,8 +18,10 @@ import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { ScrollArea } from "../ui/scroll-area";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Skeleton } from "../ui/skeleton";
+import type { Notification } from "@novu/js";
 
 type InboxTab = "all" | "unread";
+type NotificationItemExtended = Notification & { payload?: string };
 
 function UnreadDot({ isUnread }: { isUnread: boolean }) {
   return (
@@ -325,7 +327,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
                             </p>
                           )}
 
-                          {(url || (n as any)?.payload) && (
+                          {(url || (n as NotificationItemExtended)?.payload) && (
                             <div className="mt-3 flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2 text-xs text-slate-400">
                                 {!n.isRead ? (

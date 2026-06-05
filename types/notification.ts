@@ -7,7 +7,7 @@ export type NotificationDataMap = {
   [K in NotificationType]: z.infer<(typeof notificationSchemas)[K]>;
 };
 
-type NotificationTemplate<T extends NotificationType> = {
+type NotificationTemplate = {
   title: string;
   message: string;
   url: string;
@@ -16,7 +16,7 @@ type NotificationTemplate<T extends NotificationType> = {
 type NotificationTemplateFactory = {
   [K in NotificationType]: (
     data: NotificationDataMap[K]
-  ) => NotificationTemplate<K>;
+  ) => NotificationTemplate;
 };
 
 export const notificationTemplates: NotificationTemplateFactory = {
