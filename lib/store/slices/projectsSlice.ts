@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 import type { RootState } from "@/lib/store";
-import type { ProjectDetailTabKey } from "@/types/ui";
+
 import {
   MilestoneWithFilesTradiesUpdates,
   SafeMaterial,
@@ -19,7 +19,7 @@ import {
 import type { File as ProjectFiles } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
 import type { CreateScheduleRequest } from "./tradiesSlice";
-import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData } from "@/utils/validators";
+import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey } from "@/utils/validators";
 
 type MutationKey = "createProject" | "createVariation" | "addUpdate" | "addMaterial" | "createTradieSchedule" | "addMilestone" | "updateMilestone" | "addMilestonePhotos";
 

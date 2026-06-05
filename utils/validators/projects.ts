@@ -10,7 +10,6 @@ import {
   paginationSchema,
   sortOrderSchema,
 } from "./common";
-
 /**
  * Project-related validators
  * Covers project CRUD, filtering, and queries
@@ -391,3 +390,20 @@ export const milestoneParamSchema = projectParamSchema.extend({
 });
 
 export type MilestoneParam = z.infer<typeof milestoneParamSchema>;
+
+
+export const projectTabsValidator = z.enum([
+     "overview",
+   "milestones",
+   "materials",
+   "payments",
+   "updates",
+   "tradies",
+   "workers",
+   "docs",
+   "history",
+   "communications",
+   "variations"
+]);
+
+export type ProjectDetailTabKey = z.infer<typeof projectTabsValidator>;

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProjectDetailTabKey } from "@/types/ui";
+
 import { cn } from "@/lib/utils";
 import {
   LayoutGrid,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
 import { useMemo } from "react";
+import { ProjectDetailTabKey } from "@/utils/validators/projects";
 
 const TabIcons: Record<ProjectDetailTabKey, React.ElementType> = {
   overview: LayoutGrid,

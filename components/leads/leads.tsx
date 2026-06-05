@@ -33,7 +33,7 @@ import {
   fetchLeads,
   fetchAllLeads,
   fetchLeadsStats,
-  sendEmailToLead
+  sendEmailToLead,
 } from "@/lib/leads/leads-service";
 import TableView from "./views/table-view";
 import FollowupsView from "./views/followups-view";
@@ -48,6 +48,8 @@ import { LeadPagination } from "./lead-pagination";
 import { useDebounce } from "@/hooks/use-debounce";
 import { LeadAnalyticsData } from "@/types/lead";
 import { ReactEmailIframe } from "./render-email";
+import { useSearchParams } from "next/navigation";
+import { leadStatusSchema } from "@/utils/validators/lead";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -191,6 +193,9 @@ function ModalShell({
 }
 
 export default function Leads() {
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("query");
+  const initialStatus = searchParams.get("status");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("table");
@@ -283,13 +288,21 @@ export default function Leads() {
     [],
   );
 
-  const loadData = async () => {
+  const loadData = async ({
+    query,
+    status,
+  }: {
+    query?: string;
+    status?: string;
+  }) => {
     try {
       setLoading(true);
       const [leadsData, statsData, analyticsData] = await Promise.all([
         fetchLeads({
           page: 1,
           limit: 10,
+          q: query?.trim() ? query.trim() : undefined,
+          status: status ? (status.split(",") as LeadStage[]) : undefined,
         }),
         fetchLeadsStats(),
         fetchLeadAnalyticsData(),
@@ -322,6 +335,7 @@ export default function Leads() {
           page: 1,
           limit: 10,
           query,
+          status: activeMetric === "total" ? "total" : (activeMetric ?? undefined),
         });
       });
     } else if (query.length === 0) {
@@ -329,6 +343,8 @@ export default function Leads() {
         refreshLeadsData({
           page: 1,
           limit: 10,
+          status:
+            activeMetric === "total" ? "total" : (activeMetric ?? undefined),
         });
       });
     }
@@ -336,9 +352,41 @@ export default function Leads() {
 
   useEffect(() => {
     void Promise.resolve().then(() => {
-      loadData();
+      if (initialQuery || initialStatus) {
+        console.log("Initial query/status from URL:", {
+          initialQuery,
+          initialStatus,
+        });
+        const decodedQuery = initialQuery
+          ? decodeURIComponent(initialQuery)
+          : null;
+        const decodedStatus = initialStatus
+          ? decodeURIComponent(initialStatus)
+          : null;
+        const validatedStatus = leadStatusSchema.safeParse(decodedStatus);
+        if (validatedStatus.success) {
+          void Promise.resolve().then(() => {
+            setActiveMetric(validatedStatus.data);
+            loadData({
+              status: validatedStatus.data,
+            });
+          });
+        }
+        if (decodedQuery && decodedQuery.trim().length > 0) {
+          void Promise.resolve().then(() => {
+            setSearchTerm(decodedQuery);
+            loadData({
+              query: decodedQuery.trim(),
+            });
+          });
+        }
+      } else {
+        void Promise.resolve().then(() => {
+          loadData({});
+        });
+      }
     });
-  }, []);
+  }, [initialQuery, initialStatus]);
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -421,17 +469,21 @@ export default function Leads() {
     });
   };
 
-  const handlePageChange = useCallback(async (page: number) => {
-    await refreshLeadsData({
-      page,
-      limit: pageInfo.limit,
-      query: searchTerm,
-      status:  activeMetric === "total" ? "total" : (activeMetric ?? undefined),
-    });
-  }, [refreshLeadsData, activeMetric, pageInfo.limit, searchTerm]);
+  const handlePageChange = useCallback(
+    async (page: number) => {
+      await refreshLeadsData({
+        page,
+        limit: pageInfo.limit,
+        query: searchTerm,
+        status:
+          activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+      });
+    },
+    [refreshLeadsData, activeMetric, pageInfo.limit, searchTerm],
+  );
 
   const reloadCurrentData = () => {
-    loadData();
+    loadData({});
   };
 
   const handleNewLead = (newLead: Lead) => {
@@ -450,10 +502,19 @@ export default function Leads() {
     }, 4000);
   };
 
-  const openEmailTemplates = async() => {
+  const openEmailTemplates = async () => {
     const allLeads = await fetchAllLeads();
-    setEmailTargets(allLeads.filter(lead => lead.email).map(lead => lead.email) as string[]);
-    setEmailTargetList(allLeads.filter(lead => lead.email).map(lead => lead.email).join(", "));
+    setEmailTargets(
+      allLeads
+        .filter((lead) => lead.email)
+        .map((lead) => lead.email) as string[],
+    );
+    setEmailTargetList(
+      allLeads
+        .filter((lead) => lead.email)
+        .map((lead) => lead.email)
+        .join(", "),
+    );
     setShowEmailTemplates(true);
     setSelectedTemplate(null);
     setEmailSubject("");
