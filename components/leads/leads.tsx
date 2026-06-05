@@ -211,6 +211,10 @@ export default function Leads() {
   const [toasts, setToasts] = useState<
     { id: number; message: string; type: "success" | "info" }[]
   >([]);
+
+  const [emailTargets, setEmailTargets] = useState<string[]>([]);
+  const [emailTargetList, setEmailTargetList] = useState<string>("");
+
   const [pageInfo, setPageInfo] = useState({
     page: 1,
     limit: 10,
@@ -446,7 +450,10 @@ export default function Leads() {
     }, 4000);
   };
 
-  const openEmailTemplates = () => {
+  const openEmailTemplates = async() => {
+    const allLeads = await fetchAllLeads();
+    setEmailTargets(allLeads.filter(lead => lead.email).map(lead => lead.email) as string[]);
+    setEmailTargetList(allLeads.filter(lead => lead.email).map(lead => lead.email).join(", "));
     setShowEmailTemplates(true);
     setSelectedTemplate(null);
     setEmailSubject("");
@@ -607,11 +614,11 @@ export default function Leads() {
     stats && stats.total > 0
       ? ((stats.conversion / stats.total) * 100).toFixed(1)
       : "0.0";
-  const emailTargets = leads.filter((lead) => lead.email);
-  const emailTargetList = emailTargets
-    .map((lead) => lead.email)
-    .filter(Boolean)
-    .join(", ");
+  // const emailTargets = leads.filter((lead) => lead.email);
+  // const emailTargetList = emailTargets
+  //   .map((lead) => lead.email)
+  //   .filter(Boolean)
+  //   .join(", ");
 
   // Update your filteredLeads to respect the activeMetric (as shown in previous answer)
   // const filteredLeads = useMemo(() => {
@@ -985,7 +992,7 @@ export default function Leads() {
               <div className="mt-0">
                 <ReactEmailIframe
                   category={selectedTemplate.category}
-                  lead={emailTargets[0] ?? null}
+                  lead={leads[0] ?? null}
                 />
               </div>
             ) : (
