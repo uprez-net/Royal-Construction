@@ -36,7 +36,7 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
       break;
         case 'Welcome':
       {
-        let bookingUrl = 'https://royalconstructions.com.au/book-consultation/';
+        let bookingUrl = 'https://royal-construction-chi.vercel.app/book-consultation';
         if (lead?.email) {
           const params = new URLSearchParams({
             name: lead.name ?? name,

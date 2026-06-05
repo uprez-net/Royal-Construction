@@ -298,6 +298,10 @@ export default function TableView({
     { id: string; name: string }[]
   >([]);
 
+  const [loadingDelete, setLoadingDelete] = useState(false);
+  const [updateAssignedPerson, setUpdateAssignedPerson] = useState(false);
+  const [updateFollowup, setUpdateFollowup] = useState(false);
+
   const [historyDraft, setHistoryDraft] = useState<{
     action: string;
     detail: string;
@@ -427,8 +431,8 @@ export default function TableView({
 
   const handleDetailUpdate = async () => {
     if (!detailLead || !detailForm) return;
-    if (detailForm.stage === "Lost" && !detailForm.lostReason.trim()) {
-      showToast("Please provide a reason for the lost lead.", "info");
+    if ((detailForm.stage === "Lost" || detailForm.stage === "Cancelled" || detailForm.stage === "Disqualified") && !detailForm.lostReason.trim()) {
+      showToast(`Please provide a reason for the ${detailForm.stage} lead.`, "info");
       return;
     }
     setIsUpdating(true);
@@ -451,7 +455,7 @@ export default function TableView({
       followupDate: detailForm.followupDate,
       followupTime: detailForm.followupTime,
       urgent: detailForm.urgent,
-      lostReason: detailForm.stage === "Lost" ? detailForm.lostReason : "",
+      lostReason: (detailForm.stage === "Lost" || detailForm.stage === "Cancelled" || detailForm.stage === "Disqualified") ? detailForm.lostReason : "",
       history: detailForm.historyEntries,
     };
     try {
@@ -472,13 +476,18 @@ export default function TableView({
   const handleDetailDelete = async () => {
     if (!detailLead) return;
     try {
+      setLoadingDelete(true);
       await deleteLead(detailLead.id);
       onLeadDelete(detailLead.id);
       setShowDeleteConfirm(false);
+      setLoadingDelete(false);
       closeDetailModal();
-      showToast("Lead deleted");
+      showToast("Lead deleted Successfully");
     } catch (error) {
       console.error("Failed to delete lead", error);
+      showToast("Failed to delete lead", "info");
+    } finally {
+      setLoadingDelete(false);
     }
   };
 
@@ -533,36 +542,43 @@ export default function TableView({
 
   const openFollowupModal = (lead: Lead) => {
     setEditFollowupLead(lead);
-    setFollowupDate(lead.followupDate || "");
-    setFollowupTime(lead.followupTime || "");
+    setFollowupDate("");
+    setFollowupTime("");
   };
   const closeFollowupModal = () => setEditFollowupLead(null);
 
   const handleUpdateFollowup = async () => {
     if (!editFollowupLead) return;
     try {
+      setUpdateFollowup(true);
       const updatedLead = await updateLead(editFollowupLead.id, {
         followupDate,
         followupTime,
       });
       if (!updatedLead) return;
       onLeadUpdate(updatedLead);
+      setUpdateFollowup(false);
       showToast(`Updated follow-up for ${updatedLead.name}`, "success");
       closeFollowupModal();
     } catch (error) {
       console.error("Failed to update follow-up", error);
+      setUpdateFollowup(false);
+    }finally {
+      setUpdateFollowup(false);
     }
   };
 
   const openAssignedModal = (lead: Lead) => {
     setEditAssignedLead(lead);
-    setAssignedPerson(lead.assignedId || "");
+    setAssignedPerson("");
+   // setAssignedPerson(lead.assignedId || "");
   };
   const closeAssignedModal = () => setEditAssignedLead(null);
 
   const handleUpdateAssigned = async () => {
     if (!editAssignedLead) return;
     try {
+      setUpdateAssignedPerson(true);
       // ONLY send assignedId to the backend. Do NOT send assignedUser.
       // Prisma will automatically link the relation and return the populated user.
       //console.log('Updating assigned person for lead', editAssignedLead.id, 'to user ID:', assignedPerson);
@@ -581,9 +597,12 @@ export default function TableView({
         `Assigned ${assignedUserName} to ${updatedLead.name}`,
         "success",
       );
+      setUpdateAssignedPerson(false);
       closeAssignedModal();
     } catch (error) {
       console.error("Failed to update assigned", error);
+    } finally {
+      setUpdateAssignedPerson(false);
     }
   };
 
@@ -615,7 +634,6 @@ export default function TableView({
         finalHtmlBody,
       );
       if (sendCampaign) {
-        showToast(`Email sent to ${emailLead.name} Successfully`, "success");
         const now = new Date();
         const historyEntry: Lead["history"][number] = {
           date: now.toISOString().slice(0, 10),
@@ -628,7 +646,10 @@ export default function TableView({
           ...emailLead,
           history: [...emailLead.history, historyEntry],
         };
-        onLeadUpdate(updatedLead);
+        const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
+        if (!updatedLeadData) return;
+        onLeadUpdate(updatedLeadData);
+        showToast(`Email sent to ${emailLead.name} Successfully`, "success");
       } else {
         showToast(`Failed to send email to ${emailLead.name}`, "info");
       }
@@ -906,9 +927,9 @@ export default function TableView({
                 </span>
               </div>
             )}
-            {detailForm.stage === "Lost" && (
+            {(detailForm.stage === "Lost" || detailForm.stage === "Cancelled" || detailForm.stage === "Disqualified") && (
               <div className="status-banner status-banner-danger">
-                <span className="status-banner-title">Status: Lost</span>
+                <span className="status-banner-title">Status: {detailForm.stage}</span>
                 <span className="status-banner-text">
                   {detailForm.lostReason
                     ? `Reason: ${detailForm.lostReason}`
@@ -986,9 +1007,9 @@ export default function TableView({
                     setDetailForm((prev) =>
                       prev
                         ? {
-                            ...prev,
-                            sourceDetail: event.target.value as LeadSource,
-                          }
+                          ...prev,
+                          sourceDetail: event.target.value as LeadSource,
+                        }
                         : prev,
                     )
                   }
@@ -1286,10 +1307,10 @@ export default function TableView({
               </div>
             </div>
 
-            {detailForm.stage === "Lost" && (
+            {(detailForm.stage === "Lost" || detailForm.stage === "Cancelled" || detailForm.stage === "Disqualified") && (
               <div className="col-span-1 rounded-[8px] border border-red-200 bg-red-50 p-4 md:col-span-2">
                 <label className="text-sm font-medium text-red-900">
-                  Reason for Lost <span className="text-red-500">*</span>
+                  Reason for {detailForm.stage} <span className="text-red-500">*</span>
                 </label>
                 <input
                   className={`mt-1 w-full rounded-[4px] border ${!detailForm.lostReason.trim() ? "border-red-400 ring-1 ring-red-400/20" : "border-[#d6d3d1]"} bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200`}
@@ -1301,7 +1322,7 @@ export default function TableView({
                 />
                 {!detailForm.lostReason.trim() && (
                   <p className="mt-1.5 text-xs text-red-600 font-medium">
-                    This is required when marking a lead as Lost.
+                    This is required when marking a lead as {detailForm.stage}.
                   </p>
                 )}
               </div>
@@ -1323,7 +1344,7 @@ export default function TableView({
                   "Update Lead"
                 )}
               </button>
-              {["Won", "Lost"].includes(detailLead.stage) && (
+              {(detailForm.stage === "Won" || (detailForm.stage === "Lost" && detailLead.lostReason) || (detailForm.stage === "Cancelled" && detailLead.lostReason) || (detailForm.stage === "Disqualified" && detailLead.lostReason)) && (
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-full border border-[#fecaca] bg-[#fee2e2] px-4 py-2 text-xs font-medium text-[#b91c1c] transition hover:border-[#fca5a5]"
@@ -1361,7 +1382,14 @@ export default function TableView({
               className="inline-flex items-center justify-center rounded-full bg-[#dc2626] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#b91c1c]"
               onClick={handleDetailDelete}
             >
-              Delete
+              {loadingDelete ? (
+                <>
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Deleting Lead...
+                </>
+              ) : (
+                "Delete"
+              )}
             </button>
             <button
               type="button"
@@ -1534,11 +1562,18 @@ export default function TableView({
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className={`inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] ${followupDate ? "" : "opacity-50 cursor-not-allowed"}`}
               onClick={handleUpdateFollowup}
               disabled={!followupDate}
             >
-              Save Follow-up
+              {updateFollowup ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+                  Updating Follow-up ...
+                </>
+              ) : (
+                "Save Follow-up"
+              )}
             </button>
             <button
               type="button"
@@ -1583,11 +1618,19 @@ export default function TableView({
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className={`inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] ${assignedPerson ? "" : "opacity-50 cursor-not-allowed"}`}
               onClick={handleUpdateAssigned}
               disabled={!assignedPerson}
             >
-              Save Assignment
+              {updateAssignedPerson ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+                  Assigning User ...
+                </>
+              ) : (
+                "Save Assignment"
+              )
+              }
             </button>
             <button
               type="button"
