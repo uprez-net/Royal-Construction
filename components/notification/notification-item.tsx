@@ -1,10 +1,9 @@
 import { cn } from "@/lib/utils";
 import type { Notification } from "@novu/js";
 import { formatDistanceToNowStrict } from "date-fns";
-import { UnreadDot } from "./util-components";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
-import { Archive, CheckCheck, ExternalLink } from "lucide-react";
+import { Archive, Bell, CheckCheck, ExternalLink } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 
@@ -39,7 +38,13 @@ export function NotificationItem({
     >
       <div className="flex items-start gap-3">
         <div className="mt-1 grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/5">
-          <UnreadDot isUnread={!n.isRead} />
+          <Bell
+            className={cn(
+              "size-5",
+              n.isRead ? "text-slate-400" : "text-primary",
+              isBusy && "animate-pulse",
+            )}
+          />
         </div>
 
         <div className="min-w-0 flex-1">
