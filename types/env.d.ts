@@ -47,5 +47,9 @@ namespace NodeJS {
 
         // App
         NEXT_PUBLIC_APP_URL: string;
+
+        // Novu
+        NOVU_SECRET_KEY: string;
+        NEXT_PUBLIC_NOVU_APP_IDENTIFIER: string;
     }
 }
