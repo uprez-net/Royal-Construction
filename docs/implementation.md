@@ -1,274 +1,342 @@
 # Current Implementation
 
-This document is a live report of what is implemented today. It is intentionally specific to the repository, including the current architecture, feature surface, integration points, and the parts of the system that still need cleanup.
+This is a live architecture report for the repository as implemented today. It is intentionally specific to the actual files, helpers, and flows in the codebase.
 
 ## Snapshot
 
-The application is a construction management portal built with Next.js App Router, Clerk authentication, Prisma on PostgreSQL, Redux Toolkit, and Vercel Blob. The product is split between live operational surfaces and legacy mock-driven screens. The live paths are centered on projects, tradies, file uploads, Clerk sync, and reminder automation.
+The application is a construction-management portal built with Next.js App Router, Clerk authentication, Prisma, Redux Toolkit, React Query, Novu, and Vercel Blob. The product has a split personality: some modules are fully live and data-backed, while a few legacy surfaces still rely on mock-driven composition.
 
-At the moment the app includes:
+Live surfaces currently center on projects, tradies, leads, quotations, chat-based offer generation, file uploads, Clerk sync, and notification delivery.
 
-- a shared application shell with navigation, breadcrumb, notifications, and account controls
-- Clerk sign-in, sign-up, and profile routes
-- project list, project detail, project mutation, and upload workflows backed by Prisma
-- tradie coordination dashboards, schedule updates, and reminder jobs
-- Clerk webhook synchronization into local user and customer records
-- a route-driven screen registry that still powers several mock module surfaces
-
-## What Is Actually Live
-
-| Area | Current state | Key files |
-| --- | --- | --- |
-| Shell and navigation | Live | [app/(main)/layout.tsx](../app/(main)/layout.tsx), [components/common/app-shell.tsx](../components/common/app-shell.tsx) |
-| Project list and detail | Live and data-backed | [lib/data/projects.ts](../lib/data/projects.ts), [components/projects/project-detail-screen.tsx](../components/projects/project-detail-screen.tsx) |
-| Tradie coordination | Live and data-backed | [lib/data/tradies.ts](../lib/data/tradies.ts), [lib/store/slices/tradiesSlice.ts](../lib/store/slices/tradiesSlice.ts) |
-| Uploads | Live | [app/api/upload/route.ts](../app/api/upload/route.ts), [lib/data/file.ts](../lib/data/file.ts) |
-| Identity sync | Live | [app/api/webhook/clerk/route.ts](../app/api/webhook/clerk/route.ts), [lib/auth.ts](../lib/auth.ts), [lib/data/user.ts](../lib/data/user.ts) |
-| Reminder automation | Live | [app/api/cron/tradie-reminders/route.ts](../app/api/cron/tradie-reminders/route.ts), [lib/jobs/tradie-reminder.ts](../lib/jobs/tradie-reminder.ts) |
-| Legacy module screens | Still mostly mock-driven | [lib/mock-data.tsx](../lib/mock-data.tsx) |
-
-## Routing And Entry Points
-
-The home route in [app/page.tsx](../app/page.tsx) renders the dashboard experience directly and passes the Clerk signed-in state into the dashboard component.
-
-The main route group in [app/(main)/layout.tsx](../app/(main)/layout.tsx) wraps authenticated surfaces in [components/common/app-shell.tsx](../components/common/app-shell.tsx). That shell is responsible for global chrome rather than feature logic.
-
-The app still uses a screen registry in [lib/mock-data.tsx](../lib/mock-data.tsx) to map route slugs to module renderers. That registry is now a mix of legacy mock screens and live implementations. The important consequence is that routing is still centralized even though data sources now vary by screen.
-
-Authentication pages are mounted under:
-
-- [app/sign-in/[[...sign-in]]/page.tsx](../app/sign-in/%5B%5B...sign-in%5D%5D/page.tsx)
-- [app/sign-up/[[...sign-up]]/page.tsx](../app/sign-up/%5B%5B...sign-up%5D%5D/page.tsx)
-- [app/user-profile/page.tsx](../app/user-profile/page.tsx)
-
-## Request And Rendering Model
+## Top-Level Structure
 
 ```mermaid
 flowchart TD
-	A[Browser] --> B[Clerk session]
-	B --> C[proxy.ts middleware]
-	C --> D[App Router page or route handler]
-	D --> E[Server components / lib data helpers]
-	D --> F[Route handlers under app/api]
-	E --> G[Prisma/PostgreSQL]
-	F --> G
-	G --> H[JSON payload or Prisma DTO]
-	H --> I[Redux slice or client component]
-	I --> J[Shared shell and feature UI]
+	Browser --> Clerk
+	Clerk --> RootLayout[app/layout.tsx]
+	RootLayout --> Redux[ReduxProvider]
+	RootLayout --> ModalManager[ModalManager]
+	RootLayout --> AppShell[AppShell]
+	AppShell --> Notifications[NotificationProvider + Novu JS]
+	AppShell --> Pages[App Router pages]
+	Pages --> UI[Feature components]
+	UI --> ReduxSlices[Redux slices]
+	UI --> ReactQuery[React Query where needed]
+	ReduxSlices --> Routes[app/api routes]
+	ReactQuery --> Routes
+	Routes --> LibData[lib/data helpers]
+	LibData --> Prisma[(Prisma / PostgreSQL)]
+	Routes --> Integrations[Clerk / Novu / Blob]
 ```
-
-The server-side model is split into two layers:
-
-1. Pages and layouts render the initial UI, often with server-side auth checks.
-2. Route handlers or `lib/data/*` helpers perform the actual database queries and mutations.
-
-That separation is deliberate. It allows server components to read live data directly while client components can still use route-based mutations and Redux state for interactivity.
 
 ## Frontend Architecture
 
-The top-level shell is implemented in [components/common/app-shell.tsx](../components/common/app-shell.tsx) and mounted by [app/(main)/layout.tsx](../app/(main)/layout.tsx). The shell owns:
+### Application Structure
 
-- global navigation
-- breadcrumbs
-- live clock display
-- notification dropdown
-- Clerk user controls
-- the ambient background and layout framing
+- `app/` owns routing, layouts, and route handlers.
+- `components/` owns rendering, interaction, and feature composition.
+- `lib/data/` owns Prisma queries, write helpers, and server-side DTO mapping.
+- `lib/store/` owns Redux state and async coordination.
+- `utils/` owns pure helpers, validators, and client fetch helpers.
 
-Feature composition is mostly layered like this:
+The root layout mounts [ReduxProvider](../components/providers/redux-provider.tsx), [ModalManager](../components/modals/modal-manager.tsx), and the global toaster. The authenticated shell is mounted from [app/(main)/layout.tsx](../app/(main)/layout.tsx) through [components/common/app-shell.tsx](../components/common/app-shell.tsx).
 
-- `app/` defines routes and route groups
-- `components/common/` holds cross-feature surfaces such as cards, status pills, and data tables
-- `components/<feature>/` holds feature-specific screens, modals, and detail subcomponents
-- `components/ui/` contains the low-level shadcn-style primitives
-- `lib/store/` coordinates cross-screen client state
+### State Management
 
-The current codebase is not purely server-driven or purely client-driven. It is a hybrid:
+Redux is the shared client coordination layer. The store in [lib/store/index.ts](../lib/store/index.ts) registers `customers`, `projects`, `siteManagers`, `tradies`, `quotes`, and `ui` slices.
 
-- server components and `lib/data/*` fetch the canonical project and tradie data
-- client components manage screen interactivity, filters, selection, dialogs, and optimistic overlays
-- Redux is used only where state must survive across subcomponents or flows
+- `ui` stores the active modal and screen filters.
+- `projects` stores the active project, optimistic updates, mutation state, upload state, and per-project detail UI.
+- `tradies` stores coordination filters, paging, selection, caching, and lookup state.
+- `quotes`, `customers`, and `siteManagers` support their own feature coordination.
 
-## API Layer And Data Access
+React Query is used where the state is local to a shell or provider and benefits from caching and subscription semantics.
 
-The main data access pattern is server helper first, route handler second.
+- [context/NotificationContext.tsx](../context/NotificationContext.tsx) uses `useQuery` and `useQueryClient` for Novu inbox data.
+- [components/common/app-shell.tsx](../components/common/app-shell.tsx) mounts a `QueryClientProvider` around notifications.
+- [app/(main)/leads/page.tsx](../app/(main)/leads/page.tsx) mounts a local `QueryClientProvider` for the leads screen.
 
-- `lib/data/projects.ts` builds Prisma queries, maps decimal fields to strings, and exposes cached helpers through `unstable_cache`
-- `lib/data/tradies.ts` does the same for tradie lists, schedules, and dashboard aggregates
-- `app/api/(data)/*` routes mostly call those helpers or mirror their logic for client requests
-- mutation routes return refreshed entity payloads so the UI can update immediately without building client-side normalization logic
+### Modal Architecture
 
-This pattern is visible in the project workflow. A mutation such as project creation or variation approval updates the database, revalidates the `projects` tag, and returns a full refreshed `ProjectDetail` payload. Redux then replaces the list item and active detail state with the returned entity instead of trying to patch nested fields manually.
+The shared modal architecture is centralized through `uiSlice.modal` and [components/modals/modal-manager.tsx](../components/modals/modal-manager.tsx).
 
-### Fetching strategies
+The manager maps modal `type` values to actual feature modals such as project creation, variation creation, tradie scheduling, project detail, picture preview, milestone actions, and quotation offer-file creation.
 
-There is no single data-fetching abstraction yet.
+```mermaid
+sequenceDiagram
+	participant UI as Feature UI
+	participant Redux as uiSlice
+	participant Manager as ModalManager
+	participant Modal as Feature Modal
 
-- server pages use direct helper calls such as `getProjectById()` and `getCachedProjects()`
-- Redux slices use `createAsyncThunk` plus the native `fetch()` API or `fetchJson()` wrapper
-- some client components, such as the project list, still perform local debounced fetches instead of dispatching a slice thunk
-- lookup collections such as customers, site managers, and project lookups use paginated append behavior with de-duplication by id
+	UI->>Redux: dispatch(openModal({ type, payload }))
+	Redux->>Manager: modal state changes
+	Manager->>Modal: render matching modal
+	Modal-->>Redux: dispatch follow-up actions / closeModal()
+```
 
-`fetchJson()` in [utils/fetch.ts](../utils/fetch.ts) is the only shared client request helper. It expects JSON responses and translates `{ error: string }` bodies into thrown errors with a fallback message.
+The current codebase still has a few feature-local modal shells in older screens, but the shared standard for cross-feature modals is the centralized manager.
 
-### Error Handling
+### Notification Architecture
 
-The repository currently uses pragmatic, route-local error handling rather than a global envelope:
+The shell renders the notification button and inbox popover through [components/common/notifications.tsx](../components/common/notifications.tsx) and [components/notification/notification-item.tsx](../components/notification/notification-item.tsx).
 
-- route handlers return `Response` or `NextResponse` with short error messages
-- client thunks catch and rethrow readable error strings
-- low-level helpers log to `console.error` when a database or Clerk operation fails
-- upload completion and webhook handlers fail closed when the expected identity or user record is missing
+The provider in [context/NotificationContext.tsx](../context/NotificationContext.tsx) uses the Novu JS client to:
 
-This works, but it is inconsistent. Some routes return plain strings, some return JSON `{ error }`, and some client code expects one style while other code expects the other.
+- list notifications for the signed-in Clerk user
+- mark a notification as read
+- mark all unread notifications as read
+- archive a notification
+- subscribe to real-time notification events and update the React Query cache
 
-### Validation Strategy
+### Shared Component Structure
 
-Validation is mostly imperative today.
+- `components/common/` contains cross-feature primitives such as the app shell, notifications popover, upload dropzone, cards, tables, and shells.
+- `components/<feature>/` contains feature-specific composition and modals.
+- `components/ui/` contains the low-level UI primitives.
 
-- route handlers validate required fields manually before database writes
-- IDs, query params, and enum-like strings are checked with simple runtime guards
-- Prisma schema constraints provide the final structural safety net
+### Context Providers
 
-The repo already depends on Zod and React Hook Form, but those tools are not yet used as a project-wide validation contract in the inspected code paths.
+Current provider wiring is:
 
-## Authentication And Authorization
+- [app/layout.tsx](../app/layout.tsx): `ClerkProvider`, `ReduxProvider`, `Toaster`, `ModalManager`
+- [components/common/app-shell.tsx](../components/common/app-shell.tsx): `QueryClientProvider`, `NotificationProvider`, `TooltipProvider`
+- [components/offer/offer-client.tsx](../components/offer/offer-client.tsx): `ChatProvider`
 
-Clerk is the only authentication provider in the repository.
+## Backend Architecture
 
-The intended flow is:
+### API Route Patterns
 
-1. middleware gates access
-2. server components call `auth()` when they need the signed-in state
-3. mutation routes check `userId` before writing
-4. webhooks update local user records and mirror metadata back into Clerk
+Route handlers live under `app/api/*` and act as the request boundary. The current pattern is:
 
-That intent is partially implemented, but there is a material mismatch in [proxy.ts](../proxy.ts). The public route matcher currently includes `/(.*)`, which makes the middleware effectively public for all routes. In practice, protection is therefore applied inconsistently and several GET endpoints remain publicly readable.
+1. Parse request input.
+2. Validate at the boundary.
+3. Check auth when the route is protected.
+4. Call `lib/data/*` helpers or integration helpers.
+5. Return a consistent response shape where shared response helpers are used.
 
-This needs to be treated as a real security issue, not just a style concern.
+The repository includes both standardized helpers in [utils/validators/response.ts](../utils/validators/response.ts) and a few legacy routes that still use ad hoc `NextResponse.json(...)` or `Response` return values.
 
-Immediate remediation checklist (apply quickly, then follow with tests):
+### Validation Flow
 
-- Restrict `proxy.ts` public-route matcher to only explicit public routes (sign-in, sign-up, webhook, static assets, health). Remove any catch-all like `/(.*)`.
-- Add explicit `auth()` checks to all mutation endpoints and any endpoints that return sensitive project or user data.
-- Introduce Zod request schemas for mutation routes and enforce them at the top of each handler; return a consistent JSON error envelope on validation failure.
-- Run a quick integration check (or unit test) that protected endpoints return 401 when unauthenticated.
-- Audit `app/api/(data)` GET endpoints and decide whether each should be public or require auth; document the decision in these docs.
+Shared Zod validators live under `utils/validators/`.
 
-Longer-term follow-ups:
+- `common.ts` provides shared pagination, query, and coercion validators.
+- `lead.ts` provides lead create/update/search schemas.
+- `projects.ts` provides lookup and response-shape schemas.
+- `files.ts` provides upload metadata and token payload schemas.
+- `material.ts`, `milestone.ts`, `user.ts`, and `notification.ts` provide feature-specific validation and payload typing.
 
-- Add automated route-protection tests to CI to prevent regressions.
-- Consider explicit role-based guards for admin or cross-customer operations (check `User.role` and `customerId` relationships).
+Route-level validation is already used in key flows such as file uploads, webhook handling, and notification payload generation.
 
-## Server Actions, API Routes, And Backend Integration
+### Response Handling Flow
 
-The repository uses `use server` modules under `lib/data/*` for query composition and `app/api/*` route handlers for network-visible integration.
+The shared response helper layer in [utils/validators/response.ts](../utils/validators/response.ts) provides:
 
-The model is:
+- success responses
+- paginated responses
+- validation error responses
+- generic error responses
+- unauthorized, forbidden, not-found, bad-request, and conflict helpers
 
-- `lib/data/*` = reusable server-side query and mapping logic
-- `app/api/*` = request boundary, validation, auth, and response formatting
-- Prisma = persistence layer
-- Clerk + Blob + cron = external integrations
+It also includes request parsing helpers for bodies, search params, and route params. Some newer route code uses these helpers directly; older routes still return `NextResponse.json(...)` inline.
 
-The most important backend integrations are:
+### Database Interaction Patterns
 
-- Clerk webhook sync in [app/api/webhook/clerk/route.ts](../app/api/webhook/clerk/route.ts)
-- Blob upload token generation and post-upload persistence in [app/api/upload/route.ts](../app/api/upload/route.ts)
-- tradie reminder automation in [app/api/cron/tradie-reminders/route.ts](../app/api/cron/tradie-reminders/route.ts)
-- variation delay logic in [lib/utils/apply-variation-delay.ts](../lib/utils/apply-variation-delay.ts)
+The repository uses Prisma directly in `lib/data/*` helpers.
+
+Common patterns:
+
+- use `Promise.all` for independent reads
+- convert Prisma decimals to strings before returning DTOs
+- use `include` to return canonical records with nested relations
+- use Prisma transactions when multiple writes must stay consistent
+- revalidate cache tags after writes
+
+Examples include `createChatMessages()` and `updateChatMessages()` in [lib/data/chat.ts](../lib/data/chat.ts), which use transactions or bulk writes plus `revalidateTag`.
+
+### Authentication Flow
+
+Clerk is the authentication provider.
+
+Current flows:
+
+- the root layout wraps the app in `ClerkProvider`
+- the main app shell reads `auth()` server-side to determine signed-in state
+- mutation routes check auth before writes where that route has been updated to do so
+- the Clerk webhook synchronizes identity lifecycle events into the local database
+
+### Authorization Flow
+
+Authorization is not fully uniform across every route, but the intended model is clear:
+
+- protect mutations at the request boundary
+- use server-side auth checks for state-changing routes
+- keep public routes explicit
+- use route- and role-aware checks for sensitive operations
+
+## Shared Utilities
+
+### API Helpers
+
+- [utils/fetch.ts](../utils/fetch.ts): shared client helper that unwraps JSON responses and throws readable errors.
+- [utils/validators/response.ts](../utils/validators/response.ts): shared API response builder and request-parsing helpers.
+
+### Validation Helpers
+
+- [utils/validators/common.ts](../utils/validators/common.ts): pagination, coercion, dates, strings, and common enum helpers.
+- [utils/validators/lead.ts](../utils/validators/lead.ts): lead schemas and normalization.
+- [utils/validators/projects.ts](../utils/validators/projects.ts): lookup and response schemas.
+- [utils/validators/files.ts](../utils/validators/files.ts): upload metadata and token validation.
+- [utils/validators/material.ts](../utils/validators/material.ts)
+- [utils/validators/milestone.ts](../utils/validators/milestone.ts)
+- [utils/validators/notification.ts](../utils/validators/notification.ts)
+- [utils/validators/user.ts](../utils/validators/user.ts)
+
+### Response Helpers
+
+- [utils/validators/response.ts](../utils/validators/response.ts)
+- Standard error responses and success envelopes
+- Validation treeification through Zod
+- Legacy helpers kept for compatibility during migration
+
+### Notification Helpers
+
+- [types/notification.ts](../types/notification.ts): notification type union, schema-derived data map, and template builder.
+- [lib/notification/novu.ts](../lib/notification/novu.ts): Novu server trigger helper that resolves subscriber ids and dispatches workflows.
+
+### Modal Helpers
+
+- [lib/store/slices/uiSlice.ts](../lib/store/slices/uiSlice.ts): modal state, filters, and modal actions.
+- [components/modals/modal-manager.tsx](../components/modals/modal-manager.tsx): modal router and renderer.
+
+## Data Flow
+
+```mermaid
+flowchart LR
+	UI[UI event] --> Redux[Redux action or local state]
+	UI --> Query[React Query when inbox/search data is local to a shell]
+	Redux --> Route[app/api route]
+	Query --> Route
+	Route --> Helper[lib/data helper]
+	Helper --> DB[(Prisma / PostgreSQL)]
+	DB --> Helper
+	Helper --> Route
+	Route --> UI2[JSON payload / DTO]
+	UI2 --> Redux2[Redux replace / hydrate / refresh]
+	UI2 --> Query2[React Query cache update]
+```
+
+The current implementation uses three client-state channels:
+
+1. Local component state for UI-only interaction.
+2. Redux for shared coordination and cross-page state.
+3. React Query for cached data subscriptions such as notifications.
+
+For live data, the preferred pattern is:
+
+1. fetch from a route handler or `lib/data` helper
+2. persist through Prisma
+3. revalidate the relevant tag
+4. return the refreshed canonical record
+5. update Redux or React Query from the returned payload
 
 ## Business Workflows
 
 ### Projects
 
-The project workflow is the most complete live module.
+The project workflow is the most complete data-backed module.
 
-- [lib/data/projects.ts](../lib/data/projects.ts) provides list, lookup, detail, and KPI queries
-- [app/api/(data)/projects/route.ts](../app/api/(data)/projects/route.ts) supports list and lookup modes
-- [app/api/(data)/projects/[projectId]/route.ts](../app/api/(data)/projects/%5BprojectId%5D/route.ts) returns the full detail payload
-- [app/api/(data)/projects/[projectId]/updates/route.ts](../app/api/(data)/projects/%5BprojectId%5D/updates/route.ts) creates updates, uploads photos, and marks photo-required milestones complete
-- [app/api/(data)/projects/[projectId]/variations/route.ts](../app/api/(data)/projects/%5BprojectId%5D/variations/route.ts) creates variations
-- [app/api/(data)/projects/[projectId]/variations/[variationId]/route.ts](../app/api/(data)/projects/%5BprojectId%5D/variations/%5BvariationId%5D/route.ts) approves or rejects variations and applies schedule delay logic
-
-The detail page is not a stub. [components/projects/project-detail-screen.tsx](../components/projects/project-detail-screen.tsx) hydrates Redux with the project payload, restores local detail UI state, and cleans up when the component unmounts.
+- `lib/data/projects.ts` provides list, lookup, detail, and KPI queries.
+- Project mutations live in `lib/data/projectsWrite.ts`, `lib/data/projectUpdates.ts`, `lib/data/variations.ts`, `lib/data/tradieSchedules.ts`, and related routes.
+- Detail screens hydrate Redux with canonical project payloads and keep the active project in sync with returned data.
 
 ### Tradies
 
 The tradie module centers on scheduling and operational coordination.
 
-- [lib/data/tradies.ts](../lib/data/tradies.ts) returns tradies, schedules, and dashboard aggregates
-- [app/api/(data)/tradie-schedules/route.ts](../app/api/(data)/tradie-schedules/route.ts) creates schedules and serves coordination data
-- [app/api/(data)/tradie-schedules/[scheduleId]/route.ts](../app/api/(data)/tradie-schedules/%5BscheduleId%5D/route.ts) updates schedule status and flags replacement requirements
-- [lib/jobs/tradie-reminder.ts](../lib/jobs/tradie-reminder.ts) sends reminder state and advances pending schedules to pending response
+- `lib/data/tradies.ts` provides tradie lists and dashboard data.
+- Redux stores filters, paging, selections, pending states, replacement flags, and cached dashboard payloads.
+- The coordination flows return refreshed data rather than patching nested fields manually.
 
-Redux carries a meaningful amount of tradie coordination state, including filters, pagination, selection, replacement flags, and a local 30-second dashboard cache.
+### Leads
 
-### Auth, Identity, And Sync
+Lead data powers the offer workflow and several notification triggers.
 
-The Clerk webhook in [app/api/webhook/clerk/route.ts](../app/api/webhook/clerk/route.ts) keeps Prisma aligned with identity lifecycle changes.
-
-- `user.created` inserts a local user and, for customers, creates a matching customer row
-- `user.updated` syncs profile edits and role changes
-- `user.deleted` deletes the local user row
-- `organizationInvitation.accepted` updates role metadata
-
-The helper in [lib/auth.ts](../lib/auth.ts) then mirrors role and customer metadata back to Clerk.
+- `lib/data/leads.ts` handles CRUD, analytics, and notification dispatch.
+- `useLeadSearch()` uses `fetchJson()` for debounced lookup requests.
+- Lead creation and updates trigger Novu notifications through `createNotification()` and `triggerNotification()`.
 
 ### Uploads
 
-The upload flow in [app/api/upload/route.ts](../app/api/upload/route.ts) uses Vercel Blob direct uploads.
+The upload flow uses Vercel Blob direct uploads in [app/api/upload/route.ts](../app/api/upload/route.ts).
 
-The current behavior is:
+- the user must be authenticated before token generation
+- the client sends validated file metadata
+- upload completion persists file records through [lib/data/file.ts](../lib/data/file.ts)
+- uploads are constrained by MIME type and size validators
 
-- the user must be authenticated before a token can be generated
-- the client sends a payload with file name, project id, optional milestone id, and an optional stable file id
-- the route allows common image, document, spreadsheet, and text formats
-- uploads are capped at 40 MB
-- completion saves a `File` row through [lib/data/file.ts](../lib/data/file.ts)
+### Auth, Identity, And Sync
 
-### Reminders And Background Jobs
+[app/api/webhook/clerk/route.ts](../app/api/webhook/clerk/route.ts) keeps Prisma aligned with Clerk lifecycle changes.
 
-[lib/jobs/tradie-reminder.ts](../lib/jobs/tradie-reminder.ts) finds schedules due exactly seven days out, skips already-reminded rows, marks eligible schedules as pending response, and writes a reminder timestamp. The cron route only exposes that job behind a bearer secret.
+- `user.created` inserts a local user and may create a matching customer row.
+- `user.updated` syncs profile edits and role changes.
+- `user.deleted` deletes the local user row.
+- `organizationInvitation.accepted` updates role metadata.
 
-The job is intentionally simple. It does not send email itself; it mutates schedule state and logs reminder activity.
+### Quotations
+
+Quotations are backed by Prisma helpers in [lib/data/quotes.ts](../lib/data/quotes.ts).
+
+- list and KPI helpers are cached with cache tags
+- quote creation stores decimal values in Prisma and returns serialized values
+- the quotation UI can open the offer-file modal from Redux
+
+## Offer And Chat Architecture
+
+The offer workflow is built around the chat route and a client-side context/provider pair.
+
+- [app/api/chat/route.ts](../app/api/chat/route.ts) streams agent responses.
+- [context/ChatContext.tsx](../context/ChatContext.tsx) owns the AI chat session, message transport, line items, and offer file state.
+- [components/offer/offer-client.tsx](../components/offer/offer-client.tsx) composes the chat and offer canvas.
+- [components/offer/offer-chat.tsx](../components/offer/offer-chat.tsx) renders the message stream.
+- [components/offer/offer-file.tsx](../components/offer/offer-file.tsx) renders the offer preview, files tab, and line-item tab.
+- [components/offer/file-template.tsx](../components/offer/file-template.tsx) renders the customer-facing offer HTML in an iframe.
+
+The chat route uses the following tools:
+
+- `lineItemTool`
+- `offerFileTool`
+- `fetchLeadInfoTool`
+- `fetchLeadFilesTool`
+- `FileProcessingTool`
+
+The UI currently has a specialized renderer for the first four named tools, with generic fallback rendering for unknown tool parts.
 
 ## Performance And Caching
 
-The codebase already uses a number of sensible performance tactics:
+The codebase already uses several sensible performance tactics:
 
-- server-side data helpers with `unstable_cache`
-- cache tags on the `projects` and `milestones` domains
+- `unstable_cache` and cache tags in server helpers
 - pagination for lookup collections
 - de-duplication when appending paged lookup items
-- debounced client fetches for project list search
-- query-level pagination and lookup limits to avoid overfetching
+- debounced client fetches for search-driven lookups
+- parallel reads for independent aggregates
 
-The cost is that the system now has three caching concepts in play at once: Next cache tags, client-side Redux caches, and component-local state. This is workable today, but it is a refactor target.
+The current system uses multiple caching layers at once: Next cache tags, Redux state, React Query caches, and local component state. That is workable today, but it should be kept intentional.
 
 ## Current Limitations And Inconsistencies
 
-The biggest implementation gaps today are:
-
-- [proxy.ts](../proxy.ts) currently marks nearly everything public because the matcher includes `/(.*)`
-- several GET data endpoints under `app/api/(data)` do not check auth at all
-- `lib/mock-data.tsx` still mixes route registry, dashboard mock data, and design constants
-- the project list fetch path in [components/projects/projects-client.tsx](../components/projects/projects-client.tsx) bypasses a Redux thunk and fetches directly from the client
-- customer and site manager lookup slices duplicate almost the same pagination code
-- [app/globals.css](../app/globals.css) contains a large leads-specific CSS block with its own token system and font choice, which sits outside the shared design system
-
-## Recommended Refactor Targets
-
-1. Fix the Clerk matcher and align route-level authorization with the intended security model.
-2. Split `lib/mock-data.tsx` into separate navigation, screen registry, and mock-content modules.
-3. Normalize the API response envelope so JSON errors and success payloads are consistent.
-4. Consolidate lookup pagination into one helper or shared thunk pattern.
-5. Move the large leads CSS block into a feature-scoped stylesheet or rebuild it with the shared tokens.
+- Some legacy routes still return ad hoc response shapes instead of the shared helper envelope.
+- Some screens still mount local modal state instead of using the global modal manager.
+- The route-matcher/auth story should be checked in `proxy.ts` before any new protected route work.
+- The screen registry in [lib/mock-data.tsx](../lib/mock-data.tsx) still mixes routing, mock data, and legacy surface definitions.
 
 ## Implementation Notes For Future Work
 
-- Keep live business flows returning refreshed entity payloads instead of partial patches when the UI depends on nested relations.
-- Prefer server helpers in `lib/data/*` for reusable Prisma queries and route handlers for request-specific auth and validation.
-- Treat Redux as coordination state, not as a replacement for the database.
+- Keep live business flows returning refreshed canonical payloads instead of partial patches when nested relations matter.
+- Prefer `lib/data/*` for reusable Prisma logic and route handlers for request-specific auth and validation.
+- Treat Redux as coordination state, not as a database cache.
 - Keep serializable DTOs at the client boundary, especially where Prisma decimals or nested relations are involved.
 
