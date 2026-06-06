@@ -1,7 +1,7 @@
 "use client";
 import { HistoryItem, Lead, LeadsStats, LeadStage } from './types';
 import { fetchJson } from '@/utils/fetch';
-import { findLeadById, getAllLeads, getAnalyticsData, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
+import { findLeadById, followupMeetingCreation, getAllLeads, getAnalyticsData, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
   actionDate: string;
@@ -60,6 +60,10 @@ export async function fetchLead(id: number): Promise<Lead | null> {
 
 export async function fetchLeadsStats(): Promise<LeadsStats> {
   return getLeadsStats();
+}
+
+export async function FollowupMeetingCreation(leadName: string, leadEmail: string, followupDate: string, followupTime: string): Promise<string | null> {
+  return followupMeetingCreation({ name: leadName, email: leadEmail } as Lead, followupDate, followupTime);
 }
 
 export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {
