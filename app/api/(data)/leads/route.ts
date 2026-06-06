@@ -9,7 +9,8 @@ export async function GET(request: NextRequest) {
     const params = parseSearchParamsWithResponse(url, leadLookupParamSchema);
     if (!params.success) return params.response;
     const statusFilterArray = params.data.status ? params.data.status.split(',').map(s => LeadStageToLeadStageDBMapping[(s.trim() as LeadStage)]) : undefined;
-    const leads = await getLeads(params.data.page, params.data.limit, params.data.q, statusFilterArray);
+    const filterTiming = params.data.filterTiming;
+    const leads = await getLeads(params.data.page, params.data.limit, params.data.q, statusFilterArray, filterTiming);
     return successResponse(leads);
   } catch (error) {
     console.error("/api/leads GET error", error);

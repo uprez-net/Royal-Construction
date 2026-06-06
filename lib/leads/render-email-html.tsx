@@ -12,6 +12,7 @@ import MaterialCatalogueEmail from '@/lib/graph/Email/material-catalogue-email';
 import PortfolioEmail from '@/lib/graph/Email/portfolio-email';
 
 interface LeadPreview {
+  id: number;
   name?: string;
   type?: string | string[];
   location?: string;
@@ -35,6 +36,7 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
     const params = new URLSearchParams({
       name: lead.name ?? name,
       email: lead.email,
+      id: String(lead.id)
     });
     bookingUrl += `?${params.toString()}`;
   }

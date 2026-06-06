@@ -177,7 +177,7 @@ export async function POST(request: Request): Promise<Response> {
                     phone: phoneVal,
                     location: extracted.Address || '',
                     sourceDetail: 'Website',
-                    stage: 'NEW',
+                    stage: 'CONTACTED',
                     type: extracted.Type || [],
                     notes: extracted.Info || '',
                     MicrosoftmessageId: message.id,
@@ -193,6 +193,7 @@ export async function POST(request: Request): Promise<Response> {
                   try {
                     // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
                     const leadPreview = {
+                      id: newLead.id,
                       name: newLead.name,
                       email: newLead.email,
                       type: newLead.type,

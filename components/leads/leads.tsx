@@ -34,7 +34,7 @@ import {
   fetchAllLeads,
   fetchLeadsStats,
   sendEmailToLead,
-  FollowupMeetingCreation
+  FollowupCalendarCreation
 } from "@/lib/leads/leads-service";
 import TableView from "./views/table-view";
 import FollowupsView from "./views/followups-view";
@@ -217,7 +217,7 @@ export default function Leads() {
   const [toasts, setToasts] = useState<
     { id: number; message: string; type: "success" | "info" }[]
   >([]);
-
+  const [activeFilterTiming, setActiveFilterTiming] = useState('all'); // 'all' is the default for "All Time"
   const [emailTargets, setEmailTargets] = useState<string[]>([]);
   const [emailTargetList, setEmailTargetList] = useState<string>("");
 
@@ -248,6 +248,7 @@ export default function Leads() {
       limit?: number;
       query?: string;
       status?: string;
+      filterTiming?: string;
     }) => {
       try {
         const status = query.status;
@@ -271,6 +272,7 @@ export default function Leads() {
           limit: query.limit || pageInfo.limit,
           q: query.query?.trim() ? query.query.trim() : undefined,
           status: statusFilter,
+          filterTiming: query.filterTiming,
         });
         setLeads(leadsData.items);
         setPageInfo({
@@ -337,6 +339,7 @@ export default function Leads() {
           limit: 10,
           query,
           status: activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+          filterTiming: activeFilterTiming,
         });
       });
     } else if (query.length === 0) {
@@ -346,6 +349,7 @@ export default function Leads() {
           limit: 10,
           status:
             activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+          filterTiming: activeFilterTiming,
         });
       });
     }
@@ -465,11 +469,24 @@ export default function Leads() {
       page: 1,
       limit: 10,
       status: metric === "total" ? "total" : (metric ?? undefined),
+      filterTiming: activeFilterTiming,
       query: debouncedSearchTerm.trim()
         ? debouncedSearchTerm.trim()
         : undefined,
     });
   };
+
+  const handleFilterTimingChange = (filterTiming: string) => {
+    refreshLeadsData({
+      page: 1,
+      limit: 10,
+      status: activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+      filterTiming: filterTiming,
+      query: debouncedSearchTerm.trim()
+        ? debouncedSearchTerm.trim()
+        : undefined,
+    })
+  }
 
   const handlePageChange = useCallback(
     async (page: number) => {
@@ -479,6 +496,7 @@ export default function Leads() {
         query: searchTerm,
         status:
           activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+        filterTiming: activeFilterTiming,
       });
     },
     [refreshLeadsData, activeMetric, pageInfo.limit, searchTerm],
@@ -626,6 +644,12 @@ export default function Leads() {
       actionDate: entry.actionDate || today.toISOString(),
     }));
 
+    if (formData.followupDate && formData.followupTime) {
+      formData.stage = "In Follow-up";
+    } else {
+      formData.stage = "Contacted";
+    }
+
     if (formData.stage === 'In Follow-up') {
       if (!formData.followupDate || !formData.followupTime) {
         showToast("Please provide follow-up date and time for 'In Follow-up' stage", "info");
@@ -633,10 +657,10 @@ export default function Leads() {
         setAddingWithReminder(false);
         return;
       }
-      const createMeetingForFollowup = await FollowupMeetingCreation(formData.name, formData.email, formData.followupDate, formData.followupTime);
-      if (createMeetingForFollowup !== "Follow-up meeting successfully created") {
-        console.error("Failed to create follow-up meeting:", createMeetingForFollowup);
-        showToast("Failed to create follow-up meeting. Please try again.", "info");
+      const createCalendarEventForFollowup = await FollowupCalendarCreation(formData.name, formData.email, formData.followupDate, formData.followupTime);
+      if (createCalendarEventForFollowup !== "Follow-up calendar event successfully created") {
+        console.error("Failed to create follow-up calendar event:", createCalendarEventForFollowup);
+        showToast("Failed to create follow-up calendar event. Please try again.", "info");
         setAdding(false);
         setAddingWithReminder(false);
         return;
@@ -914,6 +938,21 @@ export default function Leads() {
           })}
           {!loading && (
             <div className="ml-auto flex items-center gap-3">
+              <select
+                value={activeFilterTiming}
+                onChange={(e) => {
+                  setActiveFilterTiming(e.target.value)
+                  handleFilterTimingChange(e.target.value)
+                }}
+                className="flex-none appearance-none rounded-full border border-gray-200 bg-white py-2 pl-4 pr-8 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 focus:border-rc-gold focus:outline-none focus:ring-1 focus:ring-rc-gold"
+              >
+                <option value="today">Today</option>
+                <option value="this_week">This Week</option>
+                <option value="this_month">This Month</option>
+                <option value="quarter">This Quarter</option>
+                <option value="this_year">This Year</option>
+                <option value="all">All Time</option>
+              </select>
               <div className="search-box" style={{ flex: 1 }}>
                 <Search size={16} />
                 <input
@@ -1201,20 +1240,20 @@ const LEAD_SOURCE_OPTIONS: LeadSource[] = [
   "Business",
 ];
 
-const LEAD_STAGE_OPTIONS: LeadStage[] = [
-  "New",
-  "Contacted",
-  "Qualified",
-  "Quoted",
-  "Negotiating",
-  "Won",
-  "Meeting Scheduled",
-  "In Follow-up",
-  "No Response",
-  "Converted",
-  "Cancelled",
-  "Disqualified",
-];
+// const LEAD_STAGE_OPTIONS: LeadStage[] = [
+//   "New",
+//   "Contacted",
+//   "Qualified",
+//   "Quoted",
+//   "Negotiating",
+//   "Won",
+//   "Meeting Scheduled",
+//   "In Follow-up",
+//   "No Response",
+//   "Converted",
+//   "Cancelled",
+//   "Disqualified",
+// ];
 
 const PROJECT_TYPE_OPTIONS: ProjectType[] = [
   "Not Specified",
@@ -1249,7 +1288,7 @@ function AddLeadModal({
     phone: "",
     email: "",
     location: "",
-    sourceDetail: "Google Ads",
+    sourceDetail: "Personal",
     stage: "New",
     assignedId: "",
     budget: "Not Discussed",
@@ -1371,7 +1410,7 @@ function AddLeadModal({
             />
           </div>
           <div>
-            <label className={itemLabelClassName}>Email</label>
+            <label className={itemLabelClassName}>Email *</label>
             <input
               className={fieldClassName}
               placeholder="e.g. name@email.com"
@@ -1403,7 +1442,7 @@ function AddLeadModal({
               ))}
             </select>
           </div>
-          <div>
+          {/* <div>
             <label className={itemLabelClassName}>Stage</label>
             <select
               className={fieldClassName}
@@ -1421,7 +1460,7 @@ function AddLeadModal({
                 </option>
               ))}
             </select>
-          </div>
+          </div> */}
           <div>
             <label className={itemLabelClassName}>Assigned To *</label>
             <select
@@ -1648,6 +1687,9 @@ function AddLeadModal({
             disabled={
               !form.name.trim() ||
               !form.phone.trim() ||
+              !form.location.trim() ||
+              !form.assignedId.trim() ||
+              !form.email.trim() ||
               adding ||
               addingwithReminder
             }
@@ -1669,6 +1711,9 @@ function AddLeadModal({
             disabled={
               !form.name.trim() ||
               !form.phone.trim() ||
+              !form.location.trim() ||
+              !form.assignedId.trim() ||
+              !form.email.trim() ||
               adding ||
               addingwithReminder
             }

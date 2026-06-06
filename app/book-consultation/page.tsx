@@ -51,6 +51,7 @@ function BookingContent() {
   const searchParams = useSearchParams();
   const initialName = searchParams.get('name') || '';
   const initialEmail = searchParams.get('email') || '';
+  const initialId = searchParams.get('id') || '';
 
   const [clientName, setClientName] = useState(initialName);
   const [clientEmail, setClientEmail] = useState(initialEmail);
@@ -116,7 +117,7 @@ function BookingContent() {
       const res = await fetch('/api/graph/book-consultant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName, email: trimmedEmail, startDateTime, notes: notes.trim() }),
+        body: JSON.stringify({ id: Number(initialId || undefined), name: trimmedName, email: trimmedEmail, startDateTime, notes: notes.trim() }),
       });
       const data = await res.json();
       if (data.success) {

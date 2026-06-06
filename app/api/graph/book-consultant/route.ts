@@ -3,6 +3,8 @@ import { ClientSecretCredential } from '@azure/identity';
 import { getGraphConfig } from '@/lib/graph/config';
 import { createLead, findLeadByEmail, updateLead } from '@/lib/data/leads';
 import type { HistoryItem } from '@/lib/leads/types';
+import BookConsultantScheduleMeeting from '@/lib/graph/Email/book-consultant-ScheduleMeeting';
+import { render } from '@react-email/components';
 
 const NOTE_ACTION = 'NOTE';
 const NOTE_SOURCE_DETAIL = 'Book consultation form';
@@ -20,11 +22,13 @@ function upsertNoteHistory(existing: HistoryItem[], nextNote: HistoryItem) {
 }
 
 async function upsertBookingNotes({
+  id,
   name,
   email,
   notes,
   noteDetail,
 }: {
+  id: number;
   name: string;
   email: string;
   notes: string;
@@ -39,11 +43,11 @@ async function upsertBookingNotes({
     type: 'system',
   };
 
-  const existingLead = await findLeadByEmail(email);
+  const existingLead = await findLeadByEmail(id);
   if (existingLead) {
     const updatedHistory = upsertNoteHistory(existingLead.history, noteEntry);
     const updatedNotes = notes.length > 0 ? notes : existingLead.notes;
-    await updateLead(existingLead.id, { notes: updatedNotes, history: updatedHistory });
+    await updateLead(existingLead.id, { notes: updatedNotes, stage: 'Meeting Scheduled', history: updatedHistory });
     return;
   }
 
@@ -74,10 +78,11 @@ async function upsertBookingNotes({
   );
 }
 
+
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     const body = await req.json();
-    const { name = 'Client', email, startDateTime, notes } = body;
+    const { id, name = 'Client', email, startDateTime, notes } = body;
 
     if (!name || !email || !startDateTime) {
       return NextResponse.json({ error: 'Missing name, email, or startDateTime' }, { status: 400 });
@@ -95,40 +100,53 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (!accessToken) throw new Error('Unable to acquire Graph access token');
 
     const start = new Date(startDateTime);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    const endDateTime = end.toISOString();
 
-    const formattedDate = start.toLocaleDateString('en-AU', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    });
+    // Calculate end time locally (adds 1 hour, automatically handles day rollovers like 23:30 -> 00:30)
+    const endDateTimeObj = new Date(start.getTime() + 60 * 60 * 1000);
+
+    // Helper: Format Date object to Graph API accepted Local String "YYYY-MM-DDTHH:mm:ss"
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const formatToGraphDateTime = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
+    const graphStartStr = formatToGraphDateTime(start);
+    const graphEndStr = formatToGraphDateTime(endDateTimeObj);
+
+
+    // Helper: Format Date object to requested email display strings
+    const formatDisplayDate = (d: Date) =>
+      d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); // "Saturday 6 June 2026"
+
+    const formatDisplayTime = (d: Date) => {
+      const hours = d.getHours();
+      const minutes = d.getMinutes();
+      const ampm = hours >= 12 ? 'pm' : 'am';
+      const formattedHours = (hours % 12 || 12).toString().padStart(2, '0');
+      const formattedMinutes = minutes.toString().padStart(2, '0');
+      return `${formattedHours}:${formattedMinutes} ${ampm}`;
+    };
+
+    const displayDate = formatDisplayDate(start);
+    const displayTime = `${formatDisplayTime(start)} - ${formatDisplayTime(endDateTimeObj)} (AEST)`;
+
+    const emailHtml = await render(
+      BookConsultantScheduleMeeting({
+        name,
+        formattedDate: displayDate,
+        formattedTime: displayTime,
+      }
+      )
+    );
+
 
     const event = {
       subject: `Consultation with ${name} - Royal Constructions`,
       body: {
         contentType: 'HTML',
-        content: `
-          <div style="font-family: Arial, sans-serif; color: #333333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0;">
-            <div style="background-color: #0C1829; padding: 30px; text-align: center; border-bottom: 4px solid #C9A84C;">
-              <h1 style="color: #C9A84C; margin: 0; font-size: 24px; letter-spacing: 1px;">ROYAL CONSTRUCTIONS</h1>
-            </div>
-            <div style="padding: 30px 40px; background-color: #ffffff;">
-              <h2 style="color: #0C1829; margin-top: 0; font-size: 22px;">Initial Consultation Confirmed</h2>
-              <p>Dear ${name},</p>
-              <p>Your consultation has been scheduled.</p>
-              <table style="width: 100%; border-collapse: collapse; margin: 25px 0; background-color: #F5F6F8;">
-                <tr><td style="padding: 15px; font-weight: bold; color: #0C1829; width: 120px;">📅 Date</td><td style="padding: 15px;">${formattedDate}</td></tr>
-                <tr><td style="padding: 15px; font-weight: bold; color: #0C1829;">⏰ Time</td><td style="padding: 15px;">${start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} (AEST)</td></tr>
-                <tr><td style="padding: 15px; font-weight: bold; color: #0C1829;">📍 Location</td><td style="padding: 15px;">Microsoft Teams Meeting</td></tr>
-              </table>
-            </div>
-            <div style="background-color: #0A1525; padding: 25px 40px; text-align: center; color: #8A9BB5; font-size: 12px;">
-              Royal Constructions NSW | 1300 832 355
-            </div>
-          </div>
-        `,
+        content: emailHtml,
       },
-      start: { dateTime: startDateTime, timeZone: 'Australia/Sydney' },
-      end: { dateTime: endDateTime, timeZone: 'Australia/Sydney' },
+      start: { dateTime: graphStartStr, timeZone: 'Australia/Sydney' },
+      end: { dateTime: graphEndStr, timeZone: 'Australia/Sydney' },
       location: { displayName: 'Microsoft Teams Meeting' },
       attendees: [{ emailAddress: { address: email, name }, type: 'required' }],
       isOnlineMeeting: true,
@@ -142,10 +160,10 @@ export async function POST(req: NextRequest): Promise<Response> {
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
       {
         method: 'POST',
-        headers: { 
-          Authorization: `Bearer ${accessToken}`, 
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          'Prefer': 'include=onlinemeeting' // <--- THIS IS THE KEY
+          'Prefer': 'outlook.timezone="Australia/Sydney"' // <--- THIS IS THE KEY
         },
         body: JSON.stringify(event),
       }
@@ -166,13 +184,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     //console.log('Graph event created successfully. Join URL:', joinUrl);
 
     const trimmedNotes = typeof notes === 'string' ? notes.trim() : '';
-    const appointmentLabel = `${formattedDate} at ${start.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} (AEST)`;
+    const appointmentLabel = `${displayDate} at ${displayTime}`;
     const noteDetail = trimmedNotes.length > 0
       ? `${trimmedNotes}\n\nAppointment: ${appointmentLabel}`
       : `Appointment: ${appointmentLabel}`;
 
     try {
       await upsertBookingNotes({
+        id: Number(id),
         name,
         email,
         notes: trimmedNotes,

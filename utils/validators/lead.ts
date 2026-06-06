@@ -215,6 +215,7 @@ export const leadLookupParamSchema = z.object({
   ...paginationSchema.shape,
   q: z.string().trim().default(""),
   status: z.string().optional(),
+  filterTiming: z.string().optional(),
 })
 
 export const leadStatusSchema = z.enum(leadStages);
