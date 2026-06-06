@@ -83,7 +83,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
         <Button
           variant="ghost"
           size="icon"
-          className="relative size-10 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+          className="relative size-10 rounded-lg border border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300"
           aria-label="Notifications"
         >
           <Bell className="size-4" />

@@ -71,26 +71,13 @@ export function AppShell({
   );
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-transparent text-foreground">
-      <div
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at top left, rgba(13,148,136,0.18), transparent 34%), radial-gradient(circle at top right, rgba(232,115,12,0.12), transparent 26%), linear-gradient(180deg, rgba(248,250,252,0.94), rgba(241,245,249,0.94))",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 opacity-20"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, rgba(15,23,42,0.06) 1px, transparent 1px), linear-gradient(rgba(15,23,42,0.06) 1px, transparent 1px)",
-          backgroundSize: "42px 42px",
-          maskImage: "linear-gradient(to bottom, black, transparent)",
-        }}
-      />
+    <div className="relative min-h-screen overflow-hidden bg-[#F7F6F2] text-slate-900">
+      {/* Clean Light Background matching Email Theme */}
       <div className="flex min-h-screen">
-        <aside className="hidden w-16 shrink-0 border-r border-white/10 bg-[oklch(0.16_0.03_249.8)] text-slate-300 shadow-[6px_0_28px_rgba(15,23,42,0.12)] md:flex md:flex-col md:items-center md:py-4">
-          <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-white">
+        
+        {/* ── Desktop Sidebar ── */}
+        <aside className="hidden w-16 shrink-0 border-r border-[#E2E8F0] bg-white text-slate-600 shadow-sm md:flex md:flex-col md:items-center md:py-4">
+          <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-[#F7F6F2]">
             <Image
               src="/favicon.ico"
               alt="Royal Constructions Logo"
@@ -104,8 +91,8 @@ export function AppShell({
                 key={item.slug}
                 href={`/${item.slug}`}
                 className={cn(
-                  "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-white/10 hover:text-white",
-                  item.slug === activeSlug && "bg-teal-500/15 text-teal-300",
+                  "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-slate-100 hover:text-slate-900",
+                  item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]"
                 )}
                 aria-label={item.label}
               >
@@ -119,16 +106,18 @@ export function AppShell({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
+          
+          {/* ── Mobile Sidebar Sheet ── */}
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetContent
               side="left"
               showCloseButton={false}
-              className="w-80 border-r border-white/10 bg-[oklch(0.16_0.03_249.8)] p-0 text-slate-200"
+              className="w-80 border-r border-[#E2E8F0] bg-white p-0 text-slate-900"
             >
               <div className="flex h-full flex-col">
-                <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-4">
+                <div className="flex items-start justify-between gap-4 border-b border-[#E2E8F0] px-4 py-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-white">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#F7F6F2]">
                       <Image
                         src="/favicon.ico"
                         alt="Royal Constructions Logo"
@@ -137,7 +126,7 @@ export function AppShell({
                       />
                     </div>
                     <div className="min-w-0">
-                      <SheetTitle className="font-heading truncate text-base font-semibold text-white">
+                      <SheetTitle className="font-heading truncate text-base font-semibold text-slate-900">
                         Royal Constructions
                       </SheetTitle>
                     </div>
@@ -147,7 +136,7 @@ export function AppShell({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                      className="rounded-lg border border-[#E2E8F0] bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                       aria-label="Close navigation menu"
                     >
                       <X className="size-4" />
@@ -162,13 +151,16 @@ export function AppShell({
                         onClick={() => setMobileNavOpen(false)}
                         href={`/${item.slug}`}
                         className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-white/10 hover:text-white",
+                          "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-slate-100 hover:text-slate-900",
                           item.slug === activeSlug
-                            ? "bg-teal-500/15 text-teal-300"
-                            : "text-slate-300",
+                            ? "bg-[#C6923A]/10 text-[#C6923A]"
+                            : "text-slate-600"
                         )}
                       >
-                        <span className="grid size-9 place-items-center rounded-lg bg-white/5 text-slate-200">
+                        <span className={cn(
+                          "grid size-9 place-items-center rounded-lg bg-slate-100 text-slate-500",
+                          item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]"
+                        )}>
                           {item.icon}
                         </span>
                         <span>{item.label}</span>
@@ -178,17 +170,17 @@ export function AppShell({
                 </nav>
 
                 {!isSignedIn ? (
-                  <div className="border-t border-white/10 px-4 py-4">
+                  <div className="border-t border-[#E2E8F0] px-4 py-4">
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
-                        className="flex-1 rounded-lg border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                        className="flex-1 rounded-lg border-[#E2E8F0] bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                         asChild
                       >
                         <Link href="/sign-in">Sign in</Link>
                       </Button>
                       <Button
-                        className="flex-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                        className="flex-1 rounded-lg bg-[#C6923A] text-white hover:bg-[#C6923A]/90"
                         asChild
                       >
                         <Link href="/sign-up">Sign up</Link>
@@ -196,24 +188,23 @@ export function AppShell({
                     </div>
                   </div>
                 ) : (
-                  <div className="border-t border-white/10 px-4 py-4">
+                  <div className="border-t border-[#E2E8F0] px-4 py-4">
                     <UserButton
                       showName={true}
                       appearance={{
                         elements: {
                           avatarBox: "size-9",
                           userButtonBox:
-                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-white",
+                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-slate-900",
                           userButtonTrigger: "w-full",
-                          userButtonOuterIdentifier: "text-base text-white",
+                          userButtonOuterIdentifier: "text-base text-slate-900",
                           userButtonAvatarBox: "w-8 h-8",
                           rootBox: "w-full shadow-xs",
                         },
-                        baseTheme: "dark",
                       }}
                       userProfileProps={{
                         appearance: {
-                          baseTheme: "dark",
+                          baseTheme: "light",
                         },
                       }}
                     />
@@ -223,31 +214,32 @@ export function AppShell({
             </SheetContent>
           </Sheet>
 
-          <header className="sticky top-0 z-30 border-b border-white/60 bg-[oklch(0.16_0.03_249.8)] text-white shadow-[0_10px_30px_rgba(15,23,42,0.18)] backdrop-blur">
+          {/* ── Top Header ── */}
+          <header className="sticky top-0 z-30 border-b border-[#E2E8F0] bg-white text-slate-900 shadow-sm backdrop-blur">
             <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-4">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-10 rounded-lg border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white md:hidden"
+                  className="size-10 rounded-lg border border-[#E2E8F0] bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 md:hidden"
                   onClick={() => setMobileNavOpen(true)}
                   aria-label="Open navigation menu"
                 >
                   <Menu className="size-4" />
                 </Button>
                 <div>
-                  <p className="font-heading text-xl font-semibold tracking-tight text-teal-300">
+                  <p className="font-heading text-xl font-semibold tracking-tight text-[#C6923A]">
                     Royal Constructions
                   </p>
-                  <div className="hidden items-center gap-2 text-xs text-slate-400 md:flex">
+                  <div className="hidden items-center gap-2 text-xs text-slate-500 md:flex">
                     {trail.map((segment, index) => (
                       <div key={segment} className="flex items-center gap-2">
                         {index > 0 ? (
-                          <span className="text-slate-600">/</span>
+                          <span className="text-slate-300">/</span>
                         ) : null}
                         <span
                           className={cn(
-                            index === trail.length - 1 && "text-slate-100",
+                            index === trail.length - 1 && "font-medium text-slate-900",
                           )}
                         >
                           {segment}
@@ -259,8 +251,8 @@ export function AppShell({
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden text-right text-xs text-slate-400 md:block">
-                  <div className="font-medium text-slate-200">
+                <div className="hidden text-right text-xs text-slate-500 md:block">
+                  <div className="font-medium text-slate-900">
                     {time || "--:--:--"}
                   </div>
                   <div>AEST</div>
@@ -277,13 +269,13 @@ export function AppShell({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
-                        className="rounded-lg border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                        className="rounded-lg border-[#E2E8F0] bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                         asChild
                       >
                         <Link href="/sign-in">Sign in</Link>
                       </Button>
                       <Button
-                        className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                        className="rounded-lg bg-[#C6923A] text-white hover:bg-[#C6923A]/90"
                         asChild
                       >
                         <Link href="/sign-up">Sign up</Link>

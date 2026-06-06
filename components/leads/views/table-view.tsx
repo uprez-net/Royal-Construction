@@ -286,7 +286,7 @@ export default function TableView({
 
   const [editFollowupLead, setEditFollowupLead] = useState<Lead | null>(null);
   const [followupDate, setFollowupDate] = useState("");
-  const [followupTime, setFollowupTime] = useState("");
+  // const [followupTime, setFollowupTime] = useState("");
 
   const [editAssignedLead, setEditAssignedLead] = useState<Lead | null>(null);
   const [assignedPerson, setAssignedPerson] = useState("");
@@ -605,7 +605,7 @@ export default function TableView({
   const openFollowupModal = (lead: Lead) => {
     setEditFollowupLead(lead);
     setFollowupDate(lead.followupDate || "");
-    setFollowupTime(lead.followupTime || "");
+    //setFollowupTime(lead.followupTime || "");
   };
   const closeFollowupModal = () => setEditFollowupLead(null);
 
@@ -1663,7 +1663,7 @@ export default function TableView({
               value={editFollowupLead?.followupTime || ""}
               onChange={(event) => {
                 const val = event.target.value;
-                setFollowupTime(val);
+                //setFollowupTime(val);
                 setEditFollowupLead((prev) =>
                   prev
                     ? { ...prev, followupTime: val }

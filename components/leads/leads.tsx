@@ -1240,20 +1240,20 @@ const LEAD_SOURCE_OPTIONS: LeadSource[] = [
   "Business",
 ];
 
-const LEAD_STAGE_OPTIONS: LeadStage[] = [
-  "New",
-  "Contacted",
-  "Qualified",
-  "Quoted",
-  "Negotiating",
-  "Won",
-  "Meeting Scheduled",
-  "In Follow-up",
-  "No Response",
-  "Converted",
-  "Cancelled",
-  "Disqualified",
-];
+// const LEAD_STAGE_OPTIONS: LeadStage[] = [
+//   "New",
+//   "Contacted",
+//   "Qualified",
+//   "Quoted",
+//   "Negotiating",
+//   "Won",
+//   "Meeting Scheduled",
+//   "In Follow-up",
+//   "No Response",
+//   "Converted",
+//   "Cancelled",
+//   "Disqualified",
+// ];
 
 const PROJECT_TYPE_OPTIONS: ProjectType[] = [
   "Not Specified",
@@ -1288,7 +1288,7 @@ function AddLeadModal({
     phone: "",
     email: "",
     location: "",
-    sourceDetail: "Google Ads",
+    sourceDetail: "Personal",
     stage: "New",
     assignedId: "",
     budget: "Not Discussed",
@@ -1410,7 +1410,7 @@ function AddLeadModal({
             />
           </div>
           <div>
-            <label className={itemLabelClassName}>Email</label>
+            <label className={itemLabelClassName}>Email *</label>
             <input
               className={fieldClassName}
               placeholder="e.g. name@email.com"
@@ -1687,6 +1687,9 @@ function AddLeadModal({
             disabled={
               !form.name.trim() ||
               !form.phone.trim() ||
+              !form.location.trim() ||
+              !form.assignedId.trim() ||
+              !form.email.trim() ||
               adding ||
               addingwithReminder
             }
@@ -1708,6 +1711,9 @@ function AddLeadModal({
             disabled={
               !form.name.trim() ||
               !form.phone.trim() ||
+              !form.location.trim() ||
+              !form.assignedId.trim() ||
+              !form.email.trim() ||
               adding ||
               addingwithReminder
             }

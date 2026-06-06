@@ -61,8 +61,8 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     const dateInUTC = new Date(now.toLocaleString("en-US", { timeZone: "UTC" }));
     const sydneyOffsetMs = dateInSydney.getTime() - dateInUTC.getTime();
 
-    let startSydney = new Date(dateInSydney);
-    let endSydney = new Date(dateInSydney);
+    const startSydney = new Date(dateInSydney);
+    const endSydney = new Date(dateInSydney);
 
     if (filterTiming === 'today') {
       startSydney.setHours(0, 0, 0, 0);
