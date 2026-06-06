@@ -25,7 +25,7 @@ import { EmailSectionLight } from './email-section-light';
 const ICONS = {
   calendar: '📅',
   clock: '🕒',
-  pin: '📍',
+  phone: '📞',
 };
 
 // ─── Sub-Component ──────────────────────────────────────────────────────────
@@ -50,7 +50,6 @@ function DetailItem({
       <Column style={{ padding: '1rem 0' }}>
         <Row>
           <Column style={{ width: 36, verticalAlign: 'top', paddingTop: 2 }}>
-            {/* Replaced <Img> with <Text> for the emoji */}
             <Text
               className="m-0"
               style={{
@@ -100,14 +99,14 @@ interface FollowUpStageMeetingProps {
   name?: string;
   formattedDate?: string;
   formattedTime?: string;
-  location?: string;
+  contactMethod?: string;
 }
 
 export default function FollowUpStageMeeting({
   name = 'Homeowner',
   formattedDate = 'Saturday 6 June 2026',
   formattedTime = '09:00 am - 10:00 am (AEST)',
-  location = 'Microsoft Teams Meeting',
+  contactMethod = 'Phone Call',
 }: FollowUpStageMeetingProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -148,7 +147,7 @@ export default function FollowUpStageMeeting({
                   color: RC_COLORS.gold,
                 }}
               >
-                Appointment Confirmation
+                Follow-Up Scheduled
               </Text>
               <Text
                 className="mobile_font-40 m-0 uppercase"
@@ -161,7 +160,7 @@ export default function FollowUpStageMeeting({
                   color: RC_COLORS.textOnLight,
                 }}
               >
-                Follow-Up Meeting
+                Scheduled Call
                 <br />
                 Confirmed
               </Text>
@@ -180,8 +179,9 @@ export default function FollowUpStageMeeting({
                 Dear {name},
                 <br />
                 <br />
-                Your consultation has been scheduled. Please review the details
-                below, and ensure you are available at the specified time.
+                We have reserved a time for your follow-up call. A member of our
+                team will reach out to you at the details below. Please ensure
+                you are available so we can discuss your project.
               </Text>
             </EmailSectionLight>
 
@@ -208,15 +208,15 @@ export default function FollowUpStageMeeting({
                   showBorder
                 />
                 <DetailItem
-                  icon={ICONS.pin}
-                  label="Location"
-                  value={location}
+                  icon={ICONS.phone}
+                  label="Contact Method"
+                  value={contactMethod}
                   showBorder={false}
                 />
               </Section>
             </EmailSectionLight>
 
-            {/* ── Teams Notice ── */}
+            {/* ── Call Notice ── */}
             <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
               <Section
                 style={{
@@ -237,9 +237,9 @@ export default function FollowUpStageMeeting({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      A Microsoft Teams meeting link will be included in the
-                      calendar invite. Please click the link at the scheduled
-                      time to join the consultation.
+                      Our team will contact you at the scheduled time. If your
+                      availability changes, simply reply to this email and we
+                      will arrange a more suitable time.
                     </Text>
                   </Column>
                 </Row>

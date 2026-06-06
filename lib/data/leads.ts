@@ -45,10 +45,81 @@ export async function getAllLeads(): Promise<UiLead[]> {
   }
 }
 
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[]): Promise<PaginatedLeadsResult> {
+export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
   const search = normalizeSearch(query);
+
+  // 1. Determine if a timing filter should be active (skip if undefined or 'all')
+  const hasTimingFilter = filterTiming && filterTiming !== 'all';
+  let timingFilter = {};
+
+  if (hasTimingFilter) {
+    // 2. Perform the timezone & boundary calculations only when active
+    const now = new Date();
+    const dateInSydney = new Date(now.toLocaleString("en-US", { timeZone: "Australia/Sydney" }));
+    const dateInUTC = new Date(now.toLocaleString("en-US", { timeZone: "UTC" }));
+    const sydneyOffsetMs = dateInSydney.getTime() - dateInUTC.getTime();
+
+    let startSydney = new Date(dateInSydney);
+    let endSydney = new Date(dateInSydney);
+
+    if (filterTiming === 'today') {
+      startSydney.setHours(0, 0, 0, 0);
+      endSydney.setHours(23, 59, 59, 999);
+    }
+    else if (filterTiming === 'this_week') {
+      const day = startSydney.getDay();
+      const diffToMonday = day === 0 ? 6 : day - 1;
+      startSydney.setDate(startSydney.getDate() - diffToMonday);
+      startSydney.setHours(0, 0, 0, 0);
+
+      endSydney.setDate(startSydney.getDate() + 6);
+      endSydney.setHours(23, 59, 59, 999);
+    }
+    else if (filterTiming === 'this_month') {
+      startSydney.setDate(1);
+      startSydney.setHours(0, 0, 0, 0);
+
+      endSydney.setMonth(endSydney.getMonth() + 1);
+      endSydney.setDate(0);
+      endSydney.setHours(23, 59, 59, 999);
+    }
+    else if (filterTiming === 'quarter') {
+      const currentMonth = startSydney.getMonth();
+      const quarterStartMonth = Math.floor(currentMonth / 3) * 3;
+      startSydney.setMonth(quarterStartMonth);
+      startSydney.setDate(1);
+      startSydney.setHours(0, 0, 0, 0);
+
+      endSydney.setMonth(quarterStartMonth + 3);
+      endSydney.setDate(0);
+      endSydney.setHours(23, 59, 59, 999);
+    }
+    else if (filterTiming === 'this_year') {
+      startSydney.setMonth(0);
+      startSydney.setDate(1);
+      startSydney.setHours(0, 0, 0, 0);
+
+      endSydney.setMonth(11);
+      endSydney.setDate(31);
+      endSydney.setHours(23, 59, 59, 999);
+    }
+
+    // 3. Convert local boundary dates to UTC dates
+    const startUTC = new Date(startSydney.getTime() - sydneyOffsetMs);
+    const endUTC = new Date(endSydney.getTime() - sydneyOffsetMs);
+
+    timingFilter = {
+      createdAt: {
+        gte: startUTC,
+        lte: endUTC
+      }
+    };
+  }
+
+
+
 
   const where: Prisma.LeadWhereInput | undefined = search.length > 0
     ? {
@@ -64,6 +135,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     const leads = await prisma.lead.findMany({
       where: {
         ...where,
+        ...timingFilter,
         ...(status && status.length > 0
           ? { stage: { in: status } }
           : {}),
@@ -80,6 +152,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     const totalCount = await prisma.lead.count({
       where: {
         ...where,
+        ...timingFilter,
         ...(status && status.length > 0
           ? { stage: { in: status } }
           : {}),
@@ -126,25 +199,21 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
   return mapLead(lead);
 }
 
-export async function findLeadByEmail(email: string): Promise<UiLead | null> {
-  const trimmed = email.trim();
-  if (!trimmed) return null;
-
-  const lead = await prisma.lead.findFirst({
-    where: { email: { equals: trimmed, mode: "insensitive" } },
+export async function findLeadByEmail(id: number): Promise<UiLead | null> {
+  const lead = await prisma.lead.findUnique({
+    where: { id },
     include: {
       history: { orderBy: { actionDate: "asc" } },
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } }
-    },
+    }
   });
-
   if (!lead) return null;
 
   return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[]; assignedUser: { id: string; name: string; email: string } | null });
 }
 
-export async function followupMeetingCreation(
+export async function handleCalendarFollowup(
   lead: Lead,
   followupDate: string, // e.g., "2026-06-06"
   followupTime: string  // e.g., "09:00" or "21:00"
@@ -200,14 +269,14 @@ export async function followupMeetingCreation(
       name: lead.name,
       formattedDate: displayDate,
       formattedTime: displayTime,
-      location: 'Microsoft Teams Meeting',
+
     })
   );
 
   // ─── 3. Construct Graph API Payload ──────────────────────────────────
 
   const event = {
-    subject: `Follow-Up Meeting with ${lead.name} - Royal Constructions`,
+    subject: `Follow-Up Calendar Event with ${lead.name} - Royal Constructions`,
     body: {
       contentType: 'HTML',
       content: emailHtml, // Inject the beautifully styled React Email HTML
@@ -220,13 +289,11 @@ export async function followupMeetingCreation(
       dateTime: graphEndStr,
       timeZone: 'Australia/Sydney'
     },
-    location: { displayName: 'Microsoft Teams Meeting' },
+    location: { displayName: 'Royal Constructions' },
     attendees: [{
       emailAddress: { address: lead.email, name: lead.name },
       type: 'required'
     }],
-    isOnlineMeeting: true,
-    onlineMeetingProvider: 'teamsForBusiness',
   };
 
   // ─── 4. Send Request to Graph API ────────────────────────────────────
@@ -248,12 +315,12 @@ export async function followupMeetingCreation(
   if (!response.ok) {
     const detail = await response.text();
     console.error('Graph event create failed:', detail);
-    return "Failed to create follow-up meeting";
+    return "Failed to create follow-up calendar event";
   }
 
   //console.log('Checking the Response from Graph API for Event Creation:', await response.json());
 
-  return "Follow-up meeting successfully created";
+  return "Follow-up calendar event successfully created";
 }
 
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead> {
@@ -279,7 +346,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     if (input.stage !== 'In Follow-up') {
       historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date() });
     } else {
-      historyCreate.push({ action: "Lead created with Follow-up Meeting Link", detail: "Lead manually created and Also Assign the Follow-up Meeting", type: "SYSTEM", actionDate: new Date() });
+      historyCreate.push({ action: "Lead created with Follow-up Calender set", detail: "Lead manually created and Also Assign the Follow-up Calender", type: "SYSTEM", actionDate: new Date() });
     }
   }
 
@@ -323,11 +390,12 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   // ═══════════════════════════════════════════════════════
   // SEND WELCOME EMAIL TO MANUALLY CREATED LEADS
   // ═══════════════════════════════════════════════════════
-  if (!options?.skipWelcomeEmail && created.email && created.name) {
+  if (!options?.skipWelcomeEmail && created.email && created.name && input.stage !== 'In Follow-up') {
     console.log(`[Lead ${created.id}] Sending welcome email to newly created lead...`);
     try {
       // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
       const leadPreview = {
+        id: created.id,
         name: created.name,
         email: created.email,
         type: created.type,
@@ -433,7 +501,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       customerPhone: res.phone ?? "Not specified",
       assignedTo: res.assignedUser?.name ?? "Unknown",
     })
-    await triggerNotification([res.assignedId],notificationPayload);
+    await triggerNotification([res.assignedId], notificationPayload);
   }
 
   return res;

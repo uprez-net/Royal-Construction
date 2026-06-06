@@ -19,7 +19,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: s
     if (!parsed.success) {
       return badRequestResponse(parsed.error.message);
     }
+    console.log("Parsed update data:", parsed.data);
     const updated = await updateLead(id, parsed.data);
+    console.log("Updated lead:", updated);
     return successResponse(updated);
   } catch (error) {
     console.error("/api/leads PATCH error", error);
