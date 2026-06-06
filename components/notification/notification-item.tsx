@@ -30,7 +30,7 @@ export function NotificationItem({
     <div
       key={n.id}
       className={cn(
-        "group rounded-2xl border p-3 transition-colors",
+        "group rounded-2xl border p-3 transition-colors max-w-86",
         "border-white/10 bg-white/5 hover:bg-white/10",
         !n.isRead &&
           "border-primary/30 shadow-[0_0_0_1px_rgba(13,148,136,0.1)]",

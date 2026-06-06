@@ -63,7 +63,7 @@ export const NotificationProvider = ({
     data: notifications = [],
     isLoading,
     refetch,
-  } = useQuery({
+  } = useQuery<Notification[]>({
     queryKey,
     enabled: !!novu,
     queryFn: async () => {

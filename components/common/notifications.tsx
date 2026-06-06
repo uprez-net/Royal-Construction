@@ -94,7 +94,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
       <PopoverContent
         align="end"
         sideOffset={12}
-        className="min-w-106 overflow-hidden rounded-2xl border border-white/10 bg-[oklch(0.16_0.03_249.8)] p-0 text-slate-100 shadow-[0_24px_60px_rgba(15,23,42,0.28)]"
+        className="min-w-96 overflow-hidden rounded-2xl border border-white/10 bg-[oklch(0.16_0.03_249.8)] p-0 text-slate-100 shadow-[0_24px_60px_rgba(15,23,42,0.28)]"
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3">
@@ -190,7 +190,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
           </Button>
         </div>
         <ScrollArea
-          className="m-2 rounded-xl border border-white/10 bg-white/5 px-3 py-3"
+          className="m-2 rounded-xl border border-white/10 bg-white/5 px-2 py-3 **:data-[slot='scroll-area-scrollbar']:hidden"
           style={{ height: Math.min(maxHeight, 520) }}
         >
           {isLoading ? (
