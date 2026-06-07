@@ -21,21 +21,29 @@ export function OfferClient({
   return (
     <ChatProvider
       chatId={chatId}
-      initialMessages={initialMessages.length > 0 ? initialMessages : [{
-        id: "initial-message",
-        role: "assistant",
-        parts: [{ type: "text", text: STARTING_AGENT_MESSAGE }],
-        metadata: { createdAt: new Date().toISOString() },
-      }]}
+      initialMessages={
+        initialMessages.length > 0
+          ? initialMessages
+          : [
+              {
+                id: "initial-message",
+                role: "assistant",
+                parts: [{ type: "text", text: STARTING_AGENT_MESSAGE }],
+                metadata: { createdAt: new Date().toISOString() },
+              },
+            ]
+      }
       leadId={leadId}
     >
-      <div className="flex h-screen w-screen flex-1 rounded-lg border bg-popover">
-        <div className="flex w-[25vw]">
-          <OfferChat />
-        </div>
+      <div className="flex h-screen w-screen bg-[#F7F6F2] p-4 md:p-6">
+        <div className="flex h-full min-h-0 flex-1 overflow-hidden rounded-[28px] border border-[#E2E8F0] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+          <div className="flex w-[25vw] min-w-[320px] border-r border-[#E2E8F0] bg-[#FCFBF8]">
+            <OfferChat />
+          </div>
 
-        <div className="flex overflow-hidden flex-1">
-          <OfferFileCanvas files={files} leadId={leadId} />
+          <div className="flex min-w-0 flex-1 overflow-hidden bg-[#FAF8F3]">
+            <OfferFileCanvas files={files} leadId={leadId} />
+          </div>
         </div>
       </div>
     </ChatProvider>

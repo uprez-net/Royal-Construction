@@ -153,3 +153,55 @@ export const RoleLabelRecord: Partial<Record<Role, string>> & { undefined: strin
   CUSTOMER: "Customer",
   undefined: "No role",
 }
+
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isPrimitive(value: unknown): value is string | number | boolean | null | undefined {
+  return value === null || value === undefined || ["string", "number", "boolean"].includes(typeof value);
+}
+
+export function formatValue(value: unknown) {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "number") return new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 }).format(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+export function formatMoney(value: unknown) {
+  if (typeof value !== "number") return formatValue(value);
+
+  return currency.format(value);
+}
+
+export function toLabel(key: string) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+export function countEntries(value: unknown, keys: string[]) {
+  if (!isPlainObject(value)) return 0;
+
+  for (const key of keys) {
+    const candidate = value[key];
+    if (Array.isArray(candidate)) {
+      return candidate.length;
+    }
+    if (typeof candidate === "number") {
+      return candidate;
+    }
+  }
+
+  return 0;
+}
+
+export function safeStringify(v: unknown) {
+  try {
+    return JSON.stringify(v, null, 2);
+  } catch {
+    return String(v);
+  }
+}

@@ -3,7 +3,18 @@ import { FileProcessingTool } from "@/lib/tools/file-tools";
 import { lineItemTool as createLineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool as createOfferFileTool } from "@/lib/tools/offer-file";
 import { ChatMessage, ChatSession } from "@prisma/client";
-import { InferUITool, UIDataTypes, UIMessage } from "ai";
+import type {
+  DynamicToolUIPart,
+  FileUIPart,
+  ReasoningUIPart,
+  SourceDocumentUIPart,
+  SourceUrlUIPart,
+  StepStartUIPart,
+  ToolUIPart,
+  InferUITool,
+  UIDataTypes,
+  UIMessage
+} from "ai";
 import z from "zod";
 
 export const messageMetadataSchema = z.object({
@@ -47,3 +58,54 @@ To get started, please provide me with some basic information about the lead and
 I'll be able to assist you in crafting an offer that meets your lead's requirements. 
 Let's work together to create a compelling offer!
 `
+
+// UI Types
+/**
+ * This union represents “UI parts” you might render in your stream.
+ * We only handle tool-* parts here, but keep union for your upstream list typing.
+ */
+export type ToolType =
+  | ReasoningUIPart
+  | DynamicToolUIPart
+  | SourceUrlUIPart
+  | SourceDocumentUIPart
+  | FileUIPart
+  | StepStartUIPart
+  | { type: `data-${string}`; id?: string; data: unknown }
+  | ToolUIPart<ChatTools>;
+
+/**
+ * A strongly-typed view of ONLY tool parts.
+ */
+export type ToolPart = Extract<ToolType, { type: `tool-${string}` }>;
+
+/**
+ * Tool execution state we care about.
+ * (We avoid `as any` by narrowing with type guards below.)
+ */
+export type ToolState =
+  | "pending"
+  | "partial-call"
+  | "call"
+  | "output-available"
+  | "output-error";
+
+/**
+ * A typed refinement of ToolPart that includes state/output when present.
+ * We don't assume the AI SDK always includes them, so we guard at runtime.
+ */
+export type ToolPartWithState = ToolPart & { state: ToolState };
+export type ToolPartWithOutput = ToolPartWithState & {
+  state: "output-available";
+  output: unknown;
+};
+
+/**
+ * Known tool names (tightens switch statements).
+ * If you add more named tools later, extend this union.
+ */
+export type KnownToolName =
+  | "lineItemTool"
+  | "offerFileTool"
+  | "fetchLeadInfoTool"
+  | "fileProcessingTool";

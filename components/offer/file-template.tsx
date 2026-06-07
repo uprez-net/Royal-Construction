@@ -21,13 +21,14 @@ export function OfferFileTemplate({
 
 <style>
   :root {
-    --primary: #0f172a;
-    --muted: #64748b;
-    --border: #dbe4ee;
-    --surface: #f8fafc;
+    --primary: #1f2937;
+    --muted: #6b7280;
+    --border: #e2e8f0;
+    --surface: #fbfaf7;
     --paper: #ffffff;
-    --success: #0f9d7a;
-    --danger: #d14343;
+    --accent: #c6923a;
+    --success: #7a5a1f;
+    --danger: #b45309;
   }
 
   * {
@@ -39,8 +40,8 @@ export function OfferFileTemplate({
   body {
     font-family: "Aptos", "Segoe UI", system-ui, -apple-system, sans-serif;
     background:
-      radial-gradient(circle at top, rgba(13, 148, 136, 0.08), transparent 30%),
-      linear-gradient(180deg, #eef3f8 0%, #f8fafc 100%);
+      radial-gradient(circle at top, rgba(198, 146, 58, 0.12), transparent 30%),
+      linear-gradient(180deg, #f7f6f2 0%, #fcfbf8 100%);
     color: var(--primary);
     line-height: 1.6;
     min-height: 100vh;
@@ -53,7 +54,7 @@ export function OfferFileTemplate({
     margin: 0 auto;
     padding: 32px 28px 36px;
     background: var(--paper);
-    border: 1px solid rgba(148, 163, 184, 0.28);
+    border: 1px solid rgba(226, 232, 240, 0.9);
     border-radius: 24px;
     box-shadow:
       0 20px 60px rgba(15, 23, 42, 0.08),
@@ -66,7 +67,7 @@ export function OfferFileTemplate({
 
   .badge {
     display: inline-block;
-    background: var(--surface);
+    background: rgba(198, 146, 58, 0.1);
     border: 1px solid var(--border);
     border-radius: 999px;
     padding: 5px 11px;
@@ -74,7 +75,7 @@ export function OfferFileTemplate({
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: #8b6420;
     margin-bottom: 14px;
   }
 
@@ -105,6 +106,7 @@ export function OfferFileTemplate({
     font-size: 17px;
     font-weight: 700;
     margin-bottom: 12px;
+    color: #8b6420;
   }
 
   .card {
@@ -126,7 +128,7 @@ export function OfferFileTemplate({
   }
 
   .check {
-    color: var(--success);
+    color: var(--accent);
     font-weight: bold;
   }
 
@@ -156,7 +158,7 @@ export function OfferFileTemplate({
   }
 
   .signature-line {
-    border-top: 1px solid var(--primary);
+    border-top: 1px solid var(--border);
     padding-top: 10px;
     font-size: 13px;
   }
@@ -278,7 +280,7 @@ export function OfferFileTemplate({
       ref={ref}
       title="Offer Preview"
       srcDoc={html}
-      className="block h-full min-h-0 w-[50vw] rounded-2xl border border-slate-200/60 bg-white shadow-sm"
+      className="block h-full min-h-0 w-[50vw] rounded-2xl border border-[#E2E8F0] bg-white shadow-sm"
     />
   );
 }

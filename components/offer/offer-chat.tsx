@@ -60,15 +60,15 @@ export function OfferChat() {
     <aside
       className={cn(
         "flex h-full min-h-0 w-full flex-col overflow-hidden",
-        "bg-[#1a1f26]/95 backdrop-blur-xl",
+        "bg-[#FCFBF8]",
       )}
     >
-      <div className="shrink-0 border-b border-white/10 bg-[#242b33] px-5 py-4">
+      <div className="shrink-0 border-b border-[#E2E8F0] bg-white/95 px-5 py-4 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-linear-to-br from-[#0d7377] to-[#095456] font-serif text-lg font-bold text-white">
+          <div className="flex size-9 items-center justify-center rounded-xl border border-[#C6923A]/20 bg-[#C6923A]/10 font-semibold text-[#8B6420] shadow-sm">
             RC
           </div>
-          <span className="font-serif text-xl font-semibold text-[#f7f9fc]">
+          <span className="font-heading text-xl font-semibold tracking-tight text-slate-900">
             RealEstateGPT
           </span>
         </div>
@@ -100,10 +100,10 @@ export function OfferChat() {
                     )}
                     <div
                       className={cn(
-                        "max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed",
+                          "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
                         msg.role === "user"
-                          ? "bg-[#0d7377]/20 text-[#f7f9fc]"
-                          : "border border-[#0d7377]/30 bg-[#242b33] text-[#f7f9fc]",
+                            ? "border border-[#C6923A]/20 bg-[#C6923A]/10 text-slate-900"
+                            : "border border-[#E2E8F0] bg-white text-slate-800",
                       )}
                     >
                       {msg.parts.map((part, i) =>
@@ -128,7 +128,7 @@ export function OfferChat() {
             )}
             {status === "streaming" && <ThinkingMessage />}
             {error && (
-              <div className="max-w-[85%] self-center rounded-lg bg-red-100/70 px-3 py-2 text-sm leading-relaxed text-red-900">
+              <div className="max-w-[85%] self-center rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-relaxed text-rose-900 shadow-sm">
                 {error.message ||
                   "An error occurred while processing your chat."}
               </div>
@@ -143,7 +143,7 @@ export function OfferChat() {
           sendMessage({ parts: [{ type: "text", text: input }] });
           setInput("");
         }}
-        className="shrink-0 border-t border-white/10 bg-[#242b33] px-4 py-3"
+        className="shrink-0 border-t border-[#E2E8F0] bg-white px-4 py-3"
       >
         <div className="relative">
           <Textarea
@@ -169,7 +169,7 @@ export function OfferChat() {
                 }
               }
             }}
-            className="resize-none pr-12 rounded-lg border border-white/10 bg-[#1a1f26]/80 text-white  text-sm focus-visible:ring-0"
+            className="resize-none rounded-2xl border border-[#E2E8F0] bg-[#FAF8F3] pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-[#C6923A]/20"
           />
           <Button
             type="submit"
@@ -178,10 +178,10 @@ export function OfferChat() {
               !input.trim() || status === "streaming" || status === "submitted"
             }
             className={cn(
-              "absolute right-2 bottom-2 h-8 w-8 rounded-full",
+              "absolute right-2 bottom-2 h-8 w-8 rounded-full shadow-sm",
               input.trim()
-                ? "bg-linear-to-br from-[#0d7377] to-[#095456] text-white"
-                : "bg-[#0d7377]/40 text-[#0d7377]",
+                ? "bg-[#C6923A] text-white hover:bg-[#B88425]"
+                : "bg-[#C6923A]/15 text-[#8B6420]",
             )}
           >
             <SendHorizonalIcon className="h-4 w-4" />
@@ -200,14 +200,14 @@ export const ThinkingMessage = () => {
       data-testid="message-assistant-loading"
     >
       <div className="flex items-start justify-start gap-3">
-        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#242b33] ring-1 ring-white/10">
+        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-[#C6923A]/20 bg-[#C6923A]/10 text-[#8B6420] ring-1 ring-white/70">
           <div className="animate-pulse">
             <SparklesIcon size={14} />
           </div>
         </div>
 
         <div className="flex w-full flex-col gap-2 md:gap-4">
-          <div className="flex items-center gap-1 p-0 text-white/60 text-sm">
+          <div className="flex items-center gap-1 p-0 text-sm text-slate-500">
             <span className="animate-pulse">Thinking</span>
             <span className="inline-flex">
               <span className="animate-bounce [animation-delay:0ms]">.</span>

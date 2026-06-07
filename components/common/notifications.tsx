@@ -83,7 +83,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
         <Button
           variant="ghost"
           size="icon"
-          className="relative size-10 rounded-lg border border-white/10 bg-white/5 text-slate-500 hover:bg-white/10 hover:text-slate-300"
+          className="relative size-10 rounded-lg border border-[#E2E8F0] bg-white text-slate-500 shadow-sm hover:bg-[#F7F4EE] hover:text-slate-900"
           aria-label="Notifications"
         >
           <Bell className="size-4" />
@@ -94,25 +94,25 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
       <PopoverContent
         align="end"
         sideOffset={12}
-        className="min-w-96 overflow-hidden rounded-2xl border border-white/10 bg-[oklch(0.16_0.03_249.8)] p-0 text-slate-100 shadow-[0_24px_60px_rgba(15,23,42,0.28)]"
+        className="min-w-96 overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-0 text-slate-900 shadow-[0_24px_60px_rgba(15,23,42,0.12)]"
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 border-b border-[#E2E8F0] px-4 py-3">
           <div className="flex items-center gap-3">
-            <Inbox className="size-7 text-teal-300" />
+            <Inbox className="size-7 text-[#C6923A]" />
             <div>
               <div className="flex items-center gap-2">
                 <p className="font-semibold">Notifications</p>
                 {unreadCount > 0 && (
                   <Badge
                     variant="secondary"
-                    className="border border-teal-400/20 bg-teal-400/10 text-teal-200"
+                    className="border border-[#C6923A]/20 bg-[#C6923A]/10 text-[#8B6420]"
                   >
                     {unreadCount} unread
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="mt-1 text-xs text-slate-500">
                 Operational updates and reminders
               </p>
             </div>
@@ -124,17 +124,17 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
                   size="icon"
                   variant="ghost"
                   onClick={handleRefresh}
-                  className="size-9 rounded-xl text-slate-300 hover:bg-white/5 hover:text-white"
+                  className="size-9 rounded-xl text-slate-500 hover:bg-[#F7F4EE] hover:text-slate-900"
                   aria-label="Refresh"
                 >
                   {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-teal-300" />
+                    <Loader2 className="h-4 w-4 animate-spin text-[#C6923A]" />
                   ) : (
-                    <RefreshCcw className="h-4 w-4 text-slate-300" />
+                    <RefreshCcw className="h-4 w-4 text-slate-500" />
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent className="border border-white/10 bg-[oklch(0.16_0.03_249.8)] text-white">
+              <TooltipContent className="border border-[#E2E8F0] bg-white text-slate-900 shadow-lg">
                 Refresh
               </TooltipContent>
             </Tooltip>
@@ -143,10 +143,10 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
               size="icon"
               variant="ghost"
               onClick={() => setNotificationsOpen(false)}
-              className="size-9 rounded-xl text-slate-300 hover:bg-white/5 hover:text-white"
+              className="size-9 rounded-xl text-slate-500 hover:bg-[#F7F4EE] hover:text-slate-900"
               aria-label="Close"
             >
-              <X className="h-4 w-4 text-slate-300" />
+              <X className="h-4 w-4 text-slate-500" />
             </Button>
           </div>
         </div>
@@ -157,16 +157,16 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as InboxTab)}
           >
-            <TabsList className="border border-white/10 bg-white/5">
+            <TabsList className="border border-[#E2E8F0] bg-[#F7F4EE]">
               <TabsTrigger
                 value="all"
-                className="text-slate-400 data-[state=active]:bg-white/10 data-[state=active]:text-white hover:bg-white/5 hover:text-white"
+                className="text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-900 hover:bg-white hover:text-slate-900"
               >
                 All
               </TabsTrigger>
               <TabsTrigger
                 value="unread"
-                className="text-slate-400 data-[state=active]:bg-white/10 data-[state=active]:text-white hover:bg-white/5 hover:text-white"
+                className="text-slate-500 data-[state=active]:bg-white data-[state=active]:text-slate-900 hover:bg-white hover:text-slate-900"
               >
                 Unread
               </TabsTrigger>
@@ -178,19 +178,19 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
             onClick={handleMarkAll}
             disabled={busyAll || unreadCount === 0}
             className={cn(
-              "h-9 rounded-xl border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white",
+              "h-9 rounded-xl border border-[#E2E8F0] bg-white text-slate-700 hover:bg-[#F7F4EE] hover:text-slate-900",
             )}
           >
             {busyAll ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <CheckCheck className="mr-2 h-4 w-4 text-teal-300" />
+              <CheckCheck className="mr-2 h-4 w-4 text-[#C6923A]" />
             )}
             Mark all read
           </Button>
         </div>
         <ScrollArea
-          className="m-2 rounded-xl border border-white/10 bg-white/5 px-2 py-3 **:data-[slot='scroll-area-scrollbar']:hidden"
+          className="m-2 rounded-xl border border-[#E2E8F0] bg-[#FCFBF8] px-2 py-3 **:data-[slot='scroll-area-scrollbar']:hidden"
           style={{ height: Math.min(maxHeight, 520) }}
         >
           {isLoading ? (
