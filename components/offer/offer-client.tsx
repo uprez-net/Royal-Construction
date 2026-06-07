@@ -2,8 +2,13 @@
 import { ChatProvider } from "@/context/ChatContext";
 import { OfferChat } from "./offer-chat";
 import { OfferFileCanvas } from "./offer-file";
-import { ChatMessageAI, STARTING_AGENT_MESSAGE } from "@/types/chat";
+import { ChatMessageAI } from "@/types/chat";
 import type { File } from "@prisma/client";
+import {
+  extractLineItemsFromMessage,
+  extractOfferFileFromMessage,
+  setInitialAgentMessage,
+} from "@/utils/chat";
 
 interface OfferClientProps {
   leadId: string;
@@ -21,18 +26,9 @@ export function OfferClient({
   return (
     <ChatProvider
       chatId={chatId}
-      initialMessages={
-        initialMessages.length > 0
-          ? initialMessages
-          : [
-              {
-                id: "initial-message",
-                role: "assistant",
-                parts: [{ type: "text", text: STARTING_AGENT_MESSAGE }],
-                metadata: { createdAt: new Date().toISOString() },
-              },
-            ]
-      }
+      initialMessages={setInitialAgentMessage(initialMessages)}
+      initialOfferFile={extractOfferFileFromMessage(initialMessages)}
+      initialLineItems={extractLineItemsFromMessage(initialMessages)}
       leadId={leadId}
     >
       <div className="flex h-screen w-screen bg-[#F7F6F2] p-4 md:p-6">

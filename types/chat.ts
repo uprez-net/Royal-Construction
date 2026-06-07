@@ -52,13 +52,6 @@ export interface ChatSessionWithMessages extends ChatSession {
   messages: ChatMessage[];
 }
 
-export const STARTING_AGENT_MESSAGE = `
-Hello! I'm your offer assistant, here to help you create a personalized offer for your lead. 
-To get started, please provide me with some basic information about the lead and their needs. You can also upload any relevant files or documents that might help me understand the context better. Once I have the necessary information, 
-I'll be able to assist you in crafting an offer that meets your lead's requirements. 
-Let's work together to create a compelling offer!
-`
-
 // UI Types
 /**
  * This union represents “UI parts” you might render in your stream.

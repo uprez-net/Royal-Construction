@@ -39,7 +39,7 @@ export interface OfferFile {
   serviceExclusions?: string[];
 }
 
-const initialOfferFile: OfferFile = {
+const emptyOfferFile: OfferFile = {
   termsAndConditions: "",
   projectDescription: "",
   paymentTerms: "",
@@ -54,15 +54,19 @@ export const ChatContext = createContext<ChatContextValue | undefined>(
 export const ChatProvider = ({
   chatId,
   initialMessages,
+  initialOfferFile = emptyOfferFile,
+  initialLineItems = [],
   leadId,
   children,
 }: {
   chatId?: string;
   initialMessages: ChatMessageAI[];
+  initialOfferFile?: OfferFile;
+  initialLineItems?: LineItem[];
   leadId: string;
   children: React.ReactNode;
 }) => {
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [lineItems, setLineItems] = useState<LineItem[]>(initialLineItems);
   const [offerFile, setOfferFile] = useState<OfferFile>(initialOfferFile);
   const { messages, status, sendMessage, setMessages, resumeStream, error } =
     useChat<ChatMessageAI>({

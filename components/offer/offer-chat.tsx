@@ -14,8 +14,8 @@ import { Bot, SendHorizonalIcon, SparklesIcon } from "lucide-react";
 import { Textarea } from "../ui/textarea";
 import { Response } from "../chat/response";
 import remarkGfm from "remark-gfm";
-import { ToolResult } from "../chat/tool-result";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ToolResult } from "../chat/tool-result";
 
 export function OfferChat() {
   const { messages, sendMessage, status, error } = useChatContext();
@@ -76,7 +76,7 @@ export function OfferChat() {
       <div className="min-h-0 flex-1 overflow-hidden">
         <div
           ref={viewportRef}
-          className="h-full min-h-0 overflow-y-auto px-4 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="h-full min-h-0 overflow-y-auto px-4 py-3 no-scrollbar"
         >
           <div className="flex flex-col gap-4 pb-3">
             {messages.map(
