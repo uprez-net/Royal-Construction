@@ -52,7 +52,7 @@ export function toolNameFromType(type: ToolPart["type"]): string {
 }
 
 export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[] {
-  let lineItems: LineItem[] = [];
+  const lineItems: LineItem[] = [];
   for (const msg of message) {
     for (const part of msg.parts) {
       // Look for parts that are tool outputs with type "lineItemTool"
