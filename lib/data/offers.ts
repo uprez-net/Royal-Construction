@@ -317,6 +317,7 @@ export const getOfferKPIsCached = async () => {
 
 interface CreateOfferInput {
     leadId: number;
+    offerFileId: string;
     amount: string;
     gstAmount: string;
     totalAmount: string;
@@ -332,6 +333,7 @@ interface CreateOfferInput {
 
 export const createOffer = async ({
     leadId,
+    offerFileId,
     amount,
     gstAmount,
     totalAmount,
@@ -353,6 +355,11 @@ export const createOffer = async ({
                         totalPrice: new Prisma.Decimal(item.totalPrice),
                         unit: item.unit,
                     })),
+                },
+                files: {
+                    connect: {
+                        id: offerFileId,
+                    },
                 },
             },
             include: {

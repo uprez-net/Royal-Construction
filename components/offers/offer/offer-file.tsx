@@ -6,8 +6,11 @@ import { useRef, useState, useTransition } from "react";
 import { DataTable } from "@/components/common/data-table";
 import { ReceiptText, Files, Download, Save } from "lucide-react";
 import {
+  base64ToBlob,
+  buildBlobPath,
   currency,
   dataTimeFormat,
+  dateFormat,
   formatFileSize,
   formatFileType,
 } from "@/utils/formatters";
@@ -17,6 +20,11 @@ import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { UploadButton } from "@/components/common/upload-button";
 import { createOffer } from "@/lib/data/offers";
+import { generatePDF } from "@/lib/utils/generatePDF";
+import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
+import { upload } from "@vercel/blob/client";
+import { ClientPayload } from "@/utils/validators/files";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
@@ -54,14 +62,58 @@ export function OfferFileCanvas({
     lineItems.reduce((acc, item) => acc + item.totalPrice, 0),
   );
 
-  const handleDownload = () => {
-    if (!offerFileRef.current) return;
+  const handleDownload = async () => {
+    if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
+    try {
+      const documentHtml =
+        offerFileRef.current.contentDocument.documentElement.outerHTML;
+      const generatedPdf = await generatePDF({ html: documentHtml });
+
+      const blob = base64ToBlob(generatedPdf);
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `offer_${leadId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF. Please try again.");
+    }
   };
 
   const handleSave = async () => {
-    if (!offerFileRef.current) return;
+    if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
     // First Upload the offer file to the server, then save the offer details and line items in the database
     try {
+      const documentHtml =
+        offerFileRef.current.contentDocument.documentElement.outerHTML;
+      const generatedPdf = await generatePDF({ html: documentHtml });
+      const blob = base64ToBlob(generatedPdf);
+      const fileId = uuidv4(); // Generate a unique ID for the file
+      const fileName = `offer_${dateFormat.format(new Date())}_${leadId}.pdf`;
+
+      await upload(
+        buildBlobPath({
+          fileId: fileId,
+          fileName,
+          leadId,
+        }),
+        blob,
+        {
+          access: "public",
+          handleUploadUrl: "/api/upload",
+          clientPayload: JSON.stringify({
+            fileId: fileId,
+            fileName: fileName,
+            fileSize: blob.size,
+            leadId,
+          } satisfies ClientPayload),
+        },
+      );
+
       const amount = lineItems
         .reduce((acc, item) => acc + item.totalPrice, 0)
         .toFixed(2);
@@ -71,6 +123,7 @@ export function OfferFileCanvas({
       );
       await createOffer({
         leadId: parseInt(leadId),
+        offerFileId: fileId,
         amount: amount,
         gstAmount: gstAmount,
         totalAmount: finalAmount,

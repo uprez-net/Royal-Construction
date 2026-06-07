@@ -46,6 +46,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         fileId: clientPayload.fileId,
                         fileName: clientPayload.fileName,
                         fileSize: clientPayload.fileSize,
+                        offerId: clientPayload.offerId,
                     } satisfies TokenPayload),
                 };
             },
@@ -70,6 +71,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         fileName: payload.fileName,
                         fileType: blob.contentType,
                         fileSize: payload.fileSize,
+                        offerId: payload.offerId,
                     });
                 } catch (error) {
                     console.error('Error in onUploadCompleted', error);

@@ -106,15 +106,22 @@ interface BlobPathParams {
   milestoneId?: string;
   projectId?: string;
   leadId?: string;
+  offerId?: string;
 }
 
-export function buildBlobPath({ fileId, fileName, milestoneId, projectId, leadId }: BlobPathParams) {
+export function buildBlobPath({ fileId, fileName, milestoneId, projectId, leadId, offerId }: BlobPathParams) {
   if (milestoneId) {
     return `projects/${projectId ?? "Unknown"}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
   }
+  
   if (leadId) {
     return `leads/${leadId}/${fileId}-${sanitizeFileName(fileName)}`;
   }
+
+  if (offerId) {
+    return `offers/${offerId}/${fileId}-${sanitizeFileName(fileName)}`;
+  }
+
   else {
     return `projects/${projectId ?? "Unknown"}/${fileId}-${sanitizeFileName(fileName)}`;
   }
@@ -205,3 +212,14 @@ export function safeStringify(v: unknown) {
     return String(v);
   }
 }
+
+export const base64ToBlob = (base64: string) => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return new Blob([bytes], { type: "application/pdf" });
+};
