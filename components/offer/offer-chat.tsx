@@ -92,8 +92,8 @@ export function OfferChat() {
                     )}
                   >
                     {msg.role !== "user" && (
-                      <Avatar className="mt-0.5 h-8 w-8 border border-[#0d7377] bg-[#242b33]">
-                        <AvatarFallback className="bg-[#0d7377] text-white">
+                      <Avatar className="mt-0.5 h-8 w-8 border border-[#C6923A]/20 bg-[#C6923A]/10">
+                        <AvatarFallback className="bg-[#C6923A] text-white">
                           <Bot className="h-4 w-4" />
                         </AvatarFallback>
                       </Avatar>
