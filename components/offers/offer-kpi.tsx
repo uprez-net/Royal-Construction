@@ -6,11 +6,11 @@ interface DataPoint {
   trendDelta: number;
 }
 
-interface QuoteKPIProps {
-  activeQuotes: DataPoint;
-  approvedQuotes: DataPoint;
-  pendingQuotes: DataPoint;
-  activeVariationQuotes: DataPoint;
+interface OfferKPIProps {
+  activeOffers: DataPoint;
+  approvedOffers: DataPoint;
+  pendingOffers: DataPoint;
+  activeVariationOffers: DataPoint;
 }
 
 function TrendBadge({ value }: { value: number }) {
@@ -30,12 +30,12 @@ function TrendBadge({ value }: { value: number }) {
   );
 }
 
-export function QuoteKPI({
-  activeQuotes,
-  approvedQuotes,
-  pendingQuotes,
-  activeVariationQuotes,
-}: QuoteKPIProps) {
+export function OfferKPI({
+  activeOffers,
+  approvedOffers,
+  pendingOffers,
+  activeVariationOffers,
+}: OfferKPIProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <Card className="border-border/70 bg-white/95">
@@ -44,10 +44,10 @@ export function QuoteKPI({
             <div className="grid size-11 place-items-center rounded-xl bg-teal-600 text-white">
               <Receipt className="size-5" />
             </div>
-            <TrendBadge value={activeQuotes.trendDelta} />
+            <TrendBadge value={activeOffers.trendDelta} />
           </div>
-          <p className="text-3xl font-bold">{activeQuotes.total}</p>
-          <p className="text-xs text-muted-foreground">Active Quotes</p>
+          <p className="text-3xl font-bold">{activeOffers.total}</p>
+          <p className="text-xs text-muted-foreground">Active Offers</p>
         </CardContent>
       </Card>
 
@@ -57,10 +57,10 @@ export function QuoteKPI({
             <div className="grid size-11 place-items-center rounded-xl bg-yellow-500 text-white">
               <Hourglass className="size-5" />
             </div>
-            <TrendBadge value={pendingQuotes.trendDelta} />
+            <TrendBadge value={pendingOffers.trendDelta} />
           </div>
-          <p className="text-3xl font-bold">{pendingQuotes.total}</p>
-          <p className="text-xs text-muted-foreground">Pending Quotes</p>
+          <p className="text-3xl font-bold">{pendingOffers.total}</p>
+          <p className="text-xs text-muted-foreground">Pending Offers</p>
         </CardContent>
       </Card>
 
@@ -70,10 +70,10 @@ export function QuoteKPI({
             <div className="grid size-11 place-items-center rounded-xl bg-emerald-600 text-white">
               <CheckCircle2 className="size-5" />
             </div>
-            <TrendBadge value={approvedQuotes.trendDelta} />
+            <TrendBadge value={approvedOffers.trendDelta} />
           </div>
-          <p className="text-3xl font-bold">{approvedQuotes.total}</p>
-          <p className="text-xs text-muted-foreground">Approved Quotes</p>
+          <p className="text-3xl font-bold">{approvedOffers.total}</p>
+          <p className="text-xs text-muted-foreground">Approved Offers</p>
         </CardContent>
       </Card>
 
@@ -83,11 +83,9 @@ export function QuoteKPI({
             <div className="mb-3 grid size-11 place-items-center rounded-xl bg-orange-500 text-white">
               <RefreshCw className="size-5" />
             </div>
-            <TrendBadge value={activeVariationQuotes.trendDelta} />
+            <TrendBadge value={activeVariationOffers.trendDelta} />
           </div>
-          <p className="text-3xl font-bold">
-            {activeVariationQuotes.total}
-          </p>
+          <p className="text-3xl font-bold">{activeVariationOffers.total}</p>
           <p className="text-xs text-muted-foreground">Active Variation</p>
         </CardContent>
       </Card>

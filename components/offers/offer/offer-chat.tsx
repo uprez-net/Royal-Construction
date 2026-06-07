@@ -8,14 +8,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { Button } from "../ui/button";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Bot, SendHorizonalIcon, SparklesIcon } from "lucide-react";
-import { Textarea } from "../ui/textarea";
-import { Response } from "../chat/response";
+import { Textarea } from "@/components/ui/textarea";
+import { Response } from "@/components/chat/response";
 import remarkGfm from "remark-gfm";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ToolResult } from "../chat/tool-result";
+import { ToolResult } from "@/components/chat/tool-result";
 
 export function OfferChat() {
   const { messages, sendMessage, status, error } = useChatContext();

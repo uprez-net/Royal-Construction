@@ -3,7 +3,7 @@
 import { LineItem, OfferFile, useChatContext } from "@/context/ChatContext";
 import { cn } from "@/lib/utils";
 import { useRef, useState, useTransition } from "react";
-import { DataTable } from "../common/data-table";
+import { DataTable } from "@/components/common/data-table";
 import { ReceiptText, Files, Download, Save } from "lucide-react";
 import {
   currency,
@@ -13,10 +13,10 @@ import {
 } from "@/utils/formatters";
 import { OfferFileTemplate } from "./file-template";
 import type { File } from "@prisma/client";
-import { StatusPill } from "../common/status-pill";
-import { Button } from "../ui/button";
-import { createQuote } from "@/lib/data/quotes";
-import { UploadButton } from "../common/upload-button";
+import { StatusPill } from "@/components/common/status-pill";
+import { Button } from "@/components/ui/button";
+import { UploadButton } from "@/components/common/upload-button";
+import { createOffer } from "@/lib/data/offers";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
@@ -69,12 +69,12 @@ export function OfferFileCanvas({
       const finalAmount = (parseFloat(amount) + parseFloat(gstAmount)).toFixed(
         2,
       );
-      await createQuote({
+      await createOffer({
         leadId: parseInt(leadId),
         amount: amount,
         gstAmount: gstAmount,
         totalAmount: finalAmount,
-        quoteItems: lineItems.map((item) => ({
+        offerItems: lineItems.map((item) => ({
           item: item.item,
           description: item.description,
           quantity: item.quantity,

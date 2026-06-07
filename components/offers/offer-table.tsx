@@ -1,41 +1,41 @@
 "use client";
-import { PaginatedQuotesResult, QuoteStatusLabels } from "@/types/quote";
 import { CardContent } from "../ui/card";
 import { currency, dateFormat } from "@/utils/formatters";
 import { DataTable } from "../common/data-table";
-import { QuotePagination } from "./quote-pagination";
 import { ReceiptText, RefreshCw } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useEffect, useMemo } from "react";
-import { fetchQuotes, setQuotes } from "@/lib/store/slices/quotesSlice";
 import { toast } from "sonner";
+import { OfferStatusLabels, PaginatedOfferResult } from "@/types/offer";
+import { fetchOffers, setOffers } from "@/lib/store/slices/offerSlice";
+import { OfferPagination } from "./offer-pagination";
 
-export function QuoteTable({
+export function OfferTable({
   serverQuotes,
 }: {
-  serverQuotes: PaginatedQuotesResult;
+  serverQuotes: PaginatedOfferResult;
 }) {
   const dispatch = useAppDispatch();
-  const { quotes: stateQuotes, loading } = useAppSelector(
-    (state) => state.quotes,
+  const { offers: stateOffers, loading } = useAppSelector(
+    (state) => state.offers,
   );
-  const quotes = useMemo(() => {
-    if (stateQuotes.items.length === 0) {
+  const offers = useMemo(() => {
+    if (stateOffers.items.length === 0) {
       return serverQuotes;
     }
-    return stateQuotes;
-  }, [stateQuotes, serverQuotes]);
+    return stateOffers;
+  }, [stateOffers, serverQuotes]);
 
   useEffect(() => {
-    dispatch(setQuotes(serverQuotes));
-  }, [quotes, serverQuotes, dispatch]);
+    dispatch(setOffers(serverQuotes));
+  }, [offers, serverQuotes, dispatch]);
 
   const handlePageChange = async (page: number) => {
     try {
-      await dispatch(fetchQuotes({ page, limit: quotes.limit })).unwrap();
+      await dispatch(fetchOffers({ page, limit: offers.limit })).unwrap();
     } catch (error) {
-      console.error("Error fetching quotes for page", page, error);
-      toast.error("Failed to load quotes for page " + page);
+      console.error("Error fetching offers for page", page, error);
+      toast.error("Failed to load offers for page " + page);
     }
   };
 
@@ -43,7 +43,7 @@ export function QuoteTable({
     <CardContent className="px-5 py-4">
       <DataTable
         headers={[
-          "Quote #",
+          "Offer #",
           "Client",
           "Type",
           "Amount (Ex GST)",
@@ -53,8 +53,8 @@ export function QuoteTable({
           "Approved At",
           "Status",
         ]}
-        rows={quotes.items.map((row, index) => [
-          `QT-${index + 1}`,
+        rows={offers.items.map((row, index) => [
+          `OF-${index + 1}`,
           row.lead?.name || "N/A",
           row.lead.type.length > 0 ? row.lead.type.join(", ") : "-",
           currency.format(parseFloat(row.amount)),
@@ -62,7 +62,7 @@ export function QuoteTable({
           currency.format(parseFloat(row.totalAmount)),
           row.sentAt ? dateFormat.format(row.sentAt) : "-",
           row.acceptedAt ? dateFormat.format(row.acceptedAt) : "-",
-          QuoteStatusLabels[row.quoteStatus],
+          OfferStatusLabels[row.offerStatus],
         ])}
         emptyState={
           loading ? (
@@ -73,11 +73,11 @@ export function QuoteTable({
 
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
-                  Loading quotations...
+                  Loading offers...
                 </p>
 
                 <p className="text-xs text-muted-foreground">
-                  Your quotations will appear here.
+                  Your offers will appear here.
                 </p>
               </div>
             </div>
@@ -89,18 +89,18 @@ export function QuoteTable({
 
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
-                  No quotations available
+                  No offers available
                 </p>
 
                 <p className="text-xs text-muted-foreground">
-                  Your quotations will appear here.
+                  Your offers will appear here.
                 </p>
               </div>
             </div>
           )
         }
       />
-      <QuotePagination quotes={quotes} onPageChange={handlePageChange} />
+      <OfferPagination offers={offers} onPageChange={handlePageChange} />
     </CardContent>
   );
 }

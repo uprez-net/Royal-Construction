@@ -1,5 +1,4 @@
 "use client";
-import { PaginatedQuotesResult } from "@/types/quote";
 import {
   Pagination,
   PaginationContent,
@@ -9,12 +8,13 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { PaginatedOfferResult } from "@/types/offer";
 import { useMemo, useState } from "react";
 
-export function QuotePagination({ quotes, onPageChange }: { quotes: PaginatedQuotesResult; onPageChange: (page: number) => void }) {
-  const [currentPage, setCurrentPage] = useState(quotes.page);
+export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOfferResult; onPageChange: (page: number) => void }) {
+  const [currentPage, setCurrentPage] = useState(offers.page);
   const paginationItems = useMemo(() => {
-    const totalPages = quotes.totalPages;
+    const totalPages = offers.totalPages;
 
     if (totalPages <= 7) {
       return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -30,14 +30,14 @@ export function QuotePagination({ quotes, onPageChange }: { quotes: PaginatedQuo
     items.push(totalPages);
 
     return items;
-  }, [quotes, currentPage]);
+  }, [offers, currentPage]);
 
   return (
     <>
-      {quotes.totalCount > 0 ? (
+      {offers.totalCount > 0 ? (
         <div className="space-y-3 pt-2">
           <div className="text-center text-xs text-muted-foreground">
-            Showing {quotes.items.length} of {quotes.totalCount} quotes
+            Showing {offers.items.length} of {offers.totalCount} offers
           </div>
           <Pagination>
             <PaginationContent>
@@ -50,7 +50,7 @@ export function QuotePagination({ quotes, onPageChange }: { quotes: PaginatedQuo
                     setCurrentPage(page);
                     onPageChange(page);
                   }}
-                  aria-disabled={quotes.page === 1}
+                  aria-disabled={offers.page === 1}
                 />
               </PaginationItem>
               {paginationItems.map((item, index) =>
@@ -62,7 +62,7 @@ export function QuotePagination({ quotes, onPageChange }: { quotes: PaginatedQuo
                   <PaginationItem key={item}>
                     <PaginationLink
                       href="#"
-                      isActive={item === quotes.page}
+                      isActive={item === offers.page}
                       onClick={(event) => {
                         event.preventDefault();
                         setCurrentPage(item);
@@ -79,11 +79,11 @@ export function QuotePagination({ quotes, onPageChange }: { quotes: PaginatedQuo
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    const page = Math.min(quotes.totalPages, currentPage + 1);
+                    const page = Math.min(offers.totalPages, currentPage + 1);
                     setCurrentPage(page);
                     onPageChange(page);
                   }}
-                  aria-disabled={quotes.page >= quotes.totalPages}
+                  aria-disabled={offers.page >= offers.totalPages}
                 />
               </PaginationItem>
             </PaginationContent>

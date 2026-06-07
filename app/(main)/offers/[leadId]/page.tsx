@@ -1,4 +1,5 @@
-import { OfferClient } from "@/components/offer/offer-client";
+
+import { OfferClient } from "@/components/offers/offer/offer-client";
 import { getChatByLeadId } from "@/lib/data/chat";
 import { convertToUIMessage } from "@/utils/chat";
 import { Suspense } from "react";

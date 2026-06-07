@@ -3,15 +3,15 @@ import { Prisma } from "@prisma/client";
 import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
-import { PaginatedQuotesResult, QuoteKPIs, QuoteWithItems } from "@/types/quote";
 import { startOfWeek, subWeeks } from "date-fns";
+import { OfferKPIs, OfferWithItems, PaginatedOfferResult } from "@/types/offer";
 
-export async function getQuotes(page?: number, limit?: number, q?: string): Promise<PaginatedQuotesResult> {
+export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
     const safeLimit = Number.isFinite(limit) && (limit ?? 12) > 0 ? Math.min(Math.floor(limit ?? 12), 100) : 12;
     const safeQuery = (q && q.trim() !== "") ? q.trim() : undefined;
     try {
-        const whereClause: Prisma.QuoteWhereInput[] = [];
+        const whereClause: Prisma.OfferWhereInput[] = [];
         if (safeQuery) {
             whereClause.push({
                 OR: [
@@ -26,8 +26,8 @@ export async function getQuotes(page?: number, limit?: number, q?: string): Prom
                 ],
             });
         }
-        const [quotes, totalCount] = await Promise.all([
-            prisma.quote.findMany({
+        const [offers, totalCount] = await Promise.all([
+            prisma.offer.findMany({
                 where: { AND: whereClause },
                 include: {
                     lead: true,
@@ -35,18 +35,18 @@ export async function getQuotes(page?: number, limit?: number, q?: string): Prom
                 skip: (safePage - 1) * safeLimit,
                 take: safeLimit,
             }),
-            prisma.quote.count({
+            prisma.offer.count({
                 where: { AND: whereClause },
             }),
         ]);
         const totalPages = Math.ceil(totalCount / safeLimit);
 
         return {
-            items: quotes.map(quote => ({
-                ...quote,
-                amount: quote.amount.toString(),
-                gstAmount: quote.gstAmount.toString(),
-                totalAmount: quote.totalAmount.toString(),
+            items: offers.map(offer => ({
+                ...offer,
+                amount: offer.amount.toString(),
+                gstAmount: offer.gstAmount.toString(),
+                totalAmount: offer.totalAmount.toString(),
             })),
             page: safePage,
             limit: safeLimit,
@@ -54,7 +54,7 @@ export async function getQuotes(page?: number, limit?: number, q?: string): Prom
             totalPages,
         };
     } catch (error) {
-        console.error("Error fetching quotes:", error);
+        console.error("Error fetching offers:", error);
         return {
             items: [],
             page: safePage,
@@ -65,33 +65,33 @@ export async function getQuotes(page?: number, limit?: number, q?: string): Prom
     }
 }
 
-export async function getQuoteById(id: string): Promise<QuoteWithItems | null> {
+export async function getOfferById(id: string): Promise<OfferWithItems | null> {
     try {
-        const quote = await prisma.quote.findUnique({
+        const offer = await prisma.offer.findUnique({
             where: { id },
             include: {
                 lead: true,
-                quoteItems: true,
+                offerItems: true,
             },
         });
 
-        if (!quote) {
-            throw new Error(`Quote with ID ${id} not found`);
+        if (!offer) {
+            throw new Error(`Offer with ID ${id} not found`);
         }
 
         return {
-            ...quote,
-            amount: quote.amount.toString(),
-            gstAmount: quote.gstAmount.toString(),
-            totalAmount: quote.totalAmount.toString(),
-            items: quote.quoteItems.map(item => ({
+            ...offer,
+            amount: offer.amount.toString(),
+            gstAmount: offer.gstAmount.toString(),
+            totalAmount: offer.totalAmount.toString(),
+            items: offer.offerItems.map(item => ({
                 ...item,
                 unitPrice: item.unitPrice.toString(),
                 totalPrice: item.totalPrice.toString(),
             })) ?? [],
         };
     } catch (error) {
-        console.error("Error fetching quote by ID:", error);
+        console.error("Error fetching offer by ID:", error);
         return null;
     }
 }
@@ -104,7 +104,7 @@ function calculateTrend(current: number, previous: number) {
     return ((current - previous) / previous) * 100;
 }
 
-export async function getQuoteKPIs(): Promise<QuoteKPIs> {
+export async function getOfferKPIs(): Promise<OfferKPIs> {
     try {
         const now = new Date();
 
@@ -112,12 +112,12 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
         const previousWeekStart = subWeeks(currentWeekStart, 1);
 
         const [
-            allQuotes,
+            allOffers,
 
-            pendingQuotes,
-            approvedQuotes,
-            rejectedQuotes,
-            sentQuotes,
+            pendingOffers,
+            approvedOffers,
+            rejectedOffers,
+            sentOffers,
 
             allPreviousWeek,
             allCurrentWeek,
@@ -135,23 +135,23 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
             sentCurrentWeek,
         ] = await Promise.all([
             // Totals
-            prisma.quote.count(),
+            prisma.offer.count(),
 
-            prisma.quote.count({
-                where: { quoteStatus: "PENDING" },
+            prisma.offer.count({
+                where: { offerStatus: "PENDING" },
             }),
-            prisma.quote.count({
-                where: { quoteStatus: "ACCEPTED" },
+            prisma.offer.count({
+                where: { offerStatus: "ACCEPTED" },
             }),
-            prisma.quote.count({
-                where: { quoteStatus: "REJECTED" },
+            prisma.offer.count({
+                where: { offerStatus: "REJECTED" },
             }),
-            prisma.quote.count({
-                where: { quoteStatus: "SENT" },
+            prisma.offer.count({
+                where: { offerStatus: "SENT" },
             }),
 
-            // All Quotes Trend (created this week vs last week)
-            prisma.quote.count({
+            // All Offers Trend (created this week vs last week)
+            prisma.offer.count({
                 where: {
                     createdAt: {
                         gte: previousWeekStart,
@@ -159,7 +159,7 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
                     },
                 },
             }),
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
                     createdAt: {
                         gte: currentWeekStart,
@@ -168,18 +168,18 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
             }),
 
             // Pending Trend
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
-                    quoteStatus: "PENDING",
+                    offerStatus: "PENDING",
                     updatedAt: {
                         gte: previousWeekStart,
                         lt: currentWeekStart,
                     },
                 },
             }),
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
-                    quoteStatus: "PENDING",
+                    offerStatus: "PENDING",
                     updatedAt: {
                         gte: currentWeekStart,
                     },
@@ -187,18 +187,18 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
             }),
 
             // Approved Trend
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
-                    quoteStatus: "ACCEPTED",
+                    offerStatus: "ACCEPTED",
                     updatedAt: {
                         gte: previousWeekStart,
                         lt: currentWeekStart,
                     },
                 },
             }),
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
-                    quoteStatus: "ACCEPTED",
+                    offerStatus: "ACCEPTED",
                     updatedAt: {
                         gte: currentWeekStart,
                     },
@@ -206,18 +206,18 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
             }),
 
             // Rejected Trend
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
-                    quoteStatus: "REJECTED",
+                    offerStatus: "REJECTED",
                     updatedAt: {
                         gte: previousWeekStart,
                         lt: currentWeekStart,
                     },
                 },
             }),
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
-                    quoteStatus: "REJECTED",
+                    offerStatus: "REJECTED",
                     updatedAt: {
                         gte: currentWeekStart,
                     },
@@ -225,18 +225,18 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
             }),
 
             // Sent Trend
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
-                    quoteStatus: "SENT",
+                    offerStatus: "SENT",
                     updatedAt: {
                         gte: previousWeekStart,
                         lt: currentWeekStart,
                     },
                 },
             }),
-            prisma.quote.count({
+            prisma.offer.count({
                 where: {
-                    quoteStatus: "SENT",
+                    offerStatus: "SENT",
                     updatedAt: {
                         gte: currentWeekStart,
                     },
@@ -245,33 +245,33 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
         ]);
 
         return {
-            allQuotes: {
-                total: allQuotes,
+            allOffers: {
+                total: allOffers,
                 trendDelta: calculateTrend(allCurrentWeek, allPreviousWeek),
             },
-            pendingQuotes: {
-                total: pendingQuotes,
+            pendingOffers: {
+                total: pendingOffers,
                 trendDelta: calculateTrend(
                     pendingCurrentWeek,
                     pendingPreviousWeek,
                 ),
             },
-            approvedQuotes: {
-                total: approvedQuotes,
+            approvedOffers: {
+                total: approvedOffers,
                 trendDelta: calculateTrend(
                     approvedCurrentWeek,
                     approvedPreviousWeek,
                 ),
             },
-            rejectedQuotes: {
-                total: rejectedQuotes,
+            rejectedOffers: {
+                total: rejectedOffers,
                 trendDelta: calculateTrend(
                     rejectedCurrentWeek,
                     rejectedPreviousWeek,
                 ),
             },
-            sentQuotes: {
-                total: sentQuotes,
+            sentOffers: {
+                total: sentOffers,
                 trendDelta: calculateTrend(
                     sentCurrentWeek,
                     sentPreviousWeek,
@@ -279,48 +279,48 @@ export async function getQuoteKPIs(): Promise<QuoteKPIs> {
             },
         };
     } catch (error) {
-        console.error("Error fetching quote KPIs:", error);
+        console.error("Error fetching offer KPIs:", error);
 
         return {
-            allQuotes: { total: 0, trendDelta: 0 },
-            pendingQuotes: { total: 0, trendDelta: 0 },
-            approvedQuotes: { total: 0, trendDelta: 0 },
-            rejectedQuotes: { total: 0, trendDelta: 0 },
-            sentQuotes: { total: 0, trendDelta: 0 },
+            allOffers: { total: 0, trendDelta: 0 },
+            pendingOffers: { total: 0, trendDelta: 0 },
+            approvedOffers: { total: 0, trendDelta: 0 },
+            rejectedOffers: { total: 0, trendDelta: 0 },
+            sentOffers: { total: 0, trendDelta: 0 },
         };
     }
 }
 
-export const getQuotesCached = async (page?: number, limit?: number, q?: string) => {
+export const getOffersCached = async (page?: number, limit?: number, q?: string) => {
     "use cache";
-    cacheTag("quotes");
+    cacheTag("offers");
     cacheLife(CACHE_PROFILES.MEDIUM);
 
-    return getQuotes(page, limit, q);
+    return getOffers(page, limit, q);
 }
 
-export const getQuoteByIdCached = async (id: string) => {
+export const getOfferByIdCached = async (id: string) => {
     "use cache";
-    cacheTag(`quote-${id}`);
+    cacheTag(`offer-${id}`);
     cacheLife(CACHE_PROFILES.MEDIUM);
 
-    return getQuoteById(id);
+    return getOfferById(id);
 }
 
-export const getQuoteKPIsCached = async () => {
+export const getOfferKPIsCached = async () => {
     "use cache";
-    cacheTag("quotes");
+    cacheTag("offers");
     cacheLife(CACHE_PROFILES.MEDIUM);
 
-    return getQuoteKPIs();
+    return getOfferKPIs();
 }
 
-interface CreateQuoteInput {
+interface CreateOfferInput {
     leadId: number;
     amount: string;
     gstAmount: string;
     totalAmount: string;
-    quoteItems: {
+    offerItems: {
         item: string;
         description: string;
         quantity: number;
@@ -330,22 +330,22 @@ interface CreateQuoteInput {
     }[];
 }
 
-export const createQuote = async ({
+export const createOffer = async ({
     leadId,
     amount,
     gstAmount,
     totalAmount,
-    quoteItems
-}: CreateQuoteInput) => {
+    offerItems
+}: CreateOfferInput) => {
     try {
-        const newQuote = await prisma.quote.create({
+        const newOffer = await prisma.offer.create({
             data: {
                 leadId,
                 amount: new Prisma.Decimal(amount),
                 gstAmount: new Prisma.Decimal(gstAmount),
                 totalAmount: new Prisma.Decimal(totalAmount),
-                quoteItems: {
-                    create: quoteItems.map(item => ({
+                offerItems: {
+                    create: offerItems.map(item => ({
                         item: item.item,
                         description: item.description,
                         quantity: item.quantity,
@@ -356,26 +356,26 @@ export const createQuote = async ({
                 },
             },
             include: {
-                quoteItems: true,
+                offerItems: true,
             },
         });
 
-        revalidateTag("quotes", CACHE_PROFILES.MEDIUM);
-        revalidateTag(`quote-${newQuote.id}`, CACHE_PROFILES.MEDIUM);
+        revalidateTag("offers", CACHE_PROFILES.MEDIUM);
+        revalidateTag(`offer-${newOffer.id}`, CACHE_PROFILES.MEDIUM);
 
         return {
-            ...newQuote,
-            amount: newQuote.amount.toString(),
-            gstAmount: newQuote.gstAmount.toString(),
-            totalAmount: newQuote.totalAmount.toString(),
-            items: newQuote.quoteItems.map(item => ({
+            ...newOffer,
+            amount: newOffer.amount.toString(),
+            gstAmount: newOffer.gstAmount.toString(),
+            totalAmount: newOffer.totalAmount.toString(),
+            items: newOffer.offerItems.map(item => ({
                 ...item,
                 unitPrice: item.unitPrice.toString(),
                 totalPrice: item.totalPrice.toString(),
             })) ?? [],
         };
     } catch (error) {
-        console.error("Error creating quote:", error);
-        throw new Error("Failed to create quote");
+        console.error("Error creating offer:", error);
+        throw new Error("Failed to create offer");
     }
 }

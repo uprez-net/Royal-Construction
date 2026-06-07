@@ -5,51 +5,51 @@ import { Search } from "lucide-react";
 import { Input } from "../ui/input";
 import { useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { fetchQuotes } from "@/lib/store/slices/quotesSlice";
+import { fetchOffers } from "@/lib/store/slices/offerSlice";
 
 type TabId = "all" | "pending" | "approved" | "rejected" | "sent";
 
-interface QuoteFilterProps {
+interface OfferFilterProps {
   initialTabCounts: Record<TabId, number>;
   initialTotalCount: number;
 }
 
-export function QuoteFilter({
+export function OfferFilter({
   initialTabCounts,
   initialTotalCount,
-}: QuoteFilterProps) {
+}: OfferFilterProps) {
   const dispatch = useAppDispatch();
-  const { quotes } = useAppSelector((state) => state.quotes);
+  const { offers } = useAppSelector((state) => state.offers);
   const [searchInput, setSearchInput] = useState("");
   const [tabId, setTabId] = useState("all");
   const { tabCounts, totalCount } = useMemo(() => {
-    if (quotes.items.length === 0) {
+    if (offers.items.length === 0) {
       return {
         tabCounts: initialTabCounts,
         totalCount: initialTotalCount,
       };
     }
     const counts: Record<TabId, number> = {
-      all: quotes.totalCount,
-      pending: quotes.items.filter((q) => q.quoteStatus === "PENDING").length,
-      approved: quotes.items.filter((q) => q.quoteStatus === "ACCEPTED").length,
-      rejected: quotes.items.filter((q) => q.quoteStatus === "REJECTED").length,
-      sent: quotes.items.filter((q) => q.quoteStatus === "SENT").length,
+      all: offers.totalCount,
+      pending: offers.items.filter((o) => o.offerStatus === "PENDING").length,
+      approved: offers.items.filter((o) => o.offerStatus === "ACCEPTED").length,
+      rejected: offers.items.filter((o) => o.offerStatus === "REJECTED").length,
+      sent: offers.items.filter((o) => o.offerStatus === "SENT").length,
     };
     return {
       tabCounts: counts,
-      totalCount: quotes.totalCount,
+      totalCount: offers.totalCount,
     };
-  }, [quotes, initialTabCounts, initialTotalCount]);
+  }, [offers, initialTabCounts, initialTotalCount]);
 
   const handleSearchChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchInput(query);
     if (query.trim() === "") return;
     try {
-      await dispatch(fetchQuotes({ q: query })).unwrap();
+      await dispatch(fetchOffers({ q: query })).unwrap();
     } catch (error) {
-      console.error("Error searching quotes", error);
+      console.error("Error searching offers", error);
     }
   };
 
@@ -80,7 +80,7 @@ export function QuoteFilter({
 
                   <span
                     className={cn(
-                      "ml-2 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
+                      "ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
                       active
                         ? "bg-teal-600 text-white"
                         : "bg-muted text-muted-foreground group-hover:bg-background",
@@ -99,7 +99,7 @@ export function QuoteFilter({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative max-w-[280px] flex-1">
+          <div className="relative max-w-70 flex-1">
             <label htmlFor="search" className="sr-only">
               Search
             </label>
@@ -109,7 +109,7 @@ export function QuoteFilter({
             <Input
               id="search"
               className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
-              placeholder="Search quotes..."
+              placeholder="Search offers..."
               value={searchInput}
               onChange={handleSearchChange}
             />

@@ -90,7 +90,7 @@ export function UploadButton({
         id: fileId,
         projectId: projectId ?? null,
         milestoneId: milestoneId ?? null,
-        quoteId: null,
+        offerId: null,
         leadId: leadId ? parseInt(leadId) : null,
         filename: file.name,
         fileType: blob.contentType,

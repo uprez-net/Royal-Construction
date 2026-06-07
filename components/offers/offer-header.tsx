@@ -5,7 +5,7 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { Plus } from "lucide-react";
 
-export function QuoteHeader() {
+export function OfferHeader() {
   const dispatch = useAppDispatch();
 
   return (
@@ -16,10 +16,10 @@ export function QuoteHeader() {
         <div className="relative flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-extrabold text-slate-900">
-              Quotation Management
+              Offer Management
             </h2>
             <p className="text-sm text-slate-600">
-              Manage your quotations, track their status, and ensure timely
+              Manage your offers, track their status, and ensure timely
               follow-ups.
             </p>
           </div>

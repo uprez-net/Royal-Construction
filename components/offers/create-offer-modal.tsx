@@ -113,7 +113,7 @@ export function CreateOfferFileModal({
 
       handleOpenChange(false);
       toast.info("Redirecting to offer creation page...");
-      router.push(`/quotations/${selectedLeadId}`);
+      router.push(`/offers/${selectedLeadId}`);
     } catch (error) {
       console.error("Error creating offer:", error);
       toast.error("Failed to create offer. Please try again.");
