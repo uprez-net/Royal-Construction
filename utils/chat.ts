@@ -106,11 +106,6 @@ export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile
           offerFile.serviceInclusions,
           customerOffer.serviceInclusions
         );
-
-        const updatedServiceExclusions = mergeServiceItems(
-          offerFile.serviceExclusions,
-          customerOffer.serviceExclusions
-        );
         // Patch and update the offerFile object with the output data
         offerFile = {
           ...offerFile,
@@ -120,7 +115,10 @@ export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile
             ...(customerOffer.termsAndConditions ?? []),
           ].flat(),
           serviceInclusions: updatedServiceInclusions,
-          serviceExclusions: updatedServiceExclusions,
+          serviceExclusions: [
+            ...(offerFile.serviceExclusions ?? []),
+            ...(customerOffer.serviceExclusions ?? []),
+          ].flat(),
         };
       }
     }
@@ -148,9 +146,23 @@ export function setInitialAgentMessage(msg: ChatMessageAI[]): ChatMessageAI[] {
 }
 
 export const serviceItemSchema = z.object({
-  id: z.string().describe("Unique identifier for the service item"),
-  sectionTitle: z.string().describe("Optional title for the section of service items like 'Kitchen' or 'Bathroom'. Can be left out if not applicable."),
-  items: z.array(z.string()).describe("List of services included or excluded in the offer. Each item should be a concise description of the service."),
+  id: z
+    .string()
+    .describe(
+      "Stable unique identifier for this service section. Must remain unchanged when updating an existing section. Generate a new id only when creating a brand-new section."
+    ),
+
+  sectionTitle: z
+    .string()
+    .describe(
+      "Customer-facing title for the service section (e.g. 'Kitchen', 'Bathroom', 'Electrical Works', 'Painting'). Groups related service items together. Required for each section."
+    ),
+
+  items: z
+    .array(z.string())
+    .describe(
+      "Complete list of service line items belonging to this section. Each entry should be a short, customer-facing statement describing a single inclusion or exclusion. When updating a section, provide the full final list of items that should exist after the update."
+    ),
 });
 
 export type ServiceItem = z.infer<typeof serviceItemSchema>;

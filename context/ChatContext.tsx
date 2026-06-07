@@ -37,7 +37,8 @@ export interface OfferFile {
   projectDescription?: string;
   paymentTerms?: string;
   serviceInclusions?: ServiceItem[];
-  serviceExclusions?: ServiceItem[];
+  serviceExclusions?: string[];
+  serviceExclusionsFootnote?: string;
 }
 
 const emptyOfferFile: OfferFile = {
@@ -143,10 +144,10 @@ export const ChatProvider = ({
                 prev.serviceInclusions ?? [],
                 offerData.serviceInclusions ?? [],
               ),
-              serviceExclusions: mergeServiceItems(
-                prev.serviceExclusions ?? [],
-                offerData.serviceExclusions ?? [],
-              ),
+              serviceExclusions: [
+                ...(prev.serviceExclusions ?? []),
+                ...(offerData.serviceExclusions ?? []),
+              ].flat(),
             }));
           default:
             // For now, just log all data parts. In the future, you can handle different types of data parts as needed.

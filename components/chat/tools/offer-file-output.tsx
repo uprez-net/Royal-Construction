@@ -65,14 +65,7 @@ function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
           <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
             {output.customerOffer.serviceExclusions.map((item, index) => (
               <li key={index}>
-                {item.sectionTitle && (
-                  <span className="font-medium">{item.sectionTitle}: </span>
-                )}
-                <ul className="list-disc space-y-1 pl-5">
-                  {item.items.map((subItem, subIndex) => (
-                    <li key={subIndex}>{subItem}</li>
-                  ))}
-                </ul>
+                  <span className="font-medium">{item}: </span>
               </li>
             ))}
           </ul>

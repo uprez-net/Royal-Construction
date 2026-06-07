@@ -1,7 +1,14 @@
 import { OfferFile } from "@/context/ChatContext";
+import { dateFormat } from "@/utils/formatters";
 
 interface OfferFileTemplateProps extends OfferFile {
   ref?: React.Ref<HTMLIFrameElement>;
+  customerName?: string;
+  projectName?: string;
+  proposalDate?: string;
+  drawingsDate?: string;
+  proposalNumber?: string;
+  contractAmount?: string;
 }
 
 export function OfferFileTemplate({
@@ -10,7 +17,14 @@ export function OfferFileTemplate({
   termsAndConditions,
   serviceInclusions = [],
   serviceExclusions = [],
+  serviceExclusionsFootnote,
   ref,
+  customerName = "Client",
+  projectName,
+  proposalDate = dateFormat.format(new Date()),
+  drawingsDate,
+  proposalNumber,
+  contractAmount = "$X,XXX",
 }: OfferFileTemplateProps) {
   const html = `
 <!DOCTYPE html>
@@ -21,13 +35,13 @@ export function OfferFileTemplate({
 
 <style>
   :root {
-    --primary: #1f2937;
+    --navy: #1a2f5a;
+    --gold: #c6923a;
+    --gold-dark: #8b6420;
     --muted: #6b7280;
     --border: #e2e8f0;
     --surface: #fbfaf7;
     --paper: #ffffff;
-    --accent: #c6923a;
-    --success: #7a5a1f;
     --danger: #b45309;
   }
 
@@ -39,57 +53,94 @@ export function OfferFileTemplate({
 
   body {
     font-family: "Aptos", "Segoe UI", system-ui, -apple-system, sans-serif;
-    background:
-      radial-gradient(circle at top, rgba(198, 146, 58, 0.12), transparent 30%),
-      linear-gradient(180deg, #f7f6f2 0%, #fcfbf8 100%);
-    color: var(--primary);
+    background: linear-gradient(180deg, #f5f5f0 0%, #fafaf7 100%);
+    color: var(--navy);
     line-height: 1.6;
     min-height: 100vh;
     overflow-y: auto;
-    padding: 24px 18px 28px;
+    padding: 24px 18px 40px;
   }
 
   .container {
     width: min(100%, 760px);
     margin: 0 auto;
-    padding: 32px 28px 36px;
+    padding: 0 0 36px;
     background: var(--paper);
     border: 1px solid rgba(226, 232, 240, 0.9);
-    border-radius: 24px;
+    border-radius: 20px;
     box-shadow:
-      0 20px 60px rgba(15, 23, 42, 0.08),
+      0 20px 60px rgba(15, 23, 42, 0.09),
       inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    overflow: hidden;
   }
 
-  .header {
-    margin-bottom: 28px;
+  /* ── HEADER ── */
+  .rc-header {
+    text-align: center;
+    padding: 28px 32px 20px;
+    border-bottom: 2.5px solid var(--gold);
+    background: #fff;
   }
 
-  .badge {
-    display: inline-block;
-    background: rgba(198, 146, 58, 0.1);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 5px 11px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+  .rc-company-name {
+    font-size: 26px;
+    font-weight: 900;
+    color: var(--navy);
+    letter-spacing: 0.055em;
+    font-family: "Arial Black", "Arial", sans-serif;
     text-transform: uppercase;
-    color: #8b6420;
-    margin-bottom: 14px;
+    line-height: 1.1;
+    margin-bottom: 6px;
   }
 
-  .title {
-    font-size: 34px;
-    line-height: 1.08;
+  .rc-license-line {
+    font-size: 11.5px;
+    color: var(--gold);
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+
+  /* ── PROPOSAL TITLE BLOCK ── */
+  .proposal-title-block {
+    text-align: center;
+    padding: 32px 40px 28px;
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+  }
+
+  .proposal-type-label {
+    font-size: 30px;
+    font-weight: 900;
+    color: var(--navy);
+    letter-spacing: 0.01em;
+    font-family: "Arial Black", "Arial", sans-serif;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    line-height: 1.1;
+  }
+
+  .proposal-subtitle-line {
+    font-size: 16px;
     font-weight: 700;
-    letter-spacing: -0.03em;
-    margin-bottom: 10px;
+    color: var(--gold);
+    margin-bottom: 14px;
+    letter-spacing: 0.01em;
   }
 
-  .subtitle {
-    color: var(--muted);
-    font-size: 15px;
+  .proposal-meta {
+    font-size: 13px;
+    color: #555;
+    line-height: 2;
+  }
+
+  .proposal-meta strong {
+    font-weight: 700;
+    color: var(--navy);
+  }
+
+  /* ── BODY SECTIONS ── */
+  .body-content {
+    padding: 32px 36px 0;
   }
 
   .section {
@@ -98,7 +149,7 @@ export function OfferFileTemplate({
     border-bottom: 1px solid var(--border);
   }
 
-  .section:last-child {
+  .section:last-of-type {
     border-bottom: none;
   }
 
@@ -106,14 +157,18 @@ export function OfferFileTemplate({
     font-size: 17px;
     font-weight: 700;
     margin-bottom: 12px;
-    color: #8b6420;
+    color: var(--gold-dark);
+    letter-spacing: 0.01em;
   }
 
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 16px 18px;
+    border-radius: 14px;
+    padding: 15px 18px;
+    font-size: 14px;
+    color: #374151;
+    line-height: 1.65;
   }
 
   ul {
@@ -125,61 +180,193 @@ export function OfferFileTemplate({
     gap: 8px;
     margin-bottom: 8px;
     align-items: flex-start;
+    font-size: 14px;
   }
 
-  .check {
-    color: var(--accent);
-    font-weight: bold;
+  li:last-child {
+    margin-bottom: 0;
   }
 
-  .cross {
-    color: var(--danger);
-    font-weight: bold;
-  }
-  
-  .dot {
-    color: var(--primary);
-    font-weight: bold;
-  }
+  .check { color: var(--gold); font-weight: bold; }
+  .cross { color: var(--danger); font-weight: bold; }
+  .dot   { color: var(--navy);  font-weight: bold; }
 
   .empty {
     color: var(--muted);
     font-style: italic;
-  }
-
-  .footer {
-    margin-top: 30px;
-    padding-top: 18px;
-    border-top: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 12px;
-  }
-
-  .signature {
-    margin-top: 36px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 28px;
-  }
-
-  .signature-line {
-    border-top: 1px solid var(--border);
-    padding-top: 10px;
-    font-size: 13px;
-  }
-  .service-group-title {
     font-size: 14px;
+  }
+
+  .service-group-title {
+    font-size: 13.5px;
     font-weight: 700;
     margin-bottom: 10px;
-    color: var(--primary);
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .card + .card {
     margin-top: 12px;
   }
 
-  .card ul li:last-child {
+  /* ── ACCEPTANCE SECTION ── */
+  .acceptance {
+    margin: 0 36px 0;
+    padding: 28px 32px 32px;
+    border-top: 2px solid var(--navy);
+    background: var(--surface);
+    border-radius: 0 0 16px 16px;
+  }
+
+  .acceptance-title {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--navy);
+    font-family: "Arial Black", "Arial", sans-serif;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .acceptance-divider {
+    height: 2px;
+    background: var(--gold);
+    margin-bottom: 18px;
+    border-radius: 2px;
+  }
+
+  .acceptance-body {
+    font-size: 13.5px;
+    color: #444;
+    line-height: 1.75;
+    margin-bottom: 28px;
+  }
+
+  .sig-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 36px;
+  }
+
+  .sig-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 2px;
+  }
+
+  .sig-sublabel {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 22px;
+  }
+
+  .sig-line {
+    border-top: 1px solid #aaa;
+    padding-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+  }
+  /* Inclusions — no card, gold group title, bullet list */
+  .inclusion-group {
+    margin-bottom: 20px;
+  }
+
+  .inclusion-group:last-child {
     margin-bottom: 0;
+  }
+
+  .inclusion-group-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+
+  .inclusion-list {
+    list-style: none;
+    padding-left: 4px;
+  }
+
+  .inclusion-list li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 13.5px;
+    color: #374151;
+    margin-bottom: 6px;
+    line-height: 1.55;
+  }
+
+  .inclusion-list li::before {
+    content: "•";
+    color: #374151;
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* Exclusions — flat X list, no card */
+  .exclusion-intro {
+    font-size: 13.5px;
+    color: #444;
+    margin-bottom: 14px;
+    line-height: 1.65;
+  }
+
+  .exclusion-list {
+    list-style: none;
+    padding-left: 4px;
+    margin-bottom: 16px;
+  }
+
+  .exclusion-list li {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 13.5px;
+    color: #374151;
+    margin-bottom: 7px;
+    line-height: 1.55;
+  }
+
+  .exclusion-x {
+    font-weight: 700;
+    color: #374151;
+    flex-shrink: 0;
+    font-size: 13px;
+    margin-top: 1px;
+  }
+
+  .exclusion-footnote {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.6;
+    margin-top: 12px;
+  }
+
+  /* Shared: section heading style matching screenshots */
+  .section-heading-navy {
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--navy);
+    font-family: "Arial Black", "Arial", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    margin-bottom: 10px;
+    line-height: 1.2;
+  }
+
+  .section-gold-divider {
+    height: 1.5px;
+    background: var(--gold);
+    margin-bottom: 18px;
+    border-radius: 1px;
   }
 </style>
 </head>
@@ -187,132 +374,141 @@ export function OfferFileTemplate({
 <body>
   <div class="container">
 
-    <div class="header">
-      <div class="badge">PROJECT PROPOSAL</div>
+    <!-- ── HEADER ── -->
+    <header class="rc-header">
+      <div class="rc-company-name">Royal Constructions Pty Ltd</div>
+      <div class="rc-license-line">
+        Licence No. 383992C &nbsp;|&nbsp; NSW Residential Builder &nbsp;|&nbsp; South West Sydney Specialist
+      </div>
+    </header>
 
-      <h1 class="title">
-        Service Offer
-      </h1>
-
-      <p class="subtitle">
-        Professional project proposal and scope document
-      </p>
+    <!-- ── PROPOSAL TITLE BLOCK ── -->
+    <div class="proposal-title-block">
+      <div class="proposal-type-label">Building Proposal</div>
+      ${
+        proposalNumber || projectName
+          ? `<div class="proposal-subtitle-line">${[proposalNumber, projectName].filter(Boolean).join(" — ")}</div>`
+          : ""
+      }
+      <div class="proposal-meta">
+        <strong>Prepared exclusively for:</strong> ${customerName}<br>
+        ${drawingsDate ? `Based on drawings dated ${drawingsDate}<br>` : ""}
+        Date: ${proposalDate}
+      </div>
     </div>
 
-    <section class="section">
-      <h2 class="section-title">Project Description</h2>
+    <!-- ── BODY SECTIONS ── -->
+    <div class="body-content">
 
-      <div class="card">
+      <section class="section">
+        <h2 class="section-heading-navy">Project Description</h2>
+        <div class="section-gold-divider"></div>
+        <div class="card">
+          ${
+            projectDescription ||
+            '<span class="empty">No project description provided.</span>'
+          }
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-heading-navy">What's Included In Your Fixed Price</h2>
+        <div class="section-gold-divider"></div>
+        <p class="exclusion-intro">
+          Every item below is included in your ${contractAmount ? `<strong>${contractAmount}</strong>` : ""} fixed price contract. Nothing on this list costs extra.
+        </p>
         ${
-          projectDescription ||
-          '<span class="empty">No project description provided.</span>'
+          serviceInclusions.length
+            ? serviceInclusions.map((group) => `
+                <div class="inclusion-group">
+                  <div class="inclusion-group-title">${group.sectionTitle}</div>
+                  <ul class="inclusion-list">
+                    ${group.items.map((item) => `<li>${item}</li>`).join("")}
+                  </ul>
+                </div>
+              `).join("")
+            : `<p class="empty">No inclusions specified.</p>`
         }
-      </div>
-    </section>
+      </section>
 
-    <section class="section">
-      <h2 class="section-title">Service Inclusions</h2>
-
-      ${
-        serviceInclusions.length
-          ? serviceInclusions
-              .map(
-                (section) => `
-                  <div class="card" style="margin-bottom: 12px;">
-                    <h3 class="service-group-title">${section.sectionTitle}</h3>
-
-                    <ul>
-                      ${section.items
-                        .map(
-                          (item) =>
-                            `<li><span class="check">✓</span><span>${item}</span></li>`,
-                        )
-                        .join("")}
-                    </ul>
-                  </div>
-                `,
-              )
-              .join("")
-          : `<p class="empty">No inclusions specified.</p>`
-      }
-    </section>
-
-    <section class="section">
-      <h2 class="section-title">Service Exclusions</h2>
-
-      ${
-        serviceExclusions.length
-          ? serviceExclusions
-              .map(
-                (section) => `
-                  <div class="card" style="margin-bottom: 12px;">
-                    <h3 class="service-group-title">${section.sectionTitle}</h3>
-
-                    <ul>
-                      ${section.items
-                        .map(
-                          (item) =>
-                            `<li><span class="cross">✕</span><span>${item}</span></li>`,
-                        )
-                        .join("")}
-                    </ul>
-                  </div>
-                `,
-              )
-              .join("")
-          : `<p class="empty">No exclusions specified.</p>`
-      }
-    </section>
-
-    <section class="section">
-      <h2 class="section-title">Payment Terms</h2>
-
-      <div class="card">
+      <section class="section">
+        <h2 class="section-heading-navy">Exclusions — Not Included In Contract Price</h2>
+        <div class="section-gold-divider"></div>
+        <p class="exclusion-intro">
+          The following items are outside this contract and are to be arranged and funded by ${customerName}:
+        </p>
         ${
-          paymentTerms ||
-          '<span class="empty">Payment terms not provided.</span>'
-        }
-      </div>
-    </section>
-
-    <section class="section">
-      <h2 class="section-title">Terms & Conditions</h2>
-
-      <div class="card">
-        ${
-          (termsAndConditions && termsAndConditions?.length > 0)
-            ? `
-              <ul>
-                ${termsAndConditions
-                  .map(
-                    (item) =>
-                      `<li><span class="dot">•</span><span>${item}</span></li>`,
-                  )
-                  .join("")}
+          serviceExclusions.length
+            ? `<ul class="exclusion-list">
+                ${serviceExclusions.map((item) => `
+                  <li>
+                    <span class="exclusion-x">X</span>
+                    <span>${item}</span>
+                  </li>
+                `).join("")}
               </ul>
-          `
-            : '<span class="empty">Terms and conditions not provided.</span>'
+              ${serviceExclusionsFootnote
+                ? `<p class="exclusion-footnote">${serviceExclusionsFootnote}</p>`
+                : ""}
+            `
+            : `<p class="empty">No exclusions specified.</p>`
         }
-      </div>
-    </section>
+      </section>
 
-    <div class="signature">
-      <div>
-        <div class="signature-line">
-          Client Signature
+      <section class="section">
+        <h2 class="section-heading-navy">Payment Terms</h2>
+        <div class="section-gold-divider"></div>
+        <div class="card">
+          ${
+            paymentTerms ||
+            '<span class="empty">Payment terms not provided.</span>'
+          }
         </div>
-      </div>
+      </section>
 
-      <div>
-        <div class="signature-line">
-          Service Provider Signature
+      <section class="section">
+        <h2 class="section-heading-navy">Terms &amp; Conditions</h2>
+        <div class="section-gold-divider"></div>
+        <div class="card">
+          ${
+            termsAndConditions && termsAndConditions.length > 0
+              ? `<ul>
+                  ${termsAndConditions
+                    .map(
+                      (item) =>
+                        `<li><span class="dot">•</span><span>${item}</span></li>`,
+                    )
+                    .join("")}
+                 </ul>`
+              : '<span class="empty">Terms and conditions not provided.</span>'
+          }
         </div>
-      </div>
+      </section>
+
     </div>
 
-    <div class="footer">
-      This document serves as a proposal outlining the project scope,
-      deliverables, payment structure, and agreed terms.
+    <!-- ── ACCEPTANCE / SIGNATURE ── -->
+    <div class="acceptance">
+      <div class="acceptance-title">Acceptance</div>
+      <div class="acceptance-divider"></div>
+      <p class="acceptance-body">
+        Royal Constructions is committed to delivering <strong>${customerName}</strong>'s
+        project to the highest possible standard. We look forward to welcoming you to the
+        Royal Constructions family. Please sign and return this proposal along with the
+        required deposit to secure your commencement date.
+      </p>
+      <div class="sig-grid">
+        <div>
+          <div class="sig-label">For Royal Constructions Pty Ltd:</div>
+          <div class="sig-sublabel">Licence No. 383992C</div>
+          <div class="sig-line">Authorised Signature / Date</div>
+        </div>
+        <div>
+          <div class="sig-label">Client Acceptance:</div>
+          <div class="sig-sublabel">I/We agree to proceed on the terms of this proposal</div>
+          <div class="sig-line">${customerName} — Signature / Date</div>
+        </div>
+      </div>
     </div>
 
   </div>

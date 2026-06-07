@@ -79,6 +79,11 @@ export async function updateChatMessages(messages: MessageData[], leadId: number
 interface FetchChatResponse {
     chatSession: ChatSessionWithMessages | null;
     files: File[];
+    leadInfo: {
+        name: string;
+        location: string;
+        type: string;
+    };
 }
 
 export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse> {
@@ -90,12 +95,28 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
             where: { leadId },
             include: { messages: true },
         });
-        
+
         const leadFiles = await prisma.file.findMany({
             where: { leadId },
         });
 
-        return {chatSession, files: leadFiles};
+        const lead = await prisma.lead.findUnique({
+            where: { id: leadId },
+            select: {
+                name: true,
+                location: true,
+                type: true,
+            }
+        });
+
+        return {
+            chatSession,
+            files: leadFiles,
+            leadInfo: {
+                ...lead!,
+                type: lead!.type.length > 0 ? lead!.type.join(", ") : "Not Specified"
+            }
+        };
     } catch (error) {
         console.error("Error fetching chat session by lead ID:", error);
         throw new Error("Failed to fetch chat session");

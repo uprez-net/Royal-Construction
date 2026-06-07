@@ -9,7 +9,7 @@ async function OfferCreationContent({
   params: Promise<{ leadId: string }>;
 }) {
   const { leadId } = await params;
-  const { chatSession: chat, files } = await getChatByLeadId(parseInt(leadId));
+  const { chatSession: chat, files, leadInfo } = await getChatByLeadId(parseInt(leadId));
 
   return (
     <OfferClient
@@ -19,6 +19,7 @@ async function OfferCreationContent({
         chat?.messages ? [...convertToUIMessage(chat.messages)] : []
       }
       files={files}
+      leadInfo={leadInfo}
     />
   );
 }

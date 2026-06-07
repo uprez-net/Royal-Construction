@@ -5,7 +5,12 @@ import { cn } from "@/lib/utils";
 import { useRef, useState, useTransition } from "react";
 import { DataTable } from "../common/data-table";
 import { ReceiptText, Files, Download, Save } from "lucide-react";
-import { currency, dataTimeFormat, formatFileSize, formatFileType } from "@/utils/formatters";
+import {
+  currency,
+  dataTimeFormat,
+  formatFileSize,
+  formatFileType,
+} from "@/utils/formatters";
 import { OfferFileTemplate } from "./file-template";
 import type { File } from "@prisma/client";
 import { StatusPill } from "../common/status-pill";
@@ -19,7 +24,7 @@ const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
     offerFile.paymentTerms?.trim() ||
     offerFile.projectDescription?.trim() ||
     offerFile.serviceExclusions?.length ||
-    offerFile.termsAndConditions?.trim() ||
+    offerFile.termsAndConditions?.length ||
     offerFile.serviceExclusions?.length
   )
     return false;
@@ -30,15 +35,24 @@ const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
 export function OfferFileCanvas({
   files,
   leadId,
+  customerName,
+  projectType,
+  location,
 }: {
   leadId: string;
   files: File[];
+  customerName: string;
+  projectType: string;
+  location: string;
 }) {
   const { offerFile, lineItems } = useChatContext();
   const offerFileRef = useRef<HTMLIFrameElement | null>(null);
   const [tabId, setTabId] = useState<"offer" | "files" | "line-items">("offer");
   const [isPending, startTransition] = useTransition();
   const [filesState, setFiles] = useState<File[]>(files);
+  const totalAmount = currency.format(
+    lineItems.reduce((acc, item) => acc + item.totalPrice, 0),
+  );
 
   const handleDownload = () => {
     if (!offerFileRef.current) return;
@@ -127,14 +141,20 @@ export function OfferFileCanvas({
             className="border-[#E2E8F0] bg-white text-slate-700 hover:bg-[#F7F4EE] hover:text-slate-900"
           >
             <Save className="size-4" />
-            Save Quotation
+            Save Offer
           </Button>
         </div>
       </div>
 
       {tabId === "offer" && (
         <div className="min-h-0 w-[50vw] flex-1 overflow-hidden bg-[#FAF8F3] p-3 lg:p-4">
-          <OfferFileTemplate {...offerFile} ref={offerFileRef} />
+          <OfferFileTemplate
+            {...offerFile}
+            ref={offerFileRef}
+            contractAmount={totalAmount}
+            customerName={customerName}
+            projectName={`${projectType}, ${location}`}
+          />
         </div>
       )}
 

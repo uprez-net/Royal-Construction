@@ -15,6 +15,11 @@ interface OfferClientProps {
   chatId?: string;
   initialMessages: ChatMessageAI[];
   files: File[];
+  leadInfo: {
+    name: string;
+    location: string;
+    type: string;
+  };
 }
 
 export function OfferClient({
@@ -22,6 +27,7 @@ export function OfferClient({
   chatId,
   initialMessages,
   files,
+  leadInfo,
 }: OfferClientProps) {
   return (
     <ChatProvider
@@ -38,7 +44,13 @@ export function OfferClient({
           </div>
 
           <div className="flex min-w-0 flex-1 overflow-hidden bg-[#FAF8F3]">
-            <OfferFileCanvas files={files} leadId={leadId} />
+            <OfferFileCanvas
+              files={files}
+              leadId={leadId}
+              customerName={leadInfo.name}
+              projectType={leadInfo.type}
+              location={leadInfo.location}
+            />
           </div>
         </div>
       </div>
