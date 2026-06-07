@@ -8,12 +8,27 @@ import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
 import { Prisma, ChatSession } from "@prisma/client";
-import { format, subMonths, startOfMonth } from "date-fns";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
 import { ClientSecretCredential } from "@azure/identity";
 import { render } from "@react-email/components";
 import FollowUpStageMeeting from "../graph/Email/followupstageMeetingcreation";
+import {
+  format,
+  subMonths,
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  startOfQuarter,
+  endOfQuarter,
+  startOfYear,
+  endOfYear,
+} from "date-fns";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
+
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
@@ -55,66 +70,54 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
   let timingFilter = {};
 
   if (hasTimingFilter) {
-    // 2. Perform the timezone & boundary calculations only when active
-    const now = new Date();
-    const dateInSydney = new Date(now.toLocaleString("en-US", { timeZone: "Australia/Sydney" }));
-    const dateInUTC = new Date(now.toLocaleString("en-US", { timeZone: "UTC" }));
-    const sydneyOffsetMs = dateInSydney.getTime() - dateInUTC.getTime();
+    const timeZone = "Australia/Sydney";
 
-    const startSydney = new Date(dateInSydney);
-    const endSydney = new Date(dateInSydney);
+    // Current date in Sydney
+    const sydneyNow = toZonedTime(new Date(), timeZone);
 
-    if (filterTiming === 'today') {
-      startSydney.setHours(0, 0, 0, 0);
-      endSydney.setHours(23, 59, 59, 999);
-    }
-    else if (filterTiming === 'this_week') {
-      const day = startSydney.getDay();
-      const diffToMonday = day === 0 ? 6 : day - 1;
-      startSydney.setDate(startSydney.getDate() - diffToMonday);
-      startSydney.setHours(0, 0, 0, 0);
+    let startSydney: Date;
+    let endSydney: Date;
 
-      endSydney.setDate(startSydney.getDate() + 6);
-      endSydney.setHours(23, 59, 59, 999);
-    }
-    else if (filterTiming === 'this_month') {
-      startSydney.setDate(1);
-      startSydney.setHours(0, 0, 0, 0);
+    switch (filterTiming) {
+      case "today":
+        startSydney = startOfDay(sydneyNow);
+        endSydney = endOfDay(sydneyNow);
+        break;
 
-      endSydney.setMonth(endSydney.getMonth() + 1);
-      endSydney.setDate(0);
-      endSydney.setHours(23, 59, 59, 999);
-    }
-    else if (filterTiming === 'quarter') {
-      const currentMonth = startSydney.getMonth();
-      const quarterStartMonth = Math.floor(currentMonth / 3) * 3;
-      startSydney.setMonth(quarterStartMonth);
-      startSydney.setDate(1);
-      startSydney.setHours(0, 0, 0, 0);
+      case "this_week":
+        startSydney = startOfWeek(sydneyNow, { weekStartsOn: 1 }); // Monday
+        endSydney = endOfWeek(sydneyNow, { weekStartsOn: 1 });
+        break;
 
-      endSydney.setMonth(quarterStartMonth + 3);
-      endSydney.setDate(0);
-      endSydney.setHours(23, 59, 59, 999);
-    }
-    else if (filterTiming === 'this_year') {
-      startSydney.setMonth(0);
-      startSydney.setDate(1);
-      startSydney.setHours(0, 0, 0, 0);
+      case "this_month":
+        startSydney = startOfMonth(sydneyNow);
+        endSydney = endOfMonth(sydneyNow);
+        break;
 
-      endSydney.setMonth(11);
-      endSydney.setDate(31);
-      endSydney.setHours(23, 59, 59, 999);
+      case "quarter":
+        startSydney = startOfQuarter(sydneyNow);
+        endSydney = endOfQuarter(sydneyNow);
+        break;
+
+      case "this_year":
+        startSydney = startOfYear(sydneyNow);
+        endSydney = endOfYear(sydneyNow);
+        break;
+
+      default:
+        startSydney = startOfDay(sydneyNow);
+        endSydney = endOfDay(sydneyNow);
     }
 
-    // 3. Convert local boundary dates to UTC dates
-    const startUTC = new Date(startSydney.getTime() - sydneyOffsetMs);
-    const endUTC = new Date(endSydney.getTime() - sydneyOffsetMs);
+    // Convert Sydney boundaries back to UTC for Prisma
+    const startUTC = fromZonedTime(startSydney, timeZone);
+    const endUTC = fromZonedTime(endSydney, timeZone);
 
     timingFilter = {
       createdAt: {
         gte: startUTC,
-        lte: endUTC
-      }
+        lte: endUTC,
+      },
     };
   }
 

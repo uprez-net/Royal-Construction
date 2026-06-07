@@ -29,6 +29,7 @@ import {
 } from "@/lib/leads/leads-service";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { ReactEmailIframe } from "../render-email";
+import { v4 as uuidv4 } from "uuid";
 
 interface TableViewProps {
   loading: boolean;
@@ -319,7 +320,7 @@ export default function TableView({
   });
 
   const [toasts, setToasts] = useState<
-    { id: number; message: string; type: "success" | "info" }[]
+    { id: string; message: string; type: "success" | "info" }[]
   >([]);
 
   const activeFilters = useMemo(() => {
@@ -357,7 +358,7 @@ export default function TableView({
   }, []);
 
   const showToast = (message: string, type: "success" | "info" = "success") => {
-    const id = Date.now() + Math.random();
+    const id = uuidv4();
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));

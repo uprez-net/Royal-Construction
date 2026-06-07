@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
-import { Hourglass, List, Loader2, Plus } from "lucide-react";
+import { Hourglass, List, Loader2, Plus, Send } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -33,6 +33,8 @@ import { buildBlobPath } from "@/utils/formatters";
 import { ClientPayload } from "@/utils/validators/files";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "../ui/skeleton";
 
 interface CreateOfferFileModalProps {
   open: boolean;
@@ -229,29 +231,38 @@ export function CreateOfferFileModal({
             />
 
             {leadSearch.loading ? (
-              <div className="grid gap-3 sm:grid-cols-2 max-h-[20vh] scrollbar-thin overflow-y-auto p-2">
+              <div className="grid gap-3 sm:grid-cols-2 max-h-[24vh] scrollbar-thin overflow-y-auto p-2">
                 {Array.from({ length: 10 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="animate-pulse rounded-2xl border border-border bg-background p-4 overflow-y-auto"
-                  >
-                    <div className="h-4 w-3/4 rounded bg-muted" />
-                    <div className="mt-3 space-y-1">
-                      <div className="h-3 w-1/2 rounded bg-muted" />
-                      <div className="h-3 w-1/3 rounded bg-muted" />
-                    </div>
-                  </div>
+                  <Card key={i} className="animate-pulse overflow-hidden">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-2 flex-1">
+                          <Skeleton className="h-4 w-3/4" />
+                          <Skeleton className="h-3 w-1/2" />
+                        </div>
+
+                        <Skeleton className="h-4 w-4 rounded-full" />
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        <Skeleton className="h-3 w-1/2" />
+                        <Skeleton className="h-3 w-1/3" />
+                        <Skeleton className="h-3 w-2/3" />
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 max-h-[20vh] scrollbar-thin overflow-y-auto p-2">
+              <div className="grid gap-3 sm:grid-cols-2 max-h-[24vh] scrollbar-thin overflow-y-auto p-2">
                 {leadSearch.items.map((lead) => (
-                  <div
+                  <Card
                     key={lead.id}
                     className={cn(
-                      "relative rounded-2xl border border-border bg-background p-4 shadow-sm",
+                      "relative cursor-pointer transition-colors",
                       lead.id === selectedLeadId &&
                         "border-teal-700 ring-2 ring-teal-700",
+                      lead.stage === "Quoted" && "opacity-75",
                     )}
                     onClick={() =>
                       setSelectedLeadId(
@@ -259,31 +270,43 @@ export function CreateOfferFileModal({
                       )
                     }
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      {lead.creatingOffer && (
-                        <div className="absolute top-3.5 right-10">
-                          <span className="inline-flex items-center justify-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">
-                            <Hourglass className="mr-1.5 h-4 w-4" />
-                            Creating Offer
-                          </span>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        {(lead.creatingOffer || lead.stage === "Quoted") && (
+                          <div className="absolute top-7.5 right-10">
+                            {lead.stage === "Quoted" ? (
+                              <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
+                                <Send className="mr-1.5 h-4 w-4" />
+                                Quoted - Awaiting Feedback
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center justify-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">
+                                <Hourglass className="mr-1.5 h-4 w-4" />
+                                Creating Offer
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div>
+                          <p className="font-medium text-slate-950">
+                            {lead.name}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {lead.location}
+                          </p>
                         </div>
-                      )}
-                      <div>
-                        <p className="font-medium text-slate-950">
-                          {lead.name}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {lead.location}
-                        </p>
+
+                        <List className="size-4 text-teal-700" />
                       </div>
-                      <List className="size-4 text-teal-700" />
-                    </div>
-                    <div className="mt-3 space-y-1 text-sm text-slate-700">
-                      <p>{lead.type}</p>
-                      <p>{lead.phone}</p>
-                      <p>{lead.email}</p>
-                    </div>
-                  </div>
+
+                      <div className="mt-3 space-y-1 text-sm text-slate-700">
+                        <p>{lead.type}</p>
+                        <p>{lead.phone}</p>
+                        <p>{lead.email}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             )}

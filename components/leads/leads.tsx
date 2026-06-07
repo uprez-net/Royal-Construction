@@ -34,7 +34,7 @@ import {
   fetchAllLeads,
   fetchLeadsStats,
   sendEmailToLead,
-  FollowupCalendarCreation
+  FollowupCalendarCreation,
 } from "@/lib/leads/leads-service";
 import TableView from "./views/table-view";
 import FollowupsView from "./views/followups-view";
@@ -51,6 +51,14 @@ import { LeadAnalyticsData } from "@/types/lead";
 import { ReactEmailIframe } from "./render-email";
 import { useSearchParams } from "next/navigation";
 import { leadStatusSchema } from "@/utils/validators/lead";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { v4 as uuidv4 } from "uuid";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -215,9 +223,9 @@ export default function Leads() {
   const [adding, setAdding] = useState(false);
   const [addingWithReminder, setAddingWithReminder] = useState(false);
   const [toasts, setToasts] = useState<
-    { id: number; message: string; type: "success" | "info" }[]
+    { id: string; message: string; type: "success" | "info" }[]
   >([]);
-  const [activeFilterTiming, setActiveFilterTiming] = useState('all'); // 'all' is the default for "All Time"
+  const [activeFilterTiming, setActiveFilterTiming] = useState("all"); // 'all' is the default for "All Time"
   const [emailTargets, setEmailTargets] = useState<string[]>([]);
   const [emailTargetList, setEmailTargetList] = useState<string>("");
 
@@ -338,7 +346,8 @@ export default function Leads() {
           page: 1,
           limit: 10,
           query,
-          status: activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+          status:
+            activeMetric === "total" ? "total" : (activeMetric ?? undefined),
           filterTiming: activeFilterTiming,
         });
       });
@@ -477,6 +486,7 @@ export default function Leads() {
   };
 
   const handleFilterTimingChange = (filterTiming: string) => {
+    setActiveFilterTiming(filterTiming);
     refreshLeadsData({
       page: 1,
       limit: 10,
@@ -485,8 +495,8 @@ export default function Leads() {
       query: debouncedSearchTerm.trim()
         ? debouncedSearchTerm.trim()
         : undefined,
-    })
-  }
+    });
+  };
 
   const handlePageChange = useCallback(
     async (page: number) => {
@@ -516,7 +526,7 @@ export default function Leads() {
   };
 
   const showToast = (message: string, type: "success" | "info" = "success") => {
-    const id = Date.now() + Math.random();
+    const id = uuidv4();
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -650,17 +660,34 @@ export default function Leads() {
       formData.stage = "Contacted";
     }
 
-    if (formData.stage === 'In Follow-up') {
+    if (formData.stage === "In Follow-up") {
       if (!formData.followupDate || !formData.followupTime) {
-        showToast("Please provide follow-up date and time for 'In Follow-up' stage", "info");
+        showToast(
+          "Please provide follow-up date and time for 'In Follow-up' stage",
+          "info",
+        );
         setAdding(false);
         setAddingWithReminder(false);
         return;
       }
-      const createCalendarEventForFollowup = await FollowupCalendarCreation(formData.name, formData.email, formData.followupDate, formData.followupTime);
-      if (createCalendarEventForFollowup !== "Follow-up calendar event successfully created") {
-        console.error("Failed to create follow-up calendar event:", createCalendarEventForFollowup);
-        showToast("Failed to create follow-up calendar event. Please try again.", "info");
+      const createCalendarEventForFollowup = await FollowupCalendarCreation(
+        formData.name,
+        formData.email,
+        formData.followupDate,
+        formData.followupTime,
+      );
+      if (
+        createCalendarEventForFollowup !==
+        "Follow-up calendar event successfully created"
+      ) {
+        console.error(
+          "Failed to create follow-up calendar event:",
+          createCalendarEventForFollowup,
+        );
+        showToast(
+          "Failed to create follow-up calendar event. Please try again.",
+          "info",
+        );
         setAdding(false);
         setAddingWithReminder(false);
         return;
@@ -938,21 +965,23 @@ export default function Leads() {
           })}
           {!loading && (
             <div className="ml-auto flex items-center gap-3">
-              <select
+              <Select
                 value={activeFilterTiming}
-                onChange={(e) => {
-                  setActiveFilterTiming(e.target.value)
-                  handleFilterTimingChange(e.target.value)
-                }}
-                className="flex-none appearance-none rounded-full border border-gray-200 bg-white py-2 pl-4 pr-8 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 focus:border-rc-gold focus:outline-none focus:ring-1 focus:ring-rc-gold"
+                onValueChange={handleFilterTimingChange}
               >
-                <option value="today">Today</option>
-                <option value="this_week">This Week</option>
-                <option value="this_month">This Month</option>
-                <option value="quarter">This Quarter</option>
-                <option value="this_year">This Year</option>
-                <option value="all">All Time</option>
-              </select>
+                <SelectTrigger className="flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                  <SelectValue placeholder="Select timeframe" />
+                </SelectTrigger>
+
+                <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this_week">This Week</SelectItem>
+                  <SelectItem value="this_month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                  <SelectItem value="this_year">This Year</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
               <div className="search-box" style={{ flex: 1 }}>
                 <Search size={16} />
                 <input
