@@ -5,6 +5,7 @@ import { useChat, UseChatHelpers } from "@ai-sdk/react";
 import { fetchWithErrorHandlers } from "@/utils/chat-error";
 import { v4 as generateUUID } from "uuid";
 import { useAutoResume } from "@/hooks/use-auto-resume";
+import { mergeServiceItems, ServiceItem } from "@/utils/chat";
 
 interface ChatContextValue {
   lineItems: LineItem[];
@@ -32,15 +33,15 @@ export interface LineItem {
 }
 
 export interface OfferFile {
-  termsAndConditions?: string;
+  termsAndConditions?: string[];
   projectDescription?: string;
   paymentTerms?: string;
-  serviceInclusions?: string[];
-  serviceExclusions?: string[];
+  serviceInclusions?: ServiceItem[];
+  serviceExclusions?: ServiceItem[];
 }
 
 const emptyOfferFile: OfferFile = {
-  termsAndConditions: "",
+  termsAndConditions: [],
   projectDescription: "",
   paymentTerms: "",
   serviceInclusions: [],
@@ -134,6 +135,18 @@ export const ChatProvider = ({
             setOfferFile((prev) => ({
               ...prev,
               ...offerData,
+              termsAndConditions: [
+                ...(prev.termsAndConditions ?? []),
+                ...(offerData.termsAndConditions ?? []),
+              ].flat(),
+              serviceInclusions: mergeServiceItems(
+                prev.serviceInclusions ?? [],
+                offerData.serviceInclusions ?? [],
+              ),
+              serviceExclusions: mergeServiceItems(
+                prev.serviceExclusions ?? [],
+                offerData.serviceExclusions ?? [],
+              ),
             }));
           default:
             // For now, just log all data parts. In the future, you can handle different types of data parts as needed.

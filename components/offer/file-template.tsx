@@ -136,6 +136,11 @@ export function OfferFileTemplate({
     color: var(--danger);
     font-weight: bold;
   }
+  
+  .dot {
+    color: var(--primary);
+    font-weight: bold;
+  }
 
   .empty {
     color: var(--muted);
@@ -161,6 +166,20 @@ export function OfferFileTemplate({
     border-top: 1px solid var(--border);
     padding-top: 10px;
     font-size: 13px;
+  }
+  .service-group-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--primary);
+  }
+
+  .card + .card {
+    margin-top: 12px;
+  }
+
+  .card ul li:last-child {
+    margin-bottom: 0;
   }
 </style>
 </head>
@@ -196,16 +215,24 @@ export function OfferFileTemplate({
 
       ${
         serviceInclusions.length
-          ? `
-          <ul>
-            ${serviceInclusions
+          ? serviceInclusions
               .map(
-                (item) =>
-                  `<li><span class="check">✓</span><span>${item}</span></li>`,
+                (section) => `
+                  <div class="card" style="margin-bottom: 12px;">
+                    <h3 class="service-group-title">${section.sectionTitle}</h3>
+
+                    <ul>
+                      ${section.items
+                        .map(
+                          (item) =>
+                            `<li><span class="check">✓</span><span>${item}</span></li>`,
+                        )
+                        .join("")}
+                    </ul>
+                  </div>
+                `,
               )
-              .join("")}
-          </ul>
-        `
+              .join("")
           : `<p class="empty">No inclusions specified.</p>`
       }
     </section>
@@ -215,16 +242,24 @@ export function OfferFileTemplate({
 
       ${
         serviceExclusions.length
-          ? `
-          <ul>
-            ${serviceExclusions
+          ? serviceExclusions
               .map(
-                (item) =>
-                  `<li><span class="cross">✕</span><span>${item}</span></li>`,
+                (section) => `
+                  <div class="card" style="margin-bottom: 12px;">
+                    <h3 class="service-group-title">${section.sectionTitle}</h3>
+
+                    <ul>
+                      ${section.items
+                        .map(
+                          (item) =>
+                            `<li><span class="cross">✕</span><span>${item}</span></li>`,
+                        )
+                        .join("")}
+                    </ul>
+                  </div>
+                `,
               )
-              .join("")}
-          </ul>
-        `
+              .join("")
           : `<p class="empty">No exclusions specified.</p>`
       }
     </section>
@@ -245,8 +280,18 @@ export function OfferFileTemplate({
 
       <div class="card">
         ${
-          termsAndConditions ||
-          '<span class="empty">Terms and conditions not provided.</span>'
+          (termsAndConditions && termsAndConditions?.length > 0)
+            ? `
+              <ul>
+                ${termsAndConditions
+                  .map(
+                    (item) =>
+                      `<li><span class="dot">•</span><span>${item}</span></li>`,
+                  )
+                  .join("")}
+              </ul>
+          `
+            : '<span class="empty">Terms and conditions not provided.</span>'
         }
       </div>
     </section>

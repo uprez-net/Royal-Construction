@@ -4,6 +4,7 @@ import { formatISO } from "date-fns";
 import { UIMessagePart, UIDataTypes } from "ai";
 import { LineItem, OfferFile } from "@/context/ChatContext";
 import { v4 as uuidv4 } from "uuid";
+import z from "zod";
 
 export const convertToUIMessage = (message: ChatMessage[]): ChatMessageAI[] => {
   return message.map((msg) => ({
@@ -83,7 +84,14 @@ export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[
   return lineItems;
 }
 
-export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile | undefined {
+export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile {
+  let offerFile: OfferFile = {
+    termsAndConditions: [],
+    projectDescription: "",
+    paymentTerms: "",
+    serviceInclusions: [],
+    serviceExclusions: [],
+  };
   for (const msg of message) {
     for (const part of msg.parts) {
       // Look for parts that are tool outputs with type "offerFileTool"
@@ -94,17 +102,30 @@ export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile
         hasToolOutput(part)
       ) {
         const { customerOffer } = part.output;
-        return {
-          termsAndConditions: customerOffer.termsAndConditions,
-          projectDescription: customerOffer.projectDescription,
-          paymentTerms: customerOffer.paymentTerms,
-          serviceInclusions: customerOffer.serviceInclusions,
-          serviceExclusions: customerOffer.serviceExclusions,
+        const updatedServiceInclusions = mergeServiceItems(
+          offerFile.serviceInclusions,
+          customerOffer.serviceInclusions
+        );
+
+        const updatedServiceExclusions = mergeServiceItems(
+          offerFile.serviceExclusions,
+          customerOffer.serviceExclusions
+        );
+        // Patch and update the offerFile object with the output data
+        offerFile = {
+          ...offerFile,
+          ...customerOffer,
+          termsAndConditions: [
+            ...(offerFile.termsAndConditions ?? []),
+            ...(customerOffer.termsAndConditions ?? []),
+          ].flat(),
+          serviceInclusions: updatedServiceInclusions,
+          serviceExclusions: updatedServiceExclusions,
         };
       }
     }
   }
-  return undefined;
+  return offerFile;
 }
 
 
@@ -124,4 +145,41 @@ export function setInitialAgentMessage(msg: ChatMessageAI[]): ChatMessageAI[] {
         metadata: { createdAt: new Date().toISOString() },
       },
     ]
+}
+
+export const serviceItemSchema = z.object({
+  id: z.string().describe("Unique identifier for the service item"),
+  sectionTitle: z.string().describe("Optional title for the section of service items like 'Kitchen' or 'Bathroom'. Can be left out if not applicable."),
+  items: z.array(z.string()).describe("List of services included or excluded in the offer. Each item should be a concise description of the service."),
+});
+
+export type ServiceItem = z.infer<typeof serviceItemSchema>;
+
+
+export function mergeServiceItems(
+  existing: ServiceItem[] = [],
+  incoming: ServiceItem[] = []
+): ServiceItem[] {
+  const map = new Map<string, ServiceItem>();
+
+  for (const item of existing) {
+    map.set(item.id, item);
+  }
+
+  for (const item of incoming) {
+    const current = map.get(item.id);
+
+    map.set(
+      item.id,
+      current
+        ? {
+          ...current,
+          ...item,
+          items: [...new Set([...current.items, ...item.items])],
+        }
+        : item
+    );
+  }
+
+  return [...map.values()];
 }

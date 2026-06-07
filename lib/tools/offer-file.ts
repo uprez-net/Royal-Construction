@@ -1,84 +1,27 @@
-import type { LineItem } from "@/context/ChatContext";
+import { serviceItemSchema } from "@/utils/chat";
 import { tool, UIMessageStreamWriter } from "ai";
 import z from "zod";
 
 export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
     tool({
         description:
-            "Generates a customer-ready offer file (sections + itemised table). Computes per-line totals, subtotal, GST, and grand total. Keeps internal markup separate and does not expose it to the UI stream.",
+            `
+            Generates or patches an offer file based on the provided information.
+            Use this tool to CREATE, PATCH, or APPEND offer data by sending only the fields that changed.
+            Any provided field should be treated as an update for that section, while omitted fields should remain unchanged.
+            For list fields (termsAndConditions, serviceInclusions, serviceExclusions), send the full merged list you want saved after patching/appending.
+            The tool accepts partial payloads for incremental updates and returns the customer-facing offer data through this tool response/stream.
+            `,
         inputSchema: z.object({
+            changeDescription: z.string().optional().describe("Description of the change being made to the offer file, e.g. 'Initial creation', 'Added payment terms', etc."),
             leadId: z.number().optional().describe("Optional lead id to associate the offer with"),
-            lineItems: z
-                .array(
-                    z.object({
-                        id: z.string(),
-                        item: z.string(),
-                        description: z.string(),
-                        unitPrice: z.number(),
-                        quantity: z.number(),
-                        unit: z.string().optional(),
-                        gstRate: z.number().optional().describe("GST rate as decimal, e.g. 0.10"),
-                        gstIncluded: z.boolean().optional(),
-                        source: z.string().optional(),
-                    }),
-                )
-                .optional(),
-            termsAndConditions: z.string().optional(),
-            projectDescription: z.string().optional(),
-            paymentTerms: z.string().optional(),
-            serviceInclusions: z.array(z.string()).optional(),
-            serviceExclusions: z.array(z.string()).optional(),
-            internalMarkupPercent: z.number().optional().describe("Internal markup percent applied to cost (private, default 10)").default(10),
+            projectDescription: z.string().optional().describe("Description of the project"),
+            paymentTerms: z.string().optional().describe("Payment terms for the offer"),
+            termsAndConditions: z.array(z.string()).optional().describe("Terms and conditions for the offer, each item in the array represents a separate term or condition. For patching/appending, send the full merged list of terms and conditions you want saved or updated."),
+            serviceInclusions: z.array(serviceItemSchema).optional().describe("List of services included in the offer, keep the ids consistent for patching"),
+            serviceExclusions: z.array(serviceItemSchema).optional().describe("List of services excluded from the offer, keep the ids consistent for patching"),
         }),
         execute: async (params) => {
-            const items = params.lineItems ?? [];
-            const internalMarkup = params.internalMarkupPercent ?? 10;
-
-            // Compute per-line and aggregate values. We'll expose only customer-facing fields to the UI stream.
-            const customerLineItems = [] as LineItem[];
-            let subtotalNet = 0;
-            let totalGST = 0;
-
-            for (const it of items) {
-                const gstRate = it.gstRate ?? 0;
-                const raw = it.unitPrice * it.quantity;
-
-                // If unitPrice already includes GST, extract net then compute gst on net after markup
-                let netBeforeMarkup = raw;
-                if (it.gstIncluded) {
-                    netBeforeMarkup = +(raw / (1 + gstRate)).toFixed(2);
-                }
-
-                // Apply internal markup to derive selling price (customer-facing price includes markup)
-                const sellingNet = +(netBeforeMarkup * (1 + internalMarkup / 100)).toFixed(2);
-
-                // Compute GST on the selling net (if gst not included) or compute gst portion if included
-                const gstAmount = +(sellingNet * gstRate).toFixed(2);
-
-                const totalPrice = +(sellingNet + gstAmount).toFixed(2);
-
-                subtotalNet += sellingNet;
-                totalGST += gstAmount;
-
-                customerLineItems.push({
-                    id: it.id,
-                    item: it.item,
-                    description: it.description,
-                    unit: it.unit ?? "Unknown unit",
-                    quantity: it.quantity,
-                    unitPrice: +(sellingNet / it.quantity).toFixed(2),
-                    totalPrice: totalPrice,
-                    gstRate,
-                    gstIncluded: false, // We always show prices to customer as GST exclusive for clarity, even if input was gstIncluded
-                    source: it.source,
-                    netLine: sellingNet,
-                    gstAmount,
-                });
-            }
-
-            const subTotal = +subtotalNet.toFixed(2);
-            const gst = +totalGST.toFixed(2);
-            const grandTotal = +(subTotal + gst).toFixed(2);
 
             // Write only customer-facing data to the UI stream
             dataStream.write({
@@ -90,25 +33,12 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
                     paymentTerms: params.paymentTerms,
                     serviceInclusions: params.serviceInclusions,
                     serviceExclusions: params.serviceExclusions,
-                    lineItems: customerLineItems,
-                    subTotal,
-                    gst,
-                    grandTotal,
                 },
             });
 
-            // Prepare internal summary for server-side bookkeeping (not sent to UI stream)
-            const internalSummary = {
-                internalMarkupPercent: internalMarkup,
-                costBeforeMarkup: +(items.reduce((acc, it) => acc + it.unitPrice * it.quantity, 0)).toFixed(2),
-                sellingSubtotal: subTotal,
-                gst,
-                grandTotal,
-            };
-
             return {
                 message: `Offer file generated for lead ${params.leadId ?? "unknown"}`,
-                description: `Generated offer with ${customerLineItems.length} line items, subtotal ${subTotal}, gst ${gst}, grand total ${grandTotal}.`,
+                description: params.changeDescription,
                 customerOffer: {
                     leadId: params.leadId,
                     projectDescription: params.projectDescription,
@@ -116,12 +46,7 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
                     paymentTerms: params.paymentTerms,
                     serviceInclusions: params.serviceInclusions,
                     serviceExclusions: params.serviceExclusions,
-                    lineItems: customerLineItems,
-                    subTotal,
-                    gst,
-                    grandTotal,
                 },
-                internal: internalSummary,
             };
         },
     });
