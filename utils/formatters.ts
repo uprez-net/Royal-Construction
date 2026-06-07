@@ -45,6 +45,21 @@ export function formatFileSize(bytes: number): string {
   return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+export function formatFileType(fileType: string): string {
+  // Minify MIME types to common file extensions
+  const mapping: Record<string, string> = {
+    "application/pdf": "PDF",
+    "application/msword": "DOC",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    "application/vnd.ms-excel": "XLS",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+      "XLSX",
+    "text/csv": "CSV",
+  };
+
+  return mapping[fileType] || fileType.split("/").pop()?.toUpperCase() || "FILE";
+}
+
 export function formatStatus(status: string) {
   return status
     .split("_")
@@ -90,11 +105,15 @@ interface BlobPathParams {
   fileName: string;
   milestoneId?: string;
   projectId?: string;
+  leadId?: string;
 }
 
-export function buildBlobPath({fileId, fileName, milestoneId, projectId}: BlobPathParams) {
-  if(milestoneId) {
+export function buildBlobPath({ fileId, fileName, milestoneId, projectId, leadId }: BlobPathParams) {
+  if (milestoneId) {
     return `projects/${projectId ?? "Unknown"}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
+  }
+  if (leadId) {
+    return `leads/${leadId}/${fileId}-${sanitizeFileName(fileName)}`;
   }
   else {
     return `projects/${projectId ?? "Unknown"}/${fileId}-${sanitizeFileName(fileName)}`;

@@ -12,18 +12,14 @@ async function OfferCreationContent({
   const { chatSession: chat, files } = await getChatByLeadId(parseInt(leadId));
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1">
-      <section className="flex h-full min-h-0 w-full flex-1 overflow-hidden rounded-2xl border border-slate-200/60 bg-white/80 shadow-sm backdrop-blur">
-        <OfferClient
-          leadId={leadId}
-          chatId={chat?.id}
-          initialMessages={
-            chat?.messages ? [...convertToUIMessage(chat.messages)] : []
-          }
-          files={files}
-        />
-      </section>
-    </div>
+    <OfferClient
+      leadId={leadId}
+      chatId={chat?.id}
+      initialMessages={
+        chat?.messages ? [...convertToUIMessage(chat.messages)] : []
+      }
+      files={files}
+    />
   );
 }
 

@@ -3,7 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Plus, Eye, Send, Download, Search, Files } from "lucide-react";
 import { StatusPill } from "@/components/common/status-pill";
 
-import { dataTimeFormat, formatFileSize } from "@/utils/formatters";
+import {
+  dataTimeFormat,
+  formatFileSize,
+  formatFileType,
+} from "@/utils/formatters";
 import { ProjectDetail } from "@/types/project";
 import { DataTable } from "@/components/common/data-table";
 import { Input } from "@/components/ui/input";
@@ -67,12 +71,12 @@ export function ProjectQuotesTab({ project }: ProjectQuotesTabProps) {
                 {index + 1}
               </span>,
               <span key={`${file.id}-name`}>{file.filename}</span>,
-              <StatusPill key={`${file.id}-type`} tone={"primary"}>
-                {file.fileType}
-              </StatusPill>,
               <span key={`${file.id}-size`}>
                 {formatFileSize(file.filesize)}
               </span>,
+              <StatusPill key={`${file.id}-type`} tone={"primary"}>
+                {formatFileType(file.fileType)}
+              </StatusPill>,
               <span key={`${file.id}-milestone`}>
                 {file.milestoneId
                   ? project.milestones.find((m) => m.id === file.milestoneId)

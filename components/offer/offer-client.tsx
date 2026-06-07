@@ -29,12 +29,12 @@ export function OfferClient({
       }]}
       leadId={leadId}
     >
-      <div className="grid h-full min-h-0 min-w-0 grid-cols-1 lg:grid-cols-12">
-        <div className="flex min-h-0 min-w-0 overflow-hidden border-slate-200/60 lg:col-span-4 lg:border-r">
+      <div className="flex h-screen w-screen flex-1 rounded-lg border bg-popover">
+        <div className="flex w-[25vw]">
           <OfferChat />
         </div>
 
-        <div className="flex min-h-0 min-w-0 overflow-hidden bg-slate-50/30 lg:col-span-8">
+        <div className="flex overflow-hidden flex-1">
           <OfferFileCanvas files={files} leadId={leadId} />
         </div>
       </div>

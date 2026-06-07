@@ -5,12 +5,13 @@ import { cn } from "@/lib/utils";
 import { useRef, useState, useTransition } from "react";
 import { DataTable } from "../common/data-table";
 import { ReceiptText, Files, Download, Save } from "lucide-react";
-import { currency, dataTimeFormat, formatFileSize } from "@/utils/formatters";
+import { currency, dataTimeFormat, formatFileSize, formatFileType } from "@/utils/formatters";
 import { OfferFileTemplate } from "./file-template";
 import type { File } from "@prisma/client";
 import { StatusPill } from "../common/status-pill";
 import { Button } from "../ui/button";
 import { createQuote } from "@/lib/data/quotes";
+import { UploadButton } from "../common/upload-button";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
@@ -37,6 +38,7 @@ export function OfferFileCanvas({
   const offerFileRef = useRef<HTMLIFrameElement | null>(null);
   const [tabId, setTabId] = useState<"offer" | "files" | "line-items">("offer");
   const [isPending, startTransition] = useTransition();
+  const [filesState, setFiles] = useState<File[]>(files);
 
   const handleDownload = () => {
     if (!offerFileRef.current) return;
@@ -129,7 +131,7 @@ export function OfferFileCanvas({
       </div>
 
       {tabId === "offer" && (
-        <div className="min-h-0 flex-1 overflow-hidden p-3 lg:p-4">
+        <div className="min-h-0 w-[50vw] flex-1 overflow-hidden p-3 lg:p-4">
           <OfferFileTemplate {...offerFile} ref={offerFileRef} />
         </div>
       )}
@@ -182,9 +184,17 @@ export function OfferFileCanvas({
 
       {tabId === "files" && (
         <div className="min-h-0 w-[50vw] flex-1 overflow-auto px-4 py-4 lg:px-5">
+          <div className="mb-4 flex items-center justify-end gap-2">
+            <UploadButton
+              leadId={leadId.toString()}
+              onUpload={(uploadedFiles) =>
+                setFiles((prevFiles) => [...prevFiles, ...uploadedFiles])
+              }
+            />
+          </div>
           <DataTable
             headers={["Document #", "Name", "Size", "Type", "Uploaded At"]}
-            rows={files.map((file, index) => [
+            rows={filesState.map((file, index) => [
               <span
                 key={`${file.id}-number`}
                 className="font-semibold text-slate-900"
@@ -192,11 +202,11 @@ export function OfferFileCanvas({
                 {index + 1}
               </span>,
               <span key={`${file.id}-name`}>{file.filename}</span>,
-              <StatusPill key={`${file.id}-type`} tone={"primary"}>
-                {file.fileType}
-              </StatusPill>,
-              <span key={`${file.id}-size`}>
+              <StatusPill key={`${file.id}-size`} tone={"primary"}>
                 {formatFileSize(file.filesize)}
+              </StatusPill>,
+              <span key={`${file.id}-type`}>
+                {formatFileType(file.fileType)}
               </span>,
               <span key={`${file.id}-uploadedAt`}>
                 {dataTimeFormat.format(new Date(file.createdAt))}

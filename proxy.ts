@@ -9,7 +9,8 @@ const isPublicRoute = createRouteMatcher([
   '/.well-known/oauth-protected-resource(.*)',
   '/api/mcp(.*)',
   "/api/cron(.*)",
-  "/book-consultation"
+  "/book-consultation",
+  "/api/upload(.*)",
 ])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])

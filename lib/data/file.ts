@@ -1,6 +1,8 @@
 "use server";
 
 import prisma from '@/lib/prisma';
+import { CACHE_PROFILES } from '@/types/cache';
+import { revalidateTag } from 'next/cache';
 
 interface SaveFileParams {
     userId: string;
@@ -29,6 +31,13 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
                 leadId: leadId ? parseInt(leadId) : null,
             }
         });
+
+        if (projectId || milestoneId) {
+            revalidateTag(`project-${projectId}`, CACHE_PROFILES.SHORT);
+        }
+        if (leadId) {
+            revalidateTag(`chat-session-lead-${leadId}`, CACHE_PROFILES.SHORT);
+        }
 
         return {
             success: true,
