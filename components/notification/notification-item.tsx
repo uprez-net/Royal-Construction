@@ -3,9 +3,9 @@ import type { Notification } from "@novu/js";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
-import { Archive, Bell, CheckCheck, ExternalLink } from "lucide-react";
+import { Archive, Bell, CheckCheck } from "lucide-react";
 import { Loader2 } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type NotificationItemExtended = Notification & { payload?: string };
 
@@ -14,20 +14,40 @@ export function NotificationItem({
   busyId,
   handleMarkOne,
   handleArchive,
+  close,
 }: {
   n: NotificationItemExtended;
   busyId: string | null;
   handleMarkOne: (id: string) => Promise<void>;
   handleArchive: (id: string) => Promise<void>;
+  close: () => void;
 }) {
+  const router = useRouter();
   const title = n.subject ?? "No title";
   const body = n.body ?? "";
-  const url = n.primaryAction ? n.primaryAction.redirect! : null;
+  const { url, target } =
+    n.redirect ??
+    ({ url: "#", target: "_blank" } as NonNullable<
+      NotificationItemExtended["redirect"]
+    >);
   const createdAt = n.createdAt ? new Date(n.createdAt) : null;
   const isBusy = busyId === n.id;
 
   return (
     <div
+      onClick={() => {
+        if (url) {
+          // nice UX: mark read when user engages
+          if (!n.isRead) handleMarkOne(n.id);
+          // If it's an internal link, use router.push for faster navigation
+          if (target === "_self") {
+            router.push(url);
+          } else {
+            window.open(url, target, "noopener,noreferrer");
+          }
+          close();
+        }
+      }}
       key={n.id}
       className={cn(
         "group max-w-86 rounded-2xl border p-3 transition-colors",
@@ -80,7 +100,7 @@ export function NotificationItem({
                     )}
                   </Button>
                 </TooltipTrigger>
-                  <TooltipContent className="border border-[#E2E8F0] bg-white text-slate-900 shadow-lg">
+                <TooltipContent className="border border-[#E2E8F0] bg-white text-slate-900 shadow-lg">
                   Mark read
                 </TooltipContent>
               </Tooltip>
@@ -102,7 +122,7 @@ export function NotificationItem({
                     )}
                   </Button>
                 </TooltipTrigger>
-                  <TooltipContent className="border border-[#E2E8F0] bg-white text-slate-900 shadow-lg">
+                <TooltipContent className="border border-[#E2E8F0] bg-white text-slate-900 shadow-lg">
                   Archive
                 </TooltipContent>
               </Tooltip>
@@ -126,21 +146,6 @@ export function NotificationItem({
                   </span>
                 )}
               </div>
-
-              {url ? (
-                <Link
-                  href={url.url}
-                  target={url.target}
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg border border-[#C6923A]/20 bg-[#C6923A]/10 px-2 py-1 text-xs text-[#8B6420] transition-colors hover:bg-[#C6923A]/15"
-                  onClick={() => {
-                    // nice UX: mark read when user engages
-                    if (!n.isRead) handleMarkOne(n.id);
-                  }}
-                >
-                  Open <ExternalLink className="h-3.5 w-3.5" />
-                </Link>
-              ) : null}
             </div>
           )}
         </div>

@@ -208,6 +208,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
                     busyId={busyId}
                     handleMarkOne={handleMarkOne}
                     handleArchive={handleArchive}
+                    close={() => setNotificationsOpen(false)}
                   />
                 ))
               ) : (
