@@ -60,7 +60,7 @@ jobs:
       # Falls back to a lockfile-only key so a prior build cache is reused
       # when only source files changed.
       - name: Cache Next.js build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
@@ -84,7 +84,7 @@ jobs:
 
       # NEW: Upload node_modules so deploy jobs can skip install entirely
       - name: Upload node_modules artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: node_modules
           path: node_modules
@@ -115,14 +115,18 @@ jobs:
 
       # NEW: Download node_modules from quality-checks — no install needed
       - name: Download node_modules artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: node_modules
           path: node_modules
-
+      
+      # After download-artifact step, before any pnpm/prisma commands
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+      
       # NEW: Restore Next.js build cache for Vercel build step
       - name: Cache Next.js build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
@@ -172,14 +176,18 @@ jobs:
 
       # NEW: Download node_modules from quality-checks
       - name: Download node_modules artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: node_modules
           path: node_modules
 
+      # After download-artifact step, before any pnpm/prisma commands
+      - name: Add node_modules/.bin to PATH
+        run: echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+
       # NEW: Restore Next.js build cache
       - name: Cache Next.js build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
