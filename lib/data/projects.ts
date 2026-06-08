@@ -167,7 +167,7 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
   const where = buildProjectWhere(query);
   const orderBy = buildProjectOrderBy(query?.sortBy, query?.sortOrder);
 
-  const [projects, totalCount] = await prisma.$transaction([
+  const [projects, totalCount] = await Promise.all([
     prisma.project.findMany({
       where,
       include: projectInclude,
