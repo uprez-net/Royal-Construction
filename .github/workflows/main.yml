@@ -6,6 +6,32 @@ on:
       - "**"
   pull_request:
 
+# ─── Shared env vars (referenced in all jobs) ────────────────────────────────
+env:
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+  CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+  CLERK_WEBHOOK_SIGNING_SECRET: ${{ secrets.CLERK_WEBHOOK_SIGNING_SECRET }}
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in"
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up"
+  BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+  GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+  GEOSCAPE_API_KEY: ${{ secrets.GEOSCAPE_API_KEY }}
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  BUSINESS_EMAIL: "info@royalconstructions.com.au"
+  GRAPH_SENDER_UPN: "Dhrub@royalconstructions.com.au"
+  GRAPH_MODE: "app-only"
+  WEBHOOK_PATH: "/api/graph/notifications"
+  WEBHOOK_PORT: "3000"
+  GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
+  GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
+  GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
+  NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
+  NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
+  MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
+
 jobs:
   quality-checks:
     runs-on: ubuntu-latest
@@ -14,31 +40,6 @@ jobs:
     env:
       NODE_ENV: "test"
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      CLERK_WEBHOOK_SIGNING_SECRET: ${{ secrets.CLERK_WEBHOOK_SIGNING_SECRET }}
-      NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in"
-      NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up"
-      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-      GEOSCAPE_API_KEY: ${{ secrets.GEOSCAPE_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      BUSINESS_EMAIL: "info@royalconstructions.com.au"
-      GRAPH_SENDER_UPN: "Dhrub@royalconstructions.com.au"
-
-      GRAPH_MODE: "app-only"
-      WEBHOOK_PATH: "/api/graph/notifications"
-      WEBHOOK_PORT: "3000"
-      GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
-      GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
-      GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
-      NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
-      NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
-      MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
 
     steps:
       - name: Checkout repository
@@ -51,8 +52,20 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: pnpm
+          cache: pnpm                          # caches the pnpm store
           cache-dependency-path: pnpm-lock.yaml
+
+      # NEW: Cache Next.js build output (.next/cache)
+      # Key rotates when lockfile OR any source file changes.
+      # Falls back to a lockfile-only key so a prior build cache is reused
+      # when only source files changed.
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -69,6 +82,14 @@ jobs:
       - name: Build project
         run: pnpm build:webpack
 
+      # NEW: Upload node_modules so deploy jobs can skip install entirely
+      - name: Upload node_modules artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
+          retention-days: 1              # only needed for the duration of this workflow run
+
   vercel-deploy-production:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -77,77 +98,52 @@ jobs:
 
     env:
       DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      CLERK_WEBHOOK_SIGNING_SECRET: ${{ secrets.CLERK_WEBHOOK_SIGNING_SECRET }}
-      NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in"
-      NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up"
-      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-      GEOSCAPE_API_KEY: ${{ secrets.GEOSCAPE_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      BUSINESS_EMAIL: "info@royalconstructions.com.au"
-      GRAPH_SENDER_UPN: "Dhrub@royalconstructions.com.au"
-
-      GRAPH_MODE: "app-only"
-      WEBHOOK_PATH: "/api/graph/notifications"
-      WEBHOOK_PORT: "3000"
-      GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
-      GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
-      GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
-      NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
-      NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
-      MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
-
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
-      # Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # Setup PNPM
       - name: Setup PNPM
         uses: pnpm/action-setup@v5
 
-      # Setup Node.js with caching for PNPM
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
-      # Install dependencies
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # NEW: Download node_modules from quality-checks — no install needed
+      - name: Download node_modules artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
 
-      # Migrate the database before building and deploying
+      # NEW: Restore Next.js build cache for Vercel build step
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+
       - name: Run Prisma migrate
         run: pnpm prisma:migrate-deploy
 
-      # Run Prisma generate to ensure generated client is up to date
       - name: Run Prisma generate
         run: pnpm prisma:generate
 
-      # Install Vercel CLI only on main branch
       - name: Install Vercel CLI
         run: pnpm add -g vercel
 
-      # Pull Vercel environment/project settings
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
-      # Build using Vercel
       - name: Build Vercel Project
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
-      # Deploy prebuilt output
       - name: Deploy to Vercel
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
 
@@ -159,77 +155,51 @@ jobs:
 
     env:
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      CLERK_WEBHOOK_SIGNING_SECRET: ${{ secrets.CLERK_WEBHOOK_SIGNING_SECRET }}
-      NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in"
-      NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up"
-      BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-      GEOSCAPE_API_KEY: ${{ secrets.GEOSCAPE_API_KEY }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      BUSINESS_EMAIL: "info@royalconstructions.com.au"
-      GRAPH_SENDER_UPN: "Dhrub@royalconstructions.com.au"
-
-      GRAPH_MODE: "app-only"
-      WEBHOOK_PATH: "/api/graph/notifications"
-      WEBHOOK_PORT: "3000"
-      GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
-      GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
-      GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
-      NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
-      NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
-      MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
-
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
-      # Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      # Setup PNPM
       - name: Setup PNPM
         uses: pnpm/action-setup@v5
 
-      # Setup Node.js with caching for PNPM
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
-      # Install dependencies
-      - name: Install dependencies
-        run:
-          pnpm install --frozen-lockfile
+      # NEW: Download node_modules from quality-checks
+      - name: Download node_modules artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: node_modules
+          path: node_modules
 
-      # Migrate the database before building and deploying
+      # NEW: Restore Next.js build cache
+      - name: Cache Next.js build
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+
       - name: Run Prisma migrate
         run: pnpm prisma:migrate-deploy
 
-      # Run Prisma generate to ensure generated client is up to date
       - name: Run Prisma generate
         run: pnpm prisma:generate
 
-      # Install Vercel CLI only on staging branch
       - name: Install Vercel CLI
         run: pnpm add -g vercel
 
-      # Pull Vercel environment/project settings for staging
       - name: Pull Preview Environment
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
 
-      # Build using Vercel for staging
       - name: Build Vercel Project for Staging
         run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
 
-      # Deploy prebuilt output for staging
       - name: Deploy to Vercel for Staging
         run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
