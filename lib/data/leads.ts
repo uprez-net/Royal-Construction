@@ -476,6 +476,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   }
   // console.log('checking the Input Data', input);
   // console.log('222Updating lead with data:', updateData);
+  const existingLead = await prisma.lead.findUnique({ where: { id } });
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
@@ -483,7 +484,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   });
 
   const res = mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
-  if (!input.assignedId) {
+  if (input.assignedId === existingLead?.assignedId) {
     const notificationPayload = createNotification("leadUpdated", {
       leadId: res.id.toString(),
       leadType: res.type,
