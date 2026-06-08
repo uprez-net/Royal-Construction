@@ -4,9 +4,12 @@ import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
 import { Card } from "@/components/ui/card";
 import { getOfferKPIsCached, getOffersCached } from "@/lib/data/offers";
+import { connection } from "next/server";
 
 
 export default async function QuotationsPage() {
+  // Prevent build-time prerender DB queries; render this page at request time.
+  await connection();
   const [offerKPIs, offers] = await Promise.all([
     getOfferKPIsCached(),
     getOffersCached(1, 10),
