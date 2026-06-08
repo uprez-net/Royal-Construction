@@ -4,6 +4,8 @@ DO $$
 DECLARE
   canonical_id TEXT;
   legacy_id TEXT;
+  canonical_customer_id TEXT;
+  legacy_customer_id TEXT;
 BEGIN
   SELECT id
   INTO canonical_id
@@ -42,12 +44,48 @@ BEGIN
       SET "assignedId" = canonical_id
       WHERE "assignedId" = legacy_id;
 
-      UPDATE "Customer"
-      SET "userId" = canonical_id
+      -- Preserve customer data while replacing legacy user ownership.
+      SELECT id
+      INTO canonical_customer_id
+      FROM "Customer"
+      WHERE "userId" = canonical_id
+      LIMIT 1;
+
+      SELECT id
+      INTO legacy_customer_id
+      FROM "Customer"
       WHERE "userId" = legacy_id
-        AND NOT EXISTS (
-          SELECT 1 FROM "Customer" WHERE "userId" = canonical_id
-        );
+      LIMIT 1;
+
+      IF legacy_customer_id IS NOT NULL THEN
+        IF canonical_customer_id IS NULL THEN
+          -- Re-home the legacy customer record to the canonical user.
+          UPDATE "Customer"
+          SET
+            "userId" = canonical_id,
+            name = CASE
+              WHEN name = 'Guri Singh' THEN 'Gurpinder Uppal'
+              ELSE name
+            END,
+            email = CASE
+              WHEN email = 'guri.singh@buildpro.com.au' THEN 'gurpinder@royalconstructions.com.au'
+              ELSE email
+            END,
+            "updatedAt" = NOW()
+          WHERE id = legacy_customer_id;
+        ELSE
+          -- Canonical customer already exists: move project ownership and detach legacy customer.
+          UPDATE "Project"
+          SET "customerId" = canonical_customer_id
+          WHERE "customerId" = legacy_customer_id;
+
+          UPDATE "Customer"
+          SET
+            "userId" = NULL,
+            "updatedAt" = NOW()
+          WHERE id = legacy_customer_id;
+        END IF;
+      END IF;
 
       DELETE FROM "User" WHERE id = legacy_id;
     ELSE
@@ -61,6 +99,19 @@ BEGIN
         END,
         "updatedAt" = NOW()
       WHERE id = legacy_id;
+
+      UPDATE "Customer"
+      SET
+        name = CASE
+          WHEN name = 'Guri Singh' THEN 'Gurpinder Uppal'
+          ELSE name
+        END,
+        email = CASE
+          WHEN email = 'guri.singh@buildpro.com.au' THEN 'gurpinder@royalconstructions.com.au'
+          ELSE email
+        END,
+        "updatedAt" = NOW()
+      WHERE "userId" = legacy_id;
 
       SELECT id
       INTO canonical_id
