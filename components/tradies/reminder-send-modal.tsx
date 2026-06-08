@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { Mail, MessageSquare, Send } from "lucide-react";
 import {
   Dialog,
@@ -37,6 +38,7 @@ const buildEmailAndSmsBodies = (
   schedule: TradieScheduleListItem,
   tradie: { email: string; phone: string; name?: string },
   siteManager: { email: string; phone: string; name: string },
+  senderName: string,
 ) => {
   const formattedDate = dateFormat.format(new Date(schedule.scheduledDate));
 
@@ -63,7 +65,7 @@ If you need to reschedule, require site access details, materials, or additional
 Please reply to confirm attendance.
 
 Kind regards,
-Guri Singh
+${senderName}
 Royal Constructions
 NSW, Australia
 `.trim();
@@ -90,11 +92,17 @@ export function ReminderModal({
   tradie,
   siteManager,
 }: ReminderModalProps) {
+  const { user } = useUser();
+  const senderName =
+    user?.fullName?.trim() ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    "Royal Constructions";
+
   const {
     emailBody: emailBodyInt,
     smsBody: smsBodyInt,
     emailSubject: emailSubjectInt,
-  } = buildEmailAndSmsBodies(schedule, tradie, siteManager);
+  } = buildEmailAndSmsBodies(schedule, tradie, siteManager, senderName);
   const [tab, setTab] = useState<"email" | "sms">("email");
   const [emailBody, setEmailBody] = useState(emailBodyInt);
   const [smsBody, setSmsBody] = useState(smsBodyInt);

@@ -166,7 +166,7 @@
           <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening full notification center...','info');return false">View all notifications</a></div>
         </div>
       </div>
-      <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+      <div class="up"><div class="ua">GS</div><div class="ui"><span>Gurpinder Uppal</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
     </div>
   </header>
 
@@ -445,10 +445,10 @@ const councilContacts = [
 ];
 
 const emailTemplates = [
-  {name:"Status Enquiry",subject:"Status Enquiry: [REF] — [PROJECT ADDRESS]",icon:"bi-question-circle",color:"var(--info)",body:"Dear [Council] Team,\n\nI am writing to enquire about the status of [REF] for [ADDRESS], submitted on [DATE].\n\nOur SLA deadline was [SLA DATE] and we would appreciate an update on the assessment progress.\n\nPlease let us know if any additional information is required.\n\nRegards,\nGuri Singh\nBuildPro Construction | ABN: 12 345 678 901"},
-  {name:"Additional Info Submission",subject:"Additional Information: [REF] — [PROJECT ADDRESS]",icon:"bi-paperclip",color:"var(--success)",body:"Dear [Council] Team,\n\nFurther to your request dated [REQUEST DATE], please find attached the following additional documents for [REF]:\n\n1. [Document 1]\n2. [Document 2]\n3. [Document 3]\n\nPlease confirm receipt and advise if further information is required.\n\nRegards,\nGuri Singh\nBuildPro Construction | ABN: 12 345 678 901"},
-  {name:"SLA Follow-up (Overdue)",subject:"URGENT: SLA Overdue — [REF] — [PROJECT ADDRESS]",icon:"bi-exclamation-triangle",color:"var(--danger)",body:"Dear [Council] Team,\n\nI am writing regarding [REF] for [ADDRESS], submitted on [DATE].\n\nThe statutory assessment period of 40 working days expired on [SLA DATE] without a determination being issued.\n\nUnder Division 4.59 of the EP&A Act 1979, we request confirmation of the expected determination date.\n\nThis delay is impacting our construction timeline and client commitments.\n\nRegards,\nGuri Singh\nBuildPro Construction | ABN: 12 345 678 901"},
-  {name:"Resubmission After Refusal",subject:"Amended DA Resubmission: [REF] — [PROJECT ADDRESS]",icon:"bi-arrow-rotate-right",color:"var(--warning)",body:"Dear [Council] Team,\n\nFollowing the refusal of [REF] on [REFUSAL DATE], we have prepared an amended application addressing all matters raised:\n\n1. [Amendment 1 — addressing refusal reason 1]\n2. [Amendment 2 — addressing refusal reason 2]\n3. Updated [Report Name] attached\n\nWe believe the amended plans now fully comply with the relevant DCP and LEP provisions.\n\nWe look forward to your assessment.\n\nRegards,\nGuri Singh\nBuildPro Construction | ABN: 12 345 678 901"},
+  {name:"Status Enquiry",subject:"Status Enquiry: [REF] — [PROJECT ADDRESS]",icon:"bi-question-circle",color:"var(--info)",body:"Dear [Council] Team,\n\nI am writing to enquire about the status of [REF] for [ADDRESS], submitted on [DATE].\n\nOur SLA deadline was [SLA DATE] and we would appreciate an update on the assessment progress.\n\nPlease let us know if any additional information is required.\n\nRegards,\nGurpinder Uppal\nBuildPro Construction | ABN: 12 345 678 901"},
+  {name:"Additional Info Submission",subject:"Additional Information: [REF] — [PROJECT ADDRESS]",icon:"bi-paperclip",color:"var(--success)",body:"Dear [Council] Team,\n\nFurther to your request dated [REQUEST DATE], please find attached the following additional documents for [REF]:\n\n1. [Document 1]\n2. [Document 2]\n3. [Document 3]\n\nPlease confirm receipt and advise if further information is required.\n\nRegards,\nGurpinder Uppal\nBuildPro Construction | ABN: 12 345 678 901"},
+  {name:"SLA Follow-up (Overdue)",subject:"URGENT: SLA Overdue — [REF] — [PROJECT ADDRESS]",icon:"bi-exclamation-triangle",color:"var(--danger)",body:"Dear [Council] Team,\n\nI am writing regarding [REF] for [ADDRESS], submitted on [DATE].\n\nThe statutory assessment period of 40 working days expired on [SLA DATE] without a determination being issued.\n\nUnder Division 4.59 of the EP&A Act 1979, we request confirmation of the expected determination date.\n\nThis delay is impacting our construction timeline and client commitments.\n\nRegards,\nGurpinder Uppal\nBuildPro Construction | ABN: 12 345 678 901"},
+  {name:"Resubmission After Refusal",subject:"Amended DA Resubmission: [REF] — [PROJECT ADDRESS]",icon:"bi-arrow-rotate-right",color:"var(--warning)",body:"Dear [Council] Team,\n\nFollowing the refusal of [REF] on [REFUSAL DATE], we have prepared an amended application addressing all matters raised:\n\n1. [Amendment 1 — addressing refusal reason 1]\n2. [Amendment 2 — addressing refusal reason 2]\n3. Updated [Report Name] attached\n\nWe believe the amended plans now fully comply with the relevant DCP and LEP provisions.\n\nWe look forward to your assessment.\n\nRegards,\nGurpinder Uppal\nBuildPro Construction | ABN: 12 345 678 901"},
 ];
 
 const notifData = [
@@ -845,7 +845,7 @@ function openEmailModal(prefillRef,templateIdx){
         ${councilContacts.map(c=>`<option value="${c.email}" ${email===c.email?'selected':''}>${c.name} — ${c.email}</option>`).join('')}
       </select>
     </div>
-    <div class="email-field"><label>CC</label><input type="text" id="emailCc" value="guri@buildpro.com.au" placeholder="CC addresses..."></div>
+    <div class="email-field"><label>CC</label><input type="text" id="emailCc" value="gurpinder@royalconstructions.com.au" placeholder="CC addresses..."></div>
     <div class="email-field"><label>Subject</label><input type="text" id="emailSubject" value="${useTpl?useTpl.subject.replace('[REF]',ref||'[REF]').replace('[PROJECT ADDRESS]',app?app.address:'[ADDRESS]'):''}"></div>
     <div class="email-field"><label>Template</label>
       <select id="emailTemplateSelect" onchange="applyEmailTemplate(this.value)">

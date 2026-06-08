@@ -197,7 +197,7 @@ textarea.form-input-custom{resize:vertical;min-height:70px}
           <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notification center...','info');return false;">View all</a></div>
         </div>
       </div>
-      <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+      <div class="up"><div class="ua">GS</div><div class="ui"><span>Gurpinder Uppal</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
     </div>
   </header>
 
@@ -1047,7 +1047,7 @@ function openReminderModal(id) {
   const t = tradieDir.find(x=>x.id===s.tradieId);
   document.getElementById('reminderSubtitle').textContent = s.tradie + ' — ' + s.project;
 
-  const emailBody = `Hi ${s.tradie},\n\nThis is a reminder that you're scheduled for:\n\nTask: ${s.task}\nProject: ${s.project}\nDate: ${formatDate(s.scheduled)}\nDuration: ${s.duration} day${s.duration>1?'s':''}\nMilestone: ${s.milestone}\n\nSite Contact: ${s.sm}\n${t?'Phone: '+t.phone:''}\n\nPlease confirm your availability and let us know if you need any materials on site before you start.\n\nThanks,\nGuri Singh\nBuildPro Construction\nNSW, Australia`;
+  const emailBody = `Hi ${s.tradie},\n\nThis is a reminder that you're scheduled for:\n\nTask: ${s.task}\nProject: ${s.project}\nDate: ${formatDate(s.scheduled)}\nDuration: ${s.duration} day${s.duration>1?'s':''}\nMilestone: ${s.milestone}\n\nSite Contact: ${s.sm}\n${t?'Phone: '+t.phone:''}\n\nPlease confirm your availability and let us know if you need any materials on site before you start.\n\nThanks,\nGurpinder Uppal\nBuildPro Construction\nNSW, Australia`;
 
   const smsBody = `Hi ${s.tradie}, reminder: ${s.task} at ${s.project} on ${formatDate(s.scheduled)}. Please confirm. - Guri, BuildPro`;
 
