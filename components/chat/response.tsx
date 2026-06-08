@@ -27,43 +27,43 @@ export const Response = memo(
     [&_pre]:max-w-full 
     [&_pre]:overflow-x-auto
 
-    /* TABLE — Dark Minimal Fixed */
+    /* TABLE — Light Gold Theme */
     [&_table]:w-full
     [&_table]:max-w-full
     [&_table]:text-sm
     [&_table]:rounded-xl
     [&_table]:overflow-hidden
-    [&_table]:bg-[#111827]   /* deep slate */
+    [&_table]:bg-white
     [&_table]:border
-    [&_table]:border-white/10
-    [&_table]:shadow-md
+    [&_table]:border-[#E2E8F0]
+    [&_table]:shadow-sm
 
     /* Scroll if smaller screen */
     [&_table]:block
     [&_table]:overflow-x-auto
 
     /* Header */
-    [&_thead]:bg-[#1f2937]
+    [&_thead]:bg-[#F7F4EE]
     [&_th]:px-5
     [&_th]:py-3
     [&_th]:text-left
     [&_th]:font-medium
-    [&_th]:text-gray-300
+    [&_th]:text-slate-600
     [&_th]:border-b
-    [&_th]:border-white/10
+    [&_th]:border-[#E2E8F0]
 
     /* Body rows */
     [&_tbody_tr]:border-b
-    [&_tbody_tr]:border-white/5
+    [&_tbody_tr]:border-[#E2E8F0]
     [&_tbody_tr:last-child]:border-0
 
     /* Cells */
     [&_td]:px-5
     [&_td]:py-4
-    [&_td]:text-gray-200
+    [&_td]:text-slate-700
 
     /* Hover */
-    [&_tbody_tr:hover]:bg-white/5
+    [&_tbody_tr:hover]:bg-[#FCFBF8]
 
 
 
@@ -72,7 +72,7 @@ export const Response = memo(
     [&_ul]:pl-6
     [&_ol]:list-decimal
     [&_ol]:pl-6
-    [&_li]:marker:text-muted-foreground
+    [&_li]:marker:text-[#C6923A]
     [&_li]:my-1
 
     /* Nested list spacing */

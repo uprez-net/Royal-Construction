@@ -33,7 +33,7 @@ import { PreviewPictureModal } from "../common/preview-picture-modal";
 import UpdateMilestoneModal from "../projects/detail/update-milestone-modal";
 import AddMilestoneModal from "../projects/detail/add-milestone-modal";
 import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
-import { CreateOfferFileModal } from "../quotes/create-offer-modal";
+import { CreateOfferFileModal } from "../offers/create-offer-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);

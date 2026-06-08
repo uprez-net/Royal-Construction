@@ -12,6 +12,7 @@ import MaterialCatalogueEmail from '@/lib/graph/Email/material-catalogue-email';
 import PortfolioEmail from '@/lib/graph/Email/portfolio-email';
 
 interface LeadPreview {
+  id: number;
   name?: string;
   type?: string | string[];
   location?: string;
@@ -30,26 +31,25 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
   const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
   let component: React.ReactElement | null = null;
 
+  let bookingUrl = 'https://royal-construction-chi.vercel.app/book-consultation';
+  if (lead?.email) {
+    const params = new URLSearchParams({
+      name: lead.name ?? name,
+      email: lead.email,
+      id: String(lead.id)
+    });
+    bookingUrl += `?${params.toString()}`;
+  }
+
   switch (category) {
     case 'Follow-up':
-      component = <FollowUpEmail name={name} type={type} location={location} notes={notes} />;
+      component = <FollowUpEmail name={name} type={type} location={location} notes={notes} scheduleCallUrl={bookingUrl} />;
       break;
-        case 'Welcome':
-      {
-        let bookingUrl = 'https://royalconstructions.com.au/book-consultation/';
-        if (lead?.email) {
-          const params = new URLSearchParams({
-            name: lead.name ?? name,
-            email: lead.email,
-          });
-          bookingUrl += `?${params.toString()}`;
-        }
-
+    case 'Welcome':
         component = <WelcomeEmail name={name} bookingUrl={bookingUrl} />;
         break;
-      }
     case 'Quotation':
-      component = <QuotationEmail name={name} project={project} location={location} type={type} amount={amount} duration="6-8 months" />;
+      component = <QuotationEmail clientName={name} projectName={project} location={location} totalAmount={amount} validityPeriod="6-8 months" />;
       break;
     case 'Meeting':
       component = <SiteVisitEmail name={name} date={today} time="10:00 AM" location={location} />;

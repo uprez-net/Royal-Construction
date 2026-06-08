@@ -15,3 +15,4 @@ export * from "./material";
 export * from "./milestone";
 export * from "./mcp";
 export * from "./user";
+export * from "./notification";

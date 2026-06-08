@@ -1,6 +1,7 @@
 /** Royal Constructions email brand tokens — aligned with royalconstructions.com.au */
 
 export const RC_SITE = 'https://royalconstructions.com.au';
+export const RC_MAIN_APP = 'https://royal-construction-chi.vercel.app';
 
 export const RC_COLORS = {
   dark: '#070E1A',
@@ -27,6 +28,7 @@ export const RC_URLS = {
   website: `${RC_SITE}/`,
   customHomes: `${RC_SITE}/custom-homes/`,
   projects: `${RC_SITE}/projects/`,
+  quotation: `${RC_MAIN_APP}/quotation/`,
   /** PNG for broad email client support (WebP often fails in Gmail/Outlook). */
   logo: `${RC_SITE}/wp-content/uploads/2026/03/logo-1024x713.png`,
   mbaLogo: `${RC_SITE}/wp-content/uploads/2026/03/image-78.png`,
@@ -35,7 +37,7 @@ export const RC_URLS = {
   heroDefault: `${RC_SITE}/wp-content/uploads/2026/04/royal-contructions-custom-home-build-scaled-e1776813250892.jpg`,
   heroPortfolio: `${RC_SITE}/wp-content/smush-webp/2026/04/CUSTOM-DESIGN_CUSTOM_DUAL-OCCUPANCY_FINAL_V2-1024x683.jpg.webp`,
   contact: `${RC_SITE}/contact/`,
-  bookConsultation: `${RC_SITE}/book-consultation/`,
+  bookConsultation: `${RC_MAIN_APP}/book-consultation/`,
   privacy: `${RC_SITE}/privacy-policy/`,
   claimOffer: `${RC_SITE}/claim-offer/`,
   terms: `${RC_SITE}/terms/`,
@@ -61,7 +63,12 @@ export function getAppAssetUrl(path: string): string {
 }
 
 export const RC_URLS_APP = {
-  builderProfile: getAppAssetUrl('/Royal_Constructions_Builder_Profile_1.pdf'),
+  /**
+   * Hosted in Vercel Blob because the local public PDF was removed.
+   * Keep this URL in sync with the uploaded asset.
+   */
+  builderProfile:
+    'https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/public-file/Royal_Constructions_Builder_Profile_1.pdf',
 } as const;
 
 export const FONTS = {

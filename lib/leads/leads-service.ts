@@ -1,7 +1,7 @@
 "use client";
 import { HistoryItem, Lead, LeadsStats, LeadStage } from './types';
 import { fetchJson } from '@/utils/fetch';
-import { findLeadById, getAllLeads, getAnalyticsData, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
+import { findLeadById, getAllLeads, getAnalyticsData, getLeadsStats, handleCalendarFollowup, PaginatedLeadsResult } from '../data/leads';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
   actionDate: string;
@@ -34,12 +34,13 @@ export async function fetchAllLeads(): Promise<Lead[]> {
   return data;
 }
 
-export async function fetchLeads(params: { q?: string; limit?: number; page?: number; status?: LeadStage[] }): Promise<PaginatedLeadsResult> {
+export async function fetchLeads(params: { q?: string; limit?: number; page?: number; status?: LeadStage[] , filterTiming?: string }): Promise<PaginatedLeadsResult> {
   const query = new URLSearchParams();
   if (params.q?.trim()) query.append('q', params.q.trim());
   if (params.limit) query.append('limit', params.limit.toString());
   if (params.page) query.append('page', params.page.toString());
   if (params.status) query.append('status', params.status.join(','));
+  if(params.filterTiming) query.append('filterTiming', params.filterTiming);
   const data = await fetchJson<PaginatedLeadsResult>(
     `/api/leads?${query.toString()}`,
     { method: "GET", cache: 'no-store' },
@@ -60,6 +61,10 @@ export async function fetchLead(id: number): Promise<Lead | null> {
 
 export async function fetchLeadsStats(): Promise<LeadsStats> {
   return getLeadsStats();
+}
+
+export async function FollowupCalendarCreation(leadName: string, leadEmail: string, followupDate: string, followupTime: string): Promise<string | null> {
+  return handleCalendarFollowup({ name: leadName, email: leadEmail } as Lead, followupDate, followupTime);
 }
 
 export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {

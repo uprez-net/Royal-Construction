@@ -125,3 +125,28 @@ export async function getUserByClerkIdCached(clerkId: string) {
 
     return getUserByClerkId(clerkId);
 }
+
+export async function getAllUserClerkIds() {
+    try {
+        const users = await prisma.user.findMany({
+            select: { clerkId: true },
+        });
+        return users.map(user => user.clerkId);
+    } catch (error) {
+        console.error("Error fetching all user Clerk IDs:", error);
+        throw error;
+    }
+}
+
+export async function resolveUserIdsToClerkIds(userIds: string[]): Promise<string[]> {
+    try {
+        const users = await prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { clerkId: true },
+        });
+        return users.map(user => user.clerkId);
+    } catch (error) {
+        console.error("Error resolving user IDs to Clerk IDs:", error);
+        throw error;
+    }
+}

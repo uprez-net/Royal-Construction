@@ -8,27 +8,27 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Image from 'next/image';
 
+// ─── Royal Constructions Light Theme ────────────────────────────────────────
+
 const BRAND = {
-  dark: '#070E1A',
-  container: '#0C1829',
-  card: '#0F1E33',
-  border: '#1A2A42',
-  gold: '#C9A84C',
+  background: '#F5F6F8',  // Light page background
+  container: '#FFFFFF',   // White cards
+  border: '#E2E8F0',     // Subtle light borders
+  gold: '#C9A84C',       // Primary Royal Gold
   goldHover: '#D4B85E',
-  text: '#B8C4D6',
+  goldLight: '#FDF6E3',  // Very soft gold for hovers
+  text: '#1B2D45',       // Dark navy text
   white: '#FFFFFF',
-  muted: '#8A9BB5',
-  dimmed: '#3D5070',
-  success: '#22C55E',
-  error: '#EF4444',
-  lightBg: '#F5F6F8',
+  muted: '#64748B',      // Slate text
+  dimmed: '#94A3B8',     // Lighter slate
+  success: '#15803D',    // Darker green for light mode contrast
+  error: '#DC2626',      // Red
 };
 
-const LOGO_URL = 'https://royal-construction-chi.vercel.app/logo-1024x713.png';
+const LOGO_URL = '/logo-1024x713.png';
 const NOTES_HELPER =
   'Include land size/status, project scope, room counts, granny flat needs, facade/material preferences, timeline, approval status, and quoting/readiness status.';
 
-// Dynamic Time Slot Generator based on Weekday/Weekend
 const generateTimeSlots = (date: Date | null) => {
   if (!date) return [];
   const day = date.getDay();
@@ -51,6 +51,7 @@ function BookingContent() {
   const searchParams = useSearchParams();
   const initialName = searchParams.get('name') || '';
   const initialEmail = searchParams.get('email') || '';
+  const initialId = searchParams.get('id') || '';
 
   const [clientName, setClientName] = useState(initialName);
   const [clientEmail, setClientEmail] = useState(initialEmail);
@@ -61,8 +62,7 @@ function BookingContent() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [booked, setBooked] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [joinLink, setJoinLink] = useState<string | null>(null);
-
+  // const [joinLink, setJoinLink] = useState<string | null>(null);
   const [busySlotsMap, setBusySlotsMap] = useState<Record<string, string[]>>({});
 
   const timeSlots = generateTimeSlots(selectedDate);
@@ -70,27 +70,18 @@ function BookingContent() {
   useEffect(() => {
     async function fetchCalendar() {
       try {
-        // Fetch 60 days instead of 14
         const res = await fetch('/api/graph/read-calender-dateTime?days=60');
         const data = await res.json();
-
         if (data.success) {
           const map: Record<string, string[]> = {};
-
-          data.events.forEach((event: { subject?: string; start: unknown; end: unknown; isAllDay?: boolean }) => {
+          data.events.forEach((event: { start: unknown }) => {
             const dateTime = (event.start as { dateTime?: string })?.dateTime;
             if (!dateTime) return;
-
-            // Graph API returns "2024-08-01T14:00:00" because of the Prefer header
             const [datePart, timePart] = dateTime.split('T');
-            const time = timePart.slice(0, 5); // "14:00"
-
+            const time = timePart.slice(0, 5);
             if (!map[datePart]) map[datePart] = [];
-            if (!map[datePart].includes(time)) {
-              map[datePart].push(time);
-            }
+            if (!map[datePart].includes(time)) map[datePart].push(time);
           });
-
           setBusySlotsMap(map);
         }
       } catch (err) {
@@ -126,12 +117,12 @@ function BookingContent() {
       const res = await fetch('/api/graph/book-consultant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName, email: trimmedEmail, startDateTime, notes: notes.trim() }),
+        body: JSON.stringify({ id: Number(initialId || undefined), name: trimmedName, email: trimmedEmail, startDateTime, notes: notes.trim() }),
       });
       const data = await res.json();
       if (data.success) {
         setBooked(true);
-        setJoinLink(data.joinUrl);
+        // setJoinLink(data.joinUrl);
       } else {
         setError(data.error || 'Failed to book consultation.');
       }
@@ -143,29 +134,17 @@ function BookingContent() {
     }
   };
 
-  // const isSlotBusy = (date: Date, time: string) => {
-  //   const dateStr = date.toISOString().split('T')[0];
-  //   return busySlots.includes(`${dateStr}T${time}`);
-  // };
+  const formatToDateKey = (date: Date) => date.toLocaleDateString('sv-SE');
 
-  // Format date safely to YYYY-MM-DD without timezone offset shifting
-  const formatToDateKey = (date: Date) => {
-    return date.toLocaleDateString('sv-SE'); // sv-SE locale formats as YYYY-MM-DD
-  };
-
-  // Check if a specific time slot is already booked
   const isSlotBusy = (date: Date, time: string) => {
     const dateKey = formatToDateKey(date);
     return (busySlotsMap[dateKey] || []).includes(time);
   };
 
-  // Check if ALL available time slots for a date are booked
   const isDateFullyBooked = (date: Date) => {
     const dateKey = formatToDateKey(date);
     const expectedSlots = generateTimeSlots(date);
     const bookedSlots = busySlotsMap[dateKey] || [];
-
-    // If it's a weekend/weekday and all expected slots are in the booked array, it's full
     return expectedSlots.length > 0 && expectedSlots.every(slot => bookedSlots.includes(slot));
   };
 
@@ -181,17 +160,29 @@ function BookingContent() {
   };
 
   const displayName = clientName.trim() || 'Client';
-  const labelStyle = { fontSize: 11, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase' as const, letterSpacing: '0.5px' };
+  
+  const labelStyle = { 
+    fontSize: 11, 
+    fontWeight: 600, 
+    color: BRAND.muted, 
+    textTransform: 'uppercase' as const, 
+    letterSpacing: '0.8px',
+    marginBottom: '6px',
+    display: 'block'
+  };
+
   const inputStyle = {
     width: '100%',
-    borderRadius: 10,
+    borderRadius: 4,
     border: `1.5px solid ${BRAND.border}`,
-    backgroundColor: BRAND.container,
-    color: BRAND.white,
-    padding: '12px 12px',
-    fontSize: 13,
+    backgroundColor: BRAND.white,
+    color: BRAND.text,
+    padding: '10px 12px',
+    fontSize: 14,
     outline: 'none',
+    fontFamily: "'Inter', sans-serif",
   };
+
   const textareaStyle = {
     ...inputStyle,
     minHeight: 120,
@@ -201,19 +192,19 @@ function BookingContent() {
 
   if (booked) {
     return (
-      <div style={{ backgroundColor: BRAND.dark, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: BRAND.white, fontFamily: 'Inter, Arial, sans-serif', padding: 20 }}>
-        <div style={{ backgroundColor: BRAND.card, padding: '50px 40px', borderRadius: 16, textAlign: 'center', maxWidth: 480, width: '100%', border: `1px solid ${BRAND.border}`, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
-          <div style={{ width: 72, height: 72, borderRadius: '50%', backgroundColor: 'rgba(34,197,94,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+      <div style={{ backgroundColor: BRAND.background, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: BRAND.text, fontFamily: "'Inter', sans-serif", padding: 20 }}>
+        <div style={{ backgroundColor: BRAND.white, padding: '50px 40px', borderRadius: 6, textAlign: 'center', maxWidth: 480, width: '100%', border: `1px solid ${BRAND.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <div style={{ width: 72, height: 72, borderRadius: '50%', backgroundColor: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
             <Check size={36} color={BRAND.success} />
           </div>
-          <h1 style={{ color: BRAND.gold, margin: '0 0 12px', fontSize: 24, fontWeight: 700 }}>Consultation Booked!</h1>
-          <p style={{ color: BRAND.text, marginTop: 0, fontSize: 14, lineHeight: 1.6 }}>Your meeting has been scheduled.</p>
-          {joinLink && (
-            <a href={joinLink} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 20, backgroundColor: BRAND.gold, color: BRAND.dark, padding: '12px 24px', borderRadius: 8, fontWeight: 700, textDecoration: 'none' }}>
+          <h1 style={{ color: BRAND.text, margin: '0 0 12px', fontSize: 24, fontWeight: 500, fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase', letterSpacing: '-0.5px' }}>Consultation Booked</h1>
+          <p style={{ color: BRAND.muted, marginTop: 0, fontSize: 14, lineHeight: 1.6 }}>Your meeting has been scheduled.</p>
+          {/* {joinLink && (
+            <a href={joinLink} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 20, backgroundColor: BRAND.gold, color: BRAND.white, padding: '12px 24px', borderRadius: 4, fontWeight: 500, textDecoration: 'none', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: 15 }}>
               Join Teams Meeting
             </a>
-          )}
-          <div style={{ marginTop: 30, padding: '16px 20px', backgroundColor: BRAND.container, borderRadius: 10, border: `1px solid ${BRAND.border}` }}>
+          )} */}
+          <div style={{ marginTop: 30, padding: '16px 20px', backgroundColor: '#F8FAFC', borderRadius: 4, border: `1px solid ${BRAND.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
               <Video size={16} color={BRAND.gold} />
               <span style={{ fontSize: 13, color: BRAND.muted }}>An invite has also been sent to {clientEmail}</span>
@@ -225,27 +216,31 @@ function BookingContent() {
   }
 
   return (
-    <div style={{ backgroundColor: BRAND.dark, minHeight: '100vh', fontFamily: 'Inter, Arial, sans-serif', color: BRAND.white }}>
+    <div style={{ backgroundColor: BRAND.background, minHeight: '100vh', fontFamily: "'Inter', sans-serif", color: BRAND.text }}>
       {/* ═══ HEADER ═══ */}
-      <div style={{ backgroundColor: BRAND.lightBg, borderBottom: `1px solid #E2E8F0` }}>
+      <div style={{ backgroundColor: BRAND.white, borderBottom: `1px solid ${BRAND.border}` }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Image height={1200} width={720} src={LOGO_URL} alt="Royal Constructions" style={{ height: 48, width: 'auto', objectFit: 'contain' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22C55E' }} />
-            <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>Booking System</span>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: BRAND.success }} />
+            <span style={{ fontSize: 12, color: BRAND.muted, fontWeight: 500 }}>Booking System</span>
           </div>
         </div>
+        {/* Royal Gold Bar */}
+        <div style={{ height: 3, backgroundColor: BRAND.gold }} />
       </div>
 
       {/* ── Main Content ── */}
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: '40px 24px 60px' }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, backgroundColor: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 50, padding: '6px 16px', marginBottom: 20 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, backgroundColor: BRAND.white, border: `1px solid ${BRAND.border}`, borderRadius: 50, padding: '6px 16px', marginBottom: 20 }}>
             <Calendar size={14} color={BRAND.gold} />
             <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.gold, letterSpacing: '0.5px' }}>BOOKING PAGE</span>
           </div>
-          <h1 style={{ color: BRAND.white, fontSize: 28, fontWeight: 700, margin: '0 0 8px', letterSpacing: '-0.5px' }}>Book Your Consultation</h1>
-          <p style={{ color: BRAND.muted, fontSize: 14, margin: 0 }}>
+          <h1 style={{ color: BRAND.text, fontSize: 42, fontWeight: 500, margin: '0 0 8px', letterSpacing: '-1.2px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase', lineHeight: 1 }}>
+            Book Your<br />Consultation
+          </h1>
+          <p style={{ color: BRAND.muted, fontSize: 14, margin: 0, fontWeight: 350 }}>
             Welcome, <strong style={{ color: BRAND.gold }}>{displayName}</strong>. Choose a date and time below.
           </p>
         </div>
@@ -259,14 +254,14 @@ function BookingContent() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
             {/* ═══ CONTACT DETAILS ═══ */}
-            <div style={{ backgroundColor: BRAND.card, borderRadius: 14, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
-              <div style={{ padding: '20px 24px' }}>
+            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}>
+              <div style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: BRAND.gold }} />
-                  <h3 style={{ margin: 0, color: BRAND.white, fontSize: 15, fontWeight: 600, letterSpacing: '0.3px' }}>Your Details</h3>
+                  <h3 style={{ margin: 0, color: BRAND.text, fontSize: 17, fontWeight: 500, letterSpacing: '0.3px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase' }}>Your Details</h3>
                 </div>
-                <p style={{ fontSize: 12, color: BRAND.dimmed, marginTop: 0, marginBottom: 16 }}>Confirm your contact details so we can send the invite.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                <p style={{ fontSize: 13, color: BRAND.muted, marginTop: 0, marginBottom: 20, fontWeight: 350 }}>Confirm your contact details so we can send the invite.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
                   <div>
                     <label htmlFor="booking-name" style={labelStyle}>Full Name</label>
                     <input id="booking-name" name="name" autoComplete="name" type="text" value={clientName} onChange={(event) => setClientName(event.target.value)} placeholder="e.g. Jaswinder Singh" style={inputStyle} />
@@ -280,15 +275,15 @@ function BookingContent() {
             </div>
 
             {/* ═══ NOTES ═══ */}
-            <div style={{ backgroundColor: BRAND.card, borderRadius: 14, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
-              <div style={{ padding: '20px 24px 0' }}>
+            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}>
+              <div style={{ padding: '24px 24px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: BRAND.gold }} />
-                  <h3 style={{ margin: 0, color: BRAND.white, fontSize: 15, fontWeight: 600, letterSpacing: '0.3px' }}>Project Notes</h3>
+                  <h3 style={{ margin: 0, color: BRAND.text, fontSize: 17, fontWeight: 500, letterSpacing: '0.3px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase' }}>Project Notes</h3>
                 </div>
-                <p style={{ fontSize: 12, color: BRAND.dimmed, marginTop: 0, marginBottom: 12 }}>{NOTES_HELPER}</p>
+                <p style={{ fontSize: 13, color: BRAND.muted, marginTop: 0, marginBottom: 12, fontWeight: 350 }}>{NOTES_HELPER}</p>
               </div>
-              <div style={{ padding: '0 24px 20px' }}>
+              <div style={{ padding: '0 24px 24px' }}>
                 <label htmlFor="booking-notes" style={labelStyle}>Notes</label>
                 <textarea
                   id="booking-notes"
@@ -303,13 +298,13 @@ function BookingContent() {
             </div>
 
             {/* ═══ DATE & TIME SELECTION (SIDE BY SIDE) ═══ */}
-            <div style={{ backgroundColor: BRAND.card, borderRadius: 14, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
-              <div style={{ padding: '20px 24px 0' }}>
+            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}>
+              <div style={{ padding: '24px 24px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <Calendar size={16} color={BRAND.gold} />
-                  <h3 style={{ margin: 0, color: BRAND.white, fontSize: 15, fontWeight: 600 }}>Select Date & Time</h3>
+                  <h3 style={{ margin: 0, color: BRAND.text, fontSize: 17, fontWeight: 500, letterSpacing: '0.3px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase' }}>Select Date & Time</h3>
                 </div>
-                <p style={{ margin: 0, fontSize: 12, color: BRAND.dimmed, marginBottom: 16 }}>Choose a date from tomorrow onwards, then pick an available time slot.</p>
+                <p style={{ margin: 0, fontSize: 13, color: BRAND.muted, marginBottom: 20, fontWeight: 350 }}>Choose a date from tomorrow onwards, then pick an available time slot.</p>
               </div>
 
               <div style={{ padding: '0 24px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, alignItems: 'start' }}>
@@ -323,7 +318,7 @@ function BookingContent() {
                       setSelectedTime(null);
                     }}
                     minDate={new Date(new Date().setDate(new Date().getDate() + 1))}
-                    filterDate={(date: Date) => !isDateFullyBooked(date)} // <-- ADD THIS: Disables full dates
+                    filterDate={(date: Date) => !isDateFullyBooked(date)}
                     inline
                     calendarClassName="royal-booking-calendar"
                   />
@@ -339,8 +334,8 @@ function BookingContent() {
                           {formatDateLong(selectedDate)}
                         </span>
                       </div>
-                      <div style={{ backgroundColor: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: 8, padding: '6px 10px', marginBottom: 16 }}>
-                        <p style={{ margin: 0, fontSize: 11, color: BRAND.gold, fontWeight: 500 }}>
+                      <div style={{ backgroundColor: BRAND.goldLight, border: `1px solid ${BRAND.border}`, borderRadius: 4, padding: '6px 10px', marginBottom: 16 }}>
+                        <p style={{ margin: 0, fontSize: 11, color: BRAND.text, fontWeight: 500 }}>
                           {selectedDate.getDay() === 0 || selectedDate.getDay() === 6 ? 'Weekend Hours: 9:00 AM - 2:00 PM' : 'Weekday Hours: 2:00 PM - 6:00 PM'} (AEST)
                         </p>
                       </div>
@@ -361,15 +356,15 @@ function BookingContent() {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 padding: '12px 8px',
-                                borderRadius: 8,
-                                border: `1.5px solid ${isSelected ? BRAND.gold : busy ? 'rgba(26,42,66,0.3)' : BRAND.border}`,
-                                backgroundColor: busy ? 'rgba(7,14,26,0.3)' : isSelected ? 'rgba(201,168,76,0.1)' : BRAND.container,
+                                borderRadius: 4,
+                                border: `1.5px solid ${isSelected ? BRAND.gold : busy ? BRAND.border : BRAND.border}`,
+                                backgroundColor: busy ? '#F8FAFC' : isSelected ? BRAND.gold : BRAND.white,
                                 cursor: busy ? 'not-allowed' : 'pointer',
-                                opacity: busy ? 0.35 : 1,
+                                opacity: busy ? 0.5 : 1,
                                 transition: 'all 0.15s ease',
                               }}
                             >
-                              <span style={{ fontSize: 14, fontWeight: 600, color: busy ? BRAND.dimmed : isSelected ? BRAND.gold : BRAND.white }}>
+                              <span style={{ fontSize: 14, fontWeight: 500, color: busy ? BRAND.dimmed : isSelected ? BRAND.white : BRAND.text, fontFamily: "'IBM Plex Sans Condensed', sans-serif" }}>
                                 {formatTimeDisplay(time)}
                               </span>
                               {busy && (
@@ -378,7 +373,7 @@ function BookingContent() {
                                 </span>
                               )}
                               {isSelected && !busy && (
-                                <span style={{ fontSize: 9, fontWeight: 600, color: BRAND.gold, marginTop: 4, textTransform: 'uppercase' }}>
+                                <span style={{ fontSize: 9, fontWeight: 600, color: BRAND.white, marginTop: 4, textTransform: 'uppercase' }}>
                                   Selected
                                 </span>
                               )}
@@ -399,31 +394,31 @@ function BookingContent() {
 
             {/* ═══ SUMMARY & CONFIRM ═══ */}
             {selectedDate && selectedTime && (
-              <div style={{ backgroundColor: BRAND.card, borderRadius: 14, border: `1px solid ${BRAND.gold}40`, overflow: 'hidden' }}>
+              <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, borderTop: `3px solid ${BRAND.gold}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}>
                 <div style={{ padding: 24 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: 'rgba(201,168,76,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 4, backgroundColor: BRAND.goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Video size={20} color={BRAND.gold} />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: BRAND.white }}>Consultation Summary</h4>
-                      <p style={{ margin: '2px 0 0', fontSize: 12, color: BRAND.muted }}>1-hour Microsoft Teams meeting</p>
+                      <h4 style={{ margin: 0, fontSize: 17, fontWeight: 500, color: BRAND.text, fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase' }}>Consultation Summary</h4>
+                      <p style={{ margin: '2px 0 0', fontSize: 12, color: BRAND.muted, fontWeight: 350 }}>1-hour Microsoft Teams meeting</p>
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-                    <div style={{ backgroundColor: BRAND.container, borderRadius: 10, padding: '14px 16px', border: `1px solid ${BRAND.border}` }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Date</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.white }}>{formatDateLong(selectedDate)}</div>
+                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: 4, padding: '14px 16px', border: `1px solid ${BRAND.border}` }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>Date</div>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.text }}>{formatDateLong(selectedDate)}</div>
                     </div>
-                    <div style={{ backgroundColor: BRAND.container, borderRadius: 10, padding: '14px 16px', border: `1px solid ${BRAND.border}` }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Time</div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.white }}>{formatTimeDisplay(selectedTime)} (AEST)</div>
+                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: 4, padding: '14px 16px', border: `1px solid ${BRAND.border}` }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>Time</div>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.text }}>{formatTimeDisplay(selectedTime)} (AEST)</div>
                     </div>
                   </div>
 
                   {error && (
-                    <div style={{ backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, textAlign: 'center' }}>
+                    <div style={{ backgroundColor: '#FEF2F2', border: `1px solid #FECACA`, borderRadius: 4, padding: '10px 14px', marginBottom: 16, textAlign: 'center' }}>
                       <span style={{ fontSize: 13, color: BRAND.error }}>{error}</span>
                     </div>
                   )}
@@ -437,15 +432,18 @@ function BookingContent() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 8,
-                      backgroundColor: submitting ? BRAND.gold + '80' : BRAND.gold,
-                      color: BRAND.dark,
+                      backgroundColor: submitting ? BRAND.goldHover : BRAND.gold,
+                      color: BRAND.white,
                       border: 'none',
                       padding: '14px 24px',
-                      borderRadius: 10,
+                      borderRadius: 4,
                       fontSize: 15,
-                      fontWeight: 700,
+                      fontWeight: 500,
                       cursor: submitting ? 'wait' : 'pointer',
                       transition: 'all 0.15s ease',
+                      fontFamily: "'IBM Plex Sans Condensed', sans-serif",
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
                     }}
                   >
                     {submitting ? (
@@ -469,50 +467,49 @@ function BookingContent() {
       </div>
 
       {/* ── Footer ── */}
-      <div style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.container, padding: '20px 24px', textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: 12, color: BRAND.dimmed }}>
+      <div style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.white, padding: '20px 24px', textAlign: 'center' }}>
+        <p style={{ margin: 0, fontSize: 12, color: BRAND.dimmed, fontWeight: 300 }}>
           © {new Date().getFullYear()} Royal Constructions NSW · 38/62 Turner Rd, Smeaton Grange NSW 2567 · 1300 832 355
         </p>
       </div>
 
-      {/* ═══ DATE PICKER FIXED READABILITY STYLES ═══ */}
+      {/* ═══ DATE PICKER PREMIUM LIGHT STYLES ═══ */}
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500&family=Inter:wght@300;400;500;600;700&display=swap');
+
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        /* Container Background */
         .royal-booking-calendar {
-          background-color: #0C1829 !important;
-          border: 1.5px solid #1A2A42 !important;
-          border-radius: 10px !important;
-          font-family: Inter, Arial, sans-serif !important;
+          background-color: #FFFFFF !important;
+          border: 1px solid #E2E8F0 !important;
+          border-radius: 4px !important;
+          font-family: 'Inter', sans-serif !important;
           padding: 16px !important;
           width: 100% !important;
         }
         
-        /* Header Background */
         .royal-booking-calendar .react-datepicker__header {
-          background-color: #0C1829 !important;
-          border-bottom: 1px solid #1A2A42 !important;
+          background-color: #F8FAFC !important;
+          border-bottom: 1px solid #E2E8F0 !important;
           padding: 8px 0 16px !important;
         }
         
-        /* Month & Weekday Text */
         .royal-booking-calendar .react-datepicker__current-month,
         .royal-booking-calendar .react-datepicker__day-name {
-          color: #e2e8f0 !important; 
+          color: #1B2D45 !important; 
           font-weight: 600 !important;
+          font-family: 'IBM Plex Sans Condensed', sans-serif !important;
         }
         
         .royal-booking-calendar .react-datepicker__month {
           margin: 0 !important;
         }
         
-        /* Date Buttons */
         .royal-booking-calendar .react-datepicker__day {
-          color: #cbd5e1 !important; 
-          background-color: rgba(255, 255, 255, 0.04) !important; 
-          border: 1px solid rgba(255, 255, 255, 0.06) !important;
-          border-radius: 6px !important;
+          color: #1B2D45 !important; 
+          background-color: #FFFFFF !important; 
+          border: 1px solid transparent !important;
+          border-radius: 4px !important;
           margin: 2px !important;
           width: 2.4rem !important;
           height: 2.4rem !important;
@@ -521,40 +518,36 @@ function BookingContent() {
         }
         
         .royal-booking-calendar .react-datepicker__day:hover {
-          background-color: rgba(201, 168, 76, 0.15) !important;
-          color: #ffffff !important;
-          border-color: rgba(201, 168, 76, 0.3) !important;
+          background-color: #FDF6E3 !important;
+          color: #92700C !important;
+          border-color: #C9A84C !important;
         }
         
-        /* Selected Date */
         .royal-booking-calendar .react-datepicker__day--selected,
         .royal-booking-calendar .react-datepicker__day--keyboard-selected {
           background-color: #C9A84C !important;
-          color: #070E1A !important; 
+          color: #FFFFFF !important; 
           font-weight: 700 !important;
           border-color: #C9A84C !important;
         }
         
-        /* Disabled Dates */
         .royal-booking-calendar .react-datepicker__day--disabled {
-          color: #334155 !important; /* Darker gray text */
-          background-color: transparent !important;
+          color: #CBD5E1 !important;
+          background-color: #F8FAFC !important;
           border-color: transparent !important;
-          opacity: 0.4 !important;
+          opacity: 1 !important;
           cursor: not-allowed !important;
         }
         
-        /* Hide Days Outside Current Month */
         .royal-booking-calendar .react-datepicker__day--outside-month {
           visibility: hidden !important;
         }
         
-        /* Navigation Arrows */
         .royal-booking-calendar .react-datepicker__navigation {
           top: 14px !important;
         }
         .royal-booking-calendar .react-datepicker__navigation-icon::before {
-          border-color: #8A9BB5 !important;
+          border-color: #64748B !important;
           border-width: 2px 2px 0 0 !important;
           height: 7px !important;
           width: 7px !important;
@@ -570,11 +563,11 @@ function BookingContent() {
 export default function BookConsultationPage() {
   return (
     <Suspense fallback={
-      <div style={{ backgroundColor: '#070E1A', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C9A84C', fontFamily: 'Inter, Arial, sans-serif' }}>
+      <div style={{ backgroundColor: '#F5F6F8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C9A84C', fontFamily: 'Inter, sans-serif' }}>
         <div style={{ textAlign: 'center' }}>
           <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          <p style={{ marginTop: 16, fontSize: 14 }}>Loading booking page...</p>
+          <p style={{ marginTop: 16, fontSize: 14, color: '#64748B' }}>Loading booking page...</p>
         </div>
       </div>
     }>

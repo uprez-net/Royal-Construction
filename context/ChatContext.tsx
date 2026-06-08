@@ -5,6 +5,7 @@ import { useChat, UseChatHelpers } from "@ai-sdk/react";
 import { fetchWithErrorHandlers } from "@/utils/chat-error";
 import { v4 as generateUUID } from "uuid";
 import { useAutoResume } from "@/hooks/use-auto-resume";
+import { mergeServiceItems, ServiceItem } from "@/utils/chat";
 
 interface ChatContextValue {
   lineItems: LineItem[];
@@ -18,23 +19,30 @@ interface ChatContextValue {
 
 export interface LineItem {
   id: string;
+  description: string;
   item: string;
   unitPrice: number;
   quantity: number;
   unit: string;
   totalPrice: number;
+  gstRate: number;
+  gstIncluded: boolean;
+  source?: string;
+  netLine: number;
+  gstAmount: number;
 }
 
 export interface OfferFile {
-  termsAndConditions?: string;
+  termsAndConditions?: string[];
   projectDescription?: string;
   paymentTerms?: string;
-  serviceInclusions?: string[];
+  serviceInclusions?: ServiceItem[];
   serviceExclusions?: string[];
+  serviceExclusionsFootnote?: string;
 }
 
-const initialOfferFile: OfferFile = {
-  termsAndConditions: "",
+const emptyOfferFile: OfferFile = {
+  termsAndConditions: [],
   projectDescription: "",
   paymentTerms: "",
   serviceInclusions: [],
@@ -48,15 +56,19 @@ export const ChatContext = createContext<ChatContextValue | undefined>(
 export const ChatProvider = ({
   chatId,
   initialMessages,
+  initialOfferFile = emptyOfferFile,
+  initialLineItems = [],
   leadId,
   children,
 }: {
   chatId?: string;
   initialMessages: ChatMessageAI[];
+  initialOfferFile?: OfferFile;
+  initialLineItems?: LineItem[];
   leadId: string;
   children: React.ReactNode;
 }) => {
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [lineItems, setLineItems] = useState<LineItem[]>(initialLineItems);
   const [offerFile, setOfferFile] = useState<OfferFile>(initialOfferFile);
   const { messages, status, sendMessage, setMessages, resumeStream, error } =
     useChat<ChatMessageAI>({
@@ -124,6 +136,18 @@ export const ChatProvider = ({
             setOfferFile((prev) => ({
               ...prev,
               ...offerData,
+              termsAndConditions: [
+                ...(prev.termsAndConditions ?? []),
+                ...(offerData.termsAndConditions ?? []),
+              ].flat(),
+              serviceInclusions: mergeServiceItems(
+                prev.serviceInclusions ?? [],
+                offerData.serviceInclusions ?? [],
+              ),
+              serviceExclusions: [
+                ...(prev.serviceExclusions ?? []),
+                ...(offerData.serviceExclusions ?? []),
+              ].flat(),
             }));
           default:
             // For now, just log all data parts. In the future, you can handle different types of data parts as needed.
@@ -144,7 +168,15 @@ export const ChatProvider = ({
 
   return (
     <ChatContext.Provider
-      value={{ messages, status, sendMessage, setMessages, error, lineItems, offerFile }}
+      value={{
+        messages,
+        status,
+        sendMessage,
+        setMessages,
+        error,
+        lineItems,
+        offerFile,
+      }}
     >
       {children}
     </ChatContext.Provider>

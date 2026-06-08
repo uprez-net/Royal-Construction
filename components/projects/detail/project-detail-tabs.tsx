@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import type { ProjectDetail } from "@/types/project";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
@@ -21,14 +21,34 @@ import { ProjectSiteUpdatesTab } from "./project-site-updates-tab";
 import { ProjectTradiesTab } from "./project-tradies-tab";
 import { ProjectHistoryTabs } from "./project-history-tabs";
 import { ProjectCommunicationTabs } from "./project-communication-tabs";
+import { useSearchParams } from "next/navigation";
+import {
+  projectTabsValidator,
+} from "@/utils/validators/projects";
 
 export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
   const dispatch = useAppDispatch();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("activeTab");
   const selector = useMemo(
     () => selectProjectDetailUiState(project.id),
     [project.id],
   );
   const detailUi = useAppSelector(selector);
+
+  useEffect(() => {
+    if (initialTab) {
+      const validatedTab = projectTabsValidator.safeParse(initialTab);
+      if (validatedTab.success) {
+        dispatch(
+          setProjectDetailTab({
+            projectId: project.id,
+            tab: validatedTab.data,
+          }),
+        );
+      }
+    }
+  }, [dispatch, initialTab, project.id]);
 
   return (
     <section className="space-y-4">

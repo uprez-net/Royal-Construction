@@ -1,20 +1,23 @@
 "use server";
 
 import prisma from '@/lib/prisma';
+import { CACHE_PROFILES } from '@/types/cache';
+import { revalidateTag } from 'next/cache';
 
 interface SaveFileParams {
     userId: string;
     projectId?: string;
     milestoneId?: string;
+    leadId?: string;
+    offerId?: string;
     fileId?: string;
     fileUrl: string;
     fileName: string;
     fileType: string;
     fileSize: number;
-    leadId?: string;
 }
 
-export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, fileName, fileType, fileSize, leadId }: SaveFileParams) {
+export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, fileName, fileType, fileSize, leadId, offerId }: SaveFileParams) {
     try {
         const newFile = await prisma.file.create({
             data: {
@@ -27,8 +30,19 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
                 fileType,
                 filesize: fileSize,
                 leadId: leadId ? parseInt(leadId) : null,
+                offerId: offerId ? offerId : null,
             }
         });
+
+        if (projectId || milestoneId) {
+            revalidateTag(`project-${projectId}`, CACHE_PROFILES.SHORT);
+        }
+        if (leadId) {
+            revalidateTag(`chat-session-lead-${leadId}`, CACHE_PROFILES.SHORT);
+        }
+        if (offerId) {
+            revalidateTag(`offer-${offerId}`, CACHE_PROFILES.SHORT);
+        }
 
         return {
             success: true,

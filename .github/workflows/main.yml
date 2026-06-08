@@ -36,6 +36,9 @@ jobs:
       GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
       GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
       GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
+      NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
+      NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
+      MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
 
     steps:
       - name: Checkout repository
@@ -96,6 +99,9 @@ jobs:
       GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
       GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
       GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
+      NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
+      NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
+      MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
 
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -175,6 +181,9 @@ jobs:
       GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
       GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
       GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
+      NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
+      NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
+      MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
 
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

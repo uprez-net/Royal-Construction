@@ -59,7 +59,7 @@ const validationSchema = z
     Status: z
       .boolean()
       .describe(
-        'True if the message is spam or unrelated marketing; false if it is a genuine real estate inquiry (new home, renovation, granny flat, townhouse, similar).',
+        'True if the message is spam, unrelated marketing, an automated bot submission, OR if the message is empty/lacks meaningful content (missing Name, Phone, Location, and Message). False only if it is a genuine real estate inquiry with real intent.',
       ),
     Info: z
       .string()
@@ -82,11 +82,12 @@ const instruction =
   'empty string. Type must be an array of exact strings from this list: ' +
   `${projectTypeList}. Use [] if no clear match. ` +
   'If Type is only "Not Specified", return []. ' +
-  'Set Status to false for genuine customer inquiries about residential ' +
+  'Set Status to false ONLY for genuine customer inquiries about residential ' +
   'construction or real estate work (new home, renovation, granny flat, ' +
-  'townhouse, similar). Set Status to true for spam, marketing, or unrelated ' +
-  'services. If the message is pitching their services (marketing, website, ' +
-  'SEO, ads, or similar), mark Status as true. Always call the emitLead tool ' +
+  'townhouse, similar) that contain actual project details or questions. ' +
+  'Set Status to true for spam, marketing, unrelated services, bot submissions, ' +
+  'OR if the message lacks meaningful content (e.g. Name, Phone, Location, and ' +
+  'Message are all empty or contain gibberish/random text). Always call the emitLead tool ' +
   'with the final fields.';
 
 const leadExtractionAgent = googleProvider
@@ -177,9 +178,10 @@ export async function extractLeadFromMessage(
     '- If missing or unclear, return [].\n' +
     '- If Type is only "Not Specified", return [].\n\n' +
     'Status rules:\n' +
-    '- Status = false for genuine customer inquiries about residential construction or real estate work (new home, renovation, granny flat, townhouse, similar).\n' +
+    '- Status = false ONLY for genuine customer inquiries about residential construction or real estate work with actual questions or project intent.\n' +
     '- Status = true for spam, marketing, or unrelated services.\n' +
-    '- Status = true for pitches offering marketing, website, SEO, ads, or similar services.\n\n' +
+    '- Status = true for pitches offering marketing, website, SEO, ads, or similar services.\n' +
+    '- IMPORTANT: Status = true if the message is empty, or if it lacks meaningful content (e.g., Name, Phone, Location, and Message are all empty, missing, or contain only random/gibberish text like bot submissions). Incomplete forms with no real message are spam.\n\n' +
     'Return the structured fields only.';
 
   const result = await runWithRateLimit(() =>

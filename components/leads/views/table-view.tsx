@@ -9,6 +9,7 @@ import {
   UserPlus,
   Search,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -24,9 +25,11 @@ import {
   deleteLead,
   sendEmailToLead,
   updateLead,
+  FollowupCalendarCreation,
 } from "@/lib/leads/leads-service";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { ReactEmailIframe } from "../render-email";
+import { v4 as uuidv4 } from "uuid";
 
 interface TableViewProps {
   loading: boolean;
@@ -284,7 +287,7 @@ export default function TableView({
 
   const [editFollowupLead, setEditFollowupLead] = useState<Lead | null>(null);
   const [followupDate, setFollowupDate] = useState("");
-  const [followupTime, setFollowupTime] = useState("");
+  // const [followupTime, setFollowupTime] = useState("");
 
   const [editAssignedLead, setEditAssignedLead] = useState<Lead | null>(null);
   const [assignedPerson, setAssignedPerson] = useState("");
@@ -293,10 +296,18 @@ export default function TableView({
   const [detailForm, setDetailForm] = useState<LeadDetailFormData | null>(null);
   const [detailBaseline, setDetailBaseline] =
     useState<LeadDetailFormData | null>(null);
+
+  const [showDeleteActionConfirmed, setShowDeleteActionConfirmed] = useState(false);
+  const [actionDeleteLead, setActionDeleteLead] = useState<Lead | null>(null);
+
   const [isUpdating, setIsUpdating] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<
     { id: string; name: string }[]
   >([]);
+
+  const [loadingDelete, setLoadingDelete] = useState(false);
+  const [updateAssignedPerson, setUpdateAssignedPerson] = useState(false);
+  const [updateFollowup, setUpdateFollowup] = useState(false);
 
   const [historyDraft, setHistoryDraft] = useState<{
     action: string;
@@ -309,7 +320,7 @@ export default function TableView({
   });
 
   const [toasts, setToasts] = useState<
-    { id: number; message: string; type: "success" | "info" }[]
+    { id: string; message: string; type: "success" | "info" }[]
   >([]);
 
   const activeFilters = useMemo(() => {
@@ -347,7 +358,7 @@ export default function TableView({
   }, []);
 
   const showToast = (message: string, type: "success" | "info" = "success") => {
-    const id = Date.now() + Math.random();
+    const id = uuidv4();
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -399,6 +410,8 @@ export default function TableView({
     setDetailForm(null);
     setDetailBaseline(null);
     setShowDeleteConfirm(false);
+    setActionDeleteLead(null);
+    setShowDeleteActionConfirmed(false);
     setHistoryDraft({ action: "", detail: "", type: "call" });
   };
 
@@ -425,16 +438,67 @@ export default function TableView({
     return JSON.stringify(detailForm) !== JSON.stringify(detailBaseline);
   }, [detailForm, detailBaseline]);
 
+  const handleCalendarFollowup = async (leadToUse?: LeadDetailFormData | Lead | null) => {
+    const selectLead = leadToUse || (detailForm ? detailForm : editFollowupLead);
+    if (!selectLead) return false;
+    if (!selectLead.followupDate || !selectLead.followupTime) {
+      showToast("Please provide follow-up date and time.", "info");
+      return false;
+    }
+    const createCalendarEventForFollowup = await FollowupCalendarCreation(
+      selectLead.name,
+      selectLead.email,
+      selectLead.followupDate,
+      selectLead.followupTime
+    );
+    if (createCalendarEventForFollowup !== "Follow-up calendar event successfully created") {
+      console.error("Failed to create follow-up calendar event:", createCalendarEventForFollowup);
+      showToast("Failed to create follow-up calendar event. Please try again.", "info");
+      return false;
+    }
+    return true;
+  };
+
   const handleDetailUpdate = async () => {
     if (!detailLead || !detailForm) return;
-    if (detailForm.stage === "Lost" && !detailForm.lostReason.trim()) {
-      showToast("Please provide a reason for the lost lead.", "info");
+    if ((detailForm.stage === "Lost" || detailForm.stage === "Cancelled" || detailForm.stage === "Disqualified") && !detailForm.lostReason.trim()) {
+      showToast(`Please provide a reason for the ${detailForm.stage} lead.`, "info");
       return;
     }
     setIsUpdating(true);
+    let CalendarCreated = false;
+    // Check if we need to call the calendar event function
+    let Stage = detailForm.stage;
+    const isNewlyMovingToFollowup = (detailLead.stage !== detailForm.stage) && (detailForm.stage === 'In Follow-up');
+    const isReschedulingFollowup = (detailForm.followupDate !== detailLead.followupDate || detailForm.followupTime !== detailLead.followupTime) && (detailForm.stage === "In Follow-up") && (detailLead.stage === "In Follow-up");
+    const isFollowupdDateTimeAdded = (!detailLead.followupDate || !detailLead.followupTime) && (detailForm.followupDate && detailForm.followupTime);
+    if (isNewlyMovingToFollowup || isReschedulingFollowup || isFollowupdDateTimeAdded) {
+      const success = await handleCalendarFollowup(detailForm);
+      if (!success) return; // Stop update if calendar event creation failed
+      CalendarCreated = true;
+      Stage = "In Follow-up"; // Ensure stage is set to In Follow-up if we're creating a follow-up event
+    }
+
     const normalizedTypes =
       detailForm.type.length > 0 ? detailForm.type : ["Not Specified"];
     const typeValue: string = normalizedTypes.join(", ");
+
+    let historyToSend = detailForm.historyEntries;
+
+    if (CalendarCreated) {
+      const FollowupDateTime = `${detailForm.followupDate} at ${detailForm.followupTime}`;
+      const newCalendarEventHistory = {
+        action: "Calendar event creation for Followup Stage",
+        detail: `Calendar event created for Followup Stage at Time ${FollowupDateTime}`,
+        type: "system" as const,
+        date: detailForm.followupDate,
+        time: detailForm.followupTime,
+      };
+      historyToSend = [...historyToSend, newCalendarEventHistory];
+      // Keep client-side state in sync for the UI
+      setDetailForm(prev => prev ? { ...prev, historyEntries: historyToSend } : null);
+    }
+
     const updates: Partial<Lead> = {
       name: detailForm.name,
       phone: detailForm.phone,
@@ -442,7 +506,7 @@ export default function TableView({
       location: detailForm.location,
       source: detailForm.sourceDetail,
       sourceDetail: detailForm.sourceDetail,
-      stage: detailForm.stage,
+      stage: Stage,
       assignedId: detailForm.assignedId || null,
       assignedUser: detailForm.assignedUser || null,
       budget: detailForm.budget,
@@ -451,8 +515,8 @@ export default function TableView({
       followupDate: detailForm.followupDate,
       followupTime: detailForm.followupTime,
       urgent: detailForm.urgent,
-      lostReason: detailForm.stage === "Lost" ? detailForm.lostReason : "",
-      history: detailForm.historyEntries,
+      lostReason: (Stage === "Lost" || Stage === "Cancelled" || Stage === "Disqualified") ? detailForm.lostReason : "",
+      history: historyToSend,
     };
     try {
       const updated = await updateLead(detailLead.id, updates);
@@ -470,15 +534,23 @@ export default function TableView({
   };
 
   const handleDetailDelete = async () => {
-    if (!detailLead) return;
+    const leadToDelete =
+      showDeleteActionConfirmed ? actionDeleteLead : detailLead;
+
+    if (!leadToDelete) return;
     try {
-      await deleteLead(detailLead.id);
-      onLeadDelete(detailLead.id);
+      setLoadingDelete(true);
+      await deleteLead(leadToDelete.id);
+      onLeadDelete(leadToDelete.id);
       setShowDeleteConfirm(false);
+      setLoadingDelete(false);
       closeDetailModal();
-      showToast("Lead deleted");
+      showToast("Lead deleted Successfully");
     } catch (error) {
       console.error("Failed to delete lead", error);
+      showToast("Failed to delete lead", "info");
+    } finally {
+      setLoadingDelete(false);
     }
   };
 
@@ -534,35 +606,63 @@ export default function TableView({
   const openFollowupModal = (lead: Lead) => {
     setEditFollowupLead(lead);
     setFollowupDate(lead.followupDate || "");
-    setFollowupTime(lead.followupTime || "");
+    //setFollowupTime(lead.followupTime || "");
   };
   const closeFollowupModal = () => setEditFollowupLead(null);
 
   const handleUpdateFollowup = async () => {
     if (!editFollowupLead) return;
     try {
+      setUpdateFollowup(true);
+      let CalendarCreated = false;
+      // if (editFollowupLead.stage == "In Follow-up") {
+      const success = await handleCalendarFollowup(editFollowupLead);
+      if (!success) return;
+      CalendarCreated = true;
+      //}
+      let historyToSend = editFollowupLead.history;
+
+      if (CalendarCreated) {
+        const FollowupDateTime = `${editFollowupLead.followupDate} at ${editFollowupLead.followupTime}`;
+        const newMeetingHistory = {
+          action: "Calendar event creation for Followup Stage",
+          detail: `Calendar event created for Followup Stage at Time ${FollowupDateTime}`,
+          type: "system" as const,
+          date: editFollowupLead.followupDate ?? "",
+          time: editFollowupLead.followupTime ?? "",
+        };
+        historyToSend = [...historyToSend, newMeetingHistory];
+      }
       const updatedLead = await updateLead(editFollowupLead.id, {
-        followupDate,
-        followupTime,
+        followupDate: editFollowupLead.followupDate,
+        followupTime: editFollowupLead.followupTime,
+        history: historyToSend,
+        stage: "In Follow-up",
       });
       if (!updatedLead) return;
       onLeadUpdate(updatedLead);
+      setUpdateFollowup(false);
       showToast(`Updated follow-up for ${updatedLead.name}`, "success");
       closeFollowupModal();
     } catch (error) {
       console.error("Failed to update follow-up", error);
+      setUpdateFollowup(false);
+    } finally {
+      setUpdateFollowup(false);
     }
   };
 
   const openAssignedModal = (lead: Lead) => {
     setEditAssignedLead(lead);
-    setAssignedPerson(lead.assignedId || "");
+    setAssignedPerson("");
+    // setAssignedPerson(lead.assignedId || "");
   };
   const closeAssignedModal = () => setEditAssignedLead(null);
 
   const handleUpdateAssigned = async () => {
     if (!editAssignedLead) return;
     try {
+      setUpdateAssignedPerson(true);
       // ONLY send assignedId to the backend. Do NOT send assignedUser.
       // Prisma will automatically link the relation and return the populated user.
       //console.log('Updating assigned person for lead', editAssignedLead.id, 'to user ID:', assignedPerson);
@@ -581,9 +681,12 @@ export default function TableView({
         `Assigned ${assignedUserName} to ${updatedLead.name}`,
         "success",
       );
+      setUpdateAssignedPerson(false);
       closeAssignedModal();
     } catch (error) {
       console.error("Failed to update assigned", error);
+    } finally {
+      setUpdateAssignedPerson(false);
     }
   };
 
@@ -615,7 +718,6 @@ export default function TableView({
         finalHtmlBody,
       );
       if (sendCampaign) {
-        showToast(`Email sent to ${emailLead.name} Successfully`, "success");
         const now = new Date();
         const historyEntry: Lead["history"][number] = {
           date: now.toISOString().slice(0, 10),
@@ -628,7 +730,10 @@ export default function TableView({
           ...emailLead,
           history: [...emailLead.history, historyEntry],
         };
-        onLeadUpdate(updatedLead);
+        const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
+        if (!updatedLeadData) return;
+        onLeadUpdate(updatedLeadData);
+        showToast(`Email sent to ${emailLead.name} Successfully`, "success");
       } else {
         showToast(`Failed to send email to ${emailLead.name}`, "info");
       }
@@ -769,7 +874,7 @@ export default function TableView({
                         </span>
                       </td>
                       <td className="col-followup">
-                        {!lead.followupDate && !lead.followupTime ? (
+                        {(!lead.followupDate || !lead.followupTime) ? (
                           <button
                             type="button"
                             className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"
@@ -851,6 +956,20 @@ export default function TableView({
                               <Mail size={15} />
                             </button>
                           ) : null}
+                          {["Won", "Lost", "Cancelled", "Disqualified"].includes(lead.stage) && (
+                            <button
+                              type="button"
+                              className="action-btn-icon"
+                              title="Delete Lead"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setActionDeleteLead(lead);
+                                setShowDeleteActionConfirmed(true);
+                              }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -906,9 +1025,9 @@ export default function TableView({
                 </span>
               </div>
             )}
-            {detailForm.stage === "Lost" && (
+            {(detailForm.stage === "Lost" || detailForm.stage === "Cancelled" || detailForm.stage === "Disqualified") && (
               <div className="status-banner status-banner-danger">
-                <span className="status-banner-title">Status: Lost</span>
+                <span className="status-banner-title">Status: {detailForm.stage}</span>
                 <span className="status-banner-text">
                   {detailForm.lostReason
                     ? `Reason: ${detailForm.lostReason}`
@@ -986,9 +1105,9 @@ export default function TableView({
                     setDetailForm((prev) =>
                       prev
                         ? {
-                            ...prev,
-                            sourceDetail: event.target.value as LeadSource,
-                          }
+                          ...prev,
+                          sourceDetail: event.target.value as LeadSource,
+                        }
                         : prev,
                     )
                   }
@@ -1286,10 +1405,10 @@ export default function TableView({
               </div>
             </div>
 
-            {detailForm.stage === "Lost" && (
+            {(detailForm.stage === "Lost" || detailForm.stage === "Cancelled" || detailForm.stage === "Disqualified") && (
               <div className="col-span-1 rounded-[8px] border border-red-200 bg-red-50 p-4 md:col-span-2">
                 <label className="text-sm font-medium text-red-900">
-                  Reason for Lost <span className="text-red-500">*</span>
+                  Reason for {detailForm.stage} <span className="text-red-500">*</span>
                 </label>
                 <input
                   className={`mt-1 w-full rounded-[4px] border ${!detailForm.lostReason.trim() ? "border-red-400 ring-1 ring-red-400/20" : "border-[#d6d3d1]"} bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200`}
@@ -1301,7 +1420,7 @@ export default function TableView({
                 />
                 {!detailForm.lostReason.trim() && (
                   <p className="mt-1.5 text-xs text-red-600 font-medium">
-                    This is required when marking a lead as Lost.
+                    This is required when marking a lead as {detailForm.stage}.
                   </p>
                 )}
               </div>
@@ -1323,7 +1442,7 @@ export default function TableView({
                   "Update Lead"
                 )}
               </button>
-              {["Won", "Lost"].includes(detailLead.stage) && (
+              {(detailForm.stage === "Won" || (detailForm.stage === "Lost" && detailLead.lostReason) || (detailForm.stage === "Cancelled" && detailLead.lostReason) || (detailForm.stage === "Disqualified" && detailLead.lostReason)) && (
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-full border border-[#fecaca] bg-[#fee2e2] px-4 py-2 text-xs font-medium text-[#b91c1c] transition hover:border-[#fca5a5]"
@@ -1345,8 +1464,8 @@ export default function TableView({
       </ModalShell>
 
       <ModalShell
-        open={showDeleteConfirm && !!detailLead}
-        onClose={() => setShowDeleteConfirm(false)}
+        open={(showDeleteConfirm && !!detailLead) || (showDeleteActionConfirmed && !!actionDeleteLead)}
+        onClose={() => { setShowDeleteConfirm(false); setShowDeleteActionConfirmed(false); setActionDeleteLead(null); }}
         title="Delete Lead"
         maxWidthClass="max-w-[420px]"
       >
@@ -1361,12 +1480,19 @@ export default function TableView({
               className="inline-flex items-center justify-center rounded-full bg-[#dc2626] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#b91c1c]"
               onClick={handleDetailDelete}
             >
-              Delete
+              {loadingDelete ? (
+                <>
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Deleting Lead...
+                </>
+              ) : (
+                "Delete"
+              )}
             </button>
             <button
               type="button"
               className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
-              onClick={() => setShowDeleteConfirm(false)}
+              onClick={() => { setShowDeleteConfirm(false); setShowDeleteActionConfirmed(false); setActionDeleteLead(null); }}
             >
               Cancel
             </button>
@@ -1518,8 +1644,16 @@ export default function TableView({
             <input
               type="date"
               className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-              value={followupDate}
-              onChange={(event) => setFollowupDate(event.target.value)}
+              value={editFollowupLead?.followupDate || ""}
+              onChange={(event) => {
+                const val = event.target.value;
+                setFollowupDate(val);
+                setEditFollowupLead((prev) =>
+                  prev
+                    ? { ...prev, followupDate: val }
+                    : prev,
+                );
+              }}
             />
           </div>
           <div>
@@ -1527,18 +1661,33 @@ export default function TableView({
             <input
               type="time"
               className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
-              value={followupTime}
-              onChange={(event) => setFollowupTime(event.target.value)}
+              value={editFollowupLead?.followupTime || ""}
+              onChange={(event) => {
+                const val = event.target.value;
+                //setFollowupTime(val);
+                setEditFollowupLead((prev) =>
+                  prev
+                    ? { ...prev, followupTime: val }
+                    : prev,
+                );
+              }}
             />
           </div>
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className={`inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] ${followupDate ? "" : "opacity-50 cursor-not-allowed"}`}
               onClick={handleUpdateFollowup}
               disabled={!followupDate}
             >
-              Save Follow-up
+              {updateFollowup ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+                  Updating Follow-up ...
+                </>
+              ) : (
+                "Save Follow-up"
+              )}
             </button>
             <button
               type="button"
@@ -1583,11 +1732,19 @@ export default function TableView({
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6]"
+              className={`inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] ${assignedPerson ? "" : "opacity-50 cursor-not-allowed"}`}
               onClick={handleUpdateAssigned}
               disabled={!assignedPerson}
             >
-              Save Assignment
+              {updateAssignedPerson ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+                  Assigning User ...
+                </>
+              ) : (
+                "Save Assignment"
+              )
+              }
             </button>
             <button
               type="button"
@@ -1602,3 +1759,4 @@ export default function TableView({
     </div>
   );
 }
+

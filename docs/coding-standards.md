@@ -1,8 +1,8 @@
 # Coding Standards
 
-This is the engineering handbook for the repository. It describes the standards that new code should follow and the technical debt that still exists today.
+This document describes the current conventions for new code in this repository. It is implementation-driven: the rules below reflect the helpers, slices, validators, and route patterns that exist today.
 
-## Non-Negotiable Standards
+## Non-Negotiables
 
 1. Keep server-side data access in `lib/data` or route handlers, not in React components.
 2. Keep client components focused on rendering and interaction.
@@ -10,58 +10,136 @@ This is the engineering handbook for the repository. It describes the standards 
 4. Preserve auth checks at the request boundary, not only in the UI.
 5. Revalidate or refresh canonical data after mutations that affect server-rendered views.
 
-## Type Safety Rules
+## General Code Quality
+
+- No unused variables.
+- No unused imports.
+- No dead code.
+- No commented-out code committed to the repository.
+- Prefer explicit typing over implicit `any`.
+- Avoid type assertions unless they are the smallest practical option.
+- Lint must pass with zero warnings and zero errors.
+
+## File Structure
+
+- No file should exceed 500 lines.
+- If a file is approaching 500 lines, extract hooks, utilities, UI, or business logic before it becomes harder to scan.
+- Prefer composition over large monolithic files.
+- Keep feature-specific logic close to the feature, and shared primitives in `components/common` or `components/ui`.
+
+## Type Safety
 
 - Do not pass raw Prisma decimals to the client.
-- Do not store non-serializable values in Redux unless there is no alternative and the exception is documented.
-- Prefer explicit DTOs over `any` or untyped JSON.
-- Use union types and discriminated states for modal and mutation state.
+- Do not store non-serializable values in Redux unless the exception is intentional and documented.
+- Prefer explicit DTOs over untyped JSON.
 - Keep request payloads and response payloads separate.
+- Use union types and discriminated states for modal and mutation state.
+
+## React Standards
+
+### State Management
+
+- Avoid `setState` inside `useEffect` when the value is derived from existing props, Redux, or query results.
+- Derive state directly from props or query results when possible.
+- Use memoization when a derived value is expensive or reused.
+- Use Redux or React Query for async state.
+
+Bad:
+
+```tsx
+useEffect(() => {
+	setData(result);
+}, [result]);
+```
+
+### Initial Data Loading
+
+- Initial application data loading should be handled by Redux or React Query.
+- Avoid local component state for initial server-loaded data.
+
+### Effects
+
+- Effects should synchronize with external systems.
+- Effects should not exist solely to transform data.
+- Prefer `useMemo` for derived values.
+- Prefer `useEffectEvent` where applicable.
+
+## Data Fetching Standards
+
+- Use `fetchJson()` for client calls that expect JSON.
+- Do not add untyped `fetch()` calls when a shared helper already exists.
+- Do not manually parse response bodies when helper functions already exist.
+- Prefer centralized API utilities over feature-local request wrappers.
+- Use the existing response shape exposed by `fetchJson()` on the client.
+
+## Redux Standards
+
+- Use Redux for global state, shared application state, modal state, and cross-page coordination.
+- Avoid Redux for temporary UI-only state or local form interactions.
+- Use `createAsyncThunk` for Redux async flows.
+- Keep Redux state serializable where possible.
+- Treat Redux as coordination state, not a replacement for the database.
+
+## Modal Standards
+
+- All shared modals must be registered and managed through the centralized modal manager.
+- Do not add ad-hoc modal mounting patterns for cross-feature workflows.
+- Do not duplicate modal state management across features.
+- New modals must be registered in the modal manager, use Redux state, and follow existing modal conventions.
+
+## API Standards
+
+- New list endpoints should support `page` and `limit`.
+- New search-capable endpoints should support `search` or `q` as appropriate to the existing domain conventions.
+- Design endpoints for future scalability, even when the current UI does not use every filter yet.
+- Keep route handlers single-purpose.
+
+## Request Validation
+
+- Validate all request bodies at the route boundary.
+- Use shared validators from `utils/validators`.
+- Reuse schemas whenever possible.
+- Centralize validation logic instead of repeating ad hoc checks.
+- Normalize date strings and numeric fields before persistence.
+
+Shared validation helpers already exist in the repository, including `utils/validators/common.ts`, `lead.ts`, `projects.ts`, `files.ts`, `material.ts`, `milestone.ts`, `notification.ts`, and `response.ts`.
+
+## Server Response Standards
+
+- Use the shared response helpers in `utils/validators/response.ts` for new route work.
+- Prefer standardized success, paginated, validation-error, and error helpers.
+- Avoid `NextResponse.json(...)` in new code when a project helper already exists.
+- Keep response shapes consistent so client code can rely on stable error handling.
+
+## Performance Standards
+
+- Parallelize independent database queries.
+- Avoid sequential queries where `Promise.all` is a better fit.
+- Minimize database round trips.
+- Avoid unnecessary client re-renders.
+- Memoize expensive calculations.
+- Use server-side caching and revalidation helpers when the data is reused across requests.
+
+## Database Standards
+
+- Prefer Prisma transactions when multiple writes must stay consistent.
+- Keep database connection usage efficient.
+- Avoid N+1 query patterns.
+- Reuse existing query helpers.
+- Return refreshed canonical records when the UI depends on nested relations.
+
+## Component Standards
+
+- Prefer reusable components.
+- Prefer shared UI primitives.
+- Keep business logic out of presentational components.
+- Extract hooks when logic becomes complex.
 
 ## Function Design Principles
 
 - Keep functions small and purpose-built.
 - Prefer one clear responsibility per function.
 - Use helper functions for query building, mapping, and validation instead of inlining everything in a route handler.
-- Return canonical entity payloads after mutations when the UI depends on nested relations.
-
-## Component Design Principles
-
-- Shared UI should stay dumb and reusable.
-- Feature components may own view logic, but they should not reach into unrelated features.
-- Keep modal bodies in the feature folder and modal orchestration in the coordinator.
-- Use card, section, and table patterns consistently so screens feel like one product.
-
-## Separation Of Concerns
-
-The repository should continue to use these boundaries:
-
-- `app/` = routing and request handling
-- `components/` = rendering and interaction
-- `lib/data/` = Prisma queries and server-side DTO mapping
-- `lib/store/` = Redux state and async coordination
-- `utils/` = pure helpers
-
-Do not collapse these layers together just to reduce file count.
-
-## Reusability Strategy
-
-The preferred pattern is:
-
-- shared primitive in `components/common` or `components/ui`
-- feature-specific composition in `components/<feature>`
-- shared query logic in `lib/data`
-- shared state coordination in `lib/store`
-
-If a helper is only used once, keep it local. If it starts being reused, extract it deliberately.
-
-## Naming Conventions
-
-- component files: `PascalCase.tsx`
-- utility files: `camelCase.ts` or domain-named files
-- route handlers: `route.ts`
-- slices: `camelCaseSlice.ts`
-- DTOs: suffix with `Request`, `Response`, `Item`, `State`, or `Dashboard` as appropriate
 
 ## Error Handling Standards
 
@@ -69,219 +147,81 @@ If a helper is only used once, keep it local. If it starts being reused, extract
 - Return readable error strings to the UI.
 - Log enough context to identify the request or entity that failed.
 - Do not swallow failures silently.
-- Avoid mixing plain-text and JSON error styles in the same domain unless there is a reason.
+- Avoid mixing plain-text and JSON error styles in the same domain unless the domain already requires it.
 
 ## Logging Strategy
 
-Current logging is simple and console-based.
+- Keep logs actionable.
+- Include the route or domain in the message.
+- Include the failing entity id when possible.
+- Avoid dumping secrets or entire payloads.
 
-That is acceptable for now, but logs should still be actionable:
+## Naming Conventions
 
-- include the route or domain in the message
-- include the failing entity id when possible
-- avoid dumping secrets or entire payloads
+- Component files: `PascalCase.tsx`
+- Utility files: `camelCase.ts` or domain-named files
+- Route handlers: `route.ts`
+- Slices: `camelCaseSlice.ts`
+- DTOs: suffix with `Request`, `Response`, `Item`, `State`, or `Dashboard` as appropriate
 
-## Validation Requirements
+## Reusability Strategy
+
+- Shared primitive in `components/common` or `components/ui`
+- Feature-specific composition in `components/<feature>`
+- Shared query logic in `lib/data`
+- Shared state coordination in `lib/store`
+
+If a helper is only used once, keep it local. If it becomes reused, extract it deliberately.
+
+## Rendering And Caching
+
+- Prefer server components for initial data when the screen is data-heavy.
+- Use client components only for interactivity and local coordination.
+- Keep shell-level wrappers client-side only when they need browser APIs or user interaction.
+- Use `unstable_cache` and `revalidateTag` where the repository already does so.
+
+## Validation And Contracts
 
 - Route handlers must validate required fields before writing.
-- Enum-like query strings should be checked against the actual allowed values.
-- Date strings and numeric fields should be normalized before persistence.
-- If a flow becomes more complex, introduce a schema validator rather than adding more hand-rolled checks.
-
-## Async Handling Standards
-
-- Use `Promise.all` for independent reads.
-- Use `createAsyncThunk` for Redux async flows.
-- Prefer `async/await` over nested promise chains.
-- Keep route handlers single-purpose and keep transaction logic inside helpers when it grows.
-
-## API Calling Standards
-
-- Use `fetchJson()` for client calls that expect JSON and want a consistent fallback error message.
-- Use direct `fetch()` only when the caller needs special handling.
-- Prefer route handlers over calling Prisma from client code.
-- Return refreshed canonical records after mutation when the UI depends on nested relations.
-
-## Data Transformation Rules
-
-- Convert Prisma decimals to strings immediately after reading.
-- Convert date objects to serializable strings at the API boundary.
-- Keep transformation code close to the data access layer.
-- Do not bury data mapping deep inside React view code.
-
-## File Size And Complexity Limits
-
-These are practical targets, not hard compiler limits:
-
-- keep shared primitives small and boring
-- split feature screens once they become difficult to scan in one pass
-- if a component mixes layout, data fetching, and mutation orchestration, split it
-- if a slice accumulates several unrelated domains, split it
-
-## Refactoring Expectations
-
-Refactor when you see:
-
-- duplicated pagination or lookup logic
-- repeated DTO mapping
-- repeated error handling blocks
-- feature logic leaking into shared components
-- state that is only used to support a single local form
+- Enum-like query strings must be checked against the actual allowed values.
+- Response and request payloads should stay separate.
+- If a flow becomes more complex, introduce a schema validator instead of adding more manual guards.
 
 ## Testing Philosophy
 
-The repository does not yet show a broad automated test suite in the inspected paths.
-
-That means the current standard should be:
-
-- validate the changed slice or route directly
-- check the data contract after any API change
-- ensure new mutations return the shape the UI expects
-- add tests when a flow becomes non-trivial or business-critical
-
-## Performance Standards
-
-- use server rendering for initial data where possible
-- cache reusable reads with Next cache tags or `unstable_cache`
-- paginate large lists
-- debounce search-driven refetches
-- avoid unnecessary client re-renders by keeping derived state local or memoized
+- Validate the changed slice or route directly.
+- Check the data contract after any API change.
+- Ensure new mutations return the shape the UI expects.
+- Add tests when a flow becomes non-trivial or business-critical.
 
 ## Accessibility Standards
 
-- every icon-only control needs an accessible label
-- keep focus rings visible
-- do not encode meaning through color alone when the text label is easy to show
-- dialogs and drawers must remain keyboard accessible
-- ensure empty and error states are readable, not just decorative
+- Every icon-only control needs an accessible label.
+- Keep focus rings visible.
+- Do not encode meaning through color alone when the text label can be shown.
+- Dialogs and drawers must remain keyboard accessible.
+- Ensure empty and error states are readable, not just decorative.
 
 ## Security Considerations
 
-- auth must be enforced at the request boundary
-- webhook and cron endpoints should use their expected secret or signature checks
-- never trust client-provided ids or status strings without validation
-- treat file uploads as untrusted input until Blob and database persistence succeed
+- Auth must be enforced at the request boundary.
+- Webhook and cron endpoints should use the expected secret or signature checks.
+- Never trust client-provided ids or status strings without validation.
+- Treat file uploads as untrusted input until Blob and database persistence succeed.
 
-Guidance and checklist:
+## Current Implementation Notes
 
-- Ensure middleware public-route matchers list *only* truly public paths (sign-in, sign-up, webhook, static assets, health). Avoid patterns like `/(.*)` that make the middleware permissive.
-- Prefer explicit server-side `auth()` in mutation handlers that write to the database even when middleware is present. This makes security intentions explicit and protects against future middleware misconfiguration.
-- Validate and parse request bodies at the route boundary; use Zod schemas for consistent validation and types. Return a stable JSON error envelope such as `{ ok: false, error: string }` for failures.
-- Add a short integration test that asserts protected routes return 401/403 when unauthenticated and 200 when authenticated.
+- `fetchJson()` is the common client helper for JSON requests.
+- `utils/validators/response.ts` is the shared response-helper layer for new API code.
+- Redux currently holds project, tradie, customer, site manager, quote, and UI coordination state.
+- The centralized modal manager renders shared modals from Redux state.
+- React Query is currently used in the notification provider, the app shell, and a small number of local query shells.
 
-Example: tighten the `createRouteMatcher` in `proxy.ts` (replace permissive catch-all):
+## Suggested Workflow For New Work
 
-```
-// only allow these routes to be public
-const isPublicRoute = createRouteMatcher([
-	"/api/webhook/clerk(.*)",
-	"/sign-in(.*)",
-	"/sign-up(.*)",
-	"/_next/static(.*)",
-	"/_next/image(.*)",
-	"/static(.*)",
-	"/api/health(.*)",
-]);
-```
-
-And in mutation handlers:
-
-```
-import { auth } from '@clerk/nextjs/server'
-
-export async function POST(req: Request) {
-	const user = auth();
-	if (!user?.userId) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 });
-	// validate with zod
-}
-```
-
-## Caching Strategy
-
-The current cache model uses:
-
-- `unstable_cache` for server-side lookup and data helpers
-- `revalidateTag` after writes
-- a small client-side tradie dashboard cache in Redux
-
-This is fine short term, but it should not spread further without a clear invalidation story.
-
-## Revalidation Strategy
-
-The current pattern is:
-
-1. mutate the database
-2. revalidate the relevant tag
-3. return the refreshed canonical entity
-4. update client state from the returned payload
-
-That is the right pattern for nested project and tradie workflows.
-
-## Memoization Strategy
-
-- use memoization for derived UI state that is expensive or reused
-- do not memoize everything by default
-- keep cache keys deterministic and derived from the real query state
-
-## Server/Client Rendering Considerations
-
-- prefer server components for initial data when the screen is data-heavy
-- use client components only for interactivity and local coordination
-- keep shell-level wrappers client-side only when they truly need browser APIs or user interaction
-
-## Data Fetching Optimization Patterns
-
-- cache repeated lookups
-- reuse server helpers instead of re-querying in multiple places
-- batch independent database reads
-- keep lookup queries narrow
-- avoid overfetching full nested relations for list screens that only need summary data
-
-## Parallelization Standards
-
-- use parallel reads for independent aggregates
-- keep transactions for writes that must remain consistent
-- do not parallelize dependent operations that must happen in sequence
-
-## Segmentation And Modularity
-
-The code should be segmented by concern, not by arbitrary file count.
-
-Good segmentation looks like:
-
-- shared primitive
-- feature component
-- feature data helper
-- feature slice
-- feature types
-
-Bad segmentation looks like:
-
-- one large global utility file
-- one mega slice for unrelated modules
-- route handlers that also contain detailed business mapping logic
-
-## Existing Technical Debt
-
-- middleware auth matcher is wrong today
-- some API routes do not enforce auth consistently
-- `serializableCheck` is disabled globally
-- lookup pagination logic is duplicated
-- global CSS contains a feature-specific leads block
-- `lib/mock-data.tsx` is overloaded
-
-## Existing Anti-Patterns
-
-- direct client fetches where the feature already has Redux async infrastructure
-- ad hoc response envelopes
-- mixed mock and live data in the same registry file
-- feature-specific styling in the global stylesheet
-- stateful coordination logic spread across slice, component, and route handler without a clean boundary
-
-## Recommended Cleanup Strategy
-
-1. Fix auth and route protection first.
-2. Consolidate repeated lookup and pagination code.
-3. Separate mock content from runtime registry data.
-4. Normalize response envelopes and error handling.
-5. Reduce the amount of business logic embedded in global styles and UI-only helpers.
+1. Add or reuse a validator in `utils/validators`.
+2. Validate input in the route handler.
+3. Query or mutate through `lib/data` helpers when the logic is reusable.
+4. Return a shared response helper shape.
+5. Revalidate tags or refresh Redux state if the UI depends on the result.
+6. Keep feature UI thin and move orchestration into helpers, slices, or context.

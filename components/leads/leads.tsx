@@ -34,7 +34,7 @@ import {
   fetchAllLeads,
   fetchLeadsStats,
   sendEmailToLead,
-  updateLead,
+  FollowupCalendarCreation,
 } from "@/lib/leads/leads-service";
 import TableView from "./views/table-view";
 import FollowupsView from "./views/followups-view";
@@ -49,6 +49,16 @@ import { LeadPagination } from "./lead-pagination";
 import { useDebounce } from "@/hooks/use-debounce";
 import { LeadAnalyticsData } from "@/types/lead";
 import { ReactEmailIframe } from "./render-email";
+import { useSearchParams } from "next/navigation";
+import { leadStatusSchema } from "@/utils/validators/lead";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { v4 as uuidv4 } from "uuid";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -192,6 +202,9 @@ function ModalShell({
 }
 
 export default function Leads() {
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("query");
+  const initialStatus = searchParams.get("status");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("table");
@@ -210,8 +223,12 @@ export default function Leads() {
   const [adding, setAdding] = useState(false);
   const [addingWithReminder, setAddingWithReminder] = useState(false);
   const [toasts, setToasts] = useState<
-    { id: number; message: string; type: "success" | "info" }[]
+    { id: string; message: string; type: "success" | "info" }[]
   >([]);
+  const [activeFilterTiming, setActiveFilterTiming] = useState("all"); // 'all' is the default for "All Time"
+  const [emailTargets, setEmailTargets] = useState<string[]>([]);
+  const [emailTargetList, setEmailTargetList] = useState<string>("");
+
   const [pageInfo, setPageInfo] = useState({
     page: 1,
     limit: 10,
@@ -239,6 +256,7 @@ export default function Leads() {
       limit?: number;
       query?: string;
       status?: string;
+      filterTiming?: string;
     }) => {
       try {
         const status = query.status;
@@ -262,6 +280,7 @@ export default function Leads() {
           limit: query.limit || pageInfo.limit,
           q: query.query?.trim() ? query.query.trim() : undefined,
           status: statusFilter,
+          filterTiming: query.filterTiming,
         });
         setLeads(leadsData.items);
         setPageInfo({
@@ -280,13 +299,21 @@ export default function Leads() {
     [],
   );
 
-  const loadData = async () => {
+  const loadData = async ({
+    query,
+    status,
+  }: {
+    query?: string;
+    status?: string;
+  }) => {
     try {
       setLoading(true);
       const [leadsData, statsData, analyticsData] = await Promise.all([
         fetchLeads({
           page: 1,
           limit: 10,
+          q: query?.trim() ? query.trim() : undefined,
+          status: status ? (status.split(",") as LeadStage[]) : undefined,
         }),
         fetchLeadsStats(),
         fetchLeadAnalyticsData(),
@@ -319,6 +346,9 @@ export default function Leads() {
           page: 1,
           limit: 10,
           query,
+          status:
+            activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+          filterTiming: activeFilterTiming,
         });
       });
     } else if (query.length === 0) {
@@ -326,6 +356,9 @@ export default function Leads() {
         refreshLeadsData({
           page: 1,
           limit: 10,
+          status:
+            activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+          filterTiming: activeFilterTiming,
         });
       });
     }
@@ -333,9 +366,41 @@ export default function Leads() {
 
   useEffect(() => {
     void Promise.resolve().then(() => {
-      loadData();
+      if (initialQuery || initialStatus) {
+        console.log("Initial query/status from URL:", {
+          initialQuery,
+          initialStatus,
+        });
+        const decodedQuery = initialQuery
+          ? decodeURIComponent(initialQuery)
+          : null;
+        const decodedStatus = initialStatus
+          ? decodeURIComponent(initialStatus)
+          : null;
+        const validatedStatus = leadStatusSchema.safeParse(decodedStatus);
+        if (validatedStatus.success) {
+          void Promise.resolve().then(() => {
+            setActiveMetric(validatedStatus.data);
+            loadData({
+              status: validatedStatus.data,
+            });
+          });
+        }
+        if (decodedQuery && decodedQuery.trim().length > 0) {
+          void Promise.resolve().then(() => {
+            setSearchTerm(decodedQuery);
+            loadData({
+              query: decodedQuery.trim(),
+            });
+          });
+        }
+      } else {
+        void Promise.resolve().then(() => {
+          loadData({});
+        });
+      }
     });
-  }, []);
+  }, [initialQuery, initialStatus]);
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -362,34 +427,35 @@ export default function Leads() {
     }
   };
 
-  const recalcStats = useCallback((currentLeads: Lead[]) => {
-    const isConverted = (stage: string) =>
-      stage === "Won" || stage === "Converted";
-    const isLost = (stage: string) =>
-      stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
+  // const recalcStats = useCallback((currentLeads: Lead[]) => {
+  //   const isConverted = (stage: string) =>
+  //     stage === "Won" || stage === "Converted";
+  //   const isLost = (stage: string) =>
+  //     stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
 
-    setStats({
-      total: currentLeads.length,
-      new: currentLeads.filter((l) => l.stage === "New").length,
-      contacted: currentLeads.filter((l) => l.stage === "Contacted").length,
-      qualified: currentLeads.filter((l) => l.stage === "Qualified").length,
-      conversion: currentLeads.filter((l) => isConverted(l.stage)).length,
-      pendingFollowup: currentLeads.filter((l) => l.stage == "In Follow-up")
-        .length,
-      lost: currentLeads.filter((l) => isLost(l.stage)).length,
-    });
-  }, []);
+  //   setStats({
+  //     total: currentLeads.length,
+  //     new: currentLeads.filter((l) => l.stage === "New").length,
+  //     contacted: currentLeads.filter((l) => l.stage === "Contacted").length,
+  //     qualified: currentLeads.filter((l) => l.stage === "Qualified").length,
+  //     conversion: currentLeads.filter((l) => isConverted(l.stage)).length,
+  //     pendingFollowup: currentLeads.filter((l) => l.stage == "In Follow-up")
+  //       .length,
+  //     lost: currentLeads.filter((l) => isLost(l.stage)).length,
+  //   });
+  // }, []);
 
   const handleLeadUpdate = async (updatedLead: Lead): Promise<boolean> => {
-    const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
-    if (updatedLeadData) {
+    //const updatedLeadData = await updateLead(updatedLead.id, updatedLead);
+    if (updatedLead) {
       setLeads((prev) => {
         const updated = prev.map((lead) =>
           lead.id === updatedLead.id ? updatedLead : lead,
         );
-        recalcStats(updated);
+        // recalcStats(updated);\
         return updated;
       });
+      await refreshStats();
       return true;
     } else {
       return false;
@@ -399,7 +465,7 @@ export default function Leads() {
   const handleLeadDelete = async (leadId: number) => {
     setLeads((prev) => {
       const updated = prev.filter((lead) => lead.id !== leadId);
-      recalcStats(updated);
+      //recalcStats(updated);
       return updated;
     });
     await refreshStats();
@@ -412,42 +478,74 @@ export default function Leads() {
       page: 1,
       limit: 10,
       status: metric === "total" ? "total" : (metric ?? undefined),
+      filterTiming: activeFilterTiming,
       query: debouncedSearchTerm.trim()
         ? debouncedSearchTerm.trim()
         : undefined,
     });
   };
 
-  const handlePageChange = useCallback(async (page: number) => {
-    await refreshLeadsData({
-      page,
-      limit: pageInfo.limit,
-      query: searchTerm,
-      status:  activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+  const handleFilterTimingChange = (filterTiming: string) => {
+    setActiveFilterTiming(filterTiming);
+    refreshLeadsData({
+      page: 1,
+      limit: 10,
+      status: activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+      filterTiming: filterTiming,
+      query: debouncedSearchTerm.trim()
+        ? debouncedSearchTerm.trim()
+        : undefined,
     });
-  }, [refreshLeadsData, activeMetric, pageInfo.limit, searchTerm]);
-
-  const reloadCurrentData = () => {
-    loadData();
   };
 
-  const handleNewLead = (newLead: Lead) => {
+  const handlePageChange = useCallback(
+    async (page: number) => {
+      await refreshLeadsData({
+        page,
+        limit: pageInfo.limit,
+        query: searchTerm,
+        status:
+          activeMetric === "total" ? "total" : (activeMetric ?? undefined),
+        filterTiming: activeFilterTiming,
+      });
+    },
+    [refreshLeadsData, activeMetric, pageInfo.limit, searchTerm],
+  );
+
+  const reloadCurrentData = () => {
+    loadData({});
+  };
+
+  const handleNewLead = async (newLead: Lead) => {
     setLeads((prev) => {
       const updated = [newLead, ...prev];
-      recalcStats(updated);
+      // recalcStats(updated);
       return updated;
     });
+    await refreshStats();
   };
 
   const showToast = (message: string, type: "success" | "info" = "success") => {
-    const id = Date.now() + Math.random();
+    const id = uuidv4();
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   };
 
-  const openEmailTemplates = () => {
+  const openEmailTemplates = async () => {
+    const allLeads = await fetchAllLeads();
+    setEmailTargets(
+      allLeads
+        .filter((lead) => lead.email)
+        .map((lead) => lead.email) as string[],
+    );
+    setEmailTargetList(
+      allLeads
+        .filter((lead) => lead.email)
+        .map((lead) => lead.email)
+        .join(", "),
+    );
     setShowEmailTemplates(true);
     setSelectedTemplate(null);
     setEmailSubject("");
@@ -523,7 +621,8 @@ export default function Leads() {
       );
 
       setLeads(updated);
-      recalcStats(updated);
+      // recalcStats(updated);
+      await refreshStats();
       showToast(
         `Campaign sent to ${successCount} of ${emailTargets.length} leads`,
         "success",
@@ -554,6 +653,46 @@ export default function Leads() {
       type: entry.type,
       actionDate: entry.actionDate || today.toISOString(),
     }));
+
+    if (formData.followupDate && formData.followupTime) {
+      formData.stage = "In Follow-up";
+    } else {
+      formData.stage = "Contacted";
+    }
+
+    if (formData.stage === "In Follow-up") {
+      if (!formData.followupDate || !formData.followupTime) {
+        showToast(
+          "Please provide follow-up date and time for 'In Follow-up' stage",
+          "info",
+        );
+        setAdding(false);
+        setAddingWithReminder(false);
+        return;
+      }
+      const createCalendarEventForFollowup = await FollowupCalendarCreation(
+        formData.name,
+        formData.email,
+        formData.followupDate,
+        formData.followupTime,
+      );
+      if (
+        createCalendarEventForFollowup !==
+        "Follow-up calendar event successfully created"
+      ) {
+        console.error(
+          "Failed to create follow-up calendar event:",
+          createCalendarEventForFollowup,
+        );
+        showToast(
+          "Failed to create follow-up calendar event. Please try again.",
+          "info",
+        );
+        setAdding(false);
+        setAddingWithReminder(false);
+        return;
+      }
+    }
 
     const payload = {
       name: formData.name,
@@ -608,11 +747,11 @@ export default function Leads() {
     stats && stats.total > 0
       ? ((stats.conversion / stats.total) * 100).toFixed(1)
       : "0.0";
-  const emailTargets = leads.filter((lead) => lead.email);
-  const emailTargetList = emailTargets
-    .map((lead) => lead.email)
-    .filter(Boolean)
-    .join(", ");
+  // const emailTargets = leads.filter((lead) => lead.email);
+  // const emailTargetList = emailTargets
+  //   .map((lead) => lead.email)
+  //   .filter(Boolean)
+  //   .join(", ");
 
   // Update your filteredLeads to respect the activeMetric (as shown in previous answer)
   // const filteredLeads = useMemo(() => {
@@ -719,7 +858,7 @@ export default function Leads() {
 
   return (
     <div className="leads-container space-y-6">
-      <Card className="max-w-3xl overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
+      <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
         <CardContent className="relative p-6">
           <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
@@ -826,6 +965,23 @@ export default function Leads() {
           })}
           {!loading && (
             <div className="ml-auto flex items-center gap-3">
+              <Select
+                value={activeFilterTiming}
+                onValueChange={handleFilterTimingChange}
+              >
+                <SelectTrigger className="flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                  <SelectValue placeholder="Select timeframe" />
+                </SelectTrigger>
+
+                <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this_week">This Week</SelectItem>
+                  <SelectItem value="this_month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                  <SelectItem value="this_year">This Year</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
               <div className="search-box" style={{ flex: 1 }}>
                 <Search size={16} />
                 <input
@@ -986,7 +1142,7 @@ export default function Leads() {
               <div className="mt-0">
                 <ReactEmailIframe
                   category={selectedTemplate.category}
-                  lead={emailTargets[0] ?? null}
+                  lead={leads[0] ?? null}
                 />
               </div>
             ) : (
@@ -1113,20 +1269,20 @@ const LEAD_SOURCE_OPTIONS: LeadSource[] = [
   "Business",
 ];
 
-const LEAD_STAGE_OPTIONS: LeadStage[] = [
-  "New",
-  "Contacted",
-  "Qualified",
-  "Quoted",
-  "Negotiating",
-  "Won",
-  "Meeting Scheduled",
-  "In Follow-up",
-  "No Response",
-  "Converted",
-  "Cancelled",
-  "Disqualified",
-];
+// const LEAD_STAGE_OPTIONS: LeadStage[] = [
+//   "New",
+//   "Contacted",
+//   "Qualified",
+//   "Quoted",
+//   "Negotiating",
+//   "Won",
+//   "Meeting Scheduled",
+//   "In Follow-up",
+//   "No Response",
+//   "Converted",
+//   "Cancelled",
+//   "Disqualified",
+// ];
 
 const PROJECT_TYPE_OPTIONS: ProjectType[] = [
   "Not Specified",
@@ -1161,14 +1317,14 @@ function AddLeadModal({
     phone: "",
     email: "",
     location: "",
-    sourceDetail: "Google Ads",
+    sourceDetail: "Personal",
     stage: "New",
     assignedId: "",
     budget: "Not Discussed",
     type: ["Not Specified"],
     notes: "",
     followupDate: "",
-    followupTime: "10:00",
+    followupTime: "",
     urgent: false,
     historyEntries: [],
   });
@@ -1283,7 +1439,7 @@ function AddLeadModal({
             />
           </div>
           <div>
-            <label className={itemLabelClassName}>Email</label>
+            <label className={itemLabelClassName}>Email *</label>
             <input
               className={fieldClassName}
               placeholder="e.g. name@email.com"
@@ -1315,7 +1471,7 @@ function AddLeadModal({
               ))}
             </select>
           </div>
-          <div>
+          {/* <div>
             <label className={itemLabelClassName}>Stage</label>
             <select
               className={fieldClassName}
@@ -1333,7 +1489,7 @@ function AddLeadModal({
                 </option>
               ))}
             </select>
-          </div>
+          </div> */}
           <div>
             <label className={itemLabelClassName}>Assigned To *</label>
             <select
@@ -1418,7 +1574,7 @@ function AddLeadModal({
             <input
               className={fieldClassName}
               type="time"
-              value={form.followupTime}
+              // value={}
               onChange={(e) => updateField("followupTime", e.target.value)}
             />
           </div>
@@ -1560,6 +1716,9 @@ function AddLeadModal({
             disabled={
               !form.name.trim() ||
               !form.phone.trim() ||
+              !form.location.trim() ||
+              !form.assignedId.trim() ||
+              !form.email.trim() ||
               adding ||
               addingwithReminder
             }
@@ -1581,6 +1740,9 @@ function AddLeadModal({
             disabled={
               !form.name.trim() ||
               !form.phone.trim() ||
+              !form.location.trim() ||
+              !form.assignedId.trim() ||
+              !form.email.trim() ||
               adding ||
               addingwithReminder
             }

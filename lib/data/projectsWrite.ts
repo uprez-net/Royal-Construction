@@ -4,6 +4,8 @@ import { getSiteManagerById } from "@/lib/data/siteManagers";
 import type { CreateProjectInput } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
+import { createNotification } from "@/types/notification";
+import { triggerNotification } from "../notification/novu";
 
 export async function createProject(projectData: CreateProjectInput) {
   const customerMode = projectData.customerMode;
@@ -57,7 +59,19 @@ export async function createProject(projectData: CreateProjectInput) {
         customerMode,
       },
     },
+    include: { customer: true },
   });
+
+  const notificationPayload = createNotification("projectCreated", {
+    projectId: project.id,
+    projectName: project.name,
+    projectType: project.buildingType,
+    location: project.location,
+    customerName: project.customer.name,
+    customerEmail: project.customer.email,
+    customerPhone: project.customer.phone,
+  });
+  await triggerNotification(project.siteManagerId ? [project.siteManagerId] : [], notificationPayload);
 
 
   revalidateTag("projects", CACHE_PROFILES.MEDIUM);

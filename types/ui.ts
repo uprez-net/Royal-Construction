@@ -6,19 +6,6 @@ export type NavItem = {
   icon: ReactNode;
 };
 
-export type ProjectDetailTabKey =
-  | "overview"
-  | "milestones"
-  | "materials"
-  | "payments"
-  | "updates"
-  | "tradies"
-  | "workers"
-  | "docs"
-  | "history"
-  | "communications"
-  | "variations";
-
 export type ProjectDetailKpi = {
   id: string;
   label: string;

@@ -37,13 +37,16 @@ export async function POST(request: Request): Promise<NextResponse> {
                     allowedContentTypes: UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[],
                     addRandomSuffix: true,
                     maximumSizeInBytes: UPLOAD_CONSTRAINTS.maxFileSizeBytes,
+                    callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/upload`,
                     tokenPayload: JSON.stringify({
                         userId,
                         projectId: clientPayload.projectId,
                         milestoneId: clientPayload.milestoneId,
+                        leadId: clientPayload.leadId,
                         fileId: clientPayload.fileId,
                         fileName: clientPayload.fileName,
                         fileSize: clientPayload.fileSize,
+                        offerId: clientPayload.offerId,
                     } satisfies TokenPayload),
                 };
             },
@@ -62,11 +65,13 @@ export async function POST(request: Request): Promise<NextResponse> {
                         userId: user.id,
                         projectId: payload.projectId,
                         milestoneId: payload.milestoneId ?? undefined,
+                        leadId: payload.leadId ?? undefined,
                         fileId: payload.fileId ?? undefined,
                         fileUrl: blob.url,
                         fileName: payload.fileName,
                         fileType: blob.contentType,
                         fileSize: payload.fileSize,
+                        offerId: payload.offerId,
                     });
                 } catch (error) {
                     console.error('Error in onUploadCompleted', error);
