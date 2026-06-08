@@ -363,6 +363,7 @@ function FollowupItem({
     useState<EmailTemplate | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
+  const emailIframeRef = React.useRef<HTMLIFrameElement>(null);
 
   // Toast state
   const [toasts, setToasts] = useState<
@@ -407,10 +408,27 @@ function FollowupItem({
     setSendingEmail(true);
 
     try {
-      const finalHtmlBody = await renderEmailHtml(
-        selectedTemplate.category,
-        emailLead,
-      );
+      let finalHtmlBody = "";
+      const iframeDoc = emailIframeRef.current?.contentDocument;
+      if (iframeDoc) {
+        const body = iframeDoc.body;
+        if (body) {
+          body.removeAttribute("contenteditable");
+          body.style.outline = "";
+        }
+        finalHtmlBody = iframeDoc.documentElement.outerHTML;
+        if (body) {
+          body.setAttribute("contenteditable", "true");
+          body.style.outline = "none";
+        }
+      }
+
+      if (!finalHtmlBody) {
+        finalHtmlBody = await renderEmailHtml(
+          selectedTemplate.category,
+          emailLead,
+        ) || "";
+      }
 
       if (!finalHtmlBody) {
         showToast("Failed to generate email content", "info");
@@ -589,6 +607,7 @@ function FollowupItem({
             {selectedTemplate ? (
               <div className="mt-2">
                 <ReactEmailIframe
+                  ref={emailIframeRef}
                   category={selectedTemplate.category}
                   lead={emailLead ?? null}
                 />

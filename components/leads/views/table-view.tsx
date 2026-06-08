@@ -289,6 +289,8 @@ export default function TableView({
   const [followupDate, setFollowupDate] = useState("");
   // const [followupTime, setFollowupTime] = useState("");
 
+  const emailIframeRef = React.useRef<HTMLIFrameElement>(null);
+
   const [editAssignedLead, setEditAssignedLead] = useState<Lead | null>(null);
   const [assignedPerson, setAssignedPerson] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -702,16 +704,39 @@ export default function TableView({
     if (!emailLead || !selectedTemplate) return;
     setSendingEmail(true);
     try {
-      const finalHtmlBody = await renderEmailHtml(
-        selectedTemplate.category,
-        emailLead,
-      );
+      let finalHtmlBody = "";
+
+      // 1. Check if the iframe ref and document exist
+      const iframeDoc = emailIframeRef.current?.contentDocument;
+      if (iframeDoc) {
+        const body = iframeDoc.body;
+        if (body) {
+          // Temporarily remove contenteditable so it is not sent to the customer
+          body.removeAttribute("contenteditable");
+          body.style.outline = "";
+        }
+        // Capture the updated HTML
+        finalHtmlBody = iframeDoc.documentElement.outerHTML;
+
+        // Restore contenteditable for local preview editing
+        if (body) {
+          body.setAttribute("contenteditable", "true");
+          body.style.outline = "none";
+        }
+      }
+
+      // 2. Fallback if iframe document is not accessible
+      if (!finalHtmlBody) {
+        finalHtmlBody = await renderEmailHtml(
+          selectedTemplate.category,
+          emailLead,
+        ) || "";
+      }
       if (!finalHtmlBody) {
         showToast("Failed to generate email content", "info");
         setSendingEmail(false);
         return;
       }
-
       const sendCampaign = await sendEmailToLead(
         emailLead.email,
         emailSubject,
@@ -1590,6 +1615,7 @@ export default function TableView({
             {selectedTemplate ? (
               <div className="mt-2">
                 <ReactEmailIframe
+                  ref={emailIframeRef}
                   category={selectedTemplate.category}
                   lead={emailLead ?? null}
                 />

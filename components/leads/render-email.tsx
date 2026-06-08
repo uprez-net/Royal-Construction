@@ -1,8 +1,8 @@
 "use client";
+import React, { forwardRef } from "react";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { Lead } from "@/lib/leads/types";
 import { useQuery } from "@tanstack/react-query";
-
 
 interface ReactEmailPreviewProps {
   category: string;
@@ -15,28 +15,38 @@ const Spinner = () => (
   </div>
 );
 
-export function ReactEmailIframe({ category, lead }: ReactEmailPreviewProps) {
-  const { data: html, isLoading } = useQuery({
-    queryKey: ["email-preview", category, lead?.id],
-    queryFn: () => renderEmailHtml(category, lead),
-  });
+export const ReactEmailIframe = forwardRef<HTMLIFrameElement, ReactEmailPreviewProps>(
+  ({ category, lead }, ref) => {
+    const { data: html, isLoading } = useQuery({
+      queryKey: ["email-preview", category, lead?.id],
+      queryFn: () => renderEmailHtml(category, lead),
+    });
 
-  if(isLoading) {
-    return <Spinner />;
-  }
+    if (isLoading) {
+      return <Spinner />;
+    }
 
-  return (
+    // Inject contenteditable="true" and remove focus outline on the email's body tag
+    const editableHtml = html
+      ? html.replace(/<body([^>]*)>/i, '<body$1 contenteditable="true" style="outline: none;">')
+      : "";
+
+    return (
       <div
         className="overflow-hidden rounded-lg border border-border"
         style={{ height: 480 }}
       >
         <iframe
+          ref={ref}
           title={`${category} Email Preview`}
-          srcDoc={html as unknown as string}
+          srcDoc={editableHtml}
           className="w-full h-full"
           sandbox="allow-same-origin allow-scripts"
           style={{ border: "none" }}
         />
       </div>
-  );
-}
+    );
+  }
+);
+
+ReactEmailIframe.displayName = "ReactEmailIframe";

@@ -219,6 +219,7 @@ export default function Leads() {
     useState<EmailTemplate | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [sendingCampaign, setSendingCampaign] = useState(false);
+  const emailIframeRef = React.useRef<HTMLIFrameElement>(null);
   const [activeMetric, setActiveMetric] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [addingWithReminder, setAddingWithReminder] = useState(false);
@@ -575,16 +576,43 @@ export default function Leads() {
     const now = new Date();
 
     try {
+      let editedHtml = "";
+      const iframeDoc = emailIframeRef.current?.contentDocument;
+      if (iframeDoc) {
+        const body = iframeDoc.body;
+        if (body) {
+          body.removeAttribute("contenteditable");
+          body.style.outline = "";
+        }
+        editedHtml = iframeDoc.documentElement.outerHTML;
+        if (body) {
+          body.setAttribute("contenteditable", "true");
+          body.style.outline = "none";
+        }
+      }
+
       const updated = await Promise.all(
         leads.map(async (lead) => {
           if (!lead.email) return lead;
 
           try {
             const subject = hydrateTemplate(emailSubject, lead);
-            const finalHtmlBody = await renderEmailHtml(
-              selectedTemplate.category,
-              lead,
-            );
+            
+            let finalHtmlBody = editedHtml;
+            if (finalHtmlBody && leads[0] && leads[0].name !== lead.name) {
+              // Personalize bulk email template using the user's edits
+              finalHtmlBody = finalHtmlBody.replace(new RegExp(leads[0].name, 'g'), lead.name);
+              if (leads[0].email && lead.email) {
+                finalHtmlBody = finalHtmlBody.replace(new RegExp(leads[0].email, 'g'), lead.email);
+              }
+            }
+
+            if (!finalHtmlBody) {
+              finalHtmlBody = await renderEmailHtml(
+                selectedTemplate.category,
+                lead,
+              );
+            }
 
             if (!finalHtmlBody) {
               console.error(
@@ -1141,6 +1169,7 @@ export default function Leads() {
             {selectedTemplate ? (
               <div className="mt-0">
                 <ReactEmailIframe
+                  ref={emailIframeRef}
                   category={selectedTemplate.category}
                   lead={leads[0] ?? null}
                 />
