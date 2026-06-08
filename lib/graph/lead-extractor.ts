@@ -69,6 +69,22 @@ const validationSchema = z
   })
   .describe('Lead extraction schema from email content.');
 
+function stripHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ') // Remove style blocks
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ') // Remove script blocks
+    .replace(/<[^>]+>/g, ' ') // Remove all HTML tags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s{2,}/g, ' ') // Collapse multiple spaces/newlines into one space
+    .trim();
+}
+
 const emitLead = tool({
   description: 'Return the extracted lead fields from the email.',
   inputSchema: validationSchema,
@@ -164,13 +180,15 @@ export async function extractLeadFromMessage(
     return null;
   }
 
+  const cleanBody = stripHtml(body);
+
   console.log('Extracting lead from message with subject:', subject.trim());
-  console.log('Message body:', body.trim());
+  console.log('Message body (Cleaned):', cleanBody);
 
   const finalPrompt =
     'Extract the lead data from the email below.\n\n' +
     `Subject:\n${subject.trim()}\n\n` +
-    `Body:\n${body.trim()}\n\n` +
+    `Body:\n${cleanBody}\n\n` +
     'Info rules:\n' +
     '- Info should summarize the client query or request from the message.\n\n' +
     'Project type rules:\n' +
