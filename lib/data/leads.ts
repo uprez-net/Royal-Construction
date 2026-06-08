@@ -483,7 +483,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   });
 
   const res = mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
-  if (!res.assignedId) {
+  if (!input.assignedId) {
     const notificationPayload = createNotification("leadUpdated", {
       leadId: res.id.toString(),
       leadType: res.type,
@@ -493,7 +493,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       customerPhone: res.phone ?? "Not specified",
       status: res.stage,
     })
-    await triggerNotification([], notificationPayload);
+    await triggerNotification(res.assignedId ? [res.assignedId] : [], notificationPayload);
   } else {
     const notificationPayload = createNotification("leadAssigned", {
       leadId: res.id.toString(),
@@ -504,7 +504,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       customerPhone: res.phone ?? "Not specified",
       assignedTo: res.assignedUser?.name ?? "Unknown",
     })
-    await triggerNotification([res.assignedId], notificationPayload);
+    await triggerNotification([res.assignedId!], notificationPayload);
   }
 
   return res;
