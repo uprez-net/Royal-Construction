@@ -63,7 +63,12 @@ export function getAppAssetUrl(path: string): string {
 }
 
 export const RC_URLS_APP = {
-  builderProfile: getAppAssetUrl('/Royal_Constructions_Builder_Profile_1.pdf'),
+  /**
+   * Hosted in Vercel Blob because the local public PDF was removed.
+   * Keep this URL in sync with the uploaded asset.
+   */
+  builderProfile:
+    'https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/public-file/Royal_Constructions_Builder_Profile_1.pdf',
 } as const;
 
 export const FONTS = {

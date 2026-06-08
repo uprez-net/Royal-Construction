@@ -13,6 +13,7 @@ import {
 import {
   FONTS,
   RC_URLS,
+  RC_URLS_APP,
   RC_COLORS,
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
@@ -175,7 +176,7 @@ export default function PortfolioEmail({}: PortfolioEmailProps) {
                     </Text>
 
                     <EmailCtaButton
-                      href={"https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/public-file/Royal_Constructions_Builder_Profile_1.pdf"}
+                      href={RC_URLS_APP.builderProfile}
                       label="Download / View Builder Profile"
                       align="left"
                     />
