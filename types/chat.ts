@@ -1,4 +1,5 @@
 import { fetchLeadInfoTool as createFetchLeadInfoTool, fetchLeadFilesTool } from "@/lib/tools/fetch-lead-info";
+import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "@/lib/tools/file-tools";
 import { lineItemTool as createLineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool as createOfferFileTool } from "@/lib/tools/offer-file";
@@ -34,6 +35,7 @@ export type ChatTools = {
   fetchLeadInfoTool: InferUITool<typeof createFetchLeadInfoTool>;
   fileProcessingTool: InferUITool<typeof FileProcessingTool>;
   fetchLeadFilesTool: InferUITool<typeof fetchLeadFilesTool>;
+  fetchOfferSheetRulesTool: InferUITool<typeof fetchOfferSheetRules>;
 }
 
 export type OfferFileToolOutput = offerFileToolUI["output"];
@@ -41,6 +43,8 @@ export type LineItemToolOutput = lineItemToolUI["output"];
 export type FetchLeadInfoToolOutput = InferUITool<typeof createFetchLeadInfoTool>["output"];
 export type FetchLeadFilesToolOutput = InferUITool<typeof fetchLeadFilesTool>["output"];
 export type FileProcessingToolOutput = InferUITool<typeof FileProcessingTool>["output"];
+export type FetchOfferSheetRulesToolOutput = InferUITool<typeof fetchOfferSheetRules>["output"];
+
 
 export type ChatMessageAI = UIMessage<
   MessageMetadata,
@@ -101,4 +105,7 @@ export type KnownToolName =
   | "lineItemTool"
   | "offerFileTool"
   | "fetchLeadInfoTool"
-  | "fileProcessingTool";
+  | "fetchLeadFilesTool" 
+  | "fileProcessingTool"
+  | "fetchOfferSheetRulesTool"
+  ;

@@ -5,11 +5,15 @@ import { FetchLeadInfoOutput } from "./fetch-lead-info-output";
 import { FileProcessingOutput } from "./processing-file-output";
 import { GenericOutput } from "./util";
 import {
+  FetchLeadFilesToolOutput,
   FetchLeadInfoToolOutput,
+  FetchOfferSheetRulesToolOutput,
   FileProcessingToolOutput,
   LineItemToolOutput,
   OfferFileToolOutput,
 } from "@/types/chat";
+import { FetchOfferSheetRulesOutput } from "./fetch-offer-sheet-rules-output";
+import { FetchLeadFilesOutput } from "./fetch-lead-files-output";
 
 export function ToolOutput({
   toolName,
@@ -36,6 +40,12 @@ export function ToolOutput({
         return (
           <FileProcessingOutput output={output as FileProcessingToolOutput} />
         );
+      }
+      case "fetchOfferSheetRulesTool": {
+        return <FetchOfferSheetRulesOutput output={output as FetchOfferSheetRulesToolOutput} />;
+      }
+      case "fetchLeadFilesTool": {
+        return <FetchLeadFilesOutput output={output as FetchLeadFilesToolOutput} />;
       }
     }
   }

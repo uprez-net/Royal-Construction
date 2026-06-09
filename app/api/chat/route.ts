@@ -12,6 +12,7 @@ import { auth } from "@clerk/nextjs/server";
 import { convertToModelMessages, createUIMessageStream, JsonToSseTransformStream, smoothStream, stepCountIs, streamText, UIMessage } from "ai";
 import { NextRequest } from "next/server";
 import { v4 as generateUUID } from "uuid";
+import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
 
 
 const SYSTEM_PROMPT = `You are an expert assistant within a real-estate CRM whose primary responsibility is to
@@ -126,6 +127,7 @@ export async function POST(request: NextRequest) {
                         offerFileTool: offerFileTool(dataStream),
                         fetchLeadInfoTool: fetchLeadInfoTool,
                         fileProcessingTool: FileProcessingTool,
+                        fetchOfferSheetRulesTool: fetchOfferSheetRules,
                         fetchLeadFilesTool: fetchLeadFilesTool,
                     }
                 });
