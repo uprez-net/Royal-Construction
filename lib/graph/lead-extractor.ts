@@ -1,5 +1,5 @@
 import { ToolLoopAgent, tool } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { google } from '../google';
 import { z } from 'zod';
 
 export interface LeadExtraction {
@@ -33,9 +33,7 @@ const projectTypeList = PROJECT_TYPE_OPTIONS.map((type) => `"${type}"`).join(
 );
 
 const MODEL_NAME = 'gemini-2.5-flash';
-const apiKey =
-  process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-const googleProvider = apiKey ? createGoogleGenerativeAI({ apiKey }) : null;
+
 
 const validationSchema = z
   .object({
@@ -106,19 +104,17 @@ const instruction =
   'Message are all empty or contain gibberish/random text). Always call the emitLead tool ' +
   'with the final fields.';
 
-const leadExtractionAgent = googleProvider
-  ? new ToolLoopAgent({
-    model: googleProvider(MODEL_NAME),
-    instructions: instruction,
-    tools: {
-      emitLead,
-    },
-    toolChoice: {
-      type: 'tool',
-      toolName: 'emitLead',
-    },
-  })
-  : null;
+const leadExtractionAgent = new ToolLoopAgent({
+  model: google(MODEL_NAME),
+  instructions: instruction,
+  tools: {
+    emitLead,
+  },
+  toolChoice: {
+    type: 'tool',
+    toolName: 'emitLead',
+  },
+});
 
 const requestsPerMinute = Math.max(
   1,

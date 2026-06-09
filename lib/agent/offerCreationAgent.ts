@@ -1,14 +1,11 @@
 import { ToolLoopAgent, Output } from "ai";
-import { google } from "@ai-sdk/google";
+import { google } from "@/lib/google";
 import { fetchOfferSheetRules } from "../tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "../tools/file-tools";
 import {
-    buildCreationStarterPrompt,
     OFFER_CREATION_SYSTEM_PROMPT,
     offerCreationOutputSchema,
 } from "./offer-prompts";
-
-export { buildCreationStarterPrompt } from "./offer-prompts";
 
 
 export const offerCreationAgent = new ToolLoopAgent({

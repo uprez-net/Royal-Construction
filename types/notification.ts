@@ -73,6 +73,12 @@ export const notificationTemplates: NotificationTemplateFactory = {
     message: `A variation has been updated with status ${data.status}`,
     url: `/projects/${data.projectId}?activeTab=variations`,
   }),
+
+  offerCreated: (data) => ({
+    title: `Offer Created: OFR-#${data.offerId} for Lead LED-#${data.leadId}`,
+    message: `An offer has been created with amount ${data.offerAmount} and status ${data.offerStatus}`,
+    url: `/offers/${data.leadId}`,
+  }),
 };
 
 export function createNotification<T extends NotificationType>(

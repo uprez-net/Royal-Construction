@@ -7,7 +7,7 @@ import { offerFileTool } from "@/lib/tools/offer-file";
 import { ChatMessageAI } from "@/types/chat";
 import { convertToUIMessage } from "@/utils/chat";
 import { ChatSDKError } from "@/utils/chat-error";
-import { google } from "@ai-sdk/google";
+import { google } from "@/lib/google";
 import { auth } from "@clerk/nextjs/server";
 import { convertToModelMessages, createUIMessageStream, JsonToSseTransformStream, smoothStream, stepCountIs, streamText, UIMessage } from "ai";
 import { NextRequest } from "next/server";

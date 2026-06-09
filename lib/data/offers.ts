@@ -7,8 +7,11 @@ import { startOfWeek, subWeeks } from "date-fns";
 import { OfferKPIs, OfferWithItemsAndFiles, OfferWithLead, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
 import type { OfferFile } from "@/context/ChatContext";
 import { findLeadById } from "./leads";
-import { buildCreationStarterPrompt, offerCreationAgent } from "../agent/offerCreationAgent";
+import { offerCreationAgent } from "../agent/offerCreationAgent";
 import { v4 as uuidv4 } from "uuid";
+import { buildCreationStarterPrompt } from "../agent/offer-prompts";
+import { triggerNotification } from "@/lib/notification/novu";
+import { createNotification } from "@/types/notification";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -530,6 +533,14 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
                 leadId,
             },
         });
+
+        const notificationPayload = createNotification("offerCreated", {
+            offerId: newOffer.id.toString(),
+            leadId: leadId.toString(),
+            offerAmount: totalAmount.toString(),
+            offerStatus: newOffer.offerStatus,
+        });
+        await triggerNotification(lead.assignedId ? [lead.assignedId] : [], notificationPayload);
 
         revalidateTag("offers", CACHE_PROFILES.MEDIUM);
         revalidateTag(`offer-${newOffer.id}`, CACHE_PROFILES.MEDIUM);

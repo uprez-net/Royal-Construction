@@ -83,4 +83,11 @@ export const notificationSchemas = {
         variationAmount: z.string(),
         status: z.string(),
     }),
+
+    offerCreated: z.object({
+        offerId: z.string(),
+        leadId: z.string(),
+        offerAmount: z.string(),
+        offerStatus: z.string(),
+    }),
 } as const;
