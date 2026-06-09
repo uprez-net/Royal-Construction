@@ -198,6 +198,7 @@ export default function AddMilestonePictureModal({
             fileId: queuedFile.id,
             fileName: queuedFile.file.name,
             fileSize: queuedFile.file.size,
+            skipRecordCreation: false,
           } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {

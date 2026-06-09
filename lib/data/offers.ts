@@ -496,7 +496,6 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
         await prisma.chatSession.create({
             data: {
                 leadId,
-                offerId: newOffer.id,
             },
         });
 
