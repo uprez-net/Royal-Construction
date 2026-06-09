@@ -4,9 +4,13 @@ import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
 import { Card } from "@/components/ui/card";
 import { getOfferKPIsCached, getOffersCached } from "@/lib/data/offers";
+import { Loader2 } from "lucide-react";
+import { connection } from "next/server";
+import { Suspense } from "react";
 
-
-export default async function QuotationsPage() {
+async function QfferPageClient() {
+  // Prevent build-time prerender DB queries; render this page at request time.
+  await connection();
   const [offerKPIs, offers] = await Promise.all([
     getOfferKPIsCached(),
     getOffersCached(1, 10),
@@ -47,5 +51,13 @@ export default async function QuotationsPage() {
         <OfferTable serverQuotes={offers} />
       </Card>
     </div>
+  );
+}
+
+export default function OfferPage() {
+  return (
+    <Suspense fallback={<Loader2 className="animate-spin size-5 text-blue-100" />}>
+      <QfferPageClient />;
+    </Suspense>
   );
 }

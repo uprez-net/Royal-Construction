@@ -5,11 +5,13 @@ import {
   errorResponse,
 } from "@/utils/validators";
 import { getTradiesForLookup } from "@/lib/data/tradies";
+import { connection, type NextRequest } from "next/server";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  // Next.js 16 + Cache Components: force request-time execution for request URL usage.
+  await connection();
   try {
-    const url = new URL(request.url);
-    const params = parseSearchParamsWithResponse(url, tradieSearchQuerySchema);
+    const params = parseSearchParamsWithResponse(request.nextUrl, tradieSearchQuerySchema);
     if (!params.success) return params.response;
 
     const search = params.data.search || params.data.q || "";

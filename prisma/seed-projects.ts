@@ -1180,10 +1180,10 @@ async function main() {
 
     const admin = await prisma.user.create({
         data: {
-            name: "Guri Singh",
-            email: "guri.singh@buildpro.com.au",
+            name: "Gurpinder Uppal",
+            email: "gurpinder@royalconstructions.com.au",
             phone: "+61 400 000 001",
-            clerkId: "seed-admin-guri",
+            clerkId: "seed-admin-gurpinder",
             role: Role.ADMIN,
         },
     });

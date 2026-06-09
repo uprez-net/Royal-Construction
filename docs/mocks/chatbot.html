@@ -290,7 +290,7 @@ body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;col
         <div class="notification-footer"><a href="#" class="notification-view-all" onclick="showToast('Opening notifications...','info');return false">View all</a></div>
       </div>
     </div>
-    <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+    <div class="up"><div class="ua">GS</div><div class="ui"><span>Gurpinder Uppal</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
   </div>
 </header>
 <div class="sub-header"><i class="bi bi-house me-1" style="font-size:11px"></i><span>Home</span><span class="mx-2" style="color:var(--border-color)">/</span><span style="font-weight:600;color:var(--text-primary)">Customer Chatbot</span><span style="margin-left:auto;font-size:11px;color:var(--text-tertiary)" id="convCount">5 active conversations</span></div>
@@ -402,7 +402,7 @@ body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;col
 <!-- Escalation Modal -->
 <div class="modal-backdrop-custom" id="escalModal">
   <div class="modal-content-custom">
-    <div class="modal-header-custom"><h4 style="font-size:15px;font-weight:700">Escalate to Guri Singh</h4><button class="modal-close" onclick="closeModal('escalModal')"><i class="bi bi-x-lg"></i></button></div>
+    <div class="modal-header-custom"><h4 style="font-size:15px;font-weight:700">Escalate to Gurpinder Uppal</h4><button class="modal-close" onclick="closeModal('escalModal')"><i class="bi bi-x-lg"></i></button></div>
     <div class="modal-body-custom" id="escalBody"></div>
   </div>
 </div>
@@ -474,7 +474,7 @@ const customers = [
       {from:'user',text:'Yes please send the catalogue',time:'Yesterday 3:15 PM',read:true},
       {from:'bot',text:'Sorry, the <b>Material Catalogue</b> feature is currently disabled by Guri. I can escalate this request — shall I?',time:'Yesterday 3:15 PM'},
       {from:'user',text:'Yes escalate it',time:'Yesterday 3:16 PM',read:true},
-      {from:'bot',type:'escalated',text:'Escalation sent to Guri Singh. He\'ll receive a notification and get back to you within 24 hours.\n\nReference: <b>ESC-2025-034</b>\nCategory: Material Catalogue Access\nPriority: Normal',time:'Yesterday 3:16 PM'},
+      {from:'bot',type:'escalated',text:'Escalation sent to Gurpinder Uppal. He\'ll receive a notification and get back to you within 24 hours.\n\nReference: <b>ESC-2025-034</b>\nCategory: Material Catalogue Access\nPriority: Normal',time:'Yesterday 3:16 PM'},
     ]
   },
   {id:5,name:"Manjit Brar",project:"Liverpool Estate",stage:"Foundation",progress:18,color:"var(--success)",initials:"MB",lastMsg:"When will handover happen?",time:"2 days ago",unread:0,online:true,
@@ -958,7 +958,7 @@ function generateResponse(msg,customer){
   if(lower.includes('guri')||lower.includes('speak')||lower.includes('human')||lower.includes('complaint')||lower.includes('problem')||lower.includes('issue')||lower.includes('angry')){
     if(!settings.escalation)return {from:'bot',text:'Escalation is currently disabled. Guri is not available right now.',escalated:false};
     const ref='ESC-2025-'+String(35+Math.floor(Math.random()*100));
-    return {from:'bot',type:'escalated',text:`Escalation sent to <b>Guri Singh</b>. He'll respond within 24 hours.\n\nReference: <b>${ref}</b>\nPriority: Normal\nDirect: <b>0433 456 789</b>`,escalated:true};
+    return {from:'bot',type:'escalated',text:`Escalation sent to <b>Gurpinder Uppal</b>. He'll respond within 24 hours.\n\nReference: <b>${ref}</b>\nPriority: Normal\nDirect: <b>0433 456 789</b>`,escalated:true};
   }
 
   // Greeting

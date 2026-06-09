@@ -74,17 +74,20 @@ async function toJson(response: Response): Promise<unknown> {
   }
 }
 
+// 1. Updated graphRequest to accept optional customHeaders
 async function graphRequest<T>(
   method: string,
   url: string,
   token: string,
   body?: unknown,
+  customHeaders?: Record<string, string>,
 ): Promise<T> {
   const response = await fetch(url, {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+      ...customHeaders, // Spread custom headers here
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -215,11 +218,16 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       const select = includeBody
         ? 'subject,from,receivedDateTime,isRead,body,bodyPreview'
         : 'subject,from,receivedDateTime,isRead,bodyPreview';
+        
+      // Request plain text body to save LLM tokens if body is included
+      const headers = includeBody ? { 'Prefer': 'outlook.body-content-type="text"' } : undefined;
 
       const list = await graphRequest<{ value: GraphApiMessage[] }>(
         'GET',
         `https://graph.microsoft.com/v1.0${inboxPath}?$top=${top}&$select=${select}&$orderby=receivedDateTime desc`,
         token,
+        undefined,
+        headers,
       );
 
       return list.value.map((item) => mapMessage(item, includeBody));
@@ -230,7 +238,11 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
         ? 'subject,from,receivedDateTime,isRead,body,bodyPreview'
         : 'subject,from,receivedDateTime,isRead,bodyPreview';
       const url = buildGraphUrl(resource, select);
-      const message = await graphRequest<GraphApiMessage>('GET', url, token);
+      
+      // 2. Request plain text body to save LLM tokens if body is included
+      const headers = includeBody ? { 'Prefer': 'outlook.body-content-type="text"' } : undefined;
+      
+      const message = await graphRequest<GraphApiMessage>('GET', url, token, undefined, headers);
       return mapMessage(message, includeBody);
     },
     sendMail: async ({ to, subject, body }) => {
