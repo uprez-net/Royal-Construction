@@ -1,6 +1,7 @@
 
 import { OfferClient } from "@/components/offers/offer/offer-client";
 import { getChatByLeadId } from "@/lib/data/chat";
+import { getOfferByLeadIdCached } from "@/lib/data/offers";
 import { convertToUIMessage } from "@/utils/chat";
 import { Suspense } from "react";
 
@@ -11,6 +12,7 @@ async function OfferCreationContent({
 }) {
   const { leadId } = await params;
   const { chatSession: chat, files, leadInfo } = await getChatByLeadId(parseInt(leadId));
+  const offerData = await getOfferByLeadIdCached(parseInt(leadId));
 
   return (
     <OfferClient
@@ -21,6 +23,9 @@ async function OfferCreationContent({
       }
       files={files}
       leadInfo={leadInfo}
+      initialVersion={offerData?.version ?? 0}
+      initialItemRecord={offerData?.items ?? {}}
+      initialOfferFileRecord={offerData?.files ?? {}}
     />
   );
 }

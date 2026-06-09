@@ -9,10 +9,14 @@ import {
   extractOfferFileFromMessage,
   setInitialAgentMessage,
 } from "@/utils/chat";
+import { SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
 
 interface OfferClientProps {
   leadId: string;
   chatId?: string;
+  initialVersion: number;
+  initialItemRecord: Record<number, SafeOfferItem[]>;
+  initialOfferFileRecord: Record<number, SafeOfferDBFile>;
   initialMessages: ChatMessageAI[];
   files: File[];
   leadInfo: {
@@ -28,6 +32,9 @@ export function OfferClient({
   initialMessages,
   files,
   leadInfo,
+  initialVersion,
+  initialItemRecord,
+  initialOfferFileRecord,
 }: OfferClientProps) {
   return (
     <ChatProvider
@@ -36,6 +43,9 @@ export function OfferClient({
       initialOfferFile={extractOfferFileFromMessage(initialMessages)}
       initialLineItems={extractLineItemsFromMessage(initialMessages)}
       leadId={leadId}
+      initialVersionLength={initialVersion}
+      initialItemRecord={initialItemRecord}
+      initialOfferFileRecord={initialOfferFileRecord}
     >
       <div className="flex h-screen w-screen bg-[#F7F6F2] p-4 md:p-6">
         <div className="flex h-full min-h-0 flex-1 overflow-hidden rounded-[28px] border border-[#E2E8F0] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)]">

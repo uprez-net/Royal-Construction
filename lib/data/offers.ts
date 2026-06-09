@@ -4,7 +4,8 @@ import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
-import { OfferKPIs, OfferWithItems, PaginatedOfferResult } from "@/types/offer";
+import { OfferKPIs, OfferWithItemsAndFiles, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
+import type { OfferFile } from "@/context/ChatContext";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -31,6 +32,13 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
                 where: { AND: whereClause },
                 include: {
                     lead: true,
+                    offerFiles: {
+                        orderBy: { createdAt: "desc" },
+                        take: 1,
+                        select: {
+                            version: true,
+                        }
+                    },
                 },
                 skip: (safePage - 1) * safeLimit,
                 take: safeLimit,
@@ -42,11 +50,12 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
         const totalPages = Math.ceil(totalCount / safeLimit);
 
         return {
-            items: offers.map(offer => ({
+            items: offers.map(({ offerFiles, ...offer }) => ({
                 ...offer,
                 amount: offer.amount.toString(),
                 gstAmount: offer.gstAmount.toString(),
                 totalAmount: offer.totalAmount.toString(),
+                version: offerFiles[0]?.version ?? 1,
             })),
             page: safePage,
             limit: safeLimit,
@@ -65,34 +74,55 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
     }
 }
 
-export async function getOfferById(id: string): Promise<OfferWithItems | null> {
+export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFiles | null> {
     try {
         const offer = await prisma.offer.findUnique({
-            where: { id },
+            where: { leadId: id },
             include: {
                 lead: true,
                 offerItems: true,
+                offerFiles: true,
             },
         });
 
+        
         if (!offer) {
-            throw new Error(`Offer with ID ${id} not found`);
+            console.warn(`No offer found for lead ID: ${id}`);
+            return null;
         }
+        
+        const currentVersion = offer?.offerItems.reduce((max, item) => Math.max(max, item.version), 0) ?? 0;
+        const offerItemsRecord: Record<number, SafeOfferItem[]> = {};
+        const filesRecord: Record<number, SafeOfferDBFile> = {};
+        offer.offerItems.forEach(item => {
+            if (!offerItemsRecord[item.version]) {
+                offerItemsRecord[item.version] = [];
+            }
+            offerItemsRecord[item.version].push({
+                ...item,
+                unitPrice: item.unitPrice.toString(),
+                totalPrice: item.totalPrice.toString(),
+            });
+        });
+        offer.offerFiles.forEach(file => {
+            filesRecord[file.version] = {
+                ...file,
+                offerContent: file.offerContent as OfferFile,
+            };
+        });
 
         return {
             ...offer,
             amount: offer.amount.toString(),
             gstAmount: offer.gstAmount.toString(),
             totalAmount: offer.totalAmount.toString(),
-            items: offer.offerItems.map(item => ({
-                ...item,
-                unitPrice: item.unitPrice.toString(),
-                totalPrice: item.totalPrice.toString(),
-            })) ?? [],
+            version: currentVersion,
+            items: offerItemsRecord,
+            files: filesRecord,
         };
     } catch (error) {
         console.error("Error fetching offer by ID:", error);
-        return null;
+        throw error;
     }
 }
 
@@ -299,12 +329,12 @@ export const getOffersCached = async (page?: number, limit?: number, q?: string)
     return getOffers(page, limit, q);
 }
 
-export const getOfferByIdCached = async (id: string) => {
+export const getOfferByLeadIdCached = async (id: number) => {
     "use cache";
     cacheTag(`offer-${id}`);
     cacheLife(CACHE_PROFILES.MEDIUM);
 
-    return getOfferById(id);
+    return getOfferByLeadId(id);
 }
 
 export const getOfferKPIsCached = async () => {
@@ -317,11 +347,19 @@ export const getOfferKPIsCached = async () => {
 
 interface CreateOfferInput {
     leadId: number;
-    offerFileId: string;
+    offerFileInput: {
+        id: string;
+        filename: string;
+        fileType: string;
+        filesize: number;
+        url: string;
+        offerContent: OfferFile;
+    };
     amount: string;
     gstAmount: string;
     totalAmount: string;
     offerItems: {
+        id: string;
         item: string;
         description: string;
         quantity: number;
@@ -331,40 +369,58 @@ interface CreateOfferInput {
     }[];
 }
 
-export const createOffer = async ({
+export const createOrUpdateOffer = async ({
     leadId,
-    offerFileId,
+    offerFileInput,
     amount,
     gstAmount,
     totalAmount,
     offerItems
 }: CreateOfferInput) => {
     try {
-        const newOffer = await prisma.offer.create({
-            data: {
+        const version = await prisma.offerFile.count({
+            where: { offer: { leadId } },
+        }) + 1;
+        const newOffer = await prisma.offer.upsert({
+            where: { leadId },
+            update: {
+                amount: new Prisma.Decimal(amount),
+                gstAmount: new Prisma.Decimal(gstAmount),
+                totalAmount: new Prisma.Decimal(totalAmount),
+            },
+            create: {
                 leadId,
                 amount: new Prisma.Decimal(amount),
                 gstAmount: new Prisma.Decimal(gstAmount),
                 totalAmount: new Prisma.Decimal(totalAmount),
-                offerItems: {
-                    create: offerItems.map(item => ({
-                        item: item.item,
-                        description: item.description,
-                        quantity: item.quantity,
-                        unitPrice: new Prisma.Decimal(item.unitPrice),
-                        totalPrice: new Prisma.Decimal(item.totalPrice),
-                        unit: item.unit,
-                    })),
-                },
-                files: {
-                    connect: {
-                        id: offerFileId,
-                    },
-                },
             },
-            include: {
-                offerItems: true,
+        });
+
+        const newOfferFile = await prisma.offerFile.create({
+            data: {
+                id: offerFileInput.id,
+                offerId: newOffer.id,
+                filename: offerFileInput.filename,
+                fileType: offerFileInput.fileType,
+                filesize: offerFileInput.filesize,
+                url: offerFileInput.url,
+                offerContent: offerFileInput.offerContent as Prisma.InputJsonValue,
+                version: version,
             },
+        });
+
+        const offerItemsData = await prisma.offerItem.createManyAndReturn({
+            data: offerItems.map(item => ({
+                id: item.id,
+                offerId: newOffer.id,
+                item: item.item,
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: new Prisma.Decimal(item.unitPrice),
+                totalPrice: new Prisma.Decimal(item.totalPrice),
+                unit: item.unit,
+                version: version,
+            })),
         });
 
         revalidateTag("offers", CACHE_PROFILES.MEDIUM);
@@ -375,11 +431,15 @@ export const createOffer = async ({
             amount: newOffer.amount.toString(),
             gstAmount: newOffer.gstAmount.toString(),
             totalAmount: newOffer.totalAmount.toString(),
-            items: newOffer.offerItems.map(item => ({
+            newOfferItems: offerItemsData.map(item => ({
                 ...item,
                 unitPrice: item.unitPrice.toString(),
                 totalPrice: item.totalPrice.toString(),
             })) ?? [],
+            newOfferFile: {
+                ...newOfferFile,
+                offerContent: newOfferFile.offerContent as OfferFile,
+            },
         };
     } catch (error) {
         console.error("Error creating offer:", error);

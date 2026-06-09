@@ -5,16 +5,21 @@ import { useChat, UseChatHelpers } from "@ai-sdk/react";
 import { fetchWithErrorHandlers } from "@/utils/chat-error";
 import { v4 as generateUUID } from "uuid";
 import { useAutoResume } from "@/hooks/use-auto-resume";
-import { mergeServiceItems, ServiceItem } from "@/utils/chat";
+import { extractLineItemsFromMessage, extractOfferFileFromMessage, mergeServiceItems, ServiceItem } from "@/utils/chat";
+import { SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
 
 interface ChatContextValue {
   lineItems: LineItem[];
   offerFile: OfferFile;
+  versions: number;
+  currentVersion: number | 'current';
   messages: ChatMessageAI[];
   status: ChatStatus;
+  error?: Error;
   sendMessage: UseChatHelpers<ChatMessageAI>["sendMessage"];
   setMessages: UseChatHelpers<ChatMessageAI>["setMessages"];
-  error?: Error;
+  setVersion: (version: number | 'current') => void;
+  appendVersion: (version: number, lineItems: SafeOfferItem[], offerFile: SafeOfferDBFile) => void;
 }
 
 export interface LineItem {
@@ -55,6 +60,9 @@ export const ChatContext = createContext<ChatContextValue | undefined>(
 
 export const ChatProvider = ({
   chatId,
+  initialVersionLength = 0,
+  initialItemRecord = {},
+  initialOfferFileRecord = {},
   initialMessages,
   initialOfferFile = emptyOfferFile,
   initialLineItems = [],
@@ -62,12 +70,19 @@ export const ChatProvider = ({
   children,
 }: {
   chatId?: string;
+  initialVersionLength?: number;
+  initialItemRecord?: Record<number, SafeOfferItem[]>;
+  initialOfferFileRecord?: Record<number, SafeOfferDBFile>;
   initialMessages: ChatMessageAI[];
   initialOfferFile?: OfferFile;
   initialLineItems?: LineItem[];
   leadId: string;
   children: React.ReactNode;
 }) => {
+  const [version, setVersion] = useState<number | 'current'>('current');
+  const [versionLength, setVersionLength] = useState(initialVersionLength);
+  const [lineItemRecord, setLineItemRecord] = useState<Record<number, SafeOfferItem[]>>(initialItemRecord);
+  const [offerFileRecord, setOfferFileRecord] = useState<Record<number, SafeOfferDBFile>>(initialOfferFileRecord);
   const [lineItems, setLineItems] = useState<LineItem[]>(initialLineItems);
   const [offerFile, setOfferFile] = useState<OfferFile>(initialOfferFile);
   const { messages, status, sendMessage, setMessages, resumeStream, error } =
@@ -166,9 +181,44 @@ export const ChatProvider = ({
     setMessages,
   });
 
+  const appendVersion = (version: number, lineItems: SafeOfferItem[], offerFile: SafeOfferDBFile) => {
+    setVersion(version);
+    setVersionLength((prev) => Math.max(prev, version));
+    setLineItemRecord((prev) => ({ ...prev, [version]: lineItems }));
+    setOfferFileRecord((prev) => ({ ...prev, [version]: offerFile }));
+  };
+
+  const handleSetVersion = (version: number | 'current') => {
+    if (version === 'current') {
+      setVersion(version);
+      setLineItems(extractLineItemsFromMessage(initialMessages));
+      setOfferFile(extractOfferFileFromMessage(messages));
+      return;
+    }
+    setVersion(version);
+    const newLineItems = lineItemRecord[version] ?? [];
+    const newOfferFile = offerFileRecord[version]?.offerContent ?? emptyOfferFile;
+    setLineItems(newLineItems.map((item) => ({
+      id: item.id,
+      description: item.description,
+      item: item.item,
+      unitPrice: parseFloat(item.unitPrice),
+      quantity: item.quantity,
+      unit: item.unit,
+      totalPrice: parseFloat(item.totalPrice),
+      gstRate: 0.10, // Assuming a default GST rate of 10%
+      gstIncluded: true, // Assuming GST is included in the prices
+      netLine: parseFloat(item.totalPrice) - (parseFloat(item.totalPrice) * 0.10), // Calculate net line by removing GST from total price
+      gstAmount: parseFloat(item.totalPrice) * 0.10, // Calculate GST amount based on total price and GST rate
+    })));
+    setOfferFile(newOfferFile);
+  }
+
   return (
     <ChatContext.Provider
       value={{
+        currentVersion: version,
+        versions: versionLength,
         messages,
         status,
         sendMessage,
@@ -176,6 +226,8 @@ export const ChatProvider = ({
         error,
         lineItems,
         offerFile,
+        setVersion: handleSetVersion,
+        appendVersion,
       }}
     >
       {children}

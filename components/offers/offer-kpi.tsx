@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, Hourglass, Receipt, RefreshCw } from "lucide-react";
+import { CheckCircle2, Hourglass, Receipt, Send } from "lucide-react";
 
 interface DataPoint {
   total: number;
@@ -10,7 +10,7 @@ interface OfferKPIProps {
   activeOffers: DataPoint;
   approvedOffers: DataPoint;
   pendingOffers: DataPoint;
-  activeVariationOffers: DataPoint;
+  sentOffers: DataPoint;
 }
 
 function TrendBadge({ value }: { value: number }) {
@@ -34,7 +34,7 @@ export function OfferKPI({
   activeOffers,
   approvedOffers,
   pendingOffers,
-  activeVariationOffers,
+  sentOffers,
 }: OfferKPIProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -81,12 +81,12 @@ export function OfferKPI({
         <CardContent className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <div className="mb-3 grid size-11 place-items-center rounded-xl bg-orange-500 text-white">
-              <RefreshCw className="size-5" />
+              <Send className="size-5" />
             </div>
-            <TrendBadge value={activeVariationOffers.trendDelta} />
+            <TrendBadge value={sentOffers.trendDelta} />
           </div>
-          <p className="text-3xl font-bold">{activeVariationOffers.total}</p>
-          <p className="text-xs text-muted-foreground">Active Variation</p>
+          <p className="text-3xl font-bold">{sentOffers.total}</p>
+          <p className="text-xs text-muted-foreground">Sent Offers</p>
         </CardContent>
       </Card>
     </div>

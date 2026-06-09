@@ -32,7 +32,7 @@ async function QfferPageClient() {
           total: offerKPIs.pendingOffers.total,
           trendDelta: offerKPIs.pendingOffers.trendDelta,
         }}
-        activeVariationOffers={{
+        sentOffers={{
           total: offerKPIs.sentOffers.total,
           trendDelta: offerKPIs.sentOffers.trendDelta,
         }}

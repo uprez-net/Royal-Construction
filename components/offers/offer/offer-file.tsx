@@ -19,12 +19,13 @@ import type { File } from "@prisma/client";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { UploadButton } from "@/components/common/upload-button";
-import { createOffer } from "@/lib/data/offers";
+import { createOrUpdateOffer } from "@/lib/data/offers";
 import { generatePDF } from "@/lib/utils/generatePDF";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { upload } from "@vercel/blob/client";
 import { ClientPayload } from "@/utils/validators/files";
+import { OfferVersionSelector } from "./offer-version-selector";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
@@ -95,7 +96,7 @@ export function OfferFileCanvas({
       const fileId = uuidv4(); // Generate a unique ID for the file
       const fileName = `offer_${dateFormat.format(new Date())}_${leadId}.pdf`;
 
-      await upload(
+      const uploadRes = await upload(
         buildBlobPath({
           fileId: fileId,
           fileName,
@@ -109,7 +110,7 @@ export function OfferFileCanvas({
             fileId: fileId,
             fileName: fileName,
             fileSize: blob.size,
-            leadId,
+            skipRecordCreation: true, // Instruct the upload API to skip creating a file record since we'll handle it after the upload
           } satisfies ClientPayload),
         },
       );
@@ -121,13 +122,22 @@ export function OfferFileCanvas({
       const finalAmount = (parseFloat(amount) + parseFloat(gstAmount)).toFixed(
         2,
       );
-      await createOffer({
+
+      await createOrUpdateOffer({
         leadId: parseInt(leadId),
-        offerFileId: fileId,
+        offerFileInput: {
+          id: fileId,
+          filename: fileName,
+          fileType: blob.type,
+          filesize: blob.size,
+          url: uploadRes.url,
+          offerContent: offerFile, // Pass the offer file content to be saved in the database
+        },
         amount: amount,
         gstAmount: gstAmount,
         totalAmount: finalAmount,
         offerItems: lineItems.map((item) => ({
+          id: uuidv4(),
           item: item.item,
           description: item.description,
           quantity: item.quantity,
@@ -175,6 +185,9 @@ export function OfferFileCanvas({
         })}
 
         <div className="ml-auto flex items-center gap-2">
+          
+          <OfferVersionSelector />
+
           <Button
             variant="outline"
             size="sm"
