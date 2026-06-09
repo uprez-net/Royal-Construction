@@ -44,7 +44,9 @@ export function isKnownToolName(name: string): name is KnownToolName {
     name === "lineItemTool" ||
     name === "offerFileTool" ||
     name === "fetchLeadInfoTool" ||
-    name === "fileProcessingTool"
+    name === "fetchLeadFilesTool" ||
+    name === "fileProcessingTool" ||
+    name === "fetchOfferSheetRulesTool"
   );
 }
 
@@ -73,7 +75,7 @@ export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[
           quantity: lineItemOutput.quantity,
           unit: lineItemOutput.unit,
           totalPrice: lineItemOutput.totalPrice,
-          gstRate: lineItemOutput.gstRate ?? 18,
+          gstRate: lineItemOutput.gstRate ?? 0.10,
           gstIncluded: lineItemOutput.gstIncluded,
           netLine: lineItemOutput.netLine,
           gstAmount: lineItemOutput.gstAmount
@@ -102,23 +104,14 @@ export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile
         hasToolOutput(part)
       ) {
         const { customerOffer } = part.output;
-        const updatedServiceInclusions = mergeServiceItems(
-          offerFile.serviceInclusions,
-          customerOffer.serviceInclusions
-        );
-        // Patch and update the offerFile object with the output data
         offerFile = {
           ...offerFile,
           ...customerOffer,
-          termsAndConditions: [
-            ...(offerFile.termsAndConditions ?? []),
-            ...(customerOffer.termsAndConditions ?? []),
-          ].flat(),
-          serviceInclusions: updatedServiceInclusions,
-          serviceExclusions: [
-            ...(offerFile.serviceExclusions ?? []),
-            ...(customerOffer.serviceExclusions ?? []),
-          ].flat(),
+          termsAndConditions: customerOffer.termsAndConditions ?? offerFile.termsAndConditions,
+          serviceInclusions: customerOffer.serviceInclusions
+            ? mergeServiceItems(offerFile.serviceInclusions, customerOffer.serviceInclusions)
+            : offerFile.serviceInclusions,
+          serviceExclusions: customerOffer.serviceExclusions ?? offerFile.serviceExclusions,
         };
       }
     }

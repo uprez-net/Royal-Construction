@@ -128,8 +128,7 @@ export const ChatProvider = ({
       onData: (dataPart) => {
         console.log("Data Parts: ", dataPart);
         switch (dataPart.type) {
-          case "data-line-item-update":
-            // For line item updates, we want to update the relevant message in the chat with the new line item data
+          case "data-line-item-update": {
             const data = dataPart.data as LineItem;
             setLineItems((prev) => {
               const existingIndex = prev.findIndex(
@@ -145,28 +144,23 @@ export const ChatProvider = ({
               }
               return [...prev, data];
             });
+            break;
+          }
 
-          case "data-offer-file-update":
-            // For offer file updates and line item updates, we want to update the relevant message in the chat with the new data
+          case "data-offer-file-update": {
             const offerData = dataPart.data as OfferFile;
             setOfferFile((prev) => ({
               ...prev,
               ...offerData,
-              termsAndConditions: [
-                ...(prev.termsAndConditions ?? []),
-                ...(offerData.termsAndConditions ?? []),
-              ].flat(),
-              serviceInclusions: mergeServiceItems(
-                prev.serviceInclusions ?? [],
-                offerData.serviceInclusions ?? [],
-              ),
-              serviceExclusions: [
-                ...(prev.serviceExclusions ?? []),
-                ...(offerData.serviceExclusions ?? []),
-              ].flat(),
+              termsAndConditions: offerData.termsAndConditions ?? prev.termsAndConditions,
+              serviceInclusions: offerData.serviceInclusions
+                ? mergeServiceItems(prev.serviceInclusions ?? [], offerData.serviceInclusions)
+                : prev.serviceInclusions,
+              serviceExclusions: offerData.serviceExclusions ?? prev.serviceExclusions,
             }));
+            break;
+          }
           default:
-            // For now, just log all data parts. In the future, you can handle different types of data parts as needed.
             console.log("Received data part:", dataPart);
         }
       },

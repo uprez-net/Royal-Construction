@@ -2,19 +2,26 @@ import { serviceItemSchema } from "@/utils/chat";
 import { tool, UIMessageStreamWriter } from "ai";
 import z from "zod";
 
+function stripUndefined<T extends Record<string, unknown>>(value: T) {
+    return Object.fromEntries(
+        Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
+    ) as Partial<T>;
+}
+
 export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
     tool({
         description: `
-            Creates, updates, or incrementally patches a customer-facing offer document.
+            Creates or updates customer-facing offer document sections.
 
             PATCHING RULES:
             - The tool accepts partial payloads.
             - Any field included in the payload replaces or updates the corresponding section of the offer.
             - Any field omitted from the payload must remain unchanged.
-            - Never resend unchanged data unless intentionally replacing it.
+            - Send only changed fields unless intentionally replacing a section.
 
             LIST FIELD RULES:
-            - For termsAndConditions, serviceInclusions, and serviceExclusions, always send the COMPLETE final merged list that should be stored after the update.
+            - For termsAndConditions and serviceExclusions, send the complete final list whenever that field is included.
+            - For serviceInclusions, send complete final items for every section being created or modified.
             - Do not send only newly added items for these fields.
 
             SERVICE INCLUSION RULES:
@@ -29,7 +36,7 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
             - Incremental update: provide only the sections being changed.
             - Append operation: merge new information with existing information and send the final desired state for any modified list field.
 
-            The tool returns the latest customer-facing offer data and should be treated as the source of truth for subsequent updates.
+            The tool returns only customer-facing offer data and should be treated as the source of truth for subsequent updates.
             `,
         inputSchema: z.object({
             changeDescription: z
@@ -89,33 +96,25 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
                 ),
         }),
         execute: async (params) => {
+            const customerOffer = stripUndefined({
+                leadId: params.leadId,
+                projectDescription: params.projectDescription,
+                termsAndConditions: params.termsAndConditions,
+                paymentTerms: params.paymentTerms,
+                serviceInclusions: params.serviceInclusions,
+                serviceExclusions: params.serviceExclusions,
+                serviceExclusionsFootnote: params.serviceExclusionsFootnote,
+            });
 
-            // Write only customer-facing data to the UI stream
             dataStream.write({
                 type: "data-offer-file-update",
-                data: {
-                    leadId: params.leadId,
-                    projectDescription: params.projectDescription,
-                    termsAndConditions: params.termsAndConditions,
-                    paymentTerms: params.paymentTerms,
-                    serviceInclusions: params.serviceInclusions,
-                    serviceExclusions: params.serviceExclusions,
-                    serviceExclusionsFootnote: params.serviceExclusionsFootnote,
-                },
+                data: customerOffer,
             });
 
             return {
                 message: `Offer file generated for lead ${params.leadId ?? "unknown"}`,
                 description: params.changeDescription,
-                customerOffer: {
-                    leadId: params.leadId,
-                    projectDescription: params.projectDescription,
-                    termsAndConditions: params.termsAndConditions,
-                    paymentTerms: params.paymentTerms,
-                    serviceInclusions: params.serviceInclusions,
-                    serviceExclusions: params.serviceExclusions,
-                    serviceExclusionsFootnote: params.serviceExclusionsFootnote,
-                },
+                customerOffer,
             };
         },
     });

@@ -454,6 +454,33 @@ export const createOrUpdateOffer = async ({
     }
 }
 
+const DEFAULT_GST_RATE = 0.10;
+
+function roundCurrency(value: number) {
+    return Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
+}
+
+function calculateLinePricing(item: { unitPrice: number; quantity: number; gstRate?: number; gstIncluded?: boolean }) {
+    const gstRate = item.gstRate ?? DEFAULT_GST_RATE;
+    const rawLine = roundCurrency(item.unitPrice * item.quantity);
+
+    if (item.gstIncluded) {
+        const netLine = roundCurrency(rawLine / (1 + gstRate));
+        return {
+            netLine,
+            gstAmount: roundCurrency(rawLine - netLine),
+            totalPrice: rawLine,
+        };
+    }
+
+    const gstAmount = roundCurrency(rawLine * gstRate);
+    return {
+        netLine: rawLine,
+        gstAmount,
+        totalPrice: roundCurrency(rawLine + gstAmount),
+    };
+}
+
 export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
     try {
         const lead = await findLeadById(leadId);
@@ -467,9 +494,14 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
         const { output } = await offerCreationAgent.generate({
             prompt,
         });
-        const totalAmount = output.lineItemArray?.reduce((sum, item) => {
-            return sum + (item.unitPrice * item.quantity);
-        }, 0);
+        const offerItemsWithPricing = output.lineItemArray.map((item) => ({
+            item,
+            pricing: calculateLinePricing(item),
+        }));
+        const amount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.netLine, 0));
+        const gstAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.gstAmount, 0));
+        const totalAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.totalPrice, 0));
+
         const { newOfferItems, newOfferFile, ...newOffer } = await createOrUpdateOffer({
             leadId,
             offerFileInput: {
@@ -480,16 +512,16 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
                 url: "placeholder_url", // In a real implementation, you would upload the content to a storage service and provide the URL here
                 offerContent: output.offerFileContent,
             },
-            amount: totalAmount ? totalAmount.toString() : "0",
-            gstAmount: totalAmount ? (totalAmount * 0.10).toString() : "0", // Assuming a GST rate of 10%
-            totalAmount: totalAmount ? (totalAmount * 1.10).toString() : "0", // Total including GST
-            offerItems: output.lineItemArray.map(item => ({
+            amount: amount.toString(),
+            gstAmount: gstAmount.toString(),
+            totalAmount: totalAmount.toString(),
+            offerItems: offerItemsWithPricing.map(({ item, pricing }) => ({
                 id: item.id,
                 item: item.item,
                 description: item.description,
                 quantity: item.quantity,
                 unitPrice: item.unitPrice.toString(),
-                totalPrice: (item.unitPrice * item.quantity).toString(),
+                totalPrice: pricing.totalPrice.toString(),
                 unit: item.unit,
             })),
         });

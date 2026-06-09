@@ -1,24 +1,45 @@
 import type { FileProcessingToolOutput } from "@/types/chat";
-import { countEntries } from "@/utils/formatters";
+import { isPlainObject } from "@/utils/formatters";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { StatPill } from "./util";
+
+function numberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function arrayLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
 
 export function FileProcessingOutput({
   output,
 }: {
   output: FileProcessingToolOutput;
 }) {
-  const pages = Array.isArray(output.data) ? output.data : [];
-  const pageCount = pages.length;
-  const tableCount = pages.reduce(
-    (total, page) =>
-      total + countEntries(page, ["tables", "table", "tableMarkdown", "tableCount"]),
-    0,
-  );
-  const imageCount = pages.reduce(
-    (total, page) => total + countEntries(page, ["images", "image", "imageCount", "figures"]),
-    0,
-  );
+  const data = output.data;
+  const totals =
+    isPlainObject(data) && isPlainObject(data.totals)
+      ? data.totals
+      : {
+          tablesFound: 0,
+          amountsFound: 0,
+          quantitiesFound: 0,
+        };
+  const extracted =
+    isPlainObject(data) && isPlainObject(data.extracted)
+      ? data.extracted
+      : {
+          tables: [],
+          amounts: [],
+          quantities: [],
+        };
+  const pageCount = isPlainObject(data) ? numberValue(data.pageCount) : 0;
+  const tableCount =
+    numberValue(totals.tablesFound) || arrayLength(extracted.tables);
+  const amountCount =
+    numberValue(totals.amountsFound) || arrayLength(extracted.amounts);
+  const quantityCount =
+    numberValue(totals.quantitiesFound) || arrayLength(extracted.quantities);
 
   return (
     <div className="space-y-4 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
@@ -30,11 +51,17 @@ export function FileProcessingOutput({
         )}
         <div className="min-w-0 space-y-2">
           <div>
-            <p className="text-wrap font-medium text-slate-900">{output.message}</p>
+            <p className="text-wrap font-medium text-slate-900">
+              {output.message}
+            </p>
             <p className="mt-1 text-sm text-slate-500">
               {pageCount} page{pageCount === 1 ? "" : "s"} processed
-              {tableCount ? ` · ${tableCount} table${tableCount === 1 ? "" : "s"}` : ""}
-              {imageCount ? ` · ${imageCount} image${imageCount === 1 ? "" : "s"}` : ""}
+              {tableCount
+                ? ` · ${tableCount} table${tableCount === 1 ? "" : "s"}`
+                : ""}
+              {amountCount
+                ? ` · ${amountCount} amount${amountCount === 1 ? "" : "s"}`
+                : ""}
             </p>
           </div>
 
@@ -42,7 +69,7 @@ export function FileProcessingOutput({
             <div className="grid gap-2 sm:grid-cols-3">
               <StatPill label="Pages" value={pageCount} />
               <StatPill label="Tables" value={tableCount} />
-              <StatPill label="Images" value={imageCount} />
+              <StatPill label="Quantities" value={quantityCount} />
             </div>
           ) : null}
         </div>
