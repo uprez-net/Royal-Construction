@@ -74,6 +74,7 @@ export function UploadButton({
             fileName: file.name,
             fileSize: file.size,
             leadId,
+            skipRecordCreation: false,
           } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {
@@ -90,7 +91,6 @@ export function UploadButton({
         id: fileId,
         projectId: projectId ?? null,
         milestoneId: milestoneId ?? null,
-        offerId: null,
         leadId: leadId ? parseInt(leadId) : null,
         filename: file.name,
         fileType: blob.contentType,
