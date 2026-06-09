@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import z from "zod";
 import { OFFER_TEMPLATE_SHEET_URL, SAMPLE_QUOTE_SHEET_URL } from "@/constants/offerTemplateSheet";
-import xlsx from "xlsx";
+import * as XLSX from "xlsx";
 import { get } from "@vercel/blob"
 
 export const fetchOfferSheetRules = tool({
@@ -24,7 +24,7 @@ export const fetchOfferSheetRules = tool({
                 }
                 // Read the blob buffer and parse the Excel file
                 const arrayBuffer = blob.stream;
-                const workbook = xlsx.read(arrayBuffer, { type: "buffer" });
+                const workbook = XLSX.read(arrayBuffer, { type: "buffer" });
                 // You can further process the workbook if needed, e.g., read specific sheets or cells
                 return {
                     success: true,
@@ -38,7 +38,7 @@ export const fetchOfferSheetRules = tool({
                 }
                 // Read the blob buffer and parse the Excel file
                 const arrayBuffer = blob.stream;
-                const workbook = xlsx.read(arrayBuffer, { type: "buffer" });
+                const workbook = XLSX.read(arrayBuffer, { type: "buffer" });
                 // You can further process the workbook if needed, e.g., read specific sheets or cells
                 return {
                     success: true,
