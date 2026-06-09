@@ -7,7 +7,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { PaginatedLeadsResult } from "@/lib/data/leads";
 
 interface LeadPaginationProps {
@@ -16,7 +16,6 @@ interface LeadPaginationProps {
 }
 
 export function LeadPagination({ leads, onPageChange }: LeadPaginationProps) {
-  const [currentPage, setCurrentPage] = useState(leads.page);
   const paginationItems = useMemo(() => {
     const totalPages = leads.totalPages;
 
@@ -25,8 +24,8 @@ export function LeadPagination({ leads, onPageChange }: LeadPaginationProps) {
     }
 
     const items: Array<number | "ellipsis"> = [1];
-    const start = Math.max(2, currentPage - 1);
-    const end = Math.min(totalPages - 1, currentPage + 1);
+    const start = Math.max(2, leads.page - 1);
+    const end = Math.min(totalPages - 1, leads.page + 1);
 
     if (start > 2) items.push("ellipsis");
     for (let page = start; page <= end; page += 1) items.push(page);
@@ -34,7 +33,7 @@ export function LeadPagination({ leads, onPageChange }: LeadPaginationProps) {
     items.push(totalPages);
 
     return items;
-  }, [leads, currentPage]);
+  }, [leads]);
 
   return (
     <>
@@ -50,9 +49,9 @@ export function LeadPagination({ leads, onPageChange }: LeadPaginationProps) {
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    const page = Math.max(1, currentPage - 1);
-                    setCurrentPage(page);
-                    onPageChange(page);
+                    if (leads.page > 1) {
+                      onPageChange(leads.page - 1);
+                    }
                   }}
                   aria-disabled={leads.page === 1}
                 />
@@ -69,7 +68,6 @@ export function LeadPagination({ leads, onPageChange }: LeadPaginationProps) {
                       isActive={item === leads.page}
                       onClick={(event) => {
                         event.preventDefault();
-                        setCurrentPage(item);
                         onPageChange(item);
                       }}
                     >
@@ -83,9 +81,9 @@ export function LeadPagination({ leads, onPageChange }: LeadPaginationProps) {
                   href="#"
                   onClick={(event) => {
                     event.preventDefault();
-                    const page = Math.min(leads.totalPages, currentPage + 1);
-                    setCurrentPage(page);
-                    onPageChange(page);
+                    if (leads.page < leads.totalPages) {
+                      onPageChange(leads.page + 1);
+                    }
                   }}
                   aria-disabled={leads.page >= leads.totalPages}
                 />

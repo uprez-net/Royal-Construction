@@ -79,6 +79,7 @@ export interface LeadsStats {
   new: number;
   contacted: number;
   qualified: number;
+  quoted: number;
   conversion: number;
   pendingFollowup: number;
   lost: number;
