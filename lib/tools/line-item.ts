@@ -7,7 +7,7 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
         description:
             "Handles addition and update of a single line item for the UI. Computes line total, GST and returns a consistent structure.",
         inputSchema: z.object({
-            id: z.string().describe("Unique identifier for the line item, used for updates"),
+            id: z.uuid().describe("Unique identifier for the line item, used for updates"),
             item: z.string().describe("Description of the line item"),
             description: z.string().describe("Detailed description of the line item"),
             unitPrice: z.number().describe("Unit price for the line item (numeric, as a decimal number)"),

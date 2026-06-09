@@ -31,11 +31,12 @@ import {
 import { upload } from "@vercel/blob/client";
 import { buildBlobPath } from "@/utils/formatters";
 import { ClientPayload } from "@/utils/validators/files";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { createOffer } from "@/lib/data/offers";
+import { addOffer } from "@/lib/store/slices/offerSlice";
 
 interface CreateOfferFileModalProps {
   open: boolean;
@@ -49,7 +50,7 @@ export function CreateOfferFileModal({
   onClose,
 }: CreateOfferFileModalProps) {
   const dispatch = useAppDispatch();
-  const router = useRouter();
+  // const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const leadSearch = useLeadSearch("");
   const [search, setSearch] = useState("");
@@ -113,10 +114,12 @@ export function CreateOfferFileModal({
         );
       }
 
-      await createOffer(selectedLeadId);
+      const newOffer = await createOffer(selectedLeadId);
       handleOpenChange(false);
-      toast.info("Redirecting to offer creation page...", { id: loading });
-      router.push(`/offers/${selectedLeadId}`);
+      dispatch(addOffer(newOffer));
+      toast.success("Offer created successfully.", { id: loading });
+      // toast.info("Redirecting to offer creation page...", { id: loading });
+      // router.push(`/offers/${newOffer.id}`);
     } catch (error) {
       console.error("Error creating offer:", error);
       toast.error("Failed to create offer. Please try again.", { id: loading });

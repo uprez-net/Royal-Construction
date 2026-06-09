@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { OfferStatusLabels, PaginatedOfferResult } from "@/types/offer";
 import { fetchOffers, setOffers } from "@/lib/store/slices/offerSlice";
 import { OfferPagination } from "./offer-pagination";
+import { useRouter } from "next/navigation";
 
 export function OfferTable({
   serverQuotes,
@@ -16,6 +17,7 @@ export function OfferTable({
   serverQuotes: PaginatedOfferResult;
 }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const { offers: stateOffers, loading } = useAppSelector(
     (state) => state.offers,
   );
@@ -66,6 +68,10 @@ export function OfferTable({
           row.acceptedAt ? dateFormat.format(row.acceptedAt) : "-",
           OfferStatusLabels[row.offerStatus],
         ])}
+        onRowClick={(rowIndex) => {
+          const offer = offers.items[rowIndex];
+          router.push(`/offers/${offer.id}`);
+        }}
         emptyState={
           loading ? (
             <div className="flex flex-col items-center justify-center gap-3">

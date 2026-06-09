@@ -4,8 +4,11 @@ import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
-import { OfferKPIs, OfferWithItemsAndFiles, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
+import { OfferKPIs, OfferWithItemsAndFiles, OfferWithLead, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
 import type { OfferFile } from "@/context/ChatContext";
+import { findLeadById } from "./leads";
+import { buildCreationStarterPrompt, offerCreationAgent } from "../agent/offerCreationAgent";
+import { v4 as uuidv4 } from "uuid";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -85,12 +88,12 @@ export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFil
             },
         });
 
-        
+
         if (!offer) {
             console.warn(`No offer found for lead ID: ${id}`);
             return null;
         }
-        
+
         const currentVersion = offer?.offerItems.reduce((max, item) => Math.max(max, item.version), 0) ?? 0;
         const offerItemsRecord: Record<number, SafeOfferItem[]> = {};
         const filesRecord: Record<number, SafeOfferDBFile> = {};
@@ -394,6 +397,9 @@ export const createOrUpdateOffer = async ({
                 gstAmount: new Prisma.Decimal(gstAmount),
                 totalAmount: new Prisma.Decimal(totalAmount),
             },
+            include: {
+                lead: true,
+            }
         });
 
         const newOfferFile = await prisma.offerFile.create({
@@ -448,11 +454,60 @@ export const createOrUpdateOffer = async ({
     }
 }
 
-export const createOffer = async (leadId: number) => {
+export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
     try {
+        const lead = await findLeadById(leadId);
+        if (!lead) {
+            throw new Error(`Lead with ID ${leadId} not found`);
+        }
+        const leadFiles = await prisma.file.findMany({
+            where: { leadId }
+        });
+        const prompt = buildCreationStarterPrompt(lead, leadFiles);
+        const { output } = await offerCreationAgent.generate({
+            prompt,
+        });
+        const totalAmount = output.lineItemArray?.reduce((sum, item) => {
+            return sum + (item.unitPrice * item.quantity);
+        }, 0);
+        const { newOfferItems, newOfferFile, ...newOffer } = await createOrUpdateOffer({
+            leadId,
+            offerFileInput: {
+                id: uuidv4(),
+                filename: `offer_${lead.name}_${Date.now()}.json`,
+                fileType: "application/json",
+                filesize: JSON.stringify(output.offerFileContent).length,
+                url: "placeholder_url", // In a real implementation, you would upload the content to a storage service and provide the URL here
+                offerContent: output.offerFileContent,
+            },
+            amount: totalAmount ? totalAmount.toString() : "0",
+            gstAmount: totalAmount ? (totalAmount * 0.10).toString() : "0", // Assuming a GST rate of 10%
+            totalAmount: totalAmount ? (totalAmount * 1.10).toString() : "0", // Total including GST
+            offerItems: output.lineItemArray.map(item => ({
+                id: item.id,
+                item: item.item,
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice.toString(),
+                totalPrice: (item.unitPrice * item.quantity).toString(),
+                unit: item.unit,
+            })),
+        });
+        await prisma.chatSession.create({
+            data: {
+                leadId,
+                offerId: newOffer.id,
+            },
+        });
 
+        revalidateTag("offers", CACHE_PROFILES.MEDIUM);
+        revalidateTag(`offer-${newOffer.id}`, CACHE_PROFILES.MEDIUM);
+
+        return {
+            ...newOffer,
+        };
     } catch (error) {
         console.error("Error creating offer:", error);
-        throw new Error("Failed to create offer");
+        throw new Error(`Failed to create offer${error instanceof Error ? `: ${error.message}` : ""}`);
     }
 }

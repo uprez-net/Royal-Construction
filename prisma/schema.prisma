@@ -293,17 +293,17 @@ model ActivityLog {
 }
 
 model Customer {
-  id     String @id @default(uuid())
+  id     String  @id @default(uuid())
   userId String? @unique
   name   String
-  email  String @unique
-  phone  String @unique
+  email  String  @unique
+  phone  String  @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   projects Project[] @relation("CustomerProjects")
-  user     User?      @relation("CustomerUsers", fields: [userId], references: [id], onDelete: Cascade)
+  user     User?     @relation("CustomerUsers", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@index([phone])
@@ -326,7 +326,7 @@ model User {
   siteManagerProjects Project[]     @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
-  assignedLeads       Lead[] @relation("LeadAssignee")
+  assignedLeads       Lead[]        @relation("LeadAssignee")
 
   @@index([email])
   @@index([phone])
@@ -347,8 +347,7 @@ model Lead {
 
   stage LeadStage @default(NEW)
 
-  assignedId   String?                                                            // <-- THE NEW FOREIGN KEY
-  assignedUser User?   @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
+  assignedId String? // <-- THE NEW FOREIGN KEY
 
   assigned String?
 
@@ -374,6 +373,7 @@ model Lead {
   chatSessions ChatSession[]
   history      LeadHistory[]
   files        File[]        @relation("LeadFiles")
+  assignedUser User?         @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
 
   @@index([stage])
   @@index([assignedId])
@@ -418,8 +418,8 @@ model Offer {
   offerFiles OfferFile[]
   lead       Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  @@index([leadId])
   @@unique([leadId])
+  @@index([leadId])
 }
 
 model OfferItem {
@@ -432,7 +432,7 @@ model OfferItem {
   unitPrice   Decimal @db.Decimal(10, 2)
   totalPrice  Decimal @db.Decimal(12, 2)
 
-  version     Int     @default(1)
+  version Int @default(1)
 
   createdAt DateTime @default(now())
 
@@ -442,21 +442,21 @@ model OfferItem {
 }
 
 model OfferFile {
-  id          String   @id @default(uuid())
-  offerId     String
-  version     Int      @default(1)
-  filename    String
-  fileType    String
-  filesize    Int
-  url         String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  offerId   String
+  version   Int      @default(1)
+  filename  String
+  fileType  String
+  filesize  Int
+  url       String
+  createdAt DateTime @default(now())
 
   offerContent Json
 
   offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
 
-  @@index([offerId])
   @@unique([offerId, version])
+  @@index([offerId])
 }
 
 model ChatSession {

@@ -1,6 +1,7 @@
 import { getOffers } from "@/lib/data/offers";
 import { PaginatedOfferResult } from "@/types/offer";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import type { OfferWithLead } from "@/types/offer";
 
 interface OffersState {
     offers: PaginatedOfferResult;
@@ -38,7 +39,11 @@ const offersSlice = createSlice({
     reducers: {
         setOffers(state, action: PayloadAction<PaginatedOfferResult>) {
             state.offers = action.payload;
-        }
+        },
+        addOffer(state, action: PayloadAction<OfferWithLead>) {
+            state.offers.items.unshift(action.payload);
+            state.offers.totalCount += 1;
+        }   
     },
     extraReducers: (builder) => {
         builder
@@ -57,5 +62,5 @@ const offersSlice = createSlice({
     }
 });
 
-export const { setOffers } = offersSlice.actions;
+export const { setOffers, addOffer } = offersSlice.actions;
 export default offersSlice.reducer;
