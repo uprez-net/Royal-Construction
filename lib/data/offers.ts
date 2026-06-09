@@ -431,6 +431,7 @@ export const createOrUpdateOffer = async ({
             amount: newOffer.amount.toString(),
             gstAmount: newOffer.gstAmount.toString(),
             totalAmount: newOffer.totalAmount.toString(),
+            version: version,
             newOfferItems: offerItemsData.map(item => ({
                 ...item,
                 unitPrice: item.unitPrice.toString(),
@@ -441,6 +442,15 @@ export const createOrUpdateOffer = async ({
                 offerContent: newOfferFile.offerContent as OfferFile,
             },
         };
+    } catch (error) {
+        console.error("Error creating offer:", error);
+        throw new Error("Failed to create offer");
+    }
+}
+
+export const createOffer = async (leadId: number) => {
+    try {
+
     } catch (error) {
         console.error("Error creating offer:", error);
         throw new Error("Failed to create offer");

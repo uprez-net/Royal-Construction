@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "../ui/skeleton";
+import { createOffer } from "@/lib/data/offers";
 
 interface CreateOfferFileModalProps {
   open: boolean;
@@ -89,6 +90,7 @@ export function CreateOfferFileModal({
       toast.error("Please select a lead before creating an offer.");
       return;
     }
+    const loading = toast.loading("Creating offer...");
     try {
       if (queuedFiles.length !== 0) {
         const uploads = await Promise.allSettled(
@@ -111,13 +113,16 @@ export function CreateOfferFileModal({
         );
       }
 
+      await createOffer(selectedLeadId);
       handleOpenChange(false);
-      toast.info("Redirecting to offer creation page...");
+      toast.info("Redirecting to offer creation page...", { id: loading });
       router.push(`/offers/${selectedLeadId}`);
     } catch (error) {
       console.error("Error creating offer:", error);
-      toast.error("Failed to create offer. Please try again.");
+      toast.error("Failed to create offer. Please try again.", { id: loading });
       return;
+    } finally {
+      toast.dismiss(loading);
     }
   };
 
@@ -157,6 +162,7 @@ export function CreateOfferFileModal({
             fileId: queuedFile.id,
             fileName: queuedFile.file.name,
             fileSize: queuedFile.file.size,
+            skipRecordCreation: false,
           } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {

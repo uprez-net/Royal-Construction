@@ -54,7 +54,7 @@ export function OfferFileCanvas({
   projectType: string;
   location: string;
 }) {
-  const { offerFile, lineItems } = useChatContext();
+  const { offerFile, lineItems, appendVersion } = useChatContext();
   const offerFileRef = useRef<HTMLIFrameElement | null>(null);
   const [tabId, setTabId] = useState<"offer" | "files" | "line-items">("offer");
   const [isPending, startTransition] = useTransition();
@@ -123,7 +123,7 @@ export function OfferFileCanvas({
         2,
       );
 
-      await createOrUpdateOffer({
+      const newOffer = await createOrUpdateOffer({
         leadId: parseInt(leadId),
         offerFileInput: {
           id: fileId,
@@ -146,6 +146,7 @@ export function OfferFileCanvas({
           unit: item.unit,
         })),
       });
+      appendVersion(newOffer.version, newOffer.newOfferItems, newOffer.newOfferFile);
     } catch (error) {
       console.error("Error saving the offer:", error);
     }
@@ -185,7 +186,7 @@ export function OfferFileCanvas({
         })}
 
         <div className="ml-auto flex items-center gap-2">
-          
+
           <OfferVersionSelector />
 
           <Button

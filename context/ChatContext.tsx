@@ -17,6 +17,7 @@ interface ChatContextValue {
   status: ChatStatus;
   error?: Error;
   sendMessage: UseChatHelpers<ChatMessageAI>["sendMessage"];
+  stop: UseChatHelpers<ChatMessageAI>["stop"];
   setMessages: UseChatHelpers<ChatMessageAI>["setMessages"];
   setVersion: (version: number | 'current') => void;
   appendVersion: (version: number, lineItems: SafeOfferItem[], offerFile: SafeOfferDBFile) => void;
@@ -85,7 +86,7 @@ export const ChatProvider = ({
   const [offerFileRecord, setOfferFileRecord] = useState<Record<number, SafeOfferDBFile>>(initialOfferFileRecord);
   const [lineItems, setLineItems] = useState<LineItem[]>(initialLineItems);
   const [offerFile, setOfferFile] = useState<OfferFile>(initialOfferFile);
-  const { messages, status, sendMessage, setMessages, resumeStream, error } =
+  const { messages, status, sendMessage, setMessages, resumeStream, error, stop } =
     useChat<ChatMessageAI>({
       id: chatId,
       messages: initialMessages,
@@ -223,6 +224,7 @@ export const ChatProvider = ({
         status,
         sendMessage,
         setMessages,
+        stop,
         error,
         lineItems,
         offerFile,
