@@ -517,11 +517,12 @@ export async function deleteLead(id: number) {
 }
 
 export async function getLeadsStats(): Promise<LeadsStats> {
-  const [totalLeads, newLeads, contactedLeads, qualifiedLeads, wonLeads, lostLeads, pendingFollowupLeads] = await Promise.all([
+  const [totalLeads, newLeads, contactedLeads, qualifiedLeads, quotedLeads, wonLeads, lostLeads, pendingFollowupLeads] = await Promise.all([
     prisma.lead.count(),
     prisma.lead.count({ where: { stage: "NEW" } }),
     prisma.lead.count({ where: { stage: "CONTACTED" } }),
     prisma.lead.count({ where: { stage: "QUALIFIED" } }),
+    prisma.lead.count({ where: { stage: "QUOTED" } }),
     prisma.lead.count({ where: { stage: { in: ["WON", "CONVERTED"] } } }),
     prisma.lead.count({ where: { stage: { in: ["LOST", "CANCELLED", "DISQUALIFIED"] } } }),
     prisma.lead.count({ where: { stage: { in: ["IN_FOLLOW_UP"] } } }),
@@ -532,6 +533,7 @@ export async function getLeadsStats(): Promise<LeadsStats> {
     new: newLeads,
     contacted: contactedLeads,
     qualified: qualifiedLeads,
+    quoted: quotedLeads,
     conversion: wonLeads,
     pendingFollowup: pendingFollowupLeads,
     lost: lostLeads,

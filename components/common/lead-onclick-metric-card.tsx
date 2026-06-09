@@ -7,18 +7,20 @@ import { cn } from "@/lib/utils"
 
 const toneMap = {
   primary: "bg-teal-600 text-white",
-  accent: "bg-orange-500 text-white",
+  info: "bg-[#2563EB] text-white",
   success: "bg-emerald-500 text-white",
   warning: "bg-amber-500 text-white",
   danger: "bg-red-500 text-white",
+  badge: "bg-[#E8730C] text-white",
 }
 
 const activeRingMap = {
   primary: "ring-teal-600",
-  accent: "ring-orange-500",
+  info: "ring-[#2563EB]",
   success: "ring-emerald-600",
   warning: "ring-amber-500",
   danger: "ring-red-500",
+  badge: "ring-[#E8730C]",
 }
 
 export function LeadMetricCard({
