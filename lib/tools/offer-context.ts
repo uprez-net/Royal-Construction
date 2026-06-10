@@ -1,5 +1,5 @@
 import type { WorkBook, WorkSheet } from "xlsx";
-import xlsx from "xlsx";
+import * as xlsx from "xlsx";
 
 const MAX_VALUE_CHARS = 220;
 const MAX_KEY_LINES_PER_PAGE = 12;

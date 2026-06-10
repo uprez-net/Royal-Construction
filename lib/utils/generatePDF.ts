@@ -37,12 +37,6 @@ export async function generatePDF({
     const pdf = await page.pdf({
         format: "A4",
         printBackground: true,
-        margin: {
-            top: "20mm",
-            bottom: "20mm",
-            left: "15mm",
-            right: "15mm",
-        },
     });
     // convert Buffer/Uint8Array to base64 string
     const pdfBase64 = Buffer.from(pdf).toString("base64");

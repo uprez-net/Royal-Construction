@@ -15,14 +15,14 @@ async function OfferCreationContent({
   const { chatSession: chat, files, leadInfo } = await getChatByLeadId(parseInt(leadId));
   const offerData = await getOfferByLeadIdCached(parseInt(leadId));
 
-  if(!chat || !offerData) {
-    return (
-      <div className="p-4">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-500" />
-        <p>Your offer is being generated...</p>
-      </div>
-    );
-  }
+  // if(!chat || !offerData) {
+  //   return (
+  //     <div className="p-4">
+  //       <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-500" />
+  //       <p>Your offer is being generated...</p>
+  //     </div>
+  //   );
+  // }
 
   return (
     <OfferClient

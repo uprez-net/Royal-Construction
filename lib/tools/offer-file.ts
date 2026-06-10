@@ -1,12 +1,40 @@
-import { serviceItemSchema } from "@/utils/chat";
 import { tool, UIMessageStreamWriter } from "ai";
 import z from "zod";
+import { offerFileContentSchema } from "../agent/offer-prompts";
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
     return Object.fromEntries(
         Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
     ) as Partial<T>;
 }
+
+const offerFileContentAppendSchema = offerFileContentSchema.extend({
+    changeDescription: z
+        .string()
+        .optional()
+        .describe(
+            "Human-readable summary of the modification being made, such as 'Initial offer creation', 'Added bathroom inclusions', 'Updated payment schedule', or 'Removed electrical exclusions'."
+        ),
+
+    leadId: z
+        .number()
+        .optional()
+        .describe(
+            "Lead identifier associated with this offer. Typically provided during offer creation and rarely changed afterwards."
+        ),
+
+
+    revisionChanges: z
+        .object({
+            description: z.string().describe("Description of the changes made in this revision, such as 'Added bathroom inclusions', 'Updated payment schedule', or 'Removed electrical exclusions'."),
+            valueAdded: z.number().describe("Estimated dollar value added to the offer as a result of this change. For initial offer creation, this should be the total contract amount."),
+            youSave: z.number().describe("Estimated dollar amount the client saves as a result of this change compared to a traditional cost-plus contract. For initial offer creation, this should be the estimated savings compared to a typical cost-plus pricing for the same scope."),
+        })
+        .optional()
+        .describe(
+            "Summary of the changes made in this revision, the estimated value added to the offer as a result of these changes, and the estimated savings for the client compared to a traditional cost-plus contract. For initial offer creation, this should summarize the overall value proposition of the offer, the total estimated contract amount, and the total estimated savings compared to typical cost-plus pricing."
+        ),
+})
 
 export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
     tool({
@@ -38,72 +66,16 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
 
             The tool returns only customer-facing offer data and should be treated as the source of truth for subsequent updates.
             `,
-        inputSchema: z.object({
-            changeDescription: z
-                .string()
-                .optional()
-                .describe(
-                    "Human-readable summary of the modification being made, such as 'Initial offer creation', 'Added bathroom inclusions', 'Updated payment schedule', or 'Removed electrical exclusions'."
-                ),
-
-            leadId: z
-                .number()
-                .optional()
-                .describe(
-                    "Lead identifier associated with this offer. Typically provided during offer creation and rarely changed afterwards."
-                ),
-
-            projectDescription: z
-                .string()
-                .optional()
-                .describe(
-                    "Customer-facing description of the project scope, objectives, deliverables, or proposed works."
-                ),
-
-            paymentTerms: z
-                .string()
-                .optional()
-                .describe(
-                    "Customer-facing payment schedule and payment conditions, including milestone payments, deposits, progress claims, and final payment requirements."
-                ),
-
-            termsAndConditions: z
-                .array(z.string())
-                .optional()
-                .describe(
-                    "Complete final list of terms and conditions. Each array element represents a separate clause. When updating, provide the entire merged list that should exist after the update, not only newly added clauses."
-                ),
-
-            serviceInclusions: z
-                .array(serviceItemSchema)
-                .optional()
-                .describe(
-                    "Complete set of service inclusion sections being created or modified. Each section must contain a stable id, a section title, and the full final list of items for that section. Keep ids unchanged when updating existing sections."
-                ),
-
-            serviceExclusions: z
-                .array(z.string())
-                .optional()
-                .describe(
-                    "Complete final list of service exclusions. Each item should describe work, materials, approvals, permits, reports, or services that are not included in the offer. When updating, provide the entire merged list."
-                ),
-
-            serviceExclusionsFootnote: z
-                .string()
-                .optional()
-                .describe(
-                    "Optional customer-facing note displayed beneath the service exclusions section. Typically used for clarifications, assistance offers, assumptions, supplier references, or special exclusion-related remarks."
-                ),
-        }),
+        inputSchema: offerFileContentAppendSchema,
         execute: async (params) => {
             const customerOffer = stripUndefined({
                 leadId: params.leadId,
-                projectDescription: params.projectDescription,
+                projectWelcomeMessage: params.projectWelcomeMessage,
                 termsAndConditions: params.termsAndConditions,
-                paymentTerms: params.paymentTerms,
-                serviceInclusions: params.serviceInclusions,
-                serviceExclusions: params.serviceExclusions,
-                serviceExclusionsFootnote: params.serviceExclusionsFootnote,
+                projectScope: params.projectScope,
+                fixedPriceItems: params.fixedPriceItems,
+                promotionalUpgrades: params.promotionalUpgrades,
+                revisionChanges: params.revisionChanges,
             });
 
             dataStream.write({

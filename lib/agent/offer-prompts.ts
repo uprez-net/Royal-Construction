@@ -77,24 +77,40 @@ export const offerLineItemSchema = z.object({
 });
 
 export const offerFileContentSchema = z.object({
-    projectDescription: z
+    projectWelcomeMessage: z
         .string()
-        .describe("Customer-facing description of the project scope, objectives, deliverables, and proposed works."),
-    paymentTerms: z
-        .string()
-        .describe("Customer-facing payment schedule and payment conditions."),
+        .optional()
+        .describe(
+            "Customer-facing introductory message that welcomes the client and provides a high-level overview of the project. This is often the first section of the offer and sets the tone for the proposal."
+        ),
+
     termsAndConditions: z
         .array(z.string())
-        .describe("Complete final list of customer-facing terms and conditions."),
-    serviceInclusions: z
+        .optional()
+        .describe(
+            "Complete final list of terms and conditions. Each array element represents a separate clause. When updating, provide the entire merged list that should exist after the update, not only newly added clauses."
+        ),
+
+    projectScope: z
         .array(serviceItemSchema)
-        .describe("Complete final service inclusion sections being created or modified."),
-    serviceExclusions: z
+        .optional()
+        .describe(
+            "Complete set of service inclusion sections being created or modified. Each section must contain a stable id, a section title, and the full final list of items for that section. Keep ids unchanged when updating existing sections."
+        ),
+
+    fixedPriceItems: z
         .array(z.string())
-        .describe("Complete final list of customer-facing service exclusions."),
-    serviceExclusionsFootnote: z
-        .string()
-        .describe("Customer-facing clarification note beneath the service exclusions section."),
+        .optional()
+        .describe(
+            "Complete final list of fixed price items included in the offer. Each item is a separate line of work that is included in the contract price. When updating, provide the entire merged list that should exist after the update, not only newly added items."
+        ),
+
+    promotionalUpgrades: z
+        .array(z.string())
+        .optional()
+        .describe(
+            "Complete final list of promotional upgrade items included in the offer. Each item is a separate line of work that is being offered as an upgrade to the client. When updating, provide the entire merged list that should exist after the update, not only newly added items."
+        ),
 });
 
 export const offerCreationOutputSchema = z.object({

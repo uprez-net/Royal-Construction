@@ -30,11 +30,11 @@ import { OfferVersionSelector } from "./offer-version-selector";
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
   if (
-    offerFile.paymentTerms?.trim() ||
-    offerFile.projectDescription?.trim() ||
-    offerFile.serviceExclusions?.length ||
+    offerFile.projectWelcomeMessage?.trim() ||
+    offerFile.projectScope?.length ||
     offerFile.termsAndConditions?.length ||
-    offerFile.serviceExclusions?.length
+    offerFile.fixedPriceItems?.length ||
+    offerFile.promotionalUpgrades?.length
   )
     return false;
 
@@ -54,7 +54,7 @@ export function OfferFileCanvas({
   projectType: string;
   location: string;
 }) {
-  const { offerFile, lineItems, appendVersion } = useChatContext();
+  const { offerFile, lineItems, lastRevisionDate, proposalDate, appendVersion } = useChatContext();
   const offerFileRef = useRef<HTMLIFrameElement | null>(null);
   const [tabId, setTabId] = useState<"offer" | "files" | "line-items">("offer");
   const [isPending, startTransition] = useTransition();
@@ -218,9 +218,12 @@ export function OfferFileCanvas({
           <OfferFileTemplate
             {...offerFile}
             ref={offerFileRef}
-            contractAmount={totalAmount}
+            contractAmount={parseFloat(totalAmount) ? `${totalAmount}` : undefined}
             customerName={customerName}
             projectName={`${projectType}, ${location}`}
+            siteLocation={location}
+            revisionDate={lastRevisionDate}
+            proposalDate={proposalDate}
           />
         </div>
       )}
