@@ -57,7 +57,7 @@ export default function OfferDetailsPageSkeleton() {
 
             {/* Company Name */}
             <div className="mb-8 flex flex-col items-center gap-3">
-              <Skeleton className="h-10 w-[500px]" />
+              <Skeleton className="h-10 w-125" />
               <Skeleton className="h-4 w-48" />
             </div>
 
@@ -84,7 +84,7 @@ export default function OfferDetailsPageSkeleton() {
             <div className="mb-8 rounded-lg border p-6">
               <div className="flex flex-col items-center gap-4">
                 <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-8 w-[450px]" />
+                <Skeleton className="h-8 w-112.5" />
                 <Skeleton className="h-4 w-56" />
               </div>
             </div>
