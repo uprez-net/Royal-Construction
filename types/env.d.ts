@@ -54,5 +54,8 @@ namespace NodeJS {
 
         // Mistral AI
         MISTRAL_AI_KEY: string;
+
+        // AI Gateway
+        AI_GATEWAY_API_KEY: string;
     }
 }

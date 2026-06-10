@@ -1,5 +1,5 @@
 import { ToolLoopAgent, Output } from "ai";
-import { google } from "@/lib/google";
+import { gateway } from "@/lib/model";
 import { fetchOfferSheetRules } from "../tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "../tools/file-tools";
 import {
@@ -9,7 +9,7 @@ import {
 
 
 export const offerCreationAgent = new ToolLoopAgent({
-    model: google("gemini-3-flash-preview"),
+    model: gateway("google/gemini-2.5-flash"),
     tools: {
         fetchOfferSheetRulesTool: fetchOfferSheetRules,
         fileProcessingTool: FileProcessingTool,

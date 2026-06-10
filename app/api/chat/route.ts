@@ -7,7 +7,7 @@ import { offerFileTool } from "@/lib/tools/offer-file";
 import { ChatMessageAI } from "@/types/chat";
 import { convertToUIMessage } from "@/utils/chat";
 import { ChatSDKError } from "@/utils/chat-error";
-import { google } from "@/lib/google";
+import { gateway } from "@/lib/model";
 import { auth } from "@clerk/nextjs/server";
 import { convertToModelMessages, createUIMessageStream, JsonToSseTransformStream, smoothStream, stepCountIs, streamText, UIMessage } from "ai";
 import { NextRequest } from "next/server";
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
                 /* ---------------- AI Stream ---------------- */
 
                 const result = streamText({
-                    model: google("gemini-3-flash-preview"),
+                    model: gateway("google/gemini-2.5-flash"),
                     system: OFFER_CHAT_SYSTEM_PROMPT,
                     messages: await convertToModelMessages(UIFormattedMessages),
                     stopWhen: stepCountIs(12),

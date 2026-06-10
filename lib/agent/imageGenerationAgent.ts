@@ -1,5 +1,5 @@
 import { ToolLoopAgent, Output, generateImage, tool } from "ai";
-import { google } from "@/lib/google";
+import { gateway } from "@/lib/model";
 import z from "zod";
 import { put } from "@vercel/blob"
 
@@ -12,7 +12,7 @@ the user's description while adhering to architectural principles and aesthetics
 `
 
 export const imageGenerationAgent = new ToolLoopAgent({
-    model: google("gemini-3-flash-preview"),
+    model: gateway("google/gemini-2.5-flash"),
     tools: {
         generateImageTool: tool({
             description: "Generates an image based on a textual description of a facade design.",
@@ -22,7 +22,7 @@ export const imageGenerationAgent = new ToolLoopAgent({
             }),
             execute: async ({ description, title }) => {
                 const { image } = await generateImage({
-                    model: google.image("gemini-2.5-flash-image"),
+                    model: gateway.image("google/imagen-4.0-fast-generate-001"),
                     prompt: description,
                     size: "1024x1024",
                 });

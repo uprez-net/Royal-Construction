@@ -1,5 +1,5 @@
 import { ToolLoopAgent, tool } from 'ai';
-import { google } from '../google';
+import { gateway } from '../model';
 import { z } from 'zod';
 
 export interface LeadExtraction {
@@ -32,7 +32,7 @@ const projectTypeList = PROJECT_TYPE_OPTIONS.map((type) => `"${type}"`).join(
   ', ',
 );
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'google/gemini-2.5-flash';
 
 
 const validationSchema = z
@@ -146,7 +146,7 @@ const instruction =
   'with the final fields.';
 
 const leadExtractionAgent = new ToolLoopAgent({
-  model: google(MODEL_NAME),
+  model: gateway(MODEL_NAME),
   instructions: instruction,
   tools: {
     emitLead,
