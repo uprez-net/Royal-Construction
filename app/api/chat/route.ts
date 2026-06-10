@@ -9,7 +9,15 @@ import { convertToUIMessage } from "@/utils/chat";
 import { ChatSDKError } from "@/utils/chat-error";
 import { gateway } from "@/lib/model";
 import { auth } from "@clerk/nextjs/server";
-import { convertToModelMessages, createUIMessageStream, JsonToSseTransformStream, smoothStream, stepCountIs, streamText, UIMessage } from "ai";
+import {
+    convertToModelMessages,
+    createUIMessageStream,
+    JsonToSseTransformStream,
+    smoothStream,
+    // stepCountIs,
+    streamText,
+    UIMessage
+} from "ai";
 import { NextRequest } from "next/server";
 import { v4 as generateUUID } from "uuid";
 import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
@@ -92,9 +100,17 @@ export async function POST(request: NextRequest) {
 
                 const result = streamText({
                     model: gateway("google/gemini-2.5-flash"),
+                    temperature: 0.2,   // slightly higher — user-facing replies need to feel natural
+                    topP: 0.90,
+                    topK: 25,
+                    presencePenalty: 0,
+                    frequencyPenalty: 0.1,
                     system: OFFER_CHAT_SYSTEM_PROMPT,
                     messages: await convertToModelMessages(UIFormattedMessages),
-                    stopWhen: stepCountIs(12),
+                    stopSequences: [
+                        "<END_OFFER_UPDATE>",
+                        "<END_LINE_ITEM_UPDATE>",
+                    ],
                     experimental_transform: smoothStream({ chunking: "word" }),
                     toolChoice: "auto",
                     tools: {

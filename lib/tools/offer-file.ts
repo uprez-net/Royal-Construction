@@ -38,7 +38,7 @@ const offerFileContentAppendSchema = offerFileContentSchema.extend({
         ),
 })
 
-export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
+export const offerFileTool = (dataStream?: UIMessageStreamWriter) =>
     tool({
         description: `
             Creates or updates customer-facing offer document sections.
@@ -97,16 +97,18 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
                 }
             }
 
-            dataStream.write({
-                type: "data-offer-file-update",
-                data: {
-                    ...customerOffer,
-                    facadeOptions: customerOffer.facadeOptions ? {
-                        optionsDescription: customerOffer.facadeOptions.optionsDescription,
-                        options: Options,
-                    } : undefined,
-                } satisfies OfferFile,
-            });
+            if (dataStream) {
+                dataStream.write({
+                    type: "data-offer-file-update",
+                    data: {
+                        ...customerOffer,
+                        facadeOptions: customerOffer.facadeOptions ? {
+                            optionsDescription: customerOffer.facadeOptions.optionsDescription,
+                            options: Options,
+                        } : undefined,
+                    } satisfies OfferFile,
+                });
+            }
 
             return {
                 message: `Offer file generated for lead ${params.leadId ?? "unknown"}`,
