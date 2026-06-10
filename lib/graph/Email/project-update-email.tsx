@@ -23,6 +23,7 @@ import { EmailFooter } from './email-footer';
 import { EmailHeader } from './email-header';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 // Updated stroke colors for Light Theme compatibility
@@ -128,6 +129,7 @@ interface ProjectUpdateEmailProps {
   steps?: { label: string; state: 'completed' | 'current' | 'upcoming' }[];
   nextMilestone?: string;
   portalUrl?: string;
+  leadContext?: LeadEmailContext;
 }
 
 export default function ProjectUpdateEmail({
@@ -139,6 +141,7 @@ export default function ProjectUpdateEmail({
   steps = DEFAULT_STEPS,
   nextMilestone = 'Practical Completion',
   portalUrl = RC_URLS.contact,
+  leadContext,
 }: ProjectUpdateEmailProps) {
   const filledWidth = `${Math.min(Math.max(progressPercent, 0), 100)}%`;
   const emptyWidth = `${100 - Math.min(Math.max(progressPercent, 0), 100)}%`;
@@ -270,6 +273,8 @@ export default function ProjectUpdateEmail({
                 </Column>
               </Row>
             </EmailSectionLight>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Milestone Card ── */}
             <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>

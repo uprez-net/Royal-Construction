@@ -186,7 +186,7 @@ export function EmailFlowModal({
                               <input
                                     className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
                                     value={emailSubject}
-                                    readOnly
+                                    onChange={(e) => setEmailSubject(e.target.value)}
                               />
                         </div>
                         <div>

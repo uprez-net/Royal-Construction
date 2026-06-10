@@ -10,6 +10,7 @@ import VariationQuoteEmail from '@/lib/graph/Email/variation-quote-email';
 import ProjectUpdateEmail from '@/lib/graph/Email/project-update-email';
 import MaterialCatalogueEmail from '@/lib/graph/Email/material-catalogue-email';
 import PortfolioEmail from '@/lib/graph/Email/portfolio-email';
+import { LeadEmailContext } from '@/lib/graph/Email/email-lead-context';
 
 interface LeadPreview {
   id: number;
@@ -19,6 +20,19 @@ interface LeadPreview {
   notes?: string;
   budget?: string;
   email?: string;
+  source?: string;
+  sourceDetail?: string;
+  stage?: string;
+  followupDate?: string | null;
+  followupTime?: string | null;
+  assignedUser?: { name?: string | null } | null;
+}
+
+function formatLeadDate(date: string | null | undefined) {
+  if (!date) return undefined;
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export async function renderEmailHtml(category: string, lead: LeadPreview | null) {
@@ -29,6 +43,20 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
   const project = `${type} at ${location}`;
   const amount = (lead?.budget && lead.budget !== 'Not Discussed') ? lead.budget : 'TBD';
   const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const followupDate = formatLeadDate(lead?.followupDate);
+  const followup = followupDate
+    ? followupDate + (lead?.followupTime ? ` at ${lead.followupTime}` : '')
+    : undefined;
+  const leadContext: LeadEmailContext = {
+    projectType: type,
+    location,
+    source: lead?.sourceDetail || lead?.source,
+    stage: lead?.stage,
+    budget: lead?.budget,
+    followup,
+    assignee: lead?.assignedUser?.name ?? undefined,
+    notes,
+  };
   let component: React.ReactElement | null = null;
 
   let bookingUrl = 'https://royal-construction-chi.vercel.app/book-consultation';
@@ -43,31 +71,31 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
 
   switch (category) {
     case 'Follow-up':
-      component = <FollowUpEmail name={name} type={type} location={location} notes={notes} scheduleCallUrl={bookingUrl} />;
+      component = <FollowUpEmail name={name} type={type} location={location} notes={notes} scheduleCallUrl={bookingUrl} leadContext={leadContext} />;
       break;
     case 'Welcome':
-        component = <WelcomeEmail name={name} bookingUrl={bookingUrl} />;
+        component = <WelcomeEmail name={name} bookingUrl={bookingUrl} leadContext={leadContext} />;
         break;
     case 'Quotation':
-      component = <QuotationEmail clientName={name} projectName={project} location={location} totalAmount={amount} validityPeriod="6-8 months" />;
+      component = <QuotationEmail clientName={name} projectName={project} location={location} totalAmount={amount} validityPeriod="6-8 months" leadContext={leadContext} />;
       break;
     case 'Meeting':
-      component = <SiteVisitEmail name={name} date={today} time="10:00 AM" location={location} />;
+      component = <SiteVisitEmail name={name} date={followupDate ?? today} time={lead?.followupTime || "10:00 AM"} location={location} leadContext={leadContext} />;
       break;
     case 'Promotion':
-      component = <SpecialOfferEmail name={name} savingsAmount="$15,000" />;
+      component = <SpecialOfferEmail name={name} savingsAmount="$15,000" leadContext={leadContext} />;
       break;
     case 'Variation':
-      component = <VariationQuoteEmail name={name} project={project} originalAmount="$480,000" variationAmount="$4,500" revisedAmount="$484,500" />;
+      component = <VariationQuoteEmail name={name} project={project} originalAmount="$480,000" variationAmount="$4,500" revisedAmount="$484,500" leadContext={leadContext} />;
       break;
     case 'Update':
-      component = <ProjectUpdateEmail name={name} location={location} milestone="Foundation Complete" date={today} nextMilestone="Frame Stage" />;
+      component = <ProjectUpdateEmail name={name} location={location} milestone="Foundation Complete" date={today} nextMilestone="Frame Stage" leadContext={leadContext} />;
       break;
     case 'Catalogue':
-      component = <MaterialCatalogueEmail name={name} />;
+      component = <MaterialCatalogueEmail name={name} leadContext={leadContext} />;
       break;
     case 'Portfolio':
-      component = <PortfolioEmail name={name} />;
+      component = <PortfolioEmail name={name} leadContext={leadContext} />;
       break;
     default:
       return '';

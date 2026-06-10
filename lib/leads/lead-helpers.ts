@@ -148,18 +148,28 @@ export function hydrateSubject(text: string, lead: Lead): string {
   const typeStr = Array.isArray(lead.type)
     ? (lead.type[0] ?? "New Home Build")
     : lead.type;
+  const followup = lead.followupDate
+    ? formatFollowup(lead.followupDate, lead.followupTime)
+    : "next step";
+  const source = lead.sourceDetail || lead.source || "Royal Constructions enquiry";
+  const location = lead.location || "NSW";
 
   const values: Record<string, string> = {
     name: lead.name,
-    location: lead.location,
+    location,
     type: typeStr,
     phone: lead.phone,
-    project: `${typeStr} at ${lead.location}`,
+    project: `${typeStr} at ${location}`,
     notes: lead.notes || "Previous discussion details",
     amount: lead.budget !== "Not Discussed" ? lead.budget : "TBD",
+    budget: lead.budget || "Not Discussed",
+    source,
+    stage: lead.stage,
+    followup,
+    assignee: lead.assignedUser?.name || "Royal Constructions team",
     duration: "6-8 months",
     date: formatShortDate(new Date()),
-    time: "10:00 AM",
+    time: lead.followupTime || "10:00 AM",
     milestone: "Foundation Complete",
     nextMilestone: "Frame Stage",
     originalAmount: "$480,000",
@@ -180,21 +190,23 @@ export function previewTemplateText(text: string) {
 export function getTemplateDescription(template: EmailTemplate): string {
   const descriptions: Record<string, string> = {
     Welcome:
-      "Welcome new clients to Royal Constructions. Makes the builder appointment booking the first action, then requests land information, project priorities, build type, location, timeline, existing documents, and design ideas.",
+      "Welcome the lead by name and references their project type, location, source, current stage, budget, notes, and next follow-up where available.",
     Quotation:
-      "Send a professional and customized project quotation. Details the scope of work, budget, itemized breakdowns, and easy next steps for client approval.",
+      "Send a professional quotation summary using the lead's project type, location, budget range, stage, notes, and next action.",
     "Follow-up":
-      "Keep the momentum going with qualified leads. Recaps previous consultations, addresses open questions, and prompts for scheduling next steps.",
+      "Follow up with the selected lead using their CRM notes, stage, source, budget range, location, and scheduled follow-up.",
     Catalogue:
-      "Provide clients with our comprehensive finishes and material catalogue. Designed to let clients browse exterior cladding, finishes, and paint selections.",
+      "Send the finishes catalogue with a lead snapshot so material choices are anchored to the project type and location.",
     Variation:
-      "Formal project variation summary. Details requested changes, contract adjustments, revised pricing, and options for sign-off.",
+      "Formal variation summary with the selected lead's project context and notes for cleaner handoff.",
     Promotion:
-      "Offer a special limited-time promotional discount or upgrade bundle to incentivize hot leads to move forward with signing.",
+      "Promotional offer tailored to the lead's project type, stage, budget range, and next follow-up.",
     Meeting:
-      "Confirm a site meeting or consultant visit details. Includes appointment date, time, location maps, and contact information.",
+      "Confirm a site meeting or consultant visit using the lead's follow-up date, time, location, notes, and project type.",
     Update:
-      "Auto-generated construction milestone progress update. Informs the client about current status, completed tasks, and upcoming milestones.",
+      "Project update template with CRM lead context so the message stays connected to the right project and stage.",
+    Portfolio:
+      "Share the builder profile and portfolio with a personalized snapshot of the lead's project type, location, and enquiry details.",
   };
   return (
     descriptions[template.category] ??
