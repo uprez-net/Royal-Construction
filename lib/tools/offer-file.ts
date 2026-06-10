@@ -1,6 +1,8 @@
 import { tool, UIMessageStreamWriter } from "ai";
 import z from "zod";
-import { offerFileContentSchema } from "../agent/offer-prompts";
+import { FacadeOptionWithImageUrl, offerFileContentSchema } from "../agent/offer-prompts";
+import { imageGenerationAgent } from "../agent/imageGenerationAgent";
+import type { OfferFile } from "@/context/ChatContext";
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
     return Object.fromEntries(
@@ -79,15 +81,43 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
                 facadeOptions: params.facadeOptions,
             });
 
+            const Options: FacadeOptionWithImageUrl["options"] = [];
+            if (customerOffer.facadeOptions) {
+                for (const option of customerOffer.facadeOptions.options) {
+                    const image = await imageGenerationAgent.generate({
+                        prompt: `
+                        Generate a facade design image based on the following description: ${option.description}. 
+                        The image should reflect the architectural style, materials, colors, and specific features mentioned in the description.
+                        `
+                    })
+                    Options.push({
+                        ...option,
+                        imageUrl: image.output.imageUrl,
+                    })
+                }
+            }
+
             dataStream.write({
                 type: "data-offer-file-update",
-                data: customerOffer,
+                data: {
+                    ...customerOffer,
+                    facadeOptions: customerOffer.facadeOptions ? {
+                        optionsDescription: customerOffer.facadeOptions.optionsDescription,
+                        options: Options,
+                    } : undefined,
+                } satisfies OfferFile,
             });
 
             return {
                 message: `Offer file generated for lead ${params.leadId ?? "unknown"}`,
                 description: params.changeDescription,
-                customerOffer,
+                customerOffer: {
+                    ...customerOffer,
+                    facadeOptions: customerOffer.facadeOptions ? {
+                        optionsDescription: customerOffer.facadeOptions.optionsDescription,
+                        options: Options,
+                    } : undefined,
+                } satisfies OfferFile,
             };
         },
     });

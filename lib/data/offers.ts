@@ -9,9 +9,10 @@ import type { OfferFile } from "@/context/ChatContext";
 import { findLeadById } from "./leads";
 import { offerCreationAgent } from "../agent/offerCreationAgent";
 import { v4 as uuidv4 } from "uuid";
-import { buildCreationStarterPrompt } from "../agent/offer-prompts";
+import { buildCreationStarterPrompt, FacadeOptionWithImageUrl } from "../agent/offer-prompts";
 import { triggerNotification } from "@/lib/notification/novu";
 import { createNotification } from "@/types/notification";
+import { imageGenerationAgent } from "../agent/imageGenerationAgent";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -504,6 +505,22 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
         const amount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.netLine, 0));
         const gstAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.gstAmount, 0));
         const totalAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.totalPrice, 0));
+        const Options: FacadeOptionWithImageUrl["options"] = [];
+        if (output.offerFileContent.facadeOptions) {
+            for (const option of output.offerFileContent.facadeOptions.options) {
+                const image = await imageGenerationAgent.generate({
+                    prompt: 
+                    `
+                        Generate a facade design image based on the following description: ${option.description}. 
+                        The image should reflect the architectural style, materials, colors, and specific features mentioned in the description.
+                    `
+                })
+                Options.push({
+                    ...option,
+                    imageUrl: image.output.imageUrl,
+                })
+            }
+        }
 
         const { newOfferItems, newOfferFile, ...newOffer } = await createOrUpdateOffer({
             leadId,
@@ -513,7 +530,13 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
                 fileType: "application/json",
                 filesize: JSON.stringify(output.offerFileContent).length,
                 url: "placeholder_url", // In a real implementation, you would upload the content to a storage service and provide the URL here
-                offerContent: output.offerFileContent,
+                offerContent: {
+                    ...output.offerFileContent,
+                    facadeOptions: output.offerFileContent.facadeOptions ? {
+                        optionsDescription: output.offerFileContent.facadeOptions.optionsDescription,
+                        options: Options,
+                    } : undefined,
+                },
             },
             amount: amount.toString(),
             gstAmount: gstAmount.toString(),
