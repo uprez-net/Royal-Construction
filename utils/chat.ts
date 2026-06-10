@@ -89,11 +89,17 @@ export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[
 export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile {
   let offerFile: OfferFile = {
     termsAndConditions: [],
-    projectDescription: "",
-    paymentTerms: "",
-    serviceInclusions: [],
-    serviceExclusions: [],
+    projectWelcomeMessage: "",
+    revisionChanges: {
+      description: "",
+      valueAdded: 0,
+      youSave: 0,
+    },
+    projectScope: [],
+    fixedPriceItems: [],
+    promotionalUpgrades: [],
   };
+  
   for (const msg of message) {
     for (const part of msg.parts) {
       // Look for parts that are tool outputs with type "offerFileTool"
@@ -108,10 +114,11 @@ export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile
           ...offerFile,
           ...customerOffer,
           termsAndConditions: customerOffer.termsAndConditions ?? offerFile.termsAndConditions,
-          serviceInclusions: customerOffer.serviceInclusions
-            ? mergeServiceItems(offerFile.serviceInclusions, customerOffer.serviceInclusions)
-            : offerFile.serviceInclusions,
-          serviceExclusions: customerOffer.serviceExclusions ?? offerFile.serviceExclusions,
+          projectScope: customerOffer.projectScope
+            ? mergeServiceItems(offerFile.projectScope, customerOffer.projectScope)
+            : offerFile.projectScope,
+          fixedPriceItems: customerOffer.fixedPriceItems ?? offerFile.fixedPriceItems,
+          promotionalUpgrades: customerOffer.promotionalUpgrades ?? offerFile.promotionalUpgrades,
         };
       }
     }
