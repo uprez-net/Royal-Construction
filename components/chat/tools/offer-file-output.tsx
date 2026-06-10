@@ -1,5 +1,6 @@
 import type { OfferFileToolOutput } from "@/types/chat";
 import { CheckCircle2 } from "lucide-react";
+import Image from "next/image";
 
 export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
   return (
@@ -106,9 +107,48 @@ export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
             Terms & Conditions
           </h4>
 
-          <div className="whitespace-pre-wrap rounded-xl border border-[#E2E8F0] bg-[#FCFBF8] p-3 text-sm text-slate-600">
-            {output.customerOffer.termsAndConditions}
-          </div>
+          <ul className="space-y-3 text-sm text-slate-600">
+            {output.customerOffer.termsAndConditions.map((term, index) => (
+              <li
+                key={index}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <p className="font-medium text-slate-900">{term.title}</p>
+                <p className="mt-1 whitespace-pre-wrap">{term.description}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {output.customerOffer.facadeOptions && (
+        <section>
+          <h4 className="mb-1 text-sm font-medium text-slate-900">
+            Facade Options
+          </h4>
+
+          <p className="text-sm text-slate-600">
+            {output.customerOffer.facadeOptions.optionsDescription}
+          </p>
+
+          <ul className="space-y-3 text-sm text-slate-600">
+            {output.customerOffer.facadeOptions.options.map((term, index) => (
+              <li
+                key={index}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <p className="font-medium text-slate-900">{term.title}</p>
+                <p className="mt-1 whitespace-pre-wrap">{term.description}</p>
+                <Image
+                  src={term.imageUrl}
+                  alt={term.title}
+                  width={120}
+                  height={120}
+                  className="mt-2 h-30 w-30 rounded-md object-cover"
+                />
+              </li>
+            ))}
+          </ul>
         </section>
       )}
     </div>
