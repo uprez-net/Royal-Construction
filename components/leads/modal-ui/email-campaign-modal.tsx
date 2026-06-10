@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Mail } from "lucide-react";
 import { ModalShell } from "@/components/common/modal-shell";
 import { Lead, EmailTemplate } from "@/lib/leads/types";
@@ -43,9 +43,6 @@ export function EmailCampaignModal({
   const [emailTargets, setEmailTargets] = useState<string[]>([]);
   const [emailTargetList, setEmailTargetList] = useState("");
   const [loadingTargets, setLoadingTargets] = useState(true);
-
-
-  const emailIframeRef = useRef<HTMLIFrameElement>(null);
 
   /* Fetch all leads for targets on mount */
   useEffect(() => {
@@ -90,49 +87,16 @@ export function EmailCampaignModal({
     const now = new Date();
 
     try {
-      /* Grab any user edits from the iframe */
-      let editedHtml = "";
-      const iframeDoc = emailIframeRef.current?.contentDocument;
-      if (iframeDoc) {
-        const body = iframeDoc.body;
-        if (body) {
-          body.removeAttribute("contenteditable");
-          body.style.outline = "";
-        }
-        editedHtml = iframeDoc.documentElement.outerHTML;
-        if (body) {
-          body.setAttribute("contenteditable", "true");
-          body.style.outline = "none";
-        }
-      }
-      const previewLead = allLeads[0] || leads[0];
       const updated = await Promise.all(
         allLeads.map(async (lead) => {
           if (!lead.email) return lead;
 
           try {
             const subject = hydrateSubject(subjectTemplate, lead);
-
-            let finalHtml = editedHtml;
-            if (finalHtml && previewLead && previewLead.name !== lead.name) {
-              finalHtml = finalHtml.replace(
-                new RegExp(previewLead.name, "g"),
-                lead.name,
-              );
-              if (previewLead.email && previewLead.email) {
-                finalHtml = finalHtml.replace(
-                  new RegExp(previewLead.email!, "g"),
-                  lead.email,
-                );
-              }
-            }
-
-            if (!finalHtml) {
-              finalHtml = await renderEmailHtml(
-                selectedTemplate.category,
-                lead,
-              );
-            }
+            const finalHtml = await renderEmailHtml(
+              selectedTemplate.category,
+              lead,
+            );
 
             if (!finalHtml) {
               console.error(
@@ -182,13 +146,6 @@ export function EmailCampaignModal({
       onClose();
     }
   };
-
-  /* ── Preview subject: hydrate for first lead ── */
-  const previewLead = allLeads[0] || leads[0];
-  const previewSubject =
-    previewLead && selectedTemplate
-      ? hydrateSubject(subjectTemplate, previewLead)
-      : subjectTemplate;
 
   /* ── Loading UI ── */
   if (loadingTargets) {
@@ -291,8 +248,8 @@ export function EmailCampaignModal({
           </label>
           <input
             className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10"
-            value={previewSubject}
-            readOnly
+            value={subjectTemplate}
+            onChange={(e) => setSubjectTemplate(e.target.value)}
           />
         </div>
 
@@ -306,9 +263,9 @@ export function EmailCampaignModal({
           </p>
           {selectedTemplate ? (
             <ReactEmailIframe
-              ref={emailIframeRef}
               category={selectedTemplate.category}
               lead={allLeads[0] ?? null}
+              editable={false}
             />
           ) : (
             <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">

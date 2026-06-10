@@ -24,6 +24,7 @@ import { EmailHeader } from './email-header';
 import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 // Updated stroke color to match RC_COLORS.gold (#C9A84C)
@@ -147,6 +148,7 @@ interface SiteVisitEmailProps {
   time?: string;
   location?: string;
   calendarUrl?: string;
+  leadContext?: LeadEmailContext;
 }
 
 export default function SiteVisitEmail({
@@ -155,6 +157,7 @@ export default function SiteVisitEmail({
   time = 'TBD',
   location = 'TBD',
   calendarUrl = RC_URLS.bookConsultation,
+  leadContext,
 }: SiteVisitEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -250,6 +253,8 @@ export default function SiteVisitEmail({
                 </Column>
               </Row>
             </EmailSectionLight>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Event Details Card ── */}
             <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>

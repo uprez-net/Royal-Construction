@@ -23,6 +23,7 @@ import { EmailHeader } from './email-header';
 import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ interface FollowUpEmailProps {
   location?: string;
   notes?: string;
   scheduleCallUrl?: string;
+  leadContext?: LeadEmailContext;
 }
 
 export default function FollowUpEmail({
@@ -46,6 +48,7 @@ export default function FollowUpEmail({
   location = 'NSW',
   notes = 'Discussed initial design preferences, block orientation, and budget expectations for the project.',
   scheduleCallUrl = RC_URLS.bookConsultation,
+  leadContext,
 }: FollowUpEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -137,6 +140,8 @@ export default function FollowUpEmail({
                 vision.
               </Text>
             </EmailSectionLight>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Discussion Notes Card ── */}
             <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>

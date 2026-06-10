@@ -24,6 +24,7 @@ import { EmailHeader } from './email-header';
 import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 const PROJECT_BRIEF_ITEMS = [
   {
@@ -258,11 +259,13 @@ function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
 interface WelcomeEmailProps {
   name?: string;
   bookingUrl?: string;
+  leadContext?: LeadEmailContext;
 }
 
 export default function WelcomeEmail({
   name = 'Homeowner',
   bookingUrl = RC_URLS.bookConsultation,
+  leadContext,
 }: WelcomeEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -330,6 +333,8 @@ export default function WelcomeEmail({
                 ideas you already have so we can prepare before your consultation.
               </Text>
             </EmailSectionLight>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* Hero image */}
             <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>
