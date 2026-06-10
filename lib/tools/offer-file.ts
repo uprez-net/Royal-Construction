@@ -76,6 +76,7 @@ export const offerFileTool = (dataStream: UIMessageStreamWriter) =>
                 fixedPriceItems: params.fixedPriceItems,
                 promotionalUpgrades: params.promotionalUpgrades,
                 revisionChanges: params.revisionChanges,
+                facadeOptions: params.facadeOptions,
             });
 
             dataStream.write({

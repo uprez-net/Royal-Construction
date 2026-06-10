@@ -76,6 +76,35 @@ export const offerLineItemSchema = z.object({
     source: z.string().optional().describe("Source filename, lead field, sheet name, row, or cell for the cost or quantity."),
 });
 
+export const termsAndConditionsItemSchema = z.object({
+    title: z.string().describe("Short title summarizing the term or condition."),
+    description: z.string().describe("Detailed customer-facing explanation of the term or condition."),
+})
+
+export const facadeOptionsSchema = z.object({
+    optionsDescription: z.string().describe(
+        "Description of the options available to the customer for the build facade, such as cladding materials, window types, or roof styles. This should be a customer-facing explanation of the choices they have for the facade design."
+    ),
+    options: z.array(z.object({
+        title: z.string().describe("Short title summarizing the facade option."),
+        description: z.string().describe("Detailed customer-facing explanation of the facade option, including its features, benefits, and any relevant details that would help the customer understand the choice.")
+    })).describe(
+        "List of facade options available to the customer. Each option should have a title and a description that explains the features and benefits of that option. This helps the customer make an informed decision about their facade design."
+    ),
+});
+
+export type TermsAndConditionsItem = z.infer<typeof termsAndConditionsItemSchema>;
+// type FacadeOption = z.infer<typeof facadeOptionsSchema>;
+
+export interface FacadeOptionWithImageUrl {
+    optionsDescription: string;
+    options: {
+        title: string;
+        description: string;
+        imageUrl: string; // Optional URL for an image representing the facade option
+    }[];
+}
+
 export const offerFileContentSchema = z.object({
     projectWelcomeMessage: z
         .string()
@@ -85,7 +114,7 @@ export const offerFileContentSchema = z.object({
         ),
 
     termsAndConditions: z
-        .array(z.string())
+        .array(termsAndConditionsItemSchema)
         .optional()
         .describe(
             "Complete final list of terms and conditions. Each array element represents a separate clause. When updating, provide the entire merged list that should exist after the update, not only newly added clauses."
@@ -110,6 +139,12 @@ export const offerFileContentSchema = z.object({
         .optional()
         .describe(
             "Complete final list of promotional upgrade items included in the offer. Each item is a separate line of work that is being offered as an upgrade to the client. When updating, provide the entire merged list that should exist after the update, not only newly added items."
+        ),
+
+    facadeOptions: facadeOptionsSchema
+        .optional()
+        .describe(
+            "Optional section describing the facade design options available to the customer. This includes a general description of the choices and a list of specific options, each with its own title and detailed description. When included, this section should provide a clear explanation of the facade choices the customer has for their project."
         ),
 });
 

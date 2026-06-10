@@ -14,6 +14,7 @@ import {
 import { SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
 import { max, min } from "date-fns";
 import { dateFormat } from "@/utils/formatters";
+import type { FacadeOptionWithImageUrl, TermsAndConditionsItem } from "@/lib/agent/offer-prompts";
 
 interface ChatContextValue {
   lineItems: LineItem[];
@@ -52,7 +53,8 @@ export interface LineItem {
 }
 
 export interface OfferFile {
-  termsAndConditions?: string[];
+  termsAndConditions?: TermsAndConditionsItem[];
+  facadeOptions?: FacadeOptionWithImageUrl;
   projectWelcomeMessage?: string;
   revisionChanges?: {
     description: string;

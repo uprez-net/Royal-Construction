@@ -1,15 +1,8 @@
 import {
   ACCEPTANCE_BODY,
   COMPANY_INFO,
-  // FIXED_PRICE_INCLUDES_ITEMS,
   NEXT_STEPS,
-  NOTES_AND_TERMS,
   PROMOTIONAL_PACKAGE,
-  // SAMPLE_PREMIUM_UPGRADES,
-  // SAMPLE_PROJECT_SCOPE,
-  // SAMPLE_REVISION_CHANGES,
-  // SAMPLE_TERMS_AND_CONDITIONS,
-  // SAMPLE_WELCOME_MESSAGE,
   TIMELINE_FOOTNOTE,
   TIMELINE_STAGES,
 } from "@/constants/offerFileContent";
@@ -25,13 +18,12 @@ interface OfferFileTemplateProps extends OfferFile {
   proposalDate?: string;
   revisionDate?: string;
   creatorName?: string;
-  // drawingsDate?: string;
-  // proposalNumber?: string;
   contractAmount?: string;
 }
 
 export function OfferFileTemplate({
   projectWelcomeMessage,
+  facadeOptions,
   termsAndConditions,
   revisionChanges,
   projectScope,
@@ -44,8 +36,6 @@ export function OfferFileTemplate({
   proposalDate = dateFormat.format(new Date()),
   revisionDate,
   creatorName = COMPANY_INFO.director,
-  // drawingsDate,
-  // proposalNumber,
   contractAmount = "$X,XXX",
 }: OfferFileTemplateProps) {
   // Valid-until: proposalDate + 28 days
@@ -525,6 +515,45 @@ export function OfferFileTemplate({
   }
 
   .inclusion-credit-card .star { color: var(--gold); }
+
+  /* ─── FAÇADE OPTIONS ────────────────────────────────── */
+  .facade-intro {
+    font-size: 13.5px;
+    color: #374151;
+    line-height: 1.7;
+    margin-bottom: 28px;
+  }
+ 
+  .facade-option {
+    margin-bottom: 36px;
+  }
+ 
+  .facade-option:last-child {
+    margin-bottom: 0;
+  }
+ 
+  .facade-option-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 6px;
+  }
+ 
+  .facade-option-desc {
+    font-size: 13.5px;
+    font-style: italic;
+    color: #374151;
+    line-height: 1.65;
+    margin-bottom: 16px;
+  }
+ 
+  .facade-option-img {
+    width: 100%;
+    border-radius: 6px;
+    display: block;
+    object-fit: cover;
+    max-height: 420px;
+  }
 
   /* ─── TIMELINE ──────────────────────────────────────── */
   .timeline-table {
@@ -1060,6 +1089,31 @@ export function OfferFileTemplate({
   </div>
 
   <!-- ═══════════════════════════════════════════════════ -->
+  <!-- FAÇADE OPTIONS FOR YOUR CONSIDERATION               -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Façade Options for Your Consideration</h2>
+    <div class="section-gold-rule"></div>
+
+    <p class="facade-intro">${facadeOptions ? facadeOptions.optionsDescription : "No façade options available."}</p>
+
+    ${
+      facadeOptions && facadeOptions.options && facadeOptions.options.length > 0
+        ? facadeOptions.options.map(
+            (option) => `
+            <div class="facade-option">
+              <div class="facade-option-title">${option.title}</div>
+              <div class="facade-option-desc">${option.description}</div>
+              <img class="facade-option-img" src="${option.imageUrl}" alt="${option.title}" />
+            </div>
+            `,
+          ).join("")
+        : ""
+    }
+    <p class="empty>Façade images shown for illustrative purposes — final selections, materials and detailing confirmed at the design stage to suit your block at ${siteLocation}.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
   <!-- INDICATIVE PROJECT TIMELINE                         -->
   <!-- ═══════════════════════════════════════════════════ -->
   <div class="section-wrap">
@@ -1131,40 +1185,21 @@ export function OfferFileTemplate({
     <h2 class="section-heading">Important Notes &amp; Terms</h2>
     <div class="section-gold-rule"></div>
 
-    ${NOTES_AND_TERMS.map(
-      (note) => `
+    ${
+      termsAndConditions && termsAndConditions.length > 0
+        ? termsAndConditions
+            .map(
+              (note) => `
       <div class="notes-item">
-        <div class="notes-item-title${note.highlight ? " highlight-title" : ""}">${note.title}</div>
+        <div class="notes-item-title">${note.title}</div>
         <div class="notes-item-body">
-          ${
-            note.highlight
-              ? `<span class="notes-highlight-body">${note.body}</span>`
-              : note.body
-          }
+          ${note.description}
         </div>
       </div>
     `,
-    ).join("")}
-
-    ${
-      termsAndConditions && termsAndConditions.length > 0
-        ? `
-      <div class="notes-item">
-        <div class="notes-item-title">Additional Terms</div>
-        <div class="card" style="margin-top:8px;">
-          <ul class="tc-list">
-            ${termsAndConditions
-              .map(
-                (item) => `
-              <li><span class="dot">•</span><span>${item}</span></li>
-            `,
-              )
-              .join("")}
-          </ul>
-        </div>
-      </div>
-    `
-        : ""
+            )
+            .join("")
+        : `<p class="empty">No important notes or terms provided.</p>`
     }
   </div>
 
