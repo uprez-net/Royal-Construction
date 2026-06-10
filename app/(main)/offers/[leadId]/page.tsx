@@ -4,6 +4,7 @@ import { getOfferByLeadIdCached } from "@/lib/data/offers";
 import { convertToUIMessage } from "@/utils/chat";
 import { Suspense } from "react";
 import { Sparkles } from "lucide-react";
+import OfferDetailsPageSkeleton from "./loading";
 
 async function OfferCreationContent({
   params,
@@ -83,7 +84,7 @@ export default function OfferCreationPage({
   params: Promise<{ leadId: string }>;
 }) {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<OfferDetailsPageSkeleton />}>
       <OfferCreationContent params={params} />
     </Suspense>
   );

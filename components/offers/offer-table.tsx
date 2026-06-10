@@ -44,6 +44,7 @@ export function OfferTable({
   return (
     <CardContent className="px-5 py-4">
       <DataTable
+        key={offers.items.map((offer) => offer.id).join("-")} // Force remount when offers change
         headers={[
           "Offer #",
           "Client",
@@ -70,7 +71,7 @@ export function OfferTable({
         ])}
         onRowClick={(rowIndex) => {
           const offer = offers.items[rowIndex];
-          router.push(`/offers/${offer.id}`);
+          router.push(`/offers/${offer.leadId}`);
         }}
         emptyState={
           loading ? (

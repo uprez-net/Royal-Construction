@@ -109,12 +109,16 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
             }
         });
 
+        if(!lead) {
+            throw new Error("Lead not found");
+        }
+
         return {
             chatSession,
             files: leadFiles,
             leadInfo: {
-                ...lead!,
-                type: lead!.type.length > 0 ? lead!.type.join(", ") : "Not Specified"
+                ...lead,
+                type: lead.type.length > 0 ? lead!.type.join(", ") : "Not Specified"
             }
         };
     } catch (error) {

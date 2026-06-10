@@ -83,7 +83,7 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
 
 export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFiles | null> {
     try {
-        const offer = await prisma.offer.findUnique({
+        const offerData = await prisma.offer.findUnique({
             where: { leadId: id },
             include: {
                 lead: true,
@@ -93,15 +93,16 @@ export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFil
         });
 
 
-        if (!offer) {
+        if (!offerData) {
             console.warn(`No offer found for lead ID: ${id}`);
             return null;
         }
 
-        const currentVersion = offer?.offerItems.reduce((max, item) => Math.max(max, item.version), 0) ?? 0;
+        const { offerItems, offerFiles, ...offer } = offerData;
+        const currentVersion = offerItems.reduce((max, item) => Math.max(max, item.version), 0) ?? 0;
         const offerItemsRecord: Record<number, SafeOfferItem[]> = {};
         const filesRecord: Record<number, SafeOfferDBFile> = {};
-        offer.offerItems.forEach(item => {
+        offerItems.forEach(item => {
             if (!offerItemsRecord[item.version]) {
                 offerItemsRecord[item.version] = [];
             }
@@ -111,7 +112,7 @@ export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFil
                 totalPrice: item.totalPrice.toString(),
             });
         });
-        offer.offerFiles.forEach(file => {
+        offerFiles.forEach(file => {
             filesRecord[file.version] = {
                 ...file,
                 offerContent: file.offerContent as OfferFile,

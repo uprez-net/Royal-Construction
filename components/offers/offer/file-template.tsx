@@ -1071,7 +1071,14 @@ export function OfferFileTemplate({
                   <span>${left}</span>
                 </td>
                 <td style="width:50%">
-                  ${right ? `<span>${right}</span>` : ""}
+                  ${
+                    right
+                      ? `
+                  <span class="promo-item-star">★</span>
+                  <span>${right}</span>
+                  `
+                      : ""
+                  }
                 </td>
               </tr>
             `);
@@ -1099,15 +1106,17 @@ export function OfferFileTemplate({
 
     ${
       facadeOptions && facadeOptions.options && facadeOptions.options.length > 0
-        ? facadeOptions.options.map(
-            (option) => `
+        ? facadeOptions.options
+            .map(
+              (option) => `
             <div class="facade-option">
               <div class="facade-option-title">${option.title}</div>
               <div class="facade-option-desc">${option.description}</div>
               <img class="facade-option-img" src="${option.imageUrl}" alt="${option.title}" />
             </div>
             `,
-          ).join("")
+            )
+            .join("")
         : ""
     }
     <p class="empty>Façade images shown for illustrative purposes — final selections, materials and detailing confirmed at the design stage to suit your block at ${siteLocation}.</p>

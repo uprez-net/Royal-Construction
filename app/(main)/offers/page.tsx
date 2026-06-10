@@ -7,6 +7,7 @@ import { getOfferKPIsCached, getOffersCached } from "@/lib/data/offers";
 import { Loader2 } from "lucide-react";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import OfferPageSkeleton from "./loading";
 
 async function QfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.
@@ -56,7 +57,7 @@ async function QfferPageClient() {
 
 export default function OfferPage() {
   return (
-    <Suspense fallback={<Loader2 className="animate-spin size-5 text-blue-100" />}>
+    <Suspense fallback={<OfferPageSkeleton />}>
       <QfferPageClient />;
     </Suspense>
   );

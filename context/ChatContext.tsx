@@ -14,7 +14,10 @@ import {
 import { SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
 import { max, min } from "date-fns";
 import { dateFormat } from "@/utils/formatters";
-import type { FacadeOptionWithImageUrl, TermsAndConditionsItem } from "@/lib/agent/offer-prompts";
+import type {
+  FacadeOptionWithImageUrl,
+  TermsAndConditionsItem,
+} from "@/lib/agent/offer-prompts";
 
 interface ChatContextValue {
   lineItems: LineItem[];
@@ -98,6 +101,44 @@ const getProposalDate = (fileVersions: Record<number, SafeOfferDBFile>) => {
   return dates.length ? dateFormat.format(min(dates)) : undefined;
 };
 
+const getInitialOfferFile = (
+  version: number,
+  fileVersions: Record<number, SafeOfferDBFile>,
+  msg: ChatMessageAI[],
+  initial: OfferFile,
+) => {
+  if (msg.length > 1) {
+    return initial;
+  } else {
+    return fileVersions[version].offerContent;
+  }
+};
+
+const getInitialLineItems = (
+  version: number,
+  lineItemVersions: Record<number, SafeOfferItem[]>,
+  msg: ChatMessageAI[],
+  initial: LineItem[],
+) => {
+  if (msg.length > 1) {
+    return initial;
+  } else {
+    return lineItemVersions[version].map((item) => ({
+      id: item.id,
+      description: item.description,
+      item: item.item,
+      unitPrice: parseFloat(item.unitPrice),
+      quantity: item.quantity,
+      unit: item.unit,
+      totalPrice: parseFloat(item.totalPrice),
+      gstRate: 0.1, // Assuming a default GST rate of 10%
+      gstIncluded: true, // Assuming GST is included in the prices
+      netLine: parseFloat(item.totalPrice) - parseFloat(item.totalPrice) * 0.1, // Calculate net line by removing GST from total price
+      gstAmount: parseFloat(item.totalPrice) * 0.1, // Calculate GST amount based on total price and GST rate
+    }));
+  }
+};
+
 export const ChatProvider = ({
   chatId,
   initialVersionLength = 0,
@@ -123,15 +164,31 @@ export const ChatProvider = ({
   const [lastRevisionDate, setLastRevisionDate] = useState<string | undefined>(
     getRevisionDate(initialOfferFileRecord),
   );
-  const [version, setVersion] = useState<number | "current">("current");
+  const [version, setVersion] = useState<number | "current">(
+    initialMessages.length > 1 ? "current" : initialVersionLength,
+  );
   const [versionLength, setVersionLength] = useState(initialVersionLength);
   const [lineItemRecord, setLineItemRecord] =
     useState<Record<number, SafeOfferItem[]>>(initialItemRecord);
   const [offerFileRecord, setOfferFileRecord] = useState<
     Record<number, SafeOfferDBFile>
   >(initialOfferFileRecord);
-  const [lineItems, setLineItems] = useState<LineItem[]>(initialLineItems);
-  const [offerFile, setOfferFile] = useState<OfferFile>(initialOfferFile);
+  const [lineItems, setLineItems] = useState<LineItem[]>(
+    getInitialLineItems(
+      initialVersionLength,
+      initialItemRecord,
+      initialMessages,
+      initialLineItems,
+    ),
+  );
+  const [offerFile, setOfferFile] = useState<OfferFile>(
+    getInitialOfferFile(
+      initialVersionLength,
+      initialOfferFileRecord,
+      initialMessages,
+      initialOfferFile,
+    ),
+  );
   const proposalDate = useMemo(
     () => getProposalDate(initialOfferFileRecord),
     [initialOfferFileRecord],

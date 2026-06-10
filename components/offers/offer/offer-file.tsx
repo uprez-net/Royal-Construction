@@ -232,7 +232,6 @@ export function OfferFileCanvas({
         <div className="min-h-0 w-[50vw] flex-1 overflow-auto bg-[#FAF8F3] px-4 py-4 lg:px-5">
           <DataTable
             headers={[
-              "id",
               "item",
               "description",
               "quantity",
@@ -240,10 +239,8 @@ export function OfferFileCanvas({
               "unit",
               "gst",
               "total",
-              "source",
             ]}
             rows={lineItems.map((item) => [
-              item.id,
               item.item,
               item.description,
               item.quantity,
@@ -251,7 +248,6 @@ export function OfferFileCanvas({
               item.unit,
               currency.format(item.gstAmount),
               currency.format(item.totalPrice),
-              item.source ?? "-",
             ])}
             emptyState={
               <div className="flex flex-col items-center justify-center gap-3">
