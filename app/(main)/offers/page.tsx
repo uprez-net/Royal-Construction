@@ -4,7 +4,6 @@ import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
 import { Card } from "@/components/ui/card";
 import { getOfferKPIsCached, getOffersCached } from "@/lib/data/offers";
-import { Loader2 } from "lucide-react";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import OfferPageSkeleton from "./loading";
