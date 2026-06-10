@@ -5,22 +5,35 @@ import { useEffect, useState } from "react";
 import type { Lead as UiLead } from "@/lib/leads/types";
 import { PaginatedLeadsResult } from "@/lib/data/leads";
 
+const DEFAULT_LIMIT = 10;
 
-export function useLeadSearch(initialQuery = "") {
+export function useLeadSearch(initialQuery = "", initialPage = 1) {
     const [query, setQuery] = useState(initialQuery);
     const [items, setItems] = useState<UiLead[]>([]);
     const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [pageInfo, setPageInfo] = useState<Omit<PaginatedLeadsResult, 'items'>>({
+        page: initialPage,
+        limit: DEFAULT_LIMIT,
+        totalCount: 0,
+        totalPages: 0,
+    })
+
+    const setPage = (newPage: number) => {
+        setPageInfo((prev) => ({ ...prev, page: newPage }));
+    }
 
     useEffect(() => {
         const controller = new AbortController();
         const timer = setTimeout(async () => {
-            setLoading(true);
+            if(items.length === 0 || query.length > 0) setLoading(true);
+            else setLoadingMore(true);
             setError(null);
             const params = new URLSearchParams();
             if (query.trim().length > 0) params.append('q', query.trim());
-            params.append('page', '1');
-            params.append('limit', '10');
+            params.append('page', pageInfo.page.toString());
+            params.append('limit', DEFAULT_LIMIT.toString());
             try {
                 const { data } = await fetchJson<PaginatedLeadsResult>(
                     `/api/leads?${params.toString()}`,
@@ -28,7 +41,17 @@ export function useLeadSearch(initialQuery = "") {
                     "Failed to fetch leads",
                     controller.signal
                 );
-                setItems(data.items);
+                setItems(prev =>{
+                    if(pageInfo.page === 1) return data.items;
+                    const oldData = new Set(prev.map(i => i.id));
+                    return [...prev, ...data.items.filter(i => !oldData.has(i.id))];
+                });
+                setPageInfo({
+                    page: data.page,
+                    limit: data.limit,
+                    totalCount: data.totalCount,
+                    totalPages: data.totalPages,
+                });
             } catch (err) {
                 if (err instanceof Error) {
                     setError(err.message);
@@ -37,6 +60,7 @@ export function useLeadSearch(initialQuery = "") {
                 }
             } finally {
                 setLoading(false);
+                setLoadingMore(false);
             }
         }, 300);
 
@@ -44,7 +68,7 @@ export function useLeadSearch(initialQuery = "") {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [query]);
+    }, [query, pageInfo.page]);
 
-    return { query, setQuery, items, loading, error } as const;
+    return { query, setQuery, items, loading, error, pageInfo, setPage, loadingMore } as const;
 }
