@@ -160,7 +160,7 @@ export function LeadCardList({
 
         {currentPage >= totalPages && totalPages > 0 && (
           <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
-            You've reached the end of the list.
+            You&apos;ve reached the end of the list.
           </p>
         )}
     </div>

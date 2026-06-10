@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
-import { Hourglass, List, Loader2, Plus, Send } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -31,10 +31,6 @@ import {
 import { upload } from "@vercel/blob/client";
 import { buildBlobPath } from "@/utils/formatters";
 import { ClientPayload } from "@/utils/validators/files";
-// import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "../ui/skeleton";
 import { createOffer } from "@/lib/data/offers";
 import { addOffer } from "@/lib/store/slices/offerSlice";
 import { LeadCardList } from "./lead-card-list";
