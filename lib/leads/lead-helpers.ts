@@ -5,8 +5,11 @@ import {
   LeadStage,
   ProjectType,
   EmailTemplate,
+  LeadNoteAnnotationInput,
+  LeadRichTextDocument,
 } from "@/lib/leads/types";
 import { FollowupCalendarCreation } from "@/lib/leads/leads-service";
+import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
 
 /* ── Constants ────────────────────────────────────────── */
 
@@ -97,11 +100,12 @@ export interface LeadDetailFormData {
   budget: string;
   type: ProjectType[];
   notes: string;
+  notesDoc: LeadRichTextDocument;
+  annotationsToCreate: LeadNoteAnnotationInput[];
   followupDate: string;
   followupTime: string;
   urgent: boolean;
   lostReason: string;
-  historyEntries: HistoryItem[];
 }
 
 /* ── Formatting ───────────────────────────────────────── */
@@ -229,11 +233,12 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
     budget: lead.budget || "",
     type: normalizeTypes(lead.type),
     notes: lead.notes || "",
+    notesDoc: coerceLeadNotesDocument(lead.notesDoc, lead.notes || ""),
+    annotationsToCreate: [],
     followupDate: lead.followupDate || "",
     followupTime: lead.followupTime || "",
     urgent: Boolean(lead.urgent),
     lostReason: lead.lostReason || "",
-    historyEntries: lead.history || [],
   };
 }
 

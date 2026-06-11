@@ -32,6 +32,75 @@ import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
+function escapeEmailHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+async function sendLeadMentionEmails(input: {
+  leadId: number;
+  leadName: string;
+  selectedText: string;
+  comment: string;
+  mentionedUserIds: string[];
+}) {
+  if (input.mentionedUserIds.length === 0) return;
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: input.mentionedUserIds } },
+    select: { email: true, name: true },
+  });
+
+  if (users.length === 0) return;
+
+  const config = getGraphConfig();
+  const graphClient = await createGraphContext(config);
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://royal-construction-chi.vercel.app";
+  const crmUrl = `${baseUrl}/leads`;
+  const leadName = escapeEmailHtml(input.leadName);
+  const selectedText = escapeEmailHtml(input.selectedText);
+  const comment = escapeEmailHtml(input.comment);
+
+  const recipients = users.filter((user) => user.email);
+  if (recipients.length === 0) {
+    console.warn(`[Lead ${input.leadId}] No email addresses found for mentioned users.`);
+    return;
+  }
+
+  const results = await Promise.allSettled(
+    recipients.map((user) =>
+      graphClient.sendMail({
+        to: user.email,
+        subject: `[Lead Note] ${input.leadName} needs your attention`,
+        body: `
+            <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.5;">
+              <p>Hi ${escapeEmailHtml(user.name || "Team")},</p>
+              <p>You were mentioned in a Royal Constructions lead note.</p>
+              <p><strong>Lead:</strong> ${leadName}</p>
+              <p><strong>Note:</strong></p>
+              <blockquote style="border-left: 3px solid #c6923a; margin: 0 0 12px; padding: 8px 12px; background: #fbfaf7;">${selectedText}</blockquote>
+              <p><strong>Reason:</strong></p>
+              <p>${comment}</p>
+              <p><a href="${crmUrl}" style="color: #0d9488;">Open Lead Pipeline</a></p>
+            </div>
+          `,
+      }),
+    ),
+  );
+
+  const failed = results
+    .map((result, index) => ({ result, user: recipients[index] }))
+    .filter(({ result }) => result.status === "rejected");
+
+  if (failed.length > 0) {
+    console.error(`[Lead ${input.leadId}] Failed to email ${failed.length} mentioned user(s).`, failed);
+  }
+}
+
 function normalizeSearch(search?: string) {
   return search?.trim() ?? "";
 }
@@ -51,6 +120,7 @@ export async function getAllLeads(): Promise<UiLead[]> {
         history: { orderBy: { actionDate: "asc" } },
         chatSessions: true,
         assignedUser: { select: { id: true, name: true, email: true } },
+        noteAnnotations: { orderBy: { createdAt: "desc" } },
       },
     });
     return leads.map((lead) => mapLead(lead));
@@ -147,6 +217,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
         history: { orderBy: { actionDate: "asc" } },
         chatSessions: true,
         assignedUser: { select: { id: true, name: true, email: true } },
+        noteAnnotations: { orderBy: { createdAt: "desc" } },
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -195,7 +266,8 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
         orderBy: { actionDate: "asc" }
       },
       chatSessions: true,
-      assignedUser: { select: { id: true, name: true, email: true } }
+      assignedUser: { select: { id: true, name: true, email: true } },
+      noteAnnotations: { orderBy: { createdAt: "desc" } },
     }
   });
   if (!lead) return null;
@@ -208,7 +280,8 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
     include: {
       history: { orderBy: { actionDate: "asc" } },
       chatSessions: true,
-      assignedUser: { select: { id: true, name: true, email: true } }
+      assignedUser: { select: { id: true, name: true, email: true } },
+      noteAnnotations: { orderBy: { createdAt: "desc" } },
     }
   });
   if (!lead) return null;
@@ -373,7 +446,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       urgent: input.urgent ?? false,
       history: { create: historyCreate },
     },
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } } },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } }, noteAnnotations: { orderBy: { createdAt: "desc" } } },
   });
   const res = mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 
@@ -457,16 +530,38 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.budget !== undefined) updateData.budget = input.budget;
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
+  if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
   if (input.followupDate !== undefined) updateData.followupDate = input.followupDate;
   if (input.followupTime !== undefined) updateData.followupTime = input.followupTime;
   if (input.followupNotes !== undefined) updateData.followupNotes = input.followupNotes;
   if (input.lostReason !== undefined) updateData.lostReason = input.lostReason;
   if (input.urgent !== undefined) updateData.urgent = Boolean(input.urgent);
 
-  if (input.history) {
+  const annotationInputs = input.annotationsToCreate ?? [];
+  if (annotationInputs.length > 0) {
+    updateData.noteAnnotations = {
+      create: annotationInputs.map((annotation) => ({
+        selectedText: annotation.selectedText,
+        comment: annotation.comment,
+        mentionedUserIds: annotation.mentionedUserIds,
+      })),
+    };
+  }
+
+  if ((input.history?.length ?? 0) > 0 || annotationInputs.length > 0) {
+    const annotationHistory = annotationInputs.map((annotation) => {
+      const now = new Date();
+      return {
+        action: "Lead note mention added",
+        detail: annotation.comment || `Selected text: ${annotation.selectedText}`,
+        type: "system" as const,
+        date: now.toISOString().slice(0, 10),
+        time: now.toTimeString().slice(0, 5),
+      };
+    });
+
     updateData.history = {
-      deleteMany: {},
-      create: input.history.map((h) => ({
+      create: [...(input.history ?? []), ...annotationHistory].map((h) => ({
         action: h.action,
         detail: h.detail || "",
         type: h.type ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL") : "SYSTEM",
@@ -480,8 +575,22 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } } },
+    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } }, noteAnnotations: { orderBy: { createdAt: "desc" } } },
   });
+
+  for (const annotation of annotationInputs) {
+    try {
+      await sendLeadMentionEmails({
+        leadId: id,
+        leadName: updated.name,
+        selectedText: annotation.selectedText,
+        comment: annotation.comment,
+        mentionedUserIds: annotation.mentionedUserIds,
+      });
+    } catch (error) {
+      console.error(`[Lead ${id}] Failed to send annotation email`, error);
+    }
+  }
 
   const res = mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
   if (input.assignedId === existingLead?.assignedId) {
@@ -517,26 +626,39 @@ export async function deleteLead(id: number) {
 }
 
 export async function getLeadsStats(): Promise<LeadsStats> {
-  const [totalLeads, newLeads, contactedLeads, qualifiedLeads, quotedLeads, wonLeads, lostLeads, pendingFollowupLeads] = await Promise.all([
-    prisma.lead.count(),
-    prisma.lead.count({ where: { stage: "NEW" } }),
-    prisma.lead.count({ where: { stage: "CONTACTED" } }),
-    prisma.lead.count({ where: { stage: "QUALIFIED" } }),
-    prisma.lead.count({ where: { stage: "QUOTED" } }),
-    prisma.lead.count({ where: { stage: { in: ["WON", "CONVERTED"] } } }),
-    prisma.lead.count({ where: { stage: { in: ["LOST", "CANCELLED", "DISQUALIFIED"] } } }),
-    prisma.lead.count({ where: { stage: { in: ["IN_FOLLOW_UP"] } } }),
-  ]);
+  const [stats] = await prisma.$queryRaw<
+    {
+      total: bigint;
+      new: bigint;
+      contacted: bigint;
+      qualified: bigint;
+      quoted: bigint;
+      won: bigint;
+      lost: bigint;
+      pendingFollowup: bigint;
+    }[]
+  >`
+    SELECT
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE stage = 'NEW') AS new,
+      COUNT(*) FILTER (WHERE stage = 'CONTACTED') AS contacted,
+      COUNT(*) FILTER (WHERE stage = 'QUALIFIED') AS qualified,
+      COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
+      COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
+      COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
+      COUNT(*) FILTER (WHERE stage = 'IN_FOLLOW_UP') AS "pendingFollowup"
+    FROM "Lead"
+  `;
 
   return {
-    total: totalLeads,
-    new: newLeads,
-    contacted: contactedLeads,
-    qualified: qualifiedLeads,
-    quoted: quotedLeads,
-    conversion: wonLeads,
-    pendingFollowup: pendingFollowupLeads,
-    lost: lostLeads,
+    total: Number(stats?.total ?? 0),
+    new: Number(stats?.new ?? 0),
+    contacted: Number(stats?.contacted ?? 0),
+    qualified: Number(stats?.qualified ?? 0),
+    quoted: Number(stats?.quoted ?? 0),
+    conversion: Number(stats?.won ?? 0),
+    pendingFollowup: Number(stats?.pendingFollowup ?? 0),
+    lost: Number(stats?.lost ?? 0),
   };
 }
 

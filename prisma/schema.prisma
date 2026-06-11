@@ -72,6 +72,11 @@ enum HistoryType {
   REFERRAL
 }
 
+enum AnnotationStatus {
+  OPEN
+  RESOLVED
+}
+
 enum OfferStatus {
   SENT
   PENDING
@@ -355,6 +360,7 @@ model Lead {
   type   String[]
 
   notes String? @db.Text
+  notesDoc Json?
 
   followupDate  DateTime?
   followupTime  String?
@@ -372,12 +378,31 @@ model Lead {
   offers       Offer[]
   chatSessions ChatSession[]
   history      LeadHistory[]
+  noteAnnotations LeadNoteAnnotation[]
   files        File[]        @relation("LeadFiles")
   assignedUser User?         @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
 
   @@index([stage])
   @@index([assignedId])
   @@index([createdAt])
+}
+
+model LeadNoteAnnotation {
+  id String @id @default(uuid())
+
+  leadId Int
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  selectedText String @db.Text
+  comment      String @db.Text
+  mentionedUserIds String[]
+  status AnnotationStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+
+  @@index([leadId])
+  @@index([status])
 }
 
 model LeadHistory {
