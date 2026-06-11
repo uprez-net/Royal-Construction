@@ -1,0 +1,279 @@
+"use server";
+
+import { gateway, generateText } from 'ai';
+import { ToolLoopAgent, tool } from 'ai';
+import z from 'zod';
+
+// ─── Static Header & Footer ────────────────────────────────────────────────
+
+const EMAIL_HEADER_HTML = `
+<!-- Header -->
+<table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#ffffff;margin:0;padding:0;">
+  <tbody>
+    <tr>
+      <td align="center" style="padding:24px 24px 20px;text-align:center;">
+        <a href="https://royalconstructions.com.au" target="_blank" style="text-decoration:none;">
+          <img src="https://royalconstructions.com.au/wp-content/uploads/2026/03/logo-1024x713.png" alt="Royal Constructions" width="152" height="106" style="
+              display:block;
+              margin:0 auto;
+              width:152px;
+              height:106px;
+              max-width:152px;
+              outline:none;
+              border:none;
+              text-decoration:none;
+            ">
+        </a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Gold Bar -->
+<table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:0;padding:0;line-height:0;">
+  <tbody>
+    <tr>
+      <td style="
+          background-color:#c6923a;
+          height:3px;
+          font-size:0;
+          line-height:0;
+        ">
+        &nbsp;
+      </td>
+    </tr>
+  </tbody>
+</table>
+`;
+
+const EMAIL_FOOTER_HTML = `
+<!-- Footer -->
+<table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="
+    background-color:#f7f6f2;
+    border-top:3px solid #c6923a;
+    margin:0;
+    padding:0;
+    font-family: 'Inter',Arial,sans-serif;
+  ">
+  <tbody>
+    <tr>
+      <td style="padding:40px 24px;">
+        <table width="100%" role="presentation">
+          <tbody><tr>
+            <td width="55%" valign="top" style="padding-right:24px;">
+              <a href="https://royalconstructions.com.au" target="_blank" style="text-decoration:none;">
+                <img src="https://royalconstructions.com.au/wp-content/uploads/2026/03/logo-1024x713.png" alt="Royal Constructions" width="110" style="display:block;width:110px;margin-bottom:20px;border:none;outline:none;">
+              </a>
+              <p style="font-size:13px;line-height:1.65;color:#64748b;margin:0 0 20px;max-width:300px;">
+                Royal Constructions — Building exceptional homes across NSW with quality craftsmanship and attention to detail.
+              </p>
+              <p style="font-size:14px;line-height:1.5;margin:0 0 24px;">
+                <a href="https://facebook.com" target="_blank" style="color:#c6923a;text-decoration:none;font-weight:500;">Facebook</a>
+                <span style="color:#64748b;margin:0 10px;">·</span>
+                <a href="https://instagram.com" target="_blank" style="color:#c6923a;text-decoration:none;font-weight:500;">Instagram</a>
+              </p>
+              <p style="font-size:12px;line-height:1.6;color:#64748b;margin:0 0 16px;">
+                <strong style="color:#0f172a;">Office</strong><br>
+                38/62 Turner RD<br>
+                Smeaton Grange, NSW 2567
+              </p>
+              <p style="font-size:12px;line-height:1.6;color:#64748b;margin:0 0 20px;">
+                <strong style="color:#0f172a;">Contact</strong><br>
+                <a href="tel:+61412345678" style="color:#64748b;text-decoration:none;">0412 345 678</a><br>
+                <a href="mailto:info@royalconstructions.com.au" style="color:#64748b;text-decoration:none;">info@royalconstructions.com.au</a>
+              </p>
+              <p style="font-size:11px;line-height:1.6;color:#64748b;margin:0;">
+                <a href="https://royalconstructions.com.au/privacy" style="color:#c6923a;text-decoration:underline;">Privacy Policy</a> · 
+                <a href="#" style="color:#c6923a;text-decoration:underline;">Unsubscribe</a> from Royal Constructions marketing emails.
+              </p>
+            </td>
+            <td width="45%" valign="top">
+              <table width="100%" role="presentation" style="background:#ffffff;border:1px solid #E2E8F0;border-radius:6px;">
+                <tbody><tr>
+                  <td style="padding:20px;">
+                    <p style="margin:0 0 16px;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#64748b;">Accredited By</p>
+                    <a href="https://royalconstructions.com.au" target="_blank">
+                      <img src="https://royalconstructions.com.au/wp-content/uploads/2026/03/image-78.png" alt="Master Builders Association" width="100" style="display:block;margin-bottom:16px;border:none;">
+                    </a>
+                    <a href="https://royalconstructions.com.au" target="_blank">
+                      <img src="https://royalconstructions.com.au/wp-content/uploads/2026/03/Horizontal-secondary-lockup-1.png" alt="Oran Park" width="120" style="display:block;border:none;">
+                    </a>
+                  </td>
+                </tr></tbody>
+              </table>
+            </td>
+          </tr></tbody>
+        </table>
+      </td>
+    </tr>
+  </tbody>
+</table>
+`;
+
+const SYSTEM_INSTRUCTION = `
+You are an expert HTML email developer for 'Royal Constructions'. 
+Your task is to generate the INNER BODY HTML of an email based on a user's description, links, and attachments.
+
+STRICT RULES:
+1. Output ONLY valid HTML. Do NOT include <html>, <head>, <body>, or the header/footer. Just the inner content.
+2. Do NOT use markdown code blocks (e.g., \`\`\`html). Return raw HTML only.
+3. ALL styling MUST be inline CSS.
+4. Text links MUST end with \`&nbsp;→\` (e.g., <a href="..." style="...">View Projects&nbsp;→</a>).
+5. DO NOT use <ul>, <ol>, or <li> tags. They break padding in email clients. For lists, use <p> tags with bullet entities like: <p style="margin:0 0 0.75rem;font-size:14px;color:#475569"><span style="color:#c6923a;padding-right:8px;">&bull;</span>List item text</p>.
+6. DO NOT invent sections like "Next Steps", "Get Started", or "What Happens Next" unless the user explicitly asks for them in the description. Only output exactly what is requested.
+7. The main container background is #ffffff. Your sections should default to #ffffff.
+8. Strict Variable mention as mention in the descriptions As Mention [{name},{email},{phone},{projectType},{location}] Donot change the Variable Name. Also Donot Mention variable in any heading tag or Capitalize them.
+
+OUTPUT FORMAT:
+You MUST format your response EXACTLY like this. Do not add any other text:
+---SUBJECT---
+[The email subject line here]
+---NAME---
+[A short descriptive name for the template, e.g., 'Welcome Follow-up']
+---HTML---
+[Your HTML code here]
+
+MANDATORY LAYOUT STRUCTURE:
+You MUST wrap your content in a specific table structure to ensure it respects padding and centering.
+
+Use this exact wrapper for EVERY section you generate:
+<table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="background-color:[SECTION_COLOR];padding:[SECTION_PADDING]">
+  <tbody>
+    <tr>
+      <td style="padding:0 1.5rem;">
+        <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation">
+          <tbody style="width:100%">
+            <tr style="width:100%">
+              <td>
+                [CONTENT GOES HERE]
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+BRAND THEME & UI COMPONENTS:
+- Primary Outer Background (handled by wrapper): #f7f6f2
+- Inner Content Background: #ffffff
+- Primary Gold: #c6923a
+- Dark Text (Headings): #0c1829
+- Muted Text (Body): #475569
+- Border Color: #e2e8f0
+- Heading Font: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif; (uppercase, font-weight 500)
+- Body Font: "Inter", Arial, sans-serif; (font-weight 350, line-height 1.65)
+
+1. **Hero Section**: background-color:#ffffff; padding:2.5rem 0 2rem. Must contain a 48px uppercase heading and a 14px muted body paragraph.
+2. **Gold CTA Button**: 
+   <table border="0" cellpadding="0" cellspacing="0" role="presentation"><tbody><tr>
+   <td style="background-color:#c6923a;border-radius:6px;text-align:center">
+   <a href="URL" style="color:#0c1829;text-decoration-line:none;display:inline-block;padding:16px 48px;font-family:'IBM Plex Sans Condensed','Arial Narrow',Arial,sans-serif;font-weight:500;font-size:15px;line-height:1;letter-spacing:1px;text-transform:uppercase">LABEL</a>
+   </td></tr></tbody></table>
+3. **Action Card**: 
+   background-color:#ffffff; border:2px solid #c6923a; border-radius:6px; padding:1.5rem. Contains a 13px uppercase gold label, a 26px uppercase heading, body text, and a CTA button.
+4. **Notice / Quote Block**: 
+   background-color:#ffffff; border-left:3px solid #c6923a; padding:1rem 1.25rem; border-radius:0 6px 6px 0;
+
+Sign off the email professionally with "Warm regards," in #0c1829, followed by "Gurpinder Uppal" in #c6923a, and "Royal Constructions Pty Ltd" in #475569, separated by a top border. Also for this section do not do any Uppercase Styling.
+`;
+
+// ─── Types & Schemas ───────────────────────────────────────────────────────
+
+export interface GeneratedEmailResult {
+  html: string;
+  subject: string;
+  name: string;
+}
+
+// ─── Main Server Action ────────────────────────────────────────────────────
+
+export async function generateEmailTemplate(
+  description: string,
+  attachments: { label: string; url: string }[],
+  links: { label: string; url: string }[]
+): Promise<GeneratedEmailResult> {
+  const model = gateway('google/gemini-2.5-flash');
+
+  const linksContext = links.length > 0
+    ? `LINKS TO INCLUDE (Render these as Gold CTA Buttons inside an Action Card):\n${links.map(l => `- Label: "${l.label}", URL: ${l.url}`).join('\n')}`
+    : '';
+
+  const attachmentsContext = attachments.length > 0
+    ? `ATTACHMENTS TO INCLUDE (Render these as secondary text links with &nbsp;→):\n${attachments.map(a => `- File Name: "${a.label}", URL: ${a.url}`).join('\n')}`
+    : '';
+
+  const userPrompt = `
+Please write the HTML email body based on this description:
+
+DESCRIPTION:
+ ${description}
+
+ ${linksContext}
+
+ ${attachmentsContext}
+
+Remember, follow the brand theme strictly, do not add unrequested sections, and format your response exactly as requested.
+  `.trim();
+
+  try {
+    // Use generateText instead of ToolLoopAgent to save tokens and avoid rate limits
+    const { text } = await generateText({
+      model,
+      system: SYSTEM_INSTRUCTION,
+      prompt: userPrompt,
+    });
+
+    // Parse the structured response
+    let subjectContent = 'Royal Constructions Update';
+    let nameContent = 'Custom AI Email';
+    let htmlContent = text;
+
+    // Extract Subject
+    const subjectMatch = text.match(/---SUBJECT---\s*([\s\S]*?)\s*---NAME---/);
+    if (subjectMatch) subjectContent = subjectMatch[1].trim();
+
+    // Extract Name
+    const nameMatch = text.match(/---NAME---\s*([\s\S]*?)\s*---HTML---/);
+    if (nameMatch) nameContent = nameMatch[1].trim();
+
+    // Extract HTML
+    const htmlMatch = text.match(/---HTML---\s*([\s\S]*)/);
+    if (htmlMatch) htmlContent = htmlMatch[1].trim();
+
+    // Clean up potential markdown block wrappers if the AI added them
+    let cleanBody = htmlContent.trim();
+    if (cleanBody.startsWith('```html')) cleanBody = cleanBody.slice(7);
+    else if (cleanBody.startsWith('```')) cleanBody = cleanBody.slice(3);
+    if (cleanBody.endsWith('```')) cleanBody = cleanBody.slice(0, -3);
+    cleanBody = cleanBody.trim();
+
+    // Assemble the final email
+    const finalHtml = `
+<div style="background-color:#f7f6f2;margin:0;padding:0">
+  <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="max-width:640px;margin-right:auto;margin-left:auto;background-color:#ffffff">
+    <tbody>
+      <tr style="width:100%">
+        <td style="margin:0;padding:0">
+          ${EMAIL_HEADER_HTML}
+          ${cleanBody}
+          ${EMAIL_FOOTER_HTML}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+    `.trim();
+
+    return {
+      html: finalHtml,
+      subject: subjectContent,
+      name: nameContent
+    };
+
+  } catch (error) {
+    console.error("Failed to generate email template:", error);
+    throw new Error("AI failed to generate the email template.");
+  }
+}
