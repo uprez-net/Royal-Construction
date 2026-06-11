@@ -1,15 +1,18 @@
-"use client";
 import { DashboardHeader } from "./dashboard-header";
 import { DashboardKPI } from "./dashboard-kpi";
 import { DashboardProjectTable } from "./dashboard-project-table";
 import { DashboardFollowUps } from "./dashboard-follow-ups";
 import { DashboardSiteManagerTable } from "./dashboard-site-manager-table";
 
-export function DashboardHome() {
+interface DashboardHomeProps {
+  userFirstName: string;
+}
+
+export function DashboardHome({ userFirstName }: DashboardHomeProps) {
   return (
     <div className="grid gap-6 space-y-6">
       <DashboardHeader
-        name="Guri"
+        name={userFirstName}
         newLeadsCount={0}
         newProjectsCount={0}
         followUpsCount={0}
