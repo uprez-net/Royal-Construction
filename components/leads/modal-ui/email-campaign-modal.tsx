@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Mail } from "lucide-react";
+import React, { useMemo, useState, useEffect } from "react";
+import { AlertTriangle, ChevronDown, Mail, Users } from "lucide-react";
 import { ModalShell } from "@/components/common/modal-shell";
 import { Lead, EmailTemplate } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
@@ -24,6 +24,8 @@ interface EmailCampaignModalProps {
 
 type Step = "select" | "compose";
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function EmailCampaignModal({
   leads,
   onClose,
@@ -43,6 +45,17 @@ export function EmailCampaignModal({
   const [emailTargets, setEmailTargets] = useState<string[]>([]);
   const [emailTargetList, setEmailTargetList] = useState("");
   const [loadingTargets, setLoadingTargets] = useState(true);
+  const [showRecipients, setShowRecipients] = useState(false);
+
+  const invalidTargets = useMemo(
+    () => emailTargets.filter((email) => !EMAIL_PATTERN.test(email.trim())),
+    [emailTargets],
+  );
+
+  const recipientPreview = useMemo(
+    () => emailTargets.slice(0, 4).join(", "),
+    [emailTargets],
+  );
 
   /* Fetch all leads for targets on mount */
   useEffect(() => {
@@ -223,14 +236,54 @@ export function EmailCampaignModal({
       maxWidthClass="max-w-[600px]"
     >
       <div className="space-y-4">
-        <div>
-          <label className="text-xs font-medium text-muted-foreground">To</label>
-          <textarea
-            className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
-            rows={3}
-            value={emailTargetList || "No leads with email"}
-            readOnly
-          />
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 gap-3">
+              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-teal-50 text-teal-700">
+                <Users className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">
+                  {emailTargets.length} recipients selected
+                </p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {recipientPreview || "No leads with email"}
+                  {emailTargets.length > 4 ? `, +${emailTargets.length - 4} more` : ""}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRecipients((open) => !open)}
+              className="shrink-0"
+            >
+              <ChevronDown
+                className={`mr-1.5 size-3.5 transition-transform ${showRecipients ? "rotate-180" : ""}`}
+              />
+              Review
+            </Button>
+          </div>
+
+          {invalidTargets.length > 0 && (
+            <div className="mt-3 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                {invalidTargets.length} recipient value may not be a valid email. Review before sending.
+              </span>
+            </div>
+          )}
+
+          {showRecipients && (
+            <textarea
+              className="mt-3 max-h-36 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground"
+              rows={5}
+              value={emailTargetList || "No leads with email"}
+              readOnly
+              aria-label="Campaign recipient email addresses"
+            />
+          )}
         </div>
 
         {selectedTemplate && (
@@ -274,12 +327,16 @@ export function EmailCampaignModal({
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="sticky -bottom-4 -mx-5 mt-2 flex flex-wrap justify-end gap-2 border-t border-border bg-background/95 px-5 py-3 backdrop-blur">
+          <Button variant="outline" onClick={onClose} disabled={sending}>
+            Cancel
+          </Button>
           <Button
             onClick={handleSend}
             disabled={
               !subjectTemplate.trim() ||
               emailTargets.length === 0 ||
+              invalidTargets.length > 0 ||
               sending
             }
           >
@@ -294,9 +351,6 @@ export function EmailCampaignModal({
                 Send Campaign
               </>
             )}
-          </Button>
-          <Button variant="outline" onClick={onClose} disabled={sending}>
-            Cancel
           </Button>
         </div>
       </div>

@@ -297,9 +297,8 @@ export function AppShell({
 
           <main
             className={cn(
-              "mx-auto flex w-full max-w-screen-2xl flex-1 flex-col gap-6",
+              "mx-auto flex h-[calc(100dvh-65px)] w-full max-w-screen-2xl flex-1 flex-col gap-6",
               "overflow-y-auto",
-              "max-h-[90vh]",
               "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",

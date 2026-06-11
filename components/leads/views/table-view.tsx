@@ -123,8 +123,9 @@ export default function TableView({
             <p>No leads match your search.</p>
           </div>
         ) : (
-          <div className="table-wrapper">
-            <table className="leads-table">
+          <>
+            <div className="table-wrapper">
+              <table className="leads-table">
               <thead>
                 <tr>
                   <th className="col-lead">Lead</th>
@@ -231,7 +232,8 @@ export default function TableView({
                             <button
                               type="button"
                               className="action-btn-icon"
-                              title="Call"
+                              title={`Call ${lead.name}`}
+                              aria-label={`Call ${lead.name}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleCall(lead);
@@ -244,7 +246,8 @@ export default function TableView({
                             <button
                               type="button"
                               className="action-btn-icon"
-                              title="Follow-up Email"
+                              title={`Send follow-up email to ${lead.name}`}
+                              aria-label={`Send follow-up email to ${lead.name}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setEmailLead(lead);
@@ -257,7 +260,8 @@ export default function TableView({
                             <button
                               type="button"
                               className="action-btn-icon"
-                              title="Delete Lead"
+                              title={`Delete ${lead.name}`}
+                              aria-label={`Delete ${lead.name}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setLeadToDelete(lead);
@@ -292,8 +296,101 @@ export default function TableView({
                   </tr>
                 </tbody>
               )}
-            </table>
-          </div>
+              </table>
+            </div>
+            <div className="mobile-lead-list">
+              {leads.map((lead) => (
+                <article
+                  key={lead.id}
+                  className={`mobile-lead-card ${lead.urgent ? "urgent" : ""}`}
+                >
+                  <button
+                    type="button"
+                    className="mobile-lead-main"
+                    onClick={() => setDetailLead(lead)}
+                    aria-label={`Open ${lead.name} lead details`}
+                  >
+                    <span className="mobile-lead-name-row">
+                      <span className="mobile-lead-name">
+                        {lead.urgent && (
+                          <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
+                        )}
+                        {lead.name}
+                      </span>
+                      <span className={`stage-badge ${STAGE_STYLES[lead.stage]}`}>
+                        {lead.stage}
+                      </span>
+                    </span>
+                    <span className="mobile-lead-email">
+                      {lead.email || lead.phone || "No contact saved"}
+                    </span>
+                  </button>
+
+                  <dl className="mobile-lead-meta">
+                    <div>
+                      <dt>Follow-up</dt>
+                      <dd>
+                        {!lead.followupDate || !lead.followupTime ? (
+                          <button
+                            type="button"
+                            className="mobile-inline-action"
+                            onClick={() => setFollowupLead(lead)}
+                          >
+                            Set date
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="mobile-link-action"
+                            onClick={() => setFollowupLead(lead)}
+                          >
+                            {formatFollowup(lead.followupDate, lead.followupTime)}
+                          </button>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Assigned</dt>
+                      <dd>
+                        <button
+                          type="button"
+                          className="mobile-link-action"
+                          onClick={() => setAssignedLead(lead)}
+                        >
+                          {lead.assignedUser?.name || "Assign"}
+                        </button>
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mobile-lead-actions">
+                    {!isTerminalStage(lead.stage) && (
+                      <button
+                        type="button"
+                        className="mobile-action-btn"
+                        onClick={() => handleCall(lead)}
+                        aria-label={`Call ${lead.name}`}
+                      >
+                        <Phone size={15} />
+                        Call
+                      </button>
+                    )}
+                    {lead.email && (
+                      <button
+                        type="button"
+                        className="mobile-action-btn"
+                        onClick={() => setEmailLead(lead)}
+                        aria-label={`Send follow-up email to ${lead.name}`}
+                      >
+                        <Mail size={15} />
+                        Email
+                      </button>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
