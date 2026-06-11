@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, ProjectPaymentItem, QuoteRequestItem, WorkerAttendanceItem } from "@/types/ui";
 import { SiteManagerPerformance } from "@/components/dashboard/dashboard-site-manager-table";
-import { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 
 export const navigationItems: NavItem[] = [
   {
