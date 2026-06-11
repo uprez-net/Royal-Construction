@@ -94,8 +94,7 @@ export function EmailFlowModal({
                               type: "email" as const,
                         };
                         const updated = await updateLead(lead.id, {
-                              ...lead,
-                              history: [...lead.history, historyEntry],
+                              history: [historyEntry],
                         });
                         if (updated) onLeadUpdate(updated);
                         showToast(`Email sent to ${lead.name} Successfully`, "success");

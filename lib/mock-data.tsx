@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, ProjectPaymentItem, QuoteRequestItem, WorkerAttendanceItem } from "@/types/ui";
+import { SiteManagerPerformance } from "@/components/dashboard/dashboard-site-manager-table";
 
 export const navigationItems: NavItem[] = [
   {
@@ -461,3 +462,36 @@ export const projectTeamMock = {
     },
   ],
 }
+
+export const siteManagersMock: SiteManagerPerformance[] = [
+  {
+    id: "sm-1",
+    name: "Gurpreet Singh",
+    avatarUrl: undefined,
+    projectsCount: 3,
+    workerHoursPerWeek: 40,
+    milestonesCompleted: 12,
+    milestonesTotal: 15,
+    rating: 4.5,
+  },
+  {
+    id: "sm-2",
+    name: "Anita Desai",
+    avatarUrl: undefined,
+    projectsCount: 5,
+    workerHoursPerWeek: 38,
+    milestonesCompleted: 20,
+    milestonesTotal: 25,
+    rating: 4.2,
+  },
+  {
+    id: "sm-3",
+    name: "Ravi Patel",
+    avatarUrl: undefined,
+    projectsCount: 2,
+    workerHoursPerWeek: 42,
+    milestonesCompleted: 8,
+    milestonesTotal: 10,
+    rating: 4.8,
+  },
+];

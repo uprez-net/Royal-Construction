@@ -34,6 +34,7 @@ import { ClientPayload } from "@/utils/validators/files";
 import { createOffer } from "@/lib/data/offers";
 import { addOffer } from "@/lib/store/slices/offerSlice";
 import { LeadCardList } from "./lead-card-list";
+import { useRouter } from "next/navigation";
 
 interface CreateOfferFileModalProps {
   open: boolean;
@@ -47,7 +48,7 @@ export function CreateOfferFileModal({
   onClose,
 }: CreateOfferFileModalProps) {
   const dispatch = useAppDispatch();
-  // const router = useRouter();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const leadSearch = useLeadSearch("");
   const [search, setSearch] = useState("");
@@ -88,6 +89,12 @@ export function CreateOfferFileModal({
       toast.error("Please select a lead before creating an offer.");
       return;
     }
+    if (continuing) {
+      handleOpenChange(false);
+      toast.info("Redirecting to offer...", { duration: 2000 });
+      router.push(`/offers/${selectedLeadId}`);
+      return;
+    }
     const loading = toast.loading("Creating offer...");
     try {
       if (queuedFiles.length !== 0) {
@@ -115,14 +122,12 @@ export function CreateOfferFileModal({
       handleOpenChange(false);
       dispatch(addOffer(newOffer));
       toast.success("Offer created successfully.", { id: loading });
-      // toast.info("Redirecting to offer creation page...", { id: loading });
-      // router.push(`/offers/${newOffer.id}`);
+      toast.info("Redirecting to offer...");
+      router.push(`/offers/${selectedLeadId}`);
     } catch (error) {
       console.error("Error creating offer:", error);
       toast.error("Failed to create offer. Please try again.", { id: loading });
       return;
-    } finally {
-      toast.dismiss(loading);
     }
   };
 

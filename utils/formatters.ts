@@ -1,3 +1,4 @@
+import type { DataPoint } from "@/components/common/metric-card";
 import type { ProjectStatus, Role, VariationStatus } from "@prisma/client";
 
 export const currency = new Intl.NumberFormat("en-AU", {
@@ -28,6 +29,12 @@ export const dataTimeFormat = new Intl.DateTimeFormat("en-AU", {
   day: "2-digit",
   month: "short",
   year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
+export const timeFormat = new Intl.DateTimeFormat("en-AU", {
   hour: "2-digit",
   minute: "2-digit",
   hour12: true,
@@ -223,3 +230,22 @@ export const base64ToBlob = (base64: string) => {
 
   return new Blob([bytes], { type: "application/pdf" });
 };
+
+export function calculateTrend(
+    current: number,
+    previous: number
+): DataPoint {
+    if (previous === 0) {
+        return {
+            total: current,
+            trendDelta: current > 0 ? 100 : 0,
+        };
+    }
+
+    return {
+        total: current,
+        trendDelta: Number(
+            (((current - previous) / previous) * 100).toFixed(1)
+        ),
+    };
+}

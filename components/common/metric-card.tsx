@@ -1,47 +1,63 @@
-"use client"
+"use client";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { TrendBadge } from "./trend-badge";
+import type { LucideIcon } from "lucide-react";
+import { compactCurrency } from "@/utils/formatters";
 
-import type { ComponentType } from "react"
+export interface DataPoint {
+  total: number;
+  trendDelta: number;
+}
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+export interface KPIListItem {
+  title: string;
+  dataPoint: DataPoint;
+  Icon: LucideIcon;
+  iconTone: string;
+  isCurrency?: boolean;
+}
 
-const toneMap = {
-  primary: "bg-teal-600 text-white",
-  accent: "bg-orange-500 text-white",
-  success: "bg-emerald-500 text-white",
-  warning: "bg-amber-500 text-white",
-  danger: "bg-red-500 text-white",
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  trendDelta?: number;
+  iconTone: string;
+  Icon: LucideIcon;
+  isCurrency?: boolean;
 }
 
 export function MetricCard({
-  label,
+  title,
   value,
-  note,
-  tone = "primary",
-  icon: Icon,
-}: {
-  label: string
-  value: string
-  note: string
-  tone?: keyof typeof toneMap
-  icon?: ComponentType<{ className?: string }>
-}) {
+  trendDelta,
+  iconTone,
+  Icon,
+  isCurrency,
+}: MetricCardProps) {
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardDescription>{label}</CardDescription>
-            <CardTitle className="mt-2 font-heading text-3xl font-semibold tracking-tight">{value}</CardTitle>
+    <Card className="border-border/70 bg-white/95">
+      <CardContent className="p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div
+            className={cn(
+              "grid size-11 place-items-center rounded-xl text-white",
+              iconTone,
+            )}
+          >
+            <Icon className="size-5" />
           </div>
-          {Icon ? (
-            <div className={cn("grid size-11 place-items-center rounded-2xl", toneMap[tone])}>
-              <Icon className="size-5" />
-            </div>
-          ) : null}
+          {(trendDelta !== undefined && trendDelta !== 0) && (
+            <TrendBadge value={trendDelta} />
+          )}
         </div>
-      </CardHeader>
-      <CardContent className="pb-4 text-sm text-muted-foreground">{note}</CardContent>
+        <p className="text-3xl font-bold">
+          {isCurrency
+            ? `${compactCurrency.format(parseFloat(value.toString()))}`
+            : value}
+        </p>
+        <p className="text-xs text-muted-foreground">{title}</p>
+      </CardContent>
     </Card>
-  )
+  );
 }

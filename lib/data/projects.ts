@@ -406,19 +406,51 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
   }
 }
 
+type ProjectKPIResult = {
+  total_active: bigint;
+  on_track: bigint;
+  needs_attention: bigint;
+  delayed: bigint;
+};
+
+
 export async function getProjectKPIs(): Promise<ProjectKPIs> {
   try {
-    const [totalActive, onTrack, needsAttention, delayed] = await Promise.all([
-      prisma.project.count({ where: { status: { not: ProjectStatus.COMPLETED } } }),
-      prisma.project.count({ where: { status: ProjectStatus.ON_TRACK } }),
-      prisma.project.count({ where: { status: ProjectStatus.NEEDS_ATTENTION } }),
-      prisma.project.count({ where: { status: ProjectStatus.DELAYED } }),
-    ]);
+    const [result] = await prisma.$queryRaw<ProjectKPIResult[]>`
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE status != 'COMPLETED'
+                ) AS total_active,
 
-    return { totalActive, onTrack, needsAttention, delayed };
+                COUNT(*) FILTER (
+                    WHERE status = 'ON_TRACK'
+                ) AS on_track,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'NEEDS_ATTENTION'
+                ) AS needs_attention,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'DELAYED'
+                ) AS delayed
+            FROM "Project"
+        `;
+
+    return {
+      totalActive: Number(result.total_active),
+      onTrack: Number(result.on_track),
+      needsAttention: Number(result.needs_attention),
+      delayed: Number(result.delayed),
+    };
   } catch (error) {
     console.error("Error fetching project KPIs:", error);
-    return { totalActive: 0, onTrack: 0, needsAttention: 0, delayed: 0 };
+
+    return {
+      totalActive: 0,
+      onTrack: 0,
+      needsAttention: 0,
+      delayed: 0,
+    };
   }
 }
 

@@ -46,7 +46,8 @@ export function isKnownToolName(name: string): name is KnownToolName {
     name === "fetchLeadInfoTool" ||
     name === "fetchLeadFilesTool" ||
     name === "fileProcessingTool" ||
-    name === "fetchOfferSheetRulesTool"
+    name === "fetchOfferSheetRulesTool" ||
+    name === "webSearch"
   );
 }
 

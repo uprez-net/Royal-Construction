@@ -6,7 +6,6 @@ import {
   leadToFormData,
   LEAD_SOURCE_OPTIONS,
   LEAD_STAGE_OPTIONS,
-  HISTORY_TYPE_OPTIONS,
   BUDGET_OPTIONS,
   createCalendarEventIfValid,
   shouldCreateCalendarEvent,
@@ -14,11 +13,16 @@ import {
   isLostStage,
 } from "@/lib/leads/lead-helpers";
 import { ModalShell } from "@/components/common/modal-shell";
+import { LeadRichTextEditor } from "@/components/rich-text/lead-rich-text-editor";
+import {
+  createLeadNotesDocument,
+  extractMentionedUserIds,
+} from "@/lib/rich-text/lead-notes";
 
 interface DetailModalProps {
   lead: Lead;
   onClose: () => void;
-  onLeadUpdate: (lead: Lead) => void;
+  onLeadUpdate: (lead: Lead, options?: { keepOpen?: boolean }) => void;
   onDeleteClick: (lead: Lead) => void;
   showToast: (msg: string, type?: "success" | "info") => void;
   availableUsers: { id: string; name: string }[];
@@ -36,37 +40,59 @@ export function DetailModal({
     leadToFormData(lead),
   );
   const baseline = useMemo(() => leadToFormData(lead), [lead]);
-  const [historyDraft, setHistoryDraft] = useState({
-    action: "",
-    detail: "",
-    type: "call" as HistoryItem["type"],
-  });
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
   const hasChanges = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(baseline),
     [form, baseline],
   );
+  const noteHasChanges =
+    form.notes !== baseline.notes ||
+    JSON.stringify(form.notesDoc) !== JSON.stringify(baseline.notesDoc);
+  const mentionedUserIds = useMemo(
+    () => extractMentionedUserIds(form.notesDoc),
+    [form.notesDoc],
+  );
+  const baselineMentionedUserIds = useMemo(
+    () => extractMentionedUserIds(baseline.notesDoc),
+    [baseline.notesDoc],
+  );
+  const hasNewMentions = mentionedUserIds.some(
+    (userId) => !baselineMentionedUserIds.includes(userId),
+  );
+  const canSaveNote = noteHasChanges || hasNewMentions;
 
   const patch = (updates: Partial<LeadDetailFormData>) =>
     setForm((prev) => (prev ? { ...prev, ...updates } : prev));
 
-  const addHistoryEntry = () => {
-    if (!historyDraft.action.trim() && !historyDraft.detail.trim()) return;
+  const buildNoteMentionAnnotations = () => {
+    const newMentionedUserIds = mentionedUserIds.filter(
+      (userId) => !baselineMentionedUserIds.includes(userId),
+    );
+    if (newMentionedUserIds.length === 0) return [];
+    const noteText = form.notes.trim();
+
+    return [
+      {
+        selectedText: noteText || "Lead note",
+        comment: "Mentioned in lead note",
+        mentionedUserIds: newMentionedUserIds,
+      },
+    ];
+  };
+
+  const buildSavedNoteHistoryEntry = (): HistoryItem => {
     const now = new Date();
-    patch({
-      historyEntries: [
-        ...form.historyEntries,
-        {
-          action: historyDraft.action,
-          detail: historyDraft.detail,
-          type: historyDraft.type,
-          date: now.toISOString().slice(0, 10),
-          time: now.toTimeString().slice(0, 5),
-        },
-      ],
-    });
-    setHistoryDraft({ action: "", detail: "", type: "call" });
+    const noteText = form.notes.trim();
+
+    return {
+      action: "Lead note saved",
+      detail: noteText || "Lead note updated",
+      type: "system",
+      date: now.toISOString().slice(0, 10),
+      time: now.toTimeString().slice(0, 5),
+    };
   };
 
   const handleUpdate = async () => {
@@ -78,7 +104,7 @@ export function DetailModal({
     setIsUpdating(true);
     try {
       let stage = form.stage;
-      const historyToSend = [...form.historyEntries];
+      const historyToSend: HistoryItem[] = [];
 
       if (shouldCreateCalendarEvent(lead, form)) {
         const success = await createCalendarEventIfValid(form, showToast);
@@ -105,11 +131,16 @@ export function DetailModal({
         budget: form.budget,
         type: typeValue,
         notes: form.notes,
+        notesDoc: form.notesDoc,
+        annotationsToCreate: [
+          ...form.annotationsToCreate,
+          ...buildNoteMentionAnnotations(),
+        ],
         followupDate: form.followupDate,
         followupTime: form.followupTime,
         urgent: form.urgent,
         lostReason: isLostStage(stage) ? form.lostReason : "",
-        history: historyToSend,
+        history: historyToSend.length > 0 ? historyToSend : undefined,
       });
 
       if (!updated) return;
@@ -124,11 +155,43 @@ export function DetailModal({
     }
   };
 
+  const handleSaveNote = async () => {
+    if (!canSaveNote || isSavingNote) return;
+
+    setIsSavingNote(true);
+    try {
+      const emptyNoteDocument = createLeadNotesDocument({ plainText: "" });
+      const annotationsToCreate = buildNoteMentionAnnotations();
+      const updated = await updateLead(lead.id, {
+        notes: "",
+        notesDoc: emptyNoteDocument,
+        annotationsToCreate,
+        history: [buildSavedNoteHistoryEntry()],
+      });
+
+      if (!updated) return;
+      patch({
+        notes: "",
+        notesDoc: emptyNoteDocument,
+        annotationsToCreate: [],
+      });
+      onLeadUpdate(updated, { keepOpen: true });
+      showToast(
+        hasNewMentions
+          ? "Note saved and mentions emailed"
+          : "Note saved",
+      );
+    } catch (error) {
+      console.error("Failed to save note", error);
+      showToast("Failed to save note", "info");
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
   /* ── Common input class ── */
   const inputCls =
     "mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]";
-  const smallInputCls =
-    "mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-1.5 text-xs text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-1 focus:ring-[#0D9488]";
 
   return (
     <ModalShell
@@ -305,11 +368,15 @@ export function DetailModal({
         {/* Notes */}
         <div>
           <label className="text-xs font-medium text-[#78716c]">Notes</label>
-          <textarea
-            className={inputCls}
-            rows={4}
-            value={form.notes}
-            onChange={(e) => patch({ notes: e.target.value })}
+          <LeadRichTextEditor
+            value={form.notesDoc}
+            availableUsers={availableUsers}
+            onChange={(notesDoc) =>
+              patch({ notesDoc, notes: notesDoc.plainText })
+            }
+            onSaveNote={handleSaveNote}
+            canSaveNote={canSaveNote}
+            isSavingNote={isSavingNote}
           />
         </div>
 
@@ -329,12 +396,14 @@ export function DetailModal({
           </label>
         </div>
 
-        {/* History */}
+        {/* Activity */}
         <div>
-          <label className="text-xs font-medium text-[#78716c]">History</label>
+          <label className="text-xs font-medium text-[#78716c]">
+            Activity
+          </label>
           {lead.history.length === 0 ? (
             <div className="mt-2 text-xs text-[#a8a29e]">
-              No history recorded yet.
+              No activity recorded yet.
             </div>
           ) : (
             <div className="history-list mt-2">
@@ -357,110 +426,6 @@ export function DetailModal({
               ))}
             </div>
           )}
-
-          {/* Add new history entry */}
-          <div className="mt-4 rounded-[8px] border border-[#e5e7eb] bg-[#fafaf9] p-3">
-            <h5 className="mb-3 text-xs font-medium text-[#0c0a09]">
-              Add New History Entry
-            </h5>
-
-            {form.historyEntries.length > 0 && (
-              <div className="mb-4 space-y-2">
-                {form.historyEntries.map((entry, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-start justify-between rounded-[6px] border border-[#e5e7eb] bg-white p-2 text-xs"
-                  >
-                    <div>
-                      <div className="font-medium text-[#0c0a09]">
-                        {entry.action}{" "}
-                        <span className="font-normal text-[#a8a29e]">
-                          ({entry.type})
-                        </span>
-                      </div>
-                      {entry.detail && (
-                        <div className="mt-0.5 text-[#78716c]">
-                          {entry.detail}
-                        </div>
-                      )}
-                      <div className="mt-1 text-[10px] text-[#a8a29e]">
-                        {entry.date} {entry.time}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-[#e5e7eb]">
-              <div className="sm:col-span-2">
-                <label className="text-[11px] font-medium text-[#78716c]">
-                  Action
-                </label>
-                <input
-                  className={smallInputCls}
-                  placeholder="e.g. Left a voicemail"
-                  value={historyDraft.action}
-                  onChange={(e) =>
-                    setHistoryDraft((prev) => ({
-                      ...prev,
-                      action: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-[11px] font-medium text-[#78716c]">
-                  Detail
-                </label>
-                <textarea
-                  className={smallInputCls}
-                  placeholder="Additional context..."
-                  rows={2}
-                  value={historyDraft.detail}
-                  onChange={(e) =>
-                    setHistoryDraft((prev) => ({
-                      ...prev,
-                      detail: e.target.value,
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-medium text-[#78716c]">
-                  Type
-                </label>
-                <select
-                  className={smallInputCls}
-                  value={historyDraft.type}
-                  onChange={(e) =>
-                    setHistoryDraft((prev) => ({
-                      ...prev,
-                      type: e.target.value as HistoryItem["type"],
-                    }))
-                  }
-                >
-                  {HISTORY_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-end">
-                <button
-                  type="button"
-                  className="w-full rounded-[4px] bg-[#0c0a09] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#292524] disabled:opacity-50"
-                  onClick={addHistoryEntry}
-                  disabled={
-                    !historyDraft.action.trim() && !historyDraft.detail.trim()
-                  }
-                >
-                  Add Entry
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Lost reason */}

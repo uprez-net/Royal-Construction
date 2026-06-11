@@ -2,7 +2,7 @@ import { tool, UIMessageStreamWriter } from "ai";
 import { offerLineItemSchema } from "@/lib/agent/offer-prompts";
 
 
-export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
+export const lineItemTool = (dataStream?: UIMessageStreamWriter) =>
     tool({
         description: `Creates or updates one customer-facing offer line item. Use it only for priced rows that should appear in the offer. The tool computes net line, GST amount, and total price deterministically from unitPrice, quantity, gstRate, and gstIncluded. Include a source when the value came from a lead field, document, sheet, row, or cell.`,
         inputSchema: offerLineItemSchema,
@@ -24,23 +24,25 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
             const totalPrice = +(netLine + gstAmount).toFixed(2);
 
             // Send the line item data back to the UI via the data stream (customer-facing only)
-            dataStream.write({
-                type: "data-line-item-update",
-                data: {
-                    id: params.id,
-                    item: params.item,
-                    description: params.description,
-                    unitPrice: params.unitPrice,
-                    quantity: params.quantity,
-                    unit: params.unit,
-                    gstRate,
-                    gstIncluded: !!params.gstIncluded,
-                    netLine,
-                    gstAmount,
-                    totalPrice,
-                    source: params.source,
-                },
-            });
+            if (dataStream) {
+                dataStream.write({
+                    type: "data-line-item-update",
+                    data: {
+                        id: params.id,
+                        item: params.item,
+                        description: params.description,
+                        unitPrice: params.unitPrice,
+                        quantity: params.quantity,
+                        unit: params.unit,
+                        gstRate,
+                        gstIncluded: !!params.gstIncluded,
+                        netLine,
+                        gstAmount,
+                        totalPrice,
+                        source: params.source,
+                    },
+                });
+            }
 
             return {
                 message: `Line item ${params.id} processed successfully.`,

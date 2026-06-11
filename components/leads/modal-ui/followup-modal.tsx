@@ -32,15 +32,10 @@ export function FollowupModal({
       const success = await createCalendarEventIfValid(tempLead, showToast);
       if (!success) return;
 
-      const historyToSend = [
-        ...lead.history,
-        buildCalendarHistoryEntry(date, time),
-      ];
-
       const updated = await updateLead(lead.id, {
         followupDate: date,
         followupTime: time,
-        history: historyToSend,
+        history: [buildCalendarHistoryEntry(date, time)],
         stage: "In Follow-up",
       });
 

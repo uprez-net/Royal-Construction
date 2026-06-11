@@ -47,7 +47,7 @@ export function ProjectDetailModal({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[90vh] max-w-[60vw] overflow-y-auto">
+      <DialogContent className="max-h-[70vh] max-w-[60vw] overflow-y-auto">
         {/* Header */}
         <DialogHeader className="border-b border-border bg-white px-6 py-4">
           <div className="mb-2 flex items-start justify-between gap-4">

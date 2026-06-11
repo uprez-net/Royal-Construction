@@ -237,37 +237,42 @@ export function ProjectsClient({
       `Royal_Consturction_Projects_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
+  
 
   return (
     <div className="grid gap-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Total Active"
+          title="Total Active"
           value={String(kpis.totalActive)}
-          note="Projects currently in active delivery"
-          tone="primary"
-          icon={ClipboardList}
+          // note="Projects currently in active delivery"
+          // tone="primary"
+          Icon={ClipboardList}
+          iconTone="bg-blue-600"
         />
         <MetricCard
-          label="On Track"
+          title="On Track"
           value={String(kpis.onTrack)}
-          note="Projects tracking to plan"
-          tone="success"
-          icon={CheckCircle2}
+          // note="Projects tracking to plan"
+          // tone="success"
+          Icon={CheckCircle2}
+          iconTone="bg-green-600"
         />
         <MetricCard
-          label="Needs Attention"
+          title="Needs Attention"
           value={String(kpis.needsAttention)}
-          note="Projects with live issues or blockers"
-          tone="warning"
-          icon={AlertTriangle}
+          // note="Projects with live issues or blockers"
+          // tone="warning"
+          Icon={AlertTriangle}
+          iconTone="bg-yellow-600"
         />
         <MetricCard
-          label="Delayed"
+          title="Delayed"
           value={String(kpis.delayed)}
-          note="Projects past the current window"
-          tone="danger"
-          icon={CircleDot}
+          // note="Projects past the current window"
+          // tone="danger"
+          Icon={CircleDot}
+          iconTone="bg-red-600"
         />
       </div>
 
