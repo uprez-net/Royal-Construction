@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function DashboardSkeleton() {
+export default function DashboardSkeleton() {
   return (
     <div className="space-y-6 p-6">
       {/* Header Banner */}

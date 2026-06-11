@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { TrendBadge } from "./trend-badge";
 import type { LucideIcon } from "lucide-react";
-import { compactCurrency, currency } from "@/utils/formatters";
+import { compactCurrency } from "@/utils/formatters";
 
 export interface DataPoint {
   total: number;
@@ -47,7 +47,9 @@ export function MetricCard({
           >
             <Icon className="size-5" />
           </div>
-          {trendDelta && <TrendBadge value={trendDelta} />}
+          {(trendDelta !== undefined && trendDelta !== 0) && (
+            <TrendBadge value={trendDelta} />
+          )}
         </div>
         <p className="text-3xl font-bold">
           {isCurrency

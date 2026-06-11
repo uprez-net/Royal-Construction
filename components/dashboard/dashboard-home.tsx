@@ -1,47 +1,73 @@
+"use client";
 import { DashboardHeader } from "./dashboard-header";
 import { DashboardKPI } from "./dashboard-kpi";
 import { DashboardProjectTable } from "./dashboard-project-table";
 import { DashboardFollowUps } from "./dashboard-follow-ups";
 import { DashboardSiteManagerTable } from "./dashboard-site-manager-table";
+import { DashboardKPI as DashboardKPIType } from "@/types/dashboard";
+import type { PaginatedProjectsResult } from "@/lib/data/projects";
+import { siteManagersMock } from "@/lib/mock-data";
+import type { FollowUpItem } from "./dashboard-follow-ups";
 
 interface DashboardHomeProps {
   userFirstName: string;
+  newLeadsCount: number;
+  newProjectsCount: number;
+  followUpsCount: number;
+  kpiData: DashboardKPIType;
+  projectsData: PaginatedProjectsResult;
+  followUpItems: FollowUpItem[];
 }
 
-export function DashboardHome({ userFirstName }: DashboardHomeProps) {
+export function DashboardHome({
+  userFirstName,
+  newLeadsCount,
+  newProjectsCount,
+  followUpsCount,
+  kpiData,
+  projectsData,
+  followUpItems,
+}: DashboardHomeProps) {
   return (
     <div className="grid gap-6 space-y-6">
       <DashboardHeader
         name={userFirstName}
-        newLeadsCount={0}
-        newProjectsCount={0}
-        followUpsCount={0}
+        newLeadsCount={newLeadsCount}
+        newProjectsCount={newProjectsCount}
+        followUpsCount={followUpsCount}
       />
       <DashboardKPI
-        newLeadsThisMonth={{ total: 0, trendDelta: 0 }}
-        newLeadsConvertedThisMonth={{ total: 0, trendDelta: 0 }}
-        revenueThisQuarter={{ total: 0, trendDelta: 0 }}
-        netProfitThisQuarter={{ total: 0, trendDelta: 0 }}
-        activeProjects={{ total: 0, trendDelta: 0 }}
-        activeSiteManagers={{ total: 0, trendDelta: 0 }}
-        estimateProjectSpendingThisQuarter={{ total: 0, trendDelta: 0 }}
-        actualProjectSpendingThisQuarter={{ total: 0, trendDelta: 0 }}
+        newLeadsThisMonth={kpiData.newLeadsThisMonth}
+        newLeadsConvertedThisMonth={kpiData.newLeadsConvertedThisMonth}
+        revenueThisQuarter={kpiData.revenueThisQuarter}
+        netProfitThisQuarter={kpiData.netProfitThisQuarter}
+        activeProjects={kpiData.activeProjects}
+        activeSiteManagers={kpiData.activeSiteManagers}
+        estimateProjectSpendingThisQuarter={
+          kpiData.estimateProjectSpendingThisQuarter
+        }
+        actualProjectSpendingThisQuarter={
+          kpiData.actualProjectSpendingThisQuarter
+        }
       />
 
       <DashboardProjectTable
-        projects={[]}
-        pageInfo={{ totalCount: 0, totalPages: 0, currentPage: 1 }}
+        projects={projectsData.items}
+        pageInfo={{
+          totalCount: projectsData.totalCount,
+          totalPages: projectsData.totalPages,
+          currentPage: projectsData.page,
+        }}
         onPageChange={(page) => console.log("Page changed to:", page)}
         onSearch={(query) => console.log("Search query:", query)}
       />
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
-        <DashboardSiteManagerTable
-          siteManagers={[]}
-        />
+        <DashboardSiteManagerTable siteManagers={siteManagersMock} />
 
         <DashboardFollowUps
-          pendingFollowUpCount={0}
-          followUpItems={[]}
+          followUpTone={followUpItems.length === 0 ? "positive" : "negative"}
+          pendingFollowUpCount={followUpItems.length}
+          followUpItems={followUpItems}
         />
       </div>
     </div>

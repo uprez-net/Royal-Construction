@@ -2,9 +2,10 @@ import { timeFormat } from "@/utils/formatters";
 import { Badge } from "../ui/badge";
 import { Card, CardContent, CardHeader } from "../ui/card";
 import { Activity } from "lucide-react";
+import { differenceInCalendarDays } from "date-fns";
 
-interface FollowUpItem {
-  id: string;
+export interface FollowUpItem {
+  id: number;
   customerName: string;
   projectName: string;
   description: string;
@@ -35,6 +36,22 @@ const statusConfig: Record<
   negative: { bg: "bg-red-100", text: "text-red-700", ring: "ring-red-500" },
 };
 
+export function calculateFollowUpBadgeLabel(dueAt: Date): string {
+  const days = differenceInCalendarDays(dueAt, new Date());
+
+  if (days > 0) {
+    return `${days} day${days === 1 ? "" : "s"} left`;
+  }
+
+  if (days === 0) {
+    return "Due today";
+  }
+
+  const overdueDays = Math.abs(days);
+
+  return `${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue`;
+}
+
 export function DashboardFollowUps({
   pendingFollowUpCount,
   followUpTone = "neutral",
@@ -52,7 +69,7 @@ export function DashboardFollowUps({
           {pendingFollowUpCount} Pending
         </Badge>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-6 max-h-100 overflow-y-auto no-scrollbar">
         {followUpItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 mt-16">
             <div className="flex size-12 items-center justify-center">
@@ -91,9 +108,9 @@ export function DashboardFollowUps({
                   {timeFormat.format(new Date(item.dueAt))}
                 </p>
                 <Badge
-                  className={`absolute right-4 top-4 whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${(statusConfig[followUpTone] ?? statusConfig.neutral).bg} ${(statusConfig[followUpTone] ?? statusConfig.neutral).text}`}
+                  className={`absolute right-4 top-4 whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${(statusConfig[item.status] ?? statusConfig.neutral).bg} ${(statusConfig[item.status] ?? statusConfig.neutral).text}`}
                 >
-                  {pendingFollowUpCount} Pending
+                  {calculateFollowUpBadgeLabel(new Date(item.dueAt))}
                 </Badge>
               </article>
             ))}
