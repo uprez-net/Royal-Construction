@@ -1,4 +1,4 @@
-    import { createGateway } from "ai";
+import { createGateway } from "ai";
 
 if(!process.env.AI_GATEWAY_API_KEY ) {
     console.warn("Warning: AI_GATEWAY_API_KEY is not set. AI features will not work.");
@@ -8,3 +8,4 @@ if(!process.env.AI_GATEWAY_API_KEY ) {
 export const gateway = createGateway({
     apiKey: process.env.AI_GATEWAY_API_KEY,
 })
+

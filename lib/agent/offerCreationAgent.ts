@@ -1,4 +1,4 @@
-import { ToolLoopAgent, Output } from "ai";
+import { ToolLoopAgent, Output,  } from "ai";
 import { gateway } from "@/lib/model";
 import { fetchOfferSheetRules } from "../tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "../tools/file-tools";
@@ -9,6 +9,7 @@ import {
 import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { fetchLeadFilesTool, fetchLeadInfoTool } from "@/lib/tools/fetch-lead-info";
+import { webSearch } from "@/lib/tools/web-search";
 
 
 export const offerCreationAgent = new ToolLoopAgent({
@@ -25,6 +26,7 @@ export const offerCreationAgent = new ToolLoopAgent({
         offerFileTool: offerFileTool(),
         fetchLeadInfoTool: fetchLeadInfoTool,
         fetchLeadFilesTool: fetchLeadFilesTool,
+        webSearch: webSearch,
     },
     instructions: OFFER_CREATION_SYSTEM_PROMPT,
     stopSequences: [

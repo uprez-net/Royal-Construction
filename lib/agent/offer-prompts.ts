@@ -72,6 +72,19 @@ const TOOL_CATALOGUE = `
     <warning>Strip all internal margin, profitability, and trade cost data before calling this tool. Output is customer-visible.</warning>
   </tool>
 
+  <tool name="webSearch">
+    <description>Perplexity web search tool, configured for Australian construction market research with a focus on local suppliers, pricing, and regulations.</description>
+    <when_to_use>Use for quick market research on supplier pricing, local regulations, or competitive offers when such information is not available in the lead record or attached files. Do not use as a primary source for pricing or scope details — only for supplementary context.</when_to_use>
+    <input>query: string | string[], max_results?: number</input>
+    <output_fields>results[] (title, url, snippet) OR error (type, message, statusCode)</output_fields>
+    <configuration>
+      - maxResults: 5
+      - maxTokensPerPage: 1000
+      - country: "AU"
+      - searchDomainFilter: ['hipages.com.au', 'serviceseeking.com.au', 'bunnings.com.au', 'rawlinsons.com.au', 'oneflare.com.au', 'fairtrading.nsw.gov.au', 'consumer.vic.gov.au', 'masterbuilders.com.au', 'hia.com.au']
+      - searchRecencyFilter: "month"
+    </configuration>
+  </tool>
 </tools>
 `;
 

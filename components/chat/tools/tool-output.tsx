@@ -11,9 +11,11 @@ import {
   FileProcessingToolOutput,
   LineItemToolOutput,
   OfferFileToolOutput,
+  WebSearchToolOutput,
 } from "@/types/chat";
 import { FetchOfferSheetRulesOutput } from "./fetch-offer-sheet-rules-output";
 import { FetchLeadFilesOutput } from "./fetch-lead-files-output";
+import { WebSearchOutput } from "./web-search-output";
 
 export function ToolOutput({
   toolName,
@@ -42,10 +44,19 @@ export function ToolOutput({
         );
       }
       case "fetchOfferSheetRulesTool": {
-        return <FetchOfferSheetRulesOutput output={output as FetchOfferSheetRulesToolOutput} />;
+        return (
+          <FetchOfferSheetRulesOutput
+            output={output as FetchOfferSheetRulesToolOutput}
+          />
+        );
       }
       case "fetchLeadFilesTool": {
-        return <FetchLeadFilesOutput output={output as FetchLeadFilesToolOutput} />;
+        return (
+          <FetchLeadFilesOutput output={output as FetchLeadFilesToolOutput} />
+        );
+      }
+      case "webSearch": {
+        return <WebSearchOutput output={output as WebSearchToolOutput} />;
       }
     }
   }

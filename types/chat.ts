@@ -3,6 +3,7 @@ import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "@/lib/tools/file-tools";
 import { lineItemTool as createLineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool as createOfferFileTool } from "@/lib/tools/offer-file";
+import { webSearch } from "@/lib/tools/web-search";
 import { ChatMessage, ChatSession } from "@prisma/client";
 import type {
   DynamicToolUIPart,
@@ -36,6 +37,7 @@ export type ChatTools = {
   fileProcessingTool: InferUITool<typeof FileProcessingTool>;
   fetchLeadFilesTool: InferUITool<typeof fetchLeadFilesTool>;
   fetchOfferSheetRulesTool: InferUITool<typeof fetchOfferSheetRules>;
+  webSearch: InferUITool<typeof webSearch>;
 }
 
 export type OfferFileToolOutput = offerFileToolUI["output"];
@@ -44,7 +46,7 @@ export type FetchLeadInfoToolOutput = InferUITool<typeof createFetchLeadInfoTool
 export type FetchLeadFilesToolOutput = InferUITool<typeof fetchLeadFilesTool>["output"];
 export type FileProcessingToolOutput = InferUITool<typeof FileProcessingTool>["output"];
 export type FetchOfferSheetRulesToolOutput = InferUITool<typeof fetchOfferSheetRules>["output"];
-
+export type WebSearchToolOutput = InferUITool<typeof webSearch>["output"];
 
 export type ChatMessageAI = UIMessage<
   MessageMetadata,
@@ -108,4 +110,5 @@ export type KnownToolName =
   | "fetchLeadFilesTool" 
   | "fileProcessingTool"
   | "fetchOfferSheetRulesTool"
+  | "webSearch"
   ;
