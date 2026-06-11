@@ -33,6 +33,12 @@ export const dataTimeFormat = new Intl.DateTimeFormat("en-AU", {
   hour12: true,
 });
 
+export const timeFormat = new Intl.DateTimeFormat("en-AU", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 B";
 

@@ -19,6 +19,7 @@ export type ModalType =
   | "addMilestonePicture"
   | "updateMilestoneStatus"
   | "createOfferFile"
+  | "createLead"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;
