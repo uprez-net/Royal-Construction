@@ -302,9 +302,9 @@ export default function TableView({
         <DetailModal
           lead={detailLead}
           onClose={() => setDetailLead(null)}
-          onLeadUpdate={(updated) => {
+          onLeadUpdate={(updated, options) => {
             onLeadUpdate(updated);
-            setDetailLead(null);
+            setDetailLead(options?.keepOpen ? updated : null);
           }}
           onDeleteClick={(lead) => setLeadToDelete(lead)}
           showToast={showToast}

@@ -46,6 +46,38 @@ export interface HistoryItem {
   type: 'system' | 'call' | 'email' | 'referral';
 }
 
+export interface LeadRichTextDocument {
+  version: 1;
+  html: string;
+  plainText: string;
+  value: LeadRichTextNode[];
+}
+
+export type LeadRichTextNode = {
+  type?: string;
+  text?: string;
+  key?: unknown;
+  value?: unknown;
+  children?: LeadRichTextNode[];
+  [key: string]: unknown;
+}
+
+export interface LeadNoteAnnotation {
+  id: string;
+  selectedText: string;
+  comment: string;
+  mentionedUserIds: string[];
+  status: "open" | "resolved";
+  createdAt: string;
+  resolvedAt?: string | null;
+}
+
+export interface LeadNoteAnnotationInput {
+  selectedText: string;
+  comment: string;
+  mentionedUserIds: string[];
+}
+
 export interface Lead {
   id: number;
   name: string;
@@ -64,6 +96,8 @@ export interface Lead {
   budget: BudgetRange | string;
   type: string;
   notes: string;
+  notesDoc?: LeadRichTextDocument | null;
+  noteAnnotations?: LeadNoteAnnotation[];
   followupDate: string | null;
   followupTime: string | null;
   followupNotes: string;
