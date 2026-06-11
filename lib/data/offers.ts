@@ -13,6 +13,7 @@ import { buildCreationStarterPrompt, FacadeOptionWithImageUrl } from "../agent/o
 import { triggerNotification } from "@/lib/notification/novu";
 import { createNotification } from "@/types/notification";
 import { imageGenerationAgent } from "../agent/imageGenerationAgent";
+import { calculateTrend } from "@/utils/formatters";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -134,187 +135,139 @@ export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFil
     }
 }
 
-function calculateTrend(current: number, previous: number) {
-    if (previous === 0) {
-        return current > 0 ? 100 : 0;
-    }
 
-    return ((current - previous) / previous) * 100;
-}
+type OfferKPIQueryResult = {
+    all_offers: bigint;
+
+    pending_offers: bigint;
+    approved_offers: bigint;
+    rejected_offers: bigint;
+    sent_offers: bigint;
+
+    all_previous_week: bigint;
+    all_current_week: bigint;
+
+    pending_previous_week: bigint;
+    pending_current_week: bigint;
+
+    approved_previous_week: bigint;
+    approved_current_week: bigint;
+
+    rejected_previous_week: bigint;
+    rejected_current_week: bigint;
+
+    sent_previous_week: bigint;
+    sent_current_week: bigint;
+};
 
 export async function getOfferKPIs(): Promise<OfferKPIs> {
     try {
         const now = new Date();
 
-        const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+        const currentWeekStart = startOfWeek(now, {
+            weekStartsOn: 1,
+        });
+
         const previousWeekStart = subWeeks(currentWeekStart, 1);
 
-        const [
-            allOffers,
+        const [result] = await prisma.$queryRaw<OfferKPIQueryResult[]>`
+            SELECT
+                COUNT(*) AS all_offers,
 
-            pendingOffers,
-            approvedOffers,
-            rejectedOffers,
-            sentOffers,
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'PENDING'
+                ) AS pending_offers,
 
-            allPreviousWeek,
-            allCurrentWeek,
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'ACCEPTED'
+                ) AS approved_offers,
 
-            pendingPreviousWeek,
-            pendingCurrentWeek,
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'REJECTED'
+                ) AS rejected_offers,
 
-            approvedPreviousWeek,
-            approvedCurrentWeek,
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'SENT'
+                ) AS sent_offers,
 
-            rejectedPreviousWeek,
-            rejectedCurrentWeek,
+                COUNT(*) FILTER (
+                    WHERE "createdAt" >= ${previousWeekStart}
+                    AND "createdAt" < ${currentWeekStart}
+                ) AS all_previous_week,
 
-            sentPreviousWeek,
-            sentCurrentWeek,
-        ] = await Promise.all([
-            // Totals
-            prisma.offer.count(),
+                COUNT(*) FILTER (
+                    WHERE "createdAt" >= ${currentWeekStart}
+                ) AS all_current_week,
 
-            prisma.offer.count({
-                where: { offerStatus: "PENDING" },
-            }),
-            prisma.offer.count({
-                where: { offerStatus: "ACCEPTED" },
-            }),
-            prisma.offer.count({
-                where: { offerStatus: "REJECTED" },
-            }),
-            prisma.offer.count({
-                where: { offerStatus: "SENT" },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'PENDING'
+                    AND "updatedAt" >= ${previousWeekStart}
+                    AND "updatedAt" < ${currentWeekStart}
+                ) AS pending_previous_week,
 
-            // All Offers Trend (created this week vs last week)
-            prisma.offer.count({
-                where: {
-                    createdAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    createdAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'PENDING'
+                    AND "updatedAt" >= ${currentWeekStart}
+                ) AS pending_current_week,
 
-            // Pending Trend
-            prisma.offer.count({
-                where: {
-                    offerStatus: "PENDING",
-                    updatedAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    offerStatus: "PENDING",
-                    updatedAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'ACCEPTED'
+                    AND "updatedAt" >= ${previousWeekStart}
+                    AND "updatedAt" < ${currentWeekStart}
+                ) AS approved_previous_week,
 
-            // Approved Trend
-            prisma.offer.count({
-                where: {
-                    offerStatus: "ACCEPTED",
-                    updatedAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    offerStatus: "ACCEPTED",
-                    updatedAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'ACCEPTED'
+                    AND "updatedAt" >= ${currentWeekStart}
+                ) AS approved_current_week,
 
-            // Rejected Trend
-            prisma.offer.count({
-                where: {
-                    offerStatus: "REJECTED",
-                    updatedAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    offerStatus: "REJECTED",
-                    updatedAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'REJECTED'
+                    AND "updatedAt" >= ${previousWeekStart}
+                    AND "updatedAt" < ${currentWeekStart}
+                ) AS rejected_previous_week,
 
-            // Sent Trend
-            prisma.offer.count({
-                where: {
-                    offerStatus: "SENT",
-                    updatedAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    offerStatus: "SENT",
-                    updatedAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
-        ]);
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'REJECTED'
+                    AND "updatedAt" >= ${currentWeekStart}
+                ) AS rejected_current_week,
+
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'SENT'
+                    AND "updatedAt" >= ${previousWeekStart}
+                    AND "updatedAt" < ${currentWeekStart}
+                ) AS sent_previous_week,
+
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'SENT'
+                    AND "updatedAt" >= ${currentWeekStart}
+                ) AS sent_current_week
+            FROM "Offer"
+        `;
 
         return {
-            allOffers: {
-                total: allOffers,
-                trendDelta: calculateTrend(allCurrentWeek, allPreviousWeek),
-            },
-            pendingOffers: {
-                total: pendingOffers,
-                trendDelta: calculateTrend(
-                    pendingCurrentWeek,
-                    pendingPreviousWeek,
-                ),
-            },
-            approvedOffers: {
-                total: approvedOffers,
-                trendDelta: calculateTrend(
-                    approvedCurrentWeek,
-                    approvedPreviousWeek,
-                ),
-            },
-            rejectedOffers: {
-                total: rejectedOffers,
-                trendDelta: calculateTrend(
-                    rejectedCurrentWeek,
-                    rejectedPreviousWeek,
-                ),
-            },
-            sentOffers: {
-                total: sentOffers,
-                trendDelta: calculateTrend(
-                    sentCurrentWeek,
-                    sentPreviousWeek,
-                ),
-            },
+            allOffers: calculateTrend(
+                Number(result.all_current_week),
+                Number(result.all_previous_week),
+            ),
+
+            pendingOffers: calculateTrend(
+                Number(result.pending_current_week),
+                Number(result.pending_previous_week),
+            ),
+            approvedOffers: calculateTrend(
+                Number(result.approved_current_week),
+                Number(result.approved_previous_week),
+            ),
+
+            rejectedOffers: calculateTrend(
+                Number(result.rejected_current_week),
+                Number(result.rejected_previous_week),
+            ),
+            sentOffers: calculateTrend(
+                Number(result.sent_current_week),
+                Number(result.sent_previous_week),
+            ),
         };
     } catch (error) {
         console.error("Error fetching offer KPIs:", error);
@@ -510,8 +463,8 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
         if (output.offerFileContent.facadeOptions) {
             for (const option of output.offerFileContent.facadeOptions.options) {
                 const image = await imageGenerationAgent.generate({
-                    prompt: 
-                    `
+                    prompt:
+                        `
                         Generate a facade design image based on the following description: ${option.description}. 
                         The image should reflect the architectural style, materials, colors, and specific features mentioned in the description.
                     `

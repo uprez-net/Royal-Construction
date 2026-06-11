@@ -13,25 +13,32 @@ import {
 } from "date-fns";
 import { ProjectStatus, LeadStage } from "@prisma/client";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
+import { calculateTrend } from "@/utils/formatters";
 
-function calculateTrend(
-    current: number,
-    previous: number
-): DataPoint {
-    if (previous === 0) {
-        return {
-            total: current,
-            trendDelta: current > 0 ? 100 : 0,
-        };
-    }
+type DashboardKPIQueryResult = {
+    follow_ups_count: bigint;
 
-    return {
-        total: current,
-        trendDelta: Number(
-            (((current - previous) / previous) * 100).toFixed(1)
-        ),
-    };
-}
+    current_month_projects: bigint;
+
+    current_month_leads: bigint;
+    previous_month_leads: bigint;
+
+    current_month_converted_leads: bigint;
+    previous_month_converted_leads: bigint;
+
+    active_projects: bigint;
+    active_site_managers: bigint;
+
+    current_quarter_revenue: number | null;
+    previous_quarter_revenue: number | null;
+
+    current_quarter_estimated_spend: number | null;
+    previous_quarter_estimated_spend: number | null;
+
+    current_quarter_actual_spend: number | null;
+    previous_quarter_actual_spend: number | null;
+};
+
 
 export async function getDashboardKPIData(): Promise<DashboardKPI> {
     try {
@@ -49,233 +56,149 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
         const currentQuarterStart = startOfQuarter(now);
         const previousQuarterStart = startOfQuarter(subQuarters(now, 1));
 
-        const [
-            followUpsCount,
+        const [result] = await prisma.$queryRaw<DashboardKPIQueryResult[]>`
+            WITH lead_stats AS (
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE (
+                            ("assignedId" = ${userId}
+                            AND stage = 'IN_FOLLOW_UP')
+                            OR "followupDate" <= ${now}
+                        )
+                    ) AS follow_ups_count,
 
-            currentMonthProjects,
+                    COUNT(*) FILTER (
+                        WHERE "createdAt" >= ${currentMonthStart}
+                    ) AS current_month_leads,
 
-            currentMonthLeads,
-            previousMonthLeads,
+                    COUNT(*) FILTER (
+                        WHERE "createdAt" >= ${previousMonthStart}
+                        AND "createdAt" < ${currentMonthStart}
+                    ) AS previous_month_leads,
 
-            currentMonthConvertedLeads,
-            previousMonthConvertedLeads,
+                    COUNT(*) FILTER (
+                        WHERE stage IN ('WON', 'CONVERTED')
+                        AND "updatedAt" >= ${currentMonthStart}
+                    ) AS current_month_converted_leads,
 
-            activeProjects,
+                    COUNT(*) FILTER (
+                        WHERE stage IN ('WON', 'CONVERTED')
+                        AND "updatedAt" >= ${previousMonthStart}
+                        AND "updatedAt" < ${currentMonthStart}
+                    ) AS previous_month_converted_leads
+                FROM "Lead"
+            ),
 
-            activeSiteManagers,
+            project_stats AS (
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE "createdAt" >= ${currentMonthStart}
+                    ) AS current_month_projects,
 
-            currentQuarterRevenue,
-            previousQuarterRevenue,
+                    COUNT(*) FILTER (
+                        WHERE status = 'ACTIVE'
+                    ) AS active_projects,
 
-            currentQuarterEstimatedSpend,
-            previousQuarterEstimatedSpend,
+                    COUNT(DISTINCT "siteManagerId") FILTER (
+                        WHERE status = 'ACTIVE'
+                        AND "siteManagerId" IS NOT NULL
+                    ) AS active_site_managers,
 
-            currentQuarterActualSpend,
-            previousQuarterActualSpend,
-        ] = await Promise.all([
-            // Follow ups
-            prisma.lead.count({
-                where: {
-                    OR: [
-                        {
-                            assignedId: userId,
-                            stage: LeadStage.IN_FOLLOW_UP,
-                        },
-                        {
-                            followupDate: {
-                                lte: now,
-                            },
-                        }
-                    ]
-                },
-            }),
+                    COALESCE(
+                        SUM("totalBudget") FILTER (
+                            WHERE "createdAt" >= ${currentQuarterStart}
+                        ),
+                        0
+                    ) AS current_quarter_revenue,
 
-            // New projects this month
-            prisma.project.count({
-                where: {
-                    createdAt: {
-                        gte: currentMonthStart,
-                    },
-                },
-            }),
+                    COALESCE(
+                        SUM("totalBudget") FILTER (
+                            WHERE "createdAt" >= ${previousQuarterStart}
+                            AND "createdAt" < ${currentQuarterStart}
+                        ),
+                        0
+                    ) AS previous_quarter_revenue
+                FROM "Project"
+            ),
 
-            // Current month leads
-            prisma.lead.count({
-                where: {
-                    createdAt: {
-                        gte: currentMonthStart,
-                    },
-                },
-            }),
+            milestone_stats AS (
+                SELECT
+                    COALESCE(
+                        SUM(budget) FILTER (
+                            WHERE "targetDate" >= ${currentQuarterStart}
+                        ),
+                        0
+                    ) AS current_quarter_estimated_spend,
 
-            // Previous month leads
-            prisma.lead.count({
-                where: {
-                    createdAt: {
-                        gte: previousMonthStart,
-                        lt: currentMonthStart,
-                    },
-                },
-            }),
+                    COALESCE(
+                        SUM(budget) FILTER (
+                            WHERE "targetDate" >= ${previousQuarterStart}
+                            AND "targetDate" < ${currentQuarterStart}
+                        ),
+                        0
+                    ) AS previous_quarter_estimated_spend,
 
-            // Current month converted leads
-            prisma.lead.count({
-                where: {
-                    stage: { in: [LeadStage.WON, LeadStage.CONVERTED] }, // replace if different
-                    updatedAt: {
-                        gte: currentMonthStart,
-                    },
-                },
-            }),
+                    COALESCE(
+                        SUM(spend) FILTER (
+                            WHERE "targetDate" >= ${currentQuarterStart}
+                        ),
+                        0
+                    ) AS current_quarter_actual_spend,
 
-            // Previous month converted leads
-            prisma.lead.count({
-                where: {
-                    stage: { in: [LeadStage.WON, LeadStage.CONVERTED] }, // replace if different
-                    updatedAt: {
-                        gte: previousMonthStart,
-                        lt: currentMonthStart,
-                    },
-                },
-            }),
+                    COALESCE(
+                        SUM(spend) FILTER (
+                            WHERE "targetDate" >= ${previousQuarterStart}
+                            AND "targetDate" < ${currentQuarterStart}
+                        ),
+                        0
+                    ) AS previous_quarter_actual_spend
+                FROM "Milestone"
+            )
 
-            // Active projects
-            prisma.project.count({
-                where: {
-                    status: ProjectStatus.ACTIVE,
-                },
-            }),
+            SELECT *
+            FROM lead_stats
+            CROSS JOIN project_stats
+            CROSS JOIN milestone_stats;
+            `;
 
-            // Active site managers
-            prisma.project.findMany({
-                where: {
-                    status: ProjectStatus.ACTIVE,
-                    siteManagerId: {
-                        not: null,
-                    },
-                },
-                select: {
-                    siteManagerId: true,
-                },
-                distinct: ["siteManagerId"],
-            }),
-
-            // Current quarter revenue
-            prisma.project.aggregate({
-                where: {
-                    createdAt: {
-                        gte: currentQuarterStart,
-                    },
-                },
-                _sum: {
-                    totalBudget: true,
-                },
-            }),
-
-            // Previous quarter revenue
-            prisma.project.aggregate({
-                where: {
-                    createdAt: {
-                        gte: previousQuarterStart,
-                        lt: currentQuarterStart,
-                    },
-                },
-                _sum: {
-                    totalBudget: true,
-                },
-            }),
-
-            // Current quarter estimated spend
-            prisma.milestone.aggregate({
-                where: {
-                    targetDate: {
-                        gte: currentQuarterStart,
-                    },
-                },
-                _sum: {
-                    budget: true,
-                },
-            }),
-
-            // Previous quarter estimated spend
-            prisma.milestone.aggregate({
-                where: {
-                    targetDate: {
-                        gte: previousQuarterStart,
-                        lt: currentQuarterStart,
-                    },
-                },
-                _sum: {
-                    budget: true,
-                },
-            }),
-
-            // Current quarter actual spend
-            prisma.milestone.aggregate({
-                where: {
-                    targetDate: {
-                        gte: currentQuarterStart,
-                    },
-                },
-                _sum: {
-                    spend: true,
-                },
-            }),
-
-            // Previous quarter actual spend
-            prisma.milestone.aggregate({
-                where: {
-                    targetDate: {
-                        gte: previousQuarterStart,
-                        lt: currentQuarterStart,
-                    },
-                },
-                _sum: {
-                    spend: true,
-                },
-            }),
-        ]);
-
-        const currentRevenue = Number(
-            currentQuarterRevenue._sum.totalBudget ?? 0
-        );
-
-        const previousRevenue = Number(
-            previousQuarterRevenue._sum.totalBudget ?? 0
-        );
+        const currentRevenue = Number(result.current_quarter_revenue);
+        const previousRevenue = Number(result.previous_quarter_revenue);
 
         const currentEstimatedSpend = Number(
-            currentQuarterEstimatedSpend._sum.budget ?? 0
+            result.current_quarter_estimated_spend
         );
 
         const previousEstimatedSpend = Number(
-            previousQuarterEstimatedSpend._sum.budget ?? 0
+            result.previous_quarter_estimated_spend
         );
 
         const currentActualSpend = Number(
-            currentQuarterActualSpend._sum.spend ?? 0
+            result.current_quarter_actual_spend
         );
 
         const previousActualSpend = Number(
-            previousQuarterActualSpend._sum.spend ?? 0
+            result.previous_quarter_actual_spend
         );
 
         const currentProfit = currentRevenue - currentActualSpend;
-        const previousProfit = previousRevenue > 0 ? previousRevenue - previousActualSpend : 0;
+        const previousProfit =
+            previousRevenue > 0
+                ? previousRevenue - previousActualSpend
+                : 0;
 
         return {
-            followUpsCount,
+            followUpsCount: Number(result.follow_ups_count),
 
-            newProjectsCount: currentMonthProjects,
+            newProjectsCount: Number(result.current_month_projects),
 
             newLeadsThisMonth: calculateTrend(
-                currentMonthLeads,
-                previousMonthLeads
+                Number(result.current_month_leads),
+                Number(result.previous_month_leads)
             ),
 
             newLeadsConvertedThisMonth: calculateTrend(
-                currentMonthConvertedLeads,
-                previousMonthConvertedLeads
+                Number(result.current_month_converted_leads),
+                Number(result.previous_month_converted_leads)
             ),
 
             revenueThisQuarter: calculateTrend(
@@ -289,12 +212,12 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
             ),
 
             activeProjects: {
-                total: activeProjects,
+                total: Number(result.active_projects),
                 trendDelta: 0,
             },
 
             activeSiteManagers: {
-                total: activeSiteManagers.length,
+                total: Number(result.active_site_managers),
                 trendDelta: 0,
             },
 
