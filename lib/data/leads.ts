@@ -626,26 +626,39 @@ export async function deleteLead(id: number) {
 }
 
 export async function getLeadsStats(): Promise<LeadsStats> {
-  const [totalLeads, newLeads, contactedLeads, qualifiedLeads, quotedLeads, wonLeads, lostLeads, pendingFollowupLeads] = await Promise.all([
-    prisma.lead.count(),
-    prisma.lead.count({ where: { stage: "NEW" } }),
-    prisma.lead.count({ where: { stage: "CONTACTED" } }),
-    prisma.lead.count({ where: { stage: "QUALIFIED" } }),
-    prisma.lead.count({ where: { stage: "QUOTED" } }),
-    prisma.lead.count({ where: { stage: { in: ["WON", "CONVERTED"] } } }),
-    prisma.lead.count({ where: { stage: { in: ["LOST", "CANCELLED", "DISQUALIFIED"] } } }),
-    prisma.lead.count({ where: { stage: { in: ["IN_FOLLOW_UP"] } } }),
-  ]);
+  const [stats] = await prisma.$queryRaw<
+    {
+      total: bigint;
+      new: bigint;
+      contacted: bigint;
+      qualified: bigint;
+      quoted: bigint;
+      won: bigint;
+      lost: bigint;
+      pendingFollowup: bigint;
+    }[]
+  >`
+    SELECT
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE stage = 'NEW') AS new,
+      COUNT(*) FILTER (WHERE stage = 'CONTACTED') AS contacted,
+      COUNT(*) FILTER (WHERE stage = 'QUALIFIED') AS qualified,
+      COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
+      COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
+      COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
+      COUNT(*) FILTER (WHERE stage = 'IN_FOLLOW_UP') AS "pendingFollowup"
+    FROM "Lead"
+  `;
 
   return {
-    total: totalLeads,
-    new: newLeads,
-    contacted: contactedLeads,
-    qualified: qualifiedLeads,
-    quoted: quotedLeads,
-    conversion: wonLeads,
-    pendingFollowup: pendingFollowupLeads,
-    lost: lostLeads,
+    total: Number(stats?.total ?? 0),
+    new: Number(stats?.new ?? 0),
+    contacted: Number(stats?.contacted ?? 0),
+    qualified: Number(stats?.qualified ?? 0),
+    quoted: Number(stats?.quoted ?? 0),
+    conversion: Number(stats?.won ?? 0),
+    pendingFollowup: Number(stats?.pendingFollowup ?? 0),
+    lost: Number(stats?.lost ?? 0),
   };
 }
 
