@@ -105,7 +105,7 @@ export function DashboardHeader({
             </h2>
             <p className="text-sm text-slate-600">
               {newLeadsCount} new leads this month, {newProjectsCount} active
-              projects across NSW. {followUpsCount} follow-ups due today.
+              projects across NSW. {followUpsCount} follow-ups due.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
