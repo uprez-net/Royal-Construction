@@ -12,6 +12,15 @@ colors:
   cool-border: "oklch(0.905 0.02 248.7)"
   sidebar-void: "oklch(0.16 0.03 249.8)"
   sidebar-hover: "oklch(0.221 0.03 250.1)"
+  royal-gold: "oklch(0.694 0.12 77.3)"
+  royal-gold-dark: "oklch(0.609 0.106 77.7)"
+  royal-gold-light: "oklch(0.947 0.029 89.6)"
+  royal-orange: "oklch(0.68 0.172 51.9)"
+  royal-orange-light: "oklch(0.969 0.028 79.5)"
+  success: "oklch(0.627 0.17 149.2)"
+  warning: "oklch(0.769 0.165 70.1)"
+  info: "oklch(0.546 0.215 262.9)"
+  accent-purple: "oklch(0.541 0.247 293)"
 typography:
   display:
     fontFamily: "Fraunces, Georgia, serif"
@@ -123,7 +132,7 @@ This system explicitly rejects three failure modes. Generic SaaS: pastel cards, 
 
 ## 2. Colors: The Site Office Palette
 
-Restrained-to-Committed strategy. Site Teal carries 10–20% of any given screen as the action signal. Tradie Amber appears in chart data, warning states, and the subtle body-background gradient. The rest is the neutral slate family.
+Restrained-to-Committed strategy. The operational core uses Site Teal as its action signal, carrying 10–20% of any given screen; Tradie Amber appears in chart data, warning states, and the subtle body-background gradient. The leads and sales surfaces swap that action signal for Royal Gold (see Sales Accent below). The rest, everywhere, is the neutral slate family.
 
 ### Primary
 - **Site Teal** (oklch(0.584 0.118 183.6)): Primary actions, focus rings, sidebar active states, the ring token, chart-1. The one colour that means "act here." Used at mid-saturation so it reads clearly without dominating.
@@ -143,8 +152,32 @@ Restrained-to-Committed strategy. Site Teal carries 10–20% of any given screen
 - **Sidebar Void** (oklch(0.16 0.03 249.8)): The navigation rail. Very dark navy. The steel frame.
 - **Sidebar Hover** (oklch(0.221 0.03 250.1)): Sidebar item hover. One step lighter than the rail.
 
+### Sales Accent (Royal Constructions)
+
+The leads and sales surfaces carry the **Royal Constructions** brand: a warm gold, not Site Teal. This is deliberate and permanent. The operational core of the app (dashboard, projects, tradies, financials, milestones) runs on Site Teal as its action signal; the lead-management and sales-facing surfaces run on Royal Gold. The two never appear as competing primaries on the same screen because they live on different surfaces.
+
+- **Royal Gold** (oklch(0.694 0.12 77.3)): Primary action and selection colour on leads/sales surfaces. The leads equivalent of Site Teal. Buttons, active pipeline stages, focus rings, links.
+- **Royal Gold Dark** (oklch(0.609 0.106 77.7)): Hover/pressed state for gold actions.
+- **Royal Gold Light** (oklch(0.947 0.029 89.6)): Tinted gold backgrounds, selected-row fills, soft highlights.
+- **Royal Orange** (oklch(0.68 0.172 51.9)): Warm secondary energy on sales surfaces. Accent chips, time-pressure cues. The sales-surface cousin of Tradie Amber.
+- **Royal Orange Light** (oklch(0.969 0.028 79.5)): Tinted orange backgrounds.
+
+These are real `:root` tokens (`--royal-gold`, `--royal-gold-dark`, `--royal-gold-light`, `--royal-orange`, `--royal-orange-light`). The `.leads-container` CSS aliases them through its `--leads-*` variables; it no longer defines its own colour values.
+
+### Semantic Status
+
+A shared status scale, available app-wide as `:root` tokens, each with a tinted `-light` companion for backgrounds:
+
+- **Success** (oklch(0.627 0.17 149.2)) / `--success-light`: completed, confirmed, healthy.
+- **Warning** (oklch(0.769 0.165 70.1)) / `--warning-light`: caution, pending attention.
+- **Info** (oklch(0.546 0.215 262.9)) / `--info-light`: neutral informational state.
+- **Accent Purple** (oklch(0.541 0.247 293)) / `--accent-purple-light`: categorical/secondary tagging only, never an action colour.
+- Destructive reuses **Site Red** (`--destructive`) with `--destructive-light` for tinted error backgrounds.
+
+Status is always paired with a label or icon, never colour alone.
+
 ### Named Rules
-**The One Signal Rule.** Site Teal is used for interactive affordances only. It means "you can act here" or "this is selected." Using it decoratively, on static backgrounds or ornamental borders, erodes the signal. When in doubt, keep it neutral.
+**The One Signal Rule.** Each surface has exactly one action colour, used for interactive affordances only: it means "you can act here" or "this is selected." On the operational core that colour is Site Teal; on leads/sales surfaces it is Royal Gold. Using the action colour decoratively, on static backgrounds or ornamental borders, erodes the signal. Never mix teal and gold as competing primaries on the same surface. When in doubt, keep it neutral.
 
 **The Amber-Not-Orange Rule.** The warm secondary is Tradie Amber (oklch(0.726 0.165 54.6) / chart-3), not an arbitrary orange. The body background gradient uses `rgba(232, 115, 12, 0.08)` which maps to this anchor. Keep warm secondary choices within this OKLCH family.
 
@@ -257,8 +290,8 @@ The standard content panel. Wraps most feature-level content.
 - **Don't** make it look like Procore or BuilderTrend: no dense grey utilitarian chrome, no enterprise-2015 typography.
 - **Don't** make it look like a finance or banking dark-mode product: no terminal-native aesthetics, no neon accents, no dark content surfaces, no crypto-adjacent chrome. BuildPro runs in daylight. Precision is correct; that aesthetic register is wrong.
 - **Don't** introduce dark-themed panels, sections, or feature areas outside the sidebar rail. The light canvas is not a default that gets overridden; it is the system.
-- **Don't** use Inter. The `.leads-container` CSS block uses it as a parallel font stack; that is a documented anti-pattern. New features always use Manrope.
-- **Don't** replicate the `.leads-container` parallel CSS system in new features. It defines its own token set, overrides project fonts, and introduces a second visual language into the app.
+- **Don't** use Inter. Manrope is the only body/UI font (`var(--font-sans)`). The `.leads-container` Inter usage has been removed; do not reintroduce it.
+- **Don't** give the `.leads-container` CSS its own colour or font values. The parallel token set has been dissolved: `--leads-*` now alias the canonical `:root` tokens (`--royal-gold`, `--success`, `--foreground`, etc.) and `font-family` inherits Manrope. Keep it that way. Prefer Tailwind utility classes over extending this hand-written CSS block at all; new sales/leads UI should consume the system tokens directly. (Radii and shadow values in the block remain bespoke px values, pending a future pass onto the rem token scale.)
 - **Don't** use `border-left` wider than 1px as a coloured accent stripe on cards, list items, or callouts. The follow-up notes block has one; it is the pattern to eliminate, not repeat.
 - **Don't** use gradient text (`background-clip: text` combined with a gradient background). No exceptions.
 - **Don't** introduce identical card grids: same-sized cards with icon + heading + body text, repeated. MetricCard is a purposeful exception with strict data binding. Generic icon grids are prohibited.
