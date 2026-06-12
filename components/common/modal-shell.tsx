@@ -20,6 +20,8 @@ export function ModalShell({
   titleClassName,
   children,
 }: ModalShellProps) {
+  const titleId = React.useId();
+
   if (!open) return null;
 
   return (
@@ -30,6 +32,7 @@ export function ModalShell({
       }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
     >
       <div
         className={`flex max-h-[90vh] w-full flex-col ${maxWidthClass} rounded-xl bg-background shadow-lg ring-1 ring-border`}
@@ -37,6 +40,7 @@ export function ModalShell({
         <div className="shrink-0 flex items-start justify-between gap-3 border-b border-border px-5 py-3">
           <div>
             <h4
+              id={titleId}
               className={`text-base font-bold tracking-tight text-foreground ${titleClassName ?? ""}`}
             >
               {title}

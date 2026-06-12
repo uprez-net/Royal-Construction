@@ -191,7 +191,8 @@ function FollowupItem({
           <button
             type="button"
             className="fu-action-btn fu-action-call"
-            title="Call"
+            title={`Call ${lead.name}`}
+            aria-label={`Call ${lead.name}`}
             onClick={(event) => {
               event.stopPropagation();
               handleCall();
@@ -203,7 +204,8 @@ function FollowupItem({
           <button
             type="button"
             className="fu-action-btn fu-action-email"
-            title="Follow-up Email"
+            title={`Send follow-up email to ${lead.name}`}
+            aria-label={`Send follow-up email to ${lead.name}`}
             onClick={(event) => {
               event.stopPropagation();
               setShowEmailModal(true);
