@@ -8,6 +8,8 @@ import { DashboardKPI as DashboardKPIType } from "@/types/dashboard";
 import type { PaginatedProjectsResult } from "@/lib/data/projects";
 import { siteManagersMock } from "@/lib/mock-data";
 import type { FollowUpItem } from "./dashboard-follow-ups";
+import { DashboardGraphCards } from "./dashboard-graph-cards";
+import type { DashboardGraphData } from "@/lib/data/dashboard";
 
 interface DashboardHomeProps {
   userFirstName: string;
@@ -17,6 +19,7 @@ interface DashboardHomeProps {
   kpiData: DashboardKPIType;
   projectsData: PaginatedProjectsResult;
   followUpItems: FollowUpItem[];
+  graphData: DashboardGraphData;
 }
 
 export function DashboardHome({
@@ -27,6 +30,7 @@ export function DashboardHome({
   kpiData,
   projectsData,
   followUpItems,
+  graphData,
 }: DashboardHomeProps) {
   return (
     <div className="grid gap-6 space-y-6">
@@ -51,6 +55,9 @@ export function DashboardHome({
         }
       />
 
+      {/* Graph Cards */}
+      <DashboardGraphCards data={graphData} />
+
       <DashboardProjectTable
         projects={projectsData.items}
         pageInfo={{
@@ -61,6 +68,7 @@ export function DashboardHome({
         onPageChange={(page) => console.log("Page changed to:", page)}
         onSearch={(query) => console.log("Search query:", query)}
       />
+
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
         <DashboardSiteManagerTable siteManagers={siteManagersMock} />
 
