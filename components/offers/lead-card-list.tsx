@@ -104,7 +104,7 @@ export function LeadCardList({
         >
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-3">
-              {(lead.creatingOffer || lead.stage === "Quoted") && (
+              {(lead.creatingOffer || lead.stage === "Quoted" || lead.runId) && (
                 <div className="absolute top-7.5 right-10">
                   {lead.stage === "Quoted" ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">

@@ -134,6 +134,7 @@ export function mapLead(
         created: toDateOnly(lead.createdAt) ?? "",
         urgent: lead.urgent,
         creatingOffer: lead.chatSessions.length > 0,
+        runId: lead.runId,
     };
 }
 

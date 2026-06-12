@@ -106,6 +106,7 @@ export interface Lead {
   created: string;
   urgent: boolean;
   creatingOffer: boolean;
+  runId: string | null;
 }
 
 export interface LeadsStats {
