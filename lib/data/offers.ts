@@ -476,7 +476,7 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
             }
         }
 
-        const { newOfferItems, newOfferFile, ...newOffer } = await createOrUpdateOffer({
+        const result = await createOrUpdateOffer({
             leadId,
             offerFileInput: {
                 id: uuidv4(),
@@ -512,18 +512,29 @@ export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
         });
 
         const notificationPayload = createNotification("offerCreated", {
-            offerId: newOffer.id.toString(),
+            offerId: result.id.toString(),
             leadId: leadId.toString(),
             offerAmount: totalAmount.toString(),
-            offerStatus: newOffer.offerStatus,
+            offerStatus: result.offerStatus,
         });
         await triggerNotification(lead.assignedId ? [lead.assignedId] : [], notificationPayload);
 
         revalidateTag("offers", CACHE_PROFILES.MEDIUM);
-        revalidateTag(`offer-${newOffer.id}`, CACHE_PROFILES.MEDIUM);
+        revalidateTag(`offer-${result.id}`, CACHE_PROFILES.MEDIUM);
 
         return {
-            ...newOffer,
+            id: result.id,
+            leadId: result.leadId,
+            lead: result.lead,
+            amount: result.amount,
+            gstAmount: result.gstAmount,
+            totalAmount: result.totalAmount,
+            offerStatus: result.offerStatus,
+            version: result.version,
+            sentAt: result.sentAt,
+            acceptedAt: result.acceptedAt,
+            createdAt: result.createdAt,
+            updatedAt: result.updatedAt,
         };
     } catch (error) {
         console.error("Error creating offer:", error);

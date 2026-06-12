@@ -61,6 +61,7 @@ export const ALLOWED_UPLOAD_MIME_TYPES = [
   "text/csv",
   "application/csv",
   "text/plain",
+  "text/html",
 ] as const;
 
 export const uploadMimeTypeSchema = z.enum(ALLOWED_UPLOAD_MIME_TYPES);
