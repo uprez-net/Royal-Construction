@@ -151,6 +151,7 @@ export function WorkflowStreamProvider({
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
+        console.log("Got chunk:", buffer);
 
         /**
          * assumes each chunk is newline-delimited json
@@ -165,6 +166,7 @@ export function WorkflowStreamProvider({
 
           try {
             const payload = JSON.parse(line);
+            console.log(payload);
             setCreatingOffer(payload);
           } catch {
             console.error("Invalid stream payload:", line);

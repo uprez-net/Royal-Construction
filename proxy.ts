@@ -5,8 +5,7 @@ import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth"
 const isPublicRoute = createRouteMatcher([
   "/api/webhook/clerk(.*)",
   "/api/graph(.*)",
-  '/.well-known/oauth-authorization-server(.*)',
-  '/.well-known/oauth-protected-resource(.*)',
+  '/.well-known(.*)',
   '/api/mcp(.*)',
   "/api/cron(.*)",
   "/book-consultation",

@@ -24,7 +24,7 @@ export const imageGenerationAgent = new ToolLoopAgent({
                 const { image } = await generateImage({
                     model: gateway.image("google/imagen-4.0-fast-generate-001"),
                     prompt: description,
-                    size: "1024x1024",
+                    aspectRatio: "16:9",
                 });
                 const blob = await put(
                     `facade-images/${title}.${image.mediaType}`,
