@@ -15,7 +15,6 @@ import {
   Sparkles,
   FileText,
 } from "lucide-react";
-import * as XLSX from "xlsx";
 import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { useLeadsData } from "@/hooks/use-leads-data";
@@ -201,6 +200,7 @@ export default function Leads() {
   );
 
   const handleExport = async () => {
+    const XLSX = await import("xlsx");
     const allLeads = await fetchAllLeads();
     const leadHeader = [
       "leadId",
@@ -322,7 +322,7 @@ export default function Leads() {
 
       {/* Metric cards */}
       {stats && !loading && (
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3">
           <LeadMetricCard
             label="Total Leads"
             value={String(stats.total)}
@@ -382,7 +382,7 @@ export default function Leads() {
 
       {/* Main card */}
       <Card className="border-border/70 bg-white/95 shadow-sm">
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-5 py-3">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
           {(
             [
               { key: "table" as TabType, label: "Table View", Icon: Table2 },
@@ -413,12 +413,12 @@ export default function Leads() {
           ))}
 
           {!loading && (
-            <div className="ml-auto flex items-center gap-3">
+            <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
               <Select
                 value={activeFilterTiming}
                 onValueChange={handleFilterTimingChange}
               >
-                <SelectTrigger className="flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                  <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
                   <SelectValue placeholder="Select timeframe" />
                 </SelectTrigger>
                 <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
@@ -430,7 +430,7 @@ export default function Leads() {
                   <SelectItem value="all">All Time</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="search-box" style={{ flex: 1 }}>
+              <div className="search-box min-w-0 flex-1">
                 <Search size={16} />
                 <input
                   type="text"

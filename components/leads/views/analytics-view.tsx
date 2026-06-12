@@ -66,8 +66,32 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
     };
   });
 
+  const topSource = [...analytics.sourceData].sort((a, b) => b.value - a.value)[0];
+  const latestMonth = analytics.monthlyTrend.at(-1);
+  const topLostReason = [...analytics.lostReasons].sort((a, b) => b.value - a.value)[0];
+
   return (
     <div className="analytics-view">
+      <div className="analytics-summary" aria-label="Lead analytics summary">
+        <div>
+          <span>Top source</span>
+          <strong>{topSource ? `${topSource.name} (${topSource.value})` : "No source data"}</strong>
+        </div>
+        <div>
+          <span>Latest month</span>
+          <strong>
+            {latestMonth
+              ? `${latestMonth.month}: ${latestMonth.leads} leads, ${latestMonth.converted} converted`
+              : "No monthly data"}
+          </strong>
+        </div>
+        <div>
+          <span>Top lost reason</span>
+          <strong>
+            {topLostReason ? `${topLostReason.name} (${topLostReason.value})` : "No lost reason data"}
+          </strong>
+        </div>
+      </div>
       {/* ── Row 1: Lead Sources (5 col) + Monthly Trend (7 col) ── */}
       <div className="analytics-row">
         <div className="analytics-card analytics-card-small">

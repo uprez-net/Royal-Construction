@@ -285,3 +285,151 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
         throw new Error("Failed to fetch follow-up items");
     }
 }
+
+export async function getDashboardGraphData() {
+    try {
+        const [nonConversionData, leadAndRevenueDataUptoPastYear, conversionBreakdownData, estVsSpendProjectData] = await Promise.all([
+            prisma.$queryRaw<
+                {
+                    name: string | null;
+                    value: bigint;
+                }[]
+            >`
+                SELECT
+                  COALESCE("lostReason", 'Unknown') AS name,
+                  COUNT(*) AS value
+                FROM "Lead"
+                WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')
+                GROUP BY COALESCE("lostReason", 'Unknown')
+                ORDER BY value DESC
+              `,
+
+            prisma.$queryRaw<
+                {
+                    month: Date;
+                    leads: bigint;
+                    converted: bigint;
+                    revenue: bigint;
+                }[]
+            >`
+                WITH months AS (
+                    SELECT generate_series(
+                        DATE_TRUNC('month', NOW() - INTERVAL '11 months'),
+                        DATE_TRUNC('month', NOW()),
+                        INTERVAL '1 month'
+                    ) AS month
+                ),
+                lead_stats AS (
+                    SELECT
+                        DATE_TRUNC('month', "createdAt") AS month,
+                        COUNT(*) AS leads,
+                        COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS converted
+                    FROM "Lead"
+                    WHERE "createdAt" >= DATE_TRUNC('month', NOW() - INTERVAL '11 months')
+                    GROUP BY 1
+                ),
+                project_revenue AS (
+                    SELECT
+                        DATE_TRUNC('month', "createdAt") AS month,
+                        COALESCE(SUM("totalBudget"), 0) AS revenue
+                    FROM "Project"
+                    WHERE "createdAt" >= DATE_TRUNC('month', NOW() - INTERVAL '11 months')
+                    GROUP BY 1
+                )
+                SELECT
+                    m.month,
+                    COALESCE(ls.leads, 0)    AS leads,
+                    COALESCE(ls.converted, 0) AS converted,
+                    COALESCE(pr.revenue, 0)  AS revenue
+                FROM months m
+                LEFT JOIN lead_stats ls    ON ls.month = m.month
+                LEFT JOIN project_revenue pr ON pr.month = m.month
+                ORDER BY m.month;
+                  `,
+            prisma.$queryRaw<
+                {
+                    stage: "converted" | "pending" | "lost" | "nurture";
+                    value: bigint;
+                }[]
+            >`
+            SELECT
+                CASE
+                WHEN stage IN ('WON', 'CONVERTED')
+                    THEN 'converted'
+
+                WHEN stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')
+                    THEN 'lost'
+
+                WHEN stage IN ('NEW', 'CONTACTED', 'QUALIFIED')
+                    THEN 'nurture'
+
+                WHEN stage IN (
+                    'QUOTED',
+                    'NEGOTIATING',
+                    'MEETING_SCHEDULED',
+                    'IN_FOLLOW_UP',
+                    'NO_RESPONSE'
+                )
+                    THEN 'pending'
+                END AS stage,
+
+                COUNT(*) AS value
+
+            FROM "Lead"
+
+            GROUP BY 1
+            `,
+            prisma.$queryRaw<
+                {
+                    month: Date;
+                    estimateSpend: number;
+                    actualSpend: number;
+                }[]
+            >`
+                SELECT
+                    DATE_TRUNC('month', "targetDate") AS month,
+                    COALESCE(SUM("budget"), 0) AS "estimateSpend",
+                    COALESCE(SUM("spend"), 0) AS "actualSpend"
+                FROM "Milestone"
+                WHERE "targetDate" >= ${startOfMonth(subMonths(new Date(), 11))}
+                GROUP BY 1
+                ORDER BY 1;
+                `
+        ]);
+
+        const formattedNonConversionData = nonConversionData.map((item) => ({
+            name: item.name ?? "Unknown",
+            value: Number(item.value),
+        }));
+
+        const formattedLeadAndRevenueData = leadAndRevenueDataUptoPastYear.map((item) => ({
+            month: item.month,
+            leads: Number(item.leads),
+            converted: Number(item.converted),
+            revenue: Number(item.revenue),
+        }));
+
+        const formattedConversionBreakdownData = conversionBreakdownData.map((item) => ({
+            stage: item.stage,
+            value: Number(item.value),
+        }));
+
+        const formattedEstVsSpendProjectData = estVsSpendProjectData.map((item) => ({
+            month: item.month,
+            estimateSpend: Number(item.estimateSpend),
+            actualSpend: Number(item.actualSpend),
+        }));
+
+        return {
+            nonConversionData: formattedNonConversionData,
+            leadAndRevenueData: formattedLeadAndRevenueData,
+            conversionBreakdownData: formattedConversionBreakdownData,
+            estVsSpendProjectData: formattedEstVsSpendProjectData,
+        };
+    } catch (error) {
+        console.error("Error fetching dashboard graph data:", error);
+        throw new Error("Failed to fetch dashboard graph data");
+    }
+}
+
+export type DashboardGraphData = Awaited<ReturnType<typeof getDashboardGraphData>>;

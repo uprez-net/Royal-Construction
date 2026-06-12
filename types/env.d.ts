@@ -57,5 +57,8 @@ namespace NodeJS {
 
         // AI Gateway
         AI_GATEWAY_API_KEY: string;
+
+        // Scrapedo (Web Scraping)
+        SCRAPEDO_TOKEN: string;
     }
 }

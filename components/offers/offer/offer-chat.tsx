@@ -83,7 +83,10 @@ export function OfferChat() {
             {messages.map(
               (msg) =>
                 msg.parts.some(
-                  (part) => part.type === "text" && part.text.trim().length > 0,
+                  (part) =>
+                    (part.type === "text" && part.text.trim().length > 0) ||
+                    part.type === "reasoning" ||
+                    part.type.startsWith("tool-"),
                 ) && (
                   <div
                     key={msg.id}
@@ -150,6 +153,7 @@ export function OfferChat() {
       >
         <div className="relative">
           <Textarea
+            disabled={status === "streaming" || status === "submitted"}
             value={input}
             rows={1}
             placeholder="Ask about properties, data, or insights…"

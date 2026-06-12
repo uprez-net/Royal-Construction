@@ -30,7 +30,7 @@ export function OfferTable({
 
   useEffect(() => {
     dispatch(setOffers(serverQuotes));
-  }, [offers, serverQuotes, dispatch]);
+  }, [serverQuotes, dispatch]);
 
   const handlePageChange = async (page: number) => {
     try {

@@ -46,7 +46,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         fileId: clientPayload.fileId,
                         fileName: clientPayload.fileName,
                         fileSize: clientPayload.fileSize,
-                        skipRecordCreation: clientPayload.skipRecordCreation,
+                        isOfferFile: clientPayload.isOfferFile,
                     } satisfies TokenPayload),
                 };
             },
@@ -61,8 +61,8 @@ export async function POST(request: Request): Promise<NextResponse> {
                         throw new Error('User not found');
                     }
 
-                    if (payload.skipRecordCreation) {
-                        console.log('Skipping file record creation as per payload instruction');
+                    if (payload.isOfferFile) {
+                        console.log('Skipping file record creation as per payload instruction because this is an offer file');
                         return;
                     }
 

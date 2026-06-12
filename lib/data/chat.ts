@@ -118,7 +118,7 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
             files: leadFiles,
             leadInfo: {
                 ...lead,
-                type: lead.type.length > 0 ? lead!.type.join(", ") : "Not Specified"
+                type: lead.type.length > 0 ? lead.type.join(", ") : "Not Specified"
             }
         };
     } catch (error) {

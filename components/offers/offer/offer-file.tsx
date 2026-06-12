@@ -26,6 +26,7 @@ import { v4 as uuidv4 } from "uuid";
 import { upload } from "@vercel/blob/client";
 import { ClientPayload } from "@/utils/validators/files";
 import { OfferVersionSelector } from "./offer-version-selector";
+import { del } from "@vercel/blob";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
@@ -59,9 +60,11 @@ export function OfferFileCanvas({
   const [tabId, setTabId] = useState<"offer" | "files" | "line-items">("offer");
   const [isPending, startTransition] = useTransition();
   const [filesState, setFiles] = useState<File[]>(files);
-  const totalAmount = currency.format(
-    lineItems.reduce((acc, item) => acc + item.totalPrice, 0),
+  const numericTotalAmount = lineItems.reduce(
+    (acc, item) => acc + item.totalPrice,
+    0,
   );
+  const totalAmount = currency.format(numericTotalAmount);
 
   const handleDownload = async () => {
     if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
@@ -88,6 +91,7 @@ export function OfferFileCanvas({
   const handleSave = async () => {
     if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
     // First Upload the offer file to the server, then save the offer details and line items in the database
+    let fileUrl: string | undefined;
     try {
       const documentHtml =
         offerFileRef.current.contentDocument.documentElement.outerHTML;
@@ -110,7 +114,7 @@ export function OfferFileCanvas({
             fileId: fileId,
             fileName: fileName,
             fileSize: blob.size,
-            skipRecordCreation: true, // Instruct the upload API to skip creating a file record since we'll handle it after the upload
+            isOfferFile: true, // Instruct the upload API to skip creating a file record since we'll handle it after the upload
           } satisfies ClientPayload),
         },
       );
@@ -118,11 +122,11 @@ export function OfferFileCanvas({
       const amount = lineItems
         .reduce((acc, item) => acc + item.totalPrice, 0)
         .toFixed(2);
-      const gstAmount = (parseFloat(amount) * 0.18).toFixed(2); // Assuming 18% GST
+      const gstAmount = (parseFloat(amount) * 0.10).toFixed(2); // Assuming 10% GST
       const finalAmount = (parseFloat(amount) + parseFloat(gstAmount)).toFixed(
         2,
       );
-
+      fileUrl = uploadRes.url;
       const newOffer = await createOrUpdateOffer({
         leadId: parseInt(leadId),
         offerFileInput: {
@@ -148,6 +152,9 @@ export function OfferFileCanvas({
       });
       appendVersion(newOffer.version, newOffer.newOfferItems, newOffer.newOfferFile);
     } catch (error) {
+      if(fileUrl) {
+        del(fileUrl); // Clean up the uploaded file if offer saving fails
+      }
       console.error("Error saving the offer:", error);
     }
   };
@@ -218,7 +225,7 @@ export function OfferFileCanvas({
           <OfferFileTemplate
             {...offerFile}
             ref={offerFileRef}
-            contractAmount={parseFloat(totalAmount) ? `${totalAmount}` : undefined}
+            contractAmount={numericTotalAmount > 0 ? totalAmount : undefined}
             customerName={customerName}
             projectName={`${projectType}, ${location}`}
             siteLocation={location}

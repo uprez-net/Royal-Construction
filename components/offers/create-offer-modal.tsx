@@ -78,6 +78,7 @@ export function CreateOfferFileModal({
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
+      setSelectedLeadId(null);
       resetSearch();
       resetQueue();
       onClose();
@@ -167,7 +168,7 @@ export function CreateOfferFileModal({
             fileId: queuedFile.id,
             fileName: queuedFile.file.name,
             fileSize: queuedFile.file.size,
-            skipRecordCreation: false,
+            isOfferFile: false, // these are lead related files for offer creation
           } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {
