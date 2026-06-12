@@ -29,7 +29,7 @@ import {
 
 // ─── Shared tokens ────────────────────────────────────────────────────────────
 const TEAL = "#1D9E75";
-const TEAL_DARK = "#0F6E56";
+// const TEAL_DARK = "#0F6E56";
 const ORANGE = "#EF9F27";
 const GREEN_LIGHT = "#97C459";
 const NON_CONVERSION_COLORS = [

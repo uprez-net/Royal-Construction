@@ -1,6 +1,5 @@
 "use server";
 import type { DashboardKPI } from "@/types/dashboard";
-import type { DataPoint } from "@/components/common/metric-card";
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import {
@@ -11,7 +10,7 @@ import {
     isPast,
     isToday
 } from "date-fns";
-import { ProjectStatus, LeadStage } from "@prisma/client";
+import { LeadStage } from "@prisma/client";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 import { calculateTrend } from "@/utils/formatters";
 
