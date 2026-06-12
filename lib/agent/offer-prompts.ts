@@ -594,6 +594,8 @@ export const offerCreationOutputSchema = z.object({
   offerFileContent: offerFileContentSchema.describe("Structured customer-facing offer document content."),
 });
 
+export type OfferCreationOutput = z.infer<typeof offerCreationOutputSchema>;
+
 function compactValue(value: unknown) {
   if (value === null || value === undefined || value === "") return undefined;
   return value;

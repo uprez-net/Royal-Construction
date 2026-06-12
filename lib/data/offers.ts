@@ -4,15 +4,8 @@ import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
-import { OfferKPIs, OfferWithItemsAndFiles, OfferWithLead, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
+import { OfferKPIs, OfferWithItemsAndFiles, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
 import type { OfferFile } from "@/context/ChatContext";
-import { findLeadById } from "./leads";
-import { offerCreationAgent } from "../agent/offerCreationAgent";
-import { v4 as uuidv4 } from "uuid";
-import { buildCreationStarterPrompt, FacadeOptionWithImageUrl } from "../agent/offer-prompts";
-import { triggerNotification } from "@/lib/notification/novu";
-import { createNotification } from "@/types/notification";
-import { imageGenerationAgent } from "../agent/imageGenerationAgent";
 import { calculateTrend } from "@/utils/formatters";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
@@ -409,124 +402,5 @@ export const createOrUpdateOffer = async ({
     } catch (error) {
         console.error("Error creating offer:", error);
         throw new Error("Failed to create offer");
-    }
-}
-
-const DEFAULT_GST_RATE = 0.10;
-
-function roundCurrency(value: number) {
-    return Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
-}
-
-function calculateLinePricing(item: { unitPrice: number; quantity: number; gstRate?: number; gstIncluded?: boolean }) {
-    const gstRate = item.gstRate ?? DEFAULT_GST_RATE;
-    const rawLine = roundCurrency(item.unitPrice * item.quantity);
-
-    if (item.gstIncluded) {
-        const netLine = roundCurrency(rawLine / (1 + gstRate));
-        return {
-            netLine,
-            gstAmount: roundCurrency(rawLine - netLine),
-            totalPrice: rawLine,
-        };
-    }
-
-    const gstAmount = roundCurrency(rawLine * gstRate);
-    return {
-        netLine: rawLine,
-        gstAmount,
-        totalPrice: roundCurrency(rawLine + gstAmount),
-    };
-}
-
-export const createOffer = async (leadId: number): Promise<OfferWithLead> => {
-    try {
-        const lead = await findLeadById(leadId);
-        if (!lead) {
-            throw new Error(`Lead with ID ${leadId} not found`);
-        }
-        const leadFiles = await prisma.file.findMany({
-            where: { leadId }
-        });
-        const prompt = buildCreationStarterPrompt(lead, leadFiles);
-        const { output } = await offerCreationAgent.generate({
-            prompt,
-        });
-        const offerItemsWithPricing = output.lineItemArray.map((item) => ({
-            item,
-            pricing: calculateLinePricing(item),
-        }));
-        const amount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.netLine, 0));
-        const gstAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.gstAmount, 0));
-        const totalAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.totalPrice, 0));
-        const Options: FacadeOptionWithImageUrl["options"] = [];
-        if (output.offerFileContent.facadeOptions) {
-            for (const option of output.offerFileContent.facadeOptions.options) {
-                const image = await imageGenerationAgent.generate({
-                    prompt:
-                        `
-                        Generate a facade design image based on the following description: ${option.description}. 
-                        The image should reflect the architectural style, materials, colors, and specific features mentioned in the description.
-                    `
-                })
-                Options.push({
-                    ...option,
-                    imageUrl: image.output.imageUrl,
-                })
-            }
-        }
-
-        const { newOfferItems, newOfferFile, ...newOffer } = await createOrUpdateOffer({
-            leadId,
-            offerFileInput: {
-                id: uuidv4(),
-                filename: `offer_${lead.name}_${Date.now()}.json`,
-                fileType: "application/json",
-                filesize: JSON.stringify(output.offerFileContent).length,
-                url: "placeholder_url", // In a real implementation, you would upload the content to a storage service and provide the URL here
-                offerContent: {
-                    ...output.offerFileContent,
-                    facadeOptions: output.offerFileContent.facadeOptions ? {
-                        optionsDescription: output.offerFileContent.facadeOptions.optionsDescription,
-                        options: Options,
-                    } : undefined,
-                },
-            },
-            amount: amount.toString(),
-            gstAmount: gstAmount.toString(),
-            totalAmount: totalAmount.toString(),
-            offerItems: offerItemsWithPricing.map(({ item, pricing }) => ({
-                id: item.id,
-                item: item.item,
-                description: item.description,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice.toString(),
-                totalPrice: pricing.totalPrice.toString(),
-                unit: item.unit,
-            })),
-        });
-        await prisma.chatSession.create({
-            data: {
-                leadId,
-            },
-        });
-
-        const notificationPayload = createNotification("offerCreated", {
-            offerId: newOffer.id.toString(),
-            leadId: leadId.toString(),
-            offerAmount: totalAmount.toString(),
-            offerStatus: newOffer.offerStatus,
-        });
-        await triggerNotification(lead.assignedId ? [lead.assignedId] : [], notificationPayload);
-
-        revalidateTag("offers", CACHE_PROFILES.MEDIUM);
-        revalidateTag(`offer-${newOffer.id}`, CACHE_PROFILES.MEDIUM);
-
-        return {
-            ...newOffer,
-        };
-    } catch (error) {
-        console.error("Error creating offer:", error);
-        throw new Error(`Failed to create offer${error instanceof Error ? `: ${error.message}` : ""}`);
     }
 }

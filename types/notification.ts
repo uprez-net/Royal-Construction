@@ -28,7 +28,7 @@ export const notificationTemplates: NotificationTemplateFactory = {
 
   leadUpdated: (data) => ({
     title: `Lead Updated: LED-#${data.leadId} - ${data.customerName}`,
-    message: `${data.customerName}'s lead moved to ${data.status}`,
+    message: `${data.customerName}'s lead ${data.change ?? `moved to ${data.status}`}`,
     url: `/leads?status=${encodeURIComponent(data.status)}`,
   }),
 

@@ -351,6 +351,7 @@ model Lead {
   sourceDetail String?
 
   stage LeadStage @default(NEW)
+  runId String?
 
   assignedId String? // <-- THE NEW FOREIGN KEY
 
@@ -359,7 +360,7 @@ model Lead {
   budget String?
   type   String[]
 
-  notes String? @db.Text
+  notes    String? @db.Text
   notesDoc Json?
 
   followupDate  DateTime?
@@ -375,12 +376,12 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offers       Offer[]
-  chatSessions ChatSession[]
-  history      LeadHistory[]
+  offers          Offer[]
+  chatSessions    ChatSession[]
+  history         LeadHistory[]
   noteAnnotations LeadNoteAnnotation[]
-  files        File[]        @relation("LeadFiles")
-  assignedUser User?         @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
+  files           File[]               @relation("LeadFiles")
+  assignedUser    User?                @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
 
   @@index([stage])
   @@index([assignedId])
@@ -393,12 +394,12 @@ model LeadNoteAnnotation {
   leadId Int
   lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  selectedText String @db.Text
-  comment      String @db.Text
+  selectedText     String           @db.Text
+  comment          String           @db.Text
   mentionedUserIds String[]
-  status AnnotationStatus @default(OPEN)
+  status           AnnotationStatus @default(OPEN)
 
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
   resolvedAt DateTime?
 
   @@index([leadId])
@@ -510,13 +511,13 @@ model ChatMessage {
   @@index([sessionId])
 }
 
-model EmailAdHock{
-  id String @id @default(uuid())
-  name String
+model EmailAdHock {
+  id           String   @id @default(uuid())
+  name         String
   emailSubject String
-  htmlUrl String 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  htmlUrl      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@map("email_adhoc")
 }

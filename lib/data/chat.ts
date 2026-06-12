@@ -83,6 +83,7 @@ interface FetchChatResponse {
         name: string;
         location: string;
         type: string;
+        runId: string | null;
     };
 }
 
@@ -106,6 +107,7 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
                 name: true,
                 location: true,
                 type: true,
+                runId: true,
             }
         });
 

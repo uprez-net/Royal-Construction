@@ -19,6 +19,7 @@ export const notificationSchemas = {
         customerEmail: z.string().email(),
         customerPhone: z.string(),
         status: z.string(),
+        change: z.string().optional(),
     }),
 
     leadAssigned: z.object({

@@ -31,10 +31,10 @@ import {
 import { upload } from "@vercel/blob/client";
 import { buildBlobPath } from "@/utils/formatters";
 import { ClientPayload } from "@/utils/validators/files";
-import { createOffer } from "@/lib/data/offers";
 import { addOffer } from "@/lib/store/slices/offerSlice";
 import { LeadCardList } from "./lead-card-list";
 import { useRouter } from "next/navigation";
+import { fetchJson } from "@/utils/fetch";
 
 interface CreateOfferFileModalProps {
   open: boolean;
@@ -119,12 +119,21 @@ export function CreateOfferFileModal({
         );
       }
 
-      const newOffer = await createOffer(selectedLeadId);
+      const newOffer = await fetchJson<{ runId: string; message: string }>(
+        `/api/offer-create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ leadId: selectedLeadId }),
+        },
+        "Failed to trigger offer creation workflow",
+      );
       handleOpenChange(false);
-      dispatch(addOffer(newOffer));
-      toast.success("Offer created successfully.", { id: loading });
+      toast.success("Offer creation trigger started.", { id: loading });
       toast.info("Redirecting to offer...");
-      router.push(`/offers/${selectedLeadId}`);
+      router.push(`/offers/${selectedLeadId}?runId=${newOffer.data.runId}`);
     } catch (error) {
       console.error("Error creating offer:", error);
       toast.error("Failed to create offer. Please try again.", { id: loading });
