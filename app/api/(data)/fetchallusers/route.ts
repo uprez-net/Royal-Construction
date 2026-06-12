@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { clerkClient } from "@/lib/auth";
-import { errorResponse } from "@/utils/validators";
+import { errorResponse, successResponse } from "@/utils/validators";
 import { Role } from "@prisma/client";
 // import { NextRequest } from "next/server";
 
@@ -11,11 +11,26 @@ function isDisplayableName(name: string | null | undefined) {
 
 export async function GET() {
       try {
+            const pageLimit = 100;
+            let offset = 0;
+            const clerkUsers = [];
 
-            const clerkUsers = await clerkClient.users.getUserList({
-                  limit: 100,
-            });
-            const usersByClerkId = new Map(clerkUsers.data.map((user) => [user.id, user]));
+            while (true) {
+                  const page = await clerkClient.users.getUserList({
+                        limit: pageLimit,
+                        offset,
+                  });
+
+                  clerkUsers.push(...page.data);
+
+                  if (page.data.length < pageLimit) {
+                        break;
+                  }
+
+                  offset += pageLimit;
+            }
+
+            const usersByClerkId = new Map(clerkUsers.map((user) => [user.id, user]));
 
             const Users = await prisma.user.findMany({
                   where: {
@@ -46,9 +61,7 @@ export async function GET() {
                   };
             }).sort((a, b) => a.name.localeCompare(b.name));
 
-            return new Response(JSON.stringify({ users }), {
-                  status: 200,
-            });
+            return successResponse({ users });
 
       } catch (error) {
             console.error("/api/fetchallusers GET error", error);

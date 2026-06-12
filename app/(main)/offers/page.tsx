@@ -57,7 +57,7 @@ async function QfferPageClient() {
 export default function OfferPage() {
   return (
     <Suspense fallback={<OfferPageSkeleton />}>
-      <QfferPageClient />;
+      <QfferPageClient />
     </Suspense>
   );
 }

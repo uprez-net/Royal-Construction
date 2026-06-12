@@ -47,13 +47,19 @@ export function MetricCard({
           >
             <Icon className="size-5" />
           </div>
-          {(trendDelta !== undefined && trendDelta !== 0) && (
+          {trendDelta !== undefined && trendDelta !== 0 && (
             <TrendBadge value={trendDelta} />
           )}
         </div>
         <p className="text-3xl font-bold">
           {isCurrency
-            ? `${compactCurrency.format(parseFloat(value.toString()))}`
+            ? (() => {
+                const numericValue =
+                  typeof value === "number" ? value : Number(value);
+                return Number.isFinite(numericValue)
+                  ? compactCurrency.format(numericValue)
+                  : "—";
+              })()
             : value}
         </p>
         <p className="text-xs text-muted-foreground">{title}</p>

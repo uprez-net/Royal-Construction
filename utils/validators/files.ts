@@ -152,7 +152,7 @@ export const clientPayloadSchema = z.object({
     projectId: z.string().trim().min(1, 'Project ID is required').optional(),
     milestoneId: z.string().trim().optional().nullable(),
     leadId: z.coerce.string().trim().optional(),
-    skipRecordCreation: z.boolean().default(false),
+    isOfferFile: z.boolean().optional().default(false),
 });
 
 export type ClientPayload = z.infer<typeof clientPayloadSchema>;

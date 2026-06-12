@@ -83,10 +83,34 @@ export async function POST(request: NextRequest) {
 
         const chat = await createOrGetChatSession(leadId);
         const dbMessages = chat.messages;
-        const UIFormattedMessages: ChatMessageAI[] = [...convertToUIMessage(dbMessages), message as ChatMessageAI].filter(
-            (msg): msg is ChatMessageAI =>
-                msg != null && msg.parts != null && msg.role != null,
-        );
+
+        let UIFormattedMessages: ChatMessageAI[] = [];
+
+        if (isContinuationRequest) {
+            // Use the incoming `messages` array as the source-of-truth for continuations.
+            UIFormattedMessages = (messages || []).map((m) => {
+                if (!m || typeof m !== "object") return null;
+                if (!m.parts || !Array.isArray(m.parts) || !m.role) {
+                    console.error("Invalid message in continuation payload:", {
+                        hasParts: !!m?.parts,
+                        partsIsArray: Array.isArray(m?.parts),
+                        hasRole: !!m?.role,
+                    });
+                    return null;
+                }
+
+                if (!m.id) {
+                    m.id = generateUUID();
+                }
+
+                return m as ChatMessageAI;
+            }).filter((msg): msg is ChatMessageAI => msg != null && msg.parts != null && msg.role != null);
+        } else {
+            UIFormattedMessages = [...convertToUIMessage(dbMessages), message as ChatMessageAI].filter(
+                (msg): msg is ChatMessageAI =>
+                    msg != null && msg.parts != null && msg.role != null,
+            );
+        }
 
         // Safety check - ensure we have valid messages to process
         if (UIFormattedMessages.length === 0) {
