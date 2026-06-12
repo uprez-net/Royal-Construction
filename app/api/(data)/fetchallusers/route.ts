@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { clerkClient } from "@/lib/auth";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { Role } from "@prisma/client";
-// import { NextRequest } from "next/server";
+import { connection } from "next/server";
 
 function isDisplayableName(name: string | null | undefined) {
       const normalized = name?.trim();
@@ -10,6 +10,7 @@ function isDisplayableName(name: string | null | undefined) {
 }
 
 export async function GET() {
+      await connection()
       try {
             const pageLimit = 100;
             let offset = 0;

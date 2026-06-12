@@ -13,6 +13,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { getWritable } from "workflow";
+import { currency } from "@/utils/formatters";
 
 export interface OfferCreationStatus {
     failed?: boolean;
@@ -21,7 +22,7 @@ export interface OfferCreationStatus {
     message: {
         step: "FETCHING_DETAILS" | "BUILDING_OFFER" | "SAVING_OFFER" | "TRIGGERING_NOTIFICATION" | "COMPLETED";
         details?: string;
-    };
+    }[];
 }
 
 export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead> => {
@@ -31,16 +32,18 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
         await writeToStream({
             status: "FETCHING_DETAILS",
             progress: 0,
-            message: {
-                step: "FETCHING_DETAILS",
-                details: `Starting offer creation workflow for lead ID ${leadId}`,
-            }
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Starting offer creation workflow for lead ID ${leadId}`,
+                }
+            ]
         });
         // Fetching lead details step
         const { lead, prompt } = await findLead(leadId);
 
         //Processing details step
-        const { offerItemsWithPricing, amount, gstAmount, totalAmount, output, Options } = await buildOffer(prompt);
+        const { offerItemsWithPricing, amount, gstAmount, totalAmount, output, Options } = await buildOffer(prompt, lead);
 
         // Creating offer step
         const newOffer = await saveOffer({
@@ -111,10 +114,12 @@ async function findLead(leadId: number) {
         await writeToStream({
             status: "BUILDING_OFFER",
             progress: 25,
-            message: {
-                step: "FETCHING_DETAILS",
-                details: `Fetched details for lead ${lead.name} (ID: ${lead.id})`,
-            },
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${lead.name} (ID: ${lead.id})`,
+                }
+            ],
         });
 
         return { lead, prompt };
@@ -124,16 +129,18 @@ async function findLead(leadId: number) {
             failed: true,
             status: "FETCHING_DETAILS",
             progress: 0,
-            message: {
-                step: "FETCHING_DETAILS",
-                details: `Failed to fetch details for lead with ID ${leadId}${error instanceof Error ? `: ${error.message}` : ""}`,
-            },
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Failed to fetch details for lead with ID ${leadId}${error instanceof Error ? `: ${error.message}` : ""}`,
+                }
+            ],
         });
         throw new Error(`Failed to fetch lead with ID ${leadId}${error instanceof Error ? `: ${error.message}` : ""}`);
     }
 }
 
-async function buildOffer(prompt: string) {
+async function buildOffer(prompt: string, lead: Lead) {
     'use step';
     try {
         const { output } = await offerCreationAgent.generate({
@@ -166,10 +173,16 @@ async function buildOffer(prompt: string) {
         await writeToStream({
             status: "SAVING_OFFER",
             progress: 50,
-            message: {
-                step: "BUILDING_OFFER",
-                details: `Built offer with ${offerItemsWithPricing.length} line items, total amount: $${totalAmount}`,
-            },
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${lead.name} (ID: ${lead.id})`,
+                },
+                {
+                    step: "BUILDING_OFFER",
+                    details: `Built offer with ${offerItemsWithPricing.length} line items, total amount: $${totalAmount}`,
+                }
+            ],
         });
 
         return {
@@ -186,10 +199,16 @@ async function buildOffer(prompt: string) {
             status: "BUILDING_OFFER",
             progress: 25,
             failed: true,
-            message: {
-                step: "BUILDING_OFFER",
-                details: `Failed to build offer${error instanceof Error ? `: ${error.message}` : ""}`,
-            },
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${lead.name} (ID: ${lead.id})`,
+                },
+                {
+                    step: "BUILDING_OFFER",
+                    details: `Failed to build offer${error instanceof Error ? `: ${error.message}` : ""}`,
+                }
+            ],
         });
         throw new Error(`Failed to build offer${error instanceof Error ? `: ${error.message}` : ""}`);
     }
@@ -280,10 +299,21 @@ async function saveOffer({
         await writeToStream({
             status: "TRIGGERING_NOTIFICATION",
             progress: 75,
-            message: {
-                step: "SAVING_OFFER",
-                details: `Saved offer with ID ${newOffer.id} for lead ${lead.name} (ID: ${lead.id})`,
-            },
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${lead.name} (ID: ${lead.id})`,
+                },
+                {
+                    step: "BUILDING_OFFER",
+                    details: `Built offer with ${offerItemsWithPricing.length} line items, total amount: $${totalAmount}`,
+                },
+                {
+                    step: "SAVING_OFFER",
+                    details: `Saved offer with ID ${newOffer.id} for lead ${lead.name} (ID: ${lead.id})`,
+                },
+            ]
+
         });
 
         return newOffer;
@@ -293,10 +323,20 @@ async function saveOffer({
             status: "SAVING_OFFER",
             progress: 50,
             failed: true,
-            message: {
-                step: "SAVING_OFFER",
-                details: `Failed to save offer${error instanceof Error ? `: ${error.message}` : ""}`,
-            },
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${lead.name} (ID: ${lead.id})`,
+                },
+                {
+                    step: "BUILDING_OFFER",
+                    details: `Built offer with ${offerItemsWithPricing.length} line items, total amount: $${totalAmount}`,
+                },
+                {
+                    step: "SAVING_OFFER",
+                    details: `Failed to save offer${error instanceof Error ? `: ${error.message}` : ""}`,
+                },
+            ]
         });
         throw new Error(`Failed to save offer${error instanceof Error ? `: ${error.message}` : ""}`);
     }
@@ -319,10 +359,24 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
         await writeToStream({
             status: "COMPLETED",
             progress: 100,
-            message: {
-                step: "COMPLETED",
-                details: `Offer creation completed and notification triggered for offer ID ${offer.id}`,
-            },
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${offer.lead.name} (ID: ${offer.lead.id})`,
+                },
+                {
+                    step: "BUILDING_OFFER",
+                    details: `Built offer with, total amount: ${currency.format(totalAmount)}`,
+                },
+                {
+                    step: "SAVING_OFFER",
+                    details: `Saved offer with ID ${offer.id} for lead ${offer.lead.name} (ID: ${offer.lead.id})`,
+                },
+                {
+                    step: "COMPLETED",
+                    details: `Offer creation completed and notification triggered for offer ID ${offer.id}`,
+                },
+            ]
         });
     } catch (error) {
         console.error("Error triggering notification:", error);
@@ -330,10 +384,24 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
             status: "TRIGGERING_NOTIFICATION",
             progress: 75,
             failed: true,
-            message: {
-                step: "TRIGGERING_NOTIFICATION",
-                details: `Failed to trigger notification for offer ID ${offer.id}${error instanceof Error ? `: ${error.message}` : ""}`,
-            },
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${offer.lead.name} (ID: ${offer.lead.id})`,
+                },
+                {
+                    step: "BUILDING_OFFER",
+                    details: `Built offer with, total amount: ${currency.format(totalAmount)}`,
+                },
+                {
+                    step: "SAVING_OFFER",
+                    details: `Saved offer with ID ${offer.id} for lead ${offer.lead.name} (ID: ${offer.lead.id})`,
+                },
+                {
+                    step: "TRIGGERING_NOTIFICATION",
+                    details: `Failed to trigger notification for offer ID ${offer.id}${error instanceof Error ? `: ${error.message}` : ""}`,
+                },
+            ]
         });
         return;
     }

@@ -31,7 +31,6 @@ import {
 import { upload } from "@vercel/blob/client";
 import { buildBlobPath } from "@/utils/formatters";
 import { ClientPayload } from "@/utils/validators/files";
-import { addOffer } from "@/lib/store/slices/offerSlice";
 import { LeadCardList } from "./lead-card-list";
 import { useRouter } from "next/navigation";
 import { fetchJson } from "@/utils/fetch";

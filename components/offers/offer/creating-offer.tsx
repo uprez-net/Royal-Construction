@@ -117,6 +117,7 @@ function CreatingOffer() {
             const isActive = state === "active";
             const isDone = state === "done";
             const isFailed = state === "failed";
+            const stepMessage = message.find((m) => m.step === key);
 
             return (
               <div
@@ -163,10 +164,10 @@ function CreatingOffer() {
                     {label}
                   </span>
                   {(isActive || isDone) &&
-                    message?.details &&
-                    key === message.step && (
+                    stepMessage?.details &&
+                    key === stepMessage.step && (
                       <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {message.details}
+                        {stepMessage.details}
                       </p>
                     )}
                 </div>

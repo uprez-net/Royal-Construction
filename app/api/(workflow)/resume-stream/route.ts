@@ -1,10 +1,12 @@
 import { OfferCreationStatus } from "@/lib/workflow/offer";
 import { getRun } from "workflow/api";
+import { NextRequest, connection } from "next/server";
 
 export async function GET(
-    request: Request,
+    request: NextRequest,
     { params }: { params: Promise<{ runId: string }> }
 ) {
+    await connection();
     const { runId } = await params;
     const { searchParams } = new URL(request.url);
     // Client provides the last chunk index they received
