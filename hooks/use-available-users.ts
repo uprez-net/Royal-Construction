@@ -13,7 +13,7 @@ export function useAvailableUsers() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await fetchJson<ReturnedUser[]>("/api/(data)/fetchallusers", {
+        const response = await fetchJson<ReturnedUser[]>("/api/fetchallusers", {
           method: "GET",
         }, "Failed to fetch users");
 
