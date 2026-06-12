@@ -509,3 +509,14 @@ model ChatMessage {
 
   @@index([sessionId])
 }
+
+model EmailAdHock{
+  id String @id @default(uuid())
+  name String
+  emailSubject String
+  htmlUrl String 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_adhoc")
+}
