@@ -66,8 +66,8 @@ export function CreateOfferFileModal({
   const continuing: boolean = useMemo(() => {
     const selectedLead = leadSearch.items.find(
       (lead) => lead.id === selectedLeadId,
-    );
-    return selectedLead?.creatingOffer ?? false;
+    )!;
+    return selectedLead.creatingOffer || selectedLead.runId !== null;
   }, [leadSearch.items, selectedLeadId]);
 
   const resetSearch = useCallback(() => {

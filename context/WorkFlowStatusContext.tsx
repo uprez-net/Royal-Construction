@@ -140,7 +140,6 @@ export function WorkflowStreamProvider({
 
       setConnected(true);
       setLoading(false);
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
 

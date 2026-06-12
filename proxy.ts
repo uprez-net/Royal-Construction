@@ -11,6 +11,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/cron(.*)",
   "/book-consultation",
   "/api/upload(.*)",
+  "/api/resume-stream(.*)",
 ])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
