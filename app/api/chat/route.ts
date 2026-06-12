@@ -22,7 +22,7 @@ import { NextRequest } from "next/server";
 import { v4 as generateUUID } from "uuid";
 import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
 import { OFFER_CHAT_SYSTEM_PROMPT } from "@/lib/agent/offer-prompts";
-import { webSearch } from "@/lib/tools/web-search";
+import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 
 interface ChatRequestBody {
     leadId: number;
@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
                         fetchOfferSheetRulesTool: fetchOfferSheetRules,
                         fetchLeadFilesTool: fetchLeadFilesTool,
                         webSearch: webSearch,
+                        scrapeUserLinks: scrapeUserLinks,
                     }
                 });
 

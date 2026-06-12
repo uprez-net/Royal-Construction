@@ -9,7 +9,7 @@ import {
 import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { fetchLeadFilesTool, fetchLeadInfoTool } from "@/lib/tools/fetch-lead-info";
-import { webSearch } from "@/lib/tools/web-search";
+import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 
 
 export const offerCreationAgent = new ToolLoopAgent({
@@ -27,6 +27,7 @@ export const offerCreationAgent = new ToolLoopAgent({
         fetchLeadInfoTool: fetchLeadInfoTool,
         fetchLeadFilesTool: fetchLeadFilesTool,
         webSearch: webSearch,
+        scrapeUserLinks: scrapeUserLinks,
     },
     instructions: OFFER_CREATION_SYSTEM_PROMPT,
     stopSequences: [

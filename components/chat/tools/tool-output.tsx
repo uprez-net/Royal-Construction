@@ -11,11 +11,13 @@ import {
   FileProcessingToolOutput,
   LineItemToolOutput,
   OfferFileToolOutput,
+  ScrapeUserLinksToolOutput,
   WebSearchToolOutput,
 } from "@/types/chat";
 import { FetchOfferSheetRulesOutput } from "./fetch-offer-sheet-rules-output";
 import { FetchLeadFilesOutput } from "./fetch-lead-files-output";
 import { WebSearchOutput } from "./web-search-output";
+import { ScrapeUserLinkOutputComponent } from "./scarape-user-link-output";
 
 export function ToolOutput({
   toolName,
@@ -57,6 +59,13 @@ export function ToolOutput({
       }
       case "webSearch": {
         return <WebSearchOutput output={output as WebSearchToolOutput} />;
+      }
+      case "scrapeUserLinks": {
+        return (
+          <ScrapeUserLinkOutputComponent
+            output={output as ScrapeUserLinksToolOutput}
+          />
+        );
       }
     }
   }

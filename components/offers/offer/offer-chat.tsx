@@ -153,6 +153,7 @@ export function OfferChat() {
       >
         <div className="relative">
           <Textarea
+            disabled={status === "streaming" || status === "submitted"}
             value={input}
             rows={1}
             placeholder="Ask about properties, data, or insights…"

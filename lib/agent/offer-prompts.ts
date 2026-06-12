@@ -408,149 +408,244 @@ ${OFFER_AGENT_BASE_PROMPT}
 </failure_modes_to_avoid>
 `;
 
+export const SUMMARIES_WEB_PAGE_HTML = `
+<role>
+You are an expert research analyst and information extraction specialist.
+
+Your task is to read webpage content and produce a concise, information-dense summary that preserves the most important knowledge from the page.
+
+You are extracting knowledge, not rewriting content.
+
+You are creating a summary that another AI system or human can quickly read to understand the page without needing to visit the original source.
+</role>
+
+<objective>
+You will be provided:
+
+1. Webpage content extracted from HTML.
+2. Additional context describing what information is important.
+
+Your goal is to identify the most valuable information from the page and produce a comprehensive but concise summary.
+
+Focus on information that is useful, actionable, factual, or important for understanding the page.
+</objective>
+
+<instructions>
+Before summarizing, determine:
+
+- What the page is about.
+- Why the page exists.
+- What information provides the most value.
+- Which details are important given the supplied context.
+
+Prioritize:
+
+- Core concepts
+- Key facts
+- Important entities
+- Technical information
+- Features and capabilities
+- Requirements and limitations
+- Important dates, numbers, and statistics
+- Pricing and plan information
+- Setup or implementation details
+- Workflows and processes
+- Important conclusions or findings
+- Actionable information
+
+When context is provided, use it to determine which information deserves the most attention.
+</instructions>
+
+<ignore>
+Ignore information that does not meaningfully contribute to understanding the page, including:
+
+- Navigation menus
+- Headers and footers
+- Cookie notices
+- Advertisements
+- Newsletter prompts
+- Social media links
+- Repeated marketing slogans
+- Generic promotional content
+- Boilerplate website content
+</ignore>
+
+<writing_guidelines>
+Write a dense knowledge summary.
+
+The summary should:
+
+- Be written in clear prose.
+- Be concise but information rich.
+- Preserve important details.
+- Preserve technical accuracy.
+- Preserve important facts and numbers.
+- Explain relationships between concepts when relevant.
+- Prioritize information over wording.
+
+Do not create sections, headings, bullet lists, JSON, XML, or other structured formats unless explicitly requested.
+
+Write as a single coherent summary that captures the most important information from the page.
+</writing_guidelines>
+
+<rules>
+Do not hallucinate information.
+
+Do not infer facts that are not supported by the page.
+
+Do not copy large portions of the source verbatim.
+
+Do not include commentary about the quality of the page.
+
+Do not explain your reasoning.
+
+Only return the final summary.
+</rules>
+`;
+
 export const offerLineItemSchema = z.object({
-    id: z.uuid().describe("Stable unique identifier for the line item."),
-    item: z.string().describe("Short customer-facing line item name."),
-    description: z.string().describe("Customer-facing explanation of the work, material, allowance, or service."),
-    unitPrice: z.number().describe("Numeric unit price. Use GST-exclusive pricing unless gstIncluded is true."),
-    quantity: z.number().describe("Numeric quantity for the line item."),
-    unit: z.string().describe("Unit of measurement such as each, lump sum, sqm, lm, hour, day, or allowance."),
-    gstRate: z.number().optional().describe("GST rate as a decimal. Use 0.10 when GST applies and no other explicit rate is supplied."),
-    gstIncluded: z.boolean().optional().describe("True when the provided unitPrice already includes GST."),
-    source: z.string().optional().describe("Source filename, lead field, sheet name, row, or cell for the cost or quantity."),
+  id: z.uuid().describe("Stable unique identifier for the line item."),
+  item: z.string().describe("Short customer-facing line item name."),
+  description: z.string().describe("Customer-facing explanation of the work, material, allowance, or service."),
+  unitPrice: z.number().describe("Numeric unit price. Use GST-exclusive pricing unless gstIncluded is true."),
+  quantity: z.number().describe("Numeric quantity for the line item."),
+  unit: z.string().describe("Unit of measurement such as each, lump sum, sqm, lm, hour, day, or allowance."),
+  gstRate: z.number().optional().describe("GST rate as a decimal. Use 0.10 when GST applies and no other explicit rate is supplied."),
+  gstIncluded: z.boolean().optional().describe("True when the provided unitPrice already includes GST."),
+  source: z.string().optional().describe("Source filename, lead field, sheet name, row, or cell for the cost or quantity."),
 });
 
 export const termsAndConditionsItemSchema = z.object({
-    title: z.string().describe("Short title summarizing the term or condition."),
-    description: z.string().describe("Detailed customer-facing explanation of the term or condition."),
+  title: z.string().describe("Short title summarizing the term or condition."),
+  description: z.string().describe("Detailed customer-facing explanation of the term or condition."),
 })
 
 export const facadeOptionsSchema = z.object({
-    optionsDescription: z.string().describe(
-        "Description of the options available to the customer for the build facade, such as cladding materials, window types, or roof styles. This should be a customer-facing explanation of the choices they have for the facade design."
-    ),
-    options: z.array(z.object({
-        title: z.string().describe("Short title summarizing the facade option."),
-        description: z.string().describe("Detailed customer-facing explanation of the facade option, including its features, benefits, and any relevant details that would help the customer understand the choice.")
-    })).describe(
-        "List of facade options available to the customer. Each option should have a title and a description that explains the features and benefits of that option. This helps the customer make an informed decision about their facade design."
-    ),
+  optionsDescription: z.string().describe(
+    "Description of the options available to the customer for the build facade, such as cladding materials, window types, or roof styles. This should be a customer-facing explanation of the choices they have for the facade design."
+  ),
+  options: z.array(z.object({
+    title: z.string().describe("Short title summarizing the facade option."),
+    description: z.string().describe("Detailed customer-facing explanation of the facade option, including its features, benefits, and any relevant details that would help the customer understand the choice.")
+  })).describe(
+    "List of facade options available to the customer. Each option should have a title and a description that explains the features and benefits of that option. This helps the customer make an informed decision about their facade design."
+  ),
 });
 
 export type TermsAndConditionsItem = z.infer<typeof termsAndConditionsItemSchema>;
 // type FacadeOption = z.infer<typeof facadeOptionsSchema>;
 
 export interface FacadeOptionWithImageUrl {
-    optionsDescription: string;
-    options: {
-        title: string;
-        description: string;
-        imageUrl: string; // Optional URL for an image representing the facade option
-    }[];
+  optionsDescription: string;
+  options: {
+    title: string;
+    description: string;
+    imageUrl: string; // Optional URL for an image representing the facade option
+  }[];
 }
 
 export const offerFileContentSchema = z.object({
-    projectWelcomeMessage: z
-        .string()
-        .optional()
-        .describe(
-            "Customer-facing introductory message that welcomes the client and provides a high-level overview of the project. This is often the first section of the offer and sets the tone for the proposal."
-        ),
+  projectWelcomeMessage: z
+    .string()
+    .optional()
+    .describe(
+      "Customer-facing introductory message that welcomes the client and provides a high-level overview of the project. This is often the first section of the offer and sets the tone for the proposal."
+    ),
 
-    termsAndConditions: z
-        .array(termsAndConditionsItemSchema)
-        .optional()
-        .describe(
-            "Complete final list of terms and conditions. Each array element represents a separate clause. When updating, provide the entire merged list that should exist after the update, not only newly added clauses."
-        ),
+  termsAndConditions: z
+    .array(termsAndConditionsItemSchema)
+    .optional()
+    .describe(
+      "Complete final list of terms and conditions. Each array element represents a separate clause. When updating, provide the entire merged list that should exist after the update, not only newly added clauses."
+    ),
 
-    projectScope: z
-        .array(serviceItemSchema)
-        .optional()
-        .describe(
-            "Complete set of service inclusion sections being created or modified. Each section must contain a stable id, a section title, and the full final list of items for that section. Keep ids unchanged when updating existing sections."
-        ),
+  projectScope: z
+    .array(serviceItemSchema)
+    .optional()
+    .describe(
+      "Complete set of service inclusion sections being created or modified. Each section must contain a stable id, a section title, and the full final list of items for that section. Keep ids unchanged when updating existing sections."
+    ),
 
-    fixedPriceItems: z
-        .array(z.string())
-        .optional()
-        .describe(
-            "Complete final list of fixed price items included in the offer. Each item is a separate line of work that is included in the contract price. When updating, provide the entire merged list that should exist after the update, not only newly added items."
-        ),
+  fixedPriceItems: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Complete final list of fixed price items included in the offer. Each item is a separate line of work that is included in the contract price. When updating, provide the entire merged list that should exist after the update, not only newly added items."
+    ),
 
-    promotionalUpgrades: z
-        .array(z.string())
-        .optional()
-        .describe(
-            "Complete final list of promotional upgrade items included in the offer. Each item is a separate line of work that is being offered as an upgrade to the client. When updating, provide the entire merged list that should exist after the update, not only newly added items."
-        ),
+  promotionalUpgrades: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Complete final list of promotional upgrade items included in the offer. Each item is a separate line of work that is being offered as an upgrade to the client. When updating, provide the entire merged list that should exist after the update, not only newly added items."
+    ),
 
-    facadeOptions: facadeOptionsSchema
-        .optional()
-        .describe(
-            "Optional section describing the facade design options available to the customer. This includes a general description of the choices and a list of specific options, each with its own title and detailed description. When included, this section should provide a clear explanation of the facade choices the customer has for their project."
-        ),
+  facadeOptions: facadeOptionsSchema
+    .optional()
+    .describe(
+      "Optional section describing the facade design options available to the customer. This includes a general description of the choices and a list of specific options, each with its own title and detailed description. When included, this section should provide a clear explanation of the facade choices the customer has for their project."
+    ),
 });
 
 export const offerCreationOutputSchema = z.object({
-    lineItemArray: z
-        .array(offerLineItemSchema)
-        .describe("Line items for the offer. Each item must have a stable id and a source when based on extracted data."),
-    offerFileContent: offerFileContentSchema.describe("Structured customer-facing offer document content."),
+  lineItemArray: z
+    .array(offerLineItemSchema)
+    .describe("Line items for the offer. Each item must have a stable id and a source when based on extracted data."),
+  offerFileContent: offerFileContentSchema.describe("Structured customer-facing offer document content."),
 });
 
 function compactValue(value: unknown) {
-    if (value === null || value === undefined || value === "") return undefined;
-    return value;
+  if (value === null || value === undefined || value === "") return undefined;
+  return value;
 }
 
 function compactLead(lead: UiLead) {
-    return {
-        id: lead.id,
-        contact: {
-            name: compactValue(lead.name),
-            phone: compactValue(lead.phone),
-            email: compactValue(lead.email),
-            location: compactValue(lead.location),
-        },
-        leadContext: {
-            source: compactValue(lead.source),
-            sourceDetail: compactValue(lead.sourceDetail),
-            stage: compactValue(lead.stage),
-            notes: compactValue(lead.notes),
-            urgent: lead.urgent,
-        },
-        project: {
-            buildType: compactValue(lead.type),
-            budget: compactValue(lead.budget),
-        },
-        followUp: {
-            date: compactValue(lead.followupDate),
-            time: compactValue(lead.followupTime),
-            notes: compactValue(lead.followupNotes),
-        },
-        recentHistory: lead.history?.slice(-5).map((item) => ({
-            date: compactValue(item.date),
-            action: compactValue(item.action),
-            detail: compactValue(item.detail),
-            type: compactValue(item.type),
-        })),
-    };
+  return {
+    id: lead.id,
+    contact: {
+      name: compactValue(lead.name),
+      phone: compactValue(lead.phone),
+      email: compactValue(lead.email),
+      location: compactValue(lead.location),
+    },
+    leadContext: {
+      source: compactValue(lead.source),
+      sourceDetail: compactValue(lead.sourceDetail),
+      stage: compactValue(lead.stage),
+      notes: compactValue(lead.notes),
+      urgent: lead.urgent,
+    },
+    project: {
+      buildType: compactValue(lead.type),
+      budget: compactValue(lead.budget),
+    },
+    followUp: {
+      date: compactValue(lead.followupDate),
+      time: compactValue(lead.followupTime),
+      notes: compactValue(lead.followupNotes),
+    },
+    recentHistory: lead.history?.slice(-5).map((item) => ({
+      date: compactValue(item.date),
+      action: compactValue(item.action),
+      detail: compactValue(item.detail),
+      type: compactValue(item.type),
+    })),
+  };
 }
 
 function compactFile(file: File) {
-    return {
-        id: file.id,
-        filename: file.filename,
-        fileType: file.fileType,
-        filesize: file.filesize,
-        url: file.url,
-        uploadedAt: file.createdAt?.toISOString(),
-    };
+  return {
+    id: file.id,
+    filename: file.filename,
+    fileType: file.fileType,
+    filesize: file.filesize,
+    url: file.url,
+    uploadedAt: file.createdAt?.toISOString(),
+  };
 }
 
 export function buildCreationStarterPrompt(lead: UiLead, leadFiles: File[]) {
-    return `Create an initial offer for the lead using the structured context below.
+  return `Create an initial offer for the lead using the structured context below.
 
 Use uploaded files only when they are likely to contain scope, quantities, plans, prior quotes, pricing, or exclusions. Process relevant files through fileProcessingTool instead of copying raw file content into the prompt.
 
