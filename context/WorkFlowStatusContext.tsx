@@ -41,10 +41,12 @@ const WorkflowStreamContext = createContext<WorkflowStreamState | null>(null);
 const defaultCreatingOffer: OfferCreationStatus = {
   status: "FETCHING_DETAILS",
   progress: 0,
-  message: {
-    step: "FETCHING_DETAILS",
-    details: undefined,
-  },
+  message: [
+    {
+      step: "FETCHING_DETAILS",
+      details: "Starting offer creation workflow",
+    },
+  ],
 };
 
 /**
