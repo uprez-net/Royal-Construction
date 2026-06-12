@@ -97,10 +97,10 @@ export default function TableView({
                   "Qualified",
                   "Quoted",
                   "Negotiating",
-                  "Won",
+                  // "Won",
                   "Converted",
                   "No Response",
-                  "Cancelled",
+                  //"Cancelled",
                   "Disqualified",
                   "Lost",
                 ].map((stage) => (
