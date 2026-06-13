@@ -57,7 +57,7 @@ export default function ProjectDetailLoading() {
                 <Skeleton className="h-3 w-24 mb-6" />
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                    {/* Double width for first row (contract value) */}
-                   <div className="grid gap-3 grid-cols-2">
+                   <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                      <Skeleton className="h-15 w-full rounded-[10px]" />
                      <Skeleton className="h-15 w-full rounded-[10px]" />
                    </div>

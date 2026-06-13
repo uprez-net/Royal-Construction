@@ -383,6 +383,89 @@ export function TradiesClient({
     URL.revokeObjectURL(url);
   };
 
+  const renderScheduleActions = (row: TradieScheduleListItem, large = false) => {
+    const size = large ? "icon" : "sm";
+    const btn = large ? "h-10 w-10" : "";
+    return (
+      <div
+        key={`actions-${row.id}`}
+        className="flex justify-start gap-1"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {(row.status === TradieScheduleStatus.PENDING ||
+          row.status === TradieScheduleStatus.NO_RESPONSE ||
+          row.status === TradieScheduleStatus.PENDING_RESPONSE) && (
+          <Button
+            size={size}
+            variant="ghost"
+            className={btn}
+            aria-label="Log call"
+            onClick={() => void handleRowCallLogged(row)}
+          >
+            <Phone className="h-4 w-4" />
+          </Button>
+        )}
+
+        {row.status !== TradieScheduleStatus.CONFIRMED &&
+          row.status !== TradieScheduleStatus.COMPLETED && (
+            <Button
+              size={size}
+              variant="ghost"
+              className={btn}
+              aria-label="Mark confirmed"
+              onClick={() => void handleRowQuickConfirm(row)}
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+          )}
+
+        {row.status !== TradieScheduleStatus.COMPLETED && (
+          <Button
+            size={size}
+            variant="ghost"
+            className={btn}
+            aria-label="Send reminder"
+            onClick={() => void handleRowReminder(row)}
+          >
+            <Mail className="h-4 w-4" />
+          </Button>
+        )}
+        {row.status === TradieScheduleStatus.COMPLETED && (
+          <Button
+            size={size}
+            variant="ghost"
+            className={btn}
+            disabled
+            aria-label="Completed"
+          >
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+          </Button>
+        )}
+
+        <Button
+          size={size}
+          variant="ghost"
+          className={btn}
+          aria-label="More actions"
+          disabled={row.status === TradieScheduleStatus.COMPLETED}
+          onClick={() => void handleUpdateRowStatus(row)}
+        >
+          <EllipsisVertical className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  };
+
+  const daysLeftBadgeClass = (scheduledDate: string) =>
+    [
+      "rounded-md px-2 py-1 text-xs font-semibold flex gap-2 items-center",
+      daysUntil(scheduledDate) <= 2
+        ? "bg-red-100 text-red-700"
+        : daysUntil(scheduledDate) <= 7
+          ? "bg-amber-100 text-amber-700"
+          : "bg-slate-100 text-slate-700",
+    ].join(" ");
+
   const scheduleTableHeaders = [
     <input
       key="select-all"
@@ -441,17 +524,7 @@ export function TradiesClient({
       <p className="text-xs text-muted-foreground">{row.durationDays} day(s)</p>
     </div>,
 
-    <span
-      key={`days-${row.id}`}
-      className={[
-        "rounded-md px-2 py-1 text-xs font-semibold flex gap-2 items-center",
-        daysUntil(row.scheduledDate) <= 2
-          ? "bg-red-100 text-red-700"
-          : daysUntil(row.scheduledDate) <= 7
-            ? "bg-amber-100 text-amber-700"
-            : "bg-slate-100 text-slate-700",
-      ].join(" ")}
-    >
+    <span key={`days-${row.id}`} className={daysLeftBadgeClass(row.scheduledDate)}>
       {CalanderRow(row.scheduledDate)}
     </span>,
 
@@ -459,58 +532,7 @@ export function TradiesClient({
       {statusLabelMap[row.status]}
     </StatusPill>,
 
-    <div
-      key={`actions-${row.id}`}
-      className="flex justify-start gap-1"
-      onClick={(event) => event.stopPropagation()}
-    >
-      {(row.status === TradieScheduleStatus.PENDING ||
-        row.status === TradieScheduleStatus.NO_RESPONSE ||
-        row.status === TradieScheduleStatus.PENDING_RESPONSE) && (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => void handleRowCallLogged(row)}
-        >
-          <Phone className="h-4 w-4" />
-        </Button>
-      )}
-
-      {row.status !== TradieScheduleStatus.CONFIRMED &&
-        row.status !== TradieScheduleStatus.COMPLETED && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => void handleRowQuickConfirm(row)}
-          >
-            <Check className="h-4 w-4" />
-          </Button>
-        )}
-
-      {row.status !== TradieScheduleStatus.COMPLETED && (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => void handleRowReminder(row)}
-        >
-          <Mail className="h-4 w-4" />
-        </Button>
-      )}
-      {row.status === TradieScheduleStatus.COMPLETED && (
-        <Button size="sm" variant="ghost" disabled>
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
-        </Button>
-      )}
-
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={row.status === TradieScheduleStatus.COMPLETED}
-        onClick={() => void handleUpdateRowStatus(row)}
-      >
-        <EllipsisVertical className="h-4 w-4" />
-      </Button>
-    </div>,
+    renderScheduleActions(row),
   ]);
 
   return (
@@ -895,7 +917,7 @@ export function TradiesClient({
           !tradiesState.error &&
           tradiesState.schedules.length > 0 ? (
             <>
-              <div className="overflow-x-auto rounded-xl border border-border/70">
+              <div className="hidden overflow-x-auto rounded-xl border border-border/70 md:block">
                 <DataTable
                   headers={scheduleTableHeaders}
                   rows={scheduleTableRows}
@@ -926,6 +948,111 @@ export function TradiesClient({
                     </div>
                   }
                 />
+              </div>
+
+              {/* Mobile card fallback */}
+              <div className="space-y-3 md:hidden">
+                {tradiesState.schedules.map((row) => (
+                  <article
+                    key={`card-${row.id}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`View schedule for ${row.tradieName}`}
+                    onClick={() =>
+                      dispatch(
+                        openModal({
+                          type: "tradieScheduleDetails",
+                          payload: { schedule: row },
+                        }),
+                      )
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        dispatch(
+                          openModal({
+                            type: "tradieScheduleDetails",
+                            payload: { schedule: row },
+                          }),
+                        );
+                      }
+                    }}
+                    className="cursor-pointer rounded-xl border border-border/70 bg-card p-4 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 size-4"
+                          checked={tradiesState.selectedScheduleIds.includes(
+                            row.id,
+                          )}
+                          onChange={() =>
+                            dispatch(toggleScheduleSelection(row.id))
+                          }
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Select ${row.tradieName}`}
+                        />
+                        <div>
+                          <p className="font-semibold text-slate-900">
+                            {row.tradieName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.company ?? "Independent"}
+                          </p>
+                        </div>
+                      </div>
+                      <StatusPill
+                        id={`card-status-${row.id}`}
+                        tone={statusToneMap[row.status]}
+                      >
+                        {statusLabelMap[row.status]}
+                      </StatusPill>
+                    </div>
+
+                    <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Trade</dt>
+                        <dd className="font-medium text-foreground">
+                          {row.tradeType}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">
+                          Project
+                        </dt>
+                        <dd className="font-medium text-foreground">
+                          {row.projectName}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Task</dt>
+                        <dd className="font-medium text-foreground">
+                          {row.taskLabel}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">
+                          Scheduled
+                        </dt>
+                        <dd className="font-medium text-foreground">
+                          {dateFormat.format(new Date(row.scheduledDate))}
+                          <span className="text-xs text-muted-foreground">
+                            {" "}
+                            · {row.durationDays} day(s)
+                          </span>
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+                      <span className={daysLeftBadgeClass(row.scheduledDate)}>
+                        {CalanderRow(row.scheduledDate)}
+                      </span>
+                      {renderScheduleActions(row, true)}
+                    </div>
+                  </article>
+                ))}
               </div>
 
               {tradiesState.selectedScheduleIds.length > 0 ? (
@@ -1028,7 +1155,7 @@ export function TradiesClient({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
         <Card className="border-border/70 bg-white/95 shadow-sm">
           <CardHeader className="border-b border-border/70 pb-3">
             <CardTitle className="text-sm font-semibold uppercase tracking-[0.06em] text-muted-foreground">
