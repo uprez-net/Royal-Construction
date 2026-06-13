@@ -3,7 +3,8 @@ import { gateway } from "@/lib/model";
 import { fetchOfferSheetRules } from "../tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "../tools/file-tools";
 import {
-    OFFER_CREATION_SYSTEM_PROMPT,
+    OFFER_FILE_CONTENT_CREATION_SYSTEM_PROMPT,
+    OFFER_LINE_ITEM_CREATION_SYSTEM_PROMPT,
     type OfferLineItem,
 } from "./offer-prompts";
 import { lineItemTool } from "@/lib/tools/line-item";
@@ -45,14 +46,14 @@ export const handleOfferGeneration = async (prompt: string) => {
             scrapeUserLinks: scrapeUserLinks,
         },
         stopWhen: stepCountIs(25),
-        instructions: OFFER_CREATION_SYSTEM_PROMPT,
+        instructions: OFFER_LINE_ITEM_CREATION_SYSTEM_PROMPT,
         stopSequences: [
             "<END_OFFER_GENERATION>",
             "<END_GENERATION>",
         ],
         output: Output.object({
             schema: z.object({
-                creationMessage: z.string().describe("A message summarizing the result of the offer generation process."),
+                creationMessage: z.string().describe("A message summarizing the result of the line item generation process."),
             }),
         }),
     });
@@ -74,7 +75,7 @@ export const handleOfferGeneration = async (prompt: string) => {
             scrapeUserLinks: scrapeUserLinks,
         },
         stopWhen: stepCountIs(25),
-        instructions: OFFER_CREATION_SYSTEM_PROMPT,
+        instructions: OFFER_FILE_CONTENT_CREATION_SYSTEM_PROMPT,
         stopSequences: [
             "<END_OFFER_GENERATION>",
             "<END_GENERATION>",
@@ -86,26 +87,15 @@ export const handleOfferGeneration = async (prompt: string) => {
         }),
     });
 
-    const { output: lineItemOutput } = await offerLineItemCreatorAgent.generate({
-        prompt: `
-        # !Important Instructions:
-        Only create the offer line items
-
-        ${prompt}
-        `
-    });
+    const { output: lineItemOutput } = await offerLineItemCreatorAgent.generate({ prompt });
     const { output } = await offerFileCreationAgent.generate({
         prompt: `
-         # !Important Instructions:
-         Only create the offer file content based on the line items created
-
          ## Created Line Items:
         ${offerLineItems.map(item =>
             `- ${item.item} - (${item.description}): ${item.quantity} ${item.unit} at $${item.unitPrice} each (GST ${item.gstIncluded ? "included" : "excluded"})`).join("\n")
             }
 
         ${prompt}
-
          `
 
     });
