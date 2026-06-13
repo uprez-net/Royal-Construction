@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Sparkles, Plus, Trash2, Link2, Paperclip, Mail, FileText, ChevronRight,
+  LinkIcon,
+  Loader2,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,8 +23,9 @@ interface ComposeStepProps {
   updateLink: (id: string, field: keyof LinkItem, value: string) => void;
   removeLink: (id: string) => void;
   addAttachment: () => void;
-  updateAttachment: (id: string, field: keyof AttachmentItem, value: string) => void;
-  removeAttachment: (id: string) => void;
+  updateAttachment: (id: string, field: keyof AttachmentItem, value: string | boolean) => void;
+  removeAttachment: (id: string) => Promise<void>; // Now async
+  handleAttachmentUpload: (id: string, file: File) => Promise<void>; // New
   handleGenerate: () => void;
   savedTemplates: EmailAdHocTemplate[];
   isLoadingTemplates: boolean;
@@ -35,9 +39,10 @@ interface ComposeStepProps {
 export default function ComposeStep({
   description, setDescription, links, attachments, errors, setErrors, isGenerating,
   addLink, updateLink, removeLink, addAttachment, updateAttachment, removeAttachment,
-  handleGenerate, savedTemplates, isLoadingTemplates, handleSelectSavedTemplate,
+  handleAttachmentUpload, handleGenerate, savedTemplates, isLoadingTemplates, handleSelectSavedTemplate,
   handleDeleteTemplate, handleTemplateSelect, emailTemplateId, EMAIL_TEMPLATES,
 }: ComposeStepProps) {
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Left Column: Composer */}
@@ -125,7 +130,9 @@ export default function ComposeStep({
                 {attachments.map((file) => {
                   const fileError = errors.attachments?.[file.id];
                   return (
-                    <div key={file.id} className="flex flex-col gap-1">
+                    <div key={file.id} className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+
+                      {/* Row 1: Label & Delete */}
                       <div className="flex items-center gap-2">
                         <Input
                           placeholder="File Name / Button Text"
@@ -133,16 +140,66 @@ export default function ComposeStep({
                           onChange={(e) => updateAttachment(file.id, 'label', e.target.value)}
                           className={cn("flex-1 border-slate-200 focus:border-[#C6923A] focus:ring-[#C6923A]", fileError?.label && "border-red-500")}
                         />
-                        <Input
-                          placeholder="https://link-to-file.com"
-                          value={file.url}
-                          onChange={(e) => updateAttachment(file.id, 'url', e.target.value)}
-                          className={cn("flex-[2] border-slate-200 focus:border-[#C6923A] focus:ring-[#C6923A]", fileError?.url && "border-red-500")}
-                        />
+
+                        {/* Mode Toggle */}
+                        <div className="flex items-center border border-slate-200 rounded-md overflow-hidden h-9">
+                          <button
+                            type="button"
+                            onClick={() => updateAttachment(file.id, 'mode', 'upload')}
+                            className={cn("h-full px-3 flex items-center gap-1.5 text-xs font-medium transition-colors", file.mode === 'upload' ? 'bg-[#C6923A]/10 text-[#C6923A]' : 'bg-white text-slate-500 hover:bg-slate-50')}
+                          >
+                            <Upload className="size-3.5" /> Upload
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateAttachment(file.id, 'mode', 'url')}
+                            className={cn("h-full px-3 flex items-center gap-1.5 text-xs font-medium border-l border-slate-200 transition-colors", file.mode === 'url' ? 'bg-[#C6923A]/10 text-[#C6923A]' : 'bg-white text-slate-500 hover:bg-slate-50')}
+                          >
+                            <LinkIcon className="size-3.5" /> URL
+                          </button>
+                        </div>
+
                         <Button variant="ghost" size="icon" onClick={() => removeAttachment(file.id)} className="shrink-0 text-slate-400 hover:text-red-500">
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
+
+                      {/* Row 2: Upload or URL Input based on Mode */}
+                      {file.mode === 'upload' ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            ref={(el) => { fileInputRefs.current[file.id] = el; }}
+                            className="hidden"
+                            onChange={(e) => {
+                              const selectedFile = e.target.files?.[0];
+                              if (selectedFile) handleAttachmentUpload(file.id, selectedFile);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => fileInputRefs.current[file.id]?.click()}
+                            disabled={file.isUploading}
+                            className="border-dashed border-slate-300 text-slate-600 hover:border-[#C6923A] hover:text-[#C6923A]"
+                          >
+                            {file.isUploading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Upload className="mr-2 size-4" />}
+                            {file.isUploading ? 'Uploading...' : file.url ? 'Replace File' : 'Choose File'}
+                          </Button>
+                          {file.url && !file.isUploading && (
+                            <span className="text-xs text-green-600 font-medium truncate flex-1">File uploaded successfully</span>
+                          )}
+                        </div>
+                      ) : (
+                        <Input
+                          placeholder="https://link-to-file.com"
+                          value={file.url}
+                          onChange={(e) => updateAttachment(file.id, 'url', e.target.value)}
+                          className={cn("border-slate-200 focus:border-[#C6923A] focus:ring-[#C6923A]", fileError?.url && "border-red-500")}
+                        />
+                      )}
+
+                      {/* Errors */}
                       {(fileError?.label || fileError?.url) && (
                         <p className="text-[11px] text-red-500 font-medium">
                           {fileError.label && fileError.url ? "File name & URL are required" : fileError.label || fileError.url}

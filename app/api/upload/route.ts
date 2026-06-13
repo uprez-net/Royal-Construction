@@ -3,7 +3,7 @@ import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
 import { saveFile } from '@/lib/data/file';
 import { getUserByClerkIdCached } from '@/lib/data/user';
-import { ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
+import { ALLOWED_ATTACHMENT_MIME_TYPES, ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
 import { errorResponse, unauthorizedResponse } from '@/utils/validators';
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -32,10 +32,25 @@ export async function POST(request: Request): Promise<NextResponse> {
                     throw new Error('Invalid file metadata in payload');
                 }
 
+                let allowedContentTypes: string[] = UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[];
+                let addRandomSuffix = true;
+                let allowOverwrite = false;
+
+                if (clientPayload.uploadType === 'email-template') {
+                    allowedContentTypes = ['text/html']; // Strictly HTML
+                    addRandomSuffix = false;
+                    allowOverwrite = true;
+                } else if (clientPayload.uploadType === 'email-attachment') {
+                    allowedContentTypes = ALLOWED_ATTACHMENT_MIME_TYPES as unknown as string[]; // PDFs, Docs, Images (No HTML)
+                    addRandomSuffix = true;
+                    allowOverwrite = false;
+                }
+
                 return {
                     pathname,
-                    allowedContentTypes: UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[],
-                    addRandomSuffix: true,
+                    allowedContentTypes,
+                    addRandomSuffix,
+                    allowOverwrite,
                     maximumSizeInBytes: UPLOAD_CONSTRAINTS.maxFileSizeBytes,
                     callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/upload`,
                     tokenPayload: JSON.stringify({
@@ -47,6 +62,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         fileName: clientPayload.fileName,
                         fileSize: clientPayload.fileSize,
                         isOfferFile: clientPayload.isOfferFile,
+                        uploadType: clientPayload.uploadType,
                     } satisfies TokenPayload),
                 };
             },
@@ -61,8 +77,8 @@ export async function POST(request: Request): Promise<NextResponse> {
                         throw new Error('User not found');
                     }
 
-                    if (payload.isOfferFile) {
-                        console.log('Skipping file record creation as per payload instruction because this is an offer file');
+                    if (payload.isOfferFile || payload.uploadType === 'email-template' || payload.uploadType === 'email-attachment') {
+                        console.log(`Skipping file record creation for uploadType: ${payload.uploadType}`);
                         return;
                     }
 

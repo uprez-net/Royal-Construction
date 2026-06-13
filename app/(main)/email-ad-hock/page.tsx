@@ -121,6 +121,7 @@ export default function AdHocEmailPage() {
             addAttachment={hook.addAttachment}
             updateAttachment={hook.updateAttachment}
             removeAttachment={hook.removeAttachment}
+            handleAttachmentUpload={hook.handleAttachmentUpload}
             handleGenerate={hook.handleGenerate}
             savedTemplates={hook.savedTemplates}
             isLoadingTemplates={hook.isLoadingTemplates}
@@ -143,7 +144,7 @@ export default function AdHocEmailPage() {
             setEmailSubject={hook.setEmailSubject}
             generatedHtml={hook.generatedHtml}
             iframeRef={hook.iframeRef}
-            isSaving={hook.isSaving}
+            // isSaving={hook.isSaving}
             handleNextToSend={hook.handleNextToSend}
             setCurrentStep={hook.setCurrentStep}
             setEmailTemplateId={hook.setEmailTemplateId}
@@ -170,6 +171,10 @@ export default function AdHocEmailPage() {
             pageCount={hook.pageCount}
             setCurrentStep={hook.setCurrentStep}
             setShowConfirmModal={hook.setShowConfirmModal}
+            templateSection={hook.templateSection}
+            emailTemplateId={hook.emailTemplateId}
+            saveTemplate={hook.saveTemplate}
+            setSaveTemplate={hook.setSaveTemplate}
           />
         )}
 

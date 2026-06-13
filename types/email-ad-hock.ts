@@ -8,6 +8,8 @@ export interface AttachmentItem {
   id: string;
   label: string;
   url: string;
+  mode: 'url' | 'upload'; // New: toggle between URL input and File upload
+  isUploading?: boolean;   // New: loading state for the upload
 }
 
 export interface EmailTemplate {

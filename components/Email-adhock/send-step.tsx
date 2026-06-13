@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Mail, Search, Check, ChevronLeft, ChevronRight as ChevronRightIcon, Loader2 } from 'lucide-react';
+import { Mail, Search, Check, ChevronLeft, ChevronRight as ChevronRightIcon, Loader2, Bookmark } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CampaignLead } from '@/types/email-ad-hock';
 
@@ -24,14 +24,20 @@ interface SendStepProps {
   pageCount: number;
   setCurrentStep: React.Dispatch<React.SetStateAction<number>>;
   setShowConfirmModal: React.Dispatch<React.SetStateAction<boolean>>;
+  // New Props
+  templateSection: string;
+  emailTemplateId: string | null;
+  saveTemplate: boolean;
+  setSaveTemplate: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export default function SendStep({
   searchQuery, setSearchQuery, stageFilter, setStageFilter, setCurrentPage,
   isSelectAll, handleSelectAll, totalLeads, selectedLeads, isLoadingLeads,
   leadsList, handleSelectLead, currentPage, pageCount, setCurrentStep,
-  setShowConfirmModal,
+  setShowConfirmModal, templateSection, emailTemplateId, saveTemplate, setSaveTemplate
 }: SendStepProps) {
+  const showSaveCheckbox = templateSection === 'ai-generated' && !emailTemplateId;
   return (
     <div className="space-y-6">
       {/* Top Filters */}
@@ -107,9 +113,9 @@ export default function SendStep({
                   <span className={cn(
                     "mt-1.5 inline-block px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded-full",
                     lead.stage === "New" ? "bg-blue-50 text-blue-700" :
-                    lead.stage === "Qualified" ? "bg-green-50 text-green-700" :
-                    lead.stage === "Meeting Scheduled" ? "bg-purple-50 text-purple-700" :
-                    "bg-slate-100 text-slate-600"
+                      lead.stage === "Qualified" ? "bg-green-50 text-green-700" :
+                        lead.stage === "Meeting Scheduled" ? "bg-purple-50 text-purple-700" :
+                          "bg-slate-100 text-slate-600"
                   )}>
                     {lead.stage}
                   </span>
@@ -156,17 +162,37 @@ export default function SendStep({
         </Button>
       </div>
 
-      {/* Footer Actions */}
-      <div className="flex justify-between items-center pt-6 border-t border-slate-200">
+      {/* Save to Wishlist & Footer Actions */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-6 border-t border-slate-200 gap-4">
         <Button variant="outline" onClick={() => setCurrentStep(2)}>Back</Button>
-        <Button
-          className="bg-[#C6923A] text-white hover:bg-[#C6923A]/90"
-          disabled={selectedLeads.size === 0}
-          onClick={() => setShowConfirmModal(true)}
-        >
-          <Mail className="mr-2 h-4 w-4" />
-          Send Email ({selectedLeads.size})
-        </Button>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto sm:justify-end">
+          {showSaveCheckbox && (
+            <label className="flex items-center gap-3 rounded-lg border border-[#E2E8F0] bg-white p-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={saveTemplate}
+                onChange={(e) => setSaveTemplate(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-[#C6923A] focus:ring-[#C6923A]"
+              />
+              <div className="text-left">
+                <span className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Bookmark className="size-4 text-[#C6923A]" /> Save to Wishlist
+                </span>
+                <p className="text-[11px] text-slate-500">Save this template for future use before sending.</p>
+              </div>
+            </label>
+          )}
+
+          <Button
+            className="bg-[#C6923A] text-white hover:bg-[#C6923A]/90 w-full sm:w-auto"
+            disabled={selectedLeads.size === 0}
+            onClick={() => setShowConfirmModal(true)}
+          >
+            <Mail className="mr-2 h-4 w-4" />
+            Send Email ({selectedLeads.size})
+          </Button>
+        </div>
       </div>
     </div>
   );

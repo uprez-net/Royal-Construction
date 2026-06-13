@@ -494,7 +494,7 @@ export async function getLeadsForCampaign({
     prisma.lead.count({ where }),
   ]);
 
-  console.log("Checking Leads fetched for campaign:", leads); // Debug log to verify fetched leads
+  //console.log("Checking Leads fetched for campaign:", leads); // Debug log to verify fetched leads
 
   return {
     leads,
@@ -521,4 +521,14 @@ export async function getAllLeadIdsForCampaign({
       assignedUser: { select: { id: true, name: true, email: true } },
     },
   });
+}
+
+export async function RemoveUrlFromBlob(blobUrl: string) {
+  try {
+    await del(blobUrl);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete blob at URL:", blobUrl, error);
+    return { success: false, error: "Failed to delete blob." };
+  }
 }

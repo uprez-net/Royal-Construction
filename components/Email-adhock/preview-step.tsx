@@ -1,7 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
 import { getEditablePreviewHtml } from '@/lib/utils/email-preview';
 
 interface PreviewStepProps {
@@ -13,7 +12,7 @@ interface PreviewStepProps {
   setEmailSubject: React.Dispatch<React.SetStateAction<string>>;
   generatedHtml: string;
   iframeRef: React.RefObject<HTMLIFrameElement | null>;
-  isSaving: boolean;
+  // isSaving: boolean;
   handleNextToSend: () => void;
   setCurrentStep: React.Dispatch<React.SetStateAction<number>>;
   setEmailTemplateId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -22,7 +21,7 @@ interface PreviewStepProps {
 
 export default function PreviewStep({
   templateSection, emailTemplateId, templateName, setTemplateName,
-  emailSubject, setEmailSubject, generatedHtml, iframeRef, isSaving,
+  emailSubject, setEmailSubject, generatedHtml, iframeRef,
   handleNextToSend, setCurrentStep, setEmailTemplateId, setTemplateSection,
 }: PreviewStepProps) {
   return (
@@ -84,9 +83,11 @@ export default function PreviewStep({
         >
           Back to Compose
         </Button>
-        <Button className="bg-[#C6923A] text-white hover:bg-[#C6923A]/90" onClick={handleNextToSend} disabled={isSaving}>
-          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {templateSection === 'default-react-email' ? 'Next & Proceed' : isSaving ? 'Saving...' : 'Next: Saved & Proceed'}
+        <Button className="bg-[#C6923A] text-white hover:bg-[#C6923A]/90" onClick={handleNextToSend} >
+          {/* {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} */}
+          {/* <Loader2 className="mr-2 h-4 w-4 animate-spin" /> */}
+          {/* {templateSection === 'default-react-email' ? 'Next & Proceed' : isSaving ? 'Saving...' : 'Next: Saved & Proceed'} */}
+           Next & Proceed for sending Campaign
         </Button>
       </div>
     </div>

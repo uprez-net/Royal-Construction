@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-      CreateEmailAdHock, generateEmailTemplate, UpdateEmailAdHock,
+      CreateEmailAdHock, generateEmailTemplate,
       GetEmailAdHock, DeleteEmailAdHock, getAllLeadIdsForCampaign,
       getLeadsForCampaign,
+      RemoveUrlFromBlob,
 } from '@/lib/data/email-ad-hock';
 import { upload } from '@vercel/blob/client';
 import { toast } from 'sonner';
@@ -32,7 +33,7 @@ export function useEmailAdHock() {
       const [emailSubject, setEmailSubject] = useState('');
       const [templateName, setTemplateName] = useState('');
       const [emailTemplateId, setEmailTemplateId] = useState<string | null>(null);
-      const [isSaving, setIsSaving] = useState(false);
+      //const [isSaving, setIsSaving] = useState(false);
 
       // ─── Saved Templates ─────────────────────────────────────────
       const [savedTemplates, setSavedTemplates] = useState<EmailAdHocTemplate[]>([]);
@@ -52,6 +53,8 @@ export function useEmailAdHock() {
       const [isLoadingLeads, setIsLoadingLeads] = useState(false);
       const [showConfirmModal, setShowConfirmModal] = useState(false);
       const [isSending, setIsSending] = useState(false);
+
+      const [saveTemplate, setSaveTemplate] = useState(false);
 
       // ─── Effects ─────────────────────────────────────────────────
 
@@ -117,13 +120,54 @@ export function useEmailAdHock() {
       // ─── Attachment Handlers ─────────────────────────────────────
 
       const addAttachment = () =>
-            setAttachments(prev => [...prev, { id: generateId(), label: '', url: '' }]);
+            setAttachments(prev => [...prev, { id: generateId(), label: '', url: '', mode: 'upload', isUploading: false }]);
 
-      const updateAttachment = (id: string, field: keyof AttachmentItem, value: string) =>
+      const updateAttachment = (id: string, field: keyof AttachmentItem, value: string | boolean) =>
             setAttachments(prev => prev.map(a => (a.id === id ? { ...a, [field]: value } : a)));
 
-      const removeAttachment = (id: string) =>
+      const removeAttachment = async (id: string) => {
+            const attachment = attachments.find(a => a.id === id);
+
+            if (attachment?.mode === 'upload' && attachment.url) {
+                  try {
+                        const remove = await RemoveUrlFromBlob(attachment.url);
+                        if (remove.success) {
+                              toast.success('Uploaded file removed successfully!');
+                        }
+                  } catch (error) {
+                        console.error('Failed to remove uploaded file:', error);
+                        toast.error('Failed to remove uploaded file. Please try again.');
+                  }
+            }
+
             setAttachments(prev => prev.filter(a => a.id !== id));
+      }
+
+
+      const handleAttachmentUpload = async (id: string, file: File) => {
+            // Set uploading state
+            setAttachments(prev => prev.map(a => (a.id === id ? { ...a, isUploading: true, url: '' } : a)));
+
+            try {
+                  const blob = await upload(
+                        `email-ad-hock-attachment-upload/attachments/${file.name}`,
+                        file,
+                        {
+                              access: 'public',
+                              handleUploadUrl: '/api/upload',
+                              clientPayload: JSON.stringify({ fileName: file.name, fileSize: file.size, uploadType: 'email-attachment' }),
+                        }
+                  );
+
+                  // Update attachment with the returned blob URL
+                  setAttachments(prev => prev.map(a => (a.id === id ? { ...a, isUploading: false, url: blob.url } : a)));
+                  toast.success('File uploaded successfully!');
+            } catch (error) {
+                  console.error('Upload failed:', error);
+                  toast.error('Failed to upload file.');
+                  setAttachments(prev => prev.map(a => (a.id === id ? { ...a, isUploading: false } : a)));
+            }
+      };
 
       // ─── Validation ──────────────────────────────────────────────
 
@@ -174,23 +218,23 @@ export function useEmailAdHock() {
 
       // ─── Saved Template Actions ──────────────────────────────────
 
-      const handleSelectSavedTemplate = async (template: EmailAdHocTemplate) => {
-            const t = toast.loading('Loading saved template...');
-            try {
-                  const res = await fetch(template.htmlUrl);
-                  if (!res.ok) throw new Error('Failed to fetch template content');
-                  const html = await res.text();
-                  setEmailTemplateId(template.id);
-                  setTemplateName(template.name);
-                  setEmailSubject(template.emailSubject);
-                  setGeneratedHtml(html);
-                  setCurrentStep(2);
-                  toast.success('Template loaded!', { id: t });
-            } catch (error) {
-                  console.error('Error loading template:', error);
-                  toast.error('Failed to load template content.', { id: t });
-            }
-      };
+      // const handleSelectSavedTemplate = async (template: EmailAdHocTemplate) => {
+      //       const t = toast.loading('Loading saved template...');
+      //       try {
+      //             const res = await fetch(template.htmlUrl);
+      //             if (!res.ok) throw new Error('Failed to fetch template content');
+      //             const html = await res.text();
+      //             setEmailTemplateId(template.id);
+      //             setTemplateName(template.name);
+      //             setEmailSubject(template.emailSubject);
+      //             setGeneratedHtml(html);
+      //             setCurrentStep(2);
+      //             toast.success('Template loaded!', { id: t });
+      //       } catch (error) {
+      //             console.error('Error loading template:', error);
+      //             toast.error('Failed to load template content.', { id: t });
+      //       }
+      // };
 
       const confirmDeleteTemplate = async () => {
             if (!templateToDelete) return;
@@ -243,6 +287,7 @@ export function useEmailAdHock() {
                   return;
             }
 
+            // Clean up DOM artifacts from interactive preview
             doc.querySelectorAll('.rc-hover-toolbar').forEach(t => t.remove());
             doc.querySelectorAll('a, button').forEach(el => {
                   (el as HTMLElement).style.outline = '';
@@ -259,87 +304,66 @@ export function useEmailAdHock() {
             cleanHtml = cleanHtml.replace(/outline-offset:\s*2px;?\s*/gi, '');
             cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, '');
 
-            if (templateSection === 'default-react-email') {
-                  setGeneratedHtml(cleanHtml);
-                  setCurrentStep(3);
-                  return;
-            }
+            // Just save the clean HTML in state and move to Step 3
+            setGeneratedHtml(cleanHtml);
+            setCurrentStep(3);
+      };
 
-            setIsSaving(true);
-            const uploadToast = toast.loading('Saving and uploading email template...');
+      // ─── Saved Template Load (Ensure section is marked) ──────────
+      const handleSelectSavedTemplate = async (template: EmailAdHocTemplate) => {
+            const t = toast.loading('Loading saved template...');
             try {
-                  const sanitized = (templateName || 'custom-template').trim().replace(/[^a-zA-Z0-9-_]/g, '_');
-                  const file = new File([cleanHtml], 'index.html', { type: 'text/html' });
-                  const blob = await upload(
-                        `email-ad-hock/${sanitized}/index.html`, file,
-                        {
-                              access: 'public',
-                              handleUploadUrl: '/api/upload/email-ad-hock',
-                              clientPayload: JSON.stringify({ fileName: 'index.html', fileSize: file.size, skipRecordCreation: true }),
-                        }
-                  );
+                  const res = await fetch(template.htmlUrl);
+                  if (!res.ok) throw new Error('Failed to fetch template content');
+                  const html = await res.text();
+                  setEmailTemplateId(template.id);
+                  setTemplateName(template.name);
+                  setEmailSubject(template.emailSubject);
+                  setGeneratedHtml(html);
+                  setTemplateSection('saved-templates'); // Mark as saved template
+                  setCurrentStep(2);
+                  toast.success('Template loaded!', { id: t });
+            } catch (error) {
+                  console.error('Error loading template:', error);
+                  toast.error('Failed to load template content.', { id: t });
+            }
+      };
 
-                  if (emailTemplateId == null) {
+      // ─── Step 3: Send Campaign (With Conditional Save) ───────────
+      const handleSendCampaign = async () => {
+            setIsSending(true);
+
+            // 1. Save to Wishlist if requested (Only for AI generated new templates)
+            if (saveTemplate && templateSection === 'ai-generated' && !emailTemplateId) {
+                  const uploadToast = toast.loading('Saving template to wishlist...');
+                  try {
+                        const sanitized = (templateName || 'custom-template').trim().replace(/[^a-zA-Z0-9-_]/g, '_');
+                        const file = new File([generatedHtml], 'index.html', { type: 'text/html' });
+
+                        const blob = await upload(
+                              `email-ad-hock/${sanitized}/index.html`, file,
+                              {
+                                    access: 'public',
+                                    handleUploadUrl: '/api/upload',
+                                    clientPayload: JSON.stringify({ fileName: 'index.html', fileSize: file.size, uploadType: 'email-template' }),
+                              }
+                        );
+
                         const saved = await CreateEmailAdHock(templateName, emailSubject, blob.url);
-                        if (saved.success) {
+                        if (saved.success && saved.data) {
                               setEmailTemplateId(saved.data?.id || null);
+                              setSavedTemplates(prev => [...prev, saved.data]); // Update local state instantly
                               toast.success('Template saved successfully!', { id: uploadToast });
-                              await refreshTemplates();
                         } else {
                               toast.error('Failed to save template in database.', { id: uploadToast });
                         }
-                  } else {
-                        const updated = await UpdateEmailAdHock(emailTemplateId, templateName, emailSubject, blob.url);
-                        if (updated.success) {
-                              toast.success('Template saved successfully!', { id: uploadToast });
-                              await refreshTemplates();
-                        } else {
-                              toast.error('Failed to update template in database.', { id: uploadToast });
-                        }
+                  } catch (error) {
+                        console.error('Failed to upload email template:', error);
+                        toast.error('Failed to upload template to blob storage.', { id: uploadToast });
                   }
-
-                  setGeneratedHtml(cleanHtml);
-                  setCurrentStep(3);
-            } catch (error) {
-                  console.error('Failed to upload email template:', error);
-                  toast.error('Failed to upload template to blob storage.', { id: uploadToast });
-            } finally {
-                  setIsSaving(false);
             }
-      };
 
-      // ─── Lead Selection ──────────────────────────────────────────
-
-      const handleSelectLead = (lead: CampaignLead) => {
-            const newMap = new Map(selectedLeads);
-            if (newMap.has(lead.id)) newMap.delete(lead.id);
-            else newMap.set(lead.id, lead);
-            setSelectedLeads(newMap);
-
-            // Use newMap for immediate isSelectAll check
-            if (leadsList.length === 0) {
-                  setIsSelectAll(false);
-            } else {
-                  setIsSelectAll(leadsList.every((l) => newMap.has(l.id)));
-            }
-      };
-      
-      const handleSelectAll = async (checked: boolean) => {
-            setIsSelectAll(checked);
-            const newMap = new Map(selectedLeads);
-            const allMatching = await getAllLeadIdsForCampaign({ search: searchQuery, stage: stageFilter });
-            if (checked) {
-                  allMatching.forEach((lead: CampaignLead) => newMap.set(lead.id, lead));
-            } else {
-                  allMatching.forEach((lead: CampaignLead) => newMap.delete(lead.id));
-            }
-            setSelectedLeads(newMap);
-      };
-
-      // ─── Send Campaign ───────────────────────────────────────────
-
-      const handleSendCampaign = async () => {
-            setIsSending(true);
+            // 2. Proceed with sending emails
             const leads = Array.from(selectedLeads.values());
             const sendToast = toast.loading(`Sending emails to ${leads.length} leads...`);
             let successCount = 0;
@@ -398,6 +422,7 @@ export function useEmailAdHock() {
                         setLinks([]);
                         setDescription('');
                         setTemplateSection('ai-generated');
+                        setSaveTemplate(false); // Reset checkbox
                   } else if (successCount > 0 && failCount > 0) {
                         toast.warning(`Sent to ${successCount} leads, ${failCount} failed.`, { id: sendToast });
                         setCurrentStep(1);
@@ -408,6 +433,7 @@ export function useEmailAdHock() {
                         setLinks([]);
                         setDescription('');
                         setTemplateSection('ai-generated');
+                        setSaveTemplate(false); // Reset checkbox
                   } else {
                         toast.error(`Campaign failed. ${failCount} emails could not be sent.`, { id: sendToast });
                         setEmailTemplateId(null);
@@ -415,6 +441,7 @@ export function useEmailAdHock() {
                         setLinks([]);
                         setDescription('');
                         setTemplateSection('ai-generated');
+                        setSaveTemplate(false); // Reset checkbox
                   }
             } catch (error) {
                   console.error('Campaign send error:', error);
@@ -425,6 +452,123 @@ export function useEmailAdHock() {
             }
       };
 
+      // ─── Lead Selection ──────────────────────────────────────────
+
+      const handleSelectLead = (lead: CampaignLead) => {
+            const newMap = new Map(selectedLeads);
+            if (newMap.has(lead.id)) newMap.delete(lead.id);
+            else newMap.set(lead.id, lead);
+            setSelectedLeads(newMap);
+
+            // Use newMap for immediate isSelectAll check
+            if (leadsList.length === 0) {
+                  setIsSelectAll(false);
+            } else {
+                  setIsSelectAll(leadsList.every((l) => newMap.has(l.id)));
+            }
+      };
+
+      const handleSelectAll = async (checked: boolean) => {
+            setIsSelectAll(checked);
+            const newMap = new Map(selectedLeads);
+            const allMatching = await getAllLeadIdsForCampaign({ search: searchQuery, stage: stageFilter });
+            if (checked) {
+                  allMatching.forEach((lead: CampaignLead) => newMap.set(lead.id, lead));
+            } else {
+                  allMatching.forEach((lead: CampaignLead) => newMap.delete(lead.id));
+            }
+            setSelectedLeads(newMap);
+      };
+
+      // ─── Send Campaign ───────────────────────────────────────────
+
+      // const handleSendCampaign = async () => {
+      //       setIsSending(true);
+      //       const leads = Array.from(selectedLeads.values());
+      //       const sendToast = toast.loading(`Sending emails to ${leads.length} leads...`);
+      //       let successCount = 0;
+      //       let failCount = 0;
+
+      //       try {
+      //             for (const lead of leads) {
+      //                   if (!lead.email) { failCount++; continue; }
+      //                   try {
+      //                         const personalize = (text: string) =>
+      //                               text
+      //                                     .replace(/\{id\}/gi, lead.id.toString())
+      //                                     .replace(/\{name\}/gi, lead.name || '')
+      //                                     .replace(/\{email\}/gi, lead.email || '')
+      //                                     .replace(/\{stage\}/gi, lead.stage || '')
+      //                                     .replace(/\{source\}/gi, lead.sourceDetail || lead.source || '')
+      //                                     .replace(/\{projectType\}/gi, (lead.type && lead.type.length > 0) ? lead.type[0] : '')
+      //                                     .replace(/\{location\}/gi, lead.location || '')
+      //                                     .replace(/\{budget\}/gi, lead.budget ? `AU$${lead.budget}` : '')
+      //                                     .replace(/\{assignedUser\}/gi, lead.assignedUser?.name || '')
+      //                                     .replace(/\{followup\}/gi, lead.followupDate ? new Date(lead.followupDate).toLocaleDateString() : '')
+      //                                     .replace(/\{notes\}/gi, lead.notes || '');
+
+      //                         const personalizedSubject = personalize(emailSubject);
+      //                         const personalizedHtml = personalize(generatedHtml);
+
+      //                         const sent = await sendEmailToLead(lead.email, personalizedSubject, personalizedHtml);
+      //                         if (sent) {
+      //                               successCount++;
+      //                               const now = new Date();
+      //                               await updateLead(lead.id, {
+      //                                     history: [{
+      //                                           date: now.toISOString().slice(0, 10),
+      //                                           time: now.toTimeString().slice(0, 5),
+      //                                           action: "Email sent",
+      //                                           detail: `Subject: ${emailSubject}`,
+      //                                           type: "email" as const,
+      //                                     }],
+      //                               });
+      //                         } else {
+      //                               failCount++;
+      //                         }
+      //                   } catch (err) {
+      //                         console.error(`Failed to send to ${lead.email}:`, err);
+      //                         failCount++;
+      //                   }
+      //             }
+
+      //             if (successCount > 0 && failCount === 0) {
+      //                   toast.success(`Campaign sent successfully to ${successCount} leads!`, { id: sendToast });
+      //                   setCurrentStep(1);
+      //                   setSelectedLeads(new Map());
+      //                   setIsSelectAll(false);
+      //                   setEmailTemplateId(null);
+      //                   setAttachments([]);
+      //                   setLinks([]);
+      //                   setDescription('');
+      //                   setTemplateSection('ai-generated');
+      //             } else if (successCount > 0 && failCount > 0) {
+      //                   toast.warning(`Sent to ${successCount} leads, ${failCount} failed.`, { id: sendToast });
+      //                   setCurrentStep(1);
+      //                   setSelectedLeads(new Map());
+      //                   setIsSelectAll(false);
+      //                   setEmailTemplateId(null);
+      //                   setAttachments([]);
+      //                   setLinks([]);
+      //                   setDescription('');
+      //                   setTemplateSection('ai-generated');
+      //             } else {
+      //                   toast.error(`Campaign failed. ${failCount} emails could not be sent.`, { id: sendToast });
+      //                   setEmailTemplateId(null);
+      //                   setAttachments([]);
+      //                   setLinks([]);
+      //                   setDescription('');
+      //                   setTemplateSection('ai-generated');
+      //             }
+      //       } catch (error) {
+      //             console.error('Campaign send error:', error);
+      //             toast.error('An unexpected error occurred while sending the campaign.', { id: sendToast });
+      //       } finally {
+      //             setIsSending(false);
+      //             setShowConfirmModal(false);
+      //       }
+      // };
+
       // ─── Return ──────────────────────────────────────────────────
 
       return {
@@ -433,15 +577,15 @@ export function useEmailAdHock() {
             // Step 1 — Compose
             description, setDescription, links, attachments, errors, setErrors,
             isGenerating, addLink, updateLink, removeLink,
-            addAttachment, updateAttachment, removeAttachment, handleGenerate,
+            addAttachment, updateAttachment, removeAttachment, handleAttachmentUpload, handleGenerate,
             templateSection,
             // Templates
-            setTemplateSection,setEmailTemplateId,
-            savedTemplates, isLoadingTemplates, handleSelectSavedTemplate,
+            setTemplateSection, setEmailTemplateId,
+            savedTemplates, isLoadingTemplates, handleSelectSavedTemplate,saveTemplate, setSaveTemplate,
             openDeleteDialog, handleTemplateSelect, emailTemplateId,
             // Step 2 — Preview
             templateName, setTemplateName, emailSubject, setEmailSubject,
-            generatedHtml, iframeRef, isSaving, handleNextToSend,
+            generatedHtml, iframeRef, handleNextToSend,
             // Step 3 — Send
             searchQuery, setSearchQuery, stageFilter, setStageFilter,
             currentPage, setCurrentPage, leadsList, totalLeads, pageCount,
