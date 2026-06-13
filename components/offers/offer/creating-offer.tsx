@@ -17,8 +17,13 @@ import {
   X,
   Minus,
   AlertTriangle,
+  RotateCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchJson } from "@/utils/fetch";
+import { Button } from "@/components/ui/button";
+import { useTransition } from "react";
+import { toast } from "sonner";
 
 const STEPS = [
   {
@@ -48,11 +53,33 @@ function getStepState(
   return "idle";
 }
 
-function CreatingOffer() {
-  const { creatingOffer } = useWorkflowStream();
+function CreatingOffer({ leadId }: { leadId: number }) {
+  const { creatingOffer, startListening } = useWorkflowStream();
+  const [isPending, startTransition] = useTransition();
   const { status, progress, message, failed } = creatingOffer;
 
   const isComplete = status === "COMPLETED" && !failed;
+
+  const handleReTrigger = async () => {
+    try {
+      const { data } = await fetchJson<{ runId: string; message: string }>(
+        `/api/offer-create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ leadId }),
+        },
+        "Failed to trigger offer creation workflow",
+      );
+      toast.success("Re-triggered offer generation");
+      startListening(data.runId);
+    } catch (error) {
+      console.error("Error re-triggering offer generation:", error);
+      toast.error("Failed to re-trigger offer generation");
+    }
+  };
 
   return (
     <div className="flex min-h-100 items-center justify-center p-6">
@@ -73,21 +100,36 @@ function CreatingOffer() {
               <Sparkles className="h-5 w-5 text-primary animate-pulse" />
             )}
           </div>
-          <div>
-            <h3 className="font-semibold leading-tight">
-              {failed
-                ? "Offer generation failed"
-                : isComplete
-                  ? "Offer generated"
-                  : "Generating your offer"}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {failed
-                ? "An error occurred. Please try again."
-                : isComplete
-                  ? "Your document is ready to review."
-                  : "Analyzing project details…"}
-            </p>
+          <div className="flex flex-row items-center gap-2 justify-between w-full">
+            <div>
+              <h3 className="font-semibold leading-tight">
+                {failed
+                  ? "Offer generation failed"
+                  : isComplete
+                    ? "Offer generated"
+                    : "Generating your offer"}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {failed
+                  ? "An error occurred. Please try again."
+                  : isComplete
+                    ? "Your document is ready to review."
+                    : "Analyzing project details…"}
+              </p>
+            </div>
+
+            {failed && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                disabled={isPending}
+                onClick={() => startTransition(handleReTrigger)}
+              >
+                <RotateCw className={cn("mr-2 h-4 w-4", isPending && "animate-spin")} />
+                Retry
+              </Button>
+            )}
           </div>
         </div>
 
@@ -190,10 +232,16 @@ function CreatingOffer() {
   );
 }
 
-export function CreatingOfferClient({ runId }: { runId: string }) {
+export function CreatingOfferClient({
+  runId,
+  leadId,
+}: {
+  runId: string;
+  leadId: number;
+}) {
   return (
     <WorkflowStreamProvider initialRunId={runId}>
-      <CreatingOffer />
+      <CreatingOffer leadId={leadId} />
     </WorkflowStreamProvider>
   );
 }

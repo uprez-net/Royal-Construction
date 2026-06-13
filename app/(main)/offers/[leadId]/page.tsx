@@ -6,7 +6,6 @@ import { Suspense } from "react";
 import OfferDetailsPageSkeleton from "./loading";
 import { CreatingOfferClient } from "@/components/offers/offer/creating-offer";
 
-
 async function OfferCreationContent({
   params,
 }: {
@@ -22,7 +21,7 @@ async function OfferCreationContent({
 
   if (!chat || !offerData || leadInfo.runId !== null) {
     return (
-      <CreatingOfferClient runId={leadInfo.runId!} />
+      <CreatingOfferClient runId={leadInfo.runId!} leadId={parseInt(leadId)} />
     );
   }
 

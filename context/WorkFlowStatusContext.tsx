@@ -124,6 +124,7 @@ export function WorkflowStreamProvider({
     setRunId(id);
     setLoading(true);
     setError(null);
+    setCreatingOffer(defaultCreatingOffer);
 
     try {
       const res = await fetch(

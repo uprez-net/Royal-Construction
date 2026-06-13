@@ -1,4 +1,4 @@
-import { ToolLoopAgent, Output,  } from "ai";
+import { ToolLoopAgent, Output, } from "ai";
 import { gateway } from "@/lib/model";
 import { fetchOfferSheetRules } from "../tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "../tools/file-tools";
@@ -10,7 +10,6 @@ import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { fetchLeadFilesTool, fetchLeadInfoTool } from "@/lib/tools/fetch-lead-info";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
-
 
 export const offerCreationAgent = new ToolLoopAgent({
     model: gateway("google/gemini-2.5-flash"),
@@ -24,8 +23,8 @@ export const offerCreationAgent = new ToolLoopAgent({
         fileProcessingTool: FileProcessingTool,
         lineItemTool: lineItemTool(),
         offerFileTool: offerFileTool(),
-        fetchLeadInfoTool: fetchLeadInfoTool,
-        fetchLeadFilesTool: fetchLeadFilesTool,
+        // fetchLeadInfoTool: fetchLeadInfoTool,
+        // fetchLeadFilesTool: fetchLeadFilesTool,
         webSearch: webSearch,
         scrapeUserLinks: scrapeUserLinks,
     },
