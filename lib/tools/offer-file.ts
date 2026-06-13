@@ -38,7 +38,7 @@ const offerFileContentAppendSchema = offerFileContentSchema.extend({
         ),
 })
 
-export const offerFileTool = (dataStream?: UIMessageStreamWriter) =>
+export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data: OfferFile) => void) =>
     tool({
         description: `
             Creates or updates customer-facing offer document sections.
@@ -107,6 +107,16 @@ export const offerFileTool = (dataStream?: UIMessageStreamWriter) =>
                             options: Options,
                         } : undefined,
                     } satisfies OfferFile,
+                });
+            }
+
+            if(append) {
+                append({
+                    ...customerOffer,
+                    facadeOptions: customerOffer.facadeOptions ? {
+                        optionsDescription: customerOffer.facadeOptions.optionsDescription,
+                        options: Options,
+                    } : undefined,
                 });
             }
 

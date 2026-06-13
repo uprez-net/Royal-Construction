@@ -2,8 +2,7 @@ import { OfferWithLead } from "@/types/offer";
 import { prisma } from "@/lib/prisma";
 import { buildCreationStarterPrompt, FacadeOptionWithImageUrl } from "@/lib/agent/offer-prompts";
 import { findLeadById } from "@/lib/data/leads";
-import { offerCreationAgent } from "@/lib/agent/offerCreationAgent";
-import { imageGenerationAgent } from "@/lib/agent/imageGenerationAgent";
+import { handleOfferGeneration } from "@/lib/agent/offerCreationAgent";
 import { v4 as uuidv4 } from "uuid";
 import { createOrUpdateOffer } from "@/lib/data/offers";
 import { OfferCreationOutput } from "@/lib/agent/offer-prompts";
@@ -143,9 +142,7 @@ async function findLead(leadId: number) {
 async function buildOffer(prompt: string, lead: Lead) {
     'use step';
     try {
-        const { output } = await offerCreationAgent.generate({
-            prompt,
-        });
+        const output = await handleOfferGeneration(prompt);
         const offerItemsWithPricing = output.lineItemArray.map((item) => ({
             item,
             pricing: calculateLinePricing(item),
@@ -153,23 +150,9 @@ async function buildOffer(prompt: string, lead: Lead) {
         const amount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.netLine, 0));
         const gstAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.gstAmount, 0));
         const totalAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.totalPrice, 0));
-        const Options: FacadeOptionWithImageUrl["options"] = [];
-        if (output.offerFileContent.facadeOptions) {
-            for (const option of output.offerFileContent.facadeOptions.options) {
-                const image = await imageGenerationAgent.generate({
-                    prompt:
-                        `
-                        Generate a facade design image based on the following description: ${option.description}. 
-                        The image should reflect the architectural style, materials, colors, and specific features mentioned in the description.
-                    `
-                })
-                Options.push({
-                    ...option,
-                    imageUrl: image.output.imageUrl,
-                })
-            }
-        }
+        const Options: FacadeOptionWithImageUrl["options"] = output.offerFileContent.facadeOptions ? output.offerFileContent.facadeOptions.options : [];
 
+        console.log(`Built offer with message: ${output.creationMessage}, total amount: $${totalAmount}`);
         await writeToStream({
             status: "SAVING_OFFER",
             progress: 50,

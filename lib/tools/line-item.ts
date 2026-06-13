@@ -1,8 +1,8 @@
 import { tool, UIMessageStreamWriter } from "ai";
-import { offerLineItemSchema } from "@/lib/agent/offer-prompts";
+import { offerLineItemSchema, type OfferLineItem } from "@/lib/agent/offer-prompts";
 
 
-export const lineItemTool = (dataStream?: UIMessageStreamWriter) =>
+export const lineItemTool = (dataStream?: UIMessageStreamWriter, append?: (data: OfferLineItem) => void) =>
     tool({
         description: `Creates or updates one customer-facing offer line item. Use it only for priced rows that should appear in the offer. The tool computes net line, GST amount, and total price deterministically from unitPrice, quantity, gstRate, and gstIncluded. Include a source when the value came from a lead field, document, sheet, row, or cell.`,
         inputSchema: offerLineItemSchema,
@@ -41,6 +41,20 @@ export const lineItemTool = (dataStream?: UIMessageStreamWriter) =>
                         totalPrice,
                         source: params.source,
                     },
+                });
+            }
+
+            if(append) {
+                append({
+                    id: params.id,
+                    item: params.item,
+                    description: params.description,
+                    unitPrice: params.unitPrice,
+                    quantity: params.quantity,
+                    unit: params.unit,
+                    gstRate,
+                    gstIncluded: !!params.gstIncluded,
+                    source: params.source,
                 });
             }
 

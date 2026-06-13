@@ -515,6 +515,8 @@ export const offerLineItemSchema = z.object({
   source: z.string().optional().describe("Source filename, lead field, sheet name, row, or cell for the cost or quantity."),
 });
 
+export type OfferLineItem = z.infer<typeof offerLineItemSchema>;
+
 export const termsAndConditionsItemSchema = z.object({
   title: z.string().describe("Short title summarizing the term or condition."),
   description: z.string().describe("Detailed customer-facing explanation of the term or condition."),
@@ -586,6 +588,8 @@ export const offerFileContentSchema = z.object({
       "Optional section describing the facade design options available to the customer. This includes a general description of the choices and a list of specific options, each with its own title and detailed description. When included, this section should provide a clear explanation of the facade choices the customer has for their project."
     ),
 });
+
+export type OfferFileContent = z.infer<typeof offerFileContentSchema>;
 
 export const offerCreationOutputSchema = z.object({
   lineItemArray: z
