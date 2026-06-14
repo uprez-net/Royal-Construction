@@ -10,8 +10,9 @@ import {
 import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
-import z from "zod";
 import type { OfferFile } from "@/context/ChatContext";
+
+const MODEL_NAME = process.env.NODE_ENV !== "production" ? "xiaomi/mimo-v2.5-pro" : "google/gemini-2.5-flash" as const;
 
 export const handleOfferGeneration = async (prompt: string) => {
     const offerLineItems: OfferLineItem[] = [];
@@ -25,7 +26,7 @@ export const handleOfferGeneration = async (prompt: string) => {
     };
 
     const offerLineItemCreatorAgent = new ToolLoopAgent({
-        model: gateway("xiaomi/mimo-v2.5-pro"),
+        model: gateway(MODEL_NAME),
         temperature: 0.15,
         topP: 0.85,
         topK: 20,
@@ -56,7 +57,7 @@ export const handleOfferGeneration = async (prompt: string) => {
     });
 
     const offerFileCreationAgent = new ToolLoopAgent({
-        model: gateway("xiaomi/mimo-v2.5-pro"),
+        model: gateway(MODEL_NAME),
         temperature: 0.15,
         topP: 0.85,
         topK: 20,
