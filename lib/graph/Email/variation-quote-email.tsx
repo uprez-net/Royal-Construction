@@ -23,6 +23,7 @@ import { EmailHeader } from './email-header';
 import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ interface VariationQuoteEmailProps {
   variationAmount?: string;
   revisedAmount?: string;
   approveUrl?: string;
+  leadContext?: LeadEmailContext;
 }
 
 export default function VariationQuoteEmail({
@@ -48,6 +50,7 @@ export default function VariationQuoteEmail({
   variationAmount = '$0',
   revisedAmount = '$0',
   approveUrl = RC_URLS.website,
+  leadContext,
 }: VariationQuoteEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -147,6 +150,8 @@ export default function VariationQuoteEmail({
                 </Column>
               </Row>
             </EmailSectionLight>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Variation Comparison Card ── */}
             <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>

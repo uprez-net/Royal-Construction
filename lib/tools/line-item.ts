@@ -1,26 +1,14 @@
 import { tool, UIMessageStreamWriter } from "ai";
-import z from "zod";
+import { offerLineItemSchema, type OfferLineItem } from "@/lib/agent/offer-prompts";
 
 
-export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
+export const lineItemTool = (dataStream?: UIMessageStreamWriter, append?: (data: OfferLineItem) => void) =>
     tool({
-        description:
-            "Handles addition and update of a single line item for the UI. Computes line total, GST and returns a consistent structure.",
-        inputSchema: z.object({
-            id: z.string().describe("Unique identifier for the line item, used for updates"),
-            item: z.string().describe("Description of the line item"),
-            description: z.string().describe("Detailed description of the line item"),
-            unitPrice: z.number().describe("Unit price for the line item (numeric, as a decimal number)"),
-            quantity: z.number().describe("Quantity for the line item"),
-            unit: z.string().describe("Unit of measurement for the line item (e.g., 'each', 'lump sum', 'sqft', 'sqm')"),
-            gstRate: z.number().optional().describe("GST rate to apply to this line, expressed as a decimal (e.g., 0.10 for 10%). Optional; defaults to 0."),
-            gstIncluded: z.boolean().optional().describe("If true, the provided unitPrice includes GST already."),
-            source: z.string().optional().describe("Optional source filename or lead field where this cost originated"),
-        }),
+        description: `Creates or updates one customer-facing offer line item. Use it only for priced rows that should appear in the offer. The tool computes net line, GST amount, and total price deterministically from unitPrice, quantity, gstRate, and gstIncluded. Include a source when the value came from a lead field, document, sheet, row, or cell.`,
+        inputSchema: offerLineItemSchema,
         execute: async (params) => {
-            const gstRate = params.gstRate ?? 0;
+            const gstRate = params.gstRate ?? 0.10;
 
-            // Compute base line amount and GST depending on gstIncluded flag
             const rawLine = params.unitPrice * params.quantity;
             let netLine = rawLine;
             let gstAmount = 0;
@@ -36,9 +24,28 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
             const totalPrice = +(netLine + gstAmount).toFixed(2);
 
             // Send the line item data back to the UI via the data stream (customer-facing only)
-            dataStream.write({
-                type: "data-line-item-update",
-                data: {
+            if (dataStream) {
+                dataStream.write({
+                    type: "data-line-item-update",
+                    data: {
+                        id: params.id,
+                        item: params.item,
+                        description: params.description,
+                        unitPrice: params.unitPrice,
+                        quantity: params.quantity,
+                        unit: params.unit,
+                        gstRate,
+                        gstIncluded: !!params.gstIncluded,
+                        netLine,
+                        gstAmount,
+                        totalPrice,
+                        source: params.source,
+                    },
+                });
+            }
+
+            if(append) {
+                append({
                     id: params.id,
                     item: params.item,
                     description: params.description,
@@ -47,12 +54,9 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
                     unit: params.unit,
                     gstRate,
                     gstIncluded: !!params.gstIncluded,
-                    netLine,
-                    gstAmount,
-                    totalPrice,
                     source: params.source,
-                },
-            });
+                });
+            }
 
             return {
                 message: `Line item ${params.id} processed successfully.`,
@@ -68,7 +72,7 @@ export const lineItemTool = (dataStream: UIMessageStreamWriter) =>
                     gstAmount,
                     totalPrice,
                     source: params.source,
-                    gstRate: params.gstRate,
+                    gstRate,
                     gstIncluded: !!params.gstIncluded,
                 },
             };

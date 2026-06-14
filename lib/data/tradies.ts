@@ -248,22 +248,70 @@ export async function getTradieSchedules(filters?: {
   }
 }
 
+type TradieKPIResult = {
+  total_scheduled: bigint;
+  pending: bigint;
+  pending_response: bigint;
+  confirmed: bigint;
+  no_response: bigint;
+  declined: bigint;
+  completed: bigint;
+};
+
 export async function getTradieScheduleKPIs(): Promise<TradieKPIs> {
   try {
-    const [totalScheduled, pending, pendingResponse, confirmed, noResponse, declined, completed] = await Promise.all([
-      prisma.tradieSchedule.count(),
-      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.PENDING } }),
-      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.PENDING_RESPONSE } }),
-      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.CONFIRMED } }),
-      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.NO_RESPONSE } }),
-      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.DECLINED } }),
-      prisma.tradieSchedule.count({ where: { status: TradieScheduleStatus.COMPLETED } }),
-    ]);
+    const [result] = await prisma.$queryRaw<TradieKPIResult[]>`
+            SELECT
+                COUNT(*) AS total_scheduled,
 
-    return { totalScheduled, pending, pendingResponse, confirmed, noResponse, declined, completed };
+                COUNT(*) FILTER (
+                    WHERE status = 'PENDING'
+                ) AS pending,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'PENDING_RESPONSE'
+                ) AS pending_response,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'CONFIRMED'
+                ) AS confirmed,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'NO_RESPONSE'
+                ) AS no_response,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'DECLINED'
+                ) AS declined,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'COMPLETED'
+                ) AS completed
+
+            FROM "TradieSchedule"
+        `;
+
+    return {
+      totalScheduled: Number(result.total_scheduled),
+      pending: Number(result.pending),
+      pendingResponse: Number(result.pending_response),
+      confirmed: Number(result.confirmed),
+      noResponse: Number(result.no_response),
+      declined: Number(result.declined),
+      completed: Number(result.completed),
+    };
   } catch (error) {
     console.error("Error fetching tradie schedule KPIs:", error);
-    return { totalScheduled: 0, pending: 0, pendingResponse: 0, confirmed: 0, noResponse: 0, declined: 0, completed: 0 };
+
+    return {
+      totalScheduled: 0,
+      pending: 0,
+      pendingResponse: 0,
+      confirmed: 0,
+      noResponse: 0,
+      declined: 0,
+      completed: 0,
+    };
   }
 }
 
@@ -767,12 +815,12 @@ export async function getTradiesForLookup(limit = 20, search = "") {
   try {
     const where = search
       ? {
-          OR: [
-            { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-            { company: { contains: search, mode: Prisma.QueryMode.insensitive } },
-            { tradeType: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          ],
-        }
+        OR: [
+          { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { company: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { tradeType: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        ],
+      }
       : undefined;
 
     const tradies = await prisma.tradie.findMany({

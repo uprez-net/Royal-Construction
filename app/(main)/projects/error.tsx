@@ -36,7 +36,7 @@ export default function ProjectsError({
           {/* Error Details (in development) */}
           {process.env.NODE_ENV === "development" && error.message && (
             <div className="mb-6 rounded-lg bg-white/50 p-4 text-left">
-              <p className="text-xs font-mono text-red-600 overflow-wrap">
+              <p className="text-xs font-mono text-red-600 break-words">
                 {error.message}
               </p>
             </div>

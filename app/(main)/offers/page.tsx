@@ -4,11 +4,11 @@ import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
 import { Card } from "@/components/ui/card";
 import { getOfferKPIsCached, getOffersCached } from "@/lib/data/offers";
-import { Loader2 } from "lucide-react";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import OfferPageSkeleton from "./loading";
 
-async function QfferPageClient() {
+async function OfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.
   await connection();
   const [offerKPIs, offers] = await Promise.all([
@@ -32,7 +32,7 @@ async function QfferPageClient() {
           total: offerKPIs.pendingOffers.total,
           trendDelta: offerKPIs.pendingOffers.trendDelta,
         }}
-        activeVariationOffers={{
+        sentOffers={{
           total: offerKPIs.sentOffers.total,
           trendDelta: offerKPIs.sentOffers.trendDelta,
         }}
@@ -56,8 +56,8 @@ async function QfferPageClient() {
 
 export default function OfferPage() {
   return (
-    <Suspense fallback={<Loader2 className="animate-spin size-5 text-blue-100" />}>
-      <QfferPageClient />;
+    <Suspense fallback={<OfferPageSkeleton />}>
+          <OfferPageClient />
     </Suspense>
   );
 }

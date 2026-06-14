@@ -19,21 +19,23 @@ import type { File } from "@prisma/client";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { UploadButton } from "@/components/common/upload-button";
-import { createOffer } from "@/lib/data/offers";
+import { createOrUpdateOffer } from "@/lib/data/offers";
 import { generatePDF } from "@/lib/utils/generatePDF";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { upload } from "@vercel/blob/client";
 import { ClientPayload } from "@/utils/validators/files";
+import { OfferVersionSelector } from "./offer-version-selector";
+import { del } from "@vercel/blob";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
   if (
-    offerFile.paymentTerms?.trim() ||
-    offerFile.projectDescription?.trim() ||
-    offerFile.serviceExclusions?.length ||
+    offerFile.projectWelcomeMessage?.trim() ||
+    offerFile.projectScope?.length ||
     offerFile.termsAndConditions?.length ||
-    offerFile.serviceExclusions?.length
+    offerFile.fixedPriceItems?.length ||
+    offerFile.promotionalUpgrades?.length
   )
     return false;
 
@@ -53,14 +55,16 @@ export function OfferFileCanvas({
   projectType: string;
   location: string;
 }) {
-  const { offerFile, lineItems } = useChatContext();
+  const { offerFile, lineItems, lastRevisionDate, proposalDate, appendVersion } = useChatContext();
   const offerFileRef = useRef<HTMLIFrameElement | null>(null);
   const [tabId, setTabId] = useState<"offer" | "files" | "line-items">("offer");
   const [isPending, startTransition] = useTransition();
   const [filesState, setFiles] = useState<File[]>(files);
-  const totalAmount = currency.format(
-    lineItems.reduce((acc, item) => acc + item.totalPrice, 0),
+  const numericTotalAmount = lineItems.reduce(
+    (acc, item) => acc + item.totalPrice,
+    0,
   );
+  const totalAmount = currency.format(numericTotalAmount);
 
   const handleDownload = async () => {
     if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
@@ -87,6 +91,7 @@ export function OfferFileCanvas({
   const handleSave = async () => {
     if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
     // First Upload the offer file to the server, then save the offer details and line items in the database
+    let fileUrl: string | undefined;
     try {
       const documentHtml =
         offerFileRef.current.contentDocument.documentElement.outerHTML;
@@ -95,7 +100,7 @@ export function OfferFileCanvas({
       const fileId = uuidv4(); // Generate a unique ID for the file
       const fileName = `offer_${dateFormat.format(new Date())}_${leadId}.pdf`;
 
-      await upload(
+      const uploadRes = await upload(
         buildBlobPath({
           fileId: fileId,
           fileName,
@@ -109,7 +114,7 @@ export function OfferFileCanvas({
             fileId: fileId,
             fileName: fileName,
             fileSize: blob.size,
-            leadId,
+            isOfferFile: true, // Instruct the upload API to skip creating a file record since we'll handle it after the upload
           } satisfies ClientPayload),
         },
       );
@@ -117,17 +122,26 @@ export function OfferFileCanvas({
       const amount = lineItems
         .reduce((acc, item) => acc + item.totalPrice, 0)
         .toFixed(2);
-      const gstAmount = (parseFloat(amount) * 0.18).toFixed(2); // Assuming 18% GST
+      const gstAmount = (parseFloat(amount) * 0.10).toFixed(2); // Assuming 10% GST
       const finalAmount = (parseFloat(amount) + parseFloat(gstAmount)).toFixed(
         2,
       );
-      await createOffer({
+      fileUrl = uploadRes.url;
+      const newOffer = await createOrUpdateOffer({
         leadId: parseInt(leadId),
-        offerFileId: fileId,
+        offerFileInput: {
+          id: fileId,
+          filename: fileName,
+          fileType: blob.type,
+          filesize: blob.size,
+          url: uploadRes.url,
+          offerContent: offerFile, // Pass the offer file content to be saved in the database
+        },
         amount: amount,
         gstAmount: gstAmount,
         totalAmount: finalAmount,
         offerItems: lineItems.map((item) => ({
+          id: uuidv4(),
           item: item.item,
           description: item.description,
           quantity: item.quantity,
@@ -136,7 +150,11 @@ export function OfferFileCanvas({
           unit: item.unit,
         })),
       });
+      appendVersion(newOffer.version, newOffer.newOfferItems, newOffer.newOfferFile);
     } catch (error) {
+      if(fileUrl) {
+        del(fileUrl); // Clean up the uploaded file if offer saving fails
+      }
       console.error("Error saving the offer:", error);
     }
   };
@@ -175,6 +193,9 @@ export function OfferFileCanvas({
         })}
 
         <div className="ml-auto flex items-center gap-2">
+
+          <OfferVersionSelector />
+
           <Button
             variant="outline"
             size="sm"
@@ -204,9 +225,12 @@ export function OfferFileCanvas({
           <OfferFileTemplate
             {...offerFile}
             ref={offerFileRef}
-            contractAmount={totalAmount}
+            contractAmount={numericTotalAmount > 0 ? totalAmount : undefined}
             customerName={customerName}
             projectName={`${projectType}, ${location}`}
+            siteLocation={location}
+            revisionDate={lastRevisionDate}
+            proposalDate={proposalDate}
           />
         </div>
       )}
@@ -215,7 +239,6 @@ export function OfferFileCanvas({
         <div className="min-h-0 w-[50vw] flex-1 overflow-auto bg-[#FAF8F3] px-4 py-4 lg:px-5">
           <DataTable
             headers={[
-              "id",
               "item",
               "description",
               "quantity",
@@ -223,10 +246,8 @@ export function OfferFileCanvas({
               "unit",
               "gst",
               "total",
-              "source",
             ]}
             rows={lineItems.map((item) => [
-              item.id,
               item.item,
               item.description,
               item.quantity,
@@ -234,7 +255,6 @@ export function OfferFileCanvas({
               item.unit,
               currency.format(item.gstAmount),
               currency.format(item.totalPrice),
-              item.source ?? "-",
             ])}
             emptyState={
               <div className="flex flex-col items-center justify-center gap-3">

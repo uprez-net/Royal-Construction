@@ -24,6 +24,7 @@ import { EmailHeader } from './email-header';
 import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 // Updated stroke color to match RC_COLORS.gold (#C9A84C) and Navy (#1B2D45)
@@ -143,12 +144,14 @@ interface SpecialOfferEmailProps {
   name?: string;
   savingsAmount?: string;
   claimUrl?: string;
+  leadContext?: LeadEmailContext;
 }
 
 export default function SpecialOfferEmail({
   name = 'Homeowner',
   savingsAmount = '$8,500',
   claimUrl = RC_URLS.claimOffer,
+  leadContext,
 }: SpecialOfferEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -227,6 +230,8 @@ export default function SpecialOfferEmail({
                 </Column>
               </Row>
             </EmailSectionLight>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Big Savings Callout ── */}
             <EmailSectionWhite style={{ padding: '2.5rem 1.5rem 3rem' }}>

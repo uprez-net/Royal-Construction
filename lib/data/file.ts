@@ -9,7 +9,6 @@ interface SaveFileParams {
     projectId?: string;
     milestoneId?: string;
     leadId?: string;
-    offerId?: string;
     fileId?: string;
     fileUrl: string;
     fileName: string;
@@ -17,7 +16,7 @@ interface SaveFileParams {
     fileSize: number;
 }
 
-export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, fileName, fileType, fileSize, leadId, offerId }: SaveFileParams) {
+export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, fileName, fileType, fileSize, leadId }: SaveFileParams) {
     try {
         const newFile = await prisma.file.create({
             data: {
@@ -30,7 +29,6 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
                 fileType,
                 filesize: fileSize,
                 leadId: leadId ? parseInt(leadId) : null,
-                offerId: offerId ? offerId : null,
             }
         });
 
@@ -39,9 +37,6 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
         }
         if (leadId) {
             revalidateTag(`chat-session-lead-${leadId}`, CACHE_PROFILES.SHORT);
-        }
-        if (offerId) {
-            revalidateTag(`offer-${offerId}`, CACHE_PROFILES.SHORT);
         }
 
         return {

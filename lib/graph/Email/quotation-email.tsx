@@ -22,6 +22,7 @@ import { EmailHeader } from './email-header';
 import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
 
@@ -128,6 +129,7 @@ interface QuotationEmailProps {
   totalAmount?: string;
   validityPeriod?: string;
   quotationUrl?: string;
+  leadContext?: LeadEmailContext;
 }
 
 export default function QuotationEmail({
@@ -145,6 +147,7 @@ export default function QuotationEmail({
   totalAmount = '$480,500',
   validityPeriod = "30",
   quotationUrl = RC_URLS.quotation,
+  leadContext,
 }: QuotationEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -301,6 +304,8 @@ export default function QuotationEmail({
                 </Row>
               </Section>
             </EmailSectionWhite>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* Price Breakdown */}
             <EmailSectionLight style={{ padding: '2rem 1.5rem' }}>

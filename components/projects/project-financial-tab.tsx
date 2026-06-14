@@ -133,7 +133,7 @@ export function FinancialTab({ project }: FinancialTabProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {/* Total Budget */}
         <div className="rounded-lg bg-emerald-50 p-4 border border-emerald-200">
           <p className="text-xs text-emerald-700 font-medium">Total Budget</p>
@@ -166,7 +166,7 @@ export function FinancialTab({ project }: FinancialTabProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {/* Paid Off Costs */}
         <div className="rounded-lg bg-emerald-50 p-4 border border-emerald-200">
           <p className="text-xs text-emerald-700 font-medium">Paid</p>

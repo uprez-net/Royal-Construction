@@ -7,37 +7,22 @@ import { offerFileTool } from "@/lib/tools/offer-file";
 import { ChatMessageAI } from "@/types/chat";
 import { convertToUIMessage } from "@/utils/chat";
 import { ChatSDKError } from "@/utils/chat-error";
-import { google } from "@ai-sdk/google";
+import { gateway } from "@/lib/model";
 import { auth } from "@clerk/nextjs/server";
-import { convertToModelMessages, createUIMessageStream, JsonToSseTransformStream, smoothStream, stepCountIs, streamText, UIMessage } from "ai";
+import {
+    convertToModelMessages,
+    createUIMessageStream,
+    JsonToSseTransformStream,
+    smoothStream,
+    // stepCountIs,
+    streamText,
+    UIMessage
+} from "ai";
 import { NextRequest } from "next/server";
 import { v4 as generateUUID } from "uuid";
-
-
-const SYSTEM_PROMPT = `You are an expert assistant within a real-estate CRM whose primary responsibility is to
-generate accurate, customer-ready offer files for a specified lead by analysing all available
-lead data (lead record, uploaded files such as prior quotes, material lists, plans, and any
-other attachments). Requirements:
-
-- Parse and use only facts and numbers that are present in the lead record or attached files.
-- When extracting costs, prefer explicit numeric values from attachments; if information is
-    missing, ask for clarification rather than inventing values.
-- Produce a structured, customer-facing offer that includes: header/meta, \`projectDescription\`,
-    \`serviceInclusions\`, \`serviceExclusions\`, an itemised \`lineItems\` table (description, unit,
-    quantity, unit price, line total), \`subTotal\`, \`gst\` (explicit), and \`grandTotal\`.
-- All arithmetic must be exact and consistent: each line total = unitPrice * quantity; subtotal
-    = sum(line totals); GST = sum(per-line GST) or computed from the customer-facing amounts; grand
-    total = subtotal + gst. Ensure rounding behaviour is consistent to two decimal places.
-- The builder retains a private internal markup of 10% on costs. This internal markup must be
-    used internally for profitability calculations but MUST NOT appear anywhere in the
-    customer-facing offer file or UI streams.
-- Cite the source file or field for any cost or quantity you extract (e.g., filename or lead field)
-    when explaining how a value was obtained.
-- If you call a tool that returns structured data for the UI, only write customer-facing fields
-    to the UI stream. Keep any \`internal\` or \`profitability\` fields out of the UI stream.
-
-If you do not know the answer, ask for more information or indicate you cannot proceed.
-Be concise, precise, and never fabricate numbers.`;
+import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
+import { OFFER_CHAT_SYSTEM_PROMPT } from "@/lib/agent/offer-prompts";
+import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 
 interface ChatRequestBody {
     leadId: number;
@@ -98,10 +83,34 @@ export async function POST(request: NextRequest) {
 
         const chat = await createOrGetChatSession(leadId);
         const dbMessages = chat.messages;
-        const UIFormattedMessages: ChatMessageAI[] = [...convertToUIMessage(dbMessages), message as ChatMessageAI].filter(
-            (msg): msg is ChatMessageAI =>
-                msg != null && msg.parts != null && msg.role != null,
-        );
+
+        let UIFormattedMessages: ChatMessageAI[] = [];
+
+        if (isContinuationRequest) {
+            // Use the incoming `messages` array as the source-of-truth for continuations.
+            UIFormattedMessages = (messages || []).map((m) => {
+                if (!m || typeof m !== "object") return null;
+                if (!m.parts || !Array.isArray(m.parts) || !m.role) {
+                    console.error("Invalid message in continuation payload:", {
+                        hasParts: !!m?.parts,
+                        partsIsArray: Array.isArray(m?.parts),
+                        hasRole: !!m?.role,
+                    });
+                    return null;
+                }
+
+                if (!m.id) {
+                    m.id = generateUUID();
+                }
+
+                return m as ChatMessageAI;
+            }).filter((msg): msg is ChatMessageAI => msg != null && msg.parts != null && msg.role != null);
+        } else {
+            UIFormattedMessages = [...convertToUIMessage(dbMessages), message as ChatMessageAI].filter(
+                (msg): msg is ChatMessageAI =>
+                    msg != null && msg.parts != null && msg.role != null,
+            );
+        }
 
         // Safety check - ensure we have valid messages to process
         if (UIFormattedMessages.length === 0) {
@@ -115,10 +124,18 @@ export async function POST(request: NextRequest) {
                 /* ---------------- AI Stream ---------------- */
 
                 const result = streamText({
-                    model: google("gemini-3-flash-preview"),
-                    system: SYSTEM_PROMPT,
+                    model: gateway("google/gemini-2.5-flash"),
+                    temperature: 0.2,   // slightly higher — user-facing replies need to feel natural
+                    topP: 0.90,
+                    topK: 25,
+                    presencePenalty: 0,
+                    frequencyPenalty: 0.1,
+                    system: OFFER_CHAT_SYSTEM_PROMPT,
                     messages: await convertToModelMessages(UIFormattedMessages),
-                    stopWhen: stepCountIs(20),
+                    stopSequences: [
+                        "<END_OFFER_UPDATE>",
+                        "<END_LINE_ITEM_UPDATE>",
+                    ],
                     experimental_transform: smoothStream({ chunking: "word" }),
                     toolChoice: "auto",
                     tools: {
@@ -126,7 +143,10 @@ export async function POST(request: NextRequest) {
                         offerFileTool: offerFileTool(dataStream),
                         fetchLeadInfoTool: fetchLeadInfoTool,
                         fileProcessingTool: FileProcessingTool,
+                        fetchOfferSheetRulesTool: fetchOfferSheetRules,
                         fetchLeadFilesTool: fetchLeadFilesTool,
+                        webSearch: webSearch,
+                        scrapeUserLinks: scrapeUserLinks,
                     }
                 });
 
@@ -134,7 +154,7 @@ export async function POST(request: NextRequest) {
 
                 dataStream.merge(
                     result.toUIMessageStream({
-                        sendReasoning: true,
+                        sendReasoning: false,
                     }),
                 );
             },

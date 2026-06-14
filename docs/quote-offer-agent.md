@@ -67,10 +67,12 @@ The chat route imports and uses:
 
 - [lib/data/chat.ts](../lib/data/chat.ts): chat session and message persistence
 - [lib/data/user.ts](../lib/data/user.ts): Clerk-to-database user lookup
+- [lib/agent/offer-prompts.ts](../lib/agent/offer-prompts.ts): shared offer-agent prompts and output schemas
 - [lib/tools/fetch-lead-info.ts](../lib/tools/fetch-lead-info.ts): lead and file lookup tools
 - [lib/tools/file-tools.ts](../lib/tools/file-tools.ts): file-processing tool
 - [lib/tools/line-item.ts](../lib/tools/line-item.ts): line-item generation tool
 - [lib/tools/offer-file.ts](../lib/tools/offer-file.ts): offer-file generation tool
+- [lib/tools/offer-context.ts](../lib/tools/offer-context.ts): bounded OCR and workbook summaries for LLM context
 - [utils/chat.ts](../utils/chat.ts): conversion between DB messages and UI messages
 - [utils/chat-error.ts](../utils/chat-error.ts): structured error responses for the chat route
 
@@ -112,6 +114,8 @@ Verified capabilities in the current code:
 - lead lookup and lead detail retrieval
 - lead file lookup
 - file OCR / file processing through the Mistral OCR helper
+- OCR result compaction into offer-relevant summaries, key lines, amounts, quantities, dates, and bounded tables
+- quote workbook compaction into sheet summaries, named ranges, formulas, key rows, and pricing context
 - line-item generation with GST and totals
 - offer-file generation with line items, subtotal, GST, and grand total
 - chat-session continuation and resume
@@ -125,6 +129,7 @@ The system is wired for offer generation and pricing assistance. The current imp
 - `fetchLeadInfoTool`
 - `fetchLeadFilesTool`
 - `FileProcessingTool`
+- `fetchOfferSheetRulesTool`
 - `lineItemTool`
 - `offerFileTool`
 
@@ -133,17 +138,24 @@ The system is wired for offer generation and pricing assistance. The current imp
 #### `fetchLeadInfoTool`
 
 - Input: `leadId: number`
-- Output: `{ success, message, data }`
+- Output: `{ success, message, data }`, where `data` is a concise offer-focused lead summary
 
 #### `fetchLeadFilesTool`
 
 - Input: `leadId: number`
-- Output: `{ success, message, files, count }`
+- Output: `{ success, message, files, count }`, where `files` contains only metadata needed to choose relevant documents
 
 #### `FileProcessingTool`
 
-- Input: `fileUrl: string`
-- Output: `{ success, message, data }`
+- Input: `fileUrl: string`, optional `fileName: string`
+- Output: `{ success, message, data }`, where `data` is an `offer-document-summary`
+- The tool does not return raw OCR page objects. It returns page counts, relevant lines, detected amounts, quantities, dates, and bounded markdown tables.
+
+#### `fetchOfferSheetRulesTool`
+
+- Input: `sheetType: "sample" | "template"`
+- Output: `{ success, message, data }`, where `data` is an `offer-workbook-summary`
+- The tool does not return raw `xlsx.WorkBook` objects. It returns sheet dimensions, named ranges, relevant rows, formulas, table previews, and pricing context.
 
 #### `lineItemTool`
 
@@ -152,14 +164,15 @@ The system is wired for offer generation and pricing assistance. The current imp
 
 #### `offerFileTool`
 
-- Input: offer sections plus `lineItems` and optional `internalMarkupPercent`
-- Output: `{ message, description, customerOffer, internal }` plus a streamed `data-offer-file-update`
+- Input: offer sections to create or update
+- Output: `{ message, description, customerOffer }` plus a streamed `data-offer-file-update`
 
 ### Execution Details
 
 - `lineItemTool` and `offerFileTool` both write customer-facing data into the UI stream.
-- `offerFileTool` also returns a private `internal` summary that is not written to the UI stream.
-- `FileProcessingTool` runs OCR and returns a structured result object with `success`, `message`, and `data`.
+- `offerFileTool` strips omitted fields from the stream payload so unchanged sections remain unchanged.
+- `FileProcessingTool` runs OCR and returns a compact offer-document summary instead of raw page content.
+- `fetchOfferSheetRulesTool` reads the workbook stream and returns a compact workbook summary instead of a raw workbook object.
 - `fetchLeadFilesTool` returns a consistent structured response even when no files are found.
 
 ## Types
@@ -191,8 +204,8 @@ The chat route accepts a request body shaped as:
 
 ## Limitations
 
-- `fetchLeadFilesTool` is available to the model, but the UI renderer treats it as a generic tool output rather than a specialized card.
-- `offerFileTool` assumes a 10% internal markup default unless a different value is passed.
+- Tool renderers now cover lead files, file processing, and offer sheet rules with specialized cards.
+- The agent prompt keeps internal markup and profitability out of customer-facing output.
 - `OfferFileCanvas` currently uses a fixed 18% GST calculation when saving a quote.
 - `handleDownload` in `OfferFileCanvas` is present but does not yet implement a download action.
 - The chat route persists finished messages after streaming, but there is no separate agent state machine beyond the AI SDK stream and the local UI state.

@@ -110,6 +110,19 @@ const dateSchema = z.preprocess((value) => {
   return parsed;
 }, z.date().nullable());
 
+const leadRichTextDocumentSchema = z.object({
+  version: z.literal(1),
+  html: z.string(),
+  plainText: z.string(),
+  value: z.array(z.unknown()),
+});
+
+const leadNoteAnnotationInputSchema = z.object({
+  selectedText: z.string().trim().min(1).max(1000),
+  comment: z.string().trim().min(1).max(5000),
+  mentionedUserIds: z.array(z.string().trim().min(1)).default([]),
+});
+
 export const historySchema = z.object({
   action: z.string().trim().min(1),
   detail: z.string().optional().default(""),
@@ -134,6 +147,8 @@ export const updateLeadSchema = z.object({
   budget: nullableTrimmedString.optional(),
 
   notes: nullableTrimmedString.optional(),
+  notesDoc: leadRichTextDocumentSchema.nullable().optional(),
+  annotationsToCreate: z.array(leadNoteAnnotationInputSchema).optional(),
 
   followupDate: dateInputSchema.optional(),
 

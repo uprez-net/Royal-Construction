@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
-import { Hourglass, List, Loader2, Plus, Send } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -31,10 +31,9 @@ import {
 import { upload } from "@vercel/blob/client";
 import { buildBlobPath } from "@/utils/formatters";
 import { ClientPayload } from "@/utils/validators/files";
+import { LeadCardList } from "./lead-card-list";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "../ui/skeleton";
+import { fetchJson } from "@/utils/fetch";
 
 interface CreateOfferFileModalProps {
   open: boolean;
@@ -68,7 +67,8 @@ export function CreateOfferFileModal({
     const selectedLead = leadSearch.items.find(
       (lead) => lead.id === selectedLeadId,
     );
-    return selectedLead?.creatingOffer ?? false;
+    if(!selectedLead) return false;
+    return selectedLead.creatingOffer || selectedLead.runId !== null;
   }, [leadSearch.items, selectedLeadId]);
 
   const resetSearch = useCallback(() => {
@@ -78,6 +78,7 @@ export function CreateOfferFileModal({
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
+      setSelectedLeadId(null);
       resetSearch();
       resetQueue();
       onClose();
@@ -89,6 +90,13 @@ export function CreateOfferFileModal({
       toast.error("Please select a lead before creating an offer.");
       return;
     }
+    if (continuing) {
+      handleOpenChange(false);
+      toast.info("Redirecting to offer...", { duration: 2000 });
+      router.push(`/offers/${selectedLeadId}`);
+      return;
+    }
+    const loading = toast.loading("Creating offer...");
     try {
       if (queuedFiles.length !== 0) {
         const uploads = await Promise.allSettled(
@@ -111,12 +119,24 @@ export function CreateOfferFileModal({
         );
       }
 
+      const newOffer = await fetchJson<{ runId: string; message: string }>(
+        `/api/offer-create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ leadId: selectedLeadId }),
+        },
+        "Failed to trigger offer creation workflow",
+      );
       handleOpenChange(false);
-      toast.info("Redirecting to offer creation page...");
-      router.push(`/offers/${selectedLeadId}`);
+      toast.success("Offer creation trigger started.", { id: loading });
+      toast.info("Redirecting to offer...");
+      router.push(`/offers/${selectedLeadId}?runId=${newOffer.data.runId}`);
     } catch (error) {
       console.error("Error creating offer:", error);
-      toast.error("Failed to create offer. Please try again.");
+      toast.error("Failed to create offer. Please try again.", { id: loading });
       return;
     }
   };
@@ -157,6 +177,7 @@ export function CreateOfferFileModal({
             fileId: queuedFile.id,
             fileName: queuedFile.file.name,
             fileSize: queuedFile.file.size,
+            isOfferFile: false, // these are lead related files for offer creation
           } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {
@@ -230,86 +251,16 @@ export function CreateOfferFileModal({
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
 
-            {leadSearch.loading ? (
-              <div className="grid gap-3 sm:grid-cols-2 max-h-[24vh] scrollbar-thin overflow-y-auto p-2">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <Card key={i} className="animate-pulse overflow-hidden">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-2 flex-1">
-                          <Skeleton className="h-4 w-3/4" />
-                          <Skeleton className="h-3 w-1/2" />
-                        </div>
-
-                        <Skeleton className="h-4 w-4 rounded-full" />
-                      </div>
-
-                      <div className="mt-3 space-y-2">
-                        <Skeleton className="h-3 w-1/2" />
-                        <Skeleton className="h-3 w-1/3" />
-                        <Skeleton className="h-3 w-2/3" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 max-h-[24vh] scrollbar-thin overflow-y-auto p-2">
-                {leadSearch.items.map((lead) => (
-                  <Card
-                    key={lead.id}
-                    className={cn(
-                      "relative cursor-pointer transition-colors",
-                      lead.id === selectedLeadId &&
-                        "border-teal-700 ring-2 ring-teal-700",
-                      lead.stage === "Quoted" && "opacity-75",
-                    )}
-                    onClick={() =>
-                      setSelectedLeadId(
-                        lead.id === selectedLeadId ? null : lead.id,
-                      )
-                    }
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        {(lead.creatingOffer || lead.stage === "Quoted") && (
-                          <div className="absolute top-7.5 right-10">
-                            {lead.stage === "Quoted" ? (
-                              <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
-                                <Send className="mr-1.5 h-4 w-4" />
-                                Quoted - Awaiting Feedback
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center justify-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">
-                                <Hourglass className="mr-1.5 h-4 w-4" />
-                                Creating Offer
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        <div>
-                          <p className="font-medium text-slate-950">
-                            {lead.name}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {lead.location}
-                          </p>
-                        </div>
-
-                        <List className="size-4 text-teal-700" />
-                      </div>
-
-                      <div className="mt-3 space-y-1 text-sm text-slate-700">
-                        <p>{lead.type}</p>
-                        <p>{lead.phone}</p>
-                        <p>{lead.email}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+            <LeadCardList
+              loading={leadSearch.loading}
+              items={leadSearch.items}
+              selectedLeadId={selectedLeadId}
+              setSelectedLeadId={setSelectedLeadId}
+              setPage={leadSearch.setPage}
+              currentPage={leadSearch.pageInfo.page}
+              totalPages={leadSearch.pageInfo.totalPages}
+              loadingMore={leadSearch.loadingMore}
+            />
           </div>
 
           {!continuing && (

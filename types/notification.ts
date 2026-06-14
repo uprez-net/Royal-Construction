@@ -28,7 +28,7 @@ export const notificationTemplates: NotificationTemplateFactory = {
 
   leadUpdated: (data) => ({
     title: `Lead Updated: LED-#${data.leadId} - ${data.customerName}`,
-    message: `${data.customerName}'s lead moved to ${data.status}`,
+    message: `${data.customerName}'s lead ${data.change ?? `moved to ${data.status}`}`,
     url: `/leads?status=${encodeURIComponent(data.status)}`,
   }),
 
@@ -72,6 +72,18 @@ export const notificationTemplates: NotificationTemplateFactory = {
     title: `Variation Updated: ${data.projectName}`,
     message: `A variation has been updated with status ${data.status}`,
     url: `/projects/${data.projectId}?activeTab=variations`,
+  }),
+
+  offerCreated: (data) => ({
+    title: `Offer Created: OFR-#${data.offerId} for Lead LED-#${data.leadId}`,
+    message: `An offer has been created with amount ${data.offerAmount} and status ${data.offerStatus}`,
+    url: `/offers/${data.leadId}`,
+  }),
+
+  offerGenerationFailed: (data) => ({
+    title: `Offer Generation Failed: for Lead LED-#${data.leadId}`,
+    message: `Failed to generate offer: ${data.errorMessage}`,
+    url: `/offers/${data.leadId}`,
   }),
 };
 

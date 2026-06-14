@@ -83,6 +83,7 @@ interface FetchChatResponse {
         name: string;
         location: string;
         type: string;
+        runId: string | null;
     };
 }
 
@@ -106,15 +107,20 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
                 name: true,
                 location: true,
                 type: true,
+                runId: true,
             }
         });
+
+        if(!lead) {
+            throw new Error("Lead not found");
+        }
 
         return {
             chatSession,
             files: leadFiles,
             leadInfo: {
-                ...lead!,
-                type: lead!.type.length > 0 ? lead!.type.join(", ") : "Not Specified"
+                ...lead,
+                type: lead.type.length > 0 ? lead.type.join(", ") : "Not Specified"
             }
         };
     } catch (error) {

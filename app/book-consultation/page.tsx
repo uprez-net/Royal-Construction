@@ -11,18 +11,18 @@ import Image from 'next/image';
 // ─── Royal Constructions Light Theme ────────────────────────────────────────
 
 const BRAND = {
-  background: '#F5F6F8',  // Light page background
-  container: '#FFFFFF',   // White cards
-  border: '#E2E8F0',     // Subtle light borders
-  gold: '#C9A84C',       // Primary Royal Gold
-  goldHover: '#D4B85E',
-  goldLight: '#FDF6E3',  // Very soft gold for hovers
-  text: '#1B2D45',       // Dark navy text
-  white: '#FFFFFF',
-  muted: '#64748B',      // Slate text
-  dimmed: '#94A3B8',     // Lighter slate
-  success: '#15803D',    // Darker green for light mode contrast
-  error: '#DC2626',      // Red
+  background: 'var(--background)',  // Light page background
+  container: 'var(--card)',   // White cards
+  border: 'var(--border)',     // Subtle light borders
+  gold: 'var(--royal-gold)',       // Primary Royal Gold
+  goldHover: 'var(--royal-gold-dark)',
+  goldLight: 'var(--royal-gold-light)',  // Very soft gold for hovers
+  text: 'var(--foreground)',       // Dark navy text
+  white: 'var(--card)',
+  muted: 'var(--muted-foreground)',      // Slate text
+  dimmed: 'oklch(0.711 0.035 256.8)',     // Lighter slate
+  success: 'var(--success)',    // Darker green for light mode contrast
+  error: 'var(--destructive)',      // Red
 };
 
 const LOGO_URL = '/logo-1024x713.png';
@@ -180,7 +180,7 @@ function BookingContent() {
     padding: '10px 12px',
     fontSize: 14,
     outline: 'none',
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "var(--font-sans)",
   };
 
   const textareaStyle = {
@@ -192,9 +192,9 @@ function BookingContent() {
 
   if (booked) {
     return (
-      <div style={{ backgroundColor: BRAND.background, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: BRAND.text, fontFamily: "'Inter', sans-serif", padding: 20 }}>
-        <div style={{ backgroundColor: BRAND.white, padding: '50px 40px', borderRadius: 6, textAlign: 'center', maxWidth: 480, width: '100%', border: `1px solid ${BRAND.border}`, boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-          <div style={{ width: 72, height: 72, borderRadius: '50%', backgroundColor: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+      <div style={{ backgroundColor: BRAND.background, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: BRAND.text, fontFamily: "var(--font-sans)", padding: 20 }}>
+        <div style={{ backgroundColor: BRAND.white, padding: '50px 40px', borderRadius: 6, textAlign: 'center', maxWidth: 480, width: '100%', border: `1px solid ${BRAND.border}`, boxShadow: '0 4px 6px -1px rgba(15, 23, 42, 0.05)' }}>
+          <div style={{ width: 72, height: 72, borderRadius: '50%', backgroundColor: 'var(--success-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
             <Check size={36} color={BRAND.success} />
           </div>
           <h1 style={{ color: BRAND.text, margin: '0 0 12px', fontSize: 24, fontWeight: 500, fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase', letterSpacing: '-0.5px' }}>Consultation Booked</h1>
@@ -204,7 +204,7 @@ function BookingContent() {
               Join Teams Meeting
             </a>
           )} */}
-          <div style={{ marginTop: 30, padding: '16px 20px', backgroundColor: '#F8FAFC', borderRadius: 4, border: `1px solid ${BRAND.border}` }}>
+          <div style={{ marginTop: 30, padding: '16px 20px', backgroundColor: 'var(--muted)', borderRadius: 4, border: `1px solid ${BRAND.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
               <Video size={16} color={BRAND.gold} />
               <span style={{ fontSize: 13, color: BRAND.muted }}>An invite has also been sent to {clientEmail}</span>
@@ -216,7 +216,7 @@ function BookingContent() {
   }
 
   return (
-    <div style={{ backgroundColor: BRAND.background, minHeight: '100vh', fontFamily: "'Inter', sans-serif", color: BRAND.text }}>
+    <div style={{ backgroundColor: BRAND.background, minHeight: '100vh', fontFamily: "var(--font-sans)", color: BRAND.text }}>
       {/* ═══ HEADER ═══ */}
       <div style={{ backgroundColor: BRAND.white, borderBottom: `1px solid ${BRAND.border}` }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -254,7 +254,7 @@ function BookingContent() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
             {/* ═══ CONTACT DETAILS ═══ */}
-            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}>
+            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
               <div style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: BRAND.gold }} />
@@ -275,7 +275,7 @@ function BookingContent() {
             </div>
 
             {/* ═══ NOTES ═══ */}
-            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}>
+            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
               <div style={{ padding: '24px 24px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: BRAND.gold }} />
@@ -298,7 +298,7 @@ function BookingContent() {
             </div>
 
             {/* ═══ DATE & TIME SELECTION (SIDE BY SIDE) ═══ */}
-            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}>
+            <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
               <div style={{ padding: '24px 24px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <Calendar size={16} color={BRAND.gold} />
@@ -358,7 +358,7 @@ function BookingContent() {
                                 padding: '12px 8px',
                                 borderRadius: 4,
                                 border: `1.5px solid ${isSelected ? BRAND.gold : busy ? BRAND.border : BRAND.border}`,
-                                backgroundColor: busy ? '#F8FAFC' : isSelected ? BRAND.gold : BRAND.white,
+                                backgroundColor: busy ? 'var(--muted)' : isSelected ? BRAND.gold : BRAND.white,
                                 cursor: busy ? 'not-allowed' : 'pointer',
                                 opacity: busy ? 0.5 : 1,
                                 transition: 'all 0.15s ease',
@@ -394,7 +394,7 @@ function BookingContent() {
 
             {/* ═══ SUMMARY & CONFIRM ═══ */}
             {selectedDate && selectedTime && (
-              <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, borderTop: `3px solid ${BRAND.gold}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(0,0,0,0.05)' }}>
+              <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, borderTop: `3px solid ${BRAND.gold}`, overflow: 'hidden', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
                 <div style={{ padding: 24 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 4, backgroundColor: BRAND.goldLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -407,18 +407,18 @@ function BookingContent() {
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: 4, padding: '14px 16px', border: `1px solid ${BRAND.border}` }}>
+                    <div style={{ backgroundColor: 'var(--muted)', borderRadius: 4, padding: '14px 16px', border: `1px solid ${BRAND.border}` }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>Date</div>
                       <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.text }}>{formatDateLong(selectedDate)}</div>
                     </div>
-                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: 4, padding: '14px 16px', border: `1px solid ${BRAND.border}` }}>
+                    <div style={{ backgroundColor: 'var(--muted)', borderRadius: 4, padding: '14px 16px', border: `1px solid ${BRAND.border}` }}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: BRAND.dimmed, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 4 }}>Time</div>
                       <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.text }}>{formatTimeDisplay(selectedTime)} (AEST)</div>
                     </div>
                   </div>
 
                   {error && (
-                    <div style={{ backgroundColor: '#FEF2F2', border: `1px solid #FECACA`, borderRadius: 4, padding: '10px 14px', marginBottom: 16, textAlign: 'center' }}>
+                    <div style={{ backgroundColor: 'var(--destructive-light)', border: `1px solid color-mix(in oklab, var(--destructive) 30%, transparent)`, borderRadius: 4, padding: '10px 14px', marginBottom: 16, textAlign: 'center' }}>
                       <span style={{ fontSize: 13, color: BRAND.error }}>{error}</span>
                     </div>
                   )}
@@ -475,28 +475,28 @@ function BookingContent() {
 
       {/* ═══ DATE PICKER PREMIUM LIGHT STYLES ═══ */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500&family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500&display=swap');
 
         @keyframes spin { to { transform: rotate(360deg); } }
         
         .royal-booking-calendar {
-          background-color: #FFFFFF !important;
-          border: 1px solid #E2E8F0 !important;
+          background-color: var(--card) !important;
+          border: 1px solid var(--border) !important;
           border-radius: 4px !important;
-          font-family: 'Inter', sans-serif !important;
+          font-family: var(--font-sans) !important;
           padding: 16px !important;
           width: 100% !important;
         }
         
         .royal-booking-calendar .react-datepicker__header {
-          background-color: #F8FAFC !important;
-          border-bottom: 1px solid #E2E8F0 !important;
+          background-color: var(--muted) !important;
+          border-bottom: 1px solid var(--border) !important;
           padding: 8px 0 16px !important;
         }
         
         .royal-booking-calendar .react-datepicker__current-month,
         .royal-booking-calendar .react-datepicker__day-name {
-          color: #1B2D45 !important; 
+          color: var(--foreground) !important; 
           font-weight: 600 !important;
           font-family: 'IBM Plex Sans Condensed', sans-serif !important;
         }
@@ -506,8 +506,8 @@ function BookingContent() {
         }
         
         .royal-booking-calendar .react-datepicker__day {
-          color: #1B2D45 !important; 
-          background-color: #FFFFFF !important; 
+          color: var(--foreground) !important; 
+          background-color: var(--card) !important; 
           border: 1px solid transparent !important;
           border-radius: 4px !important;
           margin: 2px !important;
@@ -518,22 +518,22 @@ function BookingContent() {
         }
         
         .royal-booking-calendar .react-datepicker__day:hover {
-          background-color: #FDF6E3 !important;
-          color: #92700C !important;
-          border-color: #C9A84C !important;
+          background-color: var(--royal-gold-light) !important;
+          color: var(--royal-gold-dark) !important;
+          border-color: var(--royal-gold) !important;
         }
         
         .royal-booking-calendar .react-datepicker__day--selected,
         .royal-booking-calendar .react-datepicker__day--keyboard-selected {
-          background-color: #C9A84C !important;
-          color: #FFFFFF !important; 
+          background-color: var(--royal-gold) !important;
+          color: var(--card) !important; 
           font-weight: 700 !important;
-          border-color: #C9A84C !important;
+          border-color: var(--royal-gold) !important;
         }
         
         .royal-booking-calendar .react-datepicker__day--disabled {
-          color: #CBD5E1 !important;
-          background-color: #F8FAFC !important;
+          color: oklch(0.853 0.021 257) !important;
+          background-color: var(--muted) !important;
           border-color: transparent !important;
           opacity: 1 !important;
           cursor: not-allowed !important;
@@ -547,13 +547,13 @@ function BookingContent() {
           top: 14px !important;
         }
         .royal-booking-calendar .react-datepicker__navigation-icon::before {
-          border-color: #64748B !important;
+          border-color: var(--muted-foreground) !important;
           border-width: 2px 2px 0 0 !important;
           height: 7px !important;
           width: 7px !important;
         }
         .royal-booking-calendar .react-datepicker__navigation:hover .react-datepicker__navigation-icon::before {
-          border-color: #C9A84C !important;
+          border-color: var(--royal-gold) !important;
         }
       `}</style>
     </div>
@@ -563,11 +563,11 @@ function BookingContent() {
 export default function BookConsultationPage() {
   return (
     <Suspense fallback={
-      <div style={{ backgroundColor: '#F5F6F8', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C9A84C', fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ backgroundColor: 'var(--background)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--royal-gold)', fontFamily: 'var(--font-sans)' }}>
         <div style={{ textAlign: 'center' }}>
           <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          <p style={{ marginTop: 16, fontSize: 14, color: '#64748B' }}>Loading booking page...</p>
+          <p style={{ marginTop: 16, fontSize: 14, color: 'var(--muted-foreground)' }}>Loading booking page...</p>
         </div>
       </div>
     }>

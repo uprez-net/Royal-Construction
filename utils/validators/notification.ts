@@ -19,6 +19,7 @@ export const notificationSchemas = {
         customerEmail: z.string().email(),
         customerPhone: z.string(),
         status: z.string(),
+        change: z.string().optional(),
     }),
 
     leadAssigned: z.object({
@@ -82,5 +83,17 @@ export const notificationSchemas = {
         variationDescription: z.string(),
         variationAmount: z.string(),
         status: z.string(),
+    }),
+
+    offerCreated: z.object({
+        offerId: z.string(),
+        leadId: z.string(),
+        offerAmount: z.string(),
+        offerStatus: z.string(),
+    }),
+
+    offerGenerationFailed: z.object({
+        leadId: z.string(),
+        errorMessage: z.string(),
     }),
 } as const;

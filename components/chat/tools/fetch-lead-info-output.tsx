@@ -19,7 +19,7 @@ export function FetchLeadInfoOutput({
           <p className="font-medium text-slate-900">{output.message}</p>
           {output.success && (
             <p className="text-sm text-slate-500">
-              Lead profile and associated fields are expanded below.
+              Lead context is summarized below.
             </p>
           )}
         </div>

@@ -45,7 +45,7 @@ export function AuthShell({
               />
               <span className="text-xs text-slate-400">Master Builders Association NSW</span>
             </div>
-            <dl className="grid grid-cols-3 gap-6">
+            <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <div>
                 <dt className="text-xs font-semibold text-slate-100">Full visibility</dt>
                 <dd className="mt-1.5 text-xs leading-5 text-slate-400">Every job, milestone, and tradie in one place.</dd>

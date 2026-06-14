@@ -46,7 +46,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         fileId: clientPayload.fileId,
                         fileName: clientPayload.fileName,
                         fileSize: clientPayload.fileSize,
-                        offerId: clientPayload.offerId,
+                        isOfferFile: clientPayload.isOfferFile,
                     } satisfies TokenPayload),
                 };
             },
@@ -61,6 +61,11 @@ export async function POST(request: Request): Promise<NextResponse> {
                         throw new Error('User not found');
                     }
 
+                    if (payload.isOfferFile) {
+                        console.log('Skipping file record creation as per payload instruction because this is an offer file');
+                        return;
+                    }
+
                     await saveFile({
                         userId: user.id,
                         projectId: payload.projectId,
@@ -71,7 +76,6 @@ export async function POST(request: Request): Promise<NextResponse> {
                         fileName: payload.fileName,
                         fileType: blob.contentType,
                         fileSize: payload.fileSize,
-                        offerId: payload.offerId,
                     });
                 } catch (error) {
                     console.error('Error in onUploadCompleted', error);

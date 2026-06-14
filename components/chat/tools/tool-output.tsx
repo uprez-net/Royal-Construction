@@ -5,11 +5,19 @@ import { FetchLeadInfoOutput } from "./fetch-lead-info-output";
 import { FileProcessingOutput } from "./processing-file-output";
 import { GenericOutput } from "./util";
 import {
+  FetchLeadFilesToolOutput,
   FetchLeadInfoToolOutput,
+  FetchOfferSheetRulesToolOutput,
   FileProcessingToolOutput,
   LineItemToolOutput,
   OfferFileToolOutput,
+  ScrapeUserLinksToolOutput,
+  WebSearchToolOutput,
 } from "@/types/chat";
+import { FetchOfferSheetRulesOutput } from "./fetch-offer-sheet-rules-output";
+import { FetchLeadFilesOutput } from "./fetch-lead-files-output";
+import { WebSearchOutput } from "./web-search-output";
+import { ScrapeUserLinkOutputComponent } from "./scrape-user-link-output";
 
 export function ToolOutput({
   toolName,
@@ -35,6 +43,28 @@ export function ToolOutput({
       case "fileProcessingTool": {
         return (
           <FileProcessingOutput output={output as FileProcessingToolOutput} />
+        );
+      }
+      case "fetchOfferSheetRulesTool": {
+        return (
+          <FetchOfferSheetRulesOutput
+            output={output as FetchOfferSheetRulesToolOutput}
+          />
+        );
+      }
+      case "fetchLeadFilesTool": {
+        return (
+          <FetchLeadFilesOutput output={output as FetchLeadFilesToolOutput} />
+        );
+      }
+      case "webSearch": {
+        return <WebSearchOutput output={output as WebSearchToolOutput} />;
+      }
+      case "scrapeUserLinks": {
+        return (
+          <ScrapeUserLinkOutputComponent
+            output={output as ScrapeUserLinksToolOutput}
+          />
         );
       }
     }

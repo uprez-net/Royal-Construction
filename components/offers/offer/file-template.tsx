@@ -1,59 +1,80 @@
+import {
+  ACCEPTANCE_BODY,
+  COMPANY_INFO,
+  NEXT_STEPS,
+  PROMOTIONAL_PACKAGE,
+  TIMELINE_FOOTNOTE,
+  TIMELINE_STAGES,
+} from "@/constants/offerFileContent";
 import { OfferFile } from "@/context/ChatContext";
 import { dateFormat } from "@/utils/formatters";
+import { addDays } from "date-fns";
+import DOMPurify from "dompurify";
 
 interface OfferFileTemplateProps extends OfferFile {
   ref?: React.Ref<HTMLIFrameElement>;
   customerName?: string;
   projectName?: string;
+  siteLocation?: string;
   proposalDate?: string;
-  drawingsDate?: string;
-  proposalNumber?: string;
+  revisionDate?: string;
+  creatorName?: string;
   contractAmount?: string;
 }
 
 export function OfferFileTemplate({
-  projectDescription,
-  paymentTerms,
+  projectWelcomeMessage,
+  facadeOptions,
   termsAndConditions,
-  serviceInclusions = [],
-  serviceExclusions = [],
-  serviceExclusionsFootnote,
+  revisionChanges,
+  projectScope,
+  fixedPriceItems,
+  promotionalUpgrades,
   ref,
   customerName = "Client",
   projectName,
+  siteLocation,
   proposalDate = dateFormat.format(new Date()),
-  drawingsDate,
-  proposalNumber,
+  revisionDate,
+  creatorName = COMPANY_INFO.director,
   contractAmount = "$X,XXX",
 }: OfferFileTemplateProps) {
+  // Valid-until: proposalDate + 28 days
+  const validUntil = (() => {
+    try {
+      return dateFormat.format(addDays(new Date(proposalDate), 28));
+    } catch {
+      return "";
+    }
+  })();
+
   const html = `
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-
 <style>
   :root {
     --navy: #1a2f5a;
     --gold: #c6923a;
+    --gold-light: #e8b86d;
     --gold-dark: #8b6420;
+    --gold-bg: #fdf8ee;
     --muted: #6b7280;
     --border: #e2e8f0;
     --surface: #fbfaf7;
     --paper: #ffffff;
     --danger: #b45309;
+    --green: #166534;
+    --green-bg: #dcfce7;
   }
 
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
     font-family: "Aptos", "Segoe UI", system-ui, -apple-system, sans-serif;
-    background: linear-gradient(180deg, #f5f5f0 0%, #fafaf7 100%);
+    background: #f0ede6;
     color: var(--navy);
     line-height: 1.6;
     min-height: 100vh;
@@ -62,269 +83,252 @@ export function OfferFileTemplate({
   }
 
   .container {
-    width: min(100%, 760px);
+    width: min(100%, 780px);
     margin: 0 auto;
-    padding: 0 0 36px;
     background: var(--paper);
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    border-radius: 20px;
-    box-shadow:
-      0 20px 60px rgba(15, 23, 42, 0.09),
-      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(226,232,240,0.9);
+    border-radius: 4px;
+    box-shadow: 0 8px 40px rgba(15,23,42,0.12);
     overflow: hidden;
   }
 
-  /* ── HEADER ── */
-  .rc-header {
-    text-align: center;
-    padding: 28px 32px 20px;
-    border-bottom: 2.5px solid var(--gold);
-    background: #fff;
+  /* ─── COVER PAGE ────────────────────────────────────── */
+  .cover-page {
+    background: var(--paper);
+    padding-bottom: 40px;
   }
 
-  .rc-company-name {
-    font-size: 26px;
+  .cover-stars-banner {
+    background: var(--navy);
+    text-align: center;
+    padding: 10px 20px;
+    font-size: 18px;
+    color: var(--gold);
+    letter-spacing: 8px;
+  }
+
+  .cover-company-block {
+    text-align: center;
+    padding: 22px 32px 18px;
+    border-bottom: 1.5px solid var(--gold);
+  }
+
+  .cover-company-name {
+    font-size: 28px;
     font-weight: 900;
     color: var(--navy);
-    letter-spacing: 0.055em;
+    letter-spacing: 0.1em;
     font-family: "Arial Black", "Arial", sans-serif;
     text-transform: uppercase;
     line-height: 1.1;
     margin-bottom: 6px;
   }
 
-  .rc-license-line {
-    font-size: 11.5px;
-    color: var(--gold);
-    letter-spacing: 0.04em;
-    font-weight: 600;
+  .cover-company-sub {
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 500;
   }
 
-  /* ── PROPOSAL TITLE BLOCK ── */
-  .proposal-title-block {
+  .cover-proposal-type {
     text-align: center;
     padding: 32px 40px 28px;
-    border-bottom: 1px solid var(--border);
-    background: #fff;
   }
 
-  .proposal-type-label {
-    font-size: 30px;
+  .cover-proposal-heading {
+    font-size: 26px;
     font-weight: 900;
     color: var(--navy);
-    letter-spacing: 0.01em;
+    letter-spacing: 0.08em;
     font-family: "Arial Black", "Arial", sans-serif;
     text-transform: uppercase;
-    margin-bottom: 8px;
-    line-height: 1.1;
+    margin-bottom: 6px;
   }
 
-  .proposal-subtitle-line {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--gold);
-    margin-bottom: 14px;
-    letter-spacing: 0.01em;
-  }
-
-  .proposal-meta {
-    font-size: 13px;
-    color: #555;
-    line-height: 2;
-  }
-
-  .proposal-meta strong {
-    font-weight: 700;
-    color: var(--navy);
-  }
-
-  /* ── BODY SECTIONS ── */
-  .body-content {
-    padding: 32px 36px 0;
-  }
-
-  .section {
-    margin-bottom: 26px;
-    padding-bottom: 22px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .section:last-of-type {
-    border-bottom: none;
-  }
-
-  .section-title {
-    font-size: 17px;
-    font-weight: 700;
-    margin-bottom: 12px;
-    color: var(--gold-dark);
-    letter-spacing: 0.01em;
-  }
-
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 15px 18px;
-    font-size: 14px;
-    color: #374151;
-    line-height: 1.65;
-  }
-
-  ul {
-    list-style: none;
-  }
-
-  li {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-    align-items: flex-start;
-    font-size: 14px;
-  }
-
-  li:last-child {
-    margin-bottom: 0;
-  }
-
-  .check { color: var(--gold); font-weight: bold; }
-  .cross { color: var(--danger); font-weight: bold; }
-  .dot   { color: var(--navy);  font-weight: bold; }
-
-  .empty {
-    color: var(--muted);
+  .cover-proposal-subtitle {
+    font-size: 14.5px;
     font-style: italic;
-    font-size: 14px;
-  }
-
-  .service-group-title {
-    font-size: 13.5px;
-    font-weight: 700;
-    margin-bottom: 10px;
-    color: var(--navy);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  .card + .card {
-    margin-top: 12px;
-  }
-
-  /* ── ACCEPTANCE SECTION ── */
-  .acceptance {
-    margin: 0 36px 0;
-    padding: 28px 32px 32px;
-    border-top: 2px solid var(--navy);
-    background: var(--surface);
-    border-radius: 0 0 16px 16px;
-  }
-
-  .acceptance-title {
-    font-size: 22px;
-    font-weight: 900;
-    color: var(--navy);
-    font-family: "Arial Black", "Arial", sans-serif;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-  }
-
-  .acceptance-divider {
-    height: 2px;
-    background: var(--gold);
-    margin-bottom: 18px;
-    border-radius: 2px;
-  }
-
-  .acceptance-body {
-    font-size: 13.5px;
-    color: #444;
-    line-height: 1.75;
+    color: var(--muted);
     margin-bottom: 28px;
   }
 
-  .sig-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 36px;
+  .cover-meta-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--navy);
+    border-radius: 6px;
+    overflow: hidden;
   }
 
-  .sig-label {
+  .cover-meta-table tr td {
+    padding: 10px 20px;
     font-size: 13px;
+    vertical-align: middle;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .cover-meta-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .cover-meta-label {
+    color: var(--gold);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    width: 130px;
+    white-space: nowrap;
+  }
+
+  .cover-meta-value {
+    color: #ffffff;
+    font-weight: 500;
+  }
+
+  .cover-promo-card {
+    margin: 28px 40px 0;
+    background: var(--gold-bg);
+    border: 1.5px solid var(--gold-light);
+    border-radius: 6px;
+    padding: 18px 24px;
+    text-align: center;
+  }
+
+  .cover-promo-header {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: var(--gold-dark);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .cover-promo-header .star { color: var(--gold); }
+
+  .cover-promo-body {
+    font-size: 14.5px;
+    font-weight: 900;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+  }
+
+  .cover-promo-sub {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .cover-footer {
+    text-align: center;
+    padding: 28px 20px 0;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── SECTION CHROME ────────────────────────────────── */
+  .section-wrap {
+    padding: 32px 44px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-wrap:last-child { border-bottom: none; }
+
+  .section-heading {
+    font-size: 17px;
+    font-weight: 900;
+    color: var(--navy);
+    font-family: "Arial Black", "Arial", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+
+  .section-gold-rule {
+    height: 1.5px;
+    background: var(--gold);
+    margin-bottom: 18px;
+    border-radius: 1px;
+  }
+
+  /* ─── WELCOME / LETTER ──────────────────────────────── */
+  .welcome-body {
+    font-size: 14px;
+    color: #374151;
+    line-height: 1.75;
+    margin-bottom: 18px;
+  }
+
+  .welcome-signature-name {
+    font-size: 15px;
     font-weight: 700;
     color: var(--navy);
+    margin-top: 22px;
     margin-bottom: 2px;
   }
 
-  .sig-sublabel {
-    font-size: 12px;
+  .welcome-signature-role {
+    font-size: 13px;
     color: var(--muted);
     margin-bottom: 22px;
   }
 
-  .sig-line {
-    border-top: 1px solid #aaa;
-    padding-top: 8px;
+  /* Revision changes card */
+  .revision-card {
+    border: 1.5px solid var(--navy);
+    border-radius: 6px;
+    padding: 16px 20px;
+    background: #f8f9fc;
+  }
+
+  .revision-card-header {
     font-size: 12px;
-    color: var(--muted);
-    font-style: italic;
-  }
-  /* Inclusions — no card, gold group title, bullet list */
-  .inclusion-group {
-    margin-bottom: 20px;
-  }
-
-  .inclusion-group:last-child {
-    margin-bottom: 0;
-  }
-
-  .inclusion-group-title {
-    font-size: 13px;
     font-weight: 800;
-    color: var(--gold);
+    color: var(--navy);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.07em;
     margin-bottom: 8px;
   }
 
-  .inclusion-list {
-    list-style: none;
-    padding-left: 4px;
-  }
-
-  .inclusion-list li {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
+  .revision-card-desc {
     font-size: 13.5px;
     color: #374151;
-    margin-bottom: 6px;
-    line-height: 1.55;
-  }
-
-  .inclusion-list li::before {
-    content: "•";
-    color: #374151;
-    font-weight: bold;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
-
-  /* Exclusions — flat X list, no card */
-  .exclusion-intro {
-    font-size: 13.5px;
-    color: #444;
-    margin-bottom: 14px;
     line-height: 1.65;
+    margin-bottom: 10px;
   }
 
-  .exclusion-list {
+  .revision-card-stats {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gold-dark);
+  }
+
+  /* ─── PROJECT SCOPE ─────────────────────────────────── */
+  .scope-group {
+    margin-bottom: 22px;
+  }
+
+  .scope-group:last-child { margin-bottom: 0; }
+
+  .scope-group-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 10px;
+  }
+
+  .scope-list {
     list-style: none;
-    padding-left: 4px;
-    margin-bottom: 16px;
+    padding: 0;
   }
 
-  .exclusion-list li {
+  .scope-list li {
     display: flex;
     gap: 10px;
     align-items: flex-start;
@@ -334,193 +338,920 @@ export function OfferFileTemplate({
     line-height: 1.55;
   }
 
-  .exclusion-x {
-    font-weight: 700;
-    color: #374151;
-    flex-shrink: 0;
+  .scope-star {
+    color: var(--gold);
     font-size: 13px;
+    flex-shrink: 0;
     margin-top: 1px;
   }
 
-  .exclusion-footnote {
+  /* ─── YOUR INVESTMENT ───────────────────────────────── */
+  .investment-price-hero {
+    background: var(--navy);
+    border-radius: 6px;
+    text-align: center;
+    padding: 28px 20px;
+    margin-bottom: 28px;
+  }
+
+  .investment-price-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .investment-price-amount {
+    font-size: 52px;
+    font-weight: 900;
+    color: #ffffff;
+    font-family: "Arial Black", "Arial", sans-serif;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .investment-price-gst {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .investment-price-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    font-style: italic;
+  }
+
+  .investment-sub-heading {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 12px;
+  }
+
+  .fpi-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+
+  .fpi-table thead tr {
+    background: var(--navy);
+  }
+
+  .fpi-table thead th {
+    padding: 10px 16px;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  .fpi-table thead th:last-child {
+    text-align: center;
+    width: 110px;
+  }
+
+  .fpi-table tbody tr:nth-child(odd) {
+    background: #f9fafb;
+  }
+
+  .fpi-table tbody tr:nth-child(even) {
+    background: #ffffff;
+  }
+
+  .fpi-table tbody td {
+    padding: 9px 16px;
+    color: #374151;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .fpi-table tbody td:last-child {
+    text-align: center;
+  }
+
+  .fpi-yes {
+    font-weight: 700;
+    color: var(--green);
+    background: var(--green-bg);
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    display: inline-block;
+  }
+
+  /* ─── PROMOTIONAL UPGRADES ──────────────────────────── */
+  .promo-intro {
+    font-size: 13.5px;
+    color: #374151;
+    line-height: 1.7;
+    margin-bottom: 18px;
+  }
+
+  .promo-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 22px;
+  }
+
+  .promo-table thead tr {
+    background: var(--navy);
+  }
+
+  .promo-table thead th {
+    padding: 10px 16px;
+    color: #ffffff;
+    font-weight: 600;
+    text-align: left;
+    font-size: 13px;
+  }
+
+  .promo-table tbody tr:nth-child(odd) {
+    background: #f9fafb;
+  }
+
+  .promo-table tbody tr:nth-child(even) {
+    background: #ffffff;
+  }
+
+  .promo-table tbody td {
+    padding: 9px 14px;
+    color: #374151;
+    vertical-align: top;
+    border-bottom: 1px solid #f0f0f0;
+    line-height: 1.55;
+  }
+
+  .promo-item-star {
+    color: var(--gold);
+    margin-right: 6px;
+    font-size: 12px;
+  }
+
+  .promo-highlight-row td {
+    background: #fffbeb !important;
+  }
+
+  .promo-highlight-text {
+    background: #fef08a;
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+
+  .inclusion-credit-card {
+    background: var(--gold-bg);
+    border: 1.5px solid var(--gold-light);
+    border-radius: 6px;
+    padding: 14px 20px;
+    text-align: center;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+
+  .inclusion-credit-card .star { color: var(--gold); }
+
+  /* ─── FAÇADE OPTIONS ────────────────────────────────── */
+  .facade-intro {
+    font-size: 13.5px;
+    color: #374151;
+    line-height: 1.7;
+    margin-bottom: 28px;
+  }
+ 
+  .facade-option {
+    margin-bottom: 36px;
+  }
+ 
+  .facade-option:last-child {
+    margin-bottom: 0;
+  }
+ 
+  .facade-option-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 6px;
+  }
+ 
+  .facade-option-desc {
+    font-size: 13.5px;
+    font-style: italic;
+    color: #374151;
+    line-height: 1.65;
+    margin-bottom: 16px;
+  }
+ 
+  .facade-option-img {
+    width: 100%;
+    border-radius: 6px;
+    display: block;
+    object-fit: cover;
+    max-height: 420px;
+  }
+
+  /* ─── TIMELINE ──────────────────────────────────────── */
+  .timeline-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+
+  .timeline-table thead tr {
+    background: var(--navy);
+  }
+
+  .timeline-table thead th {
+    padding: 10px 16px;
+    color: #ffffff;
+    font-weight: 600;
+    text-align: left;
+    font-size: 13px;
+  }
+
+  .timeline-table thead th:first-child {
+    width: 36px;
+    text-align: center;
+  }
+
+  .timeline-table tbody tr:nth-child(odd) {
+    background: #f9fafb;
+  }
+
+  .timeline-table tbody tr:nth-child(even) {
+    background: #ffffff;
+  }
+
+  .timeline-table tbody td {
+    padding: 10px 16px;
+    color: #374151;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+    line-height: 1.55;
+  }
+
+  .timeline-table tbody td:first-child {
+    text-align: center;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .timeline-table tbody td.stage-name {
+    font-weight: 700;
+    color: var(--navy);
+    width: 200px;
+  }
+
+  .timeline-footnote {
     font-size: 12px;
     color: var(--muted);
     font-style: italic;
+    margin-top: 14px;
     line-height: 1.6;
-    margin-top: 12px;
   }
 
-  /* Shared: section heading style matching screenshots */
-  .section-heading-navy {
-    font-size: 18px;
-    font-weight: 900;
-    color: var(--navy);
-    font-family: "Arial Black", "Arial", sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 0.01em;
-    margin-bottom: 10px;
-    line-height: 1.2;
+  /* ─── NEXT STEPS ────────────────────────────────────── */
+  .next-steps-intro {
+    font-size: 13.5px;
+    color: #374151;
+    line-height: 1.7;
+    margin-bottom: 20px;
   }
 
-  .section-gold-divider {
-    height: 1.5px;
+  .next-steps-list {
+    list-style: none;
+    margin-bottom: 28px;
+  }
+
+  .next-step-item {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1px;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    overflow: hidden;
+  }
+
+  .next-step-item:first-child { border-radius: 6px 6px 0 0; }
+  .next-step-item:last-child { border-radius: 0 0 6px 6px; }
+
+  .next-step-num {
     background: var(--gold);
-    margin-bottom: 18px;
-    border-radius: 1px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 900;
+    width: 48px;
+    min-width: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Arial Black", "Arial", sans-serif;
+  }
+
+  .next-step-body {
+    padding: 14px 18px;
+    flex: 1;
+    background: #fff;
+  }
+
+  .next-step-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 4px;
+  }
+
+  .next-step-desc {
+    font-size: 13px;
+    color: #374151;
+    line-height: 1.6;
+  }
+
+  .next-steps-cta {
+    background: var(--navy);
+    border-radius: 6px;
+    text-align: center;
+    padding: 20px 24px;
+  }
+
+  .next-steps-cta-heading {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .next-steps-cta-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 6px;
+  }
+
+  .next-steps-cta-meta {
+    font-size: 12px;
+    color: var(--gold-light);
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── NOTES & TERMS ─────────────────────────────────── */
+  .notes-item {
+    margin-bottom: 20px;
+  }
+
+  .notes-item:last-child { margin-bottom: 0; }
+
+  .notes-item-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 6px;
+  }
+
+  .notes-item-title.highlight-title {
+    background: #fef08a;
+    display: inline-block;
+    padding: 0 3px;
+  }
+
+  .notes-item-body {
+    font-size: 13.5px;
+    color: #374151;
+    line-height: 1.7;
+  }
+
+  .notes-highlight-body {
+    background: #fef08a;
+    padding: 2px 3px;
+    border-radius: 2px;
+  }
+
+  /* ─── ACCEPTANCE ─────────────────────────────────────── */
+  .acceptance-wrap {
+    padding: 32px 44px 40px;
+  }
+
+  .acceptance-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px 28px;
+    margin-bottom: 32px;
+    font-size: 13.5px;
+    color: #374151;
+    line-height: 1.7;
+  }
+
+  .sig-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-top: 28px;
+  }
+
+  .sig-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 2px;
+  }
+
+  .sig-line {
+    border-top: 1px solid #aaa;
+    margin-top: 36px;
+    padding-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .sig-sublabel {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ─── PAYMENT TERMS & T&C (kept from original) ─────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 15px 18px;
+    font-size: 14px;
+    color: #374151;
+    line-height: 1.65;
+  }
+
+  ul.tc-list { list-style: none; }
+
+  ul.tc-list li {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: flex-start;
+    font-size: 14px;
+  }
+
+  .dot { color: var(--navy); font-weight: bold; }
+
+  .empty {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 14px;
+  }
+  
+  @media print {
+    p,
+    li,
+    table,
+    tr,
+    td,
+    section,
+    article,
+    .keep-together {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    /* Cover page always ends on its own page */
+    .cover-page {
+      break-after: page;
+      page-break-after: always;
+    }
+
+    /* Keep heading + rule + first content together */
+    .section-gold-rule {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    /* Keep every logical block intact */
+    .section-wrap,
+    .scope-group,
+    .notes-item,
+    .revision-card,
+    .acceptance-card,
+    .next-step-item,
+    .investment-price-hero,
+    .cover-promo-card,
+    .inclusion-credit-card,
+    .next-steps-cta,
+    .promo-intro,
+    .timeline-footnote {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
   }
 </style>
 </head>
-
 <body>
-  <div class="container">
+<div class="container">
 
-    <!-- ── HEADER ── -->
-    <header class="rc-header">
-      <div class="rc-company-name">Royal Constructions Pty Ltd</div>
-      <div class="rc-license-line">
-        Licence No. 383992C &nbsp;|&nbsp; NSW Residential Builder &nbsp;|&nbsp; South West Sydney Specialist
-      </div>
-    </header>
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- COVER PAGE                                          -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="cover-page">
+    <div class="cover-stars-banner">★ ★ ★ ★ ★</div>
 
-    <!-- ── PROPOSAL TITLE BLOCK ── -->
-    <div class="proposal-title-block">
-      <div class="proposal-type-label">Building Proposal</div>
-      ${
-        proposalNumber || projectName
-          ? `<div class="proposal-subtitle-line">${[proposalNumber, projectName].filter(Boolean).join(" — ")}</div>`
-          : ""
-      }
-      <div class="proposal-meta">
-        <strong>Prepared exclusively for:</strong> ${customerName}<br>
-        ${drawingsDate ? `Based on drawings dated ${drawingsDate}<br>` : ""}
-        Date: ${proposalDate}
-      </div>
+    <div class="cover-company-block">
+      <div class="cover-company-name">${COMPANY_INFO.name}</div>
+      <div class="cover-company-sub">${COMPANY_INFO.tagline}</div>
     </div>
 
-    <!-- ── BODY SECTIONS ── -->
-    <div class="body-content">
+    <div class="cover-proposal-type">
+      <div class="cover-proposal-heading">Custom Home Proposal</div>
+      ${projectName ? `<div class="cover-proposal-subtitle">${projectName}</div>` : ""}
 
-      <section class="section">
-        <h2 class="section-heading-navy">Project Description</h2>
-        <div class="section-gold-divider"></div>
-        <div class="card">
-          ${
-            projectDescription ||
-            '<span class="empty">No project description provided.</span>'
-          }
-        </div>
-      </section>
-
-      <section class="section">
-        <h2 class="section-heading-navy">What's Included In Your Fixed Price</h2>
-        <div class="section-gold-divider"></div>
-        <p class="exclusion-intro">
-          Every item below is included in your ${contractAmount ? `<strong>${contractAmount}</strong>` : ""} fixed price contract. Nothing on this list costs extra.
-        </p>
+      <table class="cover-meta-table">
+        <tr>
+          <td class="cover-meta-label">Prepared For</td>
+          <td class="cover-meta-value">${customerName}</td>
+        </tr>
         ${
-          serviceInclusions.length
-            ? serviceInclusions.map((group) => `
-                <div class="inclusion-group">
-                  <div class="inclusion-group-title">${group.sectionTitle}</div>
-                  <ul class="inclusion-list">
-                    ${group.items.map((item) => `<li>${item}</li>`).join("")}
-                  </ul>
-                </div>
-              `).join("")
-            : `<p class="empty">No inclusions specified.</p>`
+          siteLocation
+            ? `
+        <tr>
+          <td class="cover-meta-label">Site Address</td>
+          <td class="cover-meta-value">${siteLocation}</td>
+        </tr>`
+            : ""
         }
-      </section>
-
-      <section class="section">
-        <h2 class="section-heading-navy">Exclusions — Not Included In Contract Price</h2>
-        <div class="section-gold-divider"></div>
-        <p class="exclusion-intro">
-          The following items are outside this contract and are to be arranged and funded by ${customerName}:
-        </p>
         ${
-          serviceExclusions.length
-            ? `<ul class="exclusion-list">
-                ${serviceExclusions.map((item) => `
-                  <li>
-                    <span class="exclusion-x">X</span>
-                    <span>${item}</span>
-                  </li>
-                `).join("")}
-              </ul>
-              ${serviceExclusionsFootnote
-                ? `<p class="exclusion-footnote">${serviceExclusionsFootnote}</p>`
-                : ""}
-            `
-            : `<p class="empty">No exclusions specified.</p>`
+          revisionDate
+            ? `<tr>
+                <td class="cover-meta-label">Revised Date</td>
+                <td class="cover-meta-value">${revisionDate}</td>
+              </tr>`
+            : ""
         }
-      </section>
+        <tr>
+          <td class="cover-meta-label">Valid Until</td>
+          <td class="cover-meta-value">${validUntil}${validUntil ? " &nbsp;(28 days from original proposal)" : "28 days from original proposal"}</td>
+        </tr>
+        <tr>
+          <td class="cover-meta-label">Prepared By</td>
+          <td class="cover-meta-value">${creatorName}</td>
+        </tr>
+      </table>
 
-      <section class="section">
-        <h2 class="section-heading-navy">Payment Terms</h2>
-        <div class="section-gold-divider"></div>
-        <div class="card">
-          ${
-            paymentTerms ||
-            '<span class="empty">Payment terms not provided.</span>'
-          }
+      <div class="cover-promo-card">
+        <div class="cover-promo-header">
+          <span class="star">★</span>&nbsp; Limited-Time Promotion &nbsp;<span class="star">★</span>
         </div>
-      </section>
-
-      <section class="section">
-        <h2 class="section-heading-navy">Terms &amp; Conditions</h2>
-        <div class="section-gold-divider"></div>
-        <div class="card">
-          ${
-            termsAndConditions && termsAndConditions.length > 0
-              ? `<ul>
-                  ${termsAndConditions
-                    .map(
-                      (item) =>
-                        `<li><span class="dot">•</span><span>${item}</span></li>`,
-                    )
-                    .join("")}
-                 </ul>`
-              : '<span class="empty">Terms and conditions not provided.</span>'
-          }
+        <div class="cover-promo-body">
+          ${PROMOTIONAL_PACKAGE.amount} ${PROMOTIONAL_PACKAGE.label}
         </div>
-      </section>
+        <div class="cover-promo-sub">Sign before ${validUntil || "the expiry date"} to secure this offer</div>
+      </div>
 
+      <div class="cover-footer">
+        Lic. No. ${COMPANY_INFO.licenceNo} &nbsp;·&nbsp; ${COMPANY_INFO.accreditation} &nbsp;·&nbsp; ${COMPANY_INFO.website}
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- WELCOME / LETTER                                    -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Welcome, ${customerName.split(" ")[0]}</h2>
+    <div class="section-gold-rule"></div>
+
+    <div class="welcome-body">
+      ${projectWelcomeMessage || '<span class="empty">No welcome message provided.</span>'}
     </div>
 
-    <!-- ── ACCEPTANCE / SIGNATURE ── -->
-    <div class="acceptance">
-      <div class="acceptance-title">Acceptance</div>
-      <div class="acceptance-divider"></div>
-      <p class="acceptance-body">
-        Royal Constructions is committed to delivering <strong>${customerName}</strong>'s
-        project to the highest possible standard. We look forward to welcoming you to the
-        Royal Constructions family. Please sign and return this proposal along with the
-        required deposit to secure your commencement date.
-      </p>
+    <div class="welcome-signature-name">${creatorName.split("—")[0].trim()}</div>
+    <div class="welcome-signature-role">${COMPANY_INFO.directorRole}</div>
+
+    ${
+      revisionChanges
+        ? `
+    <div class="revision-card">
+      <div class="revision-card-header">
+        Revised Proposal — ${revisionDate} &nbsp;|&nbsp; Changes Agreed in Meeting
+      </div>
+      <div class="revision-card-desc">${revisionChanges.description}</div>
+      <div class="revision-card-stats">
+        Upgrade value added: $${revisionChanges.valueAdded.toLocaleString()}
+        &nbsp;|&nbsp;
+        Net price increase: $${(revisionChanges.valueAdded - revisionChanges.youSave).toLocaleString()}
+        &nbsp;|&nbsp;
+        You save: $${revisionChanges.youSave.toLocaleString()}
+      </div>
+    </div>`
+        : ""
+    }
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- PROJECT SCOPE                                       -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Project Scope</h2>
+    <div class="section-gold-rule"></div>
+
+    ${
+      projectScope && projectScope.length
+        ? projectScope
+            .map(
+              (group) => `
+        <div class="scope-group">
+          <div class="scope-group-title">${group.sectionTitle}</div>
+          <ul class="scope-list">
+            ${group.items
+              .map(
+                (item) => `
+              <li>
+                <span class="scope-star">★</span>
+                <span>${item}</span>
+              </li>
+            `,
+              )
+              .join("")}
+          </ul>
+        </div>
+      `,
+            )
+            .join("")
+        : `<p class="empty">No project scope provided.</p>`
+    }
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- YOUR INVESTMENT                                     -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Your Investment</h2>
+    <div class="section-gold-rule"></div>
+
+    <div class="investment-price-hero">
+      <div class="investment-price-label">Indicative Fixed Price</div>
+      <div class="investment-price-amount">${contractAmount}</div>
+      <div class="investment-price-gst">Inclusive of GST</div>
+      <div class="investment-price-sub">including ${PROMOTIONAL_PACKAGE.amount} promotional upgrade package</div>
+    </div>
+
+    <div class="investment-sub-heading">What Your Fixed Price Includes</div>
+    
+    <table class="fpi-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Included</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${
+          fixedPriceItems && fixedPriceItems.length
+            ? fixedPriceItems
+                .map(
+                  (item) => `
+            <tr>
+              <td>${item}</td>
+              <td><span class="fpi-yes">Yes</span></td>
+            </tr>
+          `,
+                )
+                .join("")
+            : `<tr><td colspan="2" class="empty" style="padding:14px 16px;">No fixed price items provided.</td></tr>`
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- YOUR $50,000 PROMOTIONAL UPGRADE PACKAGE           -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Your ${PROMOTIONAL_PACKAGE.amount} Promotional Upgrade Package</h2>
+    <div class="section-gold-rule"></div>
+
+    <p class="promo-intro">
+      Every item below is included in your fixed price at no additional cost. This package represents
+      ${PROMOTIONAL_PACKAGE.amount} of upgrades — agreed and locked in as part of your revised proposal.
+    </p>
+
+    <table class="promo-table">
+      <thead>
+        <tr>
+          <th colspan="2">Premium Upgrade Item</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${(() => {
+          const items =
+            promotionalUpgrades && promotionalUpgrades.length
+              ? promotionalUpgrades
+              : [];
+          if (items.length === 0) {
+            return `<tr><td colspan="2" class="empty" style="padding:14px 16px;">No upgrade items provided.</td></tr>`;
+          }
+          // Render in two-column pairs, last item spans if odd
+          const rows = [];
+          for (let i = 0; i < items.length; i += 2) {
+            const left = items[i];
+            const right = items[i + 1];
+            rows.push(`
+              <tr>
+                <td style="width:50%">
+                  <span class="promo-item-star">★</span>
+                  <span>${left}</span>
+                </td>
+                <td style="width:50%">
+                  ${
+                    right
+                      ? `
+                  <span class="promo-item-star">★</span>
+                  <span>${right}</span>
+                  `
+                      : ""
+                  }
+                </td>
+              </tr>
+            `);
+          }
+          return rows.join("");
+        })()}
+      </tbody>
+    </table>
+
+    <div class="inclusion-credit-card">
+      <span class="star">★</span>
+      &nbsp;${PROMOTIONAL_PACKAGE.inclusionCreditAmount} ${PROMOTIONAL_PACKAGE.inclusionCreditLabel}&nbsp;
+      <span class="star">★</span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- FAÇADE OPTIONS FOR YOUR CONSIDERATION               -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Façade Options for Your Consideration</h2>
+    <div class="section-gold-rule"></div>
+
+    <p class="facade-intro">${facadeOptions ? facadeOptions.optionsDescription : "No façade options available."}</p>
+
+    ${
+      facadeOptions && facadeOptions.options && facadeOptions.options.length > 0
+        ? facadeOptions.options
+            .map(
+              (option) => `
+            <div class="facade-option">
+              <div class="facade-option-title">${option.title}</div>
+              <div class="facade-option-desc">${option.description}</div>
+              <img class="facade-option-img" src="${option.imageUrl}" alt="${option.title}" />
+            </div>
+            `,
+            )
+            .join("")
+        : ""
+    }
+    <p class="empty">Façade images shown for illustrative purposes — final selections, materials and detailing confirmed at the design stage to suit your block at ${siteLocation}.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- INDICATIVE PROJECT TIMELINE                         -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Indicative Project Timeline</h2>
+    <div class="section-gold-rule"></div>
+
+    <table class="timeline-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Stage</th>
+          <th>What Happens</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${TIMELINE_STAGES.map(
+          (s, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td class="stage-name">${s.stage}</td>
+            <td>${s.description}</td>
+          </tr>
+        `,
+        ).join("")}
+      </tbody>
+    </table>
+    <p class="timeline-footnote">${TIMELINE_FOOTNOTE}</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- YOUR NEXT STEPS                                     -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Your Next Steps</h2>
+    <div class="section-gold-rule"></div>
+
+    <p class="next-steps-intro">
+      We have built this proposal to give you everything you need to make a confident decision.
+      To move forward:
+    </p>
+
+    <ul class="next-steps-list">
+      ${NEXT_STEPS.map(
+        (s, i) => `
+        <li class="next-step-item">
+          <div class="next-step-num">${i + 1}</div>
+          <div class="next-step-body">
+            <div class="next-step-title">${s.title}</div>
+            <div class="next-step-desc">${s.description}</div>
+          </div>
+        </li>
+      `,
+      ).join("")}
+    </ul>
+
+    <div class="next-steps-cta">
+      <div class="next-steps-cta-heading">Ready to Proceed?</div>
+      <div class="next-steps-cta-name">${COMPANY_INFO.director}, Royal Constructions</div>
+      <div class="next-steps-cta-meta">
+        www.${COMPANY_INFO.website} &nbsp;·&nbsp; Licence No. ${COMPANY_INFO.licenceNo} &nbsp;·&nbsp; ${COMPANY_INFO.accreditation}
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- IMPORTANT NOTES & TERMS                             -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-wrap">
+    <h2 class="section-heading">Important Notes &amp; Terms</h2>
+    <div class="section-gold-rule"></div>
+
+    ${
+      termsAndConditions && termsAndConditions.length > 0
+        ? termsAndConditions
+            .map(
+              (note) => `
+      <div class="notes-item">
+        <div class="notes-item-title">${note.title}</div>
+        <div class="notes-item-body">
+          ${note.description}
+        </div>
+      </div>
+    `,
+            )
+            .join("")
+        : `<p class="empty">No important notes or terms provided.</p>`
+    }
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ACCEPTANCE                                          -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="acceptance-wrap">
+    <h2 class="section-heading">Acceptance</h2>
+    <div class="section-gold-rule"></div>
+
+    <div class="acceptance-card">
+      ${ACCEPTANCE_BODY(customerName, siteLocation)}
+
       <div class="sig-grid">
         <div>
-          <div class="sig-label">For Royal Constructions Pty Ltd:</div>
-          <div class="sig-sublabel">Licence No. 383992C</div>
-          <div class="sig-line">Authorised Signature / Date</div>
+          <div class="sig-name">${customerName}</div>
+          <div class="sig-sublabel">Client</div>
+          <div class="sig-line">Signature</div>
+          <div class="sig-line" style="margin-top:20px;">Date</div>
         </div>
         <div>
-          <div class="sig-label">Client Acceptance:</div>
-          <div class="sig-sublabel">I/We agree to proceed on the terms of this proposal</div>
-          <div class="sig-line">${customerName} — Signature / Date</div>
+          <div class="sig-name">${COMPANY_INFO.director.split("—")[0].trim()}</div>
+          <div class="sig-sublabel">${COMPANY_INFO.directorRole}</div>
+          <div class="sig-line">Authorised Signature</div>
+          <div class="sig-line" style="margin-top:20px;">Date</div>
         </div>
       </div>
     </div>
-
   </div>
+
+</div>
 </body>
-</html>
-`;
+</html>`;
+
+  const clean = DOMPurify.sanitize(html);
 
   return (
     <iframe
       ref={ref}
+      sandbox="allow-same-origin"
       title="Offer Preview"
-      srcDoc={html}
+      srcDoc={clean}
       className="block h-full min-h-0 w-[50vw] rounded-2xl border border-[#E2E8F0] bg-white shadow-sm"
     />
   );

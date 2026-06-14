@@ -1,5 +1,5 @@
 import { ToolLoopAgent, tool } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { gateway } from '../model';
 import { z } from 'zod';
 
 export interface LeadExtraction {
@@ -32,10 +32,8 @@ const projectTypeList = PROJECT_TYPE_OPTIONS.map((type) => `"${type}"`).join(
   ', ',
 );
 
-const MODEL_NAME = 'gemini-2.5-flash';
-const apiKey =
-  process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-const googleProvider = apiKey ? createGoogleGenerativeAI({ apiKey }) : null;
+const MODEL_NAME = 'google/gemini-2.5-flash';
+
 
 const validationSchema = z
   .object({
@@ -68,6 +66,47 @@ const validationSchema = z
       ),
   })
   .describe('Lead extraction schema from email content.');
+
+
+/**
+* Truncates email content at the beginning of any quoted history or previous replies.
+*/
+function stripEmailThread(text: string): string {
+  if (!text) return '';
+
+  // 1. Remove HTML-specific thread containers first (if input contains HTML)
+  let cleanedText = text
+    .replace(/<div class="gmail_quote">[\s\S]*?<\/div>/gi, '')
+    .replace(/<blockquote[^>]*>[\s\S]*?<\/blockquote>/gi, '')
+    .replace(/<span id="OLK_SRC_BODY_SECTION">[\s\S]*?<\/span>/gi, '')
+    .replace(/<div id="divRplyFwdMsg"[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<div style="border-top:\s*solid\s+#[a-f0-9]{3,6}\s+1\.0pt[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<div style="border-top:\s*none[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<hr[^>]*(id="stopSpelling"|tabindex="-1"|style="[^"]*width:\s*98%")[^>]*>[\s\S]*/gi, '')
+    .replace(/<div class="gmail_signature"[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<div class="outlook_signature"[^>]*>[\s\S]*?<\/div>/gi, '');
+
+  // 2. Common text-based markers indicating the start of a thread history or previous replies
+  const threadMarkers = [
+    /________________________________/i,     // Outlook divider line
+    /-----Original Message-----/i,           // Standard desktop email clients
+    /\n\s*From:/i,                            // Outlook/Exchange format "From: ..."
+    /\n\s*On\s+.+?wrote:/i,                   // Gmail format "On [Date], [User] wrote:"
+    /\n\s*On\s+.+?at\s+.+?/i,                 // Alternative iOS/Gmail format
+    /Sent from my iPhone/i,                   // Trim default mobile signatures
+    /Get Outlook for/i                        // Trim Outlook mobile signatures
+  ];
+
+  for (const marker of threadMarkers) {
+    const match = cleanedText.match(marker);
+    if (match && match.index !== undefined) {
+      cleanedText = cleanedText.substring(0, match.index);
+    }
+  }
+
+  return cleanedText.trim();
+}
+
 
 function stripHtml(html: string): string {
   if (!html) return '';
@@ -106,19 +145,17 @@ const instruction =
   'Message are all empty or contain gibberish/random text). Always call the emitLead tool ' +
   'with the final fields.';
 
-const leadExtractionAgent = googleProvider
-  ? new ToolLoopAgent({
-    model: googleProvider(MODEL_NAME),
-    instructions: instruction,
-    tools: {
-      emitLead,
-    },
-    toolChoice: {
-      type: 'tool',
-      toolName: 'emitLead',
-    },
-  })
-  : null;
+const leadExtractionAgent = new ToolLoopAgent({
+  model: gateway(MODEL_NAME),
+  instructions: instruction,
+  tools: {
+    emitLead,
+  },
+  toolChoice: {
+    type: 'tool',
+    toolName: 'emitLead',
+  },
+});
 
 const requestsPerMinute = Math.max(
   1,
@@ -180,7 +217,10 @@ export async function extractLeadFromMessage(
     return null;
   }
 
-  const cleanBody = stripHtml(body);
+  // 1. Strip the previous email history thread
+  const threadBody = stripEmailThread(body);
+
+  const cleanBody = stripHtml(threadBody);
 
   console.log('Extracting lead from message with subject:', subject.trim());
   console.log('Message body (Cleaned):', cleanBody);

@@ -34,6 +34,7 @@ import UpdateMilestoneModal from "../projects/detail/update-milestone-modal";
 import AddMilestoneModal from "../projects/detail/add-milestone-modal";
 import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
 import { CreateOfferFileModal } from "../offers/create-offer-modal";
+import { AddLeadModal } from "../leads/modal-ui/add-lead-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -315,6 +316,26 @@ export function ModalManager() {
       );
     case "createOfferFile":
       return <CreateOfferFileModal open onClose={handleClose} />;
+    case "createLead":
+      return (
+        <AddLeadModal
+          onClose={handleClose}
+          onSuccess={() => {
+            handleClose();
+          }}
+          showToast={(message: string, type?: "success" | "info" | "error") => {
+            if (type === "success") {
+              toast.success(message);
+            } else if (type === "info") {
+              toast.info(message);
+            } else if (type === "error") {
+              toast.error(message);
+            } else {
+              toast.info(message);
+            }
+          }}
+        />
+      );
     default:
       return null;
   }

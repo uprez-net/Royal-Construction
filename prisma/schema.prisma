@@ -72,11 +72,22 @@ enum HistoryType {
   REFERRAL
 }
 
+enum AnnotationStatus {
+  OPEN
+  RESOLVED
+}
+
 enum OfferStatus {
   SENT
   PENDING
   ACCEPTED
   REJECTED
+}
+
+enum RunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
 }
 
 model Project {
@@ -195,7 +206,6 @@ model File {
   id          String   @id @default(uuid())
   projectId   String?
   milestoneId String?
-  offerId     String?
   leadId      Int?
   filename    String
   fileType    String
@@ -207,7 +217,6 @@ model File {
 
   project   Project?   @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
   milestone Milestone? @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  offer     Offer?     @relation("OfferFiles", fields: [offerId], references: [id], onDelete: Cascade)
   lead      Lead?      @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
   User      User       @relation("UserFiles", fields: [uploadedBy], references: [id])
 
@@ -295,17 +304,17 @@ model ActivityLog {
 }
 
 model Customer {
-  id     String @id @default(uuid())
+  id     String  @id @default(uuid())
   userId String? @unique
   name   String
-  email  String @unique
-  phone  String @unique
+  email  String  @unique
+  phone  String  @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   projects Project[] @relation("CustomerProjects")
-  user     User?      @relation("CustomerUsers", fields: [userId], references: [id], onDelete: Cascade)
+  user     User?     @relation("CustomerUsers", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@index([phone])
@@ -328,7 +337,7 @@ model User {
   siteManagerProjects Project[]     @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
-  assignedLeads       Lead[] @relation("LeadAssignee")
+  assignedLeads       Lead[]        @relation("LeadAssignee")
 
   @@index([email])
   @@index([phone])
@@ -348,16 +357,18 @@ model Lead {
   sourceDetail String?
 
   stage LeadStage @default(NEW)
+  runId String?
+  runStatus RunStatus?
 
-  assignedId   String?                                                            // <-- THE NEW FOREIGN KEY
-  assignedUser User?   @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
+  assignedId String? // <-- THE NEW FOREIGN KEY
 
   assigned String?
 
   budget String?
   type   String[]
 
-  notes String? @db.Text
+  notes    String? @db.Text
+  notesDoc Json?
 
   followupDate  DateTime?
   followupTime  String?
@@ -372,14 +383,34 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offers       Offer[]
-  chatSessions ChatSession[]
-  history      LeadHistory[]
-  files        File[]        @relation("LeadFiles")
+  offers          Offer[]
+  chatSessions    ChatSession[]
+  history         LeadHistory[]
+  noteAnnotations LeadNoteAnnotation[]
+  files           File[]               @relation("LeadFiles")
+  assignedUser    User?                @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
 
   @@index([stage])
   @@index([assignedId])
   @@index([createdAt])
+}
+
+model LeadNoteAnnotation {
+  id String @id @default(uuid())
+
+  leadId Int
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  selectedText     String           @db.Text
+  comment          String           @db.Text
+  mentionedUserIds String[]
+  status           AnnotationStatus @default(OPEN)
+
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([leadId])
+  @@index([status])
 }
 
 model LeadHistory {
@@ -417,23 +448,48 @@ model Offer {
   updatedAt DateTime @updatedAt
 
   offerItems OfferItem[]
-  files      File[]      @relation("OfferFiles")
+  offerFiles OfferFile[]
   lead       Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId])
+  @@index([leadId])
 }
 
 model OfferItem {
   id          String  @id @default(uuid())
   offerId     String
+  item        String
   description String
   quantity    Int
   unit        String
   unitPrice   Decimal @db.Decimal(10, 2)
   totalPrice  Decimal @db.Decimal(12, 2)
 
+  version Int @default(1)
+
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([offerId])
+}
+
+model OfferFile {
+  id        String   @id @default(uuid())
+  offerId   String
+  version   Int      @default(1)
+  filename  String
+  fileType  String
+  filesize  Int
+  url       String
+  createdAt DateTime @default(now())
+
+  offerContent Json
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, version])
+  @@index([offerId])
 }
 
 model ChatSession {
@@ -460,4 +516,15 @@ model ChatMessage {
   chatSession ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
+}
+
+model EmailAdHock {
+  id           String   @id @default(uuid())
+  name         String
+  emailSubject String
+  htmlUrl      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("email_adhoc")
 }

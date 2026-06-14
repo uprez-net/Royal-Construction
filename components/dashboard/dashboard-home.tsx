@@ -1,65 +1,83 @@
 "use client";
+import { DashboardHeader } from "./dashboard-header";
+import { DashboardKPI } from "./dashboard-kpi";
+import { DashboardProjectTable } from "./dashboard-project-table";
+import { DashboardFollowUps } from "./dashboard-follow-ups";
+import { DashboardSiteManagerTable } from "./dashboard-site-manager-table";
+import { DashboardKPI as DashboardKPIType } from "@/types/dashboard";
+import type { PaginatedProjectsResult } from "@/lib/data/projects";
+import { siteManagersMock } from "@/lib/mock-data";
+import type { FollowUpItem } from "./dashboard-follow-ups";
+import { DashboardGraphCards } from "./dashboard-graph-cards";
+import type { DashboardGraphData } from "@/lib/data/dashboard";
 
-import { ClipboardList } from "lucide-react";
+interface DashboardHomeProps {
+  userFirstName: string;
+  newLeadsCount: number;
+  newProjectsCount: number;
+  followUpsCount: number;
+  kpiData: DashboardKPIType;
+  projectsData: PaginatedProjectsResult;
+  followUpItems: FollowUpItem[];
+  graphData: DashboardGraphData;
+}
 
-import { AppShell } from "@/components/common/app-shell";
-import { MetricCard } from "@/components/common/metric-card";
-import { SectionCard } from "@/components/common/section-card";
-import {
-  dashboardMetrics,
-  dashboardProjects,
-  tickerItems,
-} from "@/lib/mock-data";
-import { ProjectCard } from "@/components/project/project-card";
-
-export function DashboardHome({ isSignedIn }: { isSignedIn: boolean }) {
+export function DashboardHome({
+  userFirstName,
+  newLeadsCount,
+  newProjectsCount,
+  followUpsCount,
+  kpiData,
+  projectsData,
+  followUpItems,
+  graphData,
+}: DashboardHomeProps) {
   return (
-    <AppShell
-      isSignedIn={isSignedIn}
-      description="A single composable shell now backs the dashboard, list views, detail pages, and future module screens."
-      actions={
-        <>
-          <div className="rounded-2xl border border-border bg-white px-4 py-2 text-sm font-medium text-slate-700">
-            Updated just now
-          </div>
-        </>
-      }
-    >
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {dashboardMetrics.map((metric) => (
-          <MetricCard key={metric.label} {...metric} />
-        ))}
-      </div>
+    <div className="grid gap-6 space-y-6">
+      <DashboardHeader
+        name={userFirstName}
+        newLeadsCount={newLeadsCount}
+        newProjectsCount={newProjectsCount}
+        followUpsCount={followUpsCount}
+      />
+      <DashboardKPI
+        newLeadsThisMonth={kpiData.newLeadsThisMonth}
+        newLeadsConvertedThisMonth={kpiData.newLeadsConvertedThisMonth}
+        revenueThisQuarter={kpiData.revenueThisQuarter}
+        netProfitThisQuarter={kpiData.netProfitThisQuarter}
+        activeProjects={kpiData.activeProjects}
+        activeSiteManagers={kpiData.activeSiteManagers}
+        estimateProjectSpendingThisQuarter={
+          kpiData.estimateProjectSpendingThisQuarter
+        }
+        actualProjectSpendingThisQuarter={
+          kpiData.actualProjectSpendingThisQuarter
+        }
+      />
+
+      {/* Graph Cards */}
+      <DashboardGraphCards data={graphData} />
+
+      <DashboardProjectTable
+        projects={projectsData.items}
+        pageInfo={{
+          totalCount: projectsData.totalCount,
+          totalPages: projectsData.totalPages,
+          currentPage: projectsData.page,
+        }}
+        onPageChange={(page) => console.log("Page changed to:", page)}
+        onSearch={(query) => console.log("Search query:", query)}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
-        <SectionCard
-          title="Active projects"
-          description="Cards are driven by the same project shape used across detail and list views."
-        >
-          <div className="grid gap-4 lg:grid-cols-3">
-            {dashboardProjects.map((project) => (
-              <ProjectCard key={project.name} {...project} />
-            ))}
-          </div>
-        </SectionCard>
+        <DashboardSiteManagerTable siteManagers={siteManagersMock} />
 
-        <SectionCard
-          title="Operational feed"
-          description="A reusable pattern for live updates, notifications, and follow-up reminders."
-        >
-          <div className="space-y-3">
-            {tickerItems.map((item) => (
-              <div
-                key={item}
-                className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/20 p-3 text-sm text-slate-700"
-              >
-                <ClipboardList className="mt-0.5 size-4 text-teal-600" />
-                <p>{item}</p>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
+        <DashboardFollowUps
+          followUpTone={followUpItems.length === 0 ? "positive" : "negative"}
+          pendingFollowUpCount={followUpItems.length}
+          followUpItems={followUpItems}
+        />
       </div>
-    </AppShell>
+    </div>
   );
 }

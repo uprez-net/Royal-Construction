@@ -42,7 +42,6 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import { QueuedUploadFile, useUploadQueue } from "@/hooks/use-upload-queue";
 import { ClientPayload } from "@/utils/validators";
-import { Input } from "../ui/input";
 import { buildBlobPath } from "@/utils/formatters";
 
 const maxFiles = 5;
@@ -80,7 +79,6 @@ export function AddUpdateModal({
     initialMilestoneId,
   );
   const [notes, setNotes] = useState("");
-  const [updatedNotesTitle, setUpdatedNotesTitle] = useState("");
   const [uploading, setUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isTransitioning, startTransition] = useTransition();
@@ -151,6 +149,7 @@ export function AddUpdateModal({
             fileId: queuedFile.id,
             fileName: queuedFile.file.name,
             fileSize: queuedFile.file.size,
+            isOfferFile: false,
           } satisfies ClientPayload),
           abortSignal: controller.signal,
           onUploadProgress: ({ percentage }) => {
@@ -197,7 +196,7 @@ export function AddUpdateModal({
 
     setErrorMessage(null);
     setUploading(true);
-
+    let success = false;
     try {
       const photoUrls =
         queuedFiles.length > 0
@@ -216,6 +215,7 @@ export function AddUpdateModal({
       ).unwrap();
 
       toast.success("Site update posted");
+      success = true;
       onSuccess();
     } catch (error) {
       Object.values(uploadControllersRef.current).forEach((controller) =>
@@ -246,8 +246,10 @@ export function AddUpdateModal({
       });
     } finally {
       setUploading(false);
-      resetForm();
-      onOpenChange(false);
+      if(success) {        
+        resetForm();
+        onOpenChange(false);
+      }
     }
   }
 
@@ -299,19 +301,6 @@ export function AddUpdateModal({
 
           <div className="space-y-1.5">
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Update Title
-            </label>
-            <Input
-              value={updatedNotesTitle}
-              onChange={(event) => setUpdatedNotesTitle(event.target.value)}
-              placeholder="Enter a title for the update..."
-              required
-              className="resize-y rounded-[7px] bg-white px-3 py-2 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Description
             </label>
             <Textarea
@@ -352,7 +341,7 @@ export function AddUpdateModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               className="h-9 rounded-[7px] px-3.5 text-[12.5px] font-medium transition-all hover:border-teal-600 hover:bg-slate-50 hover:text-teal-600"
             >
               Cancel

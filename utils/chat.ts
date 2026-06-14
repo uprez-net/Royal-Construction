@@ -44,7 +44,11 @@ export function isKnownToolName(name: string): name is KnownToolName {
     name === "lineItemTool" ||
     name === "offerFileTool" ||
     name === "fetchLeadInfoTool" ||
-    name === "fileProcessingTool"
+    name === "fetchLeadFilesTool" ||
+    name === "fileProcessingTool" ||
+    name === "fetchOfferSheetRulesTool" ||
+    name === "webSearch" ||
+    name === "scrapeUserLinks"
   );
 }
 
@@ -73,7 +77,7 @@ export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[
           quantity: lineItemOutput.quantity,
           unit: lineItemOutput.unit,
           totalPrice: lineItemOutput.totalPrice,
-          gstRate: lineItemOutput.gstRate ?? 18,
+          gstRate: lineItemOutput.gstRate ?? 0.10,
           gstIncluded: lineItemOutput.gstIncluded,
           netLine: lineItemOutput.netLine,
           gstAmount: lineItemOutput.gstAmount
@@ -87,11 +91,17 @@ export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[
 export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile {
   let offerFile: OfferFile = {
     termsAndConditions: [],
-    projectDescription: "",
-    paymentTerms: "",
-    serviceInclusions: [],
-    serviceExclusions: [],
+    projectWelcomeMessage: "",
+    revisionChanges: {
+      description: "",
+      valueAdded: 0,
+      youSave: 0,
+    },
+    projectScope: [],
+    fixedPriceItems: [],
+    promotionalUpgrades: [],
   };
+  
   for (const msg of message) {
     for (const part of msg.parts) {
       // Look for parts that are tool outputs with type "offerFileTool"
@@ -102,23 +112,15 @@ export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile
         hasToolOutput(part)
       ) {
         const { customerOffer } = part.output;
-        const updatedServiceInclusions = mergeServiceItems(
-          offerFile.serviceInclusions,
-          customerOffer.serviceInclusions
-        );
-        // Patch and update the offerFile object with the output data
         offerFile = {
           ...offerFile,
           ...customerOffer,
-          termsAndConditions: [
-            ...(offerFile.termsAndConditions ?? []),
-            ...(customerOffer.termsAndConditions ?? []),
-          ].flat(),
-          serviceInclusions: updatedServiceInclusions,
-          serviceExclusions: [
-            ...(offerFile.serviceExclusions ?? []),
-            ...(customerOffer.serviceExclusions ?? []),
-          ].flat(),
+          termsAndConditions: customerOffer.termsAndConditions ?? offerFile.termsAndConditions,
+          projectScope: customerOffer.projectScope
+            ? mergeServiceItems(offerFile.projectScope, customerOffer.projectScope)
+            : offerFile.projectScope,
+          fixedPriceItems: customerOffer.fixedPriceItems ?? offerFile.fixedPriceItems,
+          promotionalUpgrades: customerOffer.promotionalUpgrades ?? offerFile.promotionalUpgrades,
         };
       }
     }

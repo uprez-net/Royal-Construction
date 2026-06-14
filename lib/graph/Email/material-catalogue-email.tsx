@@ -23,6 +23,7 @@ import { EmailHeader } from './email-header';
 import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
@@ -100,11 +101,13 @@ function CategoryItem({
 interface MaterialCatalogueEmailProps {
   name?: string;
   catalogueUrl?: string;
+  leadContext?: LeadEmailContext;
 }
 
 export default function MaterialCatalogueEmail({
   name = 'Homeowner',
   catalogueUrl = RC_URLS.catalogue,
+  leadContext,
 }: MaterialCatalogueEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -187,6 +190,8 @@ export default function MaterialCatalogueEmail({
                 premium finishes that will make your house truly feel like home.
               </Text>
             </EmailSectionLight>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Hero Image ── */}
             <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>

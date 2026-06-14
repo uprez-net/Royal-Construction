@@ -6,6 +6,7 @@ import type {
     LeadStage as PrismaLeadStage,
 } from "@prisma/client";
 import type { HistoryItem, Lead as UiLead, LeadStage } from "@/lib/leads/types";
+import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
 
 export const stageMap: Record<PrismaLeadStage, LeadStage> = {
     NEW: "New",
@@ -87,6 +88,15 @@ export function mapLead(
         history: PrismaLeadHistory[];
         chatSessions: ChatSession[];
         assignedUser?: { id: string; name: string; email: string } | null;
+        noteAnnotations?: Array<{
+            id: string;
+            selectedText: string;
+            comment: string;
+            mentionedUserIds: string[];
+            status: "OPEN" | "RESOLVED";
+            createdAt: Date;
+            resolvedAt: Date | null;
+        }>;
     }
 ): UiLead {
     const assignedUserFromRelation = lead.assignedUser ?? null;
@@ -106,6 +116,16 @@ export function mapLead(
         budget: lead.budget ?? "Not Discussed",
         type: lead.type.length > 0 ? lead.type.join(", ") : "Not Specified",
         notes: lead.notes ?? "",
+        notesDoc: coerceLeadNotesDocument(lead.notesDoc, lead.notes ?? ""),
+        noteAnnotations: (lead.noteAnnotations ?? []).map((annotation) => ({
+            id: annotation.id,
+            selectedText: annotation.selectedText,
+            comment: annotation.comment,
+            mentionedUserIds: annotation.mentionedUserIds,
+            status: annotation.status === "RESOLVED" ? "resolved" : "open",
+            createdAt: annotation.createdAt.toISOString(),
+            resolvedAt: annotation.resolvedAt?.toISOString() ?? null,
+        })),
         followupDate: toDateOnly(lead.followupDate),
         followupTime: lead.followupTime ?? null,
         followupNotes: lead.followupNotes ?? "",
@@ -114,6 +134,8 @@ export function mapLead(
         created: toDateOnly(lead.createdAt) ?? "",
         urgent: lead.urgent,
         creatingOffer: lead.chatSessions.length > 0,
+        runId: lead.runId,
+        runStatus: lead.runStatus,
     };
 }
 

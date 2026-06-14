@@ -4,7 +4,9 @@ import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
-import { OfferKPIs, OfferWithItems, PaginatedOfferResult } from "@/types/offer";
+import { OfferKPIs, OfferWithItemsAndFiles, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
+import type { OfferFile } from "@/context/ChatContext";
+import { calculateTrend } from "@/utils/formatters";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -31,6 +33,13 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
                 where: { AND: whereClause },
                 include: {
                     lead: true,
+                    offerFiles: {
+                        orderBy: { createdAt: "desc" },
+                        take: 1,
+                        select: {
+                            version: true,
+                        }
+                    },
                 },
                 skip: (safePage - 1) * safeLimit,
                 take: safeLimit,
@@ -42,11 +51,12 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
         const totalPages = Math.ceil(totalCount / safeLimit);
 
         return {
-            items: offers.map(offer => ({
+            items: offers.map(({ offerFiles, ...offer }) => ({
                 ...offer,
                 amount: offer.amount.toString(),
                 gstAmount: offer.gstAmount.toString(),
                 totalAmount: offer.totalAmount.toString(),
+                version: offerFiles[0]?.version ?? 1,
             })),
             page: safePage,
             limit: safeLimit,
@@ -65,218 +75,192 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
     }
 }
 
-export async function getOfferById(id: string): Promise<OfferWithItems | null> {
+export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFiles | null> {
     try {
-        const offer = await prisma.offer.findUnique({
-            where: { id },
+        const offerData = await prisma.offer.findUnique({
+            where: { leadId: id },
             include: {
                 lead: true,
                 offerItems: true,
+                offerFiles: true,
             },
         });
 
-        if (!offer) {
-            throw new Error(`Offer with ID ${id} not found`);
+
+        if (!offerData) {
+            console.warn(`No offer found for lead ID: ${id}`);
+            return null;
         }
+
+        const { offerItems, offerFiles, ...offer } = offerData;
+        const currentVersion = offerItems.reduce((max, item) => Math.max(max, item.version), 0) ?? 0;
+        const offerItemsRecord: Record<number, SafeOfferItem[]> = {};
+        const filesRecord: Record<number, SafeOfferDBFile> = {};
+        offerItems.forEach(item => {
+            if (!offerItemsRecord[item.version]) {
+                offerItemsRecord[item.version] = [];
+            }
+            offerItemsRecord[item.version].push({
+                ...item,
+                unitPrice: item.unitPrice.toString(),
+                totalPrice: item.totalPrice.toString(),
+            });
+        });
+        offerFiles.forEach(file => {
+            filesRecord[file.version] = {
+                ...file,
+                offerContent: file.offerContent as OfferFile,
+            };
+        });
 
         return {
             ...offer,
             amount: offer.amount.toString(),
             gstAmount: offer.gstAmount.toString(),
             totalAmount: offer.totalAmount.toString(),
-            items: offer.offerItems.map(item => ({
-                ...item,
-                unitPrice: item.unitPrice.toString(),
-                totalPrice: item.totalPrice.toString(),
-            })) ?? [],
+            version: currentVersion,
+            items: offerItemsRecord,
+            files: filesRecord,
         };
     } catch (error) {
         console.error("Error fetching offer by ID:", error);
-        return null;
+        throw error;
     }
 }
 
-function calculateTrend(current: number, previous: number) {
-    if (previous === 0) {
-        return current > 0 ? 100 : 0;
-    }
 
-    return ((current - previous) / previous) * 100;
-}
+type OfferKPIQueryResult = {
+    all_offers: bigint;
+
+    pending_offers: bigint;
+    approved_offers: bigint;
+    rejected_offers: bigint;
+    sent_offers: bigint;
+
+    all_previous_week: bigint;
+    all_current_week: bigint;
+
+    pending_previous_week: bigint;
+    pending_current_week: bigint;
+
+    approved_previous_week: bigint;
+    approved_current_week: bigint;
+
+    rejected_previous_week: bigint;
+    rejected_current_week: bigint;
+
+    sent_previous_week: bigint;
+    sent_current_week: bigint;
+};
 
 export async function getOfferKPIs(): Promise<OfferKPIs> {
     try {
         const now = new Date();
 
-        const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+        const currentWeekStart = startOfWeek(now, {
+            weekStartsOn: 1,
+        });
+
         const previousWeekStart = subWeeks(currentWeekStart, 1);
 
-        const [
-            allOffers,
+        const [result] = await prisma.$queryRaw<OfferKPIQueryResult[]>`
+            SELECT
+                COUNT(*) AS all_offers,
 
-            pendingOffers,
-            approvedOffers,
-            rejectedOffers,
-            sentOffers,
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'PENDING'
+                ) AS pending_offers,
 
-            allPreviousWeek,
-            allCurrentWeek,
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'ACCEPTED'
+                ) AS approved_offers,
 
-            pendingPreviousWeek,
-            pendingCurrentWeek,
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'REJECTED'
+                ) AS rejected_offers,
 
-            approvedPreviousWeek,
-            approvedCurrentWeek,
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'SENT'
+                ) AS sent_offers,
 
-            rejectedPreviousWeek,
-            rejectedCurrentWeek,
+                COUNT(*) FILTER (
+                    WHERE "createdAt" >= ${previousWeekStart}
+                    AND "createdAt" < ${currentWeekStart}
+                ) AS all_previous_week,
 
-            sentPreviousWeek,
-            sentCurrentWeek,
-        ] = await Promise.all([
-            // Totals
-            prisma.offer.count(),
+                COUNT(*) FILTER (
+                    WHERE "createdAt" >= ${currentWeekStart}
+                ) AS all_current_week,
 
-            prisma.offer.count({
-                where: { offerStatus: "PENDING" },
-            }),
-            prisma.offer.count({
-                where: { offerStatus: "ACCEPTED" },
-            }),
-            prisma.offer.count({
-                where: { offerStatus: "REJECTED" },
-            }),
-            prisma.offer.count({
-                where: { offerStatus: "SENT" },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'PENDING'
+                    AND "updatedAt" >= ${previousWeekStart}
+                    AND "updatedAt" < ${currentWeekStart}
+                ) AS pending_previous_week,
 
-            // All Offers Trend (created this week vs last week)
-            prisma.offer.count({
-                where: {
-                    createdAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    createdAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'PENDING'
+                    AND "updatedAt" >= ${currentWeekStart}
+                ) AS pending_current_week,
 
-            // Pending Trend
-            prisma.offer.count({
-                where: {
-                    offerStatus: "PENDING",
-                    updatedAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    offerStatus: "PENDING",
-                    updatedAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'ACCEPTED'
+                    AND "updatedAt" >= ${previousWeekStart}
+                    AND "updatedAt" < ${currentWeekStart}
+                ) AS approved_previous_week,
 
-            // Approved Trend
-            prisma.offer.count({
-                where: {
-                    offerStatus: "ACCEPTED",
-                    updatedAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    offerStatus: "ACCEPTED",
-                    updatedAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'ACCEPTED'
+                    AND "updatedAt" >= ${currentWeekStart}
+                ) AS approved_current_week,
 
-            // Rejected Trend
-            prisma.offer.count({
-                where: {
-                    offerStatus: "REJECTED",
-                    updatedAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    offerStatus: "REJECTED",
-                    updatedAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'REJECTED'
+                    AND "updatedAt" >= ${previousWeekStart}
+                    AND "updatedAt" < ${currentWeekStart}
+                ) AS rejected_previous_week,
 
-            // Sent Trend
-            prisma.offer.count({
-                where: {
-                    offerStatus: "SENT",
-                    updatedAt: {
-                        gte: previousWeekStart,
-                        lt: currentWeekStart,
-                    },
-                },
-            }),
-            prisma.offer.count({
-                where: {
-                    offerStatus: "SENT",
-                    updatedAt: {
-                        gte: currentWeekStart,
-                    },
-                },
-            }),
-        ]);
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'REJECTED'
+                    AND "updatedAt" >= ${currentWeekStart}
+                ) AS rejected_current_week,
+
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'SENT'
+                    AND "updatedAt" >= ${previousWeekStart}
+                    AND "updatedAt" < ${currentWeekStart}
+                ) AS sent_previous_week,
+
+                COUNT(*) FILTER (
+                    WHERE "offerStatus" = 'SENT'
+                    AND "updatedAt" >= ${currentWeekStart}
+                ) AS sent_current_week
+            FROM "Offer"
+        `;
 
         return {
-            allOffers: {
-                total: allOffers,
-                trendDelta: calculateTrend(allCurrentWeek, allPreviousWeek),
-            },
-            pendingOffers: {
-                total: pendingOffers,
-                trendDelta: calculateTrend(
-                    pendingCurrentWeek,
-                    pendingPreviousWeek,
-                ),
-            },
-            approvedOffers: {
-                total: approvedOffers,
-                trendDelta: calculateTrend(
-                    approvedCurrentWeek,
-                    approvedPreviousWeek,
-                ),
-            },
-            rejectedOffers: {
-                total: rejectedOffers,
-                trendDelta: calculateTrend(
-                    rejectedCurrentWeek,
-                    rejectedPreviousWeek,
-                ),
-            },
-            sentOffers: {
-                total: sentOffers,
-                trendDelta: calculateTrend(
-                    sentCurrentWeek,
-                    sentPreviousWeek,
-                ),
-            },
+            allOffers: calculateTrend(
+                Number(result.all_current_week),
+                Number(result.all_previous_week),
+            ),
+
+            pendingOffers: calculateTrend(
+                Number(result.pending_current_week),
+                Number(result.pending_previous_week),
+            ),
+            approvedOffers: calculateTrend(
+                Number(result.approved_current_week),
+                Number(result.approved_previous_week),
+            ),
+
+            rejectedOffers: calculateTrend(
+                Number(result.rejected_current_week),
+                Number(result.rejected_previous_week),
+            ),
+            sentOffers: calculateTrend(
+                Number(result.sent_current_week),
+                Number(result.sent_previous_week),
+            ),
         };
     } catch (error) {
         console.error("Error fetching offer KPIs:", error);
@@ -299,12 +283,12 @@ export const getOffersCached = async (page?: number, limit?: number, q?: string)
     return getOffers(page, limit, q);
 }
 
-export const getOfferByIdCached = async (id: string) => {
+export const getOfferByLeadIdCached = async (id: number) => {
     "use cache";
-    cacheTag(`offer-${id}`);
+    cacheTag(`offer-lead-${id}`);
     cacheLife(CACHE_PROFILES.MEDIUM);
 
-    return getOfferById(id);
+    return getOfferByLeadId(id);
 }
 
 export const getOfferKPIsCached = async () => {
@@ -317,11 +301,19 @@ export const getOfferKPIsCached = async () => {
 
 interface CreateOfferInput {
     leadId: number;
-    offerFileId: string;
+    offerFileInput: {
+        id: string;
+        filename: string;
+        fileType: string;
+        filesize: number;
+        url: string;
+        offerContent: OfferFile;
+    };
     amount: string;
     gstAmount: string;
     totalAmount: string;
     offerItems: {
+        id: string;
         item: string;
         description: string;
         quantity: number;
@@ -331,55 +323,86 @@ interface CreateOfferInput {
     }[];
 }
 
-export const createOffer = async ({
+export const createOrUpdateOffer = async ({
     leadId,
-    offerFileId,
+    offerFileInput,
     amount,
     gstAmount,
     totalAmount,
     offerItems
 }: CreateOfferInput) => {
     try {
-        const newOffer = await prisma.offer.create({
-            data: {
-                leadId,
-                amount: new Prisma.Decimal(amount),
-                gstAmount: new Prisma.Decimal(gstAmount),
-                totalAmount: new Prisma.Decimal(totalAmount),
-                offerItems: {
-                    create: offerItems.map(item => ({
-                        item: item.item,
-                        description: item.description,
-                        quantity: item.quantity,
-                        unitPrice: new Prisma.Decimal(item.unitPrice),
-                        totalPrice: new Prisma.Decimal(item.totalPrice),
-                        unit: item.unit,
-                    })),
+        const { version, newOffer, newOfferFile, offerItemsData } = await prisma.$transaction(async (tx) => {
+            const version = await tx.offerFile.count({
+                where: { offer: { leadId } },
+            }) + 1;
+            const newOffer = await tx.offer.upsert({
+                where: { leadId },
+                update: {
+                    amount: new Prisma.Decimal(amount),
+                    gstAmount: new Prisma.Decimal(gstAmount),
+                    totalAmount: new Prisma.Decimal(totalAmount),
                 },
-                files: {
-                    connect: {
-                        id: offerFileId,
-                    },
+                create: {
+                    leadId,
+                    amount: new Prisma.Decimal(amount),
+                    gstAmount: new Prisma.Decimal(gstAmount),
+                    totalAmount: new Prisma.Decimal(totalAmount),
                 },
-            },
-            include: {
-                offerItems: true,
-            },
+                include: {
+                    lead: true,
+                }
+            });
+
+            const newOfferFile = await tx.offerFile.create({
+                data: {
+                    id: offerFileInput.id,
+                    offerId: newOffer.id,
+                    filename: offerFileInput.filename,
+                    fileType: offerFileInput.fileType,
+                    filesize: offerFileInput.filesize,
+                    url: offerFileInput.url,
+                    offerContent: offerFileInput.offerContent as Prisma.InputJsonValue,
+                    version: version,
+                },
+            });
+
+            const offerItemsData = await tx.offerItem.createManyAndReturn({
+                data: offerItems.map(item => ({
+                    id: item.id,
+                    offerId: newOffer.id,
+                    item: item.item,
+                    description: item.description,
+                    quantity: item.quantity,
+                    unitPrice: new Prisma.Decimal(item.unitPrice),
+                    totalPrice: new Prisma.Decimal(item.totalPrice),
+                    unit: item.unit,
+                    version: version,
+                })),
+            });
+
+            return { version, newOffer, newOfferFile, offerItemsData };
         });
 
         revalidateTag("offers", CACHE_PROFILES.MEDIUM);
         revalidateTag(`offer-${newOffer.id}`, CACHE_PROFILES.MEDIUM);
+        revalidateTag(`offer-lead-${newOffer.leadId}`, CACHE_PROFILES.MEDIUM);
 
         return {
             ...newOffer,
             amount: newOffer.amount.toString(),
             gstAmount: newOffer.gstAmount.toString(),
             totalAmount: newOffer.totalAmount.toString(),
-            items: newOffer.offerItems.map(item => ({
+            version: version,
+            newOfferItems: offerItemsData.map(item => ({
                 ...item,
                 unitPrice: item.unitPrice.toString(),
                 totalPrice: item.totalPrice.toString(),
             })) ?? [],
+            newOfferFile: {
+                ...newOfferFile,
+                offerContent: newOfferFile.offerContent as OfferFile,
+            },
         };
     } catch (error) {
         console.error("Error creating offer:", error);

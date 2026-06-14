@@ -10,15 +10,16 @@ import {
 } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Bot, SendHorizonalIcon, SparklesIcon } from "lucide-react";
+import { Bot, SendHorizonalIcon, SparklesIcon, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Response } from "@/components/chat/response";
 import remarkGfm from "remark-gfm";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ToolResult } from "@/components/chat/tool-result";
+import { ReasoningResponse } from "@/components/chat/reasoning-response";
 
 export function OfferChat() {
-  const { messages, sendMessage, status, error } = useChatContext();
+  const { messages, sendMessage, status, error, stop } = useChatContext();
   const [input, setInput] = useState("");
   const [isAtBottom, setIsAtBottom] = useState(true);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -82,7 +83,10 @@ export function OfferChat() {
             {messages.map(
               (msg) =>
                 msg.parts.some(
-                  (part) => part.type === "text" && part.text.trim().length > 0,
+                  (part) =>
+                    (part.type === "text" && part.text.trim().length > 0) ||
+                    part.type === "reasoning" ||
+                    part.type.startsWith("tool-"),
                 ) && (
                   <div
                     key={msg.id}
@@ -100,10 +104,10 @@ export function OfferChat() {
                     )}
                     <div
                       className={cn(
-                          "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
+                        "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
                         msg.role === "user"
-                            ? "border border-[#C6923A]/20 bg-[#C6923A]/10 text-slate-900"
-                            : "border border-[#E2E8F0] bg-white text-slate-800",
+                          ? "border border-[#C6923A]/20 bg-[#C6923A]/10 text-slate-900"
+                          : "border border-[#E2E8F0] bg-white text-slate-800",
                       )}
                     >
                       {msg.parts.map((part, i) =>
@@ -120,6 +124,8 @@ export function OfferChat() {
                           <div className="my-2" key={`tool-part-${i}`}>
                             <ToolResult part={part} />
                           </div>
+                        ) : part.type === "reasoning" ? (
+                          <ReasoningResponse part={part} />
                         ) : null,
                       )}
                     </div>
@@ -147,6 +153,7 @@ export function OfferChat() {
       >
         <div className="relative">
           <Textarea
+            disabled={status === "streaming" || status === "submitted"}
             value={input}
             rows={1}
             placeholder="Ask about properties, data, or insights…"
@@ -171,21 +178,34 @@ export function OfferChat() {
             }}
             className="resize-none rounded-2xl border border-[#E2E8F0] bg-[#FAF8F3] pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-[#C6923A]/20"
           />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={
-              !input.trim() || status === "streaming" || status === "submitted"
-            }
-            className={cn(
-              "absolute right-2 bottom-2 h-8 w-8 rounded-full shadow-sm",
-              input.trim()
-                ? "bg-[#C6923A] text-white hover:bg-[#B88425]"
-                : "bg-[#C6923A]/15 text-[#8B6420]",
-            )}
-          >
-            <SendHorizonalIcon className="h-4 w-4" />
-          </Button>
+          {status === "streaming" || status === "submitted" ? (
+            <Button
+              type="button"
+              size="icon"
+              onClick={() => stop()}
+              className={cn(
+                "absolute right-2 bottom-2 h-8 w-8 rounded-full shadow-sm",
+                "bg-red-500 text-white hover:bg-red-600",
+              )}
+            >
+              <span className="sr-only">Stop</span>
+              <X className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!input.trim()}
+              className={cn(
+                "absolute right-2 bottom-2 h-8 w-8 rounded-full shadow-sm",
+                input.trim()
+                  ? "bg-[#C6923A] text-white hover:bg-[#B88425]"
+                  : "bg-[#C6923A]/15 text-[#8B6420]",
+              )}
+            >
+              <SendHorizonalIcon className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </form>
     </aside>

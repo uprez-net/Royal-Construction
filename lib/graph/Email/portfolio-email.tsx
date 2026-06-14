@@ -24,6 +24,7 @@ import { EmailHeader } from './email-header';
 import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
+import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
 
 // ─── Credential Item Sub-Component ──────────────────────────────────────────
 
@@ -65,9 +66,13 @@ function CredentialItem({ text }: { text: string }) {
 
 interface PortfolioEmailProps {
   name?: string;
+  leadContext?: LeadEmailContext;
 }
 
-export default function PortfolioEmail({}: PortfolioEmailProps) {
+export default function PortfolioEmail({
+  name = 'Homeowner',
+  leadContext,
+}: PortfolioEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
       <Html lang="en" dir="ltr">
@@ -102,6 +107,38 @@ export default function PortfolioEmail({}: PortfolioEmailProps) {
             style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}
           >
             <EmailHeader showGoldBar />
+
+            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+              <Text
+                className="m-0 mb-4 uppercase"
+                style={{
+                  fontFamily: FONTS.body,
+                  fontWeight: 500,
+                  fontSize: 11,
+                  lineHeight: 1,
+                  letterSpacing: '1.2px',
+                  color: RC_COLORS.gold,
+                }}
+              >
+                Builder Profile
+              </Text>
+              <Text
+                className="m-0"
+                style={{
+                  fontFamily: FONTS.body,
+                  fontWeight: 350,
+                  fontSize: 14,
+                  lineHeight: 1.7,
+                  letterSpacing: '0.3px',
+                  color: RC_COLORS.textMutedOnLight,
+                  maxWidth: 490,
+                }}
+              >
+                Dear {name}, here is the Royal Constructions builder profile and project portfolio for your review before we discuss the next step for your project.
+              </Text>
+            </EmailSectionLight>
+
+            <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Hero Image ── */}
             <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>

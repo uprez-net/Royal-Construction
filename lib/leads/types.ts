@@ -1,4 +1,4 @@
-import { LeadStage as DBLeadStage } from "@prisma/client";
+import { LeadStage as DBLeadStage, RunStatus } from "@prisma/client";
 
 export type LeadStage =
   | 'New'
@@ -46,6 +46,38 @@ export interface HistoryItem {
   type: 'system' | 'call' | 'email' | 'referral';
 }
 
+export interface LeadRichTextDocument {
+  version: 1;
+  html: string;
+  plainText: string;
+  value: LeadRichTextNode[];
+}
+
+export type LeadRichTextNode = {
+  type?: string;
+  text?: string;
+  key?: unknown;
+  value?: unknown;
+  children?: LeadRichTextNode[];
+  [key: string]: unknown;
+}
+
+export interface LeadNoteAnnotation {
+  id: string;
+  selectedText: string;
+  comment: string;
+  mentionedUserIds: string[];
+  status: "open" | "resolved";
+  createdAt: string;
+  resolvedAt?: string | null;
+}
+
+export interface LeadNoteAnnotationInput {
+  selectedText: string;
+  comment: string;
+  mentionedUserIds: string[];
+}
+
 export interface Lead {
   id: number;
   name: string;
@@ -64,6 +96,8 @@ export interface Lead {
   budget: BudgetRange | string;
   type: string;
   notes: string;
+  notesDoc?: LeadRichTextDocument | null;
+  noteAnnotations?: LeadNoteAnnotation[];
   followupDate: string | null;
   followupTime: string | null;
   followupNotes: string;
@@ -72,6 +106,8 @@ export interface Lead {
   created: string;
   urgent: boolean;
   creatingOffer: boolean;
+  runId: string | null;
+  runStatus: RunStatus | null;
 }
 
 export interface LeadsStats {
@@ -79,6 +115,7 @@ export interface LeadsStats {
   new: number;
   contacted: number;
   qualified: number;
+  quoted: number;
   conversion: number;
   pendingFollowup: number;
   lost: number;

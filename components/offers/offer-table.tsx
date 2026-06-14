@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { OfferStatusLabels, PaginatedOfferResult } from "@/types/offer";
 import { fetchOffers, setOffers } from "@/lib/store/slices/offerSlice";
 import { OfferPagination } from "./offer-pagination";
+import { useRouter } from "next/navigation";
 
 export function OfferTable({
   serverQuotes,
@@ -16,6 +17,7 @@ export function OfferTable({
   serverQuotes: PaginatedOfferResult;
 }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const { offers: stateOffers, loading } = useAppSelector(
     (state) => state.offers,
   );
@@ -28,7 +30,7 @@ export function OfferTable({
 
   useEffect(() => {
     dispatch(setOffers(serverQuotes));
-  }, [offers, serverQuotes, dispatch]);
+  }, [serverQuotes, dispatch]);
 
   const handlePageChange = async (page: number) => {
     try {
@@ -42,10 +44,12 @@ export function OfferTable({
   return (
     <CardContent className="px-5 py-4">
       <DataTable
+        key={offers.items.map((offer) => offer.id).join("-")} // Force remount when offers change
         headers={[
           "Offer #",
           "Client",
           "Type",
+          "Version",
           "Amount (Ex GST)",
           "GST",
           "Total",
@@ -57,6 +61,7 @@ export function OfferTable({
           `OF-${index + 1}`,
           row.lead?.name || "N/A",
           row.lead.type.length > 0 ? row.lead.type.join(", ") : "-",
+          row.version,
           currency.format(parseFloat(row.amount)),
           currency.format(parseFloat(row.gstAmount)),
           currency.format(parseFloat(row.totalAmount)),
@@ -64,6 +69,10 @@ export function OfferTable({
           row.acceptedAt ? dateFormat.format(row.acceptedAt) : "-",
           OfferStatusLabels[row.offerStatus],
         ])}
+        onRowClick={(rowIndex) => {
+          const offer = offers.items[rowIndex];
+          router.push(`/offers/${offer.leadId}`);
+        }}
         emptyState={
           loading ? (
             <div className="flex flex-col items-center justify-center gap-3">

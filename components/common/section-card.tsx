@@ -23,7 +23,7 @@ export function SectionCard({
           <div className="min-w-0 flex-1">
             <CardTitle className="text-lg font-semibold sm:text-xl">{title}</CardTitle>
             {description ? (
-              <CardDescription className="mt-1 wrap-break-word">{description}</CardDescription>
+              <CardDescription className="mt-1 break-words">{description}</CardDescription>
             ) : null}
           </div>
           {action ? <div className="shrink-0 self-start">{action}</div> : null}

@@ -1,5 +1,5 @@
 "use client";
-import { HistoryItem, Lead, LeadsStats, LeadStage } from './types';
+import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadsStats, LeadStage } from './types';
 import { fetchJson } from '@/utils/fetch';
 import { findLeadById, getAllLeads, getAnalyticsData, getLeadsStats, handleCalendarFollowup, PaginatedLeadsResult } from '../data/leads';
 
@@ -13,7 +13,7 @@ export interface FetchLeadsParams {
   q?: string;
 }
 
-export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer'> & {
+export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer' | 'runId' | 'runStatus'> & {
   type?: string | string[];
   history?: LeadHistoryInput[];
 };
@@ -85,7 +85,11 @@ export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {
   return payload;
 }
 
-export async function updateLead(id: number, updates: Partial<Lead>): Promise<Lead | null> {
+type LeadUpdatePayload = Partial<Omit<Lead, "runId">> & {
+  annotationsToCreate?: LeadNoteAnnotationInput[];
+};
+
+export async function updateLead(id: number, updates: LeadUpdatePayload): Promise<Lead | null> {
   // console.log('Updating lead with id:', id, 'and updates:', updates);
   const response = await fetchJson<Lead>(
     `/api/leads/${id}`,
