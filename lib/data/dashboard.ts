@@ -13,6 +13,7 @@ import {
 import { LeadStage } from "@prisma/client";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 import { calculateTrend } from "@/utils/formatters";
+import { getUserByClerkId } from "@/lib/data/user";
 
 type DashboardKPIQueryResult = {
     follow_ups_count: bigint;
@@ -180,10 +181,7 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
         );
 
         const currentProfit = currentRevenue - currentActualSpend;
-        const previousProfit =
-            previousRevenue > 0
-                ? previousRevenue - previousActualSpend
-                : 0;
+        const previousProfit = previousRevenue - previousActualSpend;
 
         return {
             followUpsCount: Number(result.follow_ups_count),
@@ -242,6 +240,10 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
         if (!userId) {
             throw new Error("Unauthorized");
         }
+        const user = await getUserByClerkId(userId);
+        if (!user) {
+            throw new Error("Unauthorized");
+        }
 
         const now = new Date();
 
@@ -249,10 +251,11 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
             where: {
                 OR: [
                     {
-                        assignedId: userId,
+                        assignedId: user.id,
                         stage: LeadStage.IN_FOLLOW_UP,
                     },
                     {
+                        assignedId: user.id,
                         followupDate: {
                             lte: now,
                         },
@@ -288,6 +291,11 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
 
 export async function getDashboardGraphData() {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            throw new Error("Unauthorized");
+        }
+
         const [nonConversionData, leadAndRevenueDataUptoPastYear, conversionBreakdownData, estVsSpendProjectData] = await Promise.all([
             prisma.$queryRaw<
                 {
@@ -371,6 +379,7 @@ export async function getDashboardGraphData() {
                     'NO_RESPONSE'
                 )
                     THEN 'pending'
+                ELSE 'nurture'
                 END AS stage,
 
                 COUNT(*) AS value

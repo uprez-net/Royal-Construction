@@ -285,7 +285,7 @@ export const getOffersCached = async (page?: number, limit?: number, q?: string)
 
 export const getOfferByLeadIdCached = async (id: number) => {
     "use cache";
-    cacheTag(`offer-${id}`);
+    cacheTag(`offer-lead-${id}`);
     cacheLife(CACHE_PROFILES.MEDIUM);
 
     return getOfferByLeadId(id);
@@ -332,56 +332,61 @@ export const createOrUpdateOffer = async ({
     offerItems
 }: CreateOfferInput) => {
     try {
-        const version = await prisma.offerFile.count({
-            where: { offer: { leadId } },
-        }) + 1;
-        const newOffer = await prisma.offer.upsert({
-            where: { leadId },
-            update: {
-                amount: new Prisma.Decimal(amount),
-                gstAmount: new Prisma.Decimal(gstAmount),
-                totalAmount: new Prisma.Decimal(totalAmount),
-            },
-            create: {
-                leadId,
-                amount: new Prisma.Decimal(amount),
-                gstAmount: new Prisma.Decimal(gstAmount),
-                totalAmount: new Prisma.Decimal(totalAmount),
-            },
-            include: {
-                lead: true,
-            }
-        });
+        const { version, newOffer, newOfferFile, offerItemsData } = await prisma.$transaction(async (tx) => {
+            const version = await tx.offerFile.count({
+                where: { offer: { leadId } },
+            }) + 1;
+            const newOffer = await tx.offer.upsert({
+                where: { leadId },
+                update: {
+                    amount: new Prisma.Decimal(amount),
+                    gstAmount: new Prisma.Decimal(gstAmount),
+                    totalAmount: new Prisma.Decimal(totalAmount),
+                },
+                create: {
+                    leadId,
+                    amount: new Prisma.Decimal(amount),
+                    gstAmount: new Prisma.Decimal(gstAmount),
+                    totalAmount: new Prisma.Decimal(totalAmount),
+                },
+                include: {
+                    lead: true,
+                }
+            });
 
-        const newOfferFile = await prisma.offerFile.create({
-            data: {
-                id: offerFileInput.id,
-                offerId: newOffer.id,
-                filename: offerFileInput.filename,
-                fileType: offerFileInput.fileType,
-                filesize: offerFileInput.filesize,
-                url: offerFileInput.url,
-                offerContent: offerFileInput.offerContent as Prisma.InputJsonValue,
-                version: version,
-            },
-        });
+            const newOfferFile = await tx.offerFile.create({
+                data: {
+                    id: offerFileInput.id,
+                    offerId: newOffer.id,
+                    filename: offerFileInput.filename,
+                    fileType: offerFileInput.fileType,
+                    filesize: offerFileInput.filesize,
+                    url: offerFileInput.url,
+                    offerContent: offerFileInput.offerContent as Prisma.InputJsonValue,
+                    version: version,
+                },
+            });
 
-        const offerItemsData = await prisma.offerItem.createManyAndReturn({
-            data: offerItems.map(item => ({
-                id: item.id,
-                offerId: newOffer.id,
-                item: item.item,
-                description: item.description,
-                quantity: item.quantity,
-                unitPrice: new Prisma.Decimal(item.unitPrice),
-                totalPrice: new Prisma.Decimal(item.totalPrice),
-                unit: item.unit,
-                version: version,
-            })),
+            const offerItemsData = await tx.offerItem.createManyAndReturn({
+                data: offerItems.map(item => ({
+                    id: item.id,
+                    offerId: newOffer.id,
+                    item: item.item,
+                    description: item.description,
+                    quantity: item.quantity,
+                    unitPrice: new Prisma.Decimal(item.unitPrice),
+                    totalPrice: new Prisma.Decimal(item.totalPrice),
+                    unit: item.unit,
+                    version: version,
+                })),
+            });
+
+            return { version, newOffer, newOfferFile, offerItemsData };
         });
 
         revalidateTag("offers", CACHE_PROFILES.MEDIUM);
         revalidateTag(`offer-${newOffer.id}`, CACHE_PROFILES.MEDIUM);
+        revalidateTag(`offer-lead-${newOffer.leadId}`, CACHE_PROFILES.MEDIUM);
 
         return {
             ...newOffer,

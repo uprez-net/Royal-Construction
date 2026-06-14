@@ -85,7 +85,7 @@ export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {
   return payload;
 }
 
-type LeadUpdatePayload = Partial<Lead> & {
+type LeadUpdatePayload = Partial<Omit<Lead, "runId">> & {
   annotationsToCreate?: LeadNoteAnnotationInput[];
 };
 

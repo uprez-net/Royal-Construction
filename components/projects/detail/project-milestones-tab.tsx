@@ -544,7 +544,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
       </Card>
 
       <div className="space-y-4">
-        <Card className="border-amber-200/60 bg-linear-to-br from-[#FEF9C3] to-[#FFF3E0] shadow-sm rounded-xl">
+        <Card className="border-amber-200/60 bg-gradient-to-br from-[#FEF9C3] to-[#FFF3E0] shadow-sm rounded-xl">
           <CardHeader className="border-b border-amber-200/60 pb-4">
             <CardTitle className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.06em] text-[#D97706]">
               <Bell className="size-4" />

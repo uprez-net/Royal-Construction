@@ -19,7 +19,7 @@ export function ScrapeUserLinkOutputComponent({
         )}
       </div>
 
-      <div className="min-w-0 max-h-26 space-y-2">
+      <div className="min-w-0 max-h-28 space-y-2">
         {isError ? (
           <>
             <p className="font-medium text-rose-600">

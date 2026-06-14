@@ -5,7 +5,11 @@ export interface RateLimiterConfig {
   interval: "second" | "minute" | "hour" | "day";
 }
 
-const limiters = new Map<string, RateLimiter>();
+const limiters = new Map<string, { limiter: RateLimiter; config: RateLimiterConfig }>();
+
+function sameConfig(a: RateLimiterConfig, b: RateLimiterConfig) {
+  return a.tokensPerInterval === b.tokensPerInterval && a.interval === b.interval;
+}
 
 /**
  * Get or create a rate limiter for a specific key
@@ -14,9 +18,9 @@ export function getRateLimiter(
   key: string,
   config: RateLimiterConfig,
 ): RateLimiter {
-  const existingLimiter = limiters.get(key);
-  if (existingLimiter) {
-    return existingLimiter;
+  const existing = limiters.get(key);
+  if (existing && sameConfig(existing.config, config)) {
+    return existing.limiter;
   }
 
   const limiter = new RateLimiter({
@@ -24,7 +28,7 @@ export function getRateLimiter(
     interval: config.interval,
   });
 
-  limiters.set(key, limiter);
+  limiters.set(key, { limiter, config });
   return limiter;
 }
 

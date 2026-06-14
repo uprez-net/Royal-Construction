@@ -139,13 +139,15 @@ export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
               >
                 <p className="font-medium text-slate-900">{term.title}</p>
                 <p className="mt-1 whitespace-pre-wrap">{term.description}</p>
-                <Image
-                  src={term.imageUrl}
-                  alt={term.title}
-                  width={120}
-                  height={120}
-                  className="mt-2 h-30 w-30 rounded-md object-cover"
-                />
+                {term.imageUrl && (
+                  <Image
+                    src={term.imageUrl}
+                    alt={term.title}
+                    width={120}
+                    height={120}
+                    className="mt-2 h-30 w-30 rounded-md object-cover"
+                  />
+                )}
               </li>
             ))}
           </ul>

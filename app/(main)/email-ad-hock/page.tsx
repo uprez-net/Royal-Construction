@@ -70,6 +70,7 @@ export default function AdHocEmailPage() {
       const [links, setLinks] = useState<LinkItem[]>([]);
       const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
       const [isGenerating, setIsGenerating] = useState(false);
+      const [generationError, setGenerationError] = useState<string | null>(null);
 
       const [errors, setErrors] = useState<{
             description?: string;
@@ -201,7 +202,12 @@ export default function AdHocEmailPage() {
 
         // Update href/data-href live
         input.addEventListener('input', function(e) {
-          el.setAttribute('href', e.target.value);
+          var nextValue = e.target.value;
+          if (el.hasAttribute('data-href')) {
+            el.setAttribute('data-href', nextValue);
+          } else {
+            el.setAttribute('href', nextValue);
+          }
         });
       });
 
@@ -232,6 +238,7 @@ export default function AdHocEmailPage() {
             if (!isValid) return;
 
             setIsGenerating(true);
+            setGenerationError(null);
             try {
                   const result = await generateEmailTemplate(description, attachments, links);
                   setGeneratedHtml(result.html);
@@ -241,6 +248,7 @@ export default function AdHocEmailPage() {
                   setErrors({});
             } catch (error) {
                   console.error('Error generating email:', error);
+                  setGenerationError(error instanceof Error ? error.message : "Failed to generate email");
             } finally {
                   setIsGenerating(false);
             }
@@ -292,6 +300,16 @@ export default function AdHocEmailPage() {
       // Template Select Handler
       const handleTemplateSelect = (template: EmailTemplate) => {
             console.log('Selected template:', template);
+            setTemplateName(template.category);
+            setEmailSubject(template.subject);
+            setGeneratedHtml(`
+                  <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;background:#ffffff;color:#1f2937;">
+                        <h1 style="margin:0 0 16px;color:#0f172a;">${template.category}</h1>
+                        <p style="margin:0 0 16px;">Use this template as a starting point and edit the preview before sending.</p>
+                        <p style="margin:0;">Royal Constructions</p>
+                  </div>
+            `);
+            setGenerationError(null);
             setCurrentStep(2);
       };
 
@@ -574,7 +592,10 @@ export default function AdHocEmailPage() {
                                                 </div>
 
                                                 {/* Generate Footer */}
-                                                <div className="flex justify-end border-t border-[#E2E8F0] bg-slate-50/50 px-6 py-4">
+                                                <div className="flex flex-col items-end gap-2 border-t border-[#E2E8F0] bg-slate-50/50 px-6 py-4">
+                                                      {generationError && (
+                                                            <p className="text-sm font-medium text-red-600">{generationError}</p>
+                                                      )}
                                                       <Button
                                                             onClick={handleGenerate}
                                                             disabled={isGenerating}

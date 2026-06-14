@@ -31,7 +31,7 @@ interface LeadPreview {
 function formatLeadDate(date: string | null | undefined) {
   if (!date) return undefined;
   const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return date;
+  if (Number.isNaN(parsed.getTime())) return undefined;
   return parsed.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 

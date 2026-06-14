@@ -602,7 +602,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       customerEmail: res.email ?? "Not specified",
       customerPhone: res.phone ?? "Not specified",
       status: res.stage,
-      change: input.stage === existingLead?.stage ? "updated with more information" : undefined,
+      change: mappedStage === existingLead?.stage ? "updated with more information" : undefined,
     })
     await triggerNotification(res.assignedId ? [res.assignedId] : [], notificationPayload);
   } else {

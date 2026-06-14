@@ -118,10 +118,12 @@ const MONTHS_SHORT = [
 export function formatFollowup(date: string | null, time?: string | null): string {
   if (!date) return "";
   const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
   return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}${time ? " " + time : ""}`;
 }
 
 export function formatShortDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) return "";
   return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]} ${date.getFullYear()}`;
 }
 

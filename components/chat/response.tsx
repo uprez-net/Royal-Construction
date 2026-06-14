@@ -18,13 +18,13 @@ export const Response = memo(
     [&>*:first-child]:mt-0 
     [&>*:last-child]:mb-0
 
-    [&_p]:wrap-break-word
-    [&_li]:wrap-break-word
+    [&_p]:break-words
+    [&_li]:break-words
     [&_a]:break-all
 
-    [&_code]:whitespace-pre-wrap 
-    [&_code]:wrap-break-word 
-    [&_pre]:max-w-full 
+    [&_code]:whitespace-pre-wrap
+    [&_code]:break-words
+    [&_pre]:max-w-full
     [&_pre]:overflow-x-auto
 
     /* TABLE — Light Gold Theme */

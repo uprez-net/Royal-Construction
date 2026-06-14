@@ -574,7 +574,7 @@ export interface FacadeOptionWithImageUrl {
   options: {
     title: string;
     description: string;
-    imageUrl: string; // Optional URL for an image representing the facade option
+    imageUrl?: string; // Optional URL for an image representing the facade option
   }[];
 }
 

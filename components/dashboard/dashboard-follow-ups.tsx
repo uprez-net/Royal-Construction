@@ -9,7 +9,7 @@ export interface FollowUpItem {
   customerName: string;
   projectName: string;
   description: string;
-  dueAt: Date;
+  dueAt: Date | string;
   status: "positive" | "neutral" | "negative";
 }
 

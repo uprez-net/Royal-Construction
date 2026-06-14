@@ -2,6 +2,7 @@
 
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default function DashboardError({
   error,
@@ -36,7 +37,7 @@ export default function DashboardError({
           {/* Error Details (in development) */}
           {process.env.NODE_ENV === "development" && error.message && (
             <div className="mb-6 rounded-lg bg-white/50 p-4 text-left">
-              <p className="text-xs font-mono text-red-600 wrap-break-word">
+              <p className="text-xs font-mono text-red-600 break-words">
                 {error.message}
               </p>
             </div>
@@ -51,13 +52,14 @@ export default function DashboardError({
               <RefreshCw className="h-4 w-4" />
               Try Again
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => (window.location.href = "/")}
-              className="border-red-200 text-red-700 hover:bg-red-100"
-            >
-              Return Home
-            </Button>
+            <Link href="/">
+              <Button
+                variant="outline"
+                className="border-red-200 text-red-700 hover:bg-red-100"
+              >
+                Return Home
+              </Button>
+            </Link>
           </div>
 
           {/* Help Text */}

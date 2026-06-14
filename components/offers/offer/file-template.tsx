@@ -1120,7 +1120,7 @@ export function OfferFileTemplate({
             .join("")
         : ""
     }
-    <p class="empty>Façade images shown for illustrative purposes — final selections, materials and detailing confirmed at the design stage to suit your block at ${siteLocation}.</p>
+    <p class="empty">Façade images shown for illustrative purposes — final selections, materials and detailing confirmed at the design stage to suit your block at ${siteLocation}.</p>
   </div>
 
   <!-- ═══════════════════════════════════════════════════ -->

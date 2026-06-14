@@ -16,7 +16,7 @@ interface EmailFlowModalProps {
       lead: Lead;
       onClose: () => void;
       onLeadUpdate: (lead: Lead) => void;
-      showToast: (msg: string, type?: "success" | "info") => void;
+      showToast: (msg: string, type?: "success" | "info" | "error") => void;
 }
 
 type Step = "select" | "compose";
@@ -94,7 +94,7 @@ export function EmailFlowModal({
                               type: "email" as const,
                         };
                         const updated = await updateLead(lead.id, {
-                              history: [historyEntry],
+                              history: [...(lead.history ?? []), historyEntry],
                         });
                         if (updated) onLeadUpdate(updated);
                         showToast(`Email sent to ${lead.name} Successfully`, "success");

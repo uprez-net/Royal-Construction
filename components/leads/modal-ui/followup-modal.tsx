@@ -11,7 +11,7 @@ interface FollowupModalProps {
   lead: Lead;
   onClose: () => void;
   onLeadUpdate: (lead: Lead) => void;
-  showToast: (msg: string, type?: "success" | "info") => void;
+  showToast: (msg: string, type?: "success" | "info" | "error") => void;
 }
 
 export function FollowupModal({
@@ -30,7 +30,10 @@ export function FollowupModal({
     try {
       const tempLead = { ...lead, followupDate: date, followupTime: time };
       const success = await createCalendarEventIfValid(tempLead, showToast);
-      if (!success) return;
+      if (!success) {
+        showToast("Calendar event could not be created", "error");
+        return;
+      }
 
       const updated = await updateLead(lead.id, {
         followupDate: date,
@@ -39,12 +42,16 @@ export function FollowupModal({
         stage: "In Follow-up",
       });
 
-      if (!updated) return;
+      if (!updated) {
+        showToast("Failed to update lead", "error");
+        return;
+      }
       onLeadUpdate(updated);
       showToast(`Updated follow-up for ${updated.name}`, "success");
       onClose();
     } catch (error) {
       console.error("Failed to update follow-up", error);
+      showToast("Failed to update follow-up", "error");
     } finally {
       setSaving(false);
     }

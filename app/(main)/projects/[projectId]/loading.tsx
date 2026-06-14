@@ -4,7 +4,7 @@ export default function ProjectDetailLoading() {
   return (
     <div className="space-y-4 pb-4">
       {/* Header Skeleton */}
-      <section className="relative overflow-hidden rounded-xl border border-teal-600/20 bg-linear-to-br from-teal-600/40 via-teal-700/40 to-teal-900/40 p-6 px-7 shadow-sm">
+      <section className="relative overflow-hidden rounded-xl border border-teal-600/20 bg-gradient-to-br from-teal-600/40 via-teal-700/40 to-teal-900/40 p-6 px-7 shadow-sm">
         <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
             <Skeleton className="h-4 w-32 bg-white/20" />

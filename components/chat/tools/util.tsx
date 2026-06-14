@@ -147,7 +147,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   return (
     <div className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 shadow-sm">
       <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 wrap-break-word text-sm text-slate-700">{value}</div>
+      <div className="mt-1 break-words text-sm text-slate-700">{value}</div>
     </div>
   );
 }

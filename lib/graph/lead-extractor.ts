@@ -82,7 +82,7 @@ function stripEmailThread(text: string): string {
     .replace(/<div id="divRplyFwdMsg"[^>]*>[\s\S]*?<\/div>/gi, '')
     .replace(/<div style="border-top:\s*solid\s+#[a-f0-9]{3,6}\s+1\.0pt[^>]*>[\s\S]*?<\/div>/gi, '')
     .replace(/<div style="border-top:\s*none[^>]*>[\s\S]*?<\/div>/gi, '')
-    .replace(/<hr[^>]+(id="stopSpelling"|tabindex="-1"|style="[^"]*width:\s*98%")[^>]*>[\s\S]*/gi, '')
+    .replace(/<hr[^>]*(id="stopSpelling"|tabindex="-1"|style="[^"]*width:\s*98%")[^>]*>[\s\S]*/gi, '')
     .replace(/<div class="gmail_signature"[^>]*>[\s\S]*?<\/div>/gi, '')
     .replace(/<div class="outlook_signature"[^>]*>[\s\S]*?<\/div>/gi, '');
 
