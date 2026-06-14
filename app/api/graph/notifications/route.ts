@@ -213,7 +213,8 @@ export async function POST(request: Request): Promise<Response> {
                       await graphClient.sendMail({
                         to: newLead.email,
                         subject: emailSubject,
-                        body: htmlBody
+                        body: htmlBody,
+                        cc: config.cc, // Include CC if configured
                       });
 
                       console.log(`  ✅ Welcome email successfully sent to ${newLead.email}`);

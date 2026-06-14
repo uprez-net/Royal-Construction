@@ -45,13 +45,13 @@ export const LEAD_STAGE_OPTIONS: LeadStage[] = [
   "Qualified",
   "Quoted",
   "Negotiating",
-  "Won",
+  //"Won",
   "Lost",
   "Meeting Scheduled",
   "In Follow-up",
   "No Response",
   "Converted",
-  "Cancelled",
+  //"Cancelled",
   "Disqualified",
 ];
 

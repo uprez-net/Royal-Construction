@@ -10,6 +10,7 @@ export interface EmailInput {
   to: string;
   subject: string;
   body: string;
+  cc?: string | string[];
 }
 
 export interface GraphMessage {
@@ -114,9 +115,9 @@ function mapMessage(item: GraphApiMessage, includeBody: boolean): GraphMessage {
     bodyPreview: item.bodyPreview ?? undefined,
     body: includeBody
       ? {
-          contentType: item.body?.contentType ?? 'text',
-          content: item.body?.content ?? '',
-        }
+        contentType: item.body?.contentType ?? 'text',
+        content: item.body?.content ?? '',
+      }
       : undefined,
   };
 }
@@ -142,52 +143,52 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
   const credential: TokenProvider =
     config.mode === 'delegated'
       ? (() => {
-          const options: DeviceCodeCredentialOptions = {
-            clientId: config.clientId,
-            tenantId: config.tenantId,
-            userPromptCallback: (info: DeviceCodeInfo) => {
-              console.log(info.message);
-            },
-          };
-          const deviceCred = new DeviceCodeCredential(options);
-          return {
-            getToken: async (scopes: string | string[]) => {
-              const tokenResult = await deviceCred.getToken(scopes);
-              if (!tokenResult?.token) {
-                throw new Error('No delegated token returned');
-              }
-              return tokenResult.token;
-            },
-          };
-        })()
+        const options: DeviceCodeCredentialOptions = {
+          clientId: config.clientId,
+          tenantId: config.tenantId,
+          userPromptCallback: (info: DeviceCodeInfo) => {
+            console.log(info.message);
+          },
+        };
+        const deviceCred = new DeviceCodeCredential(options);
+        return {
+          getToken: async (scopes: string | string[]) => {
+            const tokenResult = await deviceCred.getToken(scopes);
+            if (!tokenResult?.token) {
+              throw new Error('No delegated token returned');
+            }
+            return tokenResult.token;
+          },
+        };
+      })()
       : (() => {
-          if (!config.clientSecret) {
-            throw new Error('AZURE_CLIENT_SECRET is required for app-only mode');
-          }
+        if (!config.clientSecret) {
+          throw new Error('AZURE_CLIENT_SECRET is required for app-only mode');
+        }
 
-          const secretCred = new ClientSecretCredential(
-            config.tenantId,
-            config.clientId,
-            config.clientSecret,
-          );
+        const secretCred = new ClientSecretCredential(
+          config.tenantId,
+          config.clientId,
+          config.clientSecret,
+        );
 
-          return {
-            getToken: async (scopes: string | string[]) => {
-              const tokenResult = await secretCred.getToken(scopes);
-              if (!tokenResult?.token) {
-                throw new Error('No app-only token returned');
-              }
-              return tokenResult.token;
-            },
-          };
-        })();
+        return {
+          getToken: async (scopes: string | string[]) => {
+            const tokenResult = await secretCred.getToken(scopes);
+            if (!tokenResult?.token) {
+              throw new Error('No app-only token returned');
+            }
+            return tokenResult.token;
+          },
+        };
+      })();
 
   const getToken = async () =>
     config.mode === 'delegated'
       ? credential.getToken([
-          'https://graph.microsoft.com/Mail.Read',
-          'https://graph.microsoft.com/Mail.Send',
-        ])
+        'https://graph.microsoft.com/Mail.Read',
+        'https://graph.microsoft.com/Mail.Send',
+      ])
       : credential.getToken('https://graph.microsoft.com/.default');
 
   const getAccessToken = async () => {
@@ -218,7 +219,7 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       const select = includeBody
         ? 'subject,from,receivedDateTime,isRead,body,bodyPreview'
         : 'subject,from,receivedDateTime,isRead,bodyPreview';
-        
+
       // Request plain text body to save LLM tokens if body is included
       const headers = includeBody ? { 'Prefer': 'outlook.body-content-type="text"' } : undefined;
 
@@ -238,14 +239,24 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
         ? 'subject,from,receivedDateTime,isRead,body,bodyPreview'
         : 'subject,from,receivedDateTime,isRead,bodyPreview';
       const url = buildGraphUrl(resource, select);
-      
+
       // 2. Request plain text body to save LLM tokens if body is included
       const headers = includeBody ? { 'Prefer': 'outlook.body-content-type="text"' } : undefined;
-      
+
       const message = await graphRequest<GraphApiMessage>('GET', url, token, undefined, headers);
       return mapMessage(message, includeBody);
     },
-    sendMail: async ({ to, subject, body }) => {
+    sendMail: async ({ to, subject, body,cc }) => {
+
+      // 2. Format CC recipients if provided
+      const ccRecipients = cc
+        ? (Array.isArray(cc) ? cc : [cc]).map(email => ({
+          emailAddress: {
+            address: email,
+          },
+        }))
+        : undefined;
+
       const token = await getAccessToken();
       await graphRequest(
         'POST',
@@ -265,6 +276,7 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
                 },
               },
             ],
+            ...(ccRecipients && { ccRecipients }),
           },
           saveToSentItems: true,
         },
