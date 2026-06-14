@@ -138,6 +138,18 @@ export async function POST(req: NextRequest): Promise<Response> {
       )
     );
 
+    const attendees = [
+      { emailAddress: { address: email, name }, type: 'required' } // Main Lead
+    ];
+
+    // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
+    const ccEmail = process.env.MAIL_ID_CC;
+    if (ccEmail) {
+      attendees.push({
+        emailAddress: { address: ccEmail, name: 'Admin' },
+        type: 'optional' // This acts as the CC in Outlook Calendar
+      });
+    }
 
     const event = {
       subject: `Consultation with ${name} - Royal Constructions`,
@@ -148,7 +160,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       start: { dateTime: graphStartStr, timeZone: 'Australia/Sydney' },
       end: { dateTime: graphEndStr, timeZone: 'Australia/Sydney' },
       location: { displayName: 'Microsoft Teams Meeting' },
-      attendees: [{ emailAddress: { address: email, name }, type: 'required' }],
+      attendees: attendees,
       isOnlineMeeting: true,
       onlineMeetingProvider: 'teamsForBusiness',
     };

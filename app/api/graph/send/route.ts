@@ -56,6 +56,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const to = payload.to ?? config.defaultRecipient;
+    const cc = payload.cc ?? config.cc; // Use default CC if not provided in payload
     if (!to) {
       return badRequestResponse('Recipient address (to) is required');
     }
@@ -63,7 +64,7 @@ export async function POST(request: Request): Promise<Response> {
     const subject = payload.subject ?? config.defaultSubject;
     const body = payload.body ?? config.defaultBody;
     const client = await createGraphContext(config);
-    await client.sendMail({ to, subject, body });
+    await client.sendMail({ to, subject, body, cc });
     return successResponse({ status: 'sent' }, { status: 202 });
   } catch (error) {
     console.error('Graph send failed', error);

@@ -375,22 +375,22 @@ export async function CreateEmailAdHock(templateName: string, emailSubject: stri
   }
 }
 
-export async function UpdateEmailAdHock(id: string, templateName: string, emailSubject: string, blobUrl: string) {
-  try {
-    const result = await prisma.emailAdHock.update({
-      where: { id },
-      data: {
-        name: templateName,
-        emailSubject: emailSubject,
-        htmlUrl: blobUrl,
-      },
-    });
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Failed to update email template in DB:", error);
-    return { success: false, error: "Failed to update database record." };
-  }
-}
+// export async function UpdateEmailAdHock(id: string, templateName: string, emailSubject: string, blobUrl: string) {
+//   try {
+//     const result = await prisma.emailAdHock.update({
+//       where: { id },
+//       data: {
+//         name: templateName,
+//         emailSubject: emailSubject,
+//         htmlUrl: blobUrl,
+//       },
+//     });
+//     return { success: true, data: result };
+//   } catch (error) {
+//     console.error("Failed to update email template in DB:", error);
+//     return { success: false, error: "Failed to update database record." };
+//   }
+// }
 
 export async function GetEmailAdHock() {
   try {

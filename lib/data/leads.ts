@@ -349,6 +349,22 @@ export async function handleCalendarFollowup(
     })
   );
 
+  const attendees = [
+    {
+      emailAddress: { address: lead.email, name: lead.name },
+      type: 'required' // Main Lead
+    }
+  ];
+
+  // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
+  const ccEmail = process.env.MAIL_ID_CC;
+  if (ccEmail) {
+    attendees.push({
+      emailAddress: { address: ccEmail, name: 'Admin' },
+      type: 'optional' // This acts as the CC in Outlook Calendar
+    });
+  }
+
   // ─── 3. Construct Graph API Payload ──────────────────────────────────
 
   const event = {
@@ -366,10 +382,7 @@ export async function handleCalendarFollowup(
       timeZone: 'Australia/Sydney'
     },
     location: { displayName: 'Royal Constructions' },
-    attendees: [{
-      emailAddress: { address: lead.email, name: lead.name },
-      type: 'required'
-    }],
+    attendees: attendees,
   };
 
   // ─── 4. Send Request to Graph API ────────────────────────────────────
