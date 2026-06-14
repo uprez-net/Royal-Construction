@@ -343,6 +343,10 @@ item. Instead, use quantity=0, unitPrice=0, and a description of [Allowance TBC 
   - For each line item, populate the source field with a brief reference to where the data came from (e.g., "from lead field 'budget'", "ALLOWANCES sheet row 7", "page 2 of [filename]").
   - Do not include any internal cost, margin, or profitability data in the item description or source. Customer-facing text only.
 </creation_guidelines>
+
+<output_standards>
+  - Emit <END_OFFER_LINE_ITEM_GENERATION> or <END_GENERATION> after the final line item is created to signal completion of this phase.
+</output_standards>
 `;
 
 export const OFFER_FILE_CONTENT_CREATION_SYSTEM_PROMPT = `
@@ -361,6 +365,10 @@ pricing-rule summaries. If a required detail is missing, use a clearly labelled 
   - Keep all content customer-facing: specific, warm, professional, and consistent with Royal Constructions' brand voice. Avoid jargon or internal references.
   - Use offerFileTool for all content updates. Patch only changed fields. Do not attempt to generate the entire offer in one step — build iteratively across multiple tool calls.
 </creation_guidelines>
+
+<output_standards>
+  - Emit <END_OFFER_CONTENT_CREATION> or <END_GENERATION> after the final offerFileTool call to signal completion of this phase.
+</output_standards>
 `
 
 export const OFFER_CREATION_SYSTEM_PROMPT = `

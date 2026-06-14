@@ -13,6 +13,7 @@ import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { getWritable } from "workflow";
 import { currency } from "@/utils/formatters";
+import { RunStatus } from "@prisma/client";
 
 export interface OfferCreationStatus {
     failed?: boolean;
@@ -63,6 +64,7 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
         };
     } catch (error) {
         console.error("Error creating offer:", error);
+        await failWorkflow(error instanceof Error ? error.message : "Unknown error", leadId);
         throw new Error(`Failed to create offer${error instanceof Error ? `: ${error.message}` : ""}`);
     }
 }
@@ -135,7 +137,7 @@ async function findLead(leadId: number) {
                 }
             ],
         });
-        throw new Error(`Failed to fetch lead with ID ${leadId}${error instanceof Error ? `: ${error.message}` : ""}`);
+        throw new Error(`Failed to fetch lead with ID`);
     }
 }
 
@@ -193,7 +195,7 @@ async function buildOffer(prompt: string, lead: Lead) {
                 }
             ],
         });
-        throw new Error(`Failed to build offer${error instanceof Error ? `: ${error.message}` : ""}`);
+        throw new Error(`Failed to build offer`);
     }
 }
 
@@ -321,7 +323,7 @@ async function saveOffer({
                 },
             ]
         });
-        throw new Error(`Failed to save offer${error instanceof Error ? `: ${error.message}` : ""}`);
+        throw new Error(`Failed to save offer`);
     }
 }
 
@@ -387,6 +389,28 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
             ]
         });
         return;
+    }
+}
+
+async function failWorkflow(message: string, leadId: number) {
+    'use step';
+    try {
+        console.error(`Workflow failed: ${message}`);
+        const updatedLead = await prisma.lead.update({
+            where: { id: leadId },
+            data: {
+                runStatus: RunStatus.FAILED, // Update run status to FAILED
+            }
+        });
+
+        const notificationPayload = createNotification("offerGenerationFailed", {
+            leadId: leadId.toString(),
+            errorMessage: message,
+        });
+        await triggerNotification(updatedLead.assignedId ? [updatedLead.assignedId] : [], notificationPayload);
+    } catch (error) {
+        console.error("Error in failWorkflow:", error);
+        console.error(`Failed to update lead status for lead ID: ${leadId}`);
     }
 }
 

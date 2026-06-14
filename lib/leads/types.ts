@@ -1,4 +1,4 @@
-import { LeadStage as DBLeadStage } from "@prisma/client";
+import { LeadStage as DBLeadStage, RunStatus } from "@prisma/client";
 
 export type LeadStage =
   | 'New'
@@ -107,6 +107,7 @@ export interface Lead {
   urgent: boolean;
   creatingOffer: boolean;
   runId: string | null;
+  runStatus: RunStatus | null;
 }
 
 export interface LeadsStats {

@@ -84,6 +84,12 @@ enum OfferStatus {
   REJECTED
 }
 
+enum RunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 model Project {
   id               String   @id @default(uuid())
   name             String
@@ -352,6 +358,7 @@ model Lead {
 
   stage LeadStage @default(NEW)
   runId String?
+  runStatus RunStatus?
 
   assignedId String? // <-- THE NEW FOREIGN KEY
 

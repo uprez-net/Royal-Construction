@@ -135,6 +135,7 @@ export function mapLead(
         urgent: lead.urgent,
         creatingOffer: lead.chatSessions.length > 0,
         runId: lead.runId,
+        runStatus: lead.runStatus,
     };
 }
 

@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Hourglass, List, Send } from "lucide-react";
+import { Hourglass, List, Send, Sparkles } from "lucide-react";
 import type { Lead } from "@/lib/leads/types";
 import { useEffect, useRef, useEffectEvent } from "react";
 
@@ -55,8 +55,12 @@ export function LeadCardList({
   // useEffectEvent gives a stable reference that always reads latest values
   // without needing to be listed as a dependency — ideal for event callbacks
   const onIntersect = useEffectEvent(() => {
-    console.log("Intersected sentinel. Loading more?", { loadingMore, currentPage, totalPages });
-    if (!loadingMore  && totalPages > 0 && currentPage < totalPages) {
+    console.log("Intersected sentinel. Loading more?", {
+      loadingMore,
+      currentPage,
+      totalPages,
+    });
+    if (!loadingMore && totalPages > 0 && currentPage < totalPages) {
       setPage(currentPage + 1);
     }
   });
@@ -104,19 +108,36 @@ export function LeadCardList({
         >
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-3">
-              {(lead.creatingOffer || lead.stage === "Quoted" || lead.runId) && (
+              {(lead.creatingOffer ||
+                lead.stage === "Quoted" ||
+                lead.runId) && (
                 <div className="absolute top-7.5 right-10">
                   {lead.stage === "Quoted" ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
                       <Send className="mr-1.5 h-4 w-4" />
                       Quoted - Awaiting Feedback
                     </span>
-                  ) : (
+                  ) : lead.creatingOffer ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">
                       <Hourglass className="mr-1.5 h-4 w-4" />
                       Creating Offer
                     </span>
-                  )}
+                  ) : lead.runStatus === "RUNNING" ? (
+                    <span className="inline-flex items-center justify-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                      <Sparkles className="mr-1.5 h-4 w-4 animate-pulse" />
+                      Generating Offer
+                    </span>
+                  ) : lead.runStatus === "COMPLETED" ? (
+                    <span className="inline-flex items-center justify-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                      <Sparkles className="mr-1.5 h-4 w-4" />
+                      Offer Generated
+                    </span>
+                  ) : lead.runStatus === "FAILED" ? (
+                    <span className="inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                      <Sparkles className="mr-1.5 h-4 w-4 animate-pulse" />
+                      Offer Generation Failed
+                    </span>
+                  ) : null}
                 </div>
               )}
               <div>
@@ -158,11 +179,11 @@ export function LeadCardList({
           </Card>
         ))}
 
-        {currentPage >= totalPages && totalPages > 0 && (
-          <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
-            You&apos;ve reached the end of the list.
-          </p>
-        )}
+      {currentPage >= totalPages && totalPages > 0 && (
+        <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
+          You&apos;ve reached the end of the list.
+        </p>
+      )}
     </div>
   );
 }

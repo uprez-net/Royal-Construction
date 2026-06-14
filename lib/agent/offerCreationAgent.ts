@@ -25,7 +25,7 @@ export const handleOfferGeneration = async (prompt: string) => {
     };
 
     const offerLineItemCreatorAgent = new ToolLoopAgent({
-        model: gateway("google/gemini-2.5-flash"),
+        model: gateway("xiaomi/mimo-v2.5-pro"),
         temperature: 0.15,
         topP: 0.85,
         topK: 20,
@@ -45,21 +45,18 @@ export const handleOfferGeneration = async (prompt: string) => {
             webSearch: webSearch,
             scrapeUserLinks: scrapeUserLinks,
         },
+        toolChoice: "required",
         stopWhen: stepCountIs(25),
         instructions: OFFER_LINE_ITEM_CREATION_SYSTEM_PROMPT,
         stopSequences: [
-            "<END_OFFER_GENERATION>",
+            "<END_OFFER_LINE_ITEM_GENERATION>",
             "<END_GENERATION>",
         ],
-        output: Output.object({
-            schema: z.object({
-                creationMessage: z.string().describe("A message summarizing the result of the line item generation process."),
-            }),
-        }),
+        output: Output.text(),
     });
 
     const offerFileCreationAgent = new ToolLoopAgent({
-        model: gateway("google/gemini-2.5-flash"),
+        model: gateway("xiaomi/mimo-v2.5-pro"),
         temperature: 0.15,
         topP: 0.85,
         topK: 20,
@@ -74,21 +71,20 @@ export const handleOfferGeneration = async (prompt: string) => {
             webSearch: webSearch,
             scrapeUserLinks: scrapeUserLinks,
         },
+        toolChoice: "required",
         stopWhen: stepCountIs(25),
         instructions: OFFER_FILE_CONTENT_CREATION_SYSTEM_PROMPT,
         stopSequences: [
-            "<END_OFFER_GENERATION>",
+            "<END_OFFER_CONTENT_CREATION>",
             "<END_GENERATION>",
         ],
-        output: Output.object({
-            schema: z.object({
-                creationMessage: z.string().describe("A message summarizing the result of the offer generation process."),
-            }),
-        }),
+        output: Output.text(),
     });
 
-    const { output: lineItemOutput } = await offerLineItemCreatorAgent.generate({ prompt });
-    const { output } = await offerFileCreationAgent.generate({
+    const { text: lineItemOutput } = await offerLineItemCreatorAgent.generate({ prompt });
+    console.log("Line item generation output:", lineItemOutput);
+    console.dir(offerLineItems, { depth: Infinity });
+    const { text: offerFileOutput } = await offerFileCreationAgent.generate({
         prompt: `
          ## Created Line Items:
         ${offerLineItems.map(item =>
@@ -104,8 +100,8 @@ export const handleOfferGeneration = async (prompt: string) => {
         lineItemArray: offerLineItems,
         offerFileContent,
         creationMessage: `
-            Line item creation message: ${lineItemOutput.creationMessage}
-            Offer creation message: ${output.creationMessage}
+            Line item creation message: ${lineItemOutput}
+            Offer creation message: ${offerFileOutput}
         `,
     };
 }

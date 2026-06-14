@@ -2,6 +2,7 @@ import { start } from "workflow/api";
 import { createOfferWorkflow } from "@/lib/workflow/offer";
 import { errorResponse, successResponse } from "@/utils/validators/response";
 import prisma from "@/lib/prisma";
+import { RunStatus } from "@prisma/client";
 
 export async function POST(request: Request) {
     const { leadId } = await request.json();
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
             where: { id: leadId },
             data: {
                 runId: run.runId, // Store the runId to track workflow status
+                runStatus: RunStatus.RUNNING, // Store the initial status
             }
         });
 

@@ -205,10 +205,10 @@ function CreatingOffer({ leadId }: { leadId: number }) {
                   >
                     {label}
                   </span>
-                  {(isActive || isDone) &&
+                  {(isActive || isDone || isFailed) &&
                     stepMessage?.details &&
                     key === stepMessage.step && (
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      <p className="text-xs text-muted-foreground text-wrap mt-0.5">
                         {stepMessage.details}
                       </p>
                     )}

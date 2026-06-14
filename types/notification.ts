@@ -79,6 +79,12 @@ export const notificationTemplates: NotificationTemplateFactory = {
     message: `An offer has been created with amount ${data.offerAmount} and status ${data.offerStatus}`,
     url: `/offers/${data.leadId}`,
   }),
+
+  offerGenerationFailed: (data) => ({
+    title: `Offer Generation Failed: for Lead LED-#${data.leadId}`,
+    message: `Failed to generate offer: ${data.errorMessage}`,
+    url: `/offers/${data.leadId}`,
+  }),
 };
 
 export function createNotification<T extends NotificationType>(

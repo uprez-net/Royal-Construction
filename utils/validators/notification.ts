@@ -91,4 +91,9 @@ export const notificationSchemas = {
         offerAmount: z.string(),
         offerStatus: z.string(),
     }),
+
+    offerGenerationFailed: z.object({
+        leadId: z.string(),
+        errorMessage: z.string(),
+    }),
 } as const;
