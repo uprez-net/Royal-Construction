@@ -34,7 +34,7 @@ function summarizeLeadForOffer(lead: Awaited<ReturnType<typeof findLeadById>>) {
             time: compactValue(lead.followupTime),
             notes: compactValue(lead.followupNotes),
         },
-        recentHistory: lead.history?.slice(-5).map((item) => ({
+        recentHistory: (lead.history ?? []).slice(-5).map((item) => ({
             date: compactValue(item.date),
             action: compactValue(item.action),
             detail: compactValue(item.detail),
@@ -95,4 +95,3 @@ export const fetchLeadFilesTool = tool({
         };
     }
 });
-

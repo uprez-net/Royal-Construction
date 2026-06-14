@@ -56,7 +56,7 @@ export default function ProjectsLoading() {
                     <Skeleton className="h-5 w-40" />
                     <Skeleton className="h-3 w-32" />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Skeleton className="h-3 w-12" />
                       <Skeleton className="h-4 w-24" />
@@ -69,7 +69,7 @@ export default function ProjectsLoading() {
                   <div className="space-y-2">
                     <Skeleton className="h-2 w-full rounded-full" />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     <Skeleton className="h-12 w-full rounded" />
                     <Skeleton className="h-12 w-full rounded" />
                     <Skeleton className="h-12 w-full rounded" />

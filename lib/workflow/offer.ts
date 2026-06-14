@@ -14,6 +14,7 @@ import { triggerNotification } from "../notification/novu";
 import { getWritable } from "workflow";
 import { currency } from "@/utils/formatters";
 import { RunStatus } from "@prisma/client";
+import { put } from "@vercel/blob";
 
 export interface OfferCreationStatus {
     failed?: boolean;
@@ -23,6 +24,17 @@ export interface OfferCreationStatus {
         step: "FETCHING_DETAILS" | "BUILDING_OFFER" | "SAVING_OFFER" | "TRIGGERING_NOTIFICATION" | "COMPLETED";
         details?: string;
     }[];
+}
+
+function sanitizeOfferFilename(name: string) {
+    const safeName = name
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80);
+
+    return safeName || "offer";
 }
 
 export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead> => {
@@ -238,21 +250,34 @@ async function saveOffer({
 }) {
     'use step';
     try {
-        const { newOfferItems, newOfferFile, ...newOffer } = await createOrUpdateOffer({
+        const offerFileContent = {
+            ...output.offerFileContent,
+            facadeOptions: output.offerFileContent.facadeOptions ? {
+                optionsDescription: output.offerFileContent.facadeOptions.optionsDescription,
+                options: Options,
+            } : undefined,
+        };
+        const offerFileJson = JSON.stringify(offerFileContent);
+        const filename = `offer_${sanitizeOfferFilename(lead.name)}_${Date.now()}.json`;
+        const blob = await put(
+            `offer-files/${lead.id}/${filename}`,
+            offerFileJson,
+            {
+                access: "public",
+                addRandomSuffix: true,
+                contentType: "application/json",
+            },
+        );
+
+        const newOffer = await createOrUpdateOffer({
             leadId: lead.id,
             offerFileInput: {
                 id: uuidv4(),
-                filename: `offer_${lead.name}_${Date.now()}.json`,
+                filename,
                 fileType: "application/json",
-                filesize: JSON.stringify(output.offerFileContent).length,
-                url: "placeholder_url", // In a real implementation, you would upload the content to a storage service and provide the URL here
-                offerContent: {
-                    ...output.offerFileContent,
-                    facadeOptions: output.offerFileContent.facadeOptions ? {
-                        optionsDescription: output.offerFileContent.facadeOptions.optionsDescription,
-                        options: Options,
-                    } : undefined,
-                },
+                filesize: Buffer.byteLength(offerFileJson, "utf8"),
+                url: blob.url,
+                offerContent: offerFileContent,
             },
             amount: amount.toString(),
             gstAmount: gstAmount.toString(),
@@ -268,11 +293,17 @@ async function saveOffer({
             })),
         });
 
-        await prisma.chatSession.create({
-            data: {
-                leadId: lead.id,
-            },
+        const existingChatSession = await prisma.chatSession.findFirst({
+            where: { leadId: lead.id },
+            select: { id: true },
         });
+        if (!existingChatSession) {
+            await prisma.chatSession.create({
+                data: {
+                    leadId: lead.id,
+                },
+            });
+        }
 
         await prisma.lead.update({
             where: { id: lead.id },
@@ -340,6 +371,7 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
 
         revalidateTag("offers", CACHE_PROFILES.MEDIUM);
         revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.MEDIUM);
+        revalidateTag(`offer-lead-${offer.leadId}`, CACHE_PROFILES.MEDIUM);
 
         await writeToStream({
             status: "COMPLETED",

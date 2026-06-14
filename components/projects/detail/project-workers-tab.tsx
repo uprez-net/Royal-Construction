@@ -216,7 +216,7 @@ export function ProjectWorkersTab({ project }: ProjectWorkersTabProps) {
               Today&apos;s Summary
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2 pt-4 px-4 pb-4">
+          <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-2 pt-4 px-4 pb-4">
             <SummaryTile
               label="Checked In"
               value={summary.checkedIn}

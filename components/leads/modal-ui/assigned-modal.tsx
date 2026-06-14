@@ -7,7 +7,7 @@ interface AssignedModalProps {
   lead: Lead;
   onClose: () => void;
   onLeadUpdate: (lead: Lead) => void;
-  showToast: (msg: string, type?: "success" | "info") => void;
+  showToast: (msg: string, type?: "success" | "info" | "error") => void;
   availableUsers: { id: string; name: string }[];
 }
 
@@ -28,7 +28,10 @@ export function AssignedModal({
       const updated = await updateLead(lead.id, {
         assignedId: selectedUserId || null,
       });
-      if (!updated) return;
+      if (!updated) {
+        showToast("Failed to assign user", "error");
+        return;
+      }
 
       const assignedUserName =
         availableUsers.find((u) => u.id === selectedUserId)?.name ||
@@ -39,6 +42,7 @@ export function AssignedModal({
       onClose();
     } catch (error) {
       console.error("Failed to update assigned", error);
+      showToast("Failed to assign user. Please try again.", "error");
     } finally {
       setSaving(false);
     }

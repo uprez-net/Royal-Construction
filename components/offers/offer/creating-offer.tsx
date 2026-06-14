@@ -124,7 +124,7 @@ function CreatingOffer({ leadId }: { leadId: number }) {
                 size="sm"
                 className="mt-2"
                 disabled={isPending}
-                onClick={() => startTransition(handleReTrigger)}
+                onClick={() => startTransition(() => { void handleReTrigger(); })}
               >
                 <RotateCw className={cn("mr-2 h-4 w-4", isPending && "animate-spin")} />
                 Retry

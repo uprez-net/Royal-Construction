@@ -125,13 +125,18 @@ export default function Leads() {
       }
 
       Promise.resolve().then(() => {
+        const params: { status?: string; query?: string } = {};
         if (validatedStatus) {
           setActiveMetric(validatedStatus);
-          loadData({ status: validatedStatus });
+          params.status = validatedStatus;
         }
         if (decodedQuery && decodedQuery.trim().length > 0) {
-          setSearchTerm(decodedQuery);
-          loadData({ query: decodedQuery.trim() });
+          const query = decodedQuery.trim();
+          setSearchTerm(query);
+          params.query = query;
+        }
+        if (params.status || params.query) {
+          loadData(params);
         }
       });
     } else {
@@ -292,7 +297,7 @@ export default function Leads() {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Header card */}
-      <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
+      <Card className="overflow-hidden border-teal-100 bg-gradient-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
         <CardContent className="relative p-6">
           <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />

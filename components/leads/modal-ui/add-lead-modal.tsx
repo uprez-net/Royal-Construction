@@ -52,7 +52,7 @@ interface AddLeadFormData {
 interface AddLeadModalProps {
   onClose: () => void;
   onSuccess: (lead: Lead) => void;
-  showToast: (msg: string, type?: "success" | "info") => void;
+  showToast: (msg: string, type?: "success" | "info" | "error") => void;
 }
 
 /* ── Component ── */
@@ -138,8 +138,9 @@ export function AddLeadModal({
       const stage: LeadStage =
         form.followupDate && form.followupTime ? "In Follow-up" : "Contacted";
 
+      let calendarCreated = true;
       if (stage === "In Follow-up") {
-        const ok = await createCalendarEventIfValid(
+        calendarCreated = await createCalendarEventIfValid(
           {
             name: form.name,
             email: form.email,
@@ -148,7 +149,6 @@ export function AddLeadModal({
           },
           showToast,
         );
-        if (!ok) return;
       }
 
       const today = new Date();
@@ -181,7 +181,11 @@ export function AddLeadModal({
       onSuccess(createdLead);
       showToast(`Lead added: ${form.name}`, "success");
 
-      if (setReminder) {
+      if (!calendarCreated) {
+        showToast("Lead was saved, but the calendar reminder could not be created.", "info");
+      }
+
+      if (setReminder && calendarCreated) {
         showToast(
           `Reminder set for ${form.followupDate || today.toISOString().split("T")[0]} at ${form.followupTime || "10:00"}`,
           "info",

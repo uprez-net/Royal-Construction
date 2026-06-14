@@ -62,7 +62,7 @@ export function UserCell({ name, avatarUrl }: UserCellProps) {
         <AvatarImage src={avatarUrl ?? undefined} alt={name} />
 
         <AvatarFallback
-          className={`bg-linear-to-br ${gradient} text-xs font-semibold text-white`}
+          className={`bg-gradient-to-br ${gradient} text-xs font-semibold text-white`}
         >
           {initials}
         </AvatarFallback>

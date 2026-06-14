@@ -323,13 +323,15 @@ export function ModalManager() {
           onSuccess={() => {
             handleClose();
           }}
-          showToast={(message: string, type?: "success" | "info") => {
+          showToast={(message: string, type?: "success" | "info" | "error") => {
             if (type === "success") {
               toast.success(message);
             } else if (type === "info") {
               toast.info(message);
-            } else {
+            } else if (type === "error") {
               toast.error(message);
+            } else {
+              toast.info(message);
             }
           }}
         />

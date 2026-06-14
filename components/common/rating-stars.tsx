@@ -9,15 +9,17 @@ export function RatingStars({
   rating,
   size = 16,
 }: RatingStarsProps) {
+  const clampedRating = Math.min(5, Math.max(0, rating));
+
   return (
     <div
       className="flex items-center gap-0.5"
-      aria-label={`Rating: ${rating.toFixed(1)} out of 5`}
+      aria-label={`Rating: ${clampedRating.toFixed(1)} out of 5`}
     >
       {Array.from({ length: 5 }).map((_, index) => {
         const fillPercentage = Math.max(
           0,
-          Math.min(100, (rating - index) * 100)
+          Math.min(100, (clampedRating - index) * 100)
         );
 
         return (

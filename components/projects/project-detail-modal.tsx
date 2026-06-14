@@ -47,7 +47,7 @@ export function ProjectDetailModal({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[70vh] max-w-[60vw] overflow-y-auto">
+      <DialogContent className="max-h-[85vh] w-full max-w-[calc(100%-1.5rem)] overflow-y-auto sm:max-w-[90vw] lg:max-h-[70vh] lg:max-w-[60vw]">
         {/* Header */}
         <DialogHeader className="border-b border-border bg-white px-6 py-4">
           <div className="mb-2 flex items-start justify-between gap-4">
@@ -62,12 +62,12 @@ export function ProjectDetailModal({
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-0 border-t border-border/40 mt-4 -mx-6 px-6 pt-3">
+          <div className="flex gap-0 overflow-x-auto no-scrollbar border-t border-border/40 mt-4 -mx-6 px-6 pt-3">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                className={`shrink-0 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.id
                     ? "border-teal-600 text-teal-600"
                     : "border-transparent text-muted-foreground hover:text-foreground"

@@ -1,23 +1,32 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { Check, Bell, X } from "lucide-react";
+import { Check, Bell, X, AlertTriangle } from "lucide-react";
 
 export interface Toast {
   id: string;
   message: string;
-  type: "success" | "info";
+  type: "success" | "info" | "error";
 }
 
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const showToast = (message: string, type: "success" | "info" = "success") => {
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      timeoutsRef.current = [];
+    };
+  }, []);
+
+  const showToast = (message: string, type: "success" | "info" | "error" = "success") => {
     const id = uuidv4();
     setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(
+    const timeoutId = setTimeout(
       () => setToasts((prev) => prev.filter((t) => t.id !== id)),
       4000,
     );
+    timeoutsRef.current.push(timeoutId);
   };
 
   const dismissToast = (id: string) => {
@@ -46,12 +55,16 @@ export function ToastContainer({
               background:
                 toast.type === "success"
                   ? "rgba(22,163,74,0.1)"
+                  : toast.type === "error"
+                    ? "rgba(220,38,38,0.1)"
                   : "rgba(37,99,235,0.1)",
-              color: toast.type === "success" ? "#16A34A" : "#2563EB",
+              color: toast.type === "success" ? "#16A34A" : toast.type === "error" ? "#DC2626" : "#2563EB",
             }}
           >
             {toast.type === "success" ? (
               <Check size={15} />
+            ) : toast.type === "error" ? (
+              <AlertTriangle size={15} />
             ) : (
               <Bell size={15} />
             )}

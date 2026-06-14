@@ -19,7 +19,7 @@ interface EmailCampaignModalProps {
   leads: Lead[];
   onClose: () => void;
   onCampaignComplete: (updatedLeads: Lead[]) => Promise<void>;
-  showToast: (msg: string, type?: "success" | "info") => void;
+  showToast: (msg: string, type?: "success" | "info" | "error") => void;
 }
 
 type Step = "select" | "compose";
@@ -100,8 +100,12 @@ export function EmailCampaignModal({
     const now = new Date();
 
     try {
-      const updated = await Promise.all(
-        allLeads.map(async (lead) => {
+      const updated: Lead[] = [];
+      const batchSize = 20;
+      for (let index = 0; index < allLeads.length; index += batchSize) {
+        const batch = allLeads.slice(index, index + batchSize);
+        const batchResults = await Promise.all(
+          batch.map(async (lead) => {
           if (!lead.email) return lead;
 
           try {
@@ -144,7 +148,9 @@ export function EmailCampaignModal({
             return lead;
           }
         }),
-      );
+        );
+        updated.push(...batchResults);
+      }
 
       await onCampaignComplete(updated);
       showToast(
@@ -270,7 +276,7 @@ export function EmailCampaignModal({
             <div className="mt-3 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                {invalidTargets.length} recipient value may not be a valid email. Review before sending.
+                {invalidTargets.length} recipient {invalidTargets.length === 1 ? "value" : "values"} may not be {invalidTargets.length === 1 ? "a " : ""}valid email{invalidTargets.length === 1 ? "" : "s"}. Review before sending.
               </span>
             </div>
           )}

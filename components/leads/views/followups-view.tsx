@@ -18,7 +18,7 @@ interface FollowupsViewProps {
   leads: Lead[];
   onLeadUpdate: (lead: Lead) => void;
   onLeadDelete: (leadId: number) => void;
-  showToast: (message: string, type?: "success" | "info") => void;
+  showToast: (message: string, type?: "success" | "info" | "error") => void;
 }
 
 const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
@@ -107,7 +107,7 @@ interface FollowupItemProps {
   index: number;
   onLeadUpdate: (lead: Lead) => void;
   onLeadDelete: (leadId: number) => void;
-  showToast: (message: string, type?: "success" | "info") => void;
+  showToast: (message: string, type?: "success" | "info" | "error") => void;
 }
 
 function FollowupItem({

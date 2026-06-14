@@ -32,7 +32,7 @@ export function WebSearchOutput({ output }: Props) {
                 Search failed: {output.message}
               </p>
               <p className="text-sm text-slate-500">
-                Error type: {ERROR_LABEL[output.error]}
+                Error type: {ERROR_LABEL[output.error] ?? output.error ?? "Unknown error"}
                 {output.statusCode && ` (${output.statusCode})`}
               </p>
             </>

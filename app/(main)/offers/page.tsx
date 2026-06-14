@@ -8,7 +8,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import OfferPageSkeleton from "./loading";
 
-async function QfferPageClient() {
+async function OfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.
   await connection();
   const [offerKPIs, offers] = await Promise.all([
@@ -57,7 +57,7 @@ async function QfferPageClient() {
 export default function OfferPage() {
   return (
     <Suspense fallback={<OfferPageSkeleton />}>
-      <QfferPageClient />
+          <OfferPageClient />
     </Suspense>
   );
 }

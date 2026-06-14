@@ -2,6 +2,7 @@ import { gateway } from "../model";
 import { tool, generateText } from "ai"
 import z from "zod";
 import { getScrapeDoClient } from "../scrapedo/scraper";
+import { RATE_LIMITS } from "../scrapedo/rate-limit";
 import { SUMMARIES_WEB_PAGE_HTML } from "../agent/offer-prompts";
 
 export const webSearch = gateway.tools.perplexitySearch({
@@ -24,12 +25,23 @@ export const webSearch = gateway.tools.perplexitySearch({
 })
 
 const summarizeHtmlContent = async (html: string, context: string) => {
+    const textContent = html
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    const maxChars = 50_000;
+    const truncatedContent = textContent.length > maxChars
+        ? `${textContent.slice(0, maxChars)}\n... [truncated]`
+        : textContent;
+
     const { text } = await generateText({
         model: gateway("xiaomi/mimo-v2.5"),
         system: SUMMARIES_WEB_PAGE_HTML,
         prompt: `
-            ### Web Page HTML Content:
-            ${html}
+            ### Web Page Text Content:
+            ${truncatedContent}
 
             ### Context:
             ${context}
@@ -51,7 +63,7 @@ export const scrapeUserLinks = tool({
             const html = await client.scrapeWithRateLimit(
                 { url },
                 `user-links-scrape-${new URL(url).hostname}`,
-                { tokensPerInterval: 1000, interval: "minute" },
+                RATE_LIMITS.domain.scrape,
             );
 
             return {

@@ -24,7 +24,7 @@ interface DetailModalProps {
   onClose: () => void;
   onLeadUpdate: (lead: Lead, options?: { keepOpen?: boolean }) => void;
   onDeleteClick: (lead: Lead) => void;
-  showToast: (msg: string, type?: "success" | "info") => void;
+  showToast: (msg: string, type?: "success" | "info" | "error") => void;
   availableUsers: { id: string; name: string }[];
 }
 

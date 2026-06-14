@@ -224,7 +224,7 @@ export function DashboardProjectTable({
                         isActive={item === currentPage}
                         onClick={(event) => {
                           event.preventDefault();
-                          setCurrentPage(item);
+                          handlePageChange(item);
                         }}
                       >
                         {item}

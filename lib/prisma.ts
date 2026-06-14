@@ -6,13 +6,20 @@ import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
+  pool?: Pool;
 };
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is not set.");
 }
 
-const pool = new Pool({
+// Reuse a single pool across HMR re-evaluations in dev. Without this, every
+// hot-reload constructs a new Pool (each holding `min` live connections),
+// leaking connections until the database refuses new ones and the dev server
+// OOMs on the backlog of retry promises.
+const pool =
+  globalForPrisma.pool ??
+  new Pool({
   connectionString: process.env.DATABASE_URL,
 
   /**
@@ -83,6 +90,7 @@ export const prisma =
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
+  globalForPrisma.pool = pool;
 }
 
 export default prisma;

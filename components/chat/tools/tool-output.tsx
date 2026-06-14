@@ -17,7 +17,7 @@ import {
 import { FetchOfferSheetRulesOutput } from "./fetch-offer-sheet-rules-output";
 import { FetchLeadFilesOutput } from "./fetch-lead-files-output";
 import { WebSearchOutput } from "./web-search-output";
-import { ScrapeUserLinkOutputComponent } from "./scarape-user-link-output";
+import { ScrapeUserLinkOutputComponent } from "./scrape-user-link-output";
 
 export function ToolOutput({
   toolName,

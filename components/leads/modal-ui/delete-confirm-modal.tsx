@@ -7,7 +7,7 @@ interface DeleteConfirmModalProps {
   lead: Lead;
   onClose: () => void;
   onDeleted: (leadId: number) => void;
-  showToast: (msg: string, type?: "success" | "info") => void;
+  showToast: (msg: string, type?: "success" | "info" | "error") => void;
 }
 
 export function DeleteConfirmModal({
@@ -23,11 +23,11 @@ export function DeleteConfirmModal({
       setLoading(true);
       await deleteLead(lead.id);
       onDeleted(lead.id);
-      showToast("Lead deleted Successfully");
+      showToast("Lead deleted successfully");
       onClose();
     } catch (error) {
       console.error("Failed to delete lead", error);
-      showToast("Failed to delete lead", "info");
+      showToast("Failed to delete lead", "error");
     } finally {
       setLoading(false);
     }

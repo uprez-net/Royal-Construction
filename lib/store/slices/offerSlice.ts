@@ -43,6 +43,7 @@ const offersSlice = createSlice({
         addOffer(state, action: PayloadAction<OfferWithLead>) {
             state.offers.items.unshift(action.payload);
             state.offers.totalCount += 1;
+            state.offers.totalPages = Math.max(1, Math.ceil(state.offers.totalCount / state.offers.limit));
         }   
     },
     extraReducers: (builder) => {

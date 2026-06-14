@@ -265,6 +265,15 @@ export interface GeneratedEmailResult {
   name: string;
 }
 
+function isSafePromptUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 // ─── Main Server Action ────────────────────────────────────────────────────
 
 export async function generateEmailTemplate(
@@ -273,13 +282,15 @@ export async function generateEmailTemplate(
   links: { label: string; url: string }[]
 ): Promise<GeneratedEmailResult> {
   const model = gateway('google/gemini-2.5-flash');
+  const safeLinks = links.filter((link) => isSafePromptUrl(link.url));
+  const safeAttachments = attachments.filter((attachment) => isSafePromptUrl(attachment.url));
 
-  const linksContext = links.length > 0
-    ? `LINKS TO INCLUDE (Render these as Gold CTA Buttons inside an Action Card):\n${links.map(l => `- Label: "${l.label}", URL: ${l.url}`).join('\n')}`
+  const linksContext = safeLinks.length > 0
+    ? `LINKS TO INCLUDE (Render these as Gold CTA Buttons inside an Action Card):\n${safeLinks.map(l => `- Label: "${l.label}", URL: ${l.url}`).join('\n')}`
     : '';
 
-  const attachmentsContext = attachments.length > 0
-    ? `ATTACHMENTS TO INCLUDE (Render these as secondary text links with &nbsp;→):\n${attachments.map(a => `- File Name: "${a.label}", URL: ${a.url}`).join('\n')}`
+  const attachmentsContext = safeAttachments.length > 0
+    ? `ATTACHMENTS TO INCLUDE (Render these as secondary text links with &nbsp;→):\n${safeAttachments.map(a => `- File Name: "${a.label}", URL: ${a.url}`).join('\n')}`
     : '';
 
   const userPrompt = `
