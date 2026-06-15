@@ -23,6 +23,10 @@ export function FollowupModal({
   const [date, setDate] = useState(lead.followupDate || "");
   const [time, setTime] = useState(lead.followupTime || "");
   const [saving, setSaving] = useState(false);
+  const formId = React.useId();
+  const dateId = `${formId}-date`;
+  const timeId = `${formId}-time`;
+  const dateHelperId = `${dateId}-helper`;
 
   const handleSave = async () => {
     if (!date) return;
@@ -58,7 +62,8 @@ export function FollowupModal({
   };
 
   const inputCls =
-    "mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]";
+    "mt-1 w-full rounded-[4px] border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-[color:var(--royal-gold)] focus:outline-none focus:ring-2 focus:ring-[color:var(--royal-gold-light)]";
+  const labelCls = "text-xs font-medium text-muted-foreground";
 
   return (
     <ModalShell
@@ -70,17 +75,36 @@ export function FollowupModal({
     >
       <div className="space-y-4">
         <div>
-          <label className="text-xs font-medium text-[#78716c]">Date</label>
+          <label
+            htmlFor={dateId}
+            className={labelCls}
+          >
+            Date
+          </label>
           <input
+            id={dateId}
             type="date"
             className={inputCls}
             value={date}
             onChange={(e) => setDate(e.target.value)}
+            required
+            aria-describedby={!date ? dateHelperId : undefined}
           />
+          {!date && (
+            <p id={dateHelperId} className="mt-1.5 text-xs text-muted-foreground">
+              Choose a follow-up date before saving.
+            </p>
+          )}
         </div>
         <div>
-          <label className="text-xs font-medium text-[#78716c]">Time</label>
+          <label
+            htmlFor={timeId}
+            className={labelCls}
+          >
+            Time
+          </label>
           <input
+            id={timeId}
             type="time"
             className={inputCls}
             value={time}
@@ -90,14 +114,15 @@ export function FollowupModal({
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
-            className={`inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] ${date ? "" : "cursor-not-allowed opacity-50"}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-full bg-[color:var(--royal-gold)] px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-[color:var(--royal-gold-dark)] ${date ? "" : "cursor-not-allowed opacity-50"}`}
             onClick={handleSave}
             disabled={!date || saving}
+            aria-describedby={!date ? dateHelperId : undefined}
           >
             {saving ? (
               <>
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Updating Follow-up ...
+                Updating follow-up...
               </>
             ) : (
               "Save Follow-up"
@@ -105,7 +130,7 @@ export function FollowupModal({
           </button>
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+            className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition hover:border-[color:var(--royal-gold)] hover:bg-muted"
             onClick={onClose}
           >
             Cancel

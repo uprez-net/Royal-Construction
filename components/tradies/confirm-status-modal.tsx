@@ -47,9 +47,9 @@ const statusOptions: {
     label: "Confirmed",
     description: "Tradie confirmed and will attend",
     icon: <CheckCircle2 className="h-5 w-5" />,
-    color: "#16A34A",
-    bg: "#DCFCE7",
-    border: "rgba(22,163,74,0.2)",
+    color: "var(--success)",
+    bg: "var(--success-light)",
+    border: "color-mix(in oklab, var(--success) 24%, var(--border))",
   },
 
   {
@@ -57,9 +57,9 @@ const statusOptions: {
     label: "Pending Response",
     description: "Awaiting tradie response",
     icon: <Clock3 className="h-5 w-5" />,
-    color: "#D97706",
-    bg: "#FEF9C3",
-    border: "rgba(245,158,11,0.2)",
+    color: "var(--warning)",
+    bg: "var(--warning-light)",
+    border: "color-mix(in oklab, var(--warning) 24%, var(--border))",
   },
 
   {
@@ -67,9 +67,9 @@ const statusOptions: {
     label: "No Response",
     description: "Multiple attempts, no response",
     icon: <PhoneOff className="h-5 w-5" />,
-    color: "#DC2626",
-    bg: "#FEE2E2",
-    border: "rgba(220,38,38,0.2)",
+    color: "var(--destructive)",
+    bg: "var(--destructive-light)",
+    border: "color-mix(in oklab, var(--destructive) 24%, var(--border))",
   },
 
   {
@@ -77,9 +77,9 @@ const statusOptions: {
     label: "Awaiting Materials",
     description: "Confirmed but waiting on materials",
     icon: <Box className="h-5 w-5" />,
-    color: "#2563EB",
-    bg: "#DBEAFE",
-    border: "rgba(37,99,235,0.2)",
+    color: "var(--info)",
+    bg: "var(--info-light)",
+    border: "color-mix(in oklab, var(--info) 24%, var(--border))",
   },
 
   {
@@ -87,9 +87,9 @@ const statusOptions: {
     label: "Declined",
     description: "Tradie declined the job",
     icon: <XCircle className="h-5 w-5" />,
-    color: "#DC2626",
-    bg: "#FEE2E2",
-    border: "rgba(220,38,38,0.2)",
+    color: "var(--destructive)",
+    bg: "var(--destructive-light)",
+    border: "color-mix(in oklab, var(--destructive) 24%, var(--border))",
   },
 
   {
@@ -97,9 +97,9 @@ const statusOptions: {
     label: "Completed",
     description: "Work has been completed",
     icon: <CheckCheck className="h-5 w-5" />,
-    color: "#94A3B8",
-    bg: "#F1F5F9",
-    border: "rgba(148,163,184,0.2)",
+    color: "var(--muted-foreground)",
+    bg: "var(--muted)",
+    border: "var(--border)",
   },
 ];
 
@@ -110,21 +110,21 @@ function formatStatus(status: string) {
 function getStatusStyles(status: string) {
   switch (status) {
     case "CONFIRMED":
-      return "bg-[rgba(22,163,74,0.08)] text-[#16A34A]";
+      return "bg-[color:var(--success-light)] text-[color:var(--success)]";
 
     case "PENDING":
     case "PENDING_RESPONSE":
-      return "bg-[rgba(245,158,11,0.08)] text-[#D97706]";
+      return "bg-[color:var(--warning-light)] text-[color:var(--warning)]";
 
     case "NO_RESPONSE":
     case "DECLINED":
-      return "bg-[rgba(220,38,38,0.08)] text-[#DC2626]";
+      return "bg-[color:var(--destructive-light)] text-[color:var(--destructive)]";
 
     case "AWAITING_MATERIALS":
-      return "bg-[rgba(37,99,235,0.08)] text-[#2563EB]";
+      return "bg-[color:var(--info-light)] text-[color:var(--info)]";
 
     default:
-      return "bg-[rgba(148,163,184,0.1)] text-[#475569]";
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -186,15 +186,15 @@ export function ConfirmStatusModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
-          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-[#E2E8F0] bg-white p-0 shadow-2xl",
+          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
           "sm:rounded-[14px]",
           "max-h-[60vh] overflow-y-auto",
         )}
       >
         {/* Header */}
-        <DialogHeader className="flex-row items-center justify-between border-b border-[#E2E8F0] px-6 py-5">
+        <DialogHeader className="flex-row items-center justify-between border-b border-border/70 px-6 py-5">
           <div>
-            <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-[#0F172A]">
+            <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-foreground">
               Update Status — {schedule.tradieName}
             </DialogTitle>
           </div>
@@ -203,8 +203,8 @@ export function ConfirmStatusModal({
         {/* Body */}
         <div className="px-6 py-5">
           {/* Current Status Card */}
-          <div className="mb-4 rounded-[8px] bg-[#F1F5F9] p-3">
-            <div className="text-[12px] text-[#0F172A]">
+          <div className="mb-4 rounded-[8px] bg-muted/40 p-3">
+            <div className="text-[12px] text-foreground">
               <span className="font-[700]">Current Status:</span>{" "}
               <span
                 className={cn(
@@ -216,7 +216,7 @@ export function ConfirmStatusModal({
               </span>
             </div>
 
-            <div className="mt-0.5 text-[12px] text-[#94A3B8]">
+            <div className="mt-0.5 text-[12px] text-muted-foreground">
               {schedule.projectName} —{" "}
               {schedule.milestoneName ?? "Unscheduled milestone"}
             </div>
@@ -224,7 +224,7 @@ export function ConfirmStatusModal({
 
           {/* Error Message */}
           {error && (
-            <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-[#FEE2E2] px-3 py-2 text-[12px] text-[#DC2626]">
+            <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-[color:var(--destructive-light)] px-3 py-2 text-[12px] text-[color:var(--destructive)]">
               <XCircle className="h-4 w-4" />
               {error}
             </div>
@@ -243,12 +243,12 @@ export function ConfirmStatusModal({
                   disabled={isLoading}
                   onClick={() => updateStatus(option.value)}
                   className={cn(
-                    "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-white px-4 py-[14px] text-left transition-all",
+                    "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-card px-4 py-[14px] text-left transition-all",
                     "hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
                     "disabled:pointer-events-none disabled:opacity-60",
                     selected
                       ? "border-[var(--active-border)] bg-[var(--active-bg)]"
-                      : "border-[#E2E8F0]",
+                      : "border-border/70",
                   )}
                   style={
                     selected
@@ -285,7 +285,7 @@ export function ConfirmStatusModal({
                       {option.label}
                     </div>
 
-                    <div className="mt-0.5 text-[11px] text-[#94A3B8]">
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
                       {option.description}
                     </div>
                   </div>

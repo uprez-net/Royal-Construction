@@ -66,6 +66,7 @@ type LeadRichTextEditorProps = {
   onSaveNote: () => void;
   canSaveNote: boolean;
   isSavingNote: boolean;
+  ariaLabelledBy?: string;
 };
 
 type MentionElementNode = LeadRichTextNode & {
@@ -361,6 +362,7 @@ function MentionInputElement(props: PlateElementProps) {
             ref={inputRef}
             className="absolute inset-0 size-full min-w-2 bg-transparent p-0 text-xs text-[#0f766e] outline-none"
             value={search}
+            aria-label="Mention team member"
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => {
               inputProps.onKeyDown(event);
@@ -582,6 +584,7 @@ function EditorToolbar({
           onChange={(event) => setAiAction(event.target.value as AiNoteAction)}
           disabled={isAiWorking}
           title="AI note action"
+          aria-label="AI note action"
         >
           {aiNoteActions.map((action) => (
             <option key={action.value} value={action.value}>
@@ -616,6 +619,7 @@ export function LeadRichTextEditor({
   onSaveNote,
   canSaveNote,
   isSavingNote,
+  ariaLabelledBy,
 }: LeadRichTextEditorProps) {
   const initialDocument = useMemo(
     () => value ?? createLeadNotesDocument({ plainText: "" }),
@@ -685,6 +689,7 @@ export function LeadRichTextEditor({
           <EditorContainer variant="leadNote">
             <Editor
               variant="leadNote"
+              aria-labelledby={ariaLabelledBy}
               placeholder="Write a note. Type @ to mention a team member."
             />
           </EditorContainer>

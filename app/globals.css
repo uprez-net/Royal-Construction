@@ -35,6 +35,20 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-royal-gold: var(--royal-gold);
+  --color-royal-gold-dark: var(--royal-gold-dark);
+  --color-royal-gold-light: var(--royal-gold-light);
+  --color-royal-orange: var(--royal-orange);
+  --color-royal-orange-light: var(--royal-orange-light);
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
+  --color-destructive-light: var(--destructive-light);
+  --color-accent-purple: var(--accent-purple);
+  --color-accent-purple-light: var(--accent-purple-light);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -520,7 +534,8 @@
 }
 
 .lead-card.urgent {
-  border-left: 3px solid var(--leads-danger);
+  border-color: color-mix(in oklab, var(--leads-danger) 34%, var(--border-color));
+  background: color-mix(in oklab, var(--leads-danger-light) 38%, var(--bg-card));
 }
 
 .urgent-indicator {
@@ -572,7 +587,7 @@
   width: 18px;
   height: 18px;
   background: var(--leads-danger);
-  color: white;
+  color: var(--primary-foreground);
   border-radius: 50%;
   font-size: 10px;
   font-weight: 700;
@@ -1333,7 +1348,7 @@
   padding: 8px 10px;
   background: var(--bg-body);
   border-radius: 8px;
-  border-left: 3px solid var(--border-color);
+  border: 1px solid var(--border-color);
   line-height: 1.55;
 }
 
@@ -1425,8 +1440,8 @@
   gap: 12px;
   padding: 10px 12px;
   border-radius: 10px;
-  border-left: 3px solid var(--reminder-accent, var(--leads-primary));
-  background: var(--bg-body);
+  border: 1px solid color-mix(in oklab, var(--reminder-accent, var(--leads-primary)) 28%, var(--border-color));
+  background: color-mix(in oklab, var(--reminder-accent, var(--leads-primary)) 7%, var(--bg-body));
   transition: background 0.15s;
 }
 
@@ -1869,7 +1884,8 @@
   }
 
   .mobile-lead-card.urgent {
-    border-left: 3px solid var(--leads-danger);
+    border-color: color-mix(in oklab, var(--leads-danger) 34%, var(--border-color));
+    background: color-mix(in oklab, var(--leads-danger-light) 38%, var(--bg-card));
   }
 
   .mobile-lead-main {

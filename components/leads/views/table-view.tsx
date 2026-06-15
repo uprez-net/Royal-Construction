@@ -175,7 +175,7 @@ export default function TableView({
                         {!lead.followupDate || !lead.followupTime ? (
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold-light)] hover:text-[color:var(--royal-gold)]"
                             onClick={(e) => {
                               e.stopPropagation();
                               setFollowupLead(lead);
@@ -187,7 +187,7 @@ export default function TableView({
                           </button>
                         ) : (
                           <span
-                            className={`followup-date-text cursor-pointer transition-colors hover:text-[#0D9488] ${lead.urgent ? "followup-urgent text-rose-600 font-semibold hover:text-rose-700" : ""}`}
+                            className={`followup-date-text cursor-pointer transition-colors hover:text-[color:var(--royal-gold)] ${lead.urgent ? "followup-urgent text-[color:var(--destructive)] font-semibold hover:text-[color:var(--destructive)]" : ""}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setFollowupLead(lead);
@@ -204,7 +204,7 @@ export default function TableView({
                         {!lead.assignedId ? (
                           <button
                             type="button"
-                            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[#d6d3d1] bg-transparent px-2.5 py-1 text-[11px] font-medium text-[#a8a29e] transition-colors hover:border-[#0D9488] hover:bg-[#CCFBF1]/20 hover:text-[#0D9488]"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold-light)] hover:text-[color:var(--royal-gold)]"
                             onClick={(e) => {
                               e.stopPropagation();
                               setAssignedLead(lead);
@@ -216,7 +216,7 @@ export default function TableView({
                           </button>
                         ) : (
                           <span
-                            className="assigned-name cursor-pointer hover:text-[#0D9488] transition-colors"
+                            className="assigned-name cursor-pointer transition-colors hover:text-[color:var(--royal-gold)]"
                             onClick={(e) => {
                               e.stopPropagation();
                               setAssignedLead(lead);

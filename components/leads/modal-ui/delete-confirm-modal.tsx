@@ -41,18 +41,18 @@ export function DeleteConfirmModal({
       maxWidthClass="max-w-[420px]"
     >
       <div className="space-y-4">
-        <p className="text-sm text-[#78716c]">
+        <p className="text-sm text-muted-foreground">
           This will permanently delete {lead.name}. This action cannot be undone.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-full bg-[#dc2626] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#b91c1c]"
+            className="inline-flex items-center justify-center rounded-full bg-[color:var(--destructive)] px-4 py-2 text-xs font-medium text-primary-foreground transition hover:brightness-95"
             onClick={handleDelete}
           >
             {loading ? (
               <>
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 Deleting Lead...
               </>
             ) : (
@@ -61,7 +61,7 @@ export function DeleteConfirmModal({
           </button>
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+            className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition hover:border-[color:var(--royal-gold)] hover:bg-muted"
             onClick={onClose}
           >
             Cancel

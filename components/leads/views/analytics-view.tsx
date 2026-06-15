@@ -26,16 +26,27 @@ interface AnalyticsViewProps {
   analytics: LeadAnalyticsData;
 }
 
-/* ── Color palette (matching reference) ─────── */
+/* ── BuildPro chart tokens ─────── */
+const CHART = {
+  lead: "var(--royal-gold)",
+  success: "var(--success)",
+  warning: "var(--warning)",
+  info: "var(--info)",
+  purple: "var(--accent-purple)",
+  muted: "var(--muted-foreground)",
+  foreground: "var(--foreground)",
+  border: "var(--border)",
+};
+
 const SOURCE_COLORS: Record<string, string> = {
-  "Google Ads": "#0D9488",
-  Referral: "#16A34A",
-  "Facebook Ads": "#F59E0B",
-  "Walk-in": "#7C3AED",
-  Website: "#475569",
-  "Repeat Client": "#0F172A",
-  Personal: "#2563EB",
-  Business: "#0F766E",
+  "Google Ads": CHART.lead,
+  Referral: CHART.success,
+  "Facebook Ads": CHART.warning,
+  "Walk-in": CHART.purple,
+  Website: CHART.muted,
+  "Repeat Client": CHART.foreground,
+  Personal: CHART.info,
+  Business: "var(--primary)",
 };
 
 export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
@@ -44,18 +55,18 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
   analytics.sourceData.forEach((d) => {
     sourceChartConfig[d.name] = {
       label: d.name,
-      color: SOURCE_COLORS[d.name] || "#94A3B8",
+      color: SOURCE_COLORS[d.name] || CHART.muted,
     };
   });
 
   const trendChartConfig: ChartConfig = {
-    leads: { label: "Leads", color: "#0D9488" },
-    converted: { label: "Converted", color: "#16A34A" },
+    leads: { label: "Leads", color: CHART.lead },
+    converted: { label: "Converted", color: CHART.success },
   };
 
   const convChartConfig: ChartConfig = {
-    total: { label: "Total", color: "#0D9488" },
-    won: { label: "Won", color: "#16A34A" },
+    total: { label: "Total", color: CHART.lead },
+    won: { label: "Won", color: CHART.success },
   };
 
   const lostChartConfig: ChartConfig = {};
@@ -120,7 +131,7 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                   {analytics.sourceData.map((entry) => (
                     <Cell
                       key={entry.name}
-                      fill={SOURCE_COLORS[entry.name] || "#94A3B8"}
+                      fill={SOURCE_COLORS[entry.name] || CHART.muted}
                     />
                   ))}
                 </Pie>
@@ -152,10 +163,10 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                     x2="0"
                     y2="1"
                   >
-                    <stop offset="0%" stopColor="#0D9488" stopOpacity={0.15} />
+                    <stop offset="0%" stopColor={CHART.lead} stopOpacity={0.15} />
                     <stop
                       offset="100%"
-                      stopColor="#0D9488"
+                      stopColor={CHART.lead}
                       stopOpacity={0.02}
                     />
                   </linearGradient>
@@ -166,25 +177,25 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                     x2="0"
                     y2="1"
                   >
-                    <stop offset="0%" stopColor="#16A34A" stopOpacity={0.15} />
+                    <stop offset="0%" stopColor={CHART.success} stopOpacity={0.15} />
                     <stop
                       offset="100%"
-                      stopColor="#16A34A"
+                      stopColor={CHART.success}
                       stopOpacity={0.02}
                     />
                   </linearGradient>
                 </defs>
-                <CartesianGrid vertical={false} stroke="#E2E8F0" />
+                <CartesianGrid vertical={false} stroke={CHART.border} />
                 <XAxis
                   dataKey="month"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: "#94A3B8" }}
+                  tick={{ fontSize: 11, fill: CHART.muted }}
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: "#94A3B8" }}
+                  tick={{ fontSize: 11, fill: CHART.muted }}
                   domain={[0, 50]}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
@@ -195,19 +206,19 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                 <Area
                   type="monotone"
                   dataKey="leads"
-                  stroke="#0D9488"
+                  stroke={CHART.lead}
                   strokeWidth={2.5}
                   fill="url(#leadsGradient)"
-                  dot={{ r: 4, fill: "#0D9488", stroke: "#0D9488" }}
+                  dot={{ r: 4, fill: CHART.lead, stroke: CHART.lead }}
                   activeDot={{ r: 5, strokeWidth: 2 }}
                 />
                 <Area
                   type="monotone"
                   dataKey="converted"
-                  stroke="#16A34A"
+                  stroke={CHART.success}
                   strokeWidth={2.5}
                   fill="url(#convertedGradient)"
-                  dot={{ r: 4, fill: "#16A34A", stroke: "#16A34A" }}
+                  dot={{ r: 4, fill: CHART.success, stroke: CHART.success }}
                   activeDot={{ r: 5, strokeWidth: 2 }}
                 />
               </AreaChart>
@@ -229,12 +240,12 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
               style={{ height: 280 }}
             >
               <RechartsBarChart data={analytics.conversionData}>
-                <CartesianGrid vertical={false} stroke="#E2E8F0" />
+                <CartesianGrid vertical={false} stroke={CHART.border} />
                 <XAxis
                   dataKey="source"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 10, fill: "#94A3B8" }}
+                  tick={{ fontSize: 10, fill: CHART.muted }}
                   interval={0}
                   angle={-15}
                   textAnchor="end"
@@ -243,7 +254,7 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 11, fill: "#94A3B8" }}
+                  tick={{ fontSize: 11, fill: CHART.muted }}
                   allowDecimals={false}
                 />
                 <ChartTooltip content={<ChartTooltipContent />} />
@@ -253,13 +264,13 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                 />
                 <Bar
                   dataKey="total"
-                  fill="#0D9488"
+                  fill={CHART.lead}
                   radius={[5, 5, 0, 0]}
                   barSize={18}
                 />
                 <Bar
                   dataKey="won"
-                  fill="#16A34A"
+                  fill={CHART.success}
                   radius={[5, 5, 0, 0]}
                   barSize={18}
                 />

@@ -1,4 +1,5 @@
 "use client";
+import { AlertTriangle } from "lucide-react";
 import { DashboardHeader } from "./dashboard-header";
 import { DashboardKPI } from "./dashboard-kpi";
 import { DashboardProjectTable } from "./dashboard-project-table";
@@ -20,6 +21,7 @@ interface DashboardHomeProps {
   projectsData: PaginatedProjectsResult;
   followUpItems: FollowUpItem[];
   graphData: DashboardGraphData;
+  dataWarnings?: string[];
 }
 
 export function DashboardHome({
@@ -31,9 +33,24 @@ export function DashboardHome({
   projectsData,
   followUpItems,
   graphData,
+  dataWarnings = [],
 }: DashboardHomeProps) {
   return (
     <div className="grid gap-6 space-y-6">
+      {dataWarnings.length > 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-[color:var(--warning)] bg-[color:var(--warning-light)] px-4 py-3 text-sm text-foreground">
+          <AlertTriangle
+            className="mt-0.5 size-4 shrink-0 text-[color:var(--warning)]"
+            aria-hidden="true"
+          />
+          <div>
+            <p className="font-semibold">Some dashboard sections are temporarily unavailable.</p>
+            <p className="text-muted-foreground">
+              Showing available data while {dataWarnings.join(", ")} refreshes.
+            </p>
+          </div>
+        </div>
+      )}
       <DashboardHeader
         name={userFirstName}
         newLeadsCount={newLeadsCount}

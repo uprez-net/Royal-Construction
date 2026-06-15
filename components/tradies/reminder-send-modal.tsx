@@ -111,15 +111,15 @@ export function ReminderModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-[#E2E8F0] bg-white p-0 shadow-2xl",
+          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
           "sm:rounded-[14px]",
           "max-h-[60vh] overflow-y-auto",
         )}
       >
         {/* Header */}
-        <DialogHeader className="flex-row items-center justify-between border-b border-[#E2E8F0] px-6 py-5">
+        <DialogHeader className="flex-row items-center justify-between border-b border-border/70 px-6 py-5">
           <div>
-            <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-[#0F172A]">
+            <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-foreground">
               Send Reminder
             </DialogTitle>
           </div>
@@ -134,8 +134,8 @@ export function ReminderModal({
               className={cn(
                 "inline-flex items-center rounded-[7px] border px-3 py-[7px] text-[12.5px] font-[600] transition-all",
                 tab === "email"
-                  ? "border-[#0D9488] bg-[#0D9488] text-white shadow-[0_4px_12px_rgba(13,148,136,0.3)]"
-                  : "border-[#E2E8F0] bg-white text-[#0F172A] hover:border-[#0D9488] hover:bg-[#F8FAFC] hover:text-[#0D9488]",
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border/70 bg-card text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary",
               )}
             >
               <Mail className="mr-1.5 h-3.5 w-3.5" />
@@ -147,8 +147,8 @@ export function ReminderModal({
               className={cn(
                 "inline-flex items-center rounded-[7px] border px-3 py-[7px] text-[12.5px] font-[600] transition-all",
                 tab === "sms"
-                  ? "border-[#0D9488] bg-[#0D9488] text-white shadow-[0_4px_12px_rgba(13,148,136,0.3)]"
-                  : "border-[#E2E8F0] bg-white text-[#0F172A] hover:border-[#0D9488] hover:bg-[#F8FAFC] hover:text-[#0D9488]",
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border/70 bg-card text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary",
               )}
             >
               <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
@@ -160,47 +160,47 @@ export function ReminderModal({
           {tab === "email" && (
             <div>
               <div className="mb-3">
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-[#475569]">
+                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
                   To
                 </Label>
 
-                <div className="text-[13px] font-[600] text-[#0F172A]">
+                <div className="text-[13px] font-[600] text-foreground">
                   {tradie?.email || "N/A"}
                 </div>
               </div>
 
               <div className="mb-3">
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-[#475569]">
+                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
                   Subject
                 </Label>
 
                 <Input
                   value={emailSubject}
                   onChange={(e) => setEmailSubject(e.target.value)}
-                  className="text-[13px] font-semibold text-[#0F172A]"
+                  className="text-[13px] font-semibold text-foreground"
                 />
               </div>
 
               <div className="mb-3">
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-[#475569]">
+                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
                   CC
                 </Label>
 
-                <div className="text-[13px] text-[#475569]">
+                <div className="text-[13px] text-muted-foreground">
                   {siteManager.name} (Site Manager)
                 </div>
               </div>
 
               <div>
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-[#475569]">
+                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
                   Body
                 </Label>
 
                 <Textarea
                   onChange={(e) => setEmailBody(e.target.value)}
                   className={cn(
-                    "min-h-[180px] resize-none rounded-[8px] border border-[#E2E8F0] bg-[#F1F5F9] p-3.5",
-                    "font-sans text-[12.5px] leading-[1.6] text-[#0F172A]",
+                    "min-h-[180px] resize-none rounded-[8px] border border-border/70 bg-muted/30 p-3.5",
+                    "font-sans text-[12.5px] leading-[1.6] text-foreground",
                   )}
                   value={emailBody}
                 />
@@ -212,30 +212,30 @@ export function ReminderModal({
           {tab === "sms" && (
             <div>
               <div className="mb-3">
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-[#475569]">
+                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
                   To
                 </Label>
 
-                <div className="text-[13px] font-[600] text-[#0F172A]">
+                <div className="text-[13px] font-[600] text-foreground">
                   {tradie.phone || "N/A"}
                 </div>
               </div>
 
               <div>
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-[#475569]">
+                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
                   Message
                 </Label>
 
                 <Textarea
                   onChange={(e) => setSmsBody(e.target.value)}
                   className={cn(
-                    "min-h-[180px] resize-none rounded-[8px] border border-[#E2E8F0] bg-[#F1F5F9] p-3.5",
-                    "font-sans text-[12.5px] leading-[1.6] text-[#0F172A]",
+                    "min-h-[180px] resize-none rounded-[8px] border border-border/70 bg-muted/30 p-3.5",
+                    "font-sans text-[12.5px] leading-[1.6] text-foreground",
                   )}
                   value={smsBody}
                 />
 
-                <div className="mt-1 text-[11px] text-[#94A3B8]">
+                <div className="mt-1 text-[11px] text-muted-foreground">
                   {smsBody.length}/160 characters
                 </div>
               </div>
@@ -244,18 +244,18 @@ export function ReminderModal({
         </div>
 
         {/* Footer */}
-        <DialogFooter className="flex-row justify-end gap-2 border-t border-[#E2E8F0] px-6 py-4">
+        <DialogFooter className="flex-row justify-end gap-2 border-t border-border/70 px-6 py-4">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="h-auto rounded-[7px] border-[#E2E8F0] px-[14px] py-[7px] text-[12.5px] font-[500] text-[#0F172A] hover:border-[#0D9488] hover:bg-[#F8FAFC] hover:text-[#0D9488]"
+            className="h-auto rounded-[7px] border-border/70 px-[14px] py-[7px] text-[12.5px] font-[500] text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
           >
             Cancel
           </Button>
 
           <Button
             onClick={onSend}
-            className="h-auto rounded-[7px] bg-[#0D9488] px-[14px] py-[7px] text-[12.5px] font-[600] text-white shadow-none transition-all hover:bg-[#0F766E] hover:shadow-[0_4px_12px_rgba(13,148,136,0.3)]"
+            className="h-auto rounded-[7px] bg-primary px-[14px] py-[7px] text-[12.5px] font-[600] text-primary-foreground shadow-none transition-all hover:bg-primary/90"
           >
             <Send className="mr-1.5 h-3.5 w-3.5" />
             Send Reminder
