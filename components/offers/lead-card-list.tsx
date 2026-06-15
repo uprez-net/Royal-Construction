@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Hourglass, List, Send, Sparkles } from "lucide-react";
+import { Hourglass, List, Pencil, Send, Sparkles } from "lucide-react";
 import type { Lead } from "@/lib/leads/types";
 import { useEffect, useRef, useEffectEvent } from "react";
 
@@ -119,8 +119,8 @@ export function LeadCardList({
                     </span>
                   ) : lead.creatingOffer ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">
-                      <Hourglass className="mr-1.5 h-4 w-4" />
-                      Creating Offer
+                      <Pencil className="mr-1.5 h-4 w-4" />
+                      Update Offer
                     </span>
                   ) : lead.runStatus === "RUNNING" ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">

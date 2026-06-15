@@ -1,7 +1,7 @@
 "use server";
 import { ChatMessageAI, ChatSessionWithMessages } from "@/types/chat";
 import { prisma } from "@/lib/prisma";
-import type { Prisma, File } from "@prisma/client";
+import type { Prisma, File, RunStatus } from "@prisma/client";
 import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 
@@ -84,6 +84,7 @@ interface FetchChatResponse {
         location: string;
         type: string;
         runId: string | null;
+        runStatus: RunStatus | null;
     };
 }
 
@@ -108,6 +109,7 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
                 location: true,
                 type: true,
                 runId: true,
+                runStatus: true,
             }
         });
 

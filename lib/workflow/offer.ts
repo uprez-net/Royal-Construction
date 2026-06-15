@@ -308,7 +308,7 @@ async function saveOffer({
         await prisma.lead.update({
             where: { id: lead.id },
             data: {
-                runId: null, // Clear runId to indicate offer creation is complete
+                runStatus: RunStatus.COMPLETED,
             },
         });
 

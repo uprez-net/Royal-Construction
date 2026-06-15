@@ -266,17 +266,36 @@ export const ChatProvider = ({
           setOfferFile((prev) => ({
             ...prev,
             ...offerData,
-            termsAndConditions:
-              offerData.termsAndConditions ?? prev.termsAndConditions,
+            termsAndConditions: offerData.termsAndConditions
+              ? Array.from(
+                  new Set([
+                    ...(prev.termsAndConditions ?? []),
+                    ...offerData.termsAndConditions,
+                  ]),
+                )
+              : prev.termsAndConditions,
             projectScope: offerData.projectScope
               ? mergeServiceItems(
                   prev.projectScope ?? [],
                   offerData.projectScope,
                 )
               : prev.projectScope,
-            fixedPriceItems: offerData.fixedPriceItems ?? prev.fixedPriceItems,
-            promotionalUpgrades:
-              offerData.promotionalUpgrades ?? prev.promotionalUpgrades,
+            fixedPriceItems: offerData.fixedPriceItems
+              ? Array.from(
+                  new Set([
+                    ...(prev.fixedPriceItems ?? []),
+                    ...offerData.fixedPriceItems,
+                  ]),
+                )
+              : prev.fixedPriceItems,
+            promotionalUpgrades: offerData.promotionalUpgrades
+              ? Array.from(
+                  new Set([
+                    ...(prev.promotionalUpgrades ?? []),
+                    ...offerData.promotionalUpgrades,
+                  ]),
+                )
+              : prev.promotionalUpgrades,
           }));
           break;
         }

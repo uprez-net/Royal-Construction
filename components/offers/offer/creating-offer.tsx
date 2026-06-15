@@ -22,8 +22,9 @@ import {
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/utils/fetch";
 import { Button } from "@/components/ui/button";
-import { useTransition } from "react";
+import { useEffect, useTransition } from "react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 const STEPS = [
   {
@@ -54,11 +55,18 @@ function getStepState(
 }
 
 function CreatingOffer({ leadId }: { leadId: number }) {
+  const router = useRouter();
   const { creatingOffer, startListening } = useWorkflowStream();
   const [isPending, startTransition] = useTransition();
   const { status, progress, message, failed } = creatingOffer;
 
   const isComplete = status === "COMPLETED" && !failed;
+
+  useEffect(() => {
+    if (isComplete) {
+      router.push(`/offers/${leadId}`);
+    }
+  }, [isComplete]);
 
   const handleReTrigger = async () => {
     try {

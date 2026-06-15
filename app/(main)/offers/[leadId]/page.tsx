@@ -19,7 +19,7 @@ async function OfferCreationContent({
   } = await getChatByLeadId(parseInt(leadId));
   const offerData = await getOfferByLeadIdCached(parseInt(leadId));
 
-  if (!chat || !offerData || leadInfo.runId !== null) {
+  if (!chat || !offerData || leadInfo.runStatus !== "COMPLETED") {
     return (
       <CreatingOfferClient runId={leadInfo.runId!} leadId={parseInt(leadId)} />
     );

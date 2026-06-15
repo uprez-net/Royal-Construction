@@ -342,6 +342,7 @@ item. Instead, use quantity=0, unitPrice=0, and a description of [Allowance TBC 
   - Always use lineItemTool for line item creation to ensure consistent arithmetic and formatting. Do not calculate totals in prose.
   - For each line item, populate the source field with a brief reference to where the data came from (e.g., "from lead field 'budget'", "ALLOWANCES sheet row 7", "page 2 of [filename]").
   - Do not include any internal cost, margin, or profitability data in the item description or source. Customer-facing text only.
+  - Use tools to gather as much context as possible before creating line items. For example, if the lead record has a build type of "knockdown rebuild", look for files that might contain the existing dwelling's specifications to inform the scope and pricing.
 </creation_guidelines>
 
 <output_standards>
@@ -364,6 +365,7 @@ ${OFFER_AGENT_BASE_PROMPT}
 pricing-rule summaries. If a required detail is missing, use a clearly labelled placeholder such as [TBC — confirm with estimator] rather than fabricating content.
   - Keep all content customer-facing: specific, warm, professional, and consistent with Royal Constructions' brand voice. Avoid jargon or internal references.
   - Use offerFileTool for all content updates. Patch only changed fields. Do not attempt to generate the entire offer in one step — build iteratively across multiple tool calls.
+  - Use tools to gather necessary context before creating content. For example, if the lead record lacks a build type but a file extract indicates it's a "knockdown rebuild", use that information to inform the project scope and service inclusions.
 </creation_guidelines>
 
 <output_standards>

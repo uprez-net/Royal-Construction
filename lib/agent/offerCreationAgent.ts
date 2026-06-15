@@ -11,12 +11,13 @@ import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 import type { OfferFile } from "@/context/ChatContext";
+import { mergeServiceItems } from "@/utils/chat";
 
-const MODEL_NAME = process.env.NODE_ENV !== "production" ? "xiaomi/mimo-v2.5-pro" : "google/gemini-2.5-flash" as const;
+const MODEL_NAME = "google/gemini-2.5-flash" as const;
 
 export const handleOfferGeneration = async (prompt: string) => {
     const offerLineItems: OfferLineItem[] = [];
-    const offerFileContent: OfferFile = {
+    let offerFileContent: OfferFile = {
         projectWelcomeMessage: "",
         termsAndConditions: [],
         projectScope: [],
@@ -28,14 +29,12 @@ export const handleOfferGeneration = async (prompt: string) => {
     const offerLineItemCreatorAgent = new ToolLoopAgent({
         model: gateway(MODEL_NAME),
         temperature: 0.15,
-        topP: 0.85,
         topK: 20,
-        presencePenalty: 0,
-        frequencyPenalty: 0.05,
         tools: {
             fetchOfferSheetRulesTool: fetchOfferSheetRules,
             fileProcessingTool: FileProcessingTool,
             lineItemTool: lineItemTool(undefined, (lineItem) => {
+                console.log("Received line item update from tool:", lineItem);
                 const existingIndex = offerLineItems.findIndex(item => item.id === lineItem.id);
                 if (existingIndex !== -1) {
                     offerLineItems[existingIndex] = lineItem; // Update existing line item
@@ -47,7 +46,7 @@ export const handleOfferGeneration = async (prompt: string) => {
             scrapeUserLinks: scrapeUserLinks,
         },
         toolChoice: "required",
-        stopWhen: stepCountIs(25),
+        stopWhen: stepCountIs(15),
         instructions: OFFER_LINE_ITEM_CREATION_SYSTEM_PROMPT,
         stopSequences: [
             "<END_OFFER_LINE_ITEM_GENERATION>",
@@ -59,21 +58,37 @@ export const handleOfferGeneration = async (prompt: string) => {
     const offerFileCreationAgent = new ToolLoopAgent({
         model: gateway(MODEL_NAME),
         temperature: 0.15,
-        topP: 0.85,
         topK: 20,
-        presencePenalty: 0,
-        frequencyPenalty: 0.05,
         tools: {
             fetchOfferSheetRulesTool: fetchOfferSheetRules,
             fileProcessingTool: FileProcessingTool,
             offerFileTool: offerFileTool(undefined, (fileContent) => {
-                Object.assign(offerFileContent, fileContent); // Update offer file content
+                console.log("Received offer file content update from tool:", fileContent);
+                offerFileContent = {
+                    projectWelcomeMessage: fileContent.projectWelcomeMessage ?? offerFileContent.projectWelcomeMessage,
+                    facadeOptions: fileContent.facadeOptions ?? offerFileContent.facadeOptions,
+                    termsAndConditions: fileContent.termsAndConditions ?
+                        Array.from(new Set([...(offerFileContent.termsAndConditions ?? []), ...fileContent.termsAndConditions]))
+                        : offerFileContent.termsAndConditions,
+                    projectScope: fileContent.projectScope
+                        ? mergeServiceItems(
+                            offerFileContent.projectScope ?? [],
+                            fileContent.projectScope,
+                        )
+                        : offerFileContent.projectScope,
+                    fixedPriceItems: fileContent.fixedPriceItems
+                        ? Array.from(new Set([...(offerFileContent.fixedPriceItems ?? []), ...fileContent.fixedPriceItems]))
+                        : offerFileContent.fixedPriceItems,
+                    promotionalUpgrades: fileContent.promotionalUpgrades
+                        ? Array.from(new Set([...(offerFileContent.promotionalUpgrades ?? []), ...fileContent.promotionalUpgrades]))
+                        : offerFileContent.promotionalUpgrades,
+                }
             }),
             webSearch: webSearch,
             scrapeUserLinks: scrapeUserLinks,
         },
         toolChoice: "required",
-        stopWhen: stepCountIs(25),
+        stopWhen: stepCountIs(15),
         instructions: OFFER_FILE_CONTENT_CREATION_SYSTEM_PROMPT,
         stopSequences: [
             "<END_OFFER_CONTENT_CREATION>",

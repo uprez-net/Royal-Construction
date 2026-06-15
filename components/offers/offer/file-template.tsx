@@ -9,7 +9,6 @@ import {
 import { OfferFile } from "@/context/ChatContext";
 import { dateFormat } from "@/utils/formatters";
 import { addDays } from "date-fns";
-import DOMPurify from "dompurify";
 
 interface OfferFileTemplateProps extends OfferFile {
   ref?: React.Ref<HTMLIFrameElement>;
@@ -1244,14 +1243,13 @@ export function OfferFileTemplate({
 </body>
 </html>`;
 
-  const clean = DOMPurify.sanitize(html);
 
   return (
     <iframe
       ref={ref}
       sandbox="allow-same-origin"
       title="Offer Preview"
-      srcDoc={clean}
+      srcDoc={html}
       className="block h-full min-h-0 w-[50vw] rounded-2xl border border-[#E2E8F0] bg-white shadow-sm"
     />
   );
