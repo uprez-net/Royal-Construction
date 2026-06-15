@@ -348,11 +348,11 @@ export function ScheduleTradieModal({
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 className={cn(
-                  "min-h-22.5 resize-none rounded-[8px] border-[#E2E8F0]",
-                  "px-3 py-2 text-[13px] text-[#0F172A]",
-                  "focus-visible:border-[#0D9488]",
+                  "min-h-22.5 resize-none rounded-[8px] border-border",
+                  "px-3 py-2 text-[13px] text-foreground",
+                  "focus-visible:border-primary",
                   "focus-visible:ring-[3px]",
-                  "focus-visible:ring-[rgba(13,148,136,0.15)]",
+                  "focus-visible:ring-primary/15",
                 )}
                 required
               />

@@ -9,7 +9,7 @@ function GenericOutput({ data }: { data: unknown }) {
   }
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-sm">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-border/70 bg-card p-3 shadow-sm">
       <StructuredJsonBlock data={data} />
     </div>
   );
@@ -32,7 +32,7 @@ function StructuredObjectView({ data }: { data: unknown }) {
   const complexEntries = entries.filter(([, value]) => !isPrimitive(value));
 
   return (
-    <div className="space-y-3 rounded-xl border border-[#E2E8F0] bg-[#FCFBF8] p-3">
+    <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-3">
       {primitiveEntries.length ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {primitiveEntries.map(([key, value]) => (
@@ -44,8 +44,8 @@ function StructuredObjectView({ data }: { data: unknown }) {
       {complexEntries.length ? (
         <div className="space-y-3">
           {complexEntries.map(([key, value]) => (
-            <div key={key} className="space-y-1 rounded-xl border border-[#E2E8F0] bg-white p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            <div key={key} className="space-y-1 rounded-xl border border-border/70 bg-card p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {toLabel(key)}
               </p>
               {Array.isArray(value) ? (
@@ -73,7 +73,7 @@ function StructuredJsonBlock({ data, compact }: { data: unknown; compact?: boole
   return (
     <pre
       className={[
-        "scrollbar-thin max-h-56 overflow-auto whitespace-pre-wrap rounded-xl border border-[#E2E8F0] bg-white p-3 text-xs text-slate-600",
+        "scrollbar-thin max-h-56 overflow-auto whitespace-pre-wrap rounded-xl border border-border/70 bg-card p-3 text-xs text-muted-foreground",
         compact ? "max-h-40" : "",
       ].join(" ")}
     >
@@ -91,26 +91,26 @@ function StructuredJsonBlock({ data, compact }: { data: unknown; compact?: boole
  */
 function ArrayPreview({ value }: { value: unknown[] }) {
   if (!value.length) {
-    return <p className="text-sm text-slate-500">Empty array</p>;
+    return <p className="text-sm text-muted-foreground">Empty array</p>;
   }
 
   return (
     <div className="space-y-2">
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-muted-foreground">
         {value.length} item{value.length === 1 ? "" : "s"}
       </p>
       <div className="space-y-2">
         {value.slice(0, 5).map((item, index) => (
           <div
             key={index}
-            className="rounded-xl border border-[#E2E8F0] bg-white p-2 text-sm text-slate-600"
+            className="rounded-xl border border-border/70 bg-card p-2 text-sm text-muted-foreground"
           >
             {isPrimitive(item) ? String(item) : safeStringify(item)}
           </div>
         ))}
       </div>
       {value.length > 5 ? (
-        <p className="text-xs text-slate-400">Showing first 5 items.</p>
+        <p className="text-xs text-muted-foreground/70">Showing first 5 items.</p>
       ) : null}
     </div>
   );
@@ -126,12 +126,12 @@ function StatPill({ label, value, compact }: { label: string; value: React.React
   return (
     <div
       className={[
-        "rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-slate-600 shadow-sm",
+        "rounded-xl border border-border/70 bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm",
         compact ? "px-2 py-1" : "",
       ].join(" ")}
     >
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-0.5 font-medium tabular-nums text-slate-900">{value}</div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-0.5 font-medium tabular-nums text-foreground">{value}</div>
     </div>
   );
 }
@@ -145,9 +145,9 @@ function StatPill({ label, value, compact }: { label: string; value: React.React
  */
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 shadow-sm">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 break-words text-sm text-slate-700">{value}</div>
+    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 shadow-sm">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 break-words text-sm text-foreground">{value}</div>
     </div>
   );
 }

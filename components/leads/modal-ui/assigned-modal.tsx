@@ -20,6 +20,10 @@ export function AssignedModal({
 }: AssignedModalProps) {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [saving, setSaving] = useState(false);
+  const selectId = React.useId();
+  const helperId = `${selectId}-helper`;
+  const inputCls =
+    "mt-1 w-full rounded-[4px] border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-[color:var(--royal-gold)] focus:outline-none focus:ring-2 focus:ring-[color:var(--royal-gold-light)]";
 
   const handleSave = async () => {
     if (!selectedUserId) return;
@@ -58,13 +62,19 @@ export function AssignedModal({
     >
       <div className="space-y-4">
         <div>
-          <label className="text-xs font-medium text-[#78716c]">
+          <label
+            htmlFor={selectId}
+            className="text-xs font-medium text-muted-foreground"
+          >
             Assigned To
           </label>
           <select
-            className="mt-1 w-full rounded-[4px] border border-[#d6d3d1] bg-white px-3 py-2 text-sm text-[#0c0a09] focus:border-[#0D9488] focus:outline-none focus:ring-2 focus:ring-[#CCFBF1]"
+            id={selectId}
+            className={inputCls}
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
+            required
+            aria-describedby={!selectedUserId ? helperId : undefined}
           >
             <option value="" disabled>
               Select a person
@@ -75,18 +85,24 @@ export function AssignedModal({
               </option>
             ))}
           </select>
+          {!selectedUserId && (
+            <p id={helperId} className="mt-1.5 text-xs text-muted-foreground">
+              Choose a person before saving assignment.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
-            className={`inline-flex items-center justify-center gap-2 rounded-full bg-[#0D9488] px-4 py-2 text-xs font-medium text-white transition hover:bg-[#2b8fd6] ${selectedUserId ? "" : "cursor-not-allowed opacity-50"}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-full bg-[color:var(--royal-gold)] px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-[color:var(--royal-gold-dark)] ${selectedUserId ? "" : "cursor-not-allowed opacity-50"}`}
             onClick={handleSave}
             disabled={!selectedUserId || saving}
+            aria-describedby={!selectedUserId ? helperId : undefined}
           >
             {saving ? (
               <>
                 <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Assigning User ...
+                Assigning user...
               </>
             ) : (
               "Save Assignment"
@@ -94,7 +110,7 @@ export function AssignedModal({
           </button>
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-full border border-[#e5e7eb] px-4 py-2 text-xs font-medium text-[#78716c] transition hover:border-[#c9c5c2] hover:bg-[#fafaf9]"
+            className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition hover:border-[color:var(--royal-gold)] hover:bg-muted"
             onClick={onClose}
           >
             Cancel

@@ -1196,7 +1196,7 @@ export function TradiesClient({
             valueKey="confirmedRate"
             valueLabel="Confirmation %"
             xAxisFormatter={(value) => `${value}%`}
-            color="#0D9488"
+            color="var(--primary)"
           />
 
           <DonutChartCard
@@ -1206,12 +1206,12 @@ export function TradiesClient({
             labelKey="label"
             valueKey="value"
             colorByLabel={{
-              Confirmed: "#16A34A",
-              Pending: "#F59E0B",
-              "Pending Response": "#2563EB",
-              "No Response": "#DC2626",
-              Declined: "#B91C1C",
-              Completed: "#64748B",
+              Confirmed: "var(--success)",
+              Pending: "var(--warning)",
+              "Pending Response": "var(--info)",
+              "No Response": "var(--destructive)",
+              Declined: "var(--destructive)",
+              Completed: "var(--muted-foreground)",
             }}
           />
         </div>

@@ -43,40 +43,40 @@ const outcomeConfig: Record<
     title: "Confirmed",
     description: "Tradie confirmed availability",
     icon: <CheckCircle2 className="h-5 w-5" />,
-    border: "border-[rgba(22,163,74,0.2)]",
-    iconBg: "bg-[#DCFCE7]",
-    iconColor: "text-[#16A34A]",
-    titleColor: "text-[#16A34A]",
+    border: "border-[color:var(--success)]",
+    iconBg: "bg-[color:var(--success-light)]",
+    iconColor: "text-[color:var(--success)]",
+    titleColor: "text-[color:var(--success)]",
   },
 
   PENDING: {
     title: "Will Call Back",
     description: "Tradie will check and revert",
     icon: <Clock3 className="h-5 w-5" />,
-    border: "border-[rgba(245,158,11,0.2)]",
-    iconBg: "bg-[#FEF9C3]",
-    iconColor: "text-[#D97706]",
-    titleColor: "text-[#D97706]",
+    border: "border-[color:var(--warning)]",
+    iconBg: "bg-[color:var(--warning-light)]",
+    iconColor: "text-[color:var(--warning)]",
+    titleColor: "text-[color:var(--warning)]",
   },
 
   NO_RESPONSE: {
     title: "No Answer",
     description: "Went to voicemail / not reachable",
     icon: <PhoneOff className="h-5 w-5" />,
-    border: "border-[rgba(148,163,184,0.2)]",
-    iconBg: "bg-[#F1F5F9]",
-    iconColor: "text-[#94A3B8]",
-    titleColor: "text-[#0F172A]",
+    border: "border-border",
+    iconBg: "bg-muted",
+    iconColor: "text-muted-foreground",
+    titleColor: "text-foreground",
   },
 
   DECLINED: {
     title: "Declined",
     description: "Tradie not available",
     icon: <XCircle className="h-5 w-5" />,
-    border: "border-[rgba(220,38,38,0.2)]",
-    iconBg: "bg-[#FEE2E2]",
-    iconColor: "text-[#DC2626]",
-    titleColor: "text-[#DC2626]",
+    border: "border-[color:var(--destructive)]",
+    iconBg: "bg-[color:var(--destructive-light)]",
+    iconColor: "text-[color:var(--destructive)]",
+    titleColor: "text-[color:var(--destructive)]",
   },
 };
 
@@ -127,19 +127,19 @@ export function LogCallModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-[#E2E8F0] bg-white p-0 shadow-2xl",
+          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
           "sm:rounded-[14px]",
           "max-h-[60vh] overflow-y-auto"
         )}
       >
         {/* Header */}
-        <DialogHeader className="flex-row items-center justify-between border-b border-[#E2E8F0] px-6 py-5">
+        <DialogHeader className="flex-row items-center justify-between border-b border-border/70 px-6 py-5">
           <div>
-            <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-[#0F172A]">
+            <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-foreground">
               Log Call Outcome
             </DialogTitle>
 
-            <p className="mt-1 text-[12.5px] text-[#64748B]">
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
               {schedule.tradieName} on {schedule.projectName} for{" "}
               {schedule.milestoneName ?? "unscheduled milestone"}.
             </p>
@@ -153,24 +153,24 @@ export function LogCallModal({
             <div
               className={cn(
                 "mb-3 inline-flex h-16 w-16 items-center justify-center rounded-full",
-                "bg-[rgba(13,148,136,0.15)]",
+                "bg-primary/15",
               )}
             >
-              <Phone className="h-7 w-7 text-[#0D9488]" />
+              <Phone className="h-7 w-7 text-primary" />
             </div>
 
-            <div className="text-[20px] font-[800] tracking-[-0.02em] text-[#0F172A]">
+            <div className="text-[20px] font-[800] tracking-[-0.02em] text-foreground">
               {schedule.contact.phone || schedule.tradieName}
             </div>
 
-            <div className="mt-0.5 text-[12px] text-[#94A3B8]">
+            <div className="mt-0.5 text-[12px] text-muted-foreground">
               {schedule.company || "Tradie"}
             </div>
           </div>
 
           {/* Notes */}
           <div className="mb-4">
-            <label className="mb-[5px] block text-[11.5px] font-[600] text-[#475569]">
+            <label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
               Call Notes
             </label>
 
@@ -179,22 +179,22 @@ export function LogCallModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="What was discussed? Any outcomes or commitments made..."
               className={cn(
-                "min-h-[90px] resize-none rounded-[8px] border-[#E2E8F0]",
-                "px-3 py-2 text-[13px] text-[#0F172A]",
-                "focus-visible:border-[#0D9488]",
+                "min-h-[90px] resize-none rounded-[8px] border-border",
+                "px-3 py-2 text-[13px] text-foreground",
+                "focus-visible:border-primary",
                 "focus-visible:ring-[3px]",
-                "focus-visible:ring-[rgba(13,148,136,0.15)]",
+                "focus-visible:ring-primary/15",
               )}
             />
           </div>
 
           {/* Outcome Label */}
-          <div className="mb-2 text-[10px] font-[600] uppercase tracking-[0.06em] text-[#94A3B8]">
+          <div className="mb-2 text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
             Outcome
           </div>
           {/* Error Message */}
           {error && (
-            <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-[#FEE2E2] px-3 py-2 text-[12px] text-[#DC2626]">
+            <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-[color:var(--destructive-light)] px-3 py-2 text-[12px] text-[color:var(--destructive)]">
               <XCircle className="h-4 w-4" />
               {error}
             </div>
@@ -219,11 +219,11 @@ export function LogCallModal({
                   disabled={isLoading}
                   onClick={() => submit(status)}
                   className={cn(
-                    "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-white px-4 py-[14px] text-left transition-all",
+                    "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-card px-4 py-[14px] text-left transition-all",
                     "hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
                     "disabled:pointer-events-none disabled:opacity-60",
                     config.border,
-                    schedule.status === status && "border-[#0D9488] shadow-[0_4px_12px_rgba(13,148,136,0.15)]",
+                    schedule.status === status && "border-primary shadow-sm",
                   )}
                 >
                   <div
@@ -250,7 +250,7 @@ export function LogCallModal({
                       {config.title}
                     </div>
 
-                    <div className="mt-0.5 text-[11px] text-[#94A3B8]">
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
                       {config.description}
                     </div>
                   </div>
