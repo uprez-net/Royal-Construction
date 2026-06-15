@@ -82,6 +82,23 @@ const variationCreateToolSchema = projectParamSchema.extend(createVariationToolS
 const variationUpdateToolSchema = variationParamSchema.extend({ status: z.enum(["APPROVED", "REJECTED"]) });
 const tradieScheduleUpdateToolSchema = scheduleParamSchema.extend(updateTradieScheduleSchema.shape);
 
+const getTradieResponseSchema = z.object({
+    tradies: tradiesResponseSchema,
+    totalCount: z.number(),
+});
+
+const addressLookupResponseSchema = z.object({
+    suggestions: z.array(z.object({
+        placeId: z.string(),
+        address: z.string(),
+        lat: z.number(),
+        lng: z.number(),
+        council: z.string().optional(),
+        state: z.string().optional(),
+    })),
+    count: z.number(),
+});
+
 const removeAllNestedDateObjects = (value: unknown): unknown => {
     if (value instanceof Date) {
         return value.toISOString();
@@ -121,7 +138,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await getCachedCustomersForDropdown(params.page, params.limit, params.q || params.search))
+                const res = removeAllNestedDateObjects(await getCachedCustomersForDropdown(params.page, params.limit, params.q || params.search));
+                const validated = customerLookupResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid customer lookup response", z.treeifyError(validated.error));
+                    throw new Error("Invalid customer lookup response");
+                }
+                return toToolResult(validated.data)
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching customers ${error instanceof Error ? error.message : String(error)}` }],
@@ -139,7 +162,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await getCachedSiteManagersForDropdown(params.page, params.limit, params.q || params.search))
+                const res = removeAllNestedDateObjects(await getCachedSiteManagersForDropdown(params.page, params.limit, params.q || params.search));
+                const validated = siteManagerLookupResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid site manager lookup response", z.treeifyError(validated.error));
+                    throw new Error("Invalid site manager lookup response");
+                }
+                return toToolResult(validated.data)
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching site managers ${error instanceof Error ? error.message : String(error)}` }],
@@ -153,18 +182,17 @@ const handler = createMcpHandler((server) => {
         {
             description: "Search tradies for dropdowns and lookup",
             inputSchema: tradieSearchQuerySchema,
-            outputSchema: z.object({
-                tradies: tradiesResponseSchema,
-                totalCount: z.number(),
-            }),
+            outputSchema: getTradieResponseSchema,
         },
         async (params) => {
             try {
-                const res = await getTradiesForLookup(params.limit, params.q || params.search)
-                return toToolResult({
-                    tradies: res,
-                    totalCount: res.length,
-                })
+                const res = removeAllNestedDateObjects(await getTradiesForLookup(params.limit, params.q || params.search))
+                const validated = getTradieResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid tradie lookup response", z.treeifyError(validated.error));
+                    throw new Error("Invalid tradie lookup response");
+                }
+                return toToolResult(validated.data)
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching tradies ${error instanceof Error ? error.message : String(error)}` }],
@@ -182,7 +210,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await getCachedProjects(params));
+                const res = removeAllNestedDateObjects(await getCachedProjects(params));
+                const validated = projectsResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid projects response", z.treeifyError(validated.error));
+                    throw new Error("Invalid projects response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching projects ${error instanceof Error ? error.message : String(error)}` }],
@@ -200,7 +234,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await getCachedProjectsForLookup(params.page, params.limit, params.q));
+                const res = removeAllNestedDateObjects(await getCachedProjectsForLookup(params.page, params.limit, params.q));
+                const validated = projectLookupResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid project lookup response", z.treeifyError(validated.error));
+                    throw new Error("Invalid project lookup response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching projects for lookup ${error instanceof Error ? error.message : String(error)}` }],
@@ -218,7 +258,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await getCachedProjectById(params.projectId));
+                const res = removeAllNestedDateObjects(await getCachedProjectById(params.projectId));
+                const validated = projectDetailResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid project detail response", z.treeifyError(validated.error));
+                    throw new Error("Invalid project detail response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching project ${error instanceof Error ? error.message : String(error)}` }],
@@ -237,7 +283,13 @@ const handler = createMcpHandler((server) => {
         async (params) => {
             try {
                 const projectId = await createProject(params);
-                return toToolResult(await getCachedProjectById(projectId));
+                const res = removeAllNestedDateObjects(await getCachedProjectById(projectId));
+                const validated = projectDetailResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid project detail response", z.treeifyError(validated.error));
+                    throw new Error("Invalid project detail response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error creating project ${error instanceof Error ? error.message : String(error)}` }],
@@ -265,7 +317,13 @@ const handler = createMcpHandler((server) => {
                     throw new Error("User not found");
                 }
                 await createProjectUpdate({ ...params, authorId: user.id });
-                return toToolResult(await getCachedProjectById(params.projectId));
+                const res = removeAllNestedDateObjects(await getCachedProjectById(params.projectId));
+                const validated = projectDetailResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid project detail response", z.treeifyError(validated.error));
+                    throw new Error("Invalid project detail response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error creating project update ${error instanceof Error ? error.message : String(error)}` }],
@@ -283,7 +341,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await createVariation(params.projectId, params));
+                const res = removeAllNestedDateObjects(await createVariation(params.projectId, params));
+                const validated = variationResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid variation response", z.treeifyError(validated.error));
+                    throw new Error("Invalid variation response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error creating variation ${error instanceof Error ? error.message : String(error)}` }],
@@ -301,7 +365,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await updateVariationStatus(params.variationId, params.status));
+                const res = removeAllNestedDateObjects(await updateVariationStatus(params.variationId, params.status));
+                const validated = variationResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid variation response", z.treeifyError(validated.error));
+                    throw new Error("Invalid variation response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error updating variation status ${error instanceof Error ? error.message : String(error)}` }],
@@ -322,8 +392,16 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                const res = await getMilestonesByProject(params.projectId);
-                return toToolResult({ milestones: res, totalCount: res.length });
+                const res = removeAllNestedDateObjects(await getMilestonesByProject(params.projectId)) as Awaited<ReturnType<typeof getMilestonesByProject>>;
+                const validated = z.object({
+                    milestones: z.array(milestoneResponseSchema),
+                    totalCount: z.number(),
+                }).safeParse({ milestones: res, totalCount: res.length });
+                if (!validated.success) {
+                    console.error("Invalid milestones response", z.treeifyError(validated.error));
+                    throw new Error("Invalid milestones response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching milestones ${error instanceof Error ? error.message : String(error)}` }],
@@ -341,7 +419,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await createMilestone(params.projectId, params));
+                const res = removeAllNestedDateObjects(await createMilestone(params.projectId, params));
+                const validated = milestoneDetailResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid milestone detail response", z.treeifyError(validated.error));
+                    throw new Error("Invalid milestone detail response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error creating milestone ${error instanceof Error ? error.message : String(error)}` }],
@@ -359,7 +443,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await addPhotosToMilestone(params.projectId, params.milestoneId, params.fileIds));
+                const res = removeAllNestedDateObjects(await addPhotosToMilestone(params.projectId, params.milestoneId, params.fileIds));
+                const validated = milestoneAddPhotosResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid milestone photos response", z.treeifyError(validated.error));
+                    throw new Error("Invalid milestone photos response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error adding milestone photos ${error instanceof Error ? error.message : String(error)}` }],
@@ -377,7 +467,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await updateMilestone(params.milestoneId, params));
+                const res = removeAllNestedDateObjects(await updateMilestone(params.milestoneId, params));
+                const validated = milestoneDetailResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid milestone detail response", z.treeifyError(validated.error));
+                    throw new Error("Invalid milestone detail response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error updating milestone ${error instanceof Error ? error.message : String(error)}` }],
@@ -396,7 +492,13 @@ const handler = createMcpHandler((server) => {
         async ({ q, status, filterTiming, page, limit }) => {
             try {
                 const statusFilterArray = status ? status.split(',').map(s => LeadStageToLeadStageDBMapping[(s.trim() as LeadStage)]) : undefined;
-                return toToolResult(await getLeads(page, limit, q, statusFilterArray, filterTiming));
+                const res = removeAllNestedDateObjects(await getLeads(page, limit, q, statusFilterArray, filterTiming));
+                const validated = leadsResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid leads response", z.treeifyError(validated.error));
+                    throw new Error("Invalid leads response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching leads ${error instanceof Error ? error.message : String(error)}` }],
@@ -414,7 +516,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await createLead(params));
+                const res = removeAllNestedDateObjects(await createLead(params));
+                const validated = leadResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid lead response", z.treeifyError(validated.error));
+                    throw new Error("Invalid lead response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error creating lead ${error instanceof Error ? error.message : String(error)}` }],
@@ -433,7 +541,13 @@ const handler = createMcpHandler((server) => {
         async (params) => {
             try {
                 const { leadId, ...updates } = params;
-                return toToolResult(await updateLead(Number(leadId), updates));
+                const res = removeAllNestedDateObjects(await updateLead(Number(leadId), updates));
+                const validated = leadResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid lead response", z.treeifyError(validated.error));
+                    throw new Error("Invalid lead response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error updating lead ${error instanceof Error ? error.message : String(error)}` }],
@@ -451,7 +565,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await deleteLead(Number(params.leadId)));
+                const res = removeAllNestedDateObjects(await deleteLead(Number(params.leadId)));
+                const validated = deleteLeadResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid delete lead response", z.treeifyError(validated.error));
+                    throw new Error("Invalid delete lead response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error deleting lead ${error instanceof Error ? error.message : String(error)}` }],
@@ -472,11 +592,13 @@ const handler = createMcpHandler((server) => {
         },
         async () => {
             try {
-                const res = await getCachedTradies();
-                return toToolResult({
-                    tradies: res,
-                    totalCount: res.length,
-                });
+                const res = removeAllNestedDateObjects(await getCachedTradies());
+                const validated = tradiesResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid tradies response", z.treeifyError(validated.error));
+                    throw new Error("Invalid tradies response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching tradies ${error instanceof Error ? error.message : String(error)}` }],
@@ -494,16 +616,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                const res = await getCachedTradieCoordinationDashboard(params);
-                return toToolResult({
-                    pagination: res.pagination,
-                    schedules: res.schedules,
-                    tradeOptions: res.tradeOptions,
-                    statusMetrics: res.statusMetrics,
-                    tradeBreakdown: res.tradeBreakdown,
-                    projectAllocations: res.projectAllocations,
-                    urgentReminders: res.urgentReminders,
-                });
+                const res = removeAllNestedDateObjects(await getCachedTradieCoordinationDashboard(params));
+                const success = tradieCoordinationResponseSchema.safeParse(res);
+                if (!success.success) {
+                    console.error("Invalid tradie coordination dashboard response", success.error.format());
+                    throw new Error("Invalid tradie coordination dashboard response");
+                }
+                return toToolResult(success.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching tradie coordination data ${error instanceof Error ? error.message : String(error)}` }],
@@ -521,7 +640,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await createTradieSchedule(params));
+                const res = removeAllNestedDateObjects(await createTradieSchedule(params));
+                const validated = tradieScheduleWriteResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid tradie schedule response", z.treeifyError(validated.error));
+                    throw new Error("Invalid tradie schedule response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error creating tradie schedule ${error instanceof Error ? error.message : String(error)}` }],
@@ -540,7 +665,13 @@ const handler = createMcpHandler((server) => {
         async (params) => {
             try {
                 const { scheduleId, ...updates } = params;
-                return toToolResult(await updateTradieSchedule(scheduleId, updates));
+                const res = removeAllNestedDateObjects(await updateTradieSchedule(scheduleId, updates));
+                const validated = updateTradieScheduleResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid tradie schedule response", z.treeifyError(validated.error));
+                    throw new Error("Invalid tradie schedule response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error updating tradie schedule ${error instanceof Error ? error.message : String(error)}` }],
@@ -558,7 +689,13 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await addMaterialToProject(params.projectId, params.materialData));
+                const res = removeAllNestedDateObjects(await addMaterialToProject(params.projectId, params.materialData));
+                const validated = materialResponseSchema.safeParse(res);
+                if (!validated.success) {
+                    console.error("Invalid material response", z.treeifyError(validated.error));
+                    throw new Error("Invalid material response");
+                }
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error adding material ${error instanceof Error ? error.message : String(error)}` }],
@@ -575,6 +712,7 @@ const handler = createMcpHandler((server) => {
                 query: z.string().describe("The address to look up"),
                 limit: z.number().optional().describe("Max number of results"),
             },
+            outputSchema: addressLookupResponseSchema,
         },
         async ({ query, limit }) => {
             try {
@@ -591,7 +729,13 @@ const handler = createMcpHandler((server) => {
 
                 const data = response.data;
 
-                return toToolResult(data, true);
+                const validated = addressLookupResponseSchema.safeParse(data);
+                if (!validated.success) {
+                    console.error("Invalid address lookup response", z.treeifyError(validated.error));
+                    throw new Error("Invalid address lookup response");
+                }
+
+                return toToolResult(validated.data);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching address suggestions ${error instanceof Error ? error.message : String(error)}` }],
@@ -655,7 +799,7 @@ const handler = createMcpHandler((server) => {
             version: "1.0.0",
         },
     },
-    {   
+    {
         maxDuration: 120, // seconds
         redisUrl: process.env.REDIS_URL,
         verboseLogs: true,
