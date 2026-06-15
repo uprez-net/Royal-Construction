@@ -599,8 +599,15 @@ const handler = createMcpHandler((server) => {
             version: "1.0.0",
         },
     },
-    {
-        basePath: "/api",
+    {   
+        maxDuration: 120, // seconds
+        redisUrl: process.env.REDIS_URL,
+        verboseLogs: true,
+        disableSse: false,
+        onEvent: (event) => {
+            console.log("MCP Event:");
+            console.dir(event, { depth: Infinity, colors: true });
+        }
     });
 
 
@@ -613,5 +620,4 @@ const authHandler = withMcpAuth(handler,
         required: true,
         resourceMetadataPath: "/.well-known/oauth-protected-resource",
     });
-
-export { authHandler as GET, authHandler as POST, authHandler as DELETE };
+export { authHandler as GET, authHandler as POST };
