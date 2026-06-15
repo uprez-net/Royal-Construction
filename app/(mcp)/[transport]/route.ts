@@ -81,7 +81,7 @@ const variationUpdateToolSchema = variationParamSchema.extend({ status: z.enum([
 const tradieScheduleUpdateToolSchema = scheduleParamSchema.extend(updateTradieScheduleSchema.shape);
 
 const toToolResult = <T>(data: T) => ({
-    structuredContent: data as { [key: string]: unknown },
+    // structuredContent: data as { [key: string]: unknown },
     content: [{ type: "text" as const, text: JSON.stringify(data) }],
 });
 
@@ -551,7 +551,9 @@ const handler = createMcpHandler((server) => {
         {
             description: "Upload a file and get back its ID for association with milestones and projects",
             inputSchema: z.object({
-                file: z.instanceof(File).describe("The file to upload"),
+                file: z.string().describe("Base64 encoded file content"),
+                fileName: z.string().describe("Original file name"),
+                fileSize: z.number().describe("File size in bytes"),
                 projectId: z.string().trim().min(1).describe("The ID of the project to associate the file with"),
                 milestoneId: z.string().trim().min(1).optional().describe("The ID of the milestone to associate the file with"),
             }),
@@ -559,7 +561,7 @@ const handler = createMcpHandler((server) => {
                 fileId: z.string().describe("The ID of the uploaded file"),
             }),
         },
-        async ({ file, projectId, milestoneId }, { authInfo }) => {
+        async ({ file, fileName, fileSize, projectId, milestoneId }, { authInfo }) => {
             const userId = authInfo?.extra?.userId as string | undefined;
             try {
                 if (!userId) {
@@ -568,7 +570,7 @@ const handler = createMcpHandler((server) => {
                 const fileId = uuid();
                 const pathname = buildBlobPath({
                     fileId: fileId,
-                    fileName: file.name,
+                    fileName: fileName,
                     projectId,
                     milestoneId,
                 });
@@ -579,9 +581,9 @@ const handler = createMcpHandler((server) => {
                     milestoneId: milestoneId ?? undefined,
                     fileId: fileId,
                     fileUrl: blob.url,
-                    fileName: file.name,
+                    fileName: fileName,
                     fileType: blob.contentType,
-                    fileSize: file.size,
+                    fileSize: fileSize,
                 });
 
                 return toToolResult({ fileId });

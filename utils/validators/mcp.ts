@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isoDateStringSchema } from "./common";
 
 export const paginatedLookupSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
   z.object({
@@ -46,7 +47,7 @@ export const siteManagerLookupResponseSchema = paginatedLookupSchema(
       name: z.string(),
       email: z.string().nullable(),
       phone: z.string().nullable(),
-      createdAt: z.date(),
+      createdAt: isoDateStringSchema,
     })
     .loose(),
 );
@@ -68,7 +69,7 @@ export const customerLookupResponseSchema = paginatedLookupSchema(
       name: z.string(),
       email: z.string().nullable(),
       phone: z.string().nullable(),
-      createdAt: z.date(),
+      createdAt: isoDateStringSchema,
     })
     .loose(),
 );
@@ -78,7 +79,7 @@ export const leadHistoryItemSchema = z
     action: z.string(),
     detail: z.string().optional(),
     type: z.string(),
-    actionDate: z.string().or(z.date()),
+    actionDate: isoDateStringSchema,
   })
   .loose();
 
@@ -92,7 +93,7 @@ export const leadItemSchema = z
     source: z.string().nullable().optional(),
     stage: z.string().nullable().optional(),
     assigned: z.string().nullable().optional(),
-    createdAt: z.date(),
+    createdAt: isoDateStringSchema,
     history: z.array(leadHistoryItemSchema).optional(),
   })
   .loose();
@@ -102,7 +103,7 @@ export const leadResponseSchema = leadItemSchema;
 export const deleteLeadResponseSchema = z.object({ success: z.boolean() }).loose();
 
 export const projectCustomerSchema = z
-  .object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), createdAt: z.date() })
+  .object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), createdAt: isoDateStringSchema })
   .loose();
 
 export const projectSiteManagerSchema = z
@@ -117,8 +118,8 @@ export const projectListMilestoneSchema = z
   .object({
     id: z.string(),
     name: z.string(),
-    targetDate: z.date(),
-    actualDate: z.date().nullable(),
+    targetDate: isoDateStringSchema,
+    actualDate: isoDateStringSchema.optional(),
     status: z.string(),
     tradies: z.array(
       z
@@ -158,7 +159,7 @@ export const variationSchema = z
     projectId: z.string(),
     description: z.string(),
     cost: z.string(),
-    requestedDate: z.date().optional(),
+    requestedDate: isoDateStringSchema.optional(),
     status: z.string(),
   })
   .loose();

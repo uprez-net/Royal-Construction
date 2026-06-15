@@ -1,7 +1,7 @@
 import { TradieScheduleStatus } from "@prisma/client";
 import { z } from "zod";
 import {
-  isoDateSchema,
+  isoDateStringSchema,
   optionalEnumSchema,
 } from "./common";
 
@@ -75,7 +75,7 @@ export const createTradieScheduleSchema = z.object({
     .trim()
     .optional(),
 
-  scheduledDate: isoDateSchema,
+  scheduledDate: isoDateStringSchema,
 
   durationDays: z.coerce
     .number()

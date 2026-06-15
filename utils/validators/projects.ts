@@ -3,12 +3,12 @@ import { z } from "zod";
 import { ProjectListSortBy } from "@/lib/data/projects";
 import {
   emailSchema,
-  isoDateSchema,
   nonNegativeSchema,
   normalizedStringSchema,
-  optionalIsoDateSchema,
+  // optionalIsoDateSchema,
   paginationSchema,
   sortOrderSchema,
+  isoDateStringSchema
 } from "./common";
 /**
  * Project-related validators
@@ -49,9 +49,9 @@ const baseProjectSchema = z.object({
     .min(1, "Location is required")
     .max(255, "Location is too long"),
 
-  startDate: isoDateSchema,
+  startDate: isoDateStringSchema,
 
-  estimatedEndDate: optionalIsoDateSchema,
+  estimatedEndDate: isoDateStringSchema.optional(),
 
   estEnd: z
     .string()
@@ -271,7 +271,7 @@ export const projectListQuerySchema = z
       .optional(),
 
     status: z
-      .nativeEnum(ProjectStatus)
+      .enum(ProjectStatus)
       .optional()
       .catch(undefined),
 
@@ -337,7 +337,7 @@ export const createVariationSchema = z.object({
 
   cost: nonNegativeSchema,
 
-  requestedDate: optionalIsoDateSchema,
+  requestedDate: isoDateStringSchema.optional(),
 });
 
 export type CreateVariationInput = z.infer<typeof createVariationSchema>;

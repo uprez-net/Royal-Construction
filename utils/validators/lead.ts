@@ -37,19 +37,19 @@ const nullableTrimmedString = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : null;
 }, z.string().nullable());
 
-const dateInputSchema = z.preprocess((value) => {
-  if (typeof value !== "string" || value.trim() === "") {
-    return null;
-  }
+// const dateInputSchema = z.preprocess((value) => {
+//   if (typeof value !== "string" || value.trim() === "") {
+//     return null;
+//   }
 
-  const parsed = new Date(value);
+//   const parsed = new Date(value);
 
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
+//   if (Number.isNaN(parsed.getTime())) {
+//     return null;
+//   }
 
-  return parsed;
-}, z.date().nullable());
+//   return parsed;
+// }, z.date().nullable());
 
 const typeSchema = z.preprocess((value) => {
   if (Array.isArray(value)) {
@@ -96,19 +96,19 @@ const typeArraySchema = z.preprocess((value) => {
   return [];
 }, z.array(z.string()));
 
-const dateSchema = z.preprocess((value) => {
-  if (typeof value !== "string" || value.trim() === "") {
-    return null;
-  }
+// const dateSchema = z.preprocess((value) => {
+//   if (typeof value !== "string" || value.trim() === "") {
+//     return null;
+//   }
 
-  const parsed = new Date(value);
+//   const parsed = new Date(value);
 
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
+//   if (Number.isNaN(parsed.getTime())) {
+//     return null;
+//   }
 
-  return parsed;
-}, z.date().nullable());
+//   return parsed;
+// }, z.date().nullable());
 
 const leadRichTextDocumentSchema = z.object({
   version: z.literal(1),
@@ -130,7 +130,7 @@ export const historySchema = z.object({
     .enum(["system", "call", "email", "referral"])
     .optional()
     .default("system"),
-  actionDate: dateSchema.optional(),
+  actionDate: z.string().describe("Action date").optional(),
 });
 
 export const updateLeadSchema = z.object({
@@ -150,7 +150,7 @@ export const updateLeadSchema = z.object({
   notesDoc: leadRichTextDocumentSchema.nullable().optional(),
   annotationsToCreate: z.array(leadNoteAnnotationInputSchema).optional(),
 
-  followupDate: dateInputSchema.optional(),
+  followupDate: z.string().describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
   followupNotes: nullableTrimmedString.optional(),
@@ -187,7 +187,7 @@ export const createLeadSchema = z.object({
 
   notes: nullableTrimmedString.optional(),
 
-  followupDate: dateSchema.optional(),
+  followupDate: z.string().describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
 

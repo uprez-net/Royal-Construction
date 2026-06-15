@@ -13,7 +13,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
       tradieId: input.tradieId,
       projectId: input.projectId,
       milestoneId: input.milestoneId ?? null,
-      scheduledDate: input.scheduledDate,
+      scheduledDate: new Date(input.scheduledDate),
       durationDays: input.durationDays ?? 1,
       status: TradieScheduleStatus.PENDING,
     },
