@@ -22,9 +22,10 @@ import {
 import { cn } from "@/lib/utils";
 import { fetchJson } from "@/utils/fetch";
 import { Button } from "@/components/ui/button";
-import { useEffect, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { addMinutes, differenceInSeconds } from "date-fns";
 
 const STEPS = [
   {
@@ -54,19 +55,52 @@ function getStepState(
   return "idle";
 }
 
-function CreatingOffer({ leadId }: { leadId: number }) {
+function CreatingOffer({
+  leadId,
+  updatedAt,
+}: {
+  leadId: number;
+  updatedAt: Date;
+}) {
   const router = useRouter();
   const { creatingOffer, startListening } = useWorkflowStream();
   const [isPending, startTransition] = useTransition();
+  const [timeLeft, setTimeLeft] = useState(0);
   const { status, progress, message, failed } = creatingOffer;
 
   const isComplete = status === "COMPLETED" && !failed;
+
+  const { minutes, seconds } = useMemo(() => {
+    const mins = Math.floor(timeLeft / 60);
+    const secs = timeLeft % 60;
+    return { minutes: mins, seconds: secs };
+  }, [timeLeft]);
 
   useEffect(() => {
     if (isComplete) {
       router.push(`/offers/${leadId}`);
     }
   }, [isComplete]);
+
+  useEffect(() => {
+    const expiresAt = addMinutes(new Date(updatedAt), 15);
+
+    const updateTimer = () => {
+      const remaining = Math.max(0, differenceInSeconds(expiresAt, new Date()));
+
+      setTimeLeft(remaining);
+
+      if (remaining === 0) {
+        clearInterval(interval);
+      }
+    };
+
+    updateTimer();
+
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [updatedAt]);
 
   const handleReTrigger = async () => {
     try {
@@ -132,9 +166,15 @@ function CreatingOffer({ leadId }: { leadId: number }) {
                 size="sm"
                 className="mt-2"
                 disabled={isPending}
-                onClick={() => startTransition(() => { void handleReTrigger(); })}
+                onClick={() =>
+                  startTransition(() => {
+                    void handleReTrigger();
+                  })
+                }
               >
-                <RotateCw className={cn("mr-2 h-4 w-4", isPending && "animate-spin")} />
+                <RotateCw
+                  className={cn("mr-2 h-4 w-4", isPending && "animate-spin")}
+                />
                 Retry
               </Button>
             )}
@@ -143,15 +183,22 @@ function CreatingOffer({ leadId }: { leadId: number }) {
 
         {/* Progress bar */}
         <div className="space-y-1.5">
-          <div className="relative h-1.5 overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn(
-                "absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out",
-                failed ? "bg-destructive" : "bg-primary",
-              )}
-              style={{ width: `${progress}%` }}
-            />
+          <div className="relative pt-4">
+            <span className="absolute right-0 top-0 text-xs font-medium text-muted-foreground">
+              {minutes}:{seconds.toString().padStart(2, "0")}
+            </span>
+
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn(
+                  "absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out",
+                  failed ? "bg-destructive" : "bg-primary",
+                )}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
+
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>
               {failed ? "Failed" : isComplete ? "Done" : "Please wait"}
@@ -243,13 +290,15 @@ function CreatingOffer({ leadId }: { leadId: number }) {
 export function CreatingOfferClient({
   runId,
   leadId,
+  updatedAt,
 }: {
   runId: string;
   leadId: number;
+  updatedAt: Date;
 }) {
   return (
     <WorkflowStreamProvider initialRunId={runId}>
-      <CreatingOffer leadId={leadId} />
+      <CreatingOffer leadId={leadId} updatedAt={updatedAt} />
     </WorkflowStreamProvider>
   );
 }

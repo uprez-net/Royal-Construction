@@ -14,7 +14,7 @@ import {
     createUIMessageStream,
     JsonToSseTransformStream,
     smoothStream,
-    // stepCountIs,
+    stepCountIs,
     streamText,
     UIMessage
 } from "ai";
@@ -23,15 +23,18 @@ import { v4 as generateUUID } from "uuid";
 import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
 import { OFFER_CHAT_SYSTEM_PROMPT } from "@/lib/agent/offer-prompts";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
+import type { OfferFile, LineItem } from "@/context/ChatContext";
 
 interface ChatRequestBody {
     leadId: number;
     message?: UIMessage;
     messages?: ChatMessageAI[];
+    offerFile: OfferFile;
+    lineItems: LineItem[];
 }
 
 export async function POST(request: NextRequest) {
-    const { leadId, message, messages }: ChatRequestBody = await request.json();
+    const { leadId, message, messages, offerFile, lineItems }: ChatRequestBody = await request.json();
 
     try {
         const { userId } = await auth();
@@ -127,8 +130,19 @@ export async function POST(request: NextRequest) {
                     model: gateway("google/gemini-2.5-flash"),
                     temperature: 0.2,   // slightly higher — user-facing replies need to feel natural
                     topK: 25,
-                    system: OFFER_CHAT_SYSTEM_PROMPT,
+                    system: `
+                    ${OFFER_CHAT_SYSTEM_PROMPT}
+
+                    ## Lead ID: **${leadId}**
+
+                    ## Offer File Content
+                    ${JSON.stringify(offerFile, null, 2)}
+
+                    ## Offer Line Items
+                    ${JSON.stringify(lineItems, null, 2)}
+                    `,
                     messages: await convertToModelMessages(UIFormattedMessages),
+                    stopWhen: stepCountIs(5),
                     stopSequences: [
                         "<END_OFFER_UPDATE>",
                         "<END_LINE_ITEM_UPDATE>",
@@ -180,7 +194,7 @@ export async function POST(request: NextRequest) {
                             id: finishedMsg.id,
                             role: finishedMsg.role,
                             content: finishedMsg.parts,
-                            timestamp: new Date(),
+                            timestamp: new Date(finishedMsg.metadata?.createdAt ?? Date.now()),
                             sessionId: chat.id,
                         });
                     } else {
@@ -188,7 +202,7 @@ export async function POST(request: NextRequest) {
                             id: finishedMsg.id,
                             role: finishedMsg.role,
                             content: finishedMsg.parts,
-                            timestamp: new Date(),
+                            timestamp: new Date(finishedMsg.metadata?.createdAt ?? Date.now()),
                             sessionId: chat.id,
                         });
                     }

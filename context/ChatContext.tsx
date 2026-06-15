@@ -107,7 +107,7 @@ const getInitialOfferFile = (
   msg: ChatMessageAI[],
   initial: OfferFile,
 ) => {
-  if (msg.length > 1) {
+  if (msg.length > 1 && initial.projectWelcomeMessage?.length || initial.projectScope?.length) {
     return initial;
   } else {
     return fileVersions[version].offerContent;
@@ -120,7 +120,7 @@ const getInitialLineItems = (
   msg: ChatMessageAI[],
   initial: LineItem[],
 ) => {
-  if (msg.length > 1) {
+  if (msg.length > 1 && initial.length > 0) {
     return initial;
   } else {
     return lineItemVersions[version].map((item) => ({
@@ -136,6 +136,24 @@ const getInitialLineItems = (
       netLine: parseFloat(item.totalPrice) - parseFloat(item.totalPrice) * 0.1, // Calculate net line by removing GST from total price
       gstAmount: parseFloat(item.totalPrice) * 0.1, // Calculate GST amount based on total price and GST rate
     }));
+  }
+};
+
+const getInitialVersion = (
+  messages: ChatMessageAI[],
+  initialLineItems: LineItem[],
+  initialOfferFile: OfferFile,
+  initialVersion: number,
+) => {
+  if (
+    messages.length > 1 &&
+    initialLineItems.length > 0 &&
+    initialOfferFile.projectWelcomeMessage?.length ||
+    initialOfferFile.projectScope?.length
+  ) {
+    return "current";
+  } else {
+    return initialVersion === 0 ? "current" : initialVersion;
   }
 };
 
@@ -165,7 +183,12 @@ export const ChatProvider = ({
     getRevisionDate(initialOfferFileRecord),
   );
   const [version, setVersion] = useState<number | "current">(
-    initialMessages.length > 1 ? "current" : initialVersionLength,
+    getInitialVersion(
+      initialMessages,
+      initialLineItems,
+      initialOfferFile,
+      initialVersionLength,
+    ),
   );
   const [versionLength, setVersionLength] = useState(initialVersionLength);
   const [lineItemRecord, setLineItemRecord] =
@@ -229,7 +252,19 @@ export const ChatProvider = ({
         return {
           body: {
             id: request.id,
-            leadId,
+            leadId: parseInt(leadId),
+            offerFile: getInitialOfferFile(
+              initialVersionLength,
+              initialOfferFileRecord,
+              initialMessages,
+              initialOfferFile,
+            ),
+            lineItems: getInitialLineItems(
+              initialVersionLength,
+              initialItemRecord,
+              initialMessages,
+              initialLineItems,
+            ),
             // Send all messages for tool approval continuation, otherwise just the last user message
             ...(isToolApprovalContinuation
               ? { messages: request.messages }
@@ -245,6 +280,7 @@ export const ChatProvider = ({
         case "data-line-item-update": {
           const data = dataPart.data as LineItem;
           setLastRevisionDate(dateFormat.format(new Date()));
+          setVersion("current");
           setLineItems((prev) => {
             const existingIndex = prev.findIndex((item) => item.id === data.id);
             if (existingIndex !== -1) {
@@ -263,6 +299,7 @@ export const ChatProvider = ({
         case "data-offer-file-update": {
           const offerData = dataPart.data as OfferFile;
           setLastRevisionDate(dateFormat.format(new Date()));
+          setVersion("current");
           setOfferFile((prev) => ({
             ...prev,
             ...offerData,

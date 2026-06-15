@@ -21,7 +21,7 @@ async function OfferCreationContent({
 
   if (!chat || !offerData || leadInfo.runStatus !== "COMPLETED") {
     return (
-      <CreatingOfferClient runId={leadInfo.runId!} leadId={parseInt(leadId)} />
+      <CreatingOfferClient runId={leadInfo.runId!} leadId={parseInt(leadId)} updatedAt={leadInfo.updatedAt} />
     );
   }
 

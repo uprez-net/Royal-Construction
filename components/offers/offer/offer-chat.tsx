@@ -17,9 +17,11 @@ import remarkGfm from "remark-gfm";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ToolResult } from "@/components/chat/tool-result";
 import { ReasoningResponse } from "@/components/chat/reasoning-response";
+import { v4 as generateUUID } from "uuid";
 
 export function OfferChat() {
-  const { messages, sendMessage, status, error, stop } = useChatContext();
+  const { messages, sendMessage, setMessages, status, error, stop } =
+    useChatContext();
   const [input, setInput] = useState("");
   const [isAtBottom, setIsAtBottom] = useState(true);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -79,7 +81,10 @@ export function OfferChat() {
           ref={viewportRef}
           className="h-full min-h-0 overflow-y-auto px-4 py-3 no-scrollbar"
         >
-          <div className="flex flex-col gap-4 pb-3">
+          <div
+            className="flex flex-col gap-4 pb-3"
+            key={messages.at(-1)?.parts.length ?? messages.length}
+          >
             {messages.map(
               (msg) =>
                 msg.parts.some(
@@ -146,7 +151,16 @@ export function OfferChat() {
         onSubmit={(e) => {
           e.preventDefault();
           if (!input.trim()) return;
-          sendMessage({ parts: [{ type: "text", text: input }] });
+          if (messages.length === 1 && messages.at(-1)?.role !== "user") {
+            setMessages([]);
+          }
+          sendMessage({
+            id: generateUUID(),
+            parts: [{ type: "text", text: input }],
+            metadata: {
+              createdAt: new Date(Date.now() - 10_000).toISOString(),
+            },
+          });
           setInput("");
         }}
         className="shrink-0 border-t border-[#E2E8F0] bg-white px-4 py-3"
@@ -169,8 +183,18 @@ export function OfferChat() {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (input.trim()) {
+                  if (
+                    messages.length === 1 &&
+                    messages.at(-1)?.role !== "user"
+                  ) {
+                    setMessages([]);
+                  }
                   sendMessage({
+                    id: generateUUID(),
                     parts: [{ type: "text", text: input }],
+                    metadata: {
+                      createdAt: new Date(Date.now() - 10_000).toISOString(),
+                    },
                   });
                   setInput("");
                 }

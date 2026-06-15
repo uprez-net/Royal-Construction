@@ -60,9 +60,16 @@ export async function updateChatMessages(messages: MessageData[], leadId: number
     try {
         await prisma.$transaction(
             messages.map((msg) =>
-                prisma.chatMessage.update({
+                prisma.chatMessage.upsert({
                     where: { id: msg.id },
-                    data: {
+                    update: {
+                        content: msg.content as Prisma.InputJsonValue,
+                        timestamp: msg.timestamp,
+                    },
+                    create: {
+                        id: msg.id,
+                        sessionId: msg.sessionId,
+                        role: msg.role,
                         content: msg.content as Prisma.InputJsonValue,
                         timestamp: msg.timestamp,
                     },
@@ -85,6 +92,7 @@ interface FetchChatResponse {
         type: string;
         runId: string | null;
         runStatus: RunStatus | null;
+        updatedAt: Date;
     };
 }
 
@@ -95,7 +103,11 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
     try {
         const chatSession = await prisma.chatSession.findFirst({
             where: { leadId },
-            include: { messages: true },
+            include: { 
+                messages: {
+                    orderBy: { timestamp: "asc" },
+                } 
+            },
         });
 
         const leadFiles = await prisma.file.findMany({
@@ -110,6 +122,7 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
                 type: true,
                 runId: true,
                 runStatus: true,
+                updatedAt: true,
             }
         });
 
