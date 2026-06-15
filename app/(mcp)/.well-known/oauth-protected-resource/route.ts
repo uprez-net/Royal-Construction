@@ -9,9 +9,6 @@ const handler = protectedResourceHandlerClerk({
   resource: `${process.env.NEXT_PUBLIC_APP_URL}/mcp`,
 })
 
-export { handler as GET }
+const corsOptionsHandler = metadataCorsOptionsRequestHandler()
 
-export function OPTIONS(_: Request): Response | Promise<Response> {
-  const preflightHandler = metadataCorsOptionsRequestHandler();
-  return preflightHandler();
-}
+export { handler as GET, corsOptionsHandler as OPTIONS }

@@ -70,7 +70,7 @@ async function upsertBookingNotes({
           action: NOTE_ACTION,
           detail: noteDetail,
           type: 'system',
-          actionDate: now,
+          actionDate: now.toISOString(),
         },
       ],
     },

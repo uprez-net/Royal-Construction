@@ -130,7 +130,7 @@ export const historySchema = z.object({
     .enum(["system", "call", "email", "referral"])
     .optional()
     .default("system"),
-  actionDate: z.string().describe("Action date").optional(),
+  actionDate: z.iso.datetime().describe("Action date").optional(),
 });
 
 export const updateLeadSchema = z.object({
@@ -150,7 +150,7 @@ export const updateLeadSchema = z.object({
   notesDoc: leadRichTextDocumentSchema.nullable().optional(),
   annotationsToCreate: z.array(leadNoteAnnotationInputSchema).optional(),
 
-  followupDate: z.string().describe("Follow-up date").optional(),
+  followupDate: z.iso.datetime().describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
   followupNotes: nullableTrimmedString.optional(),
@@ -187,7 +187,7 @@ export const createLeadSchema = z.object({
 
   notes: nullableTrimmedString.optional(),
 
-  followupDate: z.string().describe("Follow-up date").optional(),
+  followupDate: z.iso.datetime().describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
 
