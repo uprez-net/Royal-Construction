@@ -31,7 +31,7 @@ export function OfferVersionSelector() {
     } else {
       return currentVersion === "current" ? false : true;
     }
-  }, [initialLineItems, initialOfferFile]);
+  }, [initialLineItems, initialOfferFile, currentVersion]);
 
   return (
     <Select

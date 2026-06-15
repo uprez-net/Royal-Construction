@@ -80,7 +80,7 @@ function CreatingOffer({
     if (isComplete) {
       router.push(`/offers/${leadId}`);
     }
-  }, [isComplete]);
+  }, [isComplete, leadId, router]);
 
   useEffect(() => {
     const expiresAt = addMinutes(new Date(updatedAt), 15);

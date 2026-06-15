@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Hourglass, List, Pencil, Send, Sparkles } from "lucide-react";
+import { List, Pencil, Send, Sparkles } from "lucide-react";
 import type { Lead } from "@/lib/leads/types";
 import { useEffect, useRef, useEffectEvent } from "react";
 
