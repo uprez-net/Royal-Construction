@@ -44,7 +44,6 @@ import {
     tradieCoordinationListQuerySchema,
     tradieCoordinationResponseSchema,
     tradieSearchQuerySchema,
-    tradiesResponseSchema,
     tradieScheduleWriteResponseSchema,
     updateLeadSchema,
     updateTradieScheduleResponseSchema,
@@ -53,6 +52,8 @@ import {
     variationResponseSchema,
     leadResponseSchema,
     AddressSuggestion,
+    tradiesResponseSchema,
+    leadLookupParamSchema,
 } from "@/utils/validators";
 import { createVariationSchema as createVariationToolSchema } from "@/utils/validators/projects";
 import { fetchJson } from "@/utils/fetch";
@@ -62,6 +63,7 @@ import { v4 as uuid } from "uuid";
 import { saveFile } from "@/lib/data/file";
 import { auth } from '@clerk/nextjs/server'
 import { verifyClerkToken } from '@clerk/mcp-tools/next'
+import { LeadStage, LeadStageToLeadStageDBMapping } from "@/lib/leads/types";
 
 const emptyInputSchema = z.object({}).strict();
 
@@ -80,10 +82,34 @@ const variationCreateToolSchema = projectParamSchema.extend(createVariationToolS
 const variationUpdateToolSchema = variationParamSchema.extend({ status: z.enum(["APPROVED", "REJECTED"]) });
 const tradieScheduleUpdateToolSchema = scheduleParamSchema.extend(updateTradieScheduleSchema.shape);
 
-const toToolResult = <T>(data: T) => ({
-    // structuredContent: data as { [key: string]: unknown },
-    content: [{ type: "text" as const, text: JSON.stringify(data) }],
-});
+const removeAllNestedDateObjects = (value: unknown): unknown => {
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+
+    if (Array.isArray(value)) {
+        return value.map(removeAllNestedDateObjects);
+    }
+
+    if (value !== null && typeof value === "object") {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, val]) => [
+                key,
+                removeAllNestedDateObjects(val),
+            ])
+        );
+    }
+
+    return value;
+};
+
+const toToolResult = <T>(data: T, noStructuredContent: boolean = false) => {
+    const safeData = removeAllNestedDateObjects(data);
+    return {
+        structuredContent: noStructuredContent ? undefined : safeData as { [key: string]: unknown },
+        content: [{ type: "text" as const, text: JSON.stringify(safeData) }],
+    };
+};
 
 const handler = createMcpHandler((server) => {
     server.registerTool(
@@ -127,11 +153,18 @@ const handler = createMcpHandler((server) => {
         {
             description: "Search tradies for dropdowns and lookup",
             inputSchema: tradieSearchQuerySchema,
-            outputSchema: tradiesResponseSchema,
+            outputSchema: z.object({
+                tradies: tradiesResponseSchema,
+                totalCount: z.number(),
+            }),
         },
         async (params) => {
             try {
-                return toToolResult(await getTradiesForLookup(params.limit, params.q || params.search))
+                const res = await getTradiesForLookup(params.limit, params.q || params.search)
+                return toToolResult({
+                    tradies: res,
+                    totalCount: res.length,
+                })
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching tradies ${error instanceof Error ? error.message : String(error)}` }],
@@ -282,11 +315,15 @@ const handler = createMcpHandler((server) => {
         {
             description: "List milestones for a project",
             inputSchema: projectParamSchema,
-            outputSchema: z.array(milestoneResponseSchema),
+            outputSchema: z.object({
+                milestones: z.array(milestoneResponseSchema),
+                totalCount: z.number(),
+            }),
         },
         async (params) => {
             try {
-                return toToolResult(await getMilestonesByProject(params.projectId));
+                const res = await getMilestonesByProject(params.projectId);
+                return toToolResult({ milestones: res, totalCount: res.length });
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching milestones ${error instanceof Error ? error.message : String(error)}` }],
@@ -353,12 +390,13 @@ const handler = createMcpHandler((server) => {
         "get_leads",
         {
             description: "List all leads",
-            inputSchema: emptyInputSchema,
+            inputSchema: leadLookupParamSchema,
             outputSchema: leadsResponseSchema,
         },
-        async () => {
+        async ({ q, status, filterTiming, page, limit }) => {
             try {
-                return toToolResult(await getLeads());
+                const statusFilterArray = status ? status.split(',').map(s => LeadStageToLeadStageDBMapping[(s.trim() as LeadStage)]) : undefined;
+                return toToolResult(await getLeads(page, limit, q, statusFilterArray, filterTiming));
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching leads ${error instanceof Error ? error.message : String(error)}` }],
@@ -427,11 +465,18 @@ const handler = createMcpHandler((server) => {
         {
             description: "List all tradies for scheduling",
             inputSchema: emptyInputSchema,
-            outputSchema: tradiesResponseSchema,
+            outputSchema: z.object({
+                tradies: tradiesResponseSchema,
+                totalCount: z.number(),
+            }),
         },
         async () => {
             try {
-                return toToolResult(await getCachedTradies());
+                const res = await getCachedTradies();
+                return toToolResult({
+                    tradies: res,
+                    totalCount: res.length,
+                });
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching tradies ${error instanceof Error ? error.message : String(error)}` }],
@@ -449,7 +494,16 @@ const handler = createMcpHandler((server) => {
         },
         async (params) => {
             try {
-                return toToolResult(await getCachedTradieCoordinationDashboard(params));
+                const res = await getCachedTradieCoordinationDashboard(params);
+                return toToolResult({
+                    pagination: res.pagination,
+                    schedules: res.schedules,
+                    tradeOptions: res.tradeOptions,
+                    statusMetrics: res.statusMetrics,
+                    tradeBreakdown: res.tradeBreakdown,
+                    projectAllocations: res.projectAllocations,
+                    urgentReminders: res.urgentReminders,
+                });
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching tradie coordination data ${error instanceof Error ? error.message : String(error)}` }],
@@ -537,7 +591,7 @@ const handler = createMcpHandler((server) => {
 
                 const data = response.data;
 
-                return toToolResult(data);
+                return toToolResult(data, true);
             } catch (error) {
                 return {
                     content: [{ type: "text" as const, text: `Error fetching address suggestions ${error instanceof Error ? error.message : String(error)}` }],
