@@ -13,7 +13,7 @@ import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { getWritable } from "workflow";
 import { base64ToBlob, currency, dateFormat } from "@/utils/formatters";
-import { RunStatus } from "@prisma/client";
+import { RunStatus, Prisma } from "@prisma/client";
 import { put } from "@vercel/blob";
 import {
     calculateOfferLinePricing,
@@ -21,6 +21,7 @@ import {
 } from "@/lib/offer/pricing";
 import { generateSafeOfferHTML } from "@/utils/handle-offer-template";
 import { generatePDF } from "../utils/generatePDF";
+import { ChatMessageAI } from "@/types/chat";
 
 export interface OfferCreationStatus {
     failed?: boolean;
@@ -53,12 +54,15 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
         const { offerItemsWithPricing, amount, gstAmount, totalAmount, output: lineItemOutput } = await buildOfferLineItems(prompt, lead);
 
         const offerCreationPrompt = `
+        ${prompt}
+
+        ## Line Item Creation Message:
+        ${lineItemOutput.creationMessage}
         ## Created Line Items:
         ${lineItemOutput.lineItemArray.map(item =>
             `- ${item.item} - (${item.description}): ${item.quantity} ${item.unit} at $${item.unitPrice} each (GST ${item.gstIncluded ? "included" : "excluded"})`).join("\n")
             }
 
-        ${prompt}
         `
         const { output: fileOutput, Options } = await buildOfferFile(offerCreationPrompt, lead);
 
@@ -74,6 +78,7 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
             amount,
             gstAmount,
             totalAmount,
+            offerCreationMessage: fileOutput.creationMessage,
         });
 
         // Trigger notification step
@@ -264,6 +269,7 @@ async function saveOffer({
     amount,
     gstAmount,
     totalAmount,
+    offerCreationMessage,
 }: {
     lead: Lead;
     output: OfferCreationOutput;
@@ -272,7 +278,7 @@ async function saveOffer({
     amount: number;
     gstAmount: number;
     totalAmount: number;
-
+    offerCreationMessage: string;
 }) {
     'use step';
     try {
@@ -331,10 +337,29 @@ async function saveOffer({
             where: { leadId: lead.id },
             select: { id: true },
         });
+        const chatSessionMessage: ChatMessageAI = {
+            id: uuidv4(),
+            role: "assistant",
+            parts: [{
+                type: "text",
+                text: offerCreationMessage,
+            }],
+            metadata: {
+                createdAt: new Date().toISOString(),
+            },
+        }
         if (!existingChatSession) {
             await prisma.chatSession.create({
                 data: {
                     leadId: lead.id,
+                    messages: {
+                        create: {
+                            id: chatSessionMessage.id,
+                            role: chatSessionMessage.role,
+                            content: chatSessionMessage.parts as Prisma.InputJsonValue,
+                            timestamp: new Date(chatSessionMessage.metadata?.createdAt ?? Date.now()),
+                        }
+                    }
                 },
             });
         }

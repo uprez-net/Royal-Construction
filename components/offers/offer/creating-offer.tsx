@@ -65,7 +65,8 @@ function CreatingOffer({
   initialRunStatus?: "RUNNING" | "COMPLETED" | "FAILED" | null;
 }) {
   const router = useRouter();
-  const { creatingOffer, startListening, runId, connected, loading } = useWorkflowStream();
+  const { creatingOffer, startListening, runId, connected, loading } =
+    useWorkflowStream();
   const [isPending, startTransition] = useTransition();
   const [timeLeft, setTimeLeft] = useState(0);
   const { status, progress, message, failed } = creatingOffer;
@@ -92,7 +93,7 @@ function CreatingOffer({
       return;
     }
 
-    const expiresAt = addMinutes(new Date(updatedAt), 15);
+    const expiresAt = addMinutes(new Date(updatedAt), 25);
 
     const updateTimer = () => {
       const remaining = Math.max(0, differenceInSeconds(expiresAt, new Date()));
@@ -168,7 +169,7 @@ function CreatingOffer({
                   ? "An error occurred. Please try again."
                   : isComplete
                     ? "Your document is ready to review."
-                  : isIdle
+                    : isIdle
                       ? "Start generation when you're ready."
                       : "Analyzing project details."}
               </p>
@@ -198,7 +199,9 @@ function CreatingOffer({
         <div className="space-y-1.5">
           <div className="relative pt-4">
             <span className="absolute right-0 top-0 text-xs font-medium text-muted-foreground">
-              {minutes}:{seconds.toString().padStart(2, "0")}
+              {minutes > 0 && seconds > 0
+                ? `${minutes}:${seconds.toString().padStart(2, "0")}`
+                : "Taking longer than expected..."}
             </span>
 
             <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -317,7 +320,11 @@ export function CreatingOfferClient({
 }) {
   return (
     <WorkflowStreamProvider initialRunId={runId}>
-      <CreatingOffer leadId={leadId} updatedAt={updatedAt} initialRunStatus={runStatus} />
+      <CreatingOffer
+        leadId={leadId}
+        updatedAt={updatedAt}
+        initialRunStatus={runStatus}
+      />
     </WorkflowStreamProvider>
   );
 }

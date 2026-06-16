@@ -38,7 +38,7 @@ const handleOfferLineItemGeneration = async (prompt: string) => {
             webSearch: webSearch,
             scrapeUserLinks: scrapeUserLinks,
         },
-        toolChoice: "required",
+        toolChoice: "auto",
         stopWhen: stepCountIs(OFFER_GENERATION_MAX_STEPS),
         instructions: OFFER_LINE_ITEM_CREATION_SYSTEM_PROMPT,
         stopSequences: [
@@ -49,9 +49,6 @@ const handleOfferLineItemGeneration = async (prompt: string) => {
     });
 
     const { text: lineItemOutput } = await offerLineItemCreatorAgent.generate({ prompt });
-
-    console.log("Line item generation output:", lineItemOutput);
-    console.dir(offerLineItems, { depth: Infinity, colors: true });
 
     return {
         lineItemArray: offerLineItems,
@@ -83,7 +80,7 @@ const handleOfferFileGeneration = async (prompt: string) => {
             webSearch: webSearch,
             scrapeUserLinks: scrapeUserLinks,
         },
-        toolChoice: "required",
+        toolChoice: "auto",
         stopWhen: stepCountIs(OFFER_GENERATION_MAX_STEPS),
         instructions: OFFER_FILE_CONTENT_CREATION_SYSTEM_PROMPT,
         stopSequences: [
@@ -96,9 +93,6 @@ const handleOfferFileGeneration = async (prompt: string) => {
     const { text: offerFileOutput } = await offerFileCreationAgent.generate({
         prompt
     });
-
-    console.log("Offer file generation output:");
-    console.dir(offerFileContent, { depth: Infinity, colors: true });
 
     return {
         offerFileContent,
