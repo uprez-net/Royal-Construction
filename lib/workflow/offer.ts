@@ -56,7 +56,16 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
 
         //Processing details step
         const { offerItemsWithPricing, amount, gstAmount, totalAmount, output: lineItemOutput } = await buildOfferLineItems(prompt, lead);
-        const { output: fileOutput, Options } = await buildOfferFile(prompt, lead);
+        
+        const offerCreationPrompt = `
+        ## Created Line Items:
+        ${lineItemOutput.lineItemArray.map(item =>
+            `- ${item.item} - (${item.description}): ${item.quantity} ${item.unit} at $${item.unitPrice} each (GST ${item.gstIncluded ? "included" : "excluded"})`).join("\n")
+            }
+
+        ${prompt}
+        `
+        const { output: fileOutput, Options } = await buildOfferFile(offerCreationPrompt, lead);
 
         // Creating offer step
         const newOffer = await saveOffer({
