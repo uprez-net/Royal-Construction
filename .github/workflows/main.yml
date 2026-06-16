@@ -90,6 +90,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality-checks
     environment: Preview
+    concurrency:
+      group: vercel-deploy-production
+      cancel-in-progress: false
 
     env:
       DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
@@ -122,7 +125,9 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Run Prisma migrate
-        run: pnpm prisma:migrate-deploy
+        run: |
+          export DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.hostname = url.hostname.replace("-pooler.", "."); url.searchParams.delete("pgbouncer"); console.log(url.toString());')"
+          pnpm prisma:migrate-deploy
 
       - name: Run Prisma generate
         run: pnpm prisma:generate
@@ -144,6 +149,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality-checks
     environment: Preview
+    concurrency:
+      group: vercel-deploy-staging
+      cancel-in-progress: false
 
     env:
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
@@ -176,7 +184,9 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Run Prisma migrate
-        run: pnpm prisma:migrate-deploy
+        run: |
+          export DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.hostname = url.hostname.replace("-pooler.", "."); url.searchParams.delete("pgbouncer"); console.log(url.toString());')"
+          pnpm prisma:migrate-deploy
 
       - name: Run Prisma generate
         run: pnpm prisma:generate
