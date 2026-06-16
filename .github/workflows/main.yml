@@ -125,6 +125,8 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Run Prisma migrate
+        env:
+          PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: "1"
         run: |
           export DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.hostname = url.hostname.replace("-pooler.", "."); url.searchParams.delete("pgbouncer"); console.log(url.toString());')"
           pnpm prisma:migrate-deploy
@@ -184,6 +186,8 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Run Prisma migrate
+        env:
+          PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: "1"
         run: |
           export DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.hostname = url.hostname.replace("-pooler.", "."); url.searchParams.delete("pgbouncer"); console.log(url.toString());')"
           pnpm prisma:migrate-deploy
