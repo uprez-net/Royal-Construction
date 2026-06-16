@@ -412,7 +412,7 @@ export async function handleCalendarFollowup(
   return "Follow-up calendar event successfully created";
 }
 
-export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead> {
+export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
 
@@ -436,6 +436,32 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date() });
     } else {
       historyCreate.push({ action: "Lead created with Follow-up Calender set", detail: "Lead manually created and Also Assign the Follow-up Calender", type: "SYSTEM", actionDate: new Date() });
+    }
+  }
+
+  const orConditions: Prisma.LeadWhereInput[] = [];
+  if (input.email && input.email.trim() !== "") {
+    orConditions.push({ email: input.email.trim() });
+  }
+  if (input.phone && input.phone.trim() !== "") {
+    orConditions.push({ phone: input.phone.trim() });
+  }
+
+  if (orConditions.length > 0) {
+    const checkexistingLead = await prisma.lead.findFirst({
+      where: { 
+        OR: orConditions,
+      },
+      include: {
+        history: { orderBy: { actionDate: "asc" } },
+        chatSessions: true,
+        assignedUser: { select: { id: true, name: true, email: true } },
+        noteAnnotations: { orderBy: { createdAt: "desc" } },
+      },
+    });
+
+    if (checkexistingLead) {
+      return { message: "A lead with the same email or phone number already exists.", existingLead: mapLead(checkexistingLead) };
     }
   }
 
@@ -508,7 +534,8 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         await graphClient.sendMail({
           to: created.email,
           subject: emailSubject,
-          body: htmlBody
+          body: htmlBody,
+          cc: config.cc,
         });
 
         console.log(`[Lead ${created.id}] ✅ Welcome email successfully sent to ${created.email}`);

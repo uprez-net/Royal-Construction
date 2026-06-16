@@ -188,6 +188,11 @@ export function AddLeadModal({
         history: historyEntries,
       });
 
+      if ('message' in createdLead) {
+        showToast(createdLead.message, "info");
+        return;
+      }
+
       onSuccess(createdLead);
       showToast(`Lead added: ${form.name}`, "success");
 

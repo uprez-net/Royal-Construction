@@ -15,7 +15,7 @@ const EMAIL_HEADER_HTML = `
 <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#ffffff;margin:0;padding:0;">
   <tbody>
     <tr>
-      <td align="center" style="padding:24px 24px 20px;text-align:center;">
+      <td align="center" style="padding:24px 24px 20px;">
         <a href="https://royalconstructions.com.au" target="_blank" style="text-decoration:none;">
           <img src="https://royalconstructions.com.au/wp-content/uploads/2026/03/logo-1024x713.png" alt="Royal Constructions" width="152" height="106" style="
               display:block;
@@ -214,7 +214,7 @@ Do NOT output a full HTML document — only the inner content that sits between 
   <cta_button label="LABEL" url="URL">
     <table border="0" cellpadding="0" cellspacing="0" role="presentation">
       <tbody><tr>
-        <td style="background-color:#c6923a;border-radius:6px;text-align:center">
+        <td style="background-color:#c6923a;border-radius:6px;">
           <a href="URL" style="color:#0c1829;text-decoration-line:none;display:inline-block;padding:16px 48px;font-family:'IBM Plex Sans Condensed','Arial Narrow',Arial,sans-serif;font-weight:500;font-size:15px;line-height:1;letter-spacing:1px;text-transform:uppercase">
             LABEL
           </a>
@@ -306,7 +306,8 @@ DESCRIPTION:
 
  ${attachmentsContext}
 
-Remember, follow the brand theme strictly, do not add unrequested sections, and format your response exactly as requested.
+The Text content Should be at left position always, and the design should be clean and minimalistic, following the brand theme provided. 
+Remember, follow the brand theme strictly, do not add unrequested sections, and format your response exactly as requested. 
   `.trim();
 
   try {

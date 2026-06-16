@@ -517,6 +517,12 @@ const handler = createMcpHandler((server) => {
         async (params) => {
             try {
                 const res = removeAllNestedDateObjects(await createLead(params));
+                if (res && typeof res === "object" && "message" in res) {
+                    return {
+                        isError: true,
+                        content: [{ type: "text" as const, text: String(res.message) }],
+                    };
+                }
                 const validated = leadResponseSchema.safeParse(res);
                 if (!validated.success) {
                     console.error("Invalid lead response", z.treeifyError(validated.error));
