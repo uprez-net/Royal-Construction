@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
                 /* ---------------- AI Stream ---------------- */
 
                 const result = streamText({
-                    model: gateway("google/gemini-2.5-flash"),
+                    model: gateway("google/gemini-3-flash"),
                     temperature: 0.2,   // slightly higher — user-facing replies need to feel natural
                     topK: 25,
                     system: `
