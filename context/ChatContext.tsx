@@ -1,13 +1,6 @@
 import { ChatMessageAI } from "@/types/chat";
 import { ChatStatus, DefaultChatTransport } from "ai";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import { useChat, UseChatHelpers } from "@ai-sdk/react";
 import { fetchWithErrorHandlers } from "@/utils/chat-error";
 import { v4 as generateUUID } from "uuid";
@@ -205,8 +198,11 @@ export const ChatProvider = ({
     ),
   );
   const [versionLength, setVersionLength] = useState(initialVersionLength);
-  const [lineItemRecord, setLineItemRecord] = useState<Record<number, SafeOfferItem[]>>(initialItemRecord);
-  const [offerFileRecord, setOfferFileRecord] = useState<Record<number, SafeOfferDBFile>>(initialOfferFileRecord);
+  const [lineItemRecord, setLineItemRecord] =
+    useState<Record<number, SafeOfferItem[]>>(initialItemRecord);
+  const [offerFileRecord, setOfferFileRecord] = useState<
+    Record<number, SafeOfferDBFile>
+  >(initialOfferFileRecord);
   const [lineItems, setLineItems] = useState<LineItem[]>(() =>
     getInitialLineItems(
       initialVersionLength,
@@ -229,9 +225,6 @@ export const ChatProvider = ({
     [initialOfferFileRecord],
   );
 
-  const lineItemsRef = useRef(lineItems);
-  const offerFileRef = useRef(offerFile);
-
   const {
     messages,
     status,
@@ -250,6 +243,21 @@ export const ChatProvider = ({
       fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest(request) {
         const lastMessage = request.messages.at(-1);
+        const {
+          leadId: requestLeadId,
+          offerFile,
+          lineItems,
+        } = (request.body ?? {}) as {
+          leadId: number;
+          offerFile: OfferFile;
+          lineItems: LineItem[];
+        };
+
+        console.log("Preparing request with body:", {
+          leadId: requestLeadId,
+          offerFile,
+          lineItems,
+        });
 
         // Check if this is a tool approval continuation:
         // - Last message is NOT a user message (meaning no new user input)
@@ -268,9 +276,9 @@ export const ChatProvider = ({
         return {
           body: {
             id: request.id,
-            leadId: parseInt(leadId),
-            offerFile: offerFileRef.current,
-            lineItems: lineItemsRef.current,
+            leadId: requestLeadId,
+            offerFile,
+            lineItems,
             // Send all messages for tool approval continuation, otherwise just the last user message
             ...(isToolApprovalContinuation
               ? { messages: request.messages }
@@ -297,7 +305,6 @@ export const ChatProvider = ({
               return updatedLineItems;
             }
             const updated = [...prev, data];
-            lineItemsRef.current = updated;
             return updated;
           });
           setVersion("current");
@@ -312,7 +319,6 @@ export const ChatProvider = ({
             console.log("Offer File Original:", prev);
             console.log("Update Offer Patch: ", offerData);
             console.log("Updated Offer File: ", update);
-            offerFileRef.current = update;
             return update;
           });
           setVersion("current");
@@ -348,14 +354,17 @@ export const ChatProvider = ({
   const handleSetVersion = (version: number | "current") => {
     if (version === "current") {
       setVersion(version);
-      setLineItems(() => {
+      setLineItems((prev) => {
         const newLineItems = extractLineItemsFromMessage(messages);
-        lineItemsRef.current = newLineItems;
-        return newLineItems;
+        return [
+          ...prev.filter(
+            (item) => !newLineItems.some((newItem) => newItem.id === item.id),
+          ),
+          ...newLineItems,
+        ];
       });
       setOfferFile((prev) => {
         const newOfferFile = extractOfferFileFromMessage(messages, prev);
-        offerFileRef.current = newOfferFile;
         return newOfferFile;
       });
       return;
@@ -379,11 +388,9 @@ export const ChatProvider = ({
           parseFloat(item.totalPrice) - parseFloat(item.totalPrice) * 0.1, // Calculate net line by removing GST from total price
         gstAmount: parseFloat(item.totalPrice) * 0.1, // Calculate GST amount based on total price and GST rate
       }));
-      lineItemsRef.current = update;
       return update;
     });
     setOfferFile(() => {
-      offerFileRef.current = newOfferFile;
       return newOfferFile;
     });
   };
@@ -397,7 +404,10 @@ export const ChatProvider = ({
         versions: versionLength,
         messages,
         status,
-        sendMessage,
+        sendMessage: (params) =>
+          sendMessage(params, {
+            body: { leadId: parseInt(leadId), offerFile, lineItems },
+          }),
         setMessages,
         stop,
         error,

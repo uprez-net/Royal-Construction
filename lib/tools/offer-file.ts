@@ -2,7 +2,6 @@ import { tool, UIMessageStreamWriter } from "ai";
 import z from "zod";
 import { FacadeOptionWithImageUrl, offerFileContentSchema } from "../agent/offer-prompts";
 import { imageGenerationAgent } from "../agent/imageGenerationAgent";
-import type { OfferFile } from "@/context/ChatContext";
 import type { OfferFilePatchPayload } from "@/utils/chat";
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
