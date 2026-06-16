@@ -133,27 +133,26 @@ function CreatingOffer({
   };
 
   return (
-    <div className="flex min-h-100 items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm space-y-5">
-        {/* Header */}
+    <div className="flex min-h-[calc(100svh-96px)] items-center justify-center bg-background p-4 sm:p-6">
+      <div className="w-full max-w-lg space-y-5 rounded-lg border border-border/70 bg-card p-5 shadow-sm sm:p-6">
         <div className="flex items-center gap-3">
           <div
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-full",
-              isFailed ? "bg-destructive/10" : "bg-primary/10",
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
+              isFailed ? "bg-destructive-light" : "bg-royal-gold-light",
             )}
           >
             {isFailed ? (
               <AlertTriangle className="h-5 w-5 text-destructive" />
             ) : isComplete ? (
-              <CheckCircle2 className="h-5 w-5 text-primary" />
+              <CheckCircle2 className="h-5 w-5 text-success" />
             ) : isIdle ? (
-              <Sparkles className="h-5 w-5 text-primary" />
+              <Sparkles className="h-5 w-5 text-foreground" />
             ) : (
-              <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+              <Sparkles className="h-5 w-5 animate-pulse text-foreground" />
             )}
           </div>
-          <div className="flex flex-row items-center gap-2 justify-between w-full">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="font-semibold leading-tight">
                 {isFailed
@@ -169,9 +168,9 @@ function CreatingOffer({
                   ? "An error occurred. Please try again."
                   : isComplete
                     ? "Your document is ready to review."
-                    : isIdle
+                  : isIdle
                       ? "Start generation when you're ready."
-                      : "Analyzing project details..."}
+                      : "Analyzing project details."}
               </p>
             </div>
 
@@ -179,7 +178,7 @@ function CreatingOffer({
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-2"
+                className="w-full bg-card sm:w-auto"
                 disabled={isPending}
                 onClick={() =>
                   startTransition(() => {
@@ -196,7 +195,6 @@ function CreatingOffer({
           </div>
         </div>
 
-        {/* Progress bar */}
         <div className="space-y-1.5">
           <div className="relative pt-4">
             <span className="absolute right-0 top-0 text-xs font-medium text-muted-foreground">
@@ -207,7 +205,7 @@ function CreatingOffer({
               <div
                 className={cn(
                   "absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out",
-                  isFailed ? "bg-destructive" : "bg-primary",
+                  isFailed ? "bg-destructive" : "bg-royal-gold",
                 )}
                 style={{ width: `${progress}%` }}
               />
@@ -228,7 +226,6 @@ function CreatingOffer({
           </div>
         </div>
 
-        {/* Step list */}
         <div className="space-y-2">
           {STEPS.map(({ key, label, icon: Icon }) => {
             const state = isIdle ? "idle" : getStepState(key, status, isFailed);
@@ -242,18 +239,17 @@ function CreatingOffer({
                 key={key}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                  isDone && "bg-emerald-50 dark:bg-emerald-950/20",
-                  isActive && "bg-primary/5",
-                  isStepFailed && "bg-destructive/5",
+                  isDone && "bg-success-light",
+                  isActive && "bg-royal-gold-light",
+                  isStepFailed && "bg-destructive-light",
                   state === "idle" && "bg-muted/40",
                 )}
               >
-                {/* Step dot */}
                 <div
                   className={cn(
                     "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
-                    isDone && "bg-emerald-500",
-                    isActive && "bg-primary",
+                    isDone && "bg-success",
+                    isActive && "bg-royal-gold",
                     isStepFailed && "bg-destructive",
                     state === "idle" && "bg-muted-foreground/20",
                   )}
@@ -273,8 +269,8 @@ function CreatingOffer({
                   <span
                     className={cn(
                       "font-medium",
-                      isDone && "text-emerald-700 dark:text-emerald-400",
-                      isActive && "text-primary",
+                      isDone && "text-foreground",
+                      isActive && "text-foreground",
                       isStepFailed && "text-destructive",
                       state === "idle" && "text-muted-foreground",
                     )}
@@ -293,8 +289,8 @@ function CreatingOffer({
                 <Icon
                   className={cn(
                     "h-4 w-4 shrink-0",
-                    isDone && "text-emerald-500",
-                    isActive && "text-primary",
+                    isDone && "text-success",
+                    isActive && "text-royal-gold",
                     isStepFailed && "text-destructive",
                     state === "idle" && "text-muted-foreground/30",
                   )}

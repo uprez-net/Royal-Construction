@@ -1250,7 +1250,8 @@ export function OfferFileTemplate({
       sandbox="allow-same-origin"
       title="Offer Preview"
       srcDoc={html}
-      className="block h-full min-h-0 w-[50vw] rounded-lg border border-border bg-white shadow-sm"
+      className="block h-full min-h-0 w-full rounded-lg border border-border bg-card shadow-sm"
+      style={{ colorScheme: "light" }}
     />
   );
 }

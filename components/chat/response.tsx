@@ -1,14 +1,14 @@
 "use client";
 
+import { MessageResponse } from "@/components/ai-elements/message";
 import { type ComponentProps, memo } from "react";
-import { Streamdown } from "streamdown";
 import { cn } from "@/lib/utils";
 
-type ResponseProps = ComponentProps<typeof Streamdown>;
+type ResponseProps = ComponentProps<typeof MessageResponse>;
 
 export const Response = memo(
   ({ className, ...props }: ResponseProps) => (
-    <Streamdown
+    <MessageResponse
       className={cn(
         `
     size-full 

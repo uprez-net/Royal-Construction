@@ -2,16 +2,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function OfferDetailsPageSkeleton() {
   return (
-    <div className="flex h-[calc(100vh-120px)] overflow-hidden rounded-lg border border-border/70 bg-background shadow-sm">
-      {/* Chat Panel */}
-      <div className="flex w-105 flex-col border-r">
-        {/* Header */}
+    <div className="flex h-[calc(100svh-96px)] overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+      <div className="hidden w-[26rem] flex-col border-r border-border/70 lg:flex xl:w-[28rem]">
         <div className="flex items-center gap-3 border-b p-4">
           <Skeleton className="size-9 rounded-lg" />
           <Skeleton className="h-6 w-40" />
         </div>
 
-        {/* Chat Message */}
         <div className="flex-1 p-4">
           <div className="flex gap-3">
             <Skeleton className="size-9 rounded-lg" />
@@ -26,48 +23,40 @@ export default function OfferDetailsPageSkeleton() {
           </div>
         </div>
 
-        {/* Input */}
         <div className="border-t p-4">
           <Skeleton className="h-10 w-full rounded-lg" />
         </div>
       </div>
 
-      {/* Offer Preview */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top Controls */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div className="flex gap-4">
+        <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-2">
             <Skeleton className="h-8 w-28 rounded-md" />
             <Skeleton className="h-8 w-24 rounded-md" />
             <Skeleton className="h-8 w-24 rounded-md" />
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <Skeleton className="h-9 w-28 rounded-md" />
             <Skeleton className="h-9 w-36 rounded-md" />
             <Skeleton className="h-9 w-32 rounded-md" />
           </div>
         </div>
 
-        {/* Document */}
         <div className="flex-1 overflow-auto bg-muted/30 p-8">
-          <div className="mx-auto max-w-4xl rounded-lg border bg-white p-8 shadow-sm">
-            {/* Header */}
+          <div className="mx-auto max-w-4xl rounded-lg border bg-card p-8 shadow-sm">
             <Skeleton className="mb-8 h-12 w-full rounded-md" />
 
-            {/* Company Name */}
             <div className="mb-8 flex flex-col items-center gap-3">
               <Skeleton className="h-10 w-125" />
               <Skeleton className="h-4 w-48" />
             </div>
 
-            {/* Proposal Title */}
             <div className="mb-8 flex flex-col items-center gap-3">
               <Skeleton className="h-8 w-80" />
               <Skeleton className="h-4 w-64" />
             </div>
 
-            {/* Details Table */}
             <div className="mb-8 overflow-hidden rounded-lg border">
               {[...Array(5)].map((_, i) => (
                 <div
@@ -80,7 +69,6 @@ export default function OfferDetailsPageSkeleton() {
               ))}
             </div>
 
-            {/* Promotion Box */}
             <div className="mb-8 rounded-lg border p-6">
               <div className="flex flex-col items-center gap-4">
                 <Skeleton className="h-4 w-40" />
@@ -89,7 +77,6 @@ export default function OfferDetailsPageSkeleton() {
               </div>
             </div>
 
-            {/* Additional Content */}
             <div className="space-y-6">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="space-y-4 rounded-lg border p-6">
