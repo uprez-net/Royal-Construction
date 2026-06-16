@@ -67,8 +67,8 @@ export async function FollowupCalendarCreation(leadName: string, leadEmail: stri
   return handleCalendarFollowup({ name: leadName, email: leadEmail } as Lead, followupDate, followupTime);
 }
 
-export async function createLead(leadData: LeadCreatePayload): Promise<Lead> {
-  const response = await fetchJson<Lead>(
+export async function createLead(leadData: LeadCreatePayload): Promise<Lead | { message: string; existingLead: Lead }> {
+  const response = await fetchJson<Lead | { message: string; existingLead: Lead }>(
     '/api/leads',
     {
       method: 'POST',

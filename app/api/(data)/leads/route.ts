@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
     }
 
     const created = await createLead(parsed.data);
+    if ('message' in created) {
+      return errorResponse(created.message, {
+        status: 409,
+        code: "LEAD_ALREADY_EXISTS",
+      });
+    }
     return successResponse(created, { status: 201 });
   } catch (error) {
     console.error("/api/leads POST error", error);
