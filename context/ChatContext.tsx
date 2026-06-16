@@ -1,6 +1,13 @@
 import { ChatMessageAI } from "@/types/chat";
 import { ChatStatus, DefaultChatTransport } from "ai";
-import { createContext, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useChat, UseChatHelpers } from "@ai-sdk/react";
 import { fetchWithErrorHandlers } from "@/utils/chat-error";
 import { v4 as generateUUID } from "uuid";
@@ -9,6 +16,7 @@ import {
   applyOfferFileUpdate,
   extractLineItemsFromMessage,
   extractOfferFileFromMessage,
+  isOfferFileInComplete,
   OfferFilePatchPayload,
   ServiceItem,
 } from "@/utils/chat";
@@ -109,10 +117,7 @@ const getInitialOfferFile = (
   msg: ChatMessageAI[],
   initial: OfferFile,
 ) => {
-  if (
-    (msg.length > 1 && initial.projectWelcomeMessage?.length) ||
-    initial.projectScope?.length
-  ) {
+  if (msg.length > 1 && !isOfferFileInComplete(initial)) {
     return initial;
   }
 
@@ -158,8 +163,7 @@ const getInitialVersion = (
   if (
     messages.length > 1 &&
     initialLineItems.length > 0 &&
-    (initialOfferFile.projectWelcomeMessage?.length ||
-      initialOfferFile.projectScope?.length)
+    !isOfferFileInComplete(initialOfferFile)
   ) {
     return "current";
   } else {
@@ -201,12 +205,9 @@ export const ChatProvider = ({
     ),
   );
   const [versionLength, setVersionLength] = useState(initialVersionLength);
-  const [lineItemRecord, setLineItemRecord] =
-    useState<Record<number, SafeOfferItem[]>>(initialItemRecord);
-  const [offerFileRecord, setOfferFileRecord] = useState<
-    Record<number, SafeOfferDBFile>
-  >(initialOfferFileRecord);
-  const [lineItems, setLineItems] = useState<LineItem[]>(
+  const [lineItemRecord, setLineItemRecord] = useState<Record<number, SafeOfferItem[]>>(initialItemRecord);
+  const [offerFileRecord, setOfferFileRecord] = useState<Record<number, SafeOfferDBFile>>(initialOfferFileRecord);
+  const [lineItems, setLineItems] = useState<LineItem[]>(() =>
     getInitialLineItems(
       initialVersionLength,
       initialItemRecord,
@@ -214,7 +215,8 @@ export const ChatProvider = ({
       initialLineItems,
     ),
   );
-  const [offerFile, setOfferFile] = useState<OfferFile>(
+
+  const [offerFile, setOfferFile] = useState<OfferFile>(() =>
     getInitialOfferFile(
       initialVersionLength,
       initialOfferFileRecord,
@@ -226,6 +228,10 @@ export const ChatProvider = ({
     () => getProposalDate(initialOfferFileRecord),
     [initialOfferFileRecord],
   );
+
+  const lineItemsRef = useRef(lineItems);
+  const offerFileRef = useRef(offerFile);
+
   const {
     messages,
     status,
@@ -263,8 +269,8 @@ export const ChatProvider = ({
           body: {
             id: request.id,
             leadId: parseInt(leadId),
-            offerFile,
-            lineItems,
+            offerFile: offerFileRef.current,
+            lineItems: lineItemsRef.current,
             // Send all messages for tool approval continuation, otherwise just the last user message
             ...(isToolApprovalContinuation
               ? { messages: request.messages }
@@ -280,7 +286,6 @@ export const ChatProvider = ({
         case "data-line-item-update": {
           const data = dataPart.data as LineItem;
           setLastRevisionDate(dateFormat.format(new Date()));
-          setVersion("current");
           setLineItems((prev) => {
             const existingIndex = prev.findIndex((item) => item.id === data.id);
             if (existingIndex !== -1) {
@@ -291,16 +296,26 @@ export const ChatProvider = ({
               };
               return updatedLineItems;
             }
-            return [...prev, data];
+            const updated = [...prev, data];
+            lineItemsRef.current = updated;
+            return updated;
           });
+          setVersion("current");
           break;
         }
 
         case "data-offer-file-update": {
           const offerData = dataPart.data as OfferFilePatchPayload;
           setLastRevisionDate(dateFormat.format(new Date()));
+          setOfferFile((prev) => {
+            const update = applyOfferFileUpdate(prev, offerData);
+            console.log("Offer File Original:", prev);
+            console.log("Update Offer Patch: ", offerData);
+            console.log("Updated Offer File: ", update);
+            offerFileRef.current = update;
+            return update;
+          });
           setVersion("current");
-          setOfferFile((prev) => applyOfferFileUpdate(prev, offerData));
           break;
         }
         default:
@@ -333,16 +348,24 @@ export const ChatProvider = ({
   const handleSetVersion = (version: number | "current") => {
     if (version === "current") {
       setVersion(version);
-      setLineItems(extractLineItemsFromMessage(initialMessages));
-      setOfferFile(extractOfferFileFromMessage(messages));
+      setLineItems(() => {
+        const newLineItems = extractLineItemsFromMessage(messages);
+        lineItemsRef.current = newLineItems;
+        return newLineItems;
+      });
+      setOfferFile((prev) => {
+        const newOfferFile = extractOfferFileFromMessage(messages, prev);
+        offerFileRef.current = newOfferFile;
+        return newOfferFile;
+      });
       return;
     }
     setVersion(version);
     const newLineItems = lineItemRecord[version] ?? [];
     const newOfferFile =
       offerFileRecord[version]?.offerContent ?? emptyOfferFile;
-    setLineItems(
-      newLineItems.map((item) => ({
+    setLineItems(() => {
+      const update = newLineItems.map((item) => ({
         id: item.id,
         description: item.description,
         item: item.item,
@@ -355,9 +378,14 @@ export const ChatProvider = ({
         netLine:
           parseFloat(item.totalPrice) - parseFloat(item.totalPrice) * 0.1, // Calculate net line by removing GST from total price
         gstAmount: parseFloat(item.totalPrice) * 0.1, // Calculate GST amount based on total price and GST rate
-      })),
-    );
-    setOfferFile(newOfferFile);
+      }));
+      lineItemsRef.current = update;
+      return update;
+    });
+    setOfferFile(() => {
+      offerFileRef.current = newOfferFile;
+      return newOfferFile;
+    });
   };
 
   return (

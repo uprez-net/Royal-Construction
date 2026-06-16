@@ -13,13 +13,13 @@ import {
 } from "@/utils/chat";
 
 export function OfferVersionSelector() {
-  const { currentVersion, versions, messages, setVersion } = useChatContext();
+  const { currentVersion, offerFile, versions, messages, setVersion } = useChatContext();
   const { initialLineItems, initialOfferFile } = useMemo(() => {
     return {
       initialLineItems: extractLineItemsFromMessage(messages),
-      initialOfferFile: extractOfferFileFromMessage(messages),
+      initialOfferFile: extractOfferFileFromMessage(messages, offerFile),
     };
-  }, [messages]);
+  }, [messages, offerFile]);
 
   const disableCurrent = useMemo(() => {
     if (

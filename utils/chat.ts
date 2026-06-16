@@ -123,19 +123,8 @@ export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[
   return lineItems;
 }
 
-export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile {
-  let offerFile: OfferFile = {
-    termsAndConditions: [],
-    projectWelcomeMessage: "",
-    revisionChanges: {
-      description: "",
-      valueAdded: 0,
-      youSave: 0,
-    },
-    projectScope: [],
-    fixedPriceItems: [],
-    promotionalUpgrades: [],
-  };
+export function extractOfferFileFromMessage(message: ChatMessageAI[], lastFile: OfferFile): OfferFile {
+  let offerFile: OfferFile = lastFile;
   
   for (const msg of message) {
     for (const part of msg.parts) {
@@ -387,7 +376,7 @@ export function applyOfferFileUpdate(
   current: OfferFile,
   incoming: OfferFilePatchPayload,
 ): OfferFile {
-  return {
+  const updatedValue: OfferFile = {
     ...current,
     ...(incoming.projectWelcomeMessage !== undefined
       ? { projectWelcomeMessage: incoming.projectWelcomeMessage }
@@ -419,4 +408,18 @@ export function applyOfferFileUpdate(
       incoming.promotionalUpgrades,
     ),
   };
+  return updatedValue;
+}
+
+export const isOfferFileInComplete = (offerFile: OfferFile): boolean => {
+  return (
+    (offerFile.termsAndConditions?.length ?? 0) > 0 ||
+    (offerFile.projectScope?.length ?? 0) > 0 ||
+    (offerFile.fixedPriceItems?.length ?? 0) > 0 ||
+    (offerFile.promotionalUpgrades?.length ?? 0) > 0 ||
+    (offerFile.projectWelcomeMessage?.length ?? 0) > 0 ||
+    (offerFile.revisionChanges?.description?.length ?? 0) > 0 ||
+    (offerFile.revisionChanges?.valueAdded ?? 0) > 0 ||
+    (offerFile.revisionChanges?.youSave ?? 0) > 0
+  );
 }

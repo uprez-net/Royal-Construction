@@ -40,7 +40,7 @@ export function OfferClient({
     <ChatProvider
       chatId={chatId}
       initialMessages={setInitialAgentMessage(initialMessages)}
-      initialOfferFile={extractOfferFileFromMessage(initialMessages)}
+      initialOfferFile={extractOfferFileFromMessage(initialMessages, initialOfferFileRecord[initialVersion].offerContent)}
       initialLineItems={extractLineItemsFromMessage(initialMessages)}
       leadId={leadId}
       initialVersionLength={initialVersion}

@@ -1,7 +1,7 @@
 "use server";
 import { ChatMessageAI, ChatSessionWithMessages } from "@/types/chat";
 import { prisma } from "@/lib/prisma";
-import type { Prisma, File, RunStatus } from "@prisma/client";
+import { Prisma, type File, type RunStatus } from "@prisma/client";
 import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 
@@ -56,30 +56,48 @@ export async function createChatMessages(messages: MessageData[], leadId: number
     }
 }
 
-export async function updateChatMessages(messages: MessageData[], leadId: number): Promise<void> {
+export async function updateChatMessages(
+    messages: MessageData[],
+    leadId: number
+): Promise<void> {
     try {
-        await prisma.$transaction(
-            messages.map((msg) =>
-                prisma.chatMessage.upsert({
-                    where: { id: msg.id },
-                    update: {
-                        content: msg.content as Prisma.InputJsonValue,
-                        timestamp: msg.timestamp,
-                    },
-                    create: {
-                        id: msg.id,
-                        sessionId: msg.sessionId,
-                        role: msg.role,
-                        content: msg.content as Prisma.InputJsonValue,
-                        timestamp: msg.timestamp,
-                    },
-                })
-            )
+        if (!messages.length) return;
+
+        const values = Prisma.join(
+            messages.map((msg) => Prisma.sql`
+                (
+                    ${msg.id},
+                    ${msg.sessionId},
+                    ${msg.role},
+                    ${JSON.stringify(msg.content)}::jsonb,
+                    ${msg.timestamp}
+                )
+            `)
         );
-        revalidateTag(`chat-session-lead-${leadId}`, CACHE_PROFILES.SHORT);
+
+        await prisma.$executeRaw`
+            INSERT INTO "ChatMessage"
+            (
+                "id",
+                "sessionId",
+                "role",
+                "content",
+                "timestamp"
+            )
+            VALUES ${values}
+            ON CONFLICT ("id")
+            DO UPDATE SET
+                "content" = EXCLUDED."content",
+                "timestamp" = EXCLUDED."timestamp";
+        `;
+
+        revalidateTag(
+            `chat-session-lead-${leadId}`,
+            CACHE_PROFILES.SHORT
+        );
     } catch (error) {
-        console.error("Error updating chat message:", error);
-        throw new Error("Failed to update chat message");
+        console.error("Error updating chat messages:", error);
+        throw new Error("Failed to update chat messages");
     }
 }
 

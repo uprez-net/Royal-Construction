@@ -121,7 +121,7 @@ export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data
             }
 
             return {
-                message: `Offer file generated for lead LED:${params.leadId}`,
+                message: `Offer file updated for lead LED:${params.leadId}`,
                 description: params.changeDescription,
                 customerOffer: resolvedOfferUpdate,
             };
