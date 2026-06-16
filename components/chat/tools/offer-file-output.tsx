@@ -28,6 +28,10 @@ function countPatchChanges(patch: unknown) {
   );
 }
 
+function hasPatchChanges(patch: unknown) {
+  return countPatchChanges(patch) > 0;
+}
+
 export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
   const termPatch = output.customerOffer.termsAndConditionsPatch;
   const scopePatch = output.customerOffer.projectScopePatch;
@@ -41,11 +45,11 @@ export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
     countPatchChanges(promotionalUpgradesPatch);
   const changedSections = [
     output.customerOffer.projectWelcomeMessage && "customer message",
-    output.customerOffer.projectScope?.length && "scope",
-    output.customerOffer.fixedPriceItems?.length && "fixed price",
-    output.customerOffer.promotionalUpgrades?.length && "upgrades",
+    hasPatchChanges(scopePatch) && "scope",
+    hasPatchChanges(fixedPriceItemsPatch) && "fixed price",
+    hasPatchChanges(promotionalUpgradesPatch) && "upgrades",
     output.customerOffer.revisionChanges && "revision",
-    output.customerOffer.termsAndConditions?.length && "terms",
+    hasPatchChanges(termPatch) && "terms",
     output.customerOffer.facadeOptions && "facade",
   ].filter(Boolean);
 

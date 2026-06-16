@@ -60,6 +60,24 @@ export function OfferChat() {
     }
   }, [messages, isAtBottom]);
 
+  const handleSendMessage = () => {
+    const text = input.trim();
+    if (!text) return;
+
+    if (messages.length === 1 && messages.at(-1)?.role !== "user") {
+      setMessages([]);
+    }
+
+    sendMessage({
+      id: generateUUID(),
+      parts: [{ type: "text", text }],
+      metadata: {
+        createdAt: new Date(Date.now() - 10_000).toISOString(),
+      },
+    });
+    setInput("");
+  };
+
   return (
     <aside
       className={cn(
@@ -84,7 +102,6 @@ export function OfferChat() {
         >
           <div
             className="flex flex-col gap-4 pb-3"
-            key={messages.at(-1)?.parts.length ?? messages.length}
           >
             {messages.map((msg) => {
               const visibleParts = msg.parts.filter(
@@ -175,18 +192,7 @@ export function OfferChat() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (!input.trim()) return;
-          if (messages.length === 1 && messages.at(-1)?.role !== "user") {
-            setMessages([]);
-          }
-          sendMessage({
-            id: generateUUID(),
-            parts: [{ type: "text", text: input }],
-            metadata: {
-              createdAt: new Date(Date.now() - 10_000).toISOString(),
-            },
-          });
-          setInput("");
+          handleSendMessage();
         }}
         className="shrink-0 border-t border-border/70 bg-card px-4 py-3"
       >
@@ -207,22 +213,7 @@ export function OfferChat() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                if (input.trim()) {
-                  if (
-                    messages.length === 1 &&
-                    messages.at(-1)?.role !== "user"
-                  ) {
-                    setMessages([]);
-                  }
-                  sendMessage({
-                    id: generateUUID(),
-                    parts: [{ type: "text", text: input }],
-                    metadata: {
-                      createdAt: new Date(Date.now() - 10_000).toISOString(),
-                    },
-                  });
-                  setInput("");
-                }
+                handleSendMessage();
               }
             }}
             className="resize-none rounded-lg border border-border bg-background pr-12 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-royal-gold/20"

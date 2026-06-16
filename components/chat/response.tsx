@@ -6,6 +6,19 @@ import { cn } from "@/lib/utils";
 
 type ResponseProps = ComponentProps<typeof MessageResponse>;
 
+function areResponsePropsEqual(prevProps: ResponseProps, nextProps: ResponseProps) {
+  const prevEntries = Object.entries(prevProps);
+  const nextEntries = Object.entries(nextProps);
+
+  if (prevEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  return prevEntries.every(([key, value]) => {
+    return Object.prototype.hasOwnProperty.call(nextProps, key) && nextProps[key as keyof ResponseProps] === value;
+  });
+}
+
 export const Response = memo(
   ({ className, ...props }: ResponseProps) => (
     <MessageResponse
@@ -84,7 +97,7 @@ export const Response = memo(
       {...props}
     />
   ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children,
+  areResponsePropsEqual,
 );
 
 Response.displayName = "Response";

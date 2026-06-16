@@ -56,6 +56,10 @@ export async function POST(request: Request): Promise<NextResponse> {
                     allowedContentTypes = ['text/html']; // Strictly HTML
                     addRandomSuffix = false;
                     allowOverwrite = true;
+                    const templatePath = pathname.startsWith('email-ad-hock/')
+                        ? pathname.slice('email-ad-hock/'.length)
+                        : pathname;
+                    pathname = `email-ad-hock/${userId}/${templatePath}`;
                 } else if (clientPayload.uploadType === 'email-attachment') {
                     allowedContentTypes = ALLOWED_ATTACHMENT_MIME_TYPES as unknown as string[]; // PDFs, Docs, Images (No HTML)
                     addRandomSuffix = true;
