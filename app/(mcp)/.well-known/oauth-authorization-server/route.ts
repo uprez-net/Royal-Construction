@@ -4,6 +4,6 @@ import {
 } from '@clerk/mcp-tools/next'
 
 const handler = authServerMetadataHandlerClerk()
-const corsHandler = metadataCorsOptionsRequestHandler()
+const corsOptionsHandler = metadataCorsOptionsRequestHandler()
 
-export { handler as GET, corsHandler as OPTIONS }
+export { handler as GET, corsOptionsHandler as OPTIONS }

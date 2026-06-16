@@ -192,7 +192,7 @@ export function FinancialTab({ project }: FinancialTabProps) {
 
       <div className="space-y-3">
         {MOCK_INVOICES.length > 0 ? (
-          <div className="overflow-hidden rounded-2xl border bg-card">
+          <div className="overflow-hidden rounded-lg border bg-card">
             <div className="overflow-x-auto no-scrollbar">
               <DataTable
                 headers={[
@@ -230,9 +230,9 @@ export function FinancialTab({ project }: FinancialTabProps) {
             </div>
           </div>
         ) : (
-          <Card className="rounded-2xl border-dashed">
+          <Card className="rounded-lg border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-14 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-muted">
                 <Receipt className="h-7 w-7 text-muted-foreground" />
               </div>
 

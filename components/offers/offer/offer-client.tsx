@@ -40,20 +40,20 @@ export function OfferClient({
     <ChatProvider
       chatId={chatId}
       initialMessages={setInitialAgentMessage(initialMessages)}
-      initialOfferFile={extractOfferFileFromMessage(initialMessages)}
+      initialOfferFile={extractOfferFileFromMessage(initialMessages, initialOfferFileRecord[initialVersion].offerContent)}
       initialLineItems={extractLineItemsFromMessage(initialMessages)}
       leadId={leadId}
       initialVersionLength={initialVersion}
       initialItemRecord={initialItemRecord}
       initialOfferFileRecord={initialOfferFileRecord}
     >
-      <div className="flex min-h-screen w-full flex-col bg-[#F7F6F2] p-3 sm:p-4 md:p-6 lg:h-screen">
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.08)] lg:flex-row">
-          <div className="flex max-h-[55vh] w-full shrink-0 border-b border-[#E2E8F0] bg-[#FCFBF8] lg:max-h-none lg:w-[25vw] lg:min-w-[320px] lg:border-r lg:border-b-0">
+      <div className="flex min-h-[calc(100svh-96px)] w-full flex-col bg-background p-3 sm:p-4 md:p-6 lg:h-[calc(100svh-96px)] lg:min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm lg:flex-row">
+          <div className="flex max-h-[48svh] w-full shrink-0 border-b border-border/70 bg-card lg:max-h-none lg:w-[24rem] lg:border-r lg:border-b-0 xl:w-[25rem]">
             <OfferChat />
           </div>
 
-          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-[#FAF8F3]">
+          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/30">
             <OfferFileCanvas
               files={files}
               leadId={leadId}

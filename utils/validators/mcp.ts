@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { isoDateStringSchema } from "./common";
+import { LeadRichTextNode } from "@/lib/leads/types";
+import { TradieScheduleStatus } from "@prisma/client";
 
 export const paginatedLookupSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
   z.object({
@@ -13,29 +16,99 @@ export const tradieItemSchema = z
   .object({
     id: z.string(),
     name: z.string(),
-    company: z.string().nullable().optional(),
-    tradeType: z.string().nullable().optional(),
-    phone: z.string().nullable().optional(),
-    email: z.string().nullable().optional(),
-  })
-  .loose();
+    company: z.string().nullable(),
+    tradeType: z.string(),
+    phone: z.string(),
+    email: z.string(),
+  });
 
 export const tradiesResponseSchema = z.array(tradieItemSchema);
 
-export const tradieScheduleItemSchema = z
-  .object({
-    id: z.string(),
-    tradieId: z.string().optional(),
-    tradieName: z.string().optional(),
-    projectId: z.string().optional(),
-    projectName: z.string().optional(),
-    milestoneId: z.string().nullable().optional(),
-    milestoneName: z.string().nullable().optional(),
-    scheduledDate: z.string(),
-    durationDays: z.number().optional(),
-    status: z.string(),
-  })
-  .loose();
+export const tradieScheduleItemSchema = z.object({
+  id: z.string(),
+
+  tradieId: z.string(),
+  tradieName: z.string(),
+
+  company: z.string().nullable(),
+
+  tradeType: z.string(),
+
+  projectId: z.string(),
+  projectName: z.string(),
+
+  milestoneId: z.string().optional(),
+  milestoneName: z.string().optional(),
+
+  taskLabel: z.string(),
+
+  scheduledDate: isoDateStringSchema,
+
+  durationDays: z.number(),
+
+  status: z.string(),
+
+  reminderSentAt: isoDateStringSchema.optional(),
+
+  updatedAt: isoDateStringSchema,
+
+  hourtlyRate: z.string().optional(),
+
+  rating: z.string().optional(),
+
+  contact: z.object({
+    email: z.string(),
+    phone: z.string(),
+  }),
+
+  siteManager: z.object({
+    name: z.string(),
+    email: z.string(),
+    phone: z.string(),
+  }),
+});
+
+export const tradieUrgentReminderItemSchema = z.object({
+  id: z.string(),
+
+  tradieName: z.string(),
+  tradeType: z.string(),
+
+  projectName: z.string(),
+
+  milestoneName: z.string().optional(),
+
+  taskLabel: z.string(),
+
+  scheduledDate: isoDateStringSchema,
+
+  daysLeft: z.number(),
+
+  status: z.string(),
+
+  reminderSentAt: isoDateStringSchema.optional(),
+
+  company: z.string().nullable(),
+
+  contact: z.object({
+    email: z.string(),
+    phone: z.string(),
+  }),
+
+  hourtlyRate: z.string().optional(),
+
+  rating: z.string().optional(),
+
+  siteManager: z.object({
+    name: z.string(),
+    email: z.string(),
+    phone: z.string(),
+  }),
+});
+
+export const tradieUrgentRemindersResponseSchema = z.array(
+  tradieUrgentReminderItemSchema
+);
 
 export const tradieScheduleResponseSchema = tradieScheduleItemSchema;
 
@@ -46,7 +119,7 @@ export const siteManagerLookupResponseSchema = paginatedLookupSchema(
       name: z.string(),
       email: z.string().nullable(),
       phone: z.string().nullable(),
-      createdAt: z.date(),
+      createdAt: isoDateStringSchema,
     })
     .loose(),
 );
@@ -68,41 +141,118 @@ export const customerLookupResponseSchema = paginatedLookupSchema(
       name: z.string(),
       email: z.string().nullable(),
       phone: z.string().nullable(),
-      createdAt: z.date(),
+      createdAt: isoDateStringSchema,
     })
     .loose(),
 );
 
-export const leadHistoryItemSchema = z
-  .object({
-    action: z.string(),
-    detail: z.string().optional(),
-    type: z.string(),
-    actionDate: z.string().or(z.date()),
-  })
-  .loose();
+export const leadHistoryItemSchema = z.object({
+  date: z.string(),
+  time: z.string(),
+  action: z.string(),
+  detail: z.string(),
+  type: z.enum([
+    "system",
+    "call",
+    "email",
+    "referral",
+  ]),
+});
 
-export const leadItemSchema = z
-  .object({
-    id: z.number(),
-    name: z.string(),
-    phone: z.string().nullable().optional(),
-    email: z.string().nullable().optional(),
-    location: z.string().nullable().optional(),
-    source: z.string().nullable().optional(),
-    stage: z.string().nullable().optional(),
-    assigned: z.string().nullable().optional(),
-    createdAt: z.date(),
-    history: z.array(leadHistoryItemSchema).optional(),
-  })
-  .loose();
+export const leadRichTextNodeSchema: z.ZodType<LeadRichTextNode> = z.lazy(() =>
+  z.object({
+    type: z.string().optional(),
+    text: z.string().optional(),
+    key: z.unknown().optional(),
+    value: z.unknown().optional(),
+    children: z.array(leadRichTextNodeSchema).optional(),
+  }).catchall(z.unknown())
+);
 
-export const leadsResponseSchema = z.array(leadItemSchema);
+export const leadRichTextDocumentSchema = z.object({
+  version: z.literal(1),
+  html: z.string(),
+  plainText: z.string(),
+  value: z.array(leadRichTextNodeSchema),
+});
+
+export const leadNoteAnnotationSchema = z.object({
+  id: z.string(),
+  selectedText: z.string(),
+  comment: z.string(),
+  mentionedUserIds: z.array(z.string()),
+  status: z.enum(["open", "resolved"]),
+  createdAt: isoDateStringSchema,
+  resolvedAt: isoDateStringSchema.nullable().optional(),
+});
+
+export const leadNoteAnnotationInputSchema = z.object({
+  selectedText: z.string(),
+  comment: z.string(),
+  mentionedUserIds: z.array(z.string()),
+});
+
+export const assignedUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+});
+
+export const leadItemSchema = z.object({
+  id: z.number(),
+
+  name: z.string(),
+  phone: z.string(),
+  email: z.string(),
+  location: z.string(),
+
+  source: z.string(),
+  sourceDetail: z.string(),
+
+  stage: z.string(),
+
+  assignedId: z.string().nullable().optional(),
+  assignedUser: assignedUserSchema.nullable().optional(),
+
+  budget: z.string(),
+
+  type: z.string(),
+
+  notes: z.string(),
+
+  notesDoc: leadRichTextDocumentSchema.nullable().optional(),
+
+  noteAnnotations: z
+    .array(leadNoteAnnotationSchema)
+    .optional(),
+
+  followupDate: z.string().nullable(),
+
+  followupTime: z.string().nullable(),
+
+  followupNotes: z.string(),
+
+  lostReason: z.string().optional(),
+
+  history: z.array(leadHistoryItemSchema),
+
+  created: z.string(),
+
+  urgent: z.boolean(),
+
+  creatingOffer: z.boolean(),
+
+  runId: z.string().nullable(),
+
+  runStatus: z.string().nullable(),
+});
+
+export const leadsResponseSchema = paginatedLookupSchema(leadItemSchema);
 export const leadResponseSchema = leadItemSchema;
 export const deleteLeadResponseSchema = z.object({ success: z.boolean() }).loose();
 
 export const projectCustomerSchema = z
-  .object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), createdAt: z.date() })
+  .object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), createdAt: isoDateStringSchema })
   .loose();
 
 export const projectSiteManagerSchema = z
@@ -117,8 +267,8 @@ export const projectListMilestoneSchema = z
   .object({
     id: z.string(),
     name: z.string(),
-    targetDate: z.date(),
-    actualDate: z.date().nullable(),
+    targetDate: isoDateStringSchema,
+    actualDate: isoDateStringSchema.nullable().optional(),
     status: z.string(),
     tradies: z.array(
       z
@@ -158,7 +308,7 @@ export const variationSchema = z
     projectId: z.string(),
     description: z.string(),
     cost: z.string(),
-    requestedDate: z.date().optional(),
+    requestedDate: isoDateStringSchema.optional(),
     status: z.string(),
   })
   .loose();
@@ -216,12 +366,13 @@ export const materialResponseSchema = z
 
 export const tradieCoordinationResponseSchema = z
   .object({
-    query: z.object({}).optional(),
     pagination: z.object({ page: z.number(), limit: z.number(), totalCount: z.number(), totalPages: z.number() }).optional(),
     schedules: z.array(tradieScheduleItemSchema),
-    summary: z.object({}).optional(),
-    tabCounts: z.record(z.string(), z.number()).optional(),
-    tradeOptions: z.array(z.string()).optional(),
+    tradeOptions: z.array(z.string()),
+    statusMetrics: z.array(z.object({ label: z.string(), value: z.number(), status: z.enum(TradieScheduleStatus) })),
+    tradeBreakdown: z.array(z.object({ tradeType: z.string(), total: z.number(), confirmedRate: z.number() })),
+    projectAllocations: z.array(z.object({ projectId: z.string(), projectName: z.string(), allocationCount: z.number() })),
+    urgentReminders: z.array(tradieUrgentReminderItemSchema)
   })
   .loose();
 

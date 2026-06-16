@@ -22,37 +22,45 @@ interface FollowupsViewProps {
 }
 
 const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
-  New: { bg: "rgba(59, 166, 241, 0.08)", color: "#0D9488", dot: "#0D9488" },
+  New: {
+    bg: "var(--royal-gold-light)",
+    color: "var(--royal-gold)",
+    dot: "var(--royal-gold)",
+  },
   Contacted: {
-    bg: "rgba(245, 158, 11, 0.08)",
-    color: "#D97706",
-    dot: "#F59E0B",
+    bg: "var(--royal-orange-light)",
+    color: "var(--royal-orange)",
+    dot: "var(--royal-orange)",
   },
   Qualified: {
-    bg: "rgba(22, 163, 74, 0.08)",
-    color: "#16A34A",
-    dot: "#16A34A",
+    bg: "var(--success-light)",
+    color: "var(--success)",
+    dot: "var(--success)",
   },
   Quoted: {
-    bg: "rgba(124, 58, 237, 0.08)",
-    color: "#7C3AED",
-    dot: "#7C3AED",
+    bg: "var(--accent-purple-light)",
+    color: "var(--accent-purple)",
+    dot: "var(--accent-purple)",
   },
   Negotiating: {
-    bg: "rgba(236, 72, 153, 0.08)",
-    color: "#EC4899",
-    dot: "#EC4899",
+    bg: "var(--info-light)",
+    color: "var(--info)",
+    dot: "var(--info)",
   },
-  Won: { bg: "rgba(22, 163, 74, 0.08)", color: "#16A34A", dot: "#16A34A" },
-  Lost: { bg: "rgba(220, 38, 38, 0.08)", color: "#DC2626", dot: "#DC2626" },
+  Won: { bg: "var(--success-light)", color: "var(--success)", dot: "var(--success)" },
+  Lost: {
+    bg: "var(--destructive-light)",
+    color: "var(--destructive)",
+    dot: "var(--destructive)",
+  },
 };
 
 function getStageConfig(stage: string) {
   return (
     STAGE_CONFIG[stage] || {
-      bg: "rgba(100,116,139,0.08)",
-      color: "#64748B",
-      dot: "#64748B",
+      bg: "var(--muted)",
+      color: "var(--muted-foreground)",
+      dot: "var(--muted-foreground)",
     }
   );
 }
@@ -144,7 +152,7 @@ function FollowupItem({
       <div className="fu-timeline-track">
         <div
           className="fu-timeline-dot"
-          style={{ background: isToday ? "#F59E0B" : stageConfig.dot }}
+          style={{ background: isToday ? "var(--warning)" : stageConfig.dot }}
         >
           {index + 1}
         </div>
@@ -159,9 +167,9 @@ function FollowupItem({
               className="fu-stage-pill"
               style={{
                 background: isToday
-                  ? "rgba(245, 158, 11, 0.15)"
+                  ? "var(--warning-light)"
                   : stageConfig.bg,
-                color: isToday ? "#F59E0B" : stageConfig.color,
+                color: isToday ? "var(--warning)" : stageConfig.color,
               }}
             >
               {lead.stage}
@@ -413,27 +421,27 @@ export default function FollowupsView({
               <StatItem
                 label="Pending Follow-ups"
                 value={stats.pending}
-                color="#DC2626"
+                color="var(--destructive)"
               />
               <StatItem
                 label="Upcoming"
                 value={stats.upcoming}
-                color="#0D9488"
+                color="var(--royal-gold)"
               />
               <StatItem
                 label="New Leads"
                 value={stats.byStage.new}
-                color="#0D9488"
+                color="var(--royal-gold)"
               />
               <StatItem
                 label="Contacted"
                 value={stats.byStage.contacted}
-                color="#F59E0B"
+                color="var(--royal-orange)"
               />
               <StatItem
                 label="Qualified"
                 value={stats.byStage.qualified}
-                color="#16A34A"
+                color="var(--success)"
               />
             </div>
           </div>

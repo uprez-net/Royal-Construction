@@ -1,5 +1,6 @@
 import { createGraphContext, type EmailInput } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
+import { requireAdminToken } from '@/lib/graph/route-utils';
 import { successResponse, errorResponse, badRequestResponse } from '@/utils/validators';
 
 function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
@@ -33,6 +34,7 @@ function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
         to: params.get('to') ?? undefined,
         subject: params.get('subject') ?? undefined,
         body: params.get('body') ?? undefined,
+        cc: params.get('cc') ?? undefined,
       } as Partial<EmailInput>;
     }
   }
@@ -42,10 +44,10 @@ function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
 
 export async function POST(request: Request): Promise<Response> {
   const config = getGraphConfig();
-  // const guard = requireAdminToken(request, config.adminToken);
-  // if (guard) {
-  //   return guard;
-  // }
+  const guard = requireAdminToken(request, config.adminToken);
+  if (guard) {
+    return guard;
+  }
 
   try {
     const rawBody = await request.text();
@@ -56,6 +58,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const to = payload.to ?? config.defaultRecipient;
+    const cc = payload.cc ?? config.cc; // Use default CC if not provided in payload
     if (!to) {
       return badRequestResponse('Recipient address (to) is required');
     }
@@ -63,7 +66,7 @@ export async function POST(request: Request): Promise<Response> {
     const subject = payload.subject ?? config.defaultSubject;
     const body = payload.body ?? config.defaultBody;
     const client = await createGraphContext(config);
-    await client.sendMail({ to, subject, body });
+    await client.sendMail({ to, subject, body, cc });
     return successResponse({ status: 'sent' }, { status: 202 });
   } catch (error) {
     console.error('Graph send failed', error);

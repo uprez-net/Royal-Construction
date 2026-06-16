@@ -26,7 +26,8 @@ import { v4 as uuidv4 } from "uuid";
 import { upload } from "@vercel/blob/client";
 import { ClientPayload } from "@/utils/validators/files";
 import { OfferVersionSelector } from "./offer-version-selector";
-import { del } from "@vercel/blob";
+import { calculateOfferTotals } from "@/lib/offer/pricing";
+import { deleteLeadBlob } from "@/lib/actions/blob";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
@@ -60,10 +61,8 @@ export function OfferFileCanvas({
   const [tabId, setTabId] = useState<"offer" | "files" | "line-items">("offer");
   const [isPending, startTransition] = useTransition();
   const [filesState, setFiles] = useState<File[]>(files);
-  const numericTotalAmount = lineItems.reduce(
-    (acc, item) => acc + item.totalPrice,
-    0,
-  );
+  const offerTotals = calculateOfferTotals(lineItems);
+  const numericTotalAmount = offerTotals.totalAmount;
   const totalAmount = currency.format(numericTotalAmount);
 
   const handleDownload = async () => {
@@ -115,17 +114,12 @@ export function OfferFileCanvas({
             fileName: fileName,
             fileSize: blob.size,
             isOfferFile: true, // Instruct the upload API to skip creating a file record since we'll handle it after the upload
+            leadId,
           } satisfies ClientPayload),
         },
       );
 
-      const amount = lineItems
-        .reduce((acc, item) => acc + item.totalPrice, 0)
-        .toFixed(2);
-      const gstAmount = (parseFloat(amount) * 0.10).toFixed(2); // Assuming 10% GST
-      const finalAmount = (parseFloat(amount) + parseFloat(gstAmount)).toFixed(
-        2,
-      );
+      const totals = calculateOfferTotals(lineItems);
       fileUrl = uploadRes.url;
       const newOffer = await createOrUpdateOffer({
         leadId: parseInt(leadId),
@@ -137,9 +131,9 @@ export function OfferFileCanvas({
           url: uploadRes.url,
           offerContent: offerFile, // Pass the offer file content to be saved in the database
         },
-        amount: amount,
-        gstAmount: gstAmount,
-        totalAmount: finalAmount,
+        amount: totals.amount.toFixed(2),
+        gstAmount: totals.gstAmount.toFixed(2),
+        totalAmount: totals.totalAmount.toFixed(2),
         offerItems: lineItems.map((item) => ({
           id: uuidv4(),
           item: item.item,
@@ -151,48 +145,54 @@ export function OfferFileCanvas({
         })),
       });
       appendVersion(newOffer.version, newOffer.newOfferItems, newOffer.newOfferFile);
+      toast.success("Offer saved.");
     } catch (error) {
       if(fileUrl) {
-        del(fileUrl); // Clean up the uploaded file if offer saving fails
+        void deleteLeadBlob(fileUrl, leadId).catch((cleanupError) => {
+          console.error("Error cleaning up uploaded offer file:", cleanupError);
+        });
       }
       console.error("Error saving the offer:", error);
+      toast.error("Failed to save offer. Please try again.");
     }
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAF8F3]">
-      <div className="shrink-0 flex items-center gap-1 border-b border-[#E2E8F0] bg-white/95 px-2 py-2 backdrop-blur-sm">
-        {(["offer", "files", "line-items"] as const).map((tab) => {
-          const active = tabId === tab;
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-muted/30">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-border/70 bg-card px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 gap-1 overflow-x-auto">
+          {(["offer", "files", "line-items"] as const).map((tab) => {
+            const active = tabId === tab;
 
-          return (
-            <Button
-              variant="ghost"
-              key={tab}
-              onClick={() => setTabId(tab)}
-              className={cn(
-                "group relative inline-flex h-8 items-center rounded-lg px-3 text-[12px] font-semibold transition-all duration-200",
-                active
-                  ? "bg-[#C6923A]/10 text-[#8B6420] shadow-sm ring-1 ring-[#C6923A]/15"
-                  : "text-slate-500 hover:bg-[#F7F4EE] hover:text-slate-900",
-              )}
-            >
-              <span>
-                {tab === "line-items"
-                  ? "Line Items"
-                  : tab === "files"
-                    ? "Lead Files"
-                    : "Offer Details"}
-              </span>
+            return (
+              <Button
+                variant="ghost"
+                key={tab}
+                onClick={() => setTabId(tab)}
+                className={cn(
+                  "group relative h-8 rounded-lg px-3 text-xs font-semibold transition-colors duration-200",
+                  active
+                    ? "bg-royal-gold-light text-foreground ring-1 ring-royal-gold/20"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <span>
+                  {tab === "line-items"
+                    ? "Line Items"
+                    : tab === "files"
+                      ? "Lead Files"
+                      : "Offer Details"}
+                </span>
 
-              {active && (
-                <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-[#C6923A]" />
-              )}
-            </Button>
-          );
-        })}
+                {active && (
+                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold" />
+                )}
+              </Button>
+            );
+          })}
+        </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
 
           <OfferVersionSelector />
 
@@ -201,7 +201,7 @@ export function OfferFileCanvas({
             size="sm"
             disabled={shouldBeDisabled(offerFile, lineItems) || isPending}
             onClick={() => startTransition(handleDownload)}
-            className="border-[#E2E8F0] bg-white text-slate-700 hover:bg-[#F7F4EE] hover:text-slate-900"
+            className="bg-card hover:bg-muted"
           >
             <Download className="size-4" />
             Download Offer
@@ -212,7 +212,7 @@ export function OfferFileCanvas({
             size="sm"
             disabled={shouldBeDisabled(offerFile, lineItems) || isPending}
             onClick={() => startTransition(handleSave)}
-            className="border-[#E2E8F0] bg-white text-slate-700 hover:bg-[#F7F4EE] hover:text-slate-900"
+            className="bg-card hover:bg-muted"
           >
             <Save className="size-4" />
             Save Offer
@@ -221,7 +221,7 @@ export function OfferFileCanvas({
       </div>
 
       {tabId === "offer" && (
-        <div className="min-h-0 w-[50vw] flex-1 overflow-hidden bg-[#FAF8F3] p-3 lg:p-4">
+        <div className="min-h-0 w-full flex-1 overflow-hidden bg-muted/30 p-3 lg:p-5">
           <OfferFileTemplate
             {...offerFile}
             ref={offerFileRef}
@@ -236,7 +236,7 @@ export function OfferFileCanvas({
       )}
 
       {tabId === "line-items" && (
-        <div className="min-h-0 w-[50vw] flex-1 overflow-auto bg-[#FAF8F3] px-4 py-4 lg:px-5">
+        <div className="min-h-0 w-full flex-1 overflow-auto bg-muted/30 px-4 py-4 lg:px-5">
           <DataTable
             headers={[
               "item",
@@ -278,7 +278,7 @@ export function OfferFileCanvas({
       )}
 
       {tabId === "files" && (
-        <div className="min-h-0 w-[50vw] flex-1 overflow-auto bg-[#FAF8F3] px-4 py-4 lg:px-5">
+        <div className="min-h-0 w-full flex-1 overflow-auto bg-muted/30 px-4 py-4 lg:px-5">
           <div className="mb-4 flex items-center justify-end gap-2">
             <UploadButton
               leadId={leadId.toString()}
@@ -292,7 +292,7 @@ export function OfferFileCanvas({
             rows={filesState.map((file, index) => [
               <span
                 key={`${file.id}-number`}
-                className="font-semibold text-slate-900"
+                className="font-semibold text-foreground"
               >
                 {index + 1}
               </span>,

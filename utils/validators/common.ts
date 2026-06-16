@@ -127,6 +127,8 @@ export const optionalIsoDateSchema = z
     return null;
   });
 
+export const isoDateStringSchema = z.iso.datetime().describe("ISO date string");
+
 /**
  * Date range validator for filter queries
  */

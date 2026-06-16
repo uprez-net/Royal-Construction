@@ -35,14 +35,14 @@ export function ProjectWorkersTab({ project }: ProjectWorkersTabProps) {
   return (
     <section className="grid gap-4 lg:grid-cols-[0.95fr_1.4fr]">
       <div className="space-y-4">
-        <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl text-center">
+        <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-lg text-center">
           <CardHeader className="border-b border-border/60 pb-4 flex justify-center">
             <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground text-center">
               Site QR Code
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 pt-5">
-            <div className="mx-auto grid size-[180px] place-items-center rounded-2xl border-2 border-dashed border-border/80 bg-white p-5">
+            <div className="mx-auto grid size-[180px] place-items-center rounded-lg border-2 border-dashed border-border/80 bg-white p-5">
               <svg
                 viewBox="0 0 200 200"
                 width="100%"
@@ -210,7 +210,7 @@ export function ProjectWorkersTab({ project }: ProjectWorkersTabProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
+        <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-lg">
           <CardHeader className="border-b border-border/60 pb-4">
             <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
               Today&apos;s Summary
@@ -241,7 +241,7 @@ export function ProjectWorkersTab({ project }: ProjectWorkersTabProps) {
         </Card>
       </div>
 
-      <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
+      <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-lg">
         <CardHeader className="border-b border-border/60 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">

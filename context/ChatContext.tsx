@@ -6,9 +6,11 @@ import { fetchWithErrorHandlers } from "@/utils/chat-error";
 import { v4 as generateUUID } from "uuid";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import {
+  applyOfferFileUpdate,
   extractLineItemsFromMessage,
   extractOfferFileFromMessage,
-  mergeServiceItems,
+  isOfferFileInComplete,
+  OfferFilePatchPayload,
   ServiceItem,
 } from "@/utils/chat";
 import { SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
@@ -18,6 +20,7 @@ import type {
   FacadeOptionWithImageUrl,
   TermsAndConditionsItem,
 } from "@/lib/agent/offer-prompts";
+import { hydratePricingFromStoredTotal } from "@/lib/offer/pricing";
 
 interface ChatContextValue {
   lineItems: LineItem[];
@@ -107,11 +110,11 @@ const getInitialOfferFile = (
   msg: ChatMessageAI[],
   initial: OfferFile,
 ) => {
-  if (msg.length > 1) {
+  if (msg.length > 1 && !isOfferFileInComplete(initial)) {
     return initial;
-  } else {
-    return fileVersions[version].offerContent;
   }
+
+  return fileVersions[version]?.offerContent ?? initial;
 };
 
 const getInitialLineItems = (
@@ -120,22 +123,44 @@ const getInitialLineItems = (
   msg: ChatMessageAI[],
   initial: LineItem[],
 ) => {
-  if (msg.length > 1) {
+  if (msg.length > 1 && initial.length > 0) {
     return initial;
-  } else {
-    return lineItemVersions[version].map((item) => ({
+  }
+
+  return (lineItemVersions[version] ?? []).map((item) => {
+    const totalPrice = parseFloat(item.totalPrice);
+    const pricing = hydratePricingFromStoredTotal(totalPrice);
+
+    return {
       id: item.id,
       description: item.description,
       item: item.item,
       unitPrice: parseFloat(item.unitPrice),
       quantity: item.quantity,
       unit: item.unit,
-      totalPrice: parseFloat(item.totalPrice),
+      totalPrice,
       gstRate: 0.1, // Assuming a default GST rate of 10%
       gstIncluded: true, // Assuming GST is included in the prices
-      netLine: parseFloat(item.totalPrice) - parseFloat(item.totalPrice) * 0.1, // Calculate net line by removing GST from total price
-      gstAmount: parseFloat(item.totalPrice) * 0.1, // Calculate GST amount based on total price and GST rate
-    }));
+      netLine: pricing.netLine,
+      gstAmount: pricing.gstAmount,
+    };
+  });
+};
+
+const getInitialVersion = (
+  messages: ChatMessageAI[],
+  initialLineItems: LineItem[],
+  initialOfferFile: OfferFile,
+  initialVersion: number,
+) => {
+  if (
+    messages.length > 1 &&
+    initialLineItems.length > 0 &&
+    !isOfferFileInComplete(initialOfferFile)
+  ) {
+    return "current";
+  } else {
+    return initialVersion === 0 ? "current" : initialVersion;
   }
 };
 
@@ -165,7 +190,12 @@ export const ChatProvider = ({
     getRevisionDate(initialOfferFileRecord),
   );
   const [version, setVersion] = useState<number | "current">(
-    initialMessages.length > 1 ? "current" : initialVersionLength,
+    getInitialVersion(
+      initialMessages,
+      initialLineItems,
+      initialOfferFile,
+      initialVersionLength,
+    ),
   );
   const [versionLength, setVersionLength] = useState(initialVersionLength);
   const [lineItemRecord, setLineItemRecord] =
@@ -173,7 +203,7 @@ export const ChatProvider = ({
   const [offerFileRecord, setOfferFileRecord] = useState<
     Record<number, SafeOfferDBFile>
   >(initialOfferFileRecord);
-  const [lineItems, setLineItems] = useState<LineItem[]>(
+  const [lineItems, setLineItems] = useState<LineItem[]>(() =>
     getInitialLineItems(
       initialVersionLength,
       initialItemRecord,
@@ -181,7 +211,8 @@ export const ChatProvider = ({
       initialLineItems,
     ),
   );
-  const [offerFile, setOfferFile] = useState<OfferFile>(
+
+  const [offerFile, setOfferFile] = useState<OfferFile>(() =>
     getInitialOfferFile(
       initialVersionLength,
       initialOfferFileRecord,
@@ -193,6 +224,7 @@ export const ChatProvider = ({
     () => getProposalDate(initialOfferFileRecord),
     [initialOfferFileRecord],
   );
+
   const {
     messages,
     status,
@@ -211,6 +243,21 @@ export const ChatProvider = ({
       fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest(request) {
         const lastMessage = request.messages.at(-1);
+        const {
+          leadId: requestLeadId,
+          offerFile,
+          lineItems,
+        } = (request.body ?? {}) as {
+          leadId: number;
+          offerFile: OfferFile;
+          lineItems: LineItem[];
+        };
+
+        console.log("Preparing request with body:", {
+          leadId: requestLeadId,
+          offerFile,
+          lineItems,
+        });
 
         // Check if this is a tool approval continuation:
         // - Last message is NOT a user message (meaning no new user input)
@@ -229,7 +276,9 @@ export const ChatProvider = ({
         return {
           body: {
             id: request.id,
-            leadId,
+            leadId: requestLeadId,
+            offerFile,
+            lineItems,
             // Send all messages for tool approval continuation, otherwise just the last user message
             ...(isToolApprovalContinuation
               ? { messages: request.messages }
@@ -255,29 +304,24 @@ export const ChatProvider = ({
               };
               return updatedLineItems;
             }
-            return [...prev, data];
+            const updated = [...prev, data];
+            return updated;
           });
+          setVersion("current");
           break;
         }
 
         case "data-offer-file-update": {
-          const offerData = dataPart.data as OfferFile;
+          const offerData = dataPart.data as OfferFilePatchPayload;
           setLastRevisionDate(dateFormat.format(new Date()));
-          setOfferFile((prev) => ({
-            ...prev,
-            ...offerData,
-            termsAndConditions:
-              offerData.termsAndConditions ?? prev.termsAndConditions,
-            projectScope: offerData.projectScope
-              ? mergeServiceItems(
-                  prev.projectScope ?? [],
-                  offerData.projectScope,
-                )
-              : prev.projectScope,
-            fixedPriceItems: offerData.fixedPriceItems ?? prev.fixedPriceItems,
-            promotionalUpgrades:
-              offerData.promotionalUpgrades ?? prev.promotionalUpgrades,
-          }));
+          setOfferFile((prev) => {
+            const update = applyOfferFileUpdate(prev, offerData);
+            console.log("Offer File Original:", prev);
+            console.log("Update Offer Patch: ", offerData);
+            console.log("Updated Offer File: ", update);
+            return update;
+          });
+          setVersion("current");
           break;
         }
         default:
@@ -310,31 +354,48 @@ export const ChatProvider = ({
   const handleSetVersion = (version: number | "current") => {
     if (version === "current") {
       setVersion(version);
-      setLineItems(extractLineItemsFromMessage(initialMessages));
-      setOfferFile(extractOfferFileFromMessage(messages));
+      setLineItems((prev) => {
+        const newLineItems = extractLineItemsFromMessage(messages);
+        return [
+          ...prev.filter(
+            (item) => !newLineItems.some((newItem) => newItem.id === item.id),
+          ),
+          ...newLineItems,
+        ];
+      });
+      setOfferFile((prev) => {
+        const newOfferFile = extractOfferFileFromMessage(messages, prev);
+        return newOfferFile;
+      });
       return;
     }
     setVersion(version);
     const newLineItems = lineItemRecord[version] ?? [];
     const newOfferFile =
       offerFileRecord[version]?.offerContent ?? emptyOfferFile;
-    setLineItems(
-      newLineItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        item: item.item,
-        unitPrice: parseFloat(item.unitPrice),
-        quantity: item.quantity,
-        unit: item.unit,
-        totalPrice: parseFloat(item.totalPrice),
-        gstRate: 0.1, // Assuming a default GST rate of 10%
-        gstIncluded: true, // Assuming GST is included in the prices
-        netLine:
-          parseFloat(item.totalPrice) - parseFloat(item.totalPrice) * 0.1, // Calculate net line by removing GST from total price
-        gstAmount: parseFloat(item.totalPrice) * 0.1, // Calculate GST amount based on total price and GST rate
-      })),
-    );
-    setOfferFile(newOfferFile);
+    setLineItems(() => {
+      const update = newLineItems.map((item) => {
+        const totalPrice = parseFloat(item.totalPrice);
+        const pricing = hydratePricingFromStoredTotal(totalPrice);
+        return {
+          id: item.id,
+          description: item.description,
+          item: item.item,
+          unitPrice: parseFloat(item.unitPrice),
+          quantity: item.quantity,
+          unit: item.unit,
+          totalPrice,
+          gstRate: 0.1,
+          gstIncluded: true,
+          netLine: pricing.netLine,
+          gstAmount: pricing.gstAmount,
+        };
+      });
+      return update;
+    });
+    setOfferFile(() => {
+      return newOfferFile;
+    });
   };
 
   return (
@@ -346,7 +407,10 @@ export const ChatProvider = ({
         versions: versionLength,
         messages,
         status,
-        sendMessage,
+        sendMessage: (params) =>
+          sendMessage(params, {
+            body: { leadId: parseInt(leadId), offerFile, lineItems },
+          }),
         setMessages,
         stop,
         error,

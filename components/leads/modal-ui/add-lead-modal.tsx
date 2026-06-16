@@ -90,6 +90,9 @@ export function AddLeadModal({
 
   const [saving, setSaving] = useState(false);
   const [savingWithReminder, setSavingWithReminder] = useState(false);
+  const formId = React.useId();
+  const fieldId = (name: string) => `${formId}-${name}`;
+  const requiredFieldsId = fieldId("required-fields");
 
   /* ── Helpers ── */
 
@@ -127,6 +130,13 @@ export function AddLeadModal({
     form.location.trim() &&
     form.assignedId.trim() &&
     form.email.trim();
+  const missingRequiredFields = [
+    !form.name.trim() && "full name",
+    !form.phone.trim() && "phone",
+    !form.email.trim() && "email",
+    !form.location.trim() && "location",
+    !form.assignedId.trim() && "assigned person",
+  ].filter(Boolean);
 
   /* ── Submit ── */
 
@@ -178,6 +188,11 @@ export function AddLeadModal({
         history: historyEntries,
       });
 
+      if ('message' in createdLead) {
+        showToast(createdLead.message, "info");
+        return;
+      }
+
       onSuccess(createdLead);
       showToast(`Lead added: ${form.name}`, "success");
 
@@ -203,9 +218,9 @@ export function AddLeadModal({
   /* ── Styles ── */
 
   const fieldCls =
-    "mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground shadow-none transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10";
+    "mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground shadow-none transition-all focus:border-[color:var(--royal-gold)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[color:var(--royal-gold-light)]";
   const textareaCls =
-    "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-none transition-all focus:border-teal-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/10";
+    "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-none transition-all focus:border-[color:var(--royal-gold)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[color:var(--royal-gold-light)]";
   const sectionLbl = "text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground";
   const itemLbl = "text-xs font-medium text-muted-foreground";
 
@@ -223,45 +238,64 @@ export function AddLeadModal({
         {/* Row 1: Contact + Source */}
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className={itemLbl}>Full Name *</label>
+            <label htmlFor={fieldId("name")} className={itemLbl}>
+              Full Name *
+            </label>
             <input
+              id={fieldId("name")}
               className={fieldCls}
               placeholder="e.g. Jaswinder Singh"
               value={form.name}
               onChange={(e) => updateField("name", e.target.value)}
+              required
             />
           </div>
           <div>
-            <label className={itemLbl}>Phone *</label>
+            <label htmlFor={fieldId("phone")} className={itemLbl}>
+              Phone *
+            </label>
             <input
+              id={fieldId("phone")}
               className={fieldCls}
               placeholder="e.g. 0412 345 678"
               value={form.phone}
               onChange={(e) => updateField("phone", e.target.value)}
+              required
             />
           </div>
           <div>
-            <label className={itemLbl}>Email *</label>
+            <label htmlFor={fieldId("email")} className={itemLbl}>
+              Email *
+            </label>
             <input
+              id={fieldId("email")}
               className={fieldCls}
               placeholder="e.g. name@email.com"
               type="email"
               value={form.email}
               onChange={(e) => updateField("email", e.target.value)}
+              required
             />
           </div>
           <div>
-            <label className={itemLbl}>Location *</label>
+            <label htmlFor={fieldId("location")} className={itemLbl}>
+              Location *
+            </label>
             <input
+              id={fieldId("location")}
               className={fieldCls}
               placeholder="e.g. Blacktown, NSW"
               value={form.location}
               onChange={(e) => updateField("location", e.target.value)}
+              required
             />
           </div>
           <div>
-            <label className={itemLbl}>Source Detail</label>
+            <label htmlFor={fieldId("source-detail")} className={itemLbl}>
+              Source Detail
+            </label>
             <select
+              id={fieldId("source-detail")}
               className={fieldCls}
               value={form.sourceDetail}
               onChange={(e) => updateField("sourceDetail", e.target.value)}
@@ -272,11 +306,15 @@ export function AddLeadModal({
             </select>
           </div>
           <div>
-            <label className={itemLbl}>Assigned To *</label>
+            <label htmlFor={fieldId("assigned-to")} className={itemLbl}>
+              Assigned To *
+            </label>
             <select
+              id={fieldId("assigned-to")}
               className={fieldCls}
               value={form.assignedId}
               onChange={(e) => updateField("assignedId", e.target.value)}
+              required
             >
               <option value="" disabled>
                 Select a person
@@ -287,8 +325,11 @@ export function AddLeadModal({
             </select>
           </div>
           <div>
-            <label className={itemLbl}>Budget Range</label>
+            <label htmlFor={fieldId("budget")} className={itemLbl}>
+              Budget Range
+            </label>
             <select
+              id={fieldId("budget")}
               className={fieldCls}
               value={form.budget}
               onChange={(e) => updateField("budget", e.target.value)}
@@ -302,7 +343,7 @@ export function AddLeadModal({
 
         {/* Project Type */}
         <div>
-          <label className={sectionLbl}>Project Type</label>
+          <p className={sectionLbl}>Project Type</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {PROJECT_TYPE_OPTIONS.map((option) => (
               <label
@@ -310,13 +351,13 @@ export function AddLeadModal({
                 className={cn(
                   "inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
                   form.type.includes(option)
-                    ? "border-teal-600 bg-teal-50 text-teal-700"
-                    : "border-border bg-background text-muted-foreground hover:border-teal-300 hover:bg-teal-50/40",
+                    ? "border-[color:var(--royal-gold)] bg-[color:var(--royal-gold-light)] text-[color:var(--royal-gold)]"
+                    : "border-border bg-background text-muted-foreground hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold-light)]",
                 )}
               >
                 <input
                   type="checkbox"
-                  className="size-3.5 accent-teal-600"
+                  className="size-3.5 accent-[var(--royal-gold)]"
                   checked={form.type.includes(option)}
                   onChange={() => toggleProjectType(option)}
                 />
@@ -328,8 +369,11 @@ export function AddLeadModal({
 
         {/* Notes */}
         <div>
-          <label className={itemLbl}>Notes</label>
+          <label htmlFor={fieldId("notes")} className={itemLbl}>
+            Notes
+          </label>
           <textarea
+            id={fieldId("notes")}
             className={textareaCls}
             rows={3}
             placeholder="Initial notes about this lead..."
@@ -341,8 +385,11 @@ export function AddLeadModal({
         {/* Follow-up */}
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className={itemLbl}>Follow-up Date</label>
+            <label htmlFor={fieldId("followup-date")} className={itemLbl}>
+              Follow-up Date
+            </label>
             <input
+              id={fieldId("followup-date")}
               className={fieldCls}
               type="date"
               value={form.followupDate}
@@ -350,8 +397,11 @@ export function AddLeadModal({
             />
           </div>
           <div>
-            <label className={itemLbl}>Follow-up Time</label>
+            <label htmlFor={fieldId("followup-time")} className={itemLbl}>
+              Follow-up Time
+            </label>
             <input
+              id={fieldId("followup-time")}
               className={fieldCls}
               type="time"
               value={form.followupTime}
@@ -363,8 +413,9 @@ export function AddLeadModal({
         {/* Urgent */}
         <label className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <input
+            id={fieldId("urgent")}
             type="checkbox"
-            className="size-3.5 accent-teal-600"
+            className="size-3.5 accent-[var(--royal-gold)]"
             checked={form.urgent}
             onChange={(e) =>
               setForm((prev) => ({ ...prev, urgent: e.target.checked }))
@@ -376,7 +427,7 @@ export function AddLeadModal({
         {/* History */}
         <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
           <div className="flex items-center justify-between gap-2">
-            <label className={sectionLbl}>History</label>
+            <p className={sectionLbl}>History</p>
             <Button
               type="button"
               size="sm"
@@ -389,8 +440,11 @@ export function AddLeadModal({
 
           <div className="grid gap-3 md:grid-cols-2">
             <div className="md:col-span-2">
-              <label className={itemLbl}>Action</label>
+              <label htmlFor={fieldId("history-action")} className={itemLbl}>
+                Action
+              </label>
               <input
+                id={fieldId("history-action")}
                 className={fieldCls}
                 placeholder="e.g. Called client"
                 value={historyDraft.action}
@@ -400,8 +454,11 @@ export function AddLeadModal({
               />
             </div>
             <div>
-              <label className={itemLbl}>Type</label>
+              <label htmlFor={fieldId("history-type")} className={itemLbl}>
+                Type
+              </label>
               <select
+                id={fieldId("history-type")}
                 className={fieldCls}
                 value={historyDraft.type}
                 onChange={(e) =>
@@ -417,8 +474,11 @@ export function AddLeadModal({
               </select>
             </div>
             <div>
-              <label className={itemLbl}>Action Date</label>
+              <label htmlFor={fieldId("history-date")} className={itemLbl}>
+                Action Date
+              </label>
               <input
+                id={fieldId("history-date")}
                 className={fieldCls}
                 type="datetime-local"
                 value={historyDraft.actionDate}
@@ -428,8 +488,11 @@ export function AddLeadModal({
               />
             </div>
             <div className="md:col-span-2">
-              <label className={itemLbl}>Detail</label>
+              <label htmlFor={fieldId("history-detail")} className={itemLbl}>
+                Detail
+              </label>
               <textarea
+                id={fieldId("history-detail")}
                 className={textareaCls}
                 rows={2}
                 placeholder="Add details about the action taken..."
@@ -486,10 +549,11 @@ export function AddLeadModal({
           <Button
             onClick={() => handleSubmit(false)}
             disabled={!isFormValid || saving || savingWithReminder}
+            aria-describedby={!isFormValid ? requiredFieldsId : undefined}
           >
             {saving ? (
               <>
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 Saving Lead...
               </>
             ) : (
@@ -502,10 +566,11 @@ export function AddLeadModal({
             variant="outline"
             onClick={() => handleSubmit(true)}
             disabled={!isFormValid || saving || savingWithReminder}
+            aria-describedby={!isFormValid ? requiredFieldsId : undefined}
           >
             {savingWithReminder ? (
               <>
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[color:var(--royal-gold)] border-t-transparent" />
                 Saving & Setting Reminder...
               </>
             ):null}
@@ -518,6 +583,14 @@ export function AddLeadModal({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
+          {!isFormValid && (
+            <p
+              id={requiredFieldsId}
+              className="basis-full text-xs font-medium text-destructive"
+            >
+              Required: {missingRequiredFields.join(", ")}.
+            </p>
+          )}
         </div>
       </div>
     </ModalShell>

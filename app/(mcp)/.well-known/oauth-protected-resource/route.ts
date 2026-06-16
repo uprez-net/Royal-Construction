@@ -6,7 +6,9 @@ import {
 const handler = protectedResourceHandlerClerk({
   // Specify which OAuth scopes this protected resource supports
   scopes_supported: ['profile', 'email'],
+  resource: `${process.env.NEXT_PUBLIC_APP_URL}/mcp`,
 })
-const corsHandler = metadataCorsOptionsRequestHandler()
 
-export { handler as GET, corsHandler as OPTIONS }
+const corsOptionsHandler = metadataCorsOptionsRequestHandler()
+
+export { handler as GET, corsOptionsHandler as OPTIONS }

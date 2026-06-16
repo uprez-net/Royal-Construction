@@ -220,6 +220,20 @@ export function WorkflowStreamProvider({
     };
   }, [initialRunId, connectToRun]);
 
+  useEffect(() => {
+    if (!runId || !connected) return;
+
+    const interval = setInterval(
+      () => {
+        console.log("Refreshing SSE connection...");
+        void connectToRun(runId);
+      },
+      2 * 60 * 1000,
+    ); // 2 minutes
+
+    return () => clearInterval(interval);
+  }, [runId, connected, connectToRun]);
+
   const value = useMemo(
     () => ({
       runId,

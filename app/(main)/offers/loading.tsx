@@ -3,39 +3,37 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function OfferPageSkeleton() {
   return (
     <div className="space-y-6">
-      {/* Hero Banner */}
-      <div className="relative overflow-hidden rounded-2xl border bg-muted/30 p-6">
-        <div className="flex items-start justify-between">
+      {/* Header */}
+      <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm sm:p-5 lg:p-6">
+        <div className="flex items-start justify-between gap-4">
           <div className="space-y-3">
-            <Skeleton className="h-8 w-56" />
-            <Skeleton className="h-4 w-105" />
+            <Skeleton className="h-5 w-56" />
+            <Skeleton className="h-4 w-80" />
           </div>
 
-          <Skeleton className="h-10 w-40 rounded-full" />
+          <Skeleton className="h-8 w-32 rounded-md" />
         </div>
-
-        {/* Decorative circles */}
-        <div className="absolute right-16 top-0 h-32 w-32 rounded-full bg-muted opacity-30" />
-        <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-muted opacity-20" />
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="rounded-2xl border bg-card p-5">
-            <div className="mb-6 flex items-start justify-between">
-              <Skeleton className="h-12 w-12 rounded-full" />
-              <Skeleton className="h-6 w-14 rounded-full" />
+          <div
+            key={index}
+            className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm"
+          >
+            <Skeleton className="size-9 rounded-lg" />
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-12" />
+              <Skeleton className="h-3 w-28" />
             </div>
-
-            <Skeleton className="mb-2 h-8 w-10" />
-            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-5 w-12 rounded-md" />
           </div>
         ))}
       </div>
 
       {/* Table Card */}
-      <div className="rounded-2xl border bg-card">
+      <div className="rounded-lg border border-border/70 bg-card shadow-sm">
         {/* Tabs */}
         <div className="border-b px-6 py-5">
           <div className="flex gap-6">
@@ -53,7 +51,7 @@ export default function OfferPageSkeleton() {
 
         {/* Table */}
         <div className="px-6 pb-6">
-          <div className="overflow-hidden rounded-xl border">
+          <div className="overflow-hidden rounded-lg border">
             {/* Header */}
             <div className="grid grid-cols-9 gap-4 border-b bg-muted/40 px-4 py-4">
               {Array.from({ length: 9 }).map((_, index) => (

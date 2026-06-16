@@ -57,13 +57,13 @@ typography:
     fontWeight: 400
     lineHeight: 1.5
 rounded:
-  sm: "0.65rem"
-  md: "0.85rem"
-  lg: "1rem"
-  xl: "1.35rem"
-  2xl: "1.8rem"
-  3xl: "2.2rem"
-  4xl: "2.8rem"
+  sm: "0.325rem"
+  md: "0.425rem"
+  lg: "0.5rem"
+  xl: "0.675rem"
+  2xl: "0.9rem"
+  3xl: "1.1rem"
+  4xl: "1.4rem"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -127,7 +127,7 @@ This system explicitly rejects three failure modes. Generic SaaS: pastel cards, 
 - Light canvas (near-white with a faint cool tint) for work surfaces; dark navy rail for structure
 - Site Teal as the single decisive action colour; Tradie Amber as the warm secondary for warnings and energy
 - Three-layer elevation: background flat, cards at shadow-sm, modals at shadow-lg
-- Generous rounding (1.8rem on icon containers, 1rem on cards) without looking consumer-app
+- Sharper rounding (0.9rem on icon containers, 0.5rem on cards) so the app feels precise rather than soft
 - Fraunces for editorial gravity; Manrope for operational speed; IBM Plex Mono for data precision
 
 ## 2. Colors: The Site Office Palette
@@ -227,7 +227,7 @@ The sidebar is structural chrome, outside the layering stack. It uses its own da
 
 Confident and direct. No ambiguity about what is clickable.
 
-- **Shape:** Gently rounded (1rem, `--radius-lg`). Substantial but not pill-shaped.
+- **Shape:** Sharply rounded (0.5rem, `--radius-lg`). Substantial but not pill-shaped.
 - **Primary:** Site Teal background (`--primary`), white foreground. Padding 10px 20px. Manrope 500, 0.875rem.
 - **Hover / Focus:** Subtle darken on hover. Focus ring: `outline-ring/50` using the ring token (site-teal at 50% opacity), 2px offset.
 - **Ghost:** Transparent background, night-slate text. Border appears on hover only.
@@ -238,7 +238,7 @@ Confident and direct. No ambiguity about what is clickable.
 The KPI summary pattern. Four across the top of dashboard-style pages.
 
 - **Surface:** Card White, `shadow-sm`, `border-border/70`.
-- **Icon container:** 44×44px, `rounded-2xl` (1.8rem). Tonal colours: teal (primary), orange (accent), emerald (success), amber (warning), red (danger).
+- **Icon container:** 44×44px, `rounded-2xl` (0.9rem). Tonal colours: teal (primary), orange (accent), emerald (success), amber (warning), red (danger).
 - **Value:** Fraunces at display or headline scale, `text-3xl font-semibold tracking-tight`. Night Slate.
 - **Label:** CardDescription, Manrope body, mid-slate.
 - **Supporting note:** `text-sm text-muted-foreground` below the value.
@@ -253,7 +253,7 @@ The standard content panel. Wraps most feature-level content.
 
 ### Inputs / Fields
 
-- **Style:** `border border-input` (cool-border), `bg-background` or `bg-white/95`. Radius `--radius-md` (~0.85rem).
+- **Style:** `border border-input` (cool-border), `bg-background` or `bg-white/95`. Radius `--radius-md` (~0.425rem).
 - **Focus:** Border shifts to `--ring` (site-teal); `outline-ring/50` glow.
 - **Error:** Border shifts to `--destructive`. Error text at label scale, site-red, below the field.
 - **Disabled:** 50% opacity. No other treatment.
@@ -277,7 +277,7 @@ The standard content panel. Wraps most feature-level content.
 ### Do:
 - **Do** use Fraunces for KPI values, section headings, milestone titles, page anchors, and anywhere editorial gravity helps the user orient.
 - **Do** use IBM Plex Mono for all financial figures, project IDs, timestamps, and reference codes.
-- **Do** apply `rounded-2xl` (1.8rem) to icon containers, avatar shapes, and interactive targets that benefit from a softer shape.
+- **Do** apply `rounded-2xl` (0.9rem) to icon containers, avatar shapes, and interactive targets that benefit from a softer shape.
 - **Do** assign `shadow-sm` to all raised card surfaces and `shadow-lg` to all floating surfaces, consistently and always.
 - **Do** use `border-border/70` and `bg-white/95` on cards to maintain translucency against the body gradient.
 - **Do** express hover states on list items and cards through background tints (`bg-muted/40`), not shadow amplification.
@@ -291,7 +291,7 @@ The standard content panel. Wraps most feature-level content.
 - **Don't** make it look like a finance or banking dark-mode product: no terminal-native aesthetics, no neon accents, no dark content surfaces, no crypto-adjacent chrome. BuildPro runs in daylight. Precision is correct; that aesthetic register is wrong.
 - **Don't** introduce dark-themed panels, sections, or feature areas outside the sidebar rail. The light canvas is not a default that gets overridden; it is the system.
 - **Don't** use Inter. Manrope is the only body/UI font (`var(--font-sans)`). The `.leads-container` Inter usage has been removed; do not reintroduce it.
-- **Don't** give the `.leads-container` CSS its own colour or font values. The parallel token set has been dissolved: `--leads-*` now alias the canonical `:root` tokens (`--royal-gold`, `--success`, `--foreground`, etc.) and `font-family` inherits Manrope. Keep it that way. Prefer Tailwind utility classes over extending this hand-written CSS block at all; new sales/leads UI should consume the system tokens directly. (Radii and shadow values in the block remain bespoke px values, pending a future pass onto the rem token scale.)
+- **Don't** give the `.leads-container` CSS its own colour, font, or radius values. The parallel token set has been dissolved: `--leads-*` now alias the canonical `:root` tokens (`--royal-gold`, `--success`, `--foreground`, etc.), radii alias the global radius scale, and `font-family` inherits Manrope. Keep it that way. Prefer Tailwind utility classes over extending this hand-written CSS block at all; new sales/leads UI should consume the system tokens directly. (Shadow values in the block remain bespoke px values, pending a future pass onto the token scale.)
 - **Don't** use `border-left` wider than 1px as a coloured accent stripe on cards, list items, or callouts. The follow-up notes block has one; it is the pattern to eliminate, not repeat.
 - **Don't** use gradient text (`background-clip: text` combined with a gradient background). No exceptions.
 - **Don't** introduce identical card grids: same-sized cards with icon + heading + body text, repeated. MetricCard is a purposeful exception with strict data binding. Generic icon grids are prohibited.

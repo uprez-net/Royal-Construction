@@ -1,7 +1,7 @@
 "use server";
 import { ChatMessageAI, ChatSessionWithMessages } from "@/types/chat";
 import { prisma } from "@/lib/prisma";
-import type { Prisma, File } from "@prisma/client";
+import { Prisma, type File, type RunStatus } from "@prisma/client";
 import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 
@@ -56,23 +56,48 @@ export async function createChatMessages(messages: MessageData[], leadId: number
     }
 }
 
-export async function updateChatMessages(messages: MessageData[], leadId: number): Promise<void> {
+export async function updateChatMessages(
+    messages: MessageData[],
+    leadId: number
+): Promise<void> {
     try {
-        await prisma.$transaction(
-            messages.map((msg) =>
-                prisma.chatMessage.update({
-                    where: { id: msg.id },
-                    data: {
-                        content: msg.content as Prisma.InputJsonValue,
-                        timestamp: msg.timestamp,
-                    },
-                })
-            )
+        if (!messages.length) return;
+
+        const values = Prisma.join(
+            messages.map((msg) => Prisma.sql`
+                (
+                    ${msg.id},
+                    ${msg.sessionId},
+                    ${msg.role},
+                    ${JSON.stringify(msg.content)}::jsonb,
+                    ${msg.timestamp}
+                )
+            `)
         );
-        revalidateTag(`chat-session-lead-${leadId}`, CACHE_PROFILES.SHORT);
+
+        await prisma.$executeRaw`
+            INSERT INTO "ChatMessage"
+            (
+                "id",
+                "sessionId",
+                "role",
+                "content",
+                "timestamp"
+            )
+            VALUES ${values}
+            ON CONFLICT ("id")
+            DO UPDATE SET
+                "content" = EXCLUDED."content",
+                "timestamp" = EXCLUDED."timestamp";
+        `;
+
+        revalidateTag(
+            `chat-session-lead-${leadId}`,
+            CACHE_PROFILES.SHORT
+        );
     } catch (error) {
-        console.error("Error updating chat message:", error);
-        throw new Error("Failed to update chat message");
+        console.error("Error updating chat messages:", error);
+        throw new Error("Failed to update chat messages");
     }
 }
 
@@ -84,6 +109,8 @@ interface FetchChatResponse {
         location: string;
         type: string;
         runId: string | null;
+        runStatus: RunStatus | null;
+        updatedAt: Date;
     };
 }
 
@@ -92,24 +119,30 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
     cacheTag(`chat-session-lead-${leadId}`);
     cacheLife(CACHE_PROFILES.SHORT);
     try {
-        const chatSession = await prisma.chatSession.findFirst({
-            where: { leadId },
-            include: { messages: true },
-        });
-
-        const leadFiles = await prisma.file.findMany({
-            where: { leadId },
-        });
-
-        const lead = await prisma.lead.findUnique({
-            where: { id: leadId },
-            select: {
-                name: true,
-                location: true,
-                type: true,
-                runId: true,
-            }
-        });
+        const [chatSession, leadFiles, lead] = await Promise.all([
+            prisma.chatSession.findFirst({
+                where: { leadId },
+                include: {
+                    messages: {
+                        orderBy: { timestamp: "asc" },
+                    }
+                },
+            }),
+            prisma.file.findMany({
+                where: { leadId },
+            }),
+            prisma.lead.findUnique({
+                where: { id: leadId },
+                select: {
+                    name: true,
+                    location: true,
+                    type: true,
+                    runId: true,
+                    runStatus: true,
+                    updatedAt: true,
+                }
+            }),
+        ]);
 
         if(!lead) {
             throw new Error("Lead not found");

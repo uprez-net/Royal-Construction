@@ -3,8 +3,9 @@ import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
 import { saveFile } from '@/lib/data/file';
 import { getUserByClerkIdCached } from '@/lib/data/user';
-import { ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
+import { ALLOWED_ATTACHMENT_MIME_TYPES, ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
 import { errorResponse, unauthorizedResponse } from '@/utils/validators';
+import { LeadAccessError, assertCanAccessLead } from '@/lib/offer/access';
 
 export async function POST(request: Request): Promise<NextResponse> {
     try {
@@ -32,10 +33,44 @@ export async function POST(request: Request): Promise<NextResponse> {
                     throw new Error('Invalid file metadata in payload');
                 }
 
+                if (clientPayload.leadId) {
+                    const user = await getUserByClerkIdCached(userId);
+                    if (!user) {
+                        throw new Error('Unauthorized');
+                    }
+                    try {
+                        await assertCanAccessLead(user, Number(clientPayload.leadId));
+                    } catch (error) {
+                        if (error instanceof LeadAccessError) {
+                            throw new Error(error.status === 404 ? 'Lead not found' : 'Forbidden');
+                        }
+                        throw error;
+                    }
+                }
+
+                let allowedContentTypes: string[] = UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[];
+                let addRandomSuffix = true;
+                let allowOverwrite = false;
+
+                if (clientPayload.uploadType === 'email-template') {
+                    allowedContentTypes = ['text/html']; // Strictly HTML
+                    addRandomSuffix = false;
+                    allowOverwrite = true;
+                    const templatePath = pathname.startsWith('email-ad-hock/')
+                        ? pathname.slice('email-ad-hock/'.length)
+                        : pathname;
+                    pathname = `email-ad-hock/${userId}/${templatePath}`;
+                } else if (clientPayload.uploadType === 'email-attachment') {
+                    allowedContentTypes = ALLOWED_ATTACHMENT_MIME_TYPES as unknown as string[]; // PDFs, Docs, Images (No HTML)
+                    addRandomSuffix = true;
+                    allowOverwrite = false;
+                }
+
                 return {
                     pathname,
-                    allowedContentTypes: UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[],
-                    addRandomSuffix: true,
+                    allowedContentTypes,
+                    addRandomSuffix,
+                    allowOverwrite,
                     maximumSizeInBytes: UPLOAD_CONSTRAINTS.maxFileSizeBytes,
                     callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/upload`,
                     tokenPayload: JSON.stringify({
@@ -47,6 +82,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         fileName: clientPayload.fileName,
                         fileSize: clientPayload.fileSize,
                         isOfferFile: clientPayload.isOfferFile,
+                        uploadType: clientPayload.uploadType,
                     } satisfies TokenPayload),
                 };
             },
@@ -61,8 +97,8 @@ export async function POST(request: Request): Promise<NextResponse> {
                         throw new Error('User not found');
                     }
 
-                    if (payload.isOfferFile) {
-                        console.log('Skipping file record creation as per payload instruction because this is an offer file');
+                    if (payload.isOfferFile || payload.uploadType === 'email-template' || payload.uploadType === 'email-attachment') {
+                        console.log(`Skipping file record creation for uploadType: ${payload.uploadType}`);
                         return;
                     }
 
@@ -90,6 +126,16 @@ export async function POST(request: Request): Promise<NextResponse> {
         switch (message) {
             case 'Unauthorized':
                 return unauthorizedResponse();
+            case 'Forbidden':
+                return errorResponse(message, {
+                    status: 403,
+                    code: 'UPLOAD_FORBIDDEN',
+                });
+            case 'Lead not found':
+                return errorResponse(message, {
+                    status: 404,
+                    code: 'UPLOAD_LEAD_NOT_FOUND',
+                });
             case 'Invalid file metadata in payload':
             case 'Failed to save file metadata':
                 return errorResponse(message, {

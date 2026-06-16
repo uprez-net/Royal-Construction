@@ -38,53 +38,53 @@ interface ViewDetailsModalProps {
 function getStatusStyles(status: string) {
   switch (status) {
     case "CONFIRMED":
-      return "border-transparent bg-[rgba(22,163,74,0.08)] text-[#16A34A]";
+      return "border-transparent bg-success-light text-success";
 
     case "PENDING":
     case "PENDING_RESPONSE":
-      return "border-transparent bg-[rgba(245,158,11,0.08)] text-[#D97706]";
+      return "border-transparent bg-warning-light text-warning";
 
     case "NO_RESPONSE":
-      return "border-transparent bg-[rgba(220,38,38,0.08)] text-[#DC2626]";
+      return "border-transparent bg-destructive-light text-destructive";
 
     case "AWAITING_MATERIALS":
-      return "border-transparent bg-[rgba(37,99,235,0.08)] text-[#2563EB]";
+      return "border-transparent bg-info-light text-info";
 
     case "DECLINED":
-      return "border-transparent bg-[rgba(220,38,38,0.08)] text-[#DC2626]";
+      return "border-transparent bg-destructive-light text-destructive";
 
     case "COMPLETED":
-      return "border-transparent bg-[rgba(148,163,184,0.1)] text-[#475569]";
+      return "border-transparent bg-muted text-muted-foreground";
 
     default:
-      return "border-transparent bg-[rgba(148,163,184,0.1)] text-[#475569]";
+      return "border-transparent bg-muted text-muted-foreground";
   }
 }
 
 function getDaysBadge(daysLeft: number) {
   if (daysLeft <= 1) {
     return {
-      className: "border-transparent bg-[#FEE2E2] text-[#DC2626]",
+      className: "border-transparent bg-destructive-light text-destructive",
       label: `${daysLeft}d`,
     };
   }
 
   if (daysLeft <= 3) {
     return {
-      className: "border-transparent bg-[#FEF9C3] text-[#D97706]",
+      className: "border-transparent bg-warning-light text-warning",
       label: `${daysLeft}d`,
     };
   }
 
   if (daysLeft <= 7) {
     return {
-      className: "border-transparent bg-[rgba(13,148,136,0.15)] text-[#0D9488]",
+      className: "border-transparent bg-primary/15 text-primary",
       label: `${daysLeft}d`,
     };
   }
 
   return {
-    className: "border-transparent bg-[rgba(148,163,184,0.1)] text-[#64748B]",
+    className: "border-transparent bg-muted text-muted-foreground",
     label: `${daysLeft}d`,
   };
 }
@@ -102,11 +102,11 @@ function DetailItem({
 }) {
   return (
     <div className={cn("space-y-1", className)}>
-      <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-[#94A3B8]">
+      <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
         {label}
       </div>
 
-      <div className="flex items-center gap-1.5 text-[13px] font-[600] text-[#0F172A]">
+      <div className="flex items-center gap-1.5 text-[13px] font-[600] text-foreground">
         {icon}
         {value}
       </div>
@@ -150,9 +150,9 @@ export function TradieScheduleDetailsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "border-[#E2E8F0] p-0",
+          "border-border/70 p-0",
           "max-h-[85vh] overflow-y-auto max-w-[calc(100%-2rem)] gap-0 sm:max-h-[60vh] sm:max-w-[720px]",
-          "rounded-[18px] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]",
+          "rounded-[18px] bg-card shadow-lg",
         )}
       >
         <DialogHeader className="sr-only">
@@ -161,14 +161,14 @@ export function TradieScheduleDetailsModal({
 
         <div className="max-h-[90vh] overflow-y-auto no-scrollbar">
           {/* Header */}
-          <div className="border-b border-[#E2E8F0] px-6 py-5">
+          <div className="border-b border-border/70 px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="truncate text-[20px] font-[800] tracking-[-0.02em] text-[#0F172A]">
+                <h2 className="truncate text-[20px] font-[800] tracking-[-0.02em] text-foreground">
                   {schedule.tradieName}
                 </h2>
 
-                <p className="mt-1 text-[12.5px] text-[#64748B]">
+                <p className="mt-1 text-[12.5px] text-muted-foreground">
                   {schedule.tradeType} —{" "}
                   {schedule.company ?? "Independent Tradie"}
                 </p>
@@ -215,7 +215,7 @@ export function TradieScheduleDetailsModal({
               <DetailItem
                 label="Project"
                 value={
-                  <span className="text-[#0D9488]">{schedule.projectName}</span>
+                  <span className="text-primary">{schedule.projectName}</span>
                 }
               />
 
@@ -226,12 +226,12 @@ export function TradieScheduleDetailsModal({
 
               <DetailItem
                 label="Scheduled"
-                icon={<CalendarDays className="h-3.5 w-3.5 text-[#94A3B8]" />}
+                icon={<CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />}
                 value={dateFormat.format(new Date(schedule.scheduledDate))}
               />
 
               <div className="space-y-1">
-                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-[#94A3B8]">
+                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
                   Days Until
                 </div>
 
@@ -248,7 +248,7 @@ export function TradieScheduleDetailsModal({
               </div>
             </div>
 
-            <Separator className="my-5 bg-[#E2E8F0]" />
+            <Separator className="my-5 bg-border" />
 
             {/* Milestone */}
             <div className="space-y-4">
@@ -258,17 +258,17 @@ export function TradieScheduleDetailsModal({
               />
 
               <div className="space-y-1">
-                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-[#94A3B8]">
+                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
                   Task
                 </div>
 
-                <p className="text-[13px] text-[#0F172A]">
+                <p className="text-[13px] text-foreground">
                   {schedule.taskLabel}
                 </p>
               </div>
 
               <div className="space-y-1">
-                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-[#94A3B8]">
+                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
                   Status
                 </div>
 
@@ -284,43 +284,43 @@ export function TradieScheduleDetailsModal({
               </div>
 
               <div className="space-y-1">
-                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-[#94A3B8]">
+                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
                   Reminder
                 </div>
 
-                <div className="text-[13px] text-[#0F172A]">
+                <div className="text-[13px] text-foreground">
                   {schedule.reminderSentAt ? (
                     <>
                       Sent on{" "}
                       {dataTimeFormat.format(new Date(schedule.reminderSentAt))}
                     </>
                   ) : (
-                    <span className="text-[#94A3B8]">Not sent yet</span>
+                    <span className="text-muted-foreground">Not sent yet</span>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Contact Card */}
-            <Card className="mt-5 rounded-[12px] border-[#E2E8F0] bg-[#F8FAFC] shadow-none">
+            <Card className="mt-5 rounded-[12px] border-border/70 bg-muted/30 shadow-none">
               <CardContent className="p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <div
                     className={cn(
                       "flex h-9 w-9 items-center justify-center",
                       "rounded-[10px]",
-                      "bg-[rgba(13,148,136,0.15)] text-[#0D9488]",
+                      "bg-primary/15 text-primary",
                     )}
                   >
                     <Star className="h-4 w-4" />
                   </div>
 
                   <div>
-                    <div className="text-[13px] font-[700] text-[#0F172A]">
+                    <div className="text-[13px] font-[700] text-foreground">
                       Contact Information
                     </div>
 
-                    <div className="text-[11px] text-[#94A3B8]">
+                    <div className="text-[11px] text-muted-foreground">
                       Reach out to the assigned tradie
                     </div>
                   </div>
@@ -330,13 +330,13 @@ export function TradieScheduleDetailsModal({
                   <div
                     className={cn(
                       "flex items-center justify-between",
-                      "rounded-[8px] border border-[#EEF2F7]",
-                      "bg-white px-3 py-2 text-[12px]",
+                      "rounded-[8px] border border-border/70",
+                      "bg-card px-3 py-2 text-[12px]",
                     )}
                   >
-                    <span className="text-[#64748B]">Phone</span>
+                    <span className="text-muted-foreground">Phone</span>
 
-                    <span className="font-[600] text-[#0F172A]">
+                    <span className="font-[600] text-foreground">
                       {schedule.contact.phone}
                     </span>
                   </div>
@@ -344,13 +344,13 @@ export function TradieScheduleDetailsModal({
                   <div
                     className={cn(
                       "flex items-center justify-between gap-4",
-                      "rounded-[8px] border border-[#EEF2F7]",
-                      "bg-white px-3 py-2 text-[12px]",
+                      "rounded-[8px] border border-border/70",
+                      "bg-card px-3 py-2 text-[12px]",
                     )}
                   >
-                    <span className="text-[#64748B]">Email</span>
+                    <span className="text-muted-foreground">Email</span>
 
-                    <span className="truncate font-[600] text-[#0F172A]">
+                    <span className="truncate font-[600] text-foreground">
                       {schedule.contact.email}
                     </span>
                   </div>
@@ -367,12 +367,11 @@ export function TradieScheduleDetailsModal({
                     onClick={() => onMarkAsDone(item)}
                     className={cn(
                       "h-auto rounded-[7px]",
-                      "bg-[#0D9488] px-[14px] py-[7px]",
-                      "text-[12.5px] font-[600] text-white",
+                      "bg-primary px-[14px] py-[7px]",
+                      "text-[12.5px] font-[600] text-primary-foreground",
                       "transition-all duration-200",
                       "hover:-translate-y-[1px]",
-                      "hover:bg-[#0F766E]",
-                      "hover:shadow-[0_4px_12px_rgba(13,148,136,0.3)]",
+                      "hover:bg-primary/90",
                     )}
                   >
                     <Check className="mr-1.5 h-3.5 w-3.5" />
@@ -387,11 +386,11 @@ export function TradieScheduleDetailsModal({
                   onClick={() => onCall(item)}
                   className={cn(
                     "h-auto rounded-[7px]",
-                    "bg-[#F59E0B] px-[14px] py-[7px]",
-                    "text-[12.5px] font-[600] text-white",
+                    "bg-warning px-[14px] py-[7px]",
+                    "text-[12.5px] font-[600] text-primary-foreground",
                     "transition-all duration-200",
                     "hover:-translate-y-[1px]",
-                    "hover:bg-[#D97706]",
+                    "hover:bg-warning/90",
                   )}
                 >
                   <Phone className="mr-1.5 h-3.5 w-3.5" />
@@ -404,12 +403,12 @@ export function TradieScheduleDetailsModal({
                 onClick={() => onSendReminder(item)}
                 className={cn(
                   "h-auto rounded-[7px]",
-                  "border-[#E2E8F0] bg-white",
+                  "border-border/70 bg-card",
                   "px-[14px] py-[7px]",
-                  "text-[12.5px] font-[500] text-[#0F172A]",
-                  "hover:border-[#0D9488]",
-                  "hover:bg-[#F8FAFC]",
-                  "hover:text-[#0D9488]",
+                  "text-[12.5px] font-[500] text-foreground",
+                  "hover:border-primary",
+                  "hover:bg-muted/40",
+                  "hover:text-primary",
                 )}
               >
                 <Mail className="mr-1.5 h-3.5 w-3.5" />
@@ -422,12 +421,12 @@ export function TradieScheduleDetailsModal({
                   onClick={() => onUpdateStatus(item)}
                   className={cn(
                     "h-auto rounded-[7px]",
-                    "border-[#E2E8F0] bg-white",
+                    "border-border/70 bg-card",
                     "px-[14px] py-[7px]",
-                    "text-[12.5px] font-[500] text-[#0F172A]",
-                    "hover:border-[#0D9488]",
-                    "hover:bg-[#F8FAFC]",
-                    "hover:text-[#0D9488]",
+                    "text-[12.5px] font-[500] text-foreground",
+                    "hover:border-primary",
+                    "hover:bg-muted/40",
+                    "hover:text-primary",
                   )}
                 >
                   <Pencil className="mr-1.5 h-3.5 w-3.5" />

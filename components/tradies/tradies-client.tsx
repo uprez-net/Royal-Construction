@@ -24,6 +24,7 @@ import {
 
 import { DonutChartCard } from "@/components/charts/donut-chart-card";
 import { HorizontalBarChartCard } from "@/components/charts/horizontal-bar-chart-card";
+import { MetricCard } from "@/components/common/metric-card";
 import { SearchableSelect } from "@/components/common/searchable-select";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -91,23 +92,6 @@ const statusToneMap: Record<
   DECLINED: "danger",
   COMPLETED: "neutral",
 };
-
-function TrendBadge({ value }: { value: number }) {
-  const isPositive = value >= 0;
-  return (
-    <span
-      className={[
-        "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold",
-        isPositive
-          ? "bg-emerald-100 text-emerald-700"
-          : "bg-red-100 text-red-700",
-      ].join(" ")}
-    >
-      {isPositive ? "+" : ""}
-      {value}%
-    </span>
-  );
-}
 
 function CalanderRow(scheduledData: string): ReactNode {
   const daysLeft = daysUntil(scheduledData);
@@ -575,68 +559,33 @@ export function TradiesClient({
       </Card>
 
       {tradiesState.summary ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Card className="border-border/70 bg-white/95">
-            <CardContent className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="grid size-11 place-items-center rounded-xl bg-teal-600 text-white">
-                  <Users className="size-5" />
-                </div>
-                <TrendBadge value={tradiesState.summary.registeredTrendDelta} />
-              </div>
-              <p className="text-3xl font-bold">
-                {tradiesState.summary.registeredTradies}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Registered Tradies
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/70 bg-white/95">
-            <CardContent className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="grid size-11 place-items-center rounded-xl bg-orange-500 text-white">
-                  <CalendarDays className="size-5" />
-                </div>
-                <TrendBadge value={tradiesState.summary.scheduledWeekDelta} />
-              </div>
-              <p className="text-3xl font-bold">
-                {tradiesState.summary.scheduledThisWeek}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Scheduled This Week
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/70 bg-white/95">
-            <CardContent className="p-4">
-              <div className="mb-3 grid size-11 place-items-center rounded-xl bg-emerald-600 text-white">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <p className="text-3xl font-bold">
-                {tradiesState.summary.confirmedBookings}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Confirmed Bookings
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/70 bg-white/95">
-            <CardContent className="p-4">
-              <div className="mb-3 grid size-11 place-items-center rounded-xl bg-red-500 text-white">
-                <AlertTriangle className="size-5" />
-              </div>
-              <p className="text-3xl font-bold">
-                {tradiesState.summary.pendingNoResponse}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Pending / No Response
-              </p>
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            title="Registered Tradies"
+            value={tradiesState.summary.registeredTradies}
+            trendDelta={tradiesState.summary.registeredTrendDelta}
+            Icon={Users}
+            iconTone="bg-teal-600"
+          />
+          <MetricCard
+            title="Scheduled This Week"
+            value={tradiesState.summary.scheduledThisWeek}
+            trendDelta={tradiesState.summary.scheduledWeekDelta}
+            Icon={CalendarDays}
+            iconTone="bg-orange-500"
+          />
+          <MetricCard
+            title="Confirmed Bookings"
+            value={tradiesState.summary.confirmedBookings}
+            Icon={CheckCircle2}
+            iconTone="bg-emerald-600"
+          />
+          <MetricCard
+            title="Pending / No Response"
+            value={tradiesState.summary.pendingNoResponse}
+            Icon={AlertTriangle}
+            iconTone="bg-red-500"
+          />
         </div>
       ) : null}
 
@@ -1196,7 +1145,7 @@ export function TradiesClient({
             valueKey="confirmedRate"
             valueLabel="Confirmation %"
             xAxisFormatter={(value) => `${value}%`}
-            color="#0D9488"
+            color="var(--primary)"
           />
 
           <DonutChartCard
@@ -1206,12 +1155,12 @@ export function TradiesClient({
             labelKey="label"
             valueKey="value"
             colorByLabel={{
-              Confirmed: "#16A34A",
-              Pending: "#F59E0B",
-              "Pending Response": "#2563EB",
-              "No Response": "#DC2626",
-              Declined: "#B91C1C",
-              Completed: "#64748B",
+              Confirmed: "var(--success)",
+              Pending: "var(--warning)",
+              "Pending Response": "var(--info)",
+              "No Response": "var(--destructive)",
+              Declined: "var(--destructive)",
+              Completed: "var(--muted-foreground)",
             }}
           />
         </div>

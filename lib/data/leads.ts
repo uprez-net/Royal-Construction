@@ -349,6 +349,22 @@ export async function handleCalendarFollowup(
     })
   );
 
+  const attendees = [
+    {
+      emailAddress: { address: lead.email, name: lead.name },
+      type: 'required' // Main Lead
+    }
+  ];
+
+  // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
+  const ccEmail = process.env.MAIL_ID_CC;
+  if (ccEmail) {
+    attendees.push({
+      emailAddress: { address: ccEmail, name: 'Admin' },
+      type: 'optional' // This acts as the CC in Outlook Calendar
+    });
+  }
+
   // ─── 3. Construct Graph API Payload ──────────────────────────────────
 
   const event = {
@@ -366,10 +382,7 @@ export async function handleCalendarFollowup(
       timeZone: 'Australia/Sydney'
     },
     location: { displayName: 'Royal Constructions' },
-    attendees: [{
-      emailAddress: { address: lead.email, name: lead.name },
-      type: 'required'
-    }],
+    attendees: attendees,
   };
 
   // ─── 4. Send Request to Graph API ────────────────────────────────────
@@ -399,7 +412,7 @@ export async function handleCalendarFollowup(
   return "Follow-up calendar event successfully created";
 }
 
-export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead> {
+export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
 
@@ -426,28 +439,62 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     }
   }
 
-  const created = await prisma.lead.create({
-    data: {
-      name: input.name,
-      phone: input.phone ?? "",
-      email: input.email ?? "",
-      location: input.location ?? "",
-      source: input.source,
-      sourceDetail: input.sourceDetail,
-      stage: mappedStage,
-      ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
-      budget: input.budget,
-      type: input.type ?? [],
-      notes: input.notes,
-      followupDate: input.followupDate,
-      followupTime: input.followupTime,
-      followupNotes: input.followupNotes,
-      lostReason: input.lostReason,
-      urgent: input.urgent ?? false,
-      history: { create: historyCreate },
-    },
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } }, noteAnnotations: { orderBy: { createdAt: "desc" } } },
-  });
+  const normalizedEmail = (input.email ?? "").trim();
+  const normalizedPhone = (input.phone ?? "").trim();
+
+  const orConditions: Prisma.LeadWhereInput[] = [];
+  if (normalizedEmail !== "") {
+    orConditions.push({ email: normalizedEmail });
+  }
+  if (normalizedPhone !== "") {
+    orConditions.push({ phone: normalizedPhone });
+  }
+
+  const duplicateLeadInclude = {
+    history: { orderBy: { actionDate: "asc" } },
+    chatSessions: true,
+    assignedUser: { select: { id: true, name: true, email: true } },
+    noteAnnotations: { orderBy: { createdAt: "desc" } },
+  } satisfies Prisma.LeadInclude;
+
+  let created: PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null };
+  try {
+    created = await prisma.lead.create({
+      data: {
+        name: input.name,
+        phone: normalizedPhone,
+        email: normalizedEmail,
+        location: input.location ?? "",
+        source: input.source,
+        sourceDetail: input.sourceDetail,
+        stage: mappedStage,
+        ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
+        budget: input.budget,
+        type: input.type ?? [],
+        notes: input.notes,
+        followupDate: input.followupDate,
+        followupTime: input.followupTime,
+        followupNotes: input.followupNotes,
+        lostReason: input.lostReason,
+        urgent: input.urgent ?? false,
+        history: { create: historyCreate },
+      },
+      include: duplicateLeadInclude,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && orConditions.length > 0) {
+      const existingLead = await prisma.lead.findFirst({
+        where: { OR: orConditions },
+        include: duplicateLeadInclude,
+      });
+
+      if (existingLead) {
+        return { message: "A lead with the same email or phone number already exists.", existingLead: mapLead(existingLead) };
+      }
+    }
+
+    throw error;
+  }
   const res = mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 
   // ═══════════════════════════════════════════════════════
@@ -495,7 +542,8 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         await graphClient.sendMail({
           to: created.email,
           subject: emailSubject,
-          body: htmlBody
+          body: htmlBody,
+          cc: config.cc,
         });
 
         console.log(`[Lead ${created.id}] ✅ Welcome email successfully sent to ${created.email}`);

@@ -62,12 +62,15 @@ const TOOL_CATALOGUE = `
 
   <tool name="offerFileTool">
     <description>Creates or updates customer-facing offer document sections (welcome message, project scope, service inclusions/exclusions, T&amp;Cs, payment schedule, facade options, revision summary).</description>
-    <when_to_use>Use for every section of the customer-facing document. Patch only the fields that changed. Always send the complete final list for termsAndConditions, serviceExclusions, and each serviceInclusions section that is modified.</when_to_use>
-    <input>leadId?, projectWelcomeMessage?, termsAndConditions[]?, projectScope[]?, serviceInclusions[]?, serviceExclusions[]?, fixedPriceItems[]?, promotionalUpgrades[]?, facadeOptions?, revisionChanges?, changeDescription?</input>
+    <when_to_use>Use for every section of the customer-facing document. Existing offer data is the source of truth. Send only changed fields and prefer minimal array patch operations for list sections.</when_to_use>
+    <input>leadId?, projectWelcomeMessage?, termsAndConditions[]?, projectScope[]?, fixedPriceItems[]?, promotionalUpgrades[]?, termsAndConditionsPatch?, projectScopePatch?, fixedPriceItemsPatch?, promotionalUpgradesPatch?, facadeOptions?, revisionChanges?, changeDescription?</input>
     <patching_rules>
       - Omitted fields are left unchanged.
-      - For list fields (termsAndConditions, serviceExclusions, serviceInclusions), always send the FULL final list for that field, not just the diff.
-      - serviceInclusions sections are identified by their id. Preserve existing ids when modifying a section.
+      - For array sections, prefer patch objects (add/remove/update/reorder) over full-array replacement.
+      - Use full-array replacement only when the user explicitly asks for a rewrite, data is invalid/corrupted, or a full regeneration is required.
+      - Never send both a full array field and its patch field for the same section in one tool call.
+      - For projectScope updates, sections are identified by id. Preserve ids when modifying an existing section.
+      - For text fields (for example projectWelcomeMessage), send the full replacement text.
     </patching_rules>
     <warning>Strip all internal margin, profitability, and trade cost data before calling this tool. Output is customer-visible.</warning>
   </tool>
@@ -161,8 +164,6 @@ const BUSINESS_CONTEXT = `
   <offer_document_sections>
     projectWelcomeMessage — Personal letter from Gurpinder, conversational, warm, deal-focused.
     projectScope — Sectioned list of what is included (Ground Floor / First Floor / External / Granny Flat etc.).
-    serviceInclusions — Detailed specification items grouped by trade/area.
-    serviceExclusions — Clear list of what is NOT included.
     fixedPriceItems — Items explicitly covered in the fixed price (statutory fees, insurance, certifier, etc.).
     promotionalUpgrades — Current promotional inclusions or upgrade credits.
     termsAndConditions — Standard validity, soil/site, void, solar, credit, and warranty terms.
@@ -201,9 +202,9 @@ const GUARDRAILS = `
 
   <scope_discipline>
     <rule id="SC-1">Keep offer wording customer-ready: specific, professional, plain English. Avoid jargon the client would not understand.</rule>
-    <rule id="SC-2">Do not duplicate information between projectScope and serviceInclusions. projectScope = high-level room/area list; serviceInclusions = detailed specification per trade.</rule>
-    <rule id="SC-3">Every item in serviceInclusions should have a corresponding scope section. Orphaned items signal missing scope.</rule>
-    <rule id="SC-4">Always include an exclusions section. At minimum, apply the standard exclusions from business_context unless the user explicitly adds items to scope.</rule>
+    <rule id="SC-2">Do not duplicate information across sections. projectScope should remain high-level while fixedPriceItems and termsAndConditions carry contractual detail.</rule>
+    <rule id="SC-3">Every fixed-price or promotional statement should align with the project scope and line items; avoid orphaned claims.</rule>
+    <rule id="SC-4">Where exclusions or limitations apply, ensure they are represented in termsAndConditions using clear customer-facing wording.</rule>
   </scope_discipline>
 
   <context_efficiency>
@@ -214,7 +215,8 @@ const GUARDRAILS = `
   </context_efficiency>
 
   <output_safety>
-    <rule id="OS-1">When updating any list field via offerFileTool (termsAndConditions, serviceExclusions, serviceInclusions), always send the complete final list, not an incremental diff.</rule>
+    <rule id="OS-1">When updating list fields via offerFileTool, use minimal patch updates by default (add/remove/update/reorder) and avoid full-list resends unless explicitly necessary.</rule>
+    <rule id="OS-1B">Never send both a direct list replacement and a patch object for the same section in a single tool call.</rule>
     <rule id="OS-2">When generating facade options, the description passed to imageGenerationAgent must describe architectural features, materials, and colours only — no client names, addresses, or internal reference codes.</rule>
     <rule id="OS-3">If a user asks for something that would require inventing unverified data, refuse that specific part and explain what source material is needed.</rule>
   </output_safety>
@@ -249,7 +251,7 @@ const OFFER_AGENT_BASE_PROMPT = `
 <system>
 
 <role>
-You are the Offer Assistant inside Guri — the Royal Constructions CRM platform. Your sole function is to help users create, update, review, and refine customer-facing construction offers for residential leads.
+You are the Offer Assistant inside — the Royal Constructions CRM platform. Your sole function is to help users create, update, review, and refine customer-facing construction offers for residential leads.
 </role>
 
 <primary_objectives>
@@ -315,14 +317,24 @@ ${OFFER_AGENT_BASE_PROMPT}
 
 </workflow>
 
+<patch_policy>
+  - Existing offer data is the source of truth.
+  - For array changes, send the smallest possible patch operation set.
+  - For text changes, send the full replacement text.
+  - Do not include unchanged sections.
+  - Do not send both full-array and patch fields for the same section in one call.
+</patch_policy>
+
 <response_style>
   - Be concise in chat. Use short sentences. Avoid repeating content already visible in the offer.
   - When referencing a source, cite it inline: "from lead field budget", "ALLOWANCES sheet row 7", "page 2 of [filename]".
   - If a critical detail is missing and no tool can supply it, ask one targeted question. Do not ask multiple questions at once.
   - Use plain English. Avoid construction acronyms in chat unless the user uses them first.
+  - All requests might not be patch requests. So also entertain information-gathering, clarification, and review intents avoid using tools like "lineItemTool" or "offerFileTool" during such requests.
 </response_style>
 
 <end_signals>
+  After final information task requessted by the user: emit <END_INFORMATION_GATHERING>
   After the final lineItemTool call in a response: emit <END_LINE_ITEM_UPDATE>
   After the final offerFileTool call in a response: emit <END_OFFER_UPDATE>
   These signals must appear on their own line.
@@ -342,6 +354,7 @@ item. Instead, use quantity=0, unitPrice=0, and a description of [Allowance TBC 
   - Always use lineItemTool for line item creation to ensure consistent arithmetic and formatting. Do not calculate totals in prose.
   - For each line item, populate the source field with a brief reference to where the data came from (e.g., "from lead field 'budget'", "ALLOWANCES sheet row 7", "page 2 of [filename]").
   - Do not include any internal cost, margin, or profitability data in the item description or source. Customer-facing text only.
+  - Use tools to gather as much context as possible before creating line items. For example, if the lead record has a build type of "knockdown rebuild", look for files that might contain the existing dwelling's specifications to inform the scope and pricing.
 </creation_guidelines>
 
 <output_standards>
@@ -356,14 +369,20 @@ ${OFFER_AGENT_BASE_PROMPT}
 
 <prerequisites>
   - The offer file content can only be created based on the line items generated in the previous phase.
-  - The project scope, service inclusions, service exclusions, and terms and conditions can only be created based on the lead data and file extracts available in the context. If critical details are missing, use clearly labelled placeholders rather than fabricating content.
+  - The project scope, terms and conditions, fixed price items, and promotional upgrades can only be created based on the lead data and file extracts available in the context. If critical details are missing, use clearly labelled placeholders rather than fabricating content.
 </prerequisites>
 
 <creation_guidelines>
-  - For each offer document section (welcome message, project scope, service inclusions/exclusions, T&Cs), include only content that can be directly sourced from the lead record, file extracts, or
+  - For each offer document section (welcome message, project scope, fixed price items, promotional upgrades, T&Cs), include only content that can be directly sourced from the lead record, file extracts, or
 pricing-rule summaries. If a required detail is missing, use a clearly labelled placeholder such as [TBC — confirm with estimator] rather than fabricating content.
   - Keep all content customer-facing: specific, warm, professional, and consistent with Royal Constructions' brand voice. Avoid jargon or internal references.
+  - Treat the current offer state as the source of truth.
   - Use offerFileTool for all content updates. Patch only changed fields. Do not attempt to generate the entire offer in one step — build iteratively across multiple tool calls.
+  - For array sections, prefer patch objects (add/remove/update/reorder). Return full arrays only when full rewrite is explicitly requested or truly required.
+  - For text sections, send complete replacement text.
+  - Do not return unchanged sections.
+  - Never send both a direct replacement array and a patch object for the same section in one tool call.
+  - Use tools to gather necessary context before creating content. For example, if the lead record lacks a build type but a file extract indicates it's a "knockdown rebuild", use that information to inform the project scope and offer wording.
 </creation_guidelines>
 
 <output_standards>
@@ -390,11 +409,18 @@ ${OFFER_AGENT_BASE_PROMPT}
     Build the offer incrementally across multiple tool calls. Do not attempt to produce the full offer in a single call. Suggested sequence:
 
     <sub_step>1. Call offerFileTool with: projectWelcomeMessage, projectScope, revisionChanges, leadId</sub_step>
-    <sub_step>2. Call offerFileTool with: serviceInclusions (all sections)</sub_step>
-    <sub_step>3. Call offerFileTool with: serviceExclusions (standard list + any project-specific exclusions)</sub_step>
-    <sub_step>4. Call offerFileTool with: fixedPriceItems, promotionalUpgrades, termsAndConditions</sub_step>
+    <sub_step>2. Call offerFileTool with: projectScopePatch updates (add/update/remove/reorder sections)</sub_step>
+    <sub_step>3. Call offerFileTool with: fixedPriceItemsPatch and promotionalUpgradesPatch updates</sub_step>
+    <sub_step>4. Call offerFileTool with: termsAndConditionsPatch updates</sub_step>
     <sub_step>5. Call lineItemTool for each priced line item</sub_step>
     <sub_step>6. Call offerFileTool with: facadeOptions (if applicable)</sub_step>
+  </phase>
+
+  <phase id="2.5" name="Patch Decision Policy">
+    <decision>If the requested change is a targeted add/remove/update/reorder in an array section, use patch fields only.</decision>
+    <decision>If the requested change is a text rewrite, send the full text field value.</decision>
+    <decision>If the user explicitly asks to regenerate an entire section, use full-array replacement for that section only.</decision>
+    <decision>Never include unchanged sections and never mix full-array and patch fields for the same section in one call.</decision>
   </phase>
 
   <phase id="3" name="Content Standards">
@@ -407,20 +433,12 @@ ${OFFER_AGENT_BASE_PROMPT}
       Group by physical area: Ground Floor, First Floor, External Works, Granny Flat (if applicable). Each item should be a clear feature statement, not a trade task. Example: "Open-plan family, kitchen and dining with void above" not "Construct open-plan area".
     </projectScope>
 
-    <serviceInclusions>
-      Group by trade or specification category. Each section gets a unique id (preserve on updates). Items should be specification-level: material grade, brand allowance, or performance standard where known. Reference lead notes or file data when they inform a specification.
-    </serviceInclusions>
-
-    <serviceExclusions>
-      Always include the standard exclusions from business_context. Add project-specific exclusions where the lead scope is narrow. Be precise: "Landscaping beyond front lawn turf" is better than "Landscaping".
-    </serviceExclusions>
-
     <fixedPriceItems>
       Include all statutory, insurance, certification, and levy items that are explicitly covered in the fixed price. Source from COVER sheet "CONTRACT SUMMARY" items and ALLOWANCES sheet data.
     </fixedPriceItems>
 
     <termsAndConditions>
-      Use the standard terms (validity 28 days, soil/site caveat, void design note, solar note, $6k credit note, HBCF warranty note) unless the lead record or user instruction modifies them. Always send the full list.
+      Use the standard terms (validity 28 days, soil/site caveat, void design note, solar note, $6k credit note, HBCF warranty note) unless the lead record or user instruction modifies them. Prefer termsAndConditionsPatch updates over full-list replacement.
     </termsAndConditions>
 
     <lineItems>
@@ -439,7 +457,7 @@ ${OFFER_AGENT_BASE_PROMPT}
 
 <failure_modes_to_avoid>
   <avoid>Calling lineItemTool with fabricated unit prices not traceable to a source.</avoid>
-  <avoid>Omitting serviceExclusions because none were explicitly requested.</avoid>
+  <avoid>Sending unchanged arrays as full replacements when a minimal patch would be sufficient.</avoid>
   <avoid>Writing the welcome message in third person or in a generic corporate tone.</avoid>
   <avoid>Including all lead files in fileProcessingTool without filtering by relevance first.</avoid>
   <avoid>Trying to generate the complete offer in a single offerFileTool call instead of iterating.</avoid>
@@ -562,6 +580,32 @@ export const termsAndConditionsItemSchema = z.object({
   description: z.string().describe("Detailed customer-facing explanation of the term or condition."),
 })
 
+const stringListPatchSchema = z.object({
+  add: z.array(z.string()).optional().describe("Items to append if not already present."),
+  remove: z.array(z.string()).optional().describe("Items to remove when values match existing entries."),
+  reorder: z.array(z.string()).optional().describe("Optional final order for known items. Unknown keys are ignored."),
+  replace: z.array(z.string()).optional().describe("Optional full replacement list. Use only when a full rewrite is required."),
+  clear: z.boolean().optional().describe("When true, clears the list before applying other operations."),
+}).strict();
+
+const termsAndConditionsPatchSchema = z.object({
+  add: z.array(termsAndConditionsItemSchema).optional().describe("Append new clauses when title is not already present."),
+  update: z.array(termsAndConditionsItemSchema).optional().describe("Update clauses matched by title."),
+  removeTitles: z.array(z.string()).optional().describe("Remove clauses by title."),
+  reorderTitles: z.array(z.string()).optional().describe("Optional final order by clause title. Unknown titles are ignored."),
+  replace: z.array(termsAndConditionsItemSchema).optional().describe("Optional full replacement list. Use only when a full rewrite is required."),
+  clear: z.boolean().optional().describe("When true, clears all clauses before applying other operations."),
+}).strict();
+
+const projectScopePatchSchema = z.object({
+  add: z.array(serviceItemSchema).optional().describe("Append new scope sections when id is not already present."),
+  update: z.array(serviceItemSchema).optional().describe("Update scope sections matched by id. Items are treated as the full final list for that section."),
+  removeIds: z.array(z.uuid()).optional().describe("Remove scope sections by id."),
+  reorderIds: z.array(z.uuid()).optional().describe("Optional final order by section id. Unknown ids are ignored."),
+  replace: z.array(serviceItemSchema).optional().describe("Optional full replacement list. Use only when a full rewrite is required."),
+  clear: z.boolean().optional().describe("When true, clears all scope sections before applying other operations."),
+}).strict();
+
 export const facadeOptionsSchema = z.object({
   optionsDescription: z.string().describe(
     "Description of the options available to the customer for the build facade, such as cladding materials, window types, or roof styles. This should be a customer-facing explanation of the choices they have for the facade design."
@@ -591,42 +635,103 @@ export const offerFileContentSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Customer-facing introductory message that welcomes the client and provides a high-level overview of the project. This is often the first section of the offer and sets the tone for the proposal."
+      `Customer-facing introductory message that welcomes 
+      the client and provides a high-level overview of the project. 
+      This is often the first section of the offer and sets the tone for the proposal.
+      Send complete message each time, not incremental updates. Reference lead details or file data when they inform the message content.
+      `
     ),
 
   termsAndConditions: z
     .array(termsAndConditionsItemSchema)
     .optional()
     .describe(
-      "Complete final list of terms and conditions. Each array element represents a separate clause. When updating, provide the entire merged list that should exist after the update, not only newly added clauses."
+      `Optional direct full replacement for terms and conditions.
+      Prefer termsAndConditionsPatch for incremental updates.
+      Use full replacement only when explicitly rewriting or regenerating the entire section.`
+    ),
+
+  termsAndConditionsPatch: termsAndConditionsPatchSchema
+    .optional()
+    .describe(
+      "Incremental patch operations for terms and conditions. Preferred for add/remove/update/reorder changes."
     ),
 
   projectScope: z
     .array(serviceItemSchema)
     .optional()
     .describe(
-      "Complete set of service inclusion sections being created or modified. Each section must contain a stable id, a section title, and the full final list of items for that section. Keep ids unchanged when updating existing sections."
+      `Optional direct full replacement for project scope sections.
+       Prefer projectScopePatch for incremental updates.
+       Use full replacement only when explicitly rewriting or regenerating the entire section.`
+    ),
+
+  projectScopePatch: projectScopePatchSchema
+    .optional()
+    .describe(
+      "Incremental patch operations for project scope sections. Updates are matched by stable section id."
     ),
 
   fixedPriceItems: z
     .array(z.string())
     .optional()
     .describe(
-      "Complete final list of fixed price items included in the offer. Each item is a separate line of work that is included in the contract price. When updating, provide the entire merged list that should exist after the update, not only newly added items."
+      "Optional direct full replacement for fixed price items. Prefer fixedPriceItemsPatch for incremental updates."
     ),
+
+  fixedPriceItemsPatch: stringListPatchSchema
+    .optional()
+    .describe("Incremental patch operations for fixed price items."),
 
   promotionalUpgrades: z
     .array(z.string())
     .optional()
     .describe(
-      "Complete final list of promotional upgrade items included in the offer. Each item is a separate line of work that is being offered as an upgrade to the client. When updating, provide the entire merged list that should exist after the update, not only newly added items."
+      "Optional direct full replacement for promotional upgrades. Prefer promotionalUpgradesPatch for incremental updates."
     ),
+
+  promotionalUpgradesPatch: stringListPatchSchema
+    .optional()
+    .describe("Incremental patch operations for promotional upgrades."),
 
   facadeOptions: facadeOptionsSchema
     .optional()
     .describe(
       "Optional section describing the facade design options available to the customer. This includes a general description of the choices and a list of specific options, each with its own title and detailed description. When included, this section should provide a clear explanation of the facade choices the customer has for their project."
     ),
+}).superRefine((value, ctx) => {
+  const conflicts: Array<[boolean, string, string]> = [
+    [
+      value.termsAndConditions !== undefined && value.termsAndConditionsPatch !== undefined,
+      "termsAndConditions",
+      "termsAndConditionsPatch",
+    ],
+    [
+      value.projectScope !== undefined && value.projectScopePatch !== undefined,
+      "projectScope",
+      "projectScopePatch",
+    ],
+    [
+      value.fixedPriceItems !== undefined && value.fixedPriceItemsPatch !== undefined,
+      "fixedPriceItems",
+      "fixedPriceItemsPatch",
+    ],
+    [
+      value.promotionalUpgrades !== undefined && value.promotionalUpgradesPatch !== undefined,
+      "promotionalUpgrades",
+      "promotionalUpgradesPatch",
+    ],
+  ];
+
+  for (const [hasConflict, fullField, patchField] of conflicts) {
+    if (!hasConflict) continue;
+
+    ctx.addIssue({
+      code: "custom",
+      message: `Use either ${fullField} or ${patchField} for a section update, not both in the same payload.`,
+      path: [patchField],
+    });
+  }
 });
 
 export type OfferFileContent = z.infer<typeof offerFileContentSchema>;

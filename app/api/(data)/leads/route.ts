@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
     }
 
     const created = await createLead(parsed.data);
+    if ('message' in created) {
+      return successResponse(created, { status: 409 });
+    }
     return successResponse(created, { status: 201 });
   } catch (error) {
     console.error("/api/leads POST error", error);

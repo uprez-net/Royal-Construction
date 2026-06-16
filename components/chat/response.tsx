@@ -1,14 +1,27 @@
 "use client";
 
+import { MessageResponse } from "@/components/ai-elements/message";
 import { type ComponentProps, memo } from "react";
-import { Streamdown } from "streamdown";
 import { cn } from "@/lib/utils";
 
-type ResponseProps = ComponentProps<typeof Streamdown>;
+type ResponseProps = ComponentProps<typeof MessageResponse>;
+
+function areResponsePropsEqual(prevProps: ResponseProps, nextProps: ResponseProps) {
+  const prevEntries = Object.entries(prevProps);
+  const nextEntries = Object.entries(nextProps);
+
+  if (prevEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  return prevEntries.every(([key, value]) => {
+    return Object.prototype.hasOwnProperty.call(nextProps, key) && nextProps[key as keyof ResponseProps] === value;
+  });
+}
 
 export const Response = memo(
   ({ className, ...props }: ResponseProps) => (
-    <Streamdown
+    <MessageResponse
       className={cn(
         `
     size-full 
@@ -33,9 +46,9 @@ export const Response = memo(
     [&_table]:text-sm
     [&_table]:rounded-xl
     [&_table]:overflow-hidden
-    [&_table]:bg-white
+    [&_table]:bg-card
     [&_table]:border
-    [&_table]:border-[#E2E8F0]
+    [&_table]:border-border
     [&_table]:shadow-sm
 
     /* Scroll if smaller screen */
@@ -43,27 +56,27 @@ export const Response = memo(
     [&_table]:overflow-x-auto
 
     /* Header */
-    [&_thead]:bg-[#F7F4EE]
+    [&_thead]:bg-[color:var(--royal-gold-light)]
     [&_th]:px-5
     [&_th]:py-3
     [&_th]:text-left
     [&_th]:font-medium
-    [&_th]:text-slate-600
+    [&_th]:text-muted-foreground
     [&_th]:border-b
-    [&_th]:border-[#E2E8F0]
+    [&_th]:border-border
 
     /* Body rows */
     [&_tbody_tr]:border-b
-    [&_tbody_tr]:border-[#E2E8F0]
+    [&_tbody_tr]:border-border
     [&_tbody_tr:last-child]:border-0
 
     /* Cells */
     [&_td]:px-5
     [&_td]:py-4
-    [&_td]:text-slate-700
+    [&_td]:text-foreground
 
     /* Hover */
-    [&_tbody_tr:hover]:bg-[#FCFBF8]
+    [&_tbody_tr:hover]:bg-muted/40
 
 
 
@@ -72,7 +85,7 @@ export const Response = memo(
     [&_ul]:pl-6
     [&_ol]:list-decimal
     [&_ol]:pl-6
-    [&_li]:marker:text-[#C6923A]
+    [&_li]:marker:text-[color:var(--royal-gold)]
     [&_li]:my-1
 
     /* Nested list spacing */
@@ -84,7 +97,7 @@ export const Response = memo(
       {...props}
     />
   ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children,
+  areResponsePropsEqual,
 );
 
 Response.displayName = "Response";

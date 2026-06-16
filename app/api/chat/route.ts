@@ -14,7 +14,7 @@ import {
     createUIMessageStream,
     JsonToSseTransformStream,
     smoothStream,
-    // stepCountIs,
+    stepCountIs,
     streamText,
     UIMessage
 } from "ai";
@@ -23,17 +23,27 @@ import { v4 as generateUUID } from "uuid";
 import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
 import { OFFER_CHAT_SYSTEM_PROMPT } from "@/lib/agent/offer-prompts";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
+import type { OfferFile, LineItem } from "@/context/ChatContext";
+import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
 
 interface ChatRequestBody {
     leadId: number;
     message?: UIMessage;
     messages?: ChatMessageAI[];
+    offerFile: OfferFile;
+    lineItems: LineItem[];
 }
 
 export async function POST(request: NextRequest) {
-    const { leadId, message, messages }: ChatRequestBody = await request.json();
-
     try {
+        let body: ChatRequestBody;
+        try {
+            body = await request.json();
+        } catch {
+            return new ChatSDKError("bad_request:chat").toResponse();
+        }
+
+        const { leadId, message, messages, offerFile, lineItems } = body;
         const { userId } = await auth();
         if (!leadId) {
             return new ChatSDKError("bad_request:chat").toResponse();
@@ -49,6 +59,8 @@ export async function POST(request: NextRequest) {
             console.error("User not found in database for Clerk ID:", userId);
             return new ChatSDKError("unauthorized:chat").toResponse();
         }
+
+        await assertCanAccessLead(dbUser, leadId);
 
         const isContinuationRequest = !message && Array.isArray(messages);
 
@@ -124,15 +136,24 @@ export async function POST(request: NextRequest) {
                 /* ---------------- AI Stream ---------------- */
 
                 const result = streamText({
-                    model: gateway("google/gemini-2.5-flash"),
+                    model: gateway("google/gemini-3-flash"),
                     temperature: 0.2,   // slightly higher — user-facing replies need to feel natural
-                    topP: 0.90,
                     topK: 25,
-                    presencePenalty: 0,
-                    frequencyPenalty: 0.1,
-                    system: OFFER_CHAT_SYSTEM_PROMPT,
+                    system: `
+                    ${OFFER_CHAT_SYSTEM_PROMPT}
+
+                    ## Lead ID: **${leadId}**
+
+                    ## Offer File Content
+                    ${JSON.stringify(offerFile, null, 2)}
+
+                    ## Offer Line Items
+                    ${JSON.stringify(lineItems, null, 2)}
+                    `,
                     messages: await convertToModelMessages(UIFormattedMessages),
+                    stopWhen: stepCountIs(5),
                     stopSequences: [
+                        "<END_INFORMATION_GATHERING>",
                         "<END_OFFER_UPDATE>",
                         "<END_LINE_ITEM_UPDATE>",
                     ],
@@ -183,7 +204,7 @@ export async function POST(request: NextRequest) {
                             id: finishedMsg.id,
                             role: finishedMsg.role,
                             content: finishedMsg.parts,
-                            timestamp: new Date(),
+                            timestamp: new Date(finishedMsg.metadata?.createdAt ?? Date.now()),
                             sessionId: chat.id,
                         });
                     } else {
@@ -191,7 +212,7 @@ export async function POST(request: NextRequest) {
                             id: finishedMsg.id,
                             role: finishedMsg.role,
                             content: finishedMsg.parts,
-                            timestamp: new Date(),
+                            timestamp: new Date(finishedMsg.metadata?.createdAt ?? Date.now()),
                             sessionId: chat.id,
                         });
                     }
@@ -228,6 +249,12 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         const vercelId = request.headers.get("x-vercel-id");
+
+        if (error instanceof LeadAccessError) {
+            return new ChatSDKError(
+                error.status === 404 ? "not_found:chat" : "forbidden:chat",
+            ).toResponse();
+        }
 
         console.error("Unhandled error in chat API:", error, { vercelId });
         return new ChatSDKError("offline:chat").toResponse();

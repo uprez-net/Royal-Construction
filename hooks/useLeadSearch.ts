@@ -27,7 +27,7 @@ export function useLeadSearch(initialQuery = "", initialPage = 1) {
     useEffect(() => {
         const controller = new AbortController();
         const timer = setTimeout(async () => {
-            if(items.length === 0 || query.length > 0) setLoading(true);
+            if (items.length === 0 || query.length > 0) setLoading(true);
             else setLoadingMore(true);
             setError(null);
             const params = new URLSearchParams();
@@ -41,8 +41,8 @@ export function useLeadSearch(initialQuery = "", initialPage = 1) {
                     "Failed to fetch leads",
                     controller.signal
                 );
-                setItems(prev =>{
-                    if(pageInfo.page === 1) return data.items;
+                setItems(prev => {
+                    if (pageInfo.page === 1) return data.items;
                     const oldData = new Set(prev.map(i => i.id));
                     return [...prev, ...data.items.filter(i => !oldData.has(i.id))];
                 });
@@ -68,7 +68,7 @@ export function useLeadSearch(initialQuery = "", initialPage = 1) {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [query, pageInfo.page]);
+    }, [query, pageInfo.page, items.length]);
 
     return { query, setQuery, items, loading, error, pageInfo, setPage, loadingMore } as const;
 }

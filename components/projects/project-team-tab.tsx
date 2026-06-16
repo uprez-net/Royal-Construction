@@ -94,7 +94,7 @@ export function TeamTab({ project }: TeamTabProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">
             {projectData.workers.length} workers assigned
@@ -151,7 +151,7 @@ export function TeamTab({ project }: TeamTabProps) {
       </Card>
 
       {/* Workers Table */}
-      <div className="overflow-hidden rounded-2xl border bg-card">
+      <div className="overflow-hidden rounded-lg border bg-card">
         <div className="overflow-x-auto no-scrollbar">
           <DataTable
             headers={["Worker", "Role", "Hours/Week", "Status", "Actions"]}
@@ -162,9 +162,9 @@ export function TeamTab({ project }: TeamTabProps) {
               toast.info(`Viewing ${worker.name}'s details...`);
             }}
             emptyState={
-              <Card className="rounded-2xl border-dashed">
+              <Card className="rounded-lg border-dashed">
                 <CardContent className="flex flex-col items-center justify-center py-14 text-center">
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-muted">
                     <Users className="h-7 w-7 text-muted-foreground" />
                   </div>
 
