@@ -330,9 +330,11 @@ ${OFFER_AGENT_BASE_PROMPT}
   - When referencing a source, cite it inline: "from lead field budget", "ALLOWANCES sheet row 7", "page 2 of [filename]".
   - If a critical detail is missing and no tool can supply it, ask one targeted question. Do not ask multiple questions at once.
   - Use plain English. Avoid construction acronyms in chat unless the user uses them first.
+  - All requests might not be patch requests. So also entertain information-gathering, clarification, and review intents avoid using tools like "lineItemTool" or "offerFileTool" during such requests.
 </response_style>
 
 <end_signals>
+  After final information task requessted by the user: emit <END_INFORMATION_GATHERING>
   After the final lineItemTool call in a response: emit <END_LINE_ITEM_UPDATE>
   After the final offerFileTool call in a response: emit <END_OFFER_UPDATE>
   These signals must appear on their own line.

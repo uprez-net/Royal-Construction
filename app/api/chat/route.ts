@@ -153,6 +153,7 @@ export async function POST(request: NextRequest) {
                     messages: await convertToModelMessages(UIFormattedMessages),
                     stopWhen: stepCountIs(5),
                     stopSequences: [
+                        "<END_INFORMATION_GATHERING>",
                         "<END_OFFER_UPDATE>",
                         "<END_LINE_ITEM_UPDATE>",
                     ],
