@@ -1,13 +1,12 @@
 "use client"
 
 import { useSignIn } from "@clerk/nextjs/legacy"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { useEffect, useRef } from "react"
 import { Suspense } from "react"
 
 function DevSignInInner() {
   const { signIn, setActive, isLoaded } = useSignIn()
-  const router = useRouter()
   const params = useSearchParams()
   const attempted = useRef(false)
 
@@ -17,9 +16,15 @@ function DevSignInInner() {
 
     const token = params.get("token")
     const redirectUrl = params.get("redirect_url") ?? "/dashboard"
+    const safeRedirectUrl = (() => {
+      const destination = new URL(redirectUrl, window.location.origin)
+      return destination.origin === window.location.origin
+        ? destination.href
+        : new URL("/dashboard", window.location.origin).href
+    })()
 
     if (!token) {
-      router.replace("/sign-in")
+      window.location.assign(new URL("/sign-in", window.location.origin).href)
       return
     }
 
@@ -28,10 +33,12 @@ function DevSignInInner() {
       .then(async (attempt) => {
         if (attempt.status !== "complete") throw new Error(attempt.status ?? "incomplete")
         await setActive({ session: attempt.createdSessionId })
-        router.replace(redirectUrl)
+        window.location.assign(safeRedirectUrl)
       })
-      .catch(() => router.replace("/sign-in"))
-  }, [isLoaded, signIn, setActive, router, params])
+      .catch(() => {
+        window.location.assign(new URL("/sign-in", window.location.origin).href)
+      })
+  }, [isLoaded, signIn, setActive, params])
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[oklch(0.979_0.006_248.4)]">

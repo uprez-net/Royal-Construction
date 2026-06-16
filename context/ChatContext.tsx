@@ -18,6 +18,7 @@ import type {
   FacadeOptionWithImageUrl,
   TermsAndConditionsItem,
 } from "@/lib/agent/offer-prompts";
+import { hydratePricingFromStoredTotal } from "@/lib/offer/pricing";
 
 interface ChatContextValue {
   lineItems: LineItem[];
@@ -107,11 +108,14 @@ const getInitialOfferFile = (
   msg: ChatMessageAI[],
   initial: OfferFile,
 ) => {
-  if (msg.length > 1 && initial.projectWelcomeMessage?.length || initial.projectScope?.length) {
+  if (
+    (msg.length > 1 && initial.projectWelcomeMessage?.length) ||
+    initial.projectScope?.length
+  ) {
     return initial;
-  } else {
-    return fileVersions[version].offerContent;
   }
+
+  return fileVersions[version]?.offerContent ?? initial;
 };
 
 const getInitialLineItems = (
@@ -122,21 +126,26 @@ const getInitialLineItems = (
 ) => {
   if (msg.length > 1 && initial.length > 0) {
     return initial;
-  } else {
-    return lineItemVersions[version].map((item) => ({
+  }
+
+  return (lineItemVersions[version] ?? []).map((item) => {
+    const totalPrice = parseFloat(item.totalPrice);
+    const pricing = hydratePricingFromStoredTotal(totalPrice);
+
+    return {
       id: item.id,
       description: item.description,
       item: item.item,
       unitPrice: parseFloat(item.unitPrice),
       quantity: item.quantity,
       unit: item.unit,
-      totalPrice: parseFloat(item.totalPrice),
+      totalPrice,
       gstRate: 0.1, // Assuming a default GST rate of 10%
       gstIncluded: true, // Assuming GST is included in the prices
-      netLine: parseFloat(item.totalPrice) - parseFloat(item.totalPrice) * 0.1, // Calculate net line by removing GST from total price
-      gstAmount: parseFloat(item.totalPrice) * 0.1, // Calculate GST amount based on total price and GST rate
-    }));
-  }
+      netLine: pricing.netLine,
+      gstAmount: pricing.gstAmount,
+    };
+  });
 };
 
 const getInitialVersion = (
@@ -148,8 +157,8 @@ const getInitialVersion = (
   if (
     messages.length > 1 &&
     initialLineItems.length > 0 &&
-    initialOfferFile.projectWelcomeMessage?.length ||
-    initialOfferFile.projectScope?.length
+    (initialOfferFile.projectWelcomeMessage?.length ||
+      initialOfferFile.projectScope?.length)
   ) {
     return "current";
   } else {
@@ -253,18 +262,8 @@ export const ChatProvider = ({
           body: {
             id: request.id,
             leadId: parseInt(leadId),
-            offerFile: getInitialOfferFile(
-              initialVersionLength,
-              initialOfferFileRecord,
-              initialMessages,
-              initialOfferFile,
-            ),
-            lineItems: getInitialLineItems(
-              initialVersionLength,
-              initialItemRecord,
-              initialMessages,
-              initialLineItems,
-            ),
+            offerFile,
+            lineItems,
             // Send all messages for tool approval continuation, otherwise just the last user message
             ...(isToolApprovalContinuation
               ? { messages: request.messages }

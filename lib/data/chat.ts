@@ -101,30 +101,30 @@ export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse
     cacheTag(`chat-session-lead-${leadId}`);
     cacheLife(CACHE_PROFILES.SHORT);
     try {
-        const chatSession = await prisma.chatSession.findFirst({
-            where: { leadId },
-            include: { 
-                messages: {
-                    orderBy: { timestamp: "asc" },
-                } 
-            },
-        });
-
-        const leadFiles = await prisma.file.findMany({
-            where: { leadId },
-        });
-
-        const lead = await prisma.lead.findUnique({
-            where: { id: leadId },
-            select: {
-                name: true,
-                location: true,
-                type: true,
-                runId: true,
-                runStatus: true,
-                updatedAt: true,
-            }
-        });
+        const [chatSession, leadFiles, lead] = await Promise.all([
+            prisma.chatSession.findFirst({
+                where: { leadId },
+                include: {
+                    messages: {
+                        orderBy: { timestamp: "asc" },
+                    }
+                },
+            }),
+            prisma.file.findMany({
+                where: { leadId },
+            }),
+            prisma.lead.findUnique({
+                where: { id: leadId },
+                select: {
+                    name: true,
+                    location: true,
+                    type: true,
+                    runId: true,
+                    runStatus: true,
+                    updatedAt: true,
+                }
+            }),
+        ]);
 
         if(!lead) {
             throw new Error("Lead not found");

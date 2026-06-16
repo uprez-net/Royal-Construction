@@ -68,7 +68,11 @@ export function CreateOfferFileModal({
       (lead) => lead.id === selectedLeadId,
     );
     if(!selectedLead) return false;
-    return selectedLead.creatingOffer || selectedLead.runId !== null;
+    return (
+      selectedLead.creatingOffer ||
+      selectedLead.runStatus === "RUNNING" ||
+      selectedLead.runStatus === "COMPLETED"
+    );
   }, [leadSearch.items, selectedLeadId]);
 
   const resetSearch = useCallback(() => {

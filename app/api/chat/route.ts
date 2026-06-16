@@ -24,6 +24,7 @@ import { fetchOfferSheetRules } from "@/lib/tools/fetch-offer-sheet-rules";
 import { OFFER_CHAT_SYSTEM_PROMPT } from "@/lib/agent/offer-prompts";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 import type { OfferFile, LineItem } from "@/context/ChatContext";
+import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
 
 interface ChatRequestBody {
     leadId: number;
@@ -34,9 +35,15 @@ interface ChatRequestBody {
 }
 
 export async function POST(request: NextRequest) {
-    const { leadId, message, messages, offerFile, lineItems }: ChatRequestBody = await request.json();
-
     try {
+        let body: ChatRequestBody;
+        try {
+            body = await request.json();
+        } catch {
+            return new ChatSDKError("bad_request:chat").toResponse();
+        }
+
+        const { leadId, message, messages, offerFile, lineItems } = body;
         const { userId } = await auth();
         if (!leadId) {
             return new ChatSDKError("bad_request:chat").toResponse();
@@ -52,6 +59,8 @@ export async function POST(request: NextRequest) {
             console.error("User not found in database for Clerk ID:", userId);
             return new ChatSDKError("unauthorized:chat").toResponse();
         }
+
+        await assertCanAccessLead(dbUser, leadId);
 
         const isContinuationRequest = !message && Array.isArray(messages);
 
@@ -239,6 +248,12 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         const vercelId = request.headers.get("x-vercel-id");
+
+        if (error instanceof LeadAccessError) {
+            return new ChatSDKError(
+                error.status === 404 ? "not_found:chat" : "forbidden:chat",
+            ).toResponse();
+        }
 
         console.error("Unhandled error in chat API:", error, { vercelId });
         return new ChatSDKError("offline:chat").toResponse();

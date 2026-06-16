@@ -15,6 +15,10 @@ import { getWritable } from "workflow";
 import { currency } from "@/utils/formatters";
 import { RunStatus } from "@prisma/client";
 import { put } from "@vercel/blob";
+import {
+    calculateOfferLinePricing,
+    calculateOfferTotals,
+} from "@/lib/offer/pricing";
 
 export interface OfferCreationStatus {
     failed?: boolean;
@@ -83,33 +87,6 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
 
 // Utility functions
 
-const DEFAULT_GST_RATE = 0.10;
-
-function roundCurrency(value: number) {
-    return Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
-}
-
-function calculateLinePricing(item: { unitPrice: number; quantity: number; gstRate?: number; gstIncluded?: boolean }) {
-    const gstRate = item.gstRate ?? DEFAULT_GST_RATE;
-    const rawLine = roundCurrency(item.unitPrice * item.quantity);
-
-    if (item.gstIncluded) {
-        const netLine = roundCurrency(rawLine / (1 + gstRate));
-        return {
-            netLine,
-            gstAmount: roundCurrency(rawLine - netLine),
-            totalPrice: rawLine,
-        };
-    }
-
-    const gstAmount = roundCurrency(rawLine * gstRate);
-    return {
-        netLine: rawLine,
-        gstAmount,
-        totalPrice: roundCurrency(rawLine + gstAmount),
-    };
-}
-
 // Steps Functions
 
 async function findLead(leadId: number) {
@@ -159,11 +136,11 @@ async function buildOffer(prompt: string, lead: Lead) {
         const output = await handleOfferGeneration(prompt);
         const offerItemsWithPricing = output.lineItemArray.map((item) => ({
             item,
-            pricing: calculateLinePricing(item),
+            pricing: calculateOfferLinePricing(item),
         }));
-        const amount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.netLine, 0));
-        const gstAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.gstAmount, 0));
-        const totalAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.totalPrice, 0));
+        const { amount, gstAmount, totalAmount } = calculateOfferTotals(
+            offerItemsWithPricing.map(({ pricing }) => pricing),
+        );
         const Options: FacadeOptionWithImageUrl["options"] = output.offerFileContent.facadeOptions ? output.offerFileContent.facadeOptions.options : [];
 
         console.log(`Built offer with message: ${output.creationMessage}, total amount: $${totalAmount}`);
@@ -309,8 +286,10 @@ async function saveOffer({
             where: { id: lead.id },
             data: {
                 runStatus: RunStatus.COMPLETED,
+                runId: null,
             },
         });
+        revalidateTag(`chat-session-lead-${lead.id}`, CACHE_PROFILES.SHORT);
 
         await writeToStream({
             status: "TRIGGERING_NOTIFICATION",
@@ -395,6 +374,7 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
                 },
             ]
         });
+        await closeWorkflowStream();
     } catch (error) {
         console.error("Error triggering notification:", error);
         await writeToStream({
@@ -420,6 +400,7 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
                 },
             ]
         });
+        await closeWorkflowStream();
         return;
     }
 }
@@ -432,17 +413,21 @@ async function failWorkflow(message: string, leadId: number) {
             where: { id: leadId },
             data: {
                 runStatus: RunStatus.FAILED, // Update run status to FAILED
+                runId: null,
             }
         });
+        revalidateTag(`chat-session-lead-${leadId}`, CACHE_PROFILES.SHORT);
 
         const notificationPayload = createNotification("offerGenerationFailed", {
             leadId: leadId.toString(),
             errorMessage: message,
         });
         await triggerNotification(updatedLead.assignedId ? [updatedLead.assignedId] : [], notificationPayload);
+        await closeWorkflowStream();
     } catch (error) {
         console.error("Error in failWorkflow:", error);
         console.error(`Failed to update lead status for lead ID: ${leadId}`);
+        await closeWorkflowStream();
     }
 }
 
@@ -451,6 +436,18 @@ async function writeToStream(data: OfferCreationStatus) {
     // Stream operations must happen in steps
     const writable = getWritable<OfferCreationStatus>();
     const writer = writable.getWriter();
-    await writer.write(data);
-    writer.releaseLock();
+    try {
+        await writer.write(data);
+    } finally {
+        writer.releaseLock();
+    }
+}
+
+async function closeWorkflowStream() {
+    "use step";
+    try {
+        await getWritable<OfferCreationStatus>().close();
+    } catch (error) {
+        console.warn("Failed to close workflow stream", error);
+    }
 }

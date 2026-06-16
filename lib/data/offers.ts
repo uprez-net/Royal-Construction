@@ -7,6 +7,9 @@ import { startOfWeek, subWeeks } from "date-fns";
 import { OfferKPIs, OfferWithItemsAndFiles, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
 import type { OfferFile } from "@/context/ChatContext";
 import { calculateTrend } from "@/utils/formatters";
+import { auth } from "@clerk/nextjs/server";
+import { getUserByClerkIdCached } from "@/lib/data/user";
+import { assertCanAccessLead } from "@/lib/offer/access";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -332,6 +335,18 @@ export const createOrUpdateOffer = async ({
     offerItems
 }: CreateOfferInput) => {
     try {
+        const { userId } = await auth();
+        if (!userId) {
+            throw new Error("Unauthorized");
+        }
+
+        const user = await getUserByClerkIdCached(userId);
+        if (!user) {
+            throw new Error("Unauthorized");
+        }
+
+        await assertCanAccessLead(user, leadId);
+
         const { version, newOffer, newOfferFile, offerItemsData } = await prisma.$transaction(async (tx) => {
             const version = await tx.offerFile.count({
                 where: { offer: { leadId } },

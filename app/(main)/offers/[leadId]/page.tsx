@@ -5,6 +5,7 @@ import { convertToUIMessage } from "@/utils/chat";
 import { Suspense } from "react";
 import OfferDetailsPageSkeleton from "./loading";
 import { CreatingOfferClient } from "@/components/offers/offer/creating-offer";
+import { notFound } from "next/navigation";
 
 async function OfferCreationContent({
   params,
@@ -12,16 +13,31 @@ async function OfferCreationContent({
   params: Promise<{ leadId: string }>;
 }) {
   const { leadId } = await params;
+  const parsedLeadId = Number(leadId);
+
+  if (!Number.isInteger(parsedLeadId) || parsedLeadId <= 0) {
+    notFound();
+  }
+
+  const [chatData, offerData] = await Promise.all([
+    getChatByLeadId(parsedLeadId),
+    getOfferByLeadIdCached(parsedLeadId),
+  ]);
+
   const {
     chatSession: chat,
     files,
     leadInfo,
-  } = await getChatByLeadId(parseInt(leadId));
-  const offerData = await getOfferByLeadIdCached(parseInt(leadId));
+  } = chatData;
 
   if (!chat || !offerData || leadInfo.runStatus !== "COMPLETED") {
     return (
-      <CreatingOfferClient runId={leadInfo.runId!} leadId={parseInt(leadId)} updatedAt={leadInfo.updatedAt} />
+      <CreatingOfferClient
+        runId={leadInfo.runId}
+        leadId={parsedLeadId}
+        updatedAt={leadInfo.updatedAt}
+        runStatus={leadInfo.runStatus}
+      />
     );
   }
 

@@ -14,6 +14,7 @@ import type { OfferFile } from "@/context/ChatContext";
 import { mergeServiceItems } from "@/utils/chat";
 
 const MODEL_NAME = "google/gemini-2.5-flash" as const;
+export const OFFER_GENERATION_MAX_STEPS = 8;
 
 export const handleOfferGeneration = async (prompt: string) => {
     const offerLineItems: OfferLineItem[] = [];
@@ -46,7 +47,7 @@ export const handleOfferGeneration = async (prompt: string) => {
             scrapeUserLinks: scrapeUserLinks,
         },
         toolChoice: "required",
-        stopWhen: stepCountIs(15),
+        stopWhen: stepCountIs(OFFER_GENERATION_MAX_STEPS),
         instructions: OFFER_LINE_ITEM_CREATION_SYSTEM_PROMPT,
         stopSequences: [
             "<END_OFFER_LINE_ITEM_GENERATION>",
@@ -88,7 +89,7 @@ export const handleOfferGeneration = async (prompt: string) => {
             scrapeUserLinks: scrapeUserLinks,
         },
         toolChoice: "required",
-        stopWhen: stepCountIs(15),
+        stopWhen: stepCountIs(OFFER_GENERATION_MAX_STEPS),
         instructions: OFFER_FILE_CONTENT_CREATION_SYSTEM_PROMPT,
         stopSequences: [
             "<END_OFFER_CONTENT_CREATION>",
