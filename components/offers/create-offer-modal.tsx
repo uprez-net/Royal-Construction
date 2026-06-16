@@ -123,7 +123,7 @@ export function CreateOfferFileModal({
         );
       }
 
-      const newOffer = await fetchJson<{ runId: string; message: string }>(
+      await fetchJson<{ runId: string; message: string }>(
         `/api/offer-create`,
         {
           method: "POST",
@@ -137,7 +137,7 @@ export function CreateOfferFileModal({
       handleOpenChange(false);
       toast.success("Offer creation trigger started.", { id: loading });
       toast.info("Redirecting to offer...");
-      router.push(`/offers/${selectedLeadId}?runId=${newOffer.data.runId}`);
+      router.push(`/offers/${selectedLeadId}`);
     } catch (error) {
       console.error("Error creating offer:", error);
       toast.error("Failed to create offer. Please try again.", { id: loading });

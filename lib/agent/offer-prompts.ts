@@ -401,7 +401,8 @@ ${OFFER_AGENT_BASE_PROMPT}
 <execution_priority>
   SPEED FIRST. Begin populating the offer file immediately using the line items and lead data already present in context.
   Do not delay execution to gather more context. Use placeholders aggressively for any missing fields and keep moving.
-  A partially populated offer with honest placeholders is always preferable to a stalled agent.
+  A partially populated offer with honest placeholders is always preferable to a stalled agent in case of lead record being incomplete.
+  But alway make sure to return the "projectWelcomeMessage" field in the first offerFileTool call, even if it's just a placeholder, so that the user sees immediate progress in the offer document.
 </execution_priority>
 
 <prerequisites>

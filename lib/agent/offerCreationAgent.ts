@@ -12,6 +12,7 @@ import { offerFileTool } from "@/lib/tools/offer-file";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 import type { OfferFile } from "@/context/ChatContext";
 import { applyOfferFileUpdate } from "@/utils/chat";
+import z from "zod";
 
 const MODEL_NAME = "google/gemini-2.5-flash" as const;
 export const OFFER_GENERATION_MAX_STEPS = 8;
@@ -87,16 +88,20 @@ const handleOfferFileGeneration = async (prompt: string) => {
             "<END_OFFER_CONTENT_CREATION>",
             "<END_GENERATION>",
         ],
-        output: Output.text(),
+        output: Output.object({
+            schema: z.object({
+                creationMessage: z.string().describe("A message describing the offer file creation progress or result or futher information request."),
+            }),
+        }),
     });
 
-    const { text: offerFileOutput } = await offerFileCreationAgent.generate({
+    const { output } = await offerFileCreationAgent.generate({
         prompt
     });
 
     return {
         offerFileContent,
-        creationMessage: `Offer creation message: ${offerFileOutput}`,
+        creationMessage: output.creationMessage,
     };
 }
 

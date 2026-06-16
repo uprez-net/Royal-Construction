@@ -96,7 +96,7 @@ export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFil
         }
 
         const { offerItems, offerFiles, ...offer } = offerData;
-        const currentVersion = offerItems.reduce((max, item) => Math.max(max, item.version), 0) ?? 0;
+        const currentVersion = offerFiles.reduce((max, file) => Math.max(max, file.version), 0);
         const offerItemsRecord: Record<number, SafeOfferItem[]> = {};
         const filesRecord: Record<number, SafeOfferDBFile> = {};
         offerItems.forEach(item => {
@@ -324,6 +324,7 @@ interface CreateOfferInput {
         totalPrice: string;
         unit: string;
     }[];
+    isWorkflowRun?: boolean;
 }
 
 export const createOrUpdateOffer = async ({
@@ -332,20 +333,23 @@ export const createOrUpdateOffer = async ({
     amount,
     gstAmount,
     totalAmount,
-    offerItems
+    offerItems,
+    isWorkflowRun = false,
 }: CreateOfferInput) => {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            throw new Error("Unauthorized");
-        }
+        if (!isWorkflowRun) {
+            const { userId } = await auth();
+            if (!userId) {
+                throw new Error("Unauthorized");
+            }
 
-        const user = await getUserByClerkIdCached(userId);
-        if (!user) {
-            throw new Error("Unauthorized");
-        }
+            const user = await getUserByClerkIdCached(userId);
+            if (!user) {
+                throw new Error("Unauthorized");
+            }
 
-        await assertCanAccessLead(user, leadId);
+            await assertCanAccessLead(user, leadId);
+        }
 
         const { version, newOffer, newOfferFile, offerItemsData } = await prisma.$transaction(async (tx) => {
             const version = await tx.offerFile.count({

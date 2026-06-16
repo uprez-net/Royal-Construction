@@ -19,9 +19,10 @@ import {
     calculateOfferLinePricing,
     calculateOfferTotals,
 } from "@/lib/offer/pricing";
-import { generateSafeOfferHTML } from "@/utils/handle-offer-template";
+import { generateSafeOfferHTMLServer } from "@/utils/handle-offer-template-sever";
 import { generatePDF } from "../utils/generatePDF";
 import { ChatMessageAI } from "@/types/chat";
+import { sleep } from "workflow";
 
 export interface OfferCreationStatus {
     failed?: boolean;
@@ -83,6 +84,9 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
 
         // Trigger notification step
         await triggerNotificationStep(newOffer, totalAmount);
+
+        await sleep(2000);
+        await closeWorkflowStream();
 
         return {
             ...newOffer,
@@ -153,7 +157,7 @@ async function buildOfferLineItems(prompt: string, lead: Lead) {
 
         console.log(`Built offer with message: ${output.creationMessage}, total amount: $${totalAmount}`);
         await writeToStream({
-            status: "SAVING_OFFER",
+            status: "BUILDING_OFFER",
             progress: 45,
             message: [
                 {
@@ -289,7 +293,7 @@ async function saveOffer({
                 options: Options,
             } : undefined,
         };
-        const offerFileHTML = generateSafeOfferHTML({
+        const offerFileHTML = generateSafeOfferHTMLServer({
             ...offerFileContent,
             customerName: lead.name,
             projectName: `${lead.type}, ${lead.location}`,
@@ -331,6 +335,7 @@ async function saveOffer({
                 totalPrice: pricing.totalPrice.toString(),
                 unit: item.unit,
             })),
+            isWorkflowRun: true,
         });
 
         const existingChatSession = await prisma.chatSession.findFirst({
@@ -368,7 +373,6 @@ async function saveOffer({
             where: { id: lead.id },
             data: {
                 runStatus: RunStatus.COMPLETED,
-                runId: null,
             },
         });
         revalidateTag(`chat-session-lead-${lead.id}`, CACHE_PROFILES.SHORT);
@@ -456,7 +460,6 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
                 },
             ]
         });
-        await closeWorkflowStream();
     } catch (error) {
         console.error("Error triggering notification:", error);
         await writeToStream({
@@ -482,7 +485,6 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
                 },
             ]
         });
-        await closeWorkflowStream();
         return;
     }
 }

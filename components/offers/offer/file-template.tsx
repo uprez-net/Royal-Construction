@@ -1,7 +1,7 @@
 import { COMPANY_INFO } from "@/constants/offerFileContent";
 import { OfferFile } from "@/context/ChatContext";
 import { dateFormat } from "@/utils/formatters";
-import { generateSafeOfferHTML } from "@/utils/handle-offer-template";
+import { generateSafeOfferHTMLClient } from "@/utils/handle-offer-template-client";
 
 interface OfferFileTemplateProps extends OfferFile {
   ref?: React.Ref<HTMLIFrameElement>;
@@ -31,7 +31,7 @@ export function OfferFileTemplate({
   creatorName = COMPANY_INFO.director,
   contractAmount = "$X,XXX",
 }: OfferFileTemplateProps) {
-  const cleanedHtml = generateSafeOfferHTML({
+  const cleanedHtml = generateSafeOfferHTMLClient({
     projectWelcomeMessage,
     facadeOptions,
     termsAndConditions,

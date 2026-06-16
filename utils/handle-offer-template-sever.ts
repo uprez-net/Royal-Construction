@@ -1,6 +1,5 @@
 import type { OfferFile } from "@/context/ChatContext";
 import { addDays } from "date-fns";
-import DOMPurify from "dompurify";
 import {
     ACCEPTANCE_BODY,
     COMPANY_INFO,
@@ -20,8 +19,13 @@ interface OfferFileTemplateProps extends OfferFile {
     creatorName?: string;
     contractAmount?: string;
 }
-
-export const generateSafeOfferHTML = ({
+/**
+ * Generates a safe HTML offer file for server-side PDF generation.
+ * Don't use in client-side contexts as it relies on server-compatible sanitization.
+ * @param OfferFileTemplateProps - The properties of the offer file, including content and metadata.
+ * @returns HTML Offer File as a string, sanitized for PDF generation on the server.
+ */
+export const generateSafeOfferHTMLServer = ({
     projectWelcomeMessage,
     facadeOptions,
     termsAndConditions,
@@ -425,8 +429,6 @@ export const generateSafeOfferHTML = ({
         </div>
         </body>
     `
-
-    const cleanedBody = DOMPurify.sanitize(body, { USE_PROFILES: { html: true } });;
 
     const html = `
         <!DOCTYPE html>
@@ -1237,7 +1239,7 @@ export const generateSafeOfferHTML = ({
         }
         </style>
         </head>
-        ${cleanedBody}
+        ${body}
         </html>`;
 
     return html;

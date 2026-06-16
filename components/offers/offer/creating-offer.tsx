@@ -73,7 +73,7 @@ function CreatingOffer({
 
   const isComplete = status === "COMPLETED" && !failed;
   const isIdle = !runId && initialRunStatus !== "RUNNING";
-  const isFailed = failed || (!runId && initialRunStatus === "FAILED");
+  const isFailed = initialRunStatus === "FAILED" ? true : failed;
   const isWorking = Boolean(runId) && (connected || loading || !isComplete);
 
   const { minutes, seconds } = useMemo(() => {
@@ -199,7 +199,7 @@ function CreatingOffer({
         <div className="space-y-1.5">
           <div className="relative pt-4">
             <span className="absolute right-0 top-0 text-xs font-medium text-muted-foreground">
-              {minutes > 0 && seconds > 0
+              {minutes > 0 || seconds > 0
                 ? `${minutes}:${seconds.toString().padStart(2, "0")}`
                 : "Taking longer than expected..."}
             </span>
