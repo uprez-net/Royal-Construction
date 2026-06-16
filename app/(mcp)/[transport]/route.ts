@@ -468,7 +468,7 @@ const handler = createMcpHandler((server) => {
         async (params) => {
             try {
                 const res = removeAllNestedDateObjects(await updateMilestone(params.milestoneId, params));
-                const validated = milestoneDetailResponseSchema.safeParse(res);
+                const validated = milestoneUpdateResponseSchema.safeParse(res);
                 if (!validated.success) {
                     console.error("Invalid milestone detail response", z.treeifyError(validated.error));
                     throw new Error("Invalid milestone detail response");
@@ -585,15 +585,13 @@ const handler = createMcpHandler((server) => {
         {
             description: "List all tradies for scheduling",
             inputSchema: emptyInputSchema,
-            outputSchema: z.object({
-                tradies: tradiesResponseSchema,
-                totalCount: z.number(),
-            }),
+            outputSchema: getTradieResponseSchema,
         },
         async () => {
             try {
-                const res = removeAllNestedDateObjects(await getCachedTradies());
-                const validated = tradiesResponseSchema.safeParse(res);
+                const tradies = removeAllNestedDateObjects(await getCachedTradies()) as Awaited<ReturnType<typeof getCachedTradies>>;
+                const payload = { tradies, totalCount: Array.isArray(tradies) ? tradies.length : 0 };
+                const validated = getTradieResponseSchema.safeParse(payload);
                 if (!validated.success) {
                     console.error("Invalid tradies response", z.treeifyError(validated.error));
                     throw new Error("Invalid tradies response");
@@ -749,7 +747,7 @@ const handler = createMcpHandler((server) => {
         {
             description: "Upload a file and get back its ID for association with milestones and projects",
             inputSchema: z.object({
-                file: z.string().describe("Base64 encoded file content"),
+                fileBase64: z.string().describe("Base64 encoded file content"),
                 fileName: z.string().describe("Original file name"),
                 fileSize: z.number().describe("File size in bytes"),
                 projectId: z.string().trim().min(1).describe("The ID of the project to associate the file with"),
@@ -759,7 +757,7 @@ const handler = createMcpHandler((server) => {
                 fileId: z.string().describe("The ID of the uploaded file"),
             }),
         },
-        async ({ file, fileName, fileSize, projectId, milestoneId }, { authInfo }) => {
+        async ({ fileBase64, fileName, fileSize, projectId, milestoneId }, { authInfo }) => {
             const userId = authInfo?.extra?.userId as string | undefined;
             try {
                 if (!userId) {
@@ -772,6 +770,7 @@ const handler = createMcpHandler((server) => {
                     projectId,
                     milestoneId,
                 });
+                const file = Buffer.from(fileBase64, "base64");
                 const blob = await put(pathname, file, { access: "public" });
                 await saveFile({
                     userId,

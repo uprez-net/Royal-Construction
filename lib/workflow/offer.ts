@@ -12,13 +12,15 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { getWritable } from "workflow";
-import { currency } from "@/utils/formatters";
+import { base64ToBlob, currency, dateFormat, sanitizeFileName } from "@/utils/formatters";
 import { RunStatus } from "@prisma/client";
 import { put } from "@vercel/blob";
 import {
     calculateOfferLinePricing,
     calculateOfferTotals,
 } from "@/lib/offer/pricing";
+import { generateSafeOfferHTML } from "@/utils/handle-offer-template";
+import { generatePDF } from "../utils/generatePDF";
 
 export interface OfferCreationStatus {
     failed?: boolean;
@@ -60,7 +62,7 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
 
         //Processing details step
         const { offerItemsWithPricing, amount, gstAmount, totalAmount, output: lineItemOutput } = await buildOfferLineItems(prompt, lead);
-        
+
         const offerCreationPrompt = `
         ## Created Line Items:
         ${lineItemOutput.lineItemArray.map(item =>
@@ -292,15 +294,23 @@ async function saveOffer({
                 options: Options,
             } : undefined,
         };
-        const offerFileJson = JSON.stringify(offerFileContent);
-        const filename = `offer_${sanitizeOfferFilename(lead.name)}_${Date.now()}.json`;
+        const offerFileHTML = generateSafeOfferHTML({
+            ...offerFileContent,
+            customerName: lead.name,
+            projectName: `${lead.type}, ${lead.location}`,
+            siteLocation: lead.location,
+            contractAmount: currency.format(totalAmount),
+        });
+        const generatedPdf = await generatePDF({ html: offerFileHTML });
+        const fileBlob = base64ToBlob(generatedPdf);
+        const fileName = `offer_${dateFormat.format(new Date())}_${lead.id}.pdf`;
         const blob = await put(
-            `offer-files/${lead.id}/${filename}`,
-            offerFileJson,
+            `offer-files/${lead.id}/${fileName}`,
+            fileBlob,
             {
                 access: "public",
                 addRandomSuffix: true,
-                contentType: "application/json",
+                contentType: fileBlob.type,
             },
         );
 
@@ -308,9 +318,9 @@ async function saveOffer({
             leadId: lead.id,
             offerFileInput: {
                 id: uuidv4(),
-                filename,
+                filename: fileName,
                 fileType: "application/json",
-                filesize: Buffer.byteLength(offerFileJson, "utf8"),
+                filesize: fileBlob.size,
                 url: blob.url,
                 offerContent: offerFileContent,
             },
