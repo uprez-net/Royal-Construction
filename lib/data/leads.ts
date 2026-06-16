@@ -457,7 +457,12 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
 
   const orConditions: Prisma.LeadWhereInput[] = [];
   if (normalizedEmail !== "") {
-    orConditions.push({ email: normalizedEmail });
+    orConditions.push({
+      email: {
+        equals: normalizedEmail,
+        mode: Prisma.QueryMode.insensitive,
+      },
+    });
   }
   if (normalizedPhone !== "") {
     orConditions.push({ phone: normalizedPhone });
