@@ -2,7 +2,7 @@ import { OfferWithLead } from "@/types/offer";
 import { prisma } from "@/lib/prisma";
 import { buildCreationStarterPrompt, FacadeOptionWithImageUrl } from "@/lib/agent/offer-prompts";
 import { findLeadById } from "@/lib/data/leads";
-import { handleOfferGeneration } from "@/lib/agent/offerCreationAgent";
+import { handleOfferFileGeneration, handleOfferLineItemGeneration } from "@/lib/agent/offerCreationAgent";
 import { v4 as uuidv4 } from "uuid";
 import { createOrUpdateOffer } from "@/lib/data/offers";
 import { OfferCreationOutput } from "@/lib/agent/offer-prompts";
@@ -55,12 +55,16 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
         const { lead, prompt } = await findLead(leadId);
 
         //Processing details step
-        const { offerItemsWithPricing, amount, gstAmount, totalAmount, output, Options } = await buildOffer(prompt, lead);
+        const { offerItemsWithPricing, amount, gstAmount, totalAmount, output: lineItemOutput } = await buildOfferLineItems(prompt, lead);
+        const { output: fileOutput, Options } = await buildOfferFile(prompt, lead);
 
         // Creating offer step
         const newOffer = await saveOffer({
             lead,
-            output,
+            output: {
+                lineItemArray: lineItemOutput.lineItemArray,
+                offerFileContent: fileOutput.offerFileContent,
+            },
             offerItemsWithPricing,
             Options,
             amount,
@@ -153,10 +157,10 @@ async function findLead(leadId: number) {
     }
 }
 
-async function buildOffer(prompt: string, lead: Lead) {
+async function buildOfferLineItems(prompt: string, lead: Lead) {
     'use step';
     try {
-        const output = await handleOfferGeneration(prompt);
+        const output = await handleOfferLineItemGeneration(prompt);
         const offerItemsWithPricing = output.lineItemArray.map((item) => ({
             item,
             pricing: calculateLinePricing(item),
@@ -164,12 +168,11 @@ async function buildOffer(prompt: string, lead: Lead) {
         const amount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.netLine, 0));
         const gstAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.gstAmount, 0));
         const totalAmount = roundCurrency(offerItemsWithPricing.reduce((sum, { pricing }) => sum + pricing.totalPrice, 0));
-        const Options: FacadeOptionWithImageUrl["options"] = output.offerFileContent.facadeOptions ? output.offerFileContent.facadeOptions.options : [];
 
         console.log(`Built offer with message: ${output.creationMessage}, total amount: $${totalAmount}`);
         await writeToStream({
             status: "SAVING_OFFER",
-            progress: 50,
+            progress: 45,
             message: [
                 {
                     step: "FETCHING_DETAILS",
@@ -177,7 +180,7 @@ async function buildOffer(prompt: string, lead: Lead) {
                 },
                 {
                     step: "BUILDING_OFFER",
-                    details: `Built offer with ${offerItemsWithPricing.length} line items, total amount: $${totalAmount}`,
+                    details: `Built ${offerItemsWithPricing.length} line items, total amount: $${totalAmount}`,
                 }
             ],
         });
@@ -188,7 +191,6 @@ async function buildOffer(prompt: string, lead: Lead) {
             gstAmount,
             totalAmount,
             output,
-            Options,
         };
     } catch (error) {
         console.error("Error building offer:", error);
@@ -208,6 +210,53 @@ async function buildOffer(prompt: string, lead: Lead) {
             ],
         });
         throw new Error(`Failed to build offer`);
+    }
+}
+
+async function buildOfferFile(prompt: string, lead: Lead) {
+    'use step';
+    try {
+        const output = await handleOfferFileGeneration(prompt);
+        const Options: FacadeOptionWithImageUrl["options"] = output.offerFileContent.facadeOptions ? output.offerFileContent.facadeOptions.options : [];
+
+        console.log(`Built offer file with message: ${output.creationMessage}`);
+        await writeToStream({
+            status: "SAVING_OFFER",
+            progress: 65,
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${lead.name} (ID: ${lead.id})`,
+                },
+                {
+                    step: "BUILDING_OFFER",
+                    details: `Built offer file with message: ${output.creationMessage}`,
+                }
+            ],
+        });
+
+        return {
+            output,
+            Options,
+        };
+    } catch (error) {
+        console.error("Error building offer file:", error);
+        await writeToStream({
+            status: "BUILDING_OFFER",
+            progress: 45,
+            failed: true,
+            message: [
+                {
+                    step: "FETCHING_DETAILS",
+                    details: `Fetched details for lead ${lead.name} (ID: ${lead.id})`,
+                },
+                {
+                    step: "BUILDING_OFFER",
+                    details: `Failed to build offer file${error instanceof Error ? `: ${error.message}` : ""}`,
+                }
+            ],
+        });
+        throw new Error(`Failed to build offer file`);
     }
 }
 
@@ -337,7 +386,7 @@ async function saveOffer({
         console.error("Error saving offer:", error);
         await writeToStream({
             status: "SAVING_OFFER",
-            progress: 50,
+            progress: 65,
             failed: true,
             message: [
                 {
