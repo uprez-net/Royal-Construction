@@ -5,6 +5,7 @@ import { saveFile } from '@/lib/data/file';
 import { getUserByClerkIdCached } from '@/lib/data/user';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
 import { errorResponse, unauthorizedResponse } from '@/utils/validators';
+import { LeadAccessError, assertCanAccessLead } from '@/lib/offer/access';
 
 export async function POST(request: Request): Promise<NextResponse> {
     try {
@@ -30,6 +31,21 @@ export async function POST(request: Request): Promise<NextResponse> {
                 } catch (error) {
                     console.error('Invalid client payload', error);
                     throw new Error('Invalid file metadata in payload');
+                }
+
+                if (clientPayload.leadId) {
+                    const user = await getUserByClerkIdCached(userId);
+                    if (!user) {
+                        throw new Error('Unauthorized');
+                    }
+                    try {
+                        await assertCanAccessLead(user, Number(clientPayload.leadId));
+                    } catch (error) {
+                        if (error instanceof LeadAccessError) {
+                            throw new Error(error.status === 404 ? 'Lead not found' : 'Forbidden');
+                        }
+                        throw error;
+                    }
                 }
 
                 let allowedContentTypes: string[] = UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[];
@@ -106,6 +122,16 @@ export async function POST(request: Request): Promise<NextResponse> {
         switch (message) {
             case 'Unauthorized':
                 return unauthorizedResponse();
+            case 'Forbidden':
+                return errorResponse(message, {
+                    status: 403,
+                    code: 'UPLOAD_FORBIDDEN',
+                });
+            case 'Lead not found':
+                return errorResponse(message, {
+                    status: 404,
+                    code: 'UPLOAD_LEAD_NOT_FOUND',
+                });
             case 'Invalid file metadata in payload':
             case 'Failed to save file metadata':
                 return errorResponse(message, {

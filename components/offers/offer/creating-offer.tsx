@@ -58,17 +58,22 @@ function getStepState(
 function CreatingOffer({
   leadId,
   updatedAt,
+  initialRunStatus,
 }: {
   leadId: number;
   updatedAt: Date;
+  initialRunStatus?: "RUNNING" | "COMPLETED" | "FAILED" | null;
 }) {
   const router = useRouter();
-  const { creatingOffer, startListening } = useWorkflowStream();
+  const { creatingOffer, startListening, runId, connected, loading } = useWorkflowStream();
   const [isPending, startTransition] = useTransition();
   const [timeLeft, setTimeLeft] = useState(0);
   const { status, progress, message, failed } = creatingOffer;
 
   const isComplete = status === "COMPLETED" && !failed;
+  const isIdle = !runId && initialRunStatus !== "RUNNING";
+  const isFailed = failed || (!runId && initialRunStatus === "FAILED");
+  const isWorking = Boolean(runId) && (connected || loading || !isComplete);
 
   const { minutes, seconds } = useMemo(() => {
     const mins = Math.floor(timeLeft / 60);
@@ -83,6 +88,10 @@ function CreatingOffer({
   }, [isComplete, leadId, router]);
 
   useEffect(() => {
+    if (isIdle) {
+      return;
+    }
+
     const expiresAt = addMinutes(new Date(updatedAt), 15);
 
     const updateTimer = () => {
@@ -100,7 +109,7 @@ function CreatingOffer({
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [updatedAt]);
+  }, [isIdle, updatedAt]);
 
   const handleReTrigger = async () => {
     try {
@@ -115,7 +124,7 @@ function CreatingOffer({
         },
         "Failed to trigger offer creation workflow",
       );
-      toast.success("Re-triggered offer generation");
+      toast.success("Offer generation started");
       startListening(data.runId);
     } catch (error) {
       console.error("Error re-triggering offer generation:", error);
@@ -131,13 +140,15 @@ function CreatingOffer({
           <div
             className={cn(
               "flex h-10 w-10 items-center justify-center rounded-full",
-              failed ? "bg-destructive/10" : "bg-primary/10",
+              isFailed ? "bg-destructive/10" : "bg-primary/10",
             )}
           >
-            {failed ? (
+            {isFailed ? (
               <AlertTriangle className="h-5 w-5 text-destructive" />
             ) : isComplete ? (
               <CheckCircle2 className="h-5 w-5 text-primary" />
+            ) : isIdle ? (
+              <Sparkles className="h-5 w-5 text-primary" />
             ) : (
               <Sparkles className="h-5 w-5 text-primary animate-pulse" />
             )}
@@ -145,22 +156,26 @@ function CreatingOffer({
           <div className="flex flex-row items-center gap-2 justify-between w-full">
             <div>
               <h3 className="font-semibold leading-tight">
-                {failed
+                {isFailed
                   ? "Offer generation failed"
                   : isComplete
                     ? "Offer generated"
-                    : "Generating your offer"}
+                    : isIdle
+                      ? "Offer not started"
+                      : "Generating your offer"}
               </h3>
               <p className="text-sm text-muted-foreground">
-                {failed
+                {isFailed
                   ? "An error occurred. Please try again."
                   : isComplete
                     ? "Your document is ready to review."
-                    : "Analyzing project details…"}
+                    : isIdle
+                      ? "Start generation when you're ready."
+                      : "Analyzing project details..."}
               </p>
             </div>
 
-            {failed && (
+            {(isFailed || isIdle) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -175,7 +190,7 @@ function CreatingOffer({
                 <RotateCw
                   className={cn("mr-2 h-4 w-4", isPending && "animate-spin")}
                 />
-                Retry
+                {isFailed ? "Retry" : "Start"}
               </Button>
             )}
           </div>
@@ -192,7 +207,7 @@ function CreatingOffer({
               <div
                 className={cn(
                   "absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out",
-                  failed ? "bg-destructive" : "bg-primary",
+                  isFailed ? "bg-destructive" : "bg-primary",
                 )}
                 style={{ width: `${progress}%` }}
               />
@@ -201,7 +216,13 @@ function CreatingOffer({
 
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>
-              {failed ? "Failed" : isComplete ? "Done" : "Please wait"}
+              {isFailed
+                ? "Failed"
+                : isComplete
+                  ? "Done"
+                  : isWorking
+                    ? "Please wait"
+                    : "Ready"}
             </span>
             <span>{progress}%</span>
           </div>
@@ -210,10 +231,10 @@ function CreatingOffer({
         {/* Step list */}
         <div className="space-y-2">
           {STEPS.map(({ key, label, icon: Icon }) => {
-            const state = getStepState(key, status, failed);
+            const state = isIdle ? "idle" : getStepState(key, status, isFailed);
             const isActive = state === "active";
             const isDone = state === "done";
-            const isFailed = state === "failed";
+            const isStepFailed = state === "failed";
             const stepMessage = message.find((m) => m.step === key);
 
             return (
@@ -223,7 +244,7 @@ function CreatingOffer({
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
                   isDone && "bg-emerald-50 dark:bg-emerald-950/20",
                   isActive && "bg-primary/5",
-                  isFailed && "bg-destructive/5",
+                  isStepFailed && "bg-destructive/5",
                   state === "idle" && "bg-muted/40",
                 )}
               >
@@ -233,7 +254,7 @@ function CreatingOffer({
                     "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
                     isDone && "bg-emerald-500",
                     isActive && "bg-primary",
-                    isFailed && "bg-destructive",
+                    isStepFailed && "bg-destructive",
                     state === "idle" && "bg-muted-foreground/20",
                   )}
                 >
@@ -241,7 +262,7 @@ function CreatingOffer({
                   {isActive && (
                     <Loader2 className="h-3 w-3 text-white animate-spin" />
                   )}
-                  {isFailed && <X className="h-3 w-3 text-white" />}
+                  {isStepFailed && <X className="h-3 w-3 text-white" />}
                   {state === "idle" && (
                     <Minus className="h-3 w-3 text-muted-foreground/50" />
                   )}
@@ -254,7 +275,7 @@ function CreatingOffer({
                       "font-medium",
                       isDone && "text-emerald-700 dark:text-emerald-400",
                       isActive && "text-primary",
-                      isFailed && "text-destructive",
+                      isStepFailed && "text-destructive",
                       state === "idle" && "text-muted-foreground",
                     )}
                   >
@@ -274,7 +295,7 @@ function CreatingOffer({
                     "h-4 w-4 shrink-0",
                     isDone && "text-emerald-500",
                     isActive && "text-primary",
-                    isFailed && "text-destructive",
+                    isStepFailed && "text-destructive",
                     state === "idle" && "text-muted-foreground/30",
                   )}
                 />
@@ -291,14 +312,16 @@ export function CreatingOfferClient({
   runId,
   leadId,
   updatedAt,
+  runStatus,
 }: {
-  runId: string;
+  runId: string | null;
   leadId: number;
   updatedAt: Date;
+  runStatus?: "RUNNING" | "COMPLETED" | "FAILED" | null;
 }) {
   return (
     <WorkflowStreamProvider initialRunId={runId}>
-      <CreatingOffer leadId={leadId} updatedAt={updatedAt} />
+      <CreatingOffer leadId={leadId} updatedAt={updatedAt} initialRunStatus={runStatus} />
     </WorkflowStreamProvider>
   );
 }

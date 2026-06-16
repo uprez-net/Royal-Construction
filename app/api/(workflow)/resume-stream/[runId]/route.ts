@@ -3,6 +3,8 @@ import { getRun } from "workflow/api";
 import { NextRequest, connection } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
+import { getUserByClerkIdCached } from "@/lib/data/user";
+import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
 
 export async function GET(
     request: NextRequest,
@@ -10,6 +12,11 @@ export async function GET(
 ) {
     const { userId } = await auth();
     if (!userId) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await getUserByClerkIdCached(userId);
+    if (!user) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -24,6 +31,18 @@ export async function GET(
     });
     if (!lead) {
         return Response.json({ error: "Workflow run not found" }, { status: 404 });
+    }
+
+    try {
+        await assertCanAccessLead(user, lead.id);
+    } catch (error) {
+        if (error instanceof LeadAccessError) {
+            return Response.json(
+                { error: error.status === 404 ? "Workflow run not found" : error.message },
+                { status: error.status },
+            );
+        }
+        throw error;
     }
 
     const { searchParams } = new URL(request.url);

@@ -110,7 +110,8 @@ export function LeadCardList({
             <div className="flex items-start justify-between gap-3">
               {(lead.creatingOffer ||
                 lead.stage === "Quoted" ||
-                lead.runId) && (
+                lead.runId ||
+                lead.runStatus) && (
                 <div className="absolute top-7.5 right-10">
                   {lead.stage === "Quoted" ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">

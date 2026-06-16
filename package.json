@@ -9,6 +9,7 @@
     "build": "next build",
     "build:webpack": "next build --webpack",
     "start": "next start",
+    "test:offer": "tsx tests/offer/*.test.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "prisma:seed": "prisma db seed",
