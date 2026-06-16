@@ -12,7 +12,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { getWritable } from "workflow";
-import { base64ToBlob, currency, dateFormat, sanitizeFileName } from "@/utils/formatters";
+import { base64ToBlob, currency, dateFormat } from "@/utils/formatters";
 import { RunStatus } from "@prisma/client";
 import { put } from "@vercel/blob";
 import {
@@ -30,17 +30,6 @@ export interface OfferCreationStatus {
         step: "FETCHING_DETAILS" | "BUILDING_OFFER" | "SAVING_OFFER" | "TRIGGERING_NOTIFICATION" | "COMPLETED";
         details?: string;
     }[];
-}
-
-function sanitizeOfferFilename(name: string) {
-    const safeName = name
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9._-]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 80);
-
-    return safeName || "offer";
 }
 
 export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead> => {

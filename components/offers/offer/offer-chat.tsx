@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ToolResult } from "@/components/chat/tool-result";
 import { ReasoningResponse } from "@/components/chat/reasoning-response";
 import { v4 as generateUUID } from "uuid";
+import type { ToolType } from "@/types/chat";
 
 export function OfferChat() {
   const { messages, sendMessage, setMessages, status, error, stop } =
@@ -63,16 +64,16 @@ export function OfferChat() {
     <aside
       className={cn(
         "flex h-full min-h-0 w-full flex-col overflow-hidden",
-        "bg-[#FCFBF8]",
+        "bg-card",
       )}
     >
-      <div className="shrink-0 border-b border-[#E2E8F0] bg-white/95 px-5 py-4 backdrop-blur-sm">
+      <div className="shrink-0 border-b border-border/70 bg-card px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-xl border border-[#C6923A]/20 bg-[#C6923A]/10 font-semibold text-[#8B6420] shadow-sm">
+          <div className="flex size-9 items-center justify-center rounded-xl border border-royal-gold/20 bg-royal-gold-light font-semibold text-foreground shadow-sm">
             RC
           </div>
-          <span className="font-heading text-xl font-semibold tracking-tight text-slate-900">
-            RealEstateGPT
+          <span className="font-heading text-xl font-semibold tracking-tight text-foreground">
+            OfferGPT
           </span>
         </div>
       </div>
@@ -85,61 +86,85 @@ export function OfferChat() {
             className="flex flex-col gap-4 pb-3"
             key={messages.at(-1)?.parts.length ?? messages.length}
           >
-            {messages.map(
-              (msg) =>
-                msg.parts.some(
-                  (part) =>
-                    (part.type === "text" && part.text.trim().length > 0) ||
-                    part.type === "reasoning" ||
-                    part.type.startsWith("tool-"),
-                ) && (
-                  <div
-                    key={msg.id}
-                    className={cn(
-                      "flex gap-2",
-                      msg.role === "user" ? "justify-end" : "justify-start",
-                    )}
-                  >
-                    {msg.role !== "user" && (
-                      <Avatar className="mt-0.5 h-8 w-8 border border-[#C6923A]/20 bg-[#C6923A]/10">
-                        <AvatarFallback className="bg-[#C6923A] text-white">
-                          <Bot className="h-4 w-4" />
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-                    <div
-                      className={cn(
-                        "max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed shadow-sm",
-                        msg.role === "user"
-                          ? "border border-[#C6923A]/20 bg-[#C6923A]/10 text-slate-900"
-                          : "border border-[#E2E8F0] bg-white text-slate-800",
-                      )}
-                    >
-                      {msg.parts.map((part, i) =>
-                        part.type === "text" ? (
-                          <div key={i} className="m-0 w-full p-0">
-                            <Response
-                              controls={{ table: true }}
-                              remarkPlugins={[remarkGfm]}
-                            >
-                              {part.text}
-                            </Response>
-                          </div>
-                        ) : part.type.startsWith("tool-") ? (
-                          <div className="my-2" key={`tool-part-${i}`}>
-                            <ToolResult part={part} />
-                          </div>
+            {messages.map((msg) => {
+              const visibleParts = msg.parts.filter(
+                (part) =>
+                  (part.type === "text" && part.text.trim().length > 0) ||
+                  part.type === "reasoning" ||
+                  part.type.startsWith("tool-"),
+              );
+              const hasText = visibleParts.some(
+                (part) => part.type === "text" && part.text.trim().length > 0,
+              );
+              const isToolOnly =
+                !hasText && visibleParts.some((part) => part.type.startsWith("tool-"));
+
+              if (visibleParts.length === 0) return null;
+
+              if (isToolOnly) {
+                return (
+                  <div key={msg.id} className="ml-10 max-w-[88%]">
+                    <div className="space-y-1.5">
+                      {visibleParts.map((part, i) =>
+                        part.type.startsWith("tool-") ? (
+                          <ToolResult key={`tool-part-${i}`} part={part as ToolType} />
                         ) : part.type === "reasoning" ? (
-                          <ReasoningResponse part={part} />
+                          <ReasoningResponse key={`reasoning-${i}`} part={part} />
                         ) : null,
                       )}
                     </div>
                   </div>
-                ),
-            )}
+                );
+              }
+
+              return (
+                <div
+                  key={msg.id}
+                  className={cn(
+                    "flex gap-2",
+                    msg.role === "user" ? "justify-end" : "justify-start",
+                  )}
+                >
+                  {msg.role !== "user" && (
+                    <Avatar className="mt-0.5 h-8 w-8 border border-royal-gold/20 bg-royal-gold-light">
+                      <AvatarFallback className="bg-royal-gold text-primary-foreground">
+                        <Bot className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div
+                    className={cn(
+                      "max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed shadow-sm",
+                      msg.role === "user"
+                        ? "border border-royal-gold/20 bg-royal-gold-light text-foreground"
+                        : "border border-border/70 bg-card text-foreground",
+                    )}
+                  >
+                    {visibleParts.map((part, i) =>
+                      part.type === "text" ? (
+                        <div key={i} className="m-0 w-full p-0">
+                          <Response
+                            controls={{ table: true }}
+                            remarkPlugins={[remarkGfm]}
+                          >
+                            {part.text}
+                          </Response>
+                        </div>
+                      ) : part.type.startsWith("tool-") ? (
+                        <div className="my-1.5" key={`tool-part-${i}`}>
+                          <ToolResult part={part as ToolType} />
+                        </div>
+                      ) : part.type === "reasoning" ? (
+                        <ReasoningResponse key={`reasoning-${i}`} part={part} />
+                      ) : null,
+                    )}
+                  </div>
+                </div>
+              );
+            })}
             {status === "streaming" && <ThinkingMessage />}
             {error && (
-              <div className="max-w-[85%] self-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-relaxed text-rose-900 shadow-sm">
+              <div className="max-w-[85%] self-center rounded-lg border border-destructive/20 bg-destructive-light px-3 py-2 text-sm leading-relaxed text-destructive shadow-sm">
                 {error.message ||
                   "An error occurred while processing your chat."}
               </div>
@@ -163,7 +188,7 @@ export function OfferChat() {
           });
           setInput("");
         }}
-        className="shrink-0 border-t border-[#E2E8F0] bg-white px-4 py-3"
+        className="shrink-0 border-t border-border/70 bg-card px-4 py-3"
       >
         <div className="relative">
           <Textarea
@@ -200,7 +225,7 @@ export function OfferChat() {
                 }
               }
             }}
-            className="resize-none rounded-lg border border-[#E2E8F0] bg-[#FAF8F3] pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-[#C6923A]/20"
+            className="resize-none rounded-lg border border-border bg-background pr-12 text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-royal-gold/20"
           />
           {status === "streaming" || status === "submitted" ? (
             <Button
@@ -209,7 +234,7 @@ export function OfferChat() {
               onClick={() => stop()}
               className={cn(
                 "absolute right-2 bottom-2 h-8 w-8 rounded-full shadow-sm",
-                "bg-red-500 text-white hover:bg-red-600",
+                "bg-destructive text-primary-foreground hover:bg-destructive/90",
               )}
             >
               <span className="sr-only">Stop</span>
@@ -223,8 +248,8 @@ export function OfferChat() {
               className={cn(
                 "absolute right-2 bottom-2 h-8 w-8 rounded-full shadow-sm",
                 input.trim()
-                  ? "bg-[#C6923A] text-white hover:bg-[#B88425]"
-                  : "bg-[#C6923A]/15 text-[#8B6420]",
+                  ? "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+                  : "bg-royal-gold-light text-foreground",
               )}
             >
               <SendHorizonalIcon className="h-4 w-4" />
@@ -244,14 +269,14 @@ export const ThinkingMessage = () => {
       data-testid="message-assistant-loading"
     >
       <div className="flex items-start justify-start gap-3">
-        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-[#C6923A]/20 bg-[#C6923A]/10 text-[#8B6420] ring-1 ring-white/70">
+        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-royal-gold/20 bg-royal-gold-light text-foreground ring-1 ring-card/70">
           <div className="animate-pulse">
             <SparklesIcon size={14} />
           </div>
         </div>
 
         <div className="flex w-full flex-col gap-2 md:gap-4">
-          <div className="flex items-center gap-1 p-0 text-sm text-slate-500">
+          <div className="flex items-center gap-1 p-0 text-sm text-muted-foreground">
             <span className="animate-pulse">Thinking</span>
             <span className="inline-flex">
               <span className="animate-bounce [animation-delay:0ms]">.</span>

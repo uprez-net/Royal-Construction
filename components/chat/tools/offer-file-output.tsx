@@ -1,8 +1,32 @@
 import type { OfferFileToolOutput } from "@/types/chat";
 
-import { CheckCircle2 } from "lucide-react";
-import Image from "next/image";
+import { CheckCircle2, ChevronDown } from "lucide-react";
 import { renderPatchItems } from "./patch-output";
+
+function normalizeLeadCopy(copy: string) {
+  return copy.replace("lead LED:", "lead #");
+}
+
+function arrayLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function countPatchChanges(patch: unknown) {
+  if (!patch || typeof patch !== "object") return 0;
+
+  const record = patch as Record<string, unknown>;
+
+  return (
+    arrayLength(record.add) +
+    arrayLength(record.update) +
+    arrayLength(record.remove) +
+    arrayLength(record.removeTitles) +
+    arrayLength(record.removeIds) +
+    arrayLength(record.reorderTitles) +
+    arrayLength(record.reorderIds) +
+    (record.clear ? 1 : 0)
+  );
+}
 
 export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
   const termPatch = output.customerOffer.termsAndConditionsPatch;
@@ -10,173 +34,58 @@ export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
   const fixedPriceItemsPatch = output.customerOffer.fixedPriceItemsPatch;
   const promotionalUpgradesPatch =
     output.customerOffer.promotionalUpgradesPatch;
-    
+  const patchCount =
+    countPatchChanges(termPatch) +
+    countPatchChanges(scopePatch) +
+    countPatchChanges(fixedPriceItemsPatch) +
+    countPatchChanges(promotionalUpgradesPatch);
+  const changedSections = [
+    output.customerOffer.projectWelcomeMessage && "customer message",
+    output.customerOffer.projectScope?.length && "scope",
+    output.customerOffer.fixedPriceItems?.length && "fixed price",
+    output.customerOffer.promotionalUpgrades?.length && "upgrades",
+    output.customerOffer.revisionChanges && "revision",
+    output.customerOffer.termsAndConditions?.length && "terms",
+    output.customerOffer.facadeOptions && "facade",
+  ].filter(Boolean);
+
   return (
-    <div className="space-y-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+    <div className="px-1 py-1.5 text-sm">
       <div className="flex items-start gap-2">
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-royal-gold" />
-        <div>
-          <p className="font-medium text-foreground">{output.message}</p>
-          {output.description && (
-            <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-              {output.description}
-            </p>
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-royal-gold" />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium leading-snug text-foreground/90">
+            {normalizeLeadCopy(output.message)}
+          </p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            {output.description ||
+              (patchCount > 0
+                ? `${patchCount} offer change${patchCount === 1 ? "" : "s"} applied.`
+                : changedSections.length > 0
+                  ? `Updated ${changedSections.join(", ")}.`
+                  : "Offer file updated.")}
+          </p>
+
+          {(termPatch ||
+            scopePatch ||
+            fixedPriceItemsPatch ||
+            promotionalUpgradesPatch) && (
+            <details className="group mt-2">
+              <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-royal-gold/30">
+                <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                View changes
+              </summary>
+
+              <div className="mt-2 space-y-2 rounded-lg bg-muted/40 p-2 text-xs text-muted-foreground">
+                {renderPatchItems(termPatch)}
+                {renderPatchItems(scopePatch)}
+                {renderPatchItems(fixedPriceItemsPatch)}
+                {renderPatchItems(promotionalUpgradesPatch)}
+              </div>
+            </details>
           )}
         </div>
       </div>
-
-      {output.customerOffer.projectWelcomeMessage && (
-        <section>
-          <h4 className="mb-1 text-sm font-medium text-foreground">
-            Customer Message
-          </h4>
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-            {output.customerOffer.projectWelcomeMessage}
-          </p>
-        </section>
-      )}
-
-      {output.customerOffer.projectScope?.length ? (
-        <section>
-          <h4 className="mb-1 text-sm font-medium text-foreground">
-            Project Scope
-          </h4>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            {output.customerOffer.projectScope.map((item, index) => (
-              <li key={index}>
-                {item.sectionTitle && (
-                  <span className="font-medium">{item.sectionTitle}: </span>
-                )}
-                <ul className="list-disc space-y-1 pl-5">
-                  {item.items.map((subItem, subIndex) => (
-                    <li key={subIndex}>{subItem}</li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {output.customerOffer.fixedPriceItems?.length ? (
-        <section>
-          <h4 className="mb-1 text-sm font-medium text-foreground">
-            Fixed Price Items
-          </h4>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            {output.customerOffer.fixedPriceItems.map((item, index) => (
-              <li key={index}>
-                <span className="font-medium">{item}: </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {output.customerOffer.promotionalUpgrades?.length ? (
-        <section>
-          <h4 className="mb-1 text-sm font-medium text-foreground">
-            Promotional Upgrades
-          </h4>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            {output.customerOffer.promotionalUpgrades.map((item, index) => (
-              <li key={index}>
-                <span className="font-medium">{item}: </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {output.customerOffer.revisionChanges && (
-        <section>
-          <h4 className="mb-1 text-sm font-medium text-foreground">
-            Revision Changes
-          </h4>
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-            {output.customerOffer.revisionChanges.description}
-          </p>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-            <li>
-              <span className="font-medium">Value Added: </span>
-              {output.customerOffer.revisionChanges.valueAdded}
-            </li>
-            <li>
-              <span className="font-medium">You Save: </span>
-              {output.customerOffer.revisionChanges.youSave}
-            </li>
-          </ul>
-        </section>
-      )}
-
-      {output.customerOffer.termsAndConditions && (
-        <section>
-          <h4 className="mb-1 text-sm font-medium text-foreground">
-            Terms & Conditions
-          </h4>
-
-          <ul className="space-y-3 text-sm text-muted-foreground">
-            {output.customerOffer.termsAndConditions.map((term, index) => (
-              <li
-                key={index}
-                className="rounded-lg border border-border/70 bg-muted/30 p-3"
-              >
-                <p className="font-medium text-foreground">{term.title}</p>
-                <p className="mt-1 whitespace-pre-wrap">{term.description}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      
-
-      {output.customerOffer.facadeOptions && (
-        <section>
-          <h4 className="mb-1 text-sm font-medium text-foreground">
-            Facade Options
-          </h4>
-
-          <p className="text-sm text-muted-foreground">
-            {output.customerOffer.facadeOptions.optionsDescription}
-          </p>
-
-          <ul className="space-y-3 text-sm text-muted-foreground">
-            {output.customerOffer.facadeOptions.options.map((term, index) => (
-              <li
-                key={index}
-                className="rounded-lg border border-border/70 bg-muted/30 p-3"
-              >
-                <p className="font-medium text-foreground">{term.title}</p>
-                <p className="mt-1 whitespace-pre-wrap">{term.description}</p>
-                {term.imageUrl && (
-                  <Image
-                    src={term.imageUrl}
-                    alt={term.title}
-                    width={120}
-                    height={120}
-                    className="mt-2 h-30 w-30 rounded-md object-cover"
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {(termPatch || scopePatch || fixedPriceItemsPatch || promotionalUpgradesPatch) && (
-        <section>
-          <h4 className="mb-1 text-sm font-medium text-foreground">
-            Offer Changes
-          </h4>
-
-          <div className="space-y-3 text-sm text-muted-foreground">
-            {renderPatchItems(termPatch)}
-            {renderPatchItems(scopePatch)}
-            {renderPatchItems(fixedPriceItemsPatch)}
-            {renderPatchItems(promotionalUpgradesPatch)}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
