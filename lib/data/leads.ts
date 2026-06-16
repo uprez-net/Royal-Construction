@@ -457,6 +457,17 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     noteAnnotations: { orderBy: { createdAt: "desc" } },
   } satisfies Prisma.LeadInclude;
 
+  if (orConditions.length > 0) {
+    const existingLead = await prisma.lead.findFirst({
+      where: { OR: orConditions },
+      include: duplicateLeadInclude,
+    });
+
+    if (existingLead) {
+      return { message: "A lead with the same email or phone number already exists.", existingLead: mapLead(existingLead) };
+    }
+  }
+
   let created: PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null };
   try {
     created = await prisma.lead.create({
