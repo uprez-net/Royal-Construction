@@ -1,12 +1,20 @@
 import type { OfferFileToolOutput } from "@/types/chat";
+
 import { CheckCircle2 } from "lucide-react";
 import Image from "next/image";
+import { renderPatchItems } from "./patch-output";
 
 export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
+  const termPatch = output.customerOffer.termsAndConditionsPatch;
+  const scopePatch = output.customerOffer.projectScopePatch;
+  const fixedPriceItemsPatch = output.customerOffer.fixedPriceItemsPatch;
+  const promotionalUpgradesPatch =
+    output.customerOffer.promotionalUpgradesPatch;
+    
   return (
     <div className="space-y-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="flex items-start gap-2">
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--royal-gold)]" />
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-royal-gold" />
         <div>
           <p className="font-medium text-foreground">{output.message}</p>
           {output.description && (
@@ -120,6 +128,7 @@ export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
           </ul>
         </section>
       )}
+      
 
       {output.customerOffer.facadeOptions && (
         <section>
@@ -151,6 +160,21 @@ export function OfferFileOutput({ output }: { output: OfferFileToolOutput }) {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {(termPatch || scopePatch || fixedPriceItemsPatch || promotionalUpgradesPatch) && (
+        <section>
+          <h4 className="mb-1 text-sm font-medium text-foreground">
+            Offer Changes
+          </h4>
+
+          <div className="space-y-3 text-sm text-muted-foreground">
+            {renderPatchItems(termPatch)}
+            {renderPatchItems(scopePatch)}
+            {renderPatchItems(fixedPriceItemsPatch)}
+            {renderPatchItems(promotionalUpgradesPatch)}
+          </div>
         </section>
       )}
     </div>
