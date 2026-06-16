@@ -2,9 +2,44 @@ import { ChatMessageAI, ChatTools, KnownToolName, ToolPart, ToolPartWithOutput, 
 import type { ChatMessage } from "@prisma/client";
 import { formatISO } from "date-fns";
 import { UIMessagePart, UIDataTypes } from "ai";
-import { LineItem, OfferFile } from "@/context/ChatContext";
+import type { LineItem, OfferFile } from "@/context/ChatContext";
 import { v4 as uuidv4 } from "uuid";
 import z from "zod";
+
+type TermsAndConditionsItem = NonNullable<OfferFile["termsAndConditions"]>[number];
+
+export interface StringListPatch {
+  add?: string[];
+  remove?: string[];
+  reorder?: string[];
+  replace?: string[];
+  clear?: boolean;
+}
+
+export interface TermsAndConditionsPatch {
+  add?: TermsAndConditionsItem[];
+  update?: TermsAndConditionsItem[];
+  removeTitles?: string[];
+  reorderTitles?: string[];
+  replace?: TermsAndConditionsItem[];
+  clear?: boolean;
+}
+
+export interface ProjectScopePatch {
+  add?: ServiceItem[];
+  update?: ServiceItem[];
+  removeIds?: string[];
+  reorderIds?: string[];
+  replace?: ServiceItem[];
+  clear?: boolean;
+}
+
+export type OfferFilePatchPayload = Partial<OfferFile> & {
+  termsAndConditionsPatch?: TermsAndConditionsPatch;
+  projectScopePatch?: ProjectScopePatch;
+  fixedPriceItemsPatch?: StringListPatch;
+  promotionalUpgradesPatch?: StringListPatch;
+};
 
 export const convertToUIMessage = (message: ChatMessage[]): ChatMessageAI[] => {
   return message.map((msg) => ({
@@ -112,16 +147,10 @@ export function extractOfferFileFromMessage(message: ChatMessageAI[]): OfferFile
         hasToolOutput(part)
       ) {
         const { customerOffer } = part.output;
-        offerFile = {
-          ...offerFile,
-          ...customerOffer,
-          termsAndConditions: customerOffer.termsAndConditions ?? offerFile.termsAndConditions,
-          projectScope: customerOffer.projectScope
-            ? mergeServiceItems(offerFile.projectScope, customerOffer.projectScope)
-            : offerFile.projectScope,
-          fixedPriceItems: customerOffer.fixedPriceItems ?? offerFile.fixedPriceItems,
-          promotionalUpgrades: customerOffer.promotionalUpgrades ?? offerFile.promotionalUpgrades,
-        };
+        offerFile = applyOfferFileUpdate(
+          offerFile,
+          customerOffer as OfferFilePatchPayload,
+        );
       }
     }
   }
@@ -149,7 +178,7 @@ export function setInitialAgentMessage(msg: ChatMessageAI[]): ChatMessageAI[] {
 
 export const serviceItemSchema = z.object({
   id: z
-    .string()
+    .uuid()
     .describe(
       "Stable unique identifier for this service section. Must remain unchanged when updating an existing section. Generate a new id only when creating a brand-new section."
     ),
@@ -174,26 +203,220 @@ export function mergeServiceItems(
   existing: ServiceItem[] = [],
   incoming: ServiceItem[] = []
 ): ServiceItem[] {
-  const map = new Map<string, ServiceItem>();
+  const merged = [...existing];
 
-  for (const item of existing) {
-    map.set(item.id, item);
+  for (const incomingItem of incoming) {
+    const index = merged.findIndex((item) => item.id === incomingItem.id);
+    if (index === -1) {
+      merged.push(incomingItem);
+      continue;
+    }
+
+    merged[index] = {
+      ...merged[index],
+      ...incomingItem,
+      // Incoming section items represent the desired final state for that section.
+      items: [...incomingItem.items],
+    };
   }
 
-  for (const item of incoming) {
-    const current = map.get(item.id);
+  return merged;
+}
 
-    map.set(
-      item.id,
-      current
-        ? {
-          ...current,
-          ...item,
-          items: [...new Set([...current.items, ...item.items])],
-        }
-        : item
-    );
+function normalizeString(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values) {
+    const key = normalizeString(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(value);
   }
 
+  return output;
+}
+
+function applyStringListPatch(
+  current: string[] = [],
+  patch?: StringListPatch,
+  directReplacement?: string[],
+): string[] {
+  let result = directReplacement ? uniqueStrings([...directReplacement]) : uniqueStrings([...current]);
+
+  if (!patch) return result;
+
+  if (patch.clear) {
+    result = [];
+  }
+
+  if (patch.replace) {
+    result = uniqueStrings([...patch.replace]);
+  }
+
+  if (patch.remove?.length) {
+    const removeSet = new Set(patch.remove.map(normalizeString));
+    result = result.filter((item) => !removeSet.has(normalizeString(item)));
+  }
+
+  if (patch.add?.length) {
+    result = uniqueStrings([...result, ...patch.add]);
+  }
+
+  if (patch.reorder?.length) {
+    const order = patch.reorder.map(normalizeString);
+    const position = new Map(order.map((key, index) => [key, index]));
+    result = [...result].sort((a, b) => {
+      const indexA = position.get(normalizeString(a));
+      const indexB = position.get(normalizeString(b));
+      const safeA = indexA ?? Number.MAX_SAFE_INTEGER;
+      const safeB = indexB ?? Number.MAX_SAFE_INTEGER;
+      return safeA - safeB;
+    });
+  }
+
+  return result;
+}
+
+function uniqueTerms(items: TermsAndConditionsItem[]): TermsAndConditionsItem[] {
+  const map = new Map<string, TermsAndConditionsItem>();
+  for (const item of items) {
+    map.set(normalizeString(item.title), item);
+  }
   return [...map.values()];
+}
+
+function applyTermsPatch(
+  current: TermsAndConditionsItem[] = [],
+  patch?: TermsAndConditionsPatch,
+  directReplacement?: TermsAndConditionsItem[],
+): TermsAndConditionsItem[] {
+  let result = directReplacement ? uniqueTerms([...directReplacement]) : uniqueTerms([...current]);
+
+  if (!patch) return result;
+
+  if (patch.clear) {
+    result = [];
+  }
+
+  if (patch.replace) {
+    result = uniqueTerms([...patch.replace]);
+  }
+
+  if (patch.removeTitles?.length) {
+    const removeSet = new Set(patch.removeTitles.map(normalizeString));
+    result = result.filter((item) => !removeSet.has(normalizeString(item.title)));
+  }
+
+  if (patch.update?.length) {
+    const map = new Map(result.map((item) => [normalizeString(item.title), item]));
+    for (const item of patch.update) {
+      map.set(normalizeString(item.title), item);
+    }
+    result = [...map.values()];
+  }
+
+  if (patch.add?.length) {
+    result = uniqueTerms([...result, ...patch.add]);
+  }
+
+  if (patch.reorderTitles?.length) {
+    const order = patch.reorderTitles.map(normalizeString);
+    const position = new Map(order.map((key, index) => [key, index]));
+    result = [...result].sort((a, b) => {
+      const indexA = position.get(normalizeString(a.title));
+      const indexB = position.get(normalizeString(b.title));
+      const safeA = indexA ?? Number.MAX_SAFE_INTEGER;
+      const safeB = indexB ?? Number.MAX_SAFE_INTEGER;
+      return safeA - safeB;
+    });
+  }
+
+  return result;
+}
+
+function applyProjectScopePatch(
+  current: ServiceItem[] = [],
+  patch?: ProjectScopePatch,
+  directReplacement?: ServiceItem[],
+): ServiceItem[] {
+  let result = directReplacement ? [...directReplacement] : [...current];
+
+  if (!patch) return result;
+
+  if (patch.clear) {
+    result = [];
+  }
+
+  if (patch.replace) {
+    result = [...patch.replace];
+  }
+
+  if (patch.removeIds?.length) {
+    const removeSet = new Set(patch.removeIds);
+    result = result.filter((item) => !removeSet.has(item.id));
+  }
+
+  if (patch.update?.length) {
+    result = mergeServiceItems(result, patch.update);
+  }
+
+  if (patch.add?.length) {
+    result = mergeServiceItems(result, patch.add);
+  }
+
+  if (patch.reorderIds?.length) {
+    const position = new Map(
+      patch.reorderIds.map((id, index) => [id, index]),
+    );
+    result = [...result].sort((a, b) => {
+      const indexA = position.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const indexB = position.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return indexA - indexB;
+    });
+  }
+
+  return result;
+}
+
+export function applyOfferFileUpdate(
+  current: OfferFile,
+  incoming: OfferFilePatchPayload,
+): OfferFile {
+  return {
+    ...current,
+    ...(incoming.projectWelcomeMessage !== undefined
+      ? { projectWelcomeMessage: incoming.projectWelcomeMessage }
+      : {}),
+    ...(incoming.revisionChanges !== undefined
+      ? { revisionChanges: incoming.revisionChanges }
+      : {}),
+    ...(incoming.facadeOptions !== undefined
+      ? { facadeOptions: incoming.facadeOptions }
+      : {}),
+    termsAndConditions: applyTermsPatch(
+      current.termsAndConditions ?? [],
+      incoming.termsAndConditionsPatch,
+      incoming.termsAndConditions,
+    ),
+    projectScope: applyProjectScopePatch(
+      current.projectScope ?? [],
+      incoming.projectScopePatch,
+      incoming.projectScope,
+    ),
+    fixedPriceItems: applyStringListPatch(
+      current.fixedPriceItems ?? [],
+      incoming.fixedPriceItemsPatch,
+      incoming.fixedPriceItems,
+    ),
+    promotionalUpgrades: applyStringListPatch(
+      current.promotionalUpgrades ?? [],
+      incoming.promotionalUpgradesPatch,
+      incoming.promotionalUpgrades,
+    ),
+  };
 }

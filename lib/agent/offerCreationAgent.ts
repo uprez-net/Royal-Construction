@@ -11,7 +11,7 @@ import { lineItemTool } from "@/lib/tools/line-item";
 import { offerFileTool } from "@/lib/tools/offer-file";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 import type { OfferFile } from "@/context/ChatContext";
-import { mergeServiceItems } from "@/utils/chat";
+import { applyOfferFileUpdate } from "@/utils/chat";
 
 const MODEL_NAME = "google/gemini-2.5-flash" as const;
 
@@ -64,25 +64,7 @@ export const handleOfferGeneration = async (prompt: string) => {
             fileProcessingTool: FileProcessingTool,
             offerFileTool: offerFileTool(undefined, (fileContent) => {
                 console.log("Received offer file content update from tool:", fileContent);
-                offerFileContent = {
-                    projectWelcomeMessage: fileContent.projectWelcomeMessage ?? offerFileContent.projectWelcomeMessage,
-                    facadeOptions: fileContent.facadeOptions ?? offerFileContent.facadeOptions,
-                    termsAndConditions: fileContent.termsAndConditions ?
-                        Array.from(new Set([...(offerFileContent.termsAndConditions ?? []), ...fileContent.termsAndConditions]))
-                        : offerFileContent.termsAndConditions,
-                    projectScope: fileContent.projectScope
-                        ? mergeServiceItems(
-                            offerFileContent.projectScope ?? [],
-                            fileContent.projectScope,
-                        )
-                        : offerFileContent.projectScope,
-                    fixedPriceItems: fileContent.fixedPriceItems
-                        ? Array.from(new Set([...(offerFileContent.fixedPriceItems ?? []), ...fileContent.fixedPriceItems]))
-                        : offerFileContent.fixedPriceItems,
-                    promotionalUpgrades: fileContent.promotionalUpgrades
-                        ? Array.from(new Set([...(offerFileContent.promotionalUpgrades ?? []), ...fileContent.promotionalUpgrades]))
-                        : offerFileContent.promotionalUpgrades,
-                }
+                offerFileContent = applyOfferFileUpdate(offerFileContent, fileContent);
             }),
             webSearch: webSearch,
             scrapeUserLinks: scrapeUserLinks,

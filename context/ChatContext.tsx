@@ -6,9 +6,10 @@ import { fetchWithErrorHandlers } from "@/utils/chat-error";
 import { v4 as generateUUID } from "uuid";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import {
+  applyOfferFileUpdate,
   extractLineItemsFromMessage,
   extractOfferFileFromMessage,
-  mergeServiceItems,
+  OfferFilePatchPayload,
   ServiceItem,
 } from "@/utils/chat";
 import { SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
@@ -253,18 +254,8 @@ export const ChatProvider = ({
           body: {
             id: request.id,
             leadId: parseInt(leadId),
-            offerFile: getInitialOfferFile(
-              initialVersionLength,
-              initialOfferFileRecord,
-              initialMessages,
-              initialOfferFile,
-            ),
-            lineItems: getInitialLineItems(
-              initialVersionLength,
-              initialItemRecord,
-              initialMessages,
-              initialLineItems,
-            ),
+            offerFile,
+            lineItems,
             // Send all messages for tool approval continuation, otherwise just the last user message
             ...(isToolApprovalContinuation
               ? { messages: request.messages }
@@ -297,43 +288,10 @@ export const ChatProvider = ({
         }
 
         case "data-offer-file-update": {
-          const offerData = dataPart.data as OfferFile;
+          const offerData = dataPart.data as OfferFilePatchPayload;
           setLastRevisionDate(dateFormat.format(new Date()));
           setVersion("current");
-          setOfferFile((prev) => ({
-            ...prev,
-            ...offerData,
-            termsAndConditions: offerData.termsAndConditions
-              ? Array.from(
-                  new Set([
-                    ...(prev.termsAndConditions ?? []),
-                    ...offerData.termsAndConditions,
-                  ]),
-                )
-              : prev.termsAndConditions,
-            projectScope: offerData.projectScope
-              ? mergeServiceItems(
-                  prev.projectScope ?? [],
-                  offerData.projectScope,
-                )
-              : prev.projectScope,
-            fixedPriceItems: offerData.fixedPriceItems
-              ? Array.from(
-                  new Set([
-                    ...(prev.fixedPriceItems ?? []),
-                    ...offerData.fixedPriceItems,
-                  ]),
-                )
-              : prev.fixedPriceItems,
-            promotionalUpgrades: offerData.promotionalUpgrades
-              ? Array.from(
-                  new Set([
-                    ...(prev.promotionalUpgrades ?? []),
-                    ...offerData.promotionalUpgrades,
-                  ]),
-                )
-              : prev.promotionalUpgrades,
-          }));
+          setOfferFile((prev) => applyOfferFileUpdate(prev, offerData));
           break;
         }
         default:

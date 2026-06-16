@@ -3,6 +3,7 @@ import z from "zod";
 import { FacadeOptionWithImageUrl, offerFileContentSchema } from "../agent/offer-prompts";
 import { imageGenerationAgent } from "../agent/imageGenerationAgent";
 import type { OfferFile } from "@/context/ChatContext";
+import type { OfferFilePatchPayload } from "@/utils/chat";
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
     return Object.fromEntries(
@@ -37,7 +38,7 @@ const offerFileContentAppendSchema = offerFileContentSchema.extend({
         ),
 })
 
-export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data: OfferFile) => void) =>
+export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data: OfferFilePatchPayload) => void) =>
     tool({
         description: `
             Creates or updates customer-facing offer document sections.
@@ -49,12 +50,12 @@ export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data
             - Send only changed fields unless intentionally replacing a section.
 
             LIST FIELD RULES:
-            - For termsAndConditions and serviceExclusions, send the complete final list whenever that field is included.
-            - For serviceInclusions, send complete final items for every section being created or modified.
-            - Do not send only newly added items for these fields.
+            - For array sections, prefer dedicated patch fields (add/remove/update/reorder) instead of full-array replacement.
+            - Use full-array replacement only for explicit rewrite/regeneration scenarios.
+            - Omit unchanged sections.
 
-            SERVICE INCLUSION RULES:
-            - serviceInclusions is organized into sections.
+            PROJECT SCOPE RULES:
+            - projectScope is organized into sections.
             - Each section is identified by its id.
             - When modifying an existing section, keep the same id.
             - When creating a new section, generate a new unique id.
@@ -73,9 +74,13 @@ export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data
                 leadId: params.leadId,
                 projectWelcomeMessage: params.projectWelcomeMessage,
                 termsAndConditions: params.termsAndConditions,
+                termsAndConditionsPatch: params.termsAndConditionsPatch,
                 projectScope: params.projectScope,
+                projectScopePatch: params.projectScopePatch,
                 fixedPriceItems: params.fixedPriceItems,
+                fixedPriceItemsPatch: params.fixedPriceItemsPatch,
                 promotionalUpgrades: params.promotionalUpgrades,
+                promotionalUpgradesPatch: params.promotionalUpgradesPatch,
                 revisionChanges: params.revisionChanges,
                 facadeOptions: params.facadeOptions,
             });
@@ -96,39 +101,29 @@ export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data
                 }
             }
 
+            const resolvedOfferUpdate = {
+                ...customerOffer,
+                facadeOptions: customerOffer.facadeOptions ? {
+                    optionsDescription: customerOffer.facadeOptions.optionsDescription,
+                    options: Options,
+                } : undefined,
+            } as OfferFilePatchPayload;
+
             if (dataStream) {
                 dataStream.write({
                     type: "data-offer-file-update",
-                    data: {
-                        ...customerOffer,
-                        facadeOptions: customerOffer.facadeOptions ? {
-                            optionsDescription: customerOffer.facadeOptions.optionsDescription,
-                            options: Options,
-                        } : undefined,
-                    } satisfies OfferFile,
+                    data: resolvedOfferUpdate,
                 });
             }
 
             if(append) {
-                append({
-                    ...customerOffer,
-                    facadeOptions: customerOffer.facadeOptions ? {
-                        optionsDescription: customerOffer.facadeOptions.optionsDescription,
-                        options: Options,
-                    } : undefined,
-                });
+                append(resolvedOfferUpdate);
             }
 
             return {
                 message: `Offer file generated for lead LED:${params.leadId}`,
                 description: params.changeDescription,
-                customerOffer: {
-                    ...customerOffer,
-                    facadeOptions: customerOffer.facadeOptions ? {
-                        optionsDescription: customerOffer.facadeOptions.optionsDescription,
-                        options: Options,
-                    } : undefined,
-                } satisfies OfferFile,
+                customerOffer: resolvedOfferUpdate,
             };
         },
     });
