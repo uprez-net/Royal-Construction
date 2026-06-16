@@ -160,28 +160,30 @@ export const MessageBranch = ({
     [onBranchChange]
   );
 
+  const safeCurrentBranch = Math.min(currentBranch, Math.max(0, branches.length - 1));
+
   const goToPrevious = useCallback(() => {
     const newBranch =
-      currentBranch > 0 ? currentBranch - 1 : branches.length - 1;
+      safeCurrentBranch > 0 ? safeCurrentBranch - 1 : branches.length - 1;
     handleBranchChange(newBranch);
-  }, [currentBranch, branches.length, handleBranchChange]);
+  }, [safeCurrentBranch, branches.length, handleBranchChange]);
 
   const goToNext = useCallback(() => {
     const newBranch =
-      currentBranch < branches.length - 1 ? currentBranch + 1 : 0;
+      safeCurrentBranch < branches.length - 1 ? safeCurrentBranch + 1 : 0;
     handleBranchChange(newBranch);
-  }, [currentBranch, branches.length, handleBranchChange]);
+  }, [safeCurrentBranch, branches.length, handleBranchChange]);
 
   const contextValue = useMemo<MessageBranchContextType>(
     () => ({
       branches,
-      currentBranch,
+      currentBranch: safeCurrentBranch,
       goToNext,
       goToPrevious,
       setBranches,
       totalBranches: branches.length,
     }),
-    [branches, currentBranch, goToNext, goToPrevious]
+    [branches, safeCurrentBranch, goToNext, goToPrevious]
   );
 
   return (

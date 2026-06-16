@@ -61,12 +61,9 @@ export const ALLOWED_UPLOAD_MIME_TYPES = [
   "text/csv",
   "application/csv",
   "text/plain",
-  "text/html",
 ] as const;
 
-export const ALLOWED_ATTACHMENT_MIME_TYPES = ALLOWED_UPLOAD_MIME_TYPES.filter(
-  (type) => type !== 'text/html'
-);
+export const ALLOWED_ATTACHMENT_MIME_TYPES = ALLOWED_UPLOAD_MIME_TYPES;
 
 export const uploadMimeTypeSchema = z.enum(ALLOWED_UPLOAD_MIME_TYPES);
 
@@ -158,7 +155,7 @@ export const clientPayloadSchema = z.object({
     milestoneId: z.string().trim().optional().nullable(),
     leadId: z.coerce.string().trim().optional(),
     isOfferFile: z.boolean().optional().default(false),
-    uploadType: z.string().optional()
+    uploadType: z.enum(["email-template", "email-attachment"]).optional()
 });
 
 export type ClientPayload = z.infer<typeof clientPayloadSchema>;

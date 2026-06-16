@@ -50,7 +50,7 @@ async function CheckLeadPresentwithEmailPhone(Email:string,ContactNo:string):Pro
     if (Email && Email.trim() !== "") {
       orConditions.push({ email: Email.trim() });
     }
-    if (ContactNo && ContactNo.trim() !== "" || ContactNo.trim() !== "0") {
+    if (ContactNo && ContactNo.trim() !== "" && ContactNo.trim() !== "0") {
       orConditions.push({ phone: ContactNo.trim() });
     }
   try {
@@ -188,7 +188,7 @@ export async function POST(request: Request): Promise<Response> {
                 if (message.id && await isMessageAlreadyProcessed(message.id)) {
                   console.log(`  Lead with MicrosoftmessageId: ${message.id} was already processed while extracting. Aborting database save.`);
                   continue;
-                }else if ( await CheckLeadPresentwithEmailPhone(extracted.Email,String(extracted.ContactNo))){
+                }else if ( await CheckLeadPresentwithEmailPhone(extracted.Email, extracted.ContactNo == null ? "" : String(extracted.ContactNo))){
                   console.log(`  Lead with Email: ${extracted.Email} or ContactNo: ${extracted.ContactNo} already exists in database. Aborting database save.`);
                   continue;
                 }

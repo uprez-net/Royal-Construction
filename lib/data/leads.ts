@@ -439,54 +439,62 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     }
   }
 
+  const normalizedEmail = (input.email ?? "").trim();
+  const normalizedPhone = (input.phone ?? "").trim();
+
   const orConditions: Prisma.LeadWhereInput[] = [];
-  if (input.email && input.email.trim() !== "") {
-    orConditions.push({ email: input.email.trim() });
+  if (normalizedEmail !== "") {
+    orConditions.push({ email: normalizedEmail });
   }
-  if (input.phone && input.phone.trim() !== "") {
-    orConditions.push({ phone: input.phone.trim() });
+  if (normalizedPhone !== "") {
+    orConditions.push({ phone: normalizedPhone });
   }
 
-  if (orConditions.length > 0) {
-    const checkexistingLead = await prisma.lead.findFirst({
-      where: { 
-        OR: orConditions,
+  const duplicateLeadInclude = {
+    history: { orderBy: { actionDate: "asc" } },
+    chatSessions: true,
+    assignedUser: { select: { id: true, name: true, email: true } },
+    noteAnnotations: { orderBy: { createdAt: "desc" } },
+  } satisfies Prisma.LeadInclude;
+
+  let created: PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null };
+  try {
+    created = await prisma.lead.create({
+      data: {
+        name: input.name,
+        phone: normalizedPhone,
+        email: normalizedEmail,
+        location: input.location ?? "",
+        source: input.source,
+        sourceDetail: input.sourceDetail,
+        stage: mappedStage,
+        ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
+        budget: input.budget,
+        type: input.type ?? [],
+        notes: input.notes,
+        followupDate: input.followupDate,
+        followupTime: input.followupTime,
+        followupNotes: input.followupNotes,
+        lostReason: input.lostReason,
+        urgent: input.urgent ?? false,
+        history: { create: historyCreate },
       },
-      include: {
-        history: { orderBy: { actionDate: "asc" } },
-        chatSessions: true,
-        assignedUser: { select: { id: true, name: true, email: true } },
-        noteAnnotations: { orderBy: { createdAt: "desc" } },
-      },
+      include: duplicateLeadInclude,
     });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && orConditions.length > 0) {
+      const existingLead = await prisma.lead.findFirst({
+        where: { OR: orConditions },
+        include: duplicateLeadInclude,
+      });
 
-    if (checkexistingLead) {
-      return { message: "A lead with the same email or phone number already exists.", existingLead: mapLead(checkexistingLead) };
+      if (existingLead) {
+        return { message: "A lead with the same email or phone number already exists.", existingLead: mapLead(existingLead) };
+      }
     }
-  }
 
-  const created = await prisma.lead.create({
-    data: {
-      name: input.name,
-      phone: input.phone ?? "",
-      email: input.email ?? "",
-      location: input.location ?? "",
-      source: input.source,
-      sourceDetail: input.sourceDetail,
-      stage: mappedStage,
-      ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
-      budget: input.budget,
-      type: input.type ?? [],
-      notes: input.notes,
-      followupDate: input.followupDate,
-      followupTime: input.followupTime,
-      followupNotes: input.followupNotes,
-      lostReason: input.lostReason,
-      urgent: input.urgent ?? false,
-      history: { create: historyCreate },
-    },
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } }, noteAnnotations: { orderBy: { createdAt: "desc" } } },
-  });
+    throw error;
+  }
   const res = mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 
   // ═══════════════════════════════════════════════════════

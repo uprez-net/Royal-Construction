@@ -308,7 +308,7 @@ async function saveOffer({
             offerFileInput: {
                 id: uuidv4(),
                 filename: fileName,
-                fileType: "application/json",
+                fileType: "application/pdf",
                 filesize: fileBlob.size,
                 url: blob.url,
                 offerContent: offerFileContent,

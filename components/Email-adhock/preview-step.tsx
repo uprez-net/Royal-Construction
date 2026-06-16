@@ -60,7 +60,7 @@ export default function PreviewStep({
                 srcDoc={getEditablePreviewHtml(generatedHtml)}
                 title="Email Preview"
                 className="w-full h-[700px] border-none"
-                sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin"
+                sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts"
               />
             ) : (
               <div className="flex h-[600px] items-center justify-center text-sm text-slate-400">

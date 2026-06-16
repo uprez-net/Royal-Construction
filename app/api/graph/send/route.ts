@@ -1,5 +1,6 @@
 import { createGraphContext, type EmailInput } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
+import { requireAdminToken } from '@/lib/graph/route-utils';
 import { successResponse, errorResponse, badRequestResponse } from '@/utils/validators';
 
 function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
@@ -33,6 +34,7 @@ function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
         to: params.get('to') ?? undefined,
         subject: params.get('subject') ?? undefined,
         body: params.get('body') ?? undefined,
+        cc: params.get('cc') ?? undefined,
       } as Partial<EmailInput>;
     }
   }
@@ -42,10 +44,10 @@ function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
 
 export async function POST(request: Request): Promise<Response> {
   const config = getGraphConfig();
-  // const guard = requireAdminToken(request, config.adminToken);
-  // if (guard) {
-  //   return guard;
-  // }
+  const guard = requireAdminToken(request, config.adminToken);
+  if (guard) {
+    return guard;
+  }
 
   try {
     const rawBody = await request.text();
