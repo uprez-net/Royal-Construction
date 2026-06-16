@@ -35,34 +35,37 @@ export function MetricCard({
   Icon,
   isCurrency,
 }: MetricCardProps) {
+  const displayValue = isCurrency
+    ? (() => {
+        const numericValue = typeof value === "number" ? value : Number(value);
+        return Number.isFinite(numericValue)
+          ? compactCurrency.format(numericValue)
+          : "—";
+      })()
+    : value;
+
   return (
-    <Card className="border-border/70 bg-white/95">
-      <CardContent className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div
-            className={cn(
-              "grid size-11 place-items-center rounded-xl text-white",
-              iconTone,
-            )}
-          >
-            <Icon className="size-5" />
-          </div>
-          {trendDelta !== undefined && trendDelta !== 0 && (
-            <TrendBadge value={trendDelta} />
+    <Card className="overflow-hidden rounded-lg border-border/70 bg-white/95 shadow-sm">
+      <CardContent className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+        <div
+          className={cn(
+            "grid size-9 place-items-center rounded-lg text-white",
+            iconTone,
           )}
+        >
+          <Icon className="size-4" />
         </div>
-        <p className="text-3xl font-bold">
-          {isCurrency
-            ? (() => {
-                const numericValue =
-                  typeof value === "number" ? value : Number(value);
-                return Number.isFinite(numericValue)
-                  ? compactCurrency.format(numericValue)
-                  : "—";
-              })()
-            : value}
-        </p>
-        <p className="text-xs text-muted-foreground">{title}</p>
+        <div className="min-w-0">
+          <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground">
+            {displayValue}
+          </p>
+          <p className="mt-1 truncate text-[11px] text-muted-foreground">
+            {title}
+          </p>
+        </div>
+        {trendDelta !== undefined && trendDelta !== 0 && (
+          <TrendBadge value={trendDelta} />
+        )}
       </CardContent>
     </Card>
   );

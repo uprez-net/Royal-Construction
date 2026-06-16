@@ -2,7 +2,7 @@
 
 import type { ComponentType } from "react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
 const toneMap = {
@@ -41,26 +41,26 @@ export function LeadMetricCard({
   active?: boolean
 }) {
   const content = (
-    <>
-      <CardHeader className="pb-3 max-sm:p-3 max-sm:pb-1">
-        <div className="flex items-start justify-between gap-4 max-sm:gap-2">
-          <div>
-            <CardDescription className="max-sm:text-xs">{label}</CardDescription>
-            <CardTitle className="mt-2 font-heading text-3xl font-semibold tracking-tight max-sm:mt-1 max-sm:text-2xl">
-              {value}
-            </CardTitle>
-          </div>
-          {Icon ? (
-            <div className={cn("grid size-11 place-items-center rounded-2xl max-sm:size-9 max-sm:rounded-xl", toneMap[tone])}>
-              <Icon className="size-5 max-sm:size-4" />
-            </div>
-          ) : null}
+    <div className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3">
+      {Icon ? (
+        <div className={cn("grid size-9 place-items-center rounded-lg", toneMap[tone])}>
+          <Icon className="size-4" />
         </div>
-      </CardHeader>
-      <CardContent className="pb-4 text-sm text-muted-foreground max-sm:p-3 max-sm:pt-0 max-sm:text-xs">
-        {note}
-      </CardContent>
-    </>
+      ) : null}
+      <div className="min-w-0">
+        <div className="flex items-baseline gap-2">
+          <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground">
+            {value}
+          </p>
+          <p className="truncate text-xs font-medium text-muted-foreground">
+            {label}
+          </p>
+        </div>
+        <p className="mt-1 truncate text-[11px] text-muted-foreground">
+          {note}
+        </p>
+      </div>
+    </div>
   )
 
   if (onClick) {
@@ -68,9 +68,9 @@ export function LeadMetricCard({
       <button
         type="button"
         className={cn(
-          "group/card flex flex-col gap-4 overflow-hidden rounded-lg bg-card py-4 text-left text-sm text-card-foreground ring-1 ring-foreground/10 transition-all duration-200 max-sm:gap-2 max-sm:py-2",
-          "cursor-pointer select-none hover:border-muted-foreground/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          active ? `ring-2 ${activeRingMap[tone]} border-transparent shadow-md` : "border-border/70 bg-white/95 shadow-sm",
+          "group/card overflow-hidden rounded-lg border text-left text-sm text-card-foreground transition-all duration-200",
+          "cursor-pointer select-none hover:border-muted-foreground/30 hover:bg-white hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          active ? `border-transparent bg-white ring-2 ${activeRingMap[tone]} shadow-md` : "border-border/70 bg-white/95 shadow-sm",
         )}
         onClick={onClick}
         aria-pressed={active}
@@ -84,11 +84,11 @@ export function LeadMetricCard({
   return (
     <Card
       className={cn(
-        "border-border/70 bg-white/95 shadow-sm transition-all duration-200 max-sm:gap-2 max-sm:py-2",
-        active ? `ring-2 ${activeRingMap[tone]} border-transparent shadow-md` : ""
+        "overflow-hidden rounded-lg border-border/70 bg-white/95 shadow-sm transition-all duration-200",
+        active ? `border-transparent ring-2 ${activeRingMap[tone]} shadow-md` : ""
       )}
     >
-      {content}
+      <CardContent className="p-0">{content}</CardContent>
     </Card>
   )
 }

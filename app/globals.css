@@ -87,7 +87,7 @@
   --chart-3: oklch(0.726 0.165 54.6);
   --chart-4: oklch(0.672 0.165 284.2);
   --chart-5: oklch(0.533 0.136 25.5);
-  --radius: 1rem;
+  --radius: 0.5rem;
   --sidebar: oklch(0.16 0.03 249.8);
   --sidebar-foreground: oklch(0.952 0.02 247.6);
   --sidebar-primary: oklch(0.584 0.118 183.6);
@@ -275,11 +275,11 @@
   --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.1);
 
   /* Radius */
-  --radius-card: 12px;
+  --radius-card: var(--radius);
   --radius-pill: 99px;
-  --radius-input: 7px;
-  --radius-large-card: 14px;
-  --radius-btn: 7px;
+  --radius-input: calc(var(--radius) * 0.85);
+  --radius-large-card: calc(var(--radius) * 1.35);
+  --radius-btn: calc(var(--radius) * 0.85);
 
   /* Font */
   font-family: inherit;

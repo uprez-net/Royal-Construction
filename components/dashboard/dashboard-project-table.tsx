@@ -31,22 +31,17 @@ interface DashboardProjectTableProps {
   onSearch: (query: string) => void;
 }
 
-const statusConfig: Record<
-  string,
-  { bg: string; text: string; stripe: string }
-> = {
+const statusConfig: Record<string, { bg: string; text: string }> = {
   ON_TRACK: {
     bg: "bg-emerald-100",
     text: "text-emerald-700",
-    stripe: "bg-emerald-500",
   },
   NEEDS_ATTENTION: {
     bg: "bg-amber-100",
     text: "text-amber-700",
-    stripe: "bg-amber-500",
   },
-  DELAYED: { bg: "bg-red-100", text: "text-red-700", stripe: "bg-red-500" },
-  ACTIVE: { bg: "bg-blue-100", text: "text-blue-700", stripe: "bg-blue-500" },
+  DELAYED: { bg: "bg-red-100", text: "text-red-700" },
+  ACTIVE: { bg: "bg-blue-100", text: "text-blue-700" },
 };
 
 export function DashboardProjectTable({
@@ -95,11 +90,17 @@ export function DashboardProjectTable({
 
   return (
     <Card className="border-border/70 bg-white/95">
-      <CardHeader className="flex items-center justify-between border-b border-border/60 pb-4">
-        <h4 className="uppercase font-bold text-muted-foreground">Active Project Overview</h4>
-        <div className="flex flex-1 gap-3 justify-end">
-          {/* Search Box */}
-          <div className="relative flex-1 md:max-w-xs">
+      <CardHeader className="grid gap-4 border-b border-border/60 pb-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="space-y-1">
+          <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Active Project Overview
+          </h4>
+          <p className="text-sm text-muted-foreground">
+            Jobs currently moving through delivery.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:justify-end">
+          <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
@@ -112,7 +113,9 @@ export function DashboardProjectTable({
             />
           </div>
 
-          <Button onClick={() => router.push("/projects")}>View All</Button>
+          <Button className="sm:shrink-0" onClick={() => router.push("/projects")}>
+            View All
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -36,7 +36,7 @@ export function DashboardHome({
   dataWarnings = [],
 }: DashboardHomeProps) {
   return (
-    <div className="grid gap-6 space-y-6">
+    <div className="flex flex-col gap-6 lg:gap-7">
       {dataWarnings.length > 0 && (
         <div className="flex items-start gap-3 rounded-lg border border-[color:var(--warning)] bg-[color:var(--warning-light)] px-4 py-3 text-sm text-foreground">
           <AlertTriangle
@@ -51,28 +51,29 @@ export function DashboardHome({
           </div>
         </div>
       )}
-      <DashboardHeader
-        name={userFirstName}
-        newLeadsCount={newLeadsCount}
-        newProjectsCount={newProjectsCount}
-        followUpsCount={followUpsCount}
-      />
-      <DashboardKPI
-        newLeadsThisMonth={kpiData.newLeadsThisMonth}
-        newLeadsConvertedThisMonth={kpiData.newLeadsConvertedThisMonth}
-        revenueThisQuarter={kpiData.revenueThisQuarter}
-        netProfitThisQuarter={kpiData.netProfitThisQuarter}
-        activeProjects={kpiData.activeProjects}
-        activeSiteManagers={kpiData.activeSiteManagers}
-        estimateProjectSpendingThisQuarter={
-          kpiData.estimateProjectSpendingThisQuarter
-        }
-        actualProjectSpendingThisQuarter={
-          kpiData.actualProjectSpendingThisQuarter
-        }
-      />
+      <section className="flex flex-col gap-4 lg:gap-5">
+        <DashboardHeader
+          name={userFirstName}
+          newLeadsCount={newLeadsCount}
+          newProjectsCount={newProjectsCount}
+          followUpsCount={followUpsCount}
+        />
+        <DashboardKPI
+          newLeadsThisMonth={kpiData.newLeadsThisMonth}
+          newLeadsConvertedThisMonth={kpiData.newLeadsConvertedThisMonth}
+          revenueThisQuarter={kpiData.revenueThisQuarter}
+          netProfitThisQuarter={kpiData.netProfitThisQuarter}
+          activeProjects={kpiData.activeProjects}
+          activeSiteManagers={kpiData.activeSiteManagers}
+          estimateProjectSpendingThisQuarter={
+            kpiData.estimateProjectSpendingThisQuarter
+          }
+          actualProjectSpendingThisQuarter={
+            kpiData.actualProjectSpendingThisQuarter
+          }
+        />
+      </section>
 
-      {/* Graph Cards */}
       <DashboardGraphCards data={graphData} />
 
       <DashboardProjectTable
@@ -86,7 +87,7 @@ export function DashboardHome({
         onSearch={(query) => console.log("Search query:", query)}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
         <DashboardSiteManagerTable siteManagers={siteManagersMock} />
 
         <DashboardFollowUps

@@ -109,7 +109,7 @@ export function OfferChat() {
                     )}
                     <div
                       className={cn(
-                        "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
+                        "max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed shadow-sm",
                         msg.role === "user"
                           ? "border border-[#C6923A]/20 bg-[#C6923A]/10 text-slate-900"
                           : "border border-[#E2E8F0] bg-white text-slate-800",
@@ -139,7 +139,7 @@ export function OfferChat() {
             )}
             {status === "streaming" && <ThinkingMessage />}
             {error && (
-              <div className="max-w-[85%] self-center rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-relaxed text-rose-900 shadow-sm">
+              <div className="max-w-[85%] self-center rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-relaxed text-rose-900 shadow-sm">
                 {error.message ||
                   "An error occurred while processing your chat."}
               </div>
@@ -200,7 +200,7 @@ export function OfferChat() {
                 }
               }
             }}
-            className="resize-none rounded-2xl border border-[#E2E8F0] bg-[#FAF8F3] pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-[#C6923A]/20"
+            className="resize-none rounded-lg border border-[#E2E8F0] bg-[#FAF8F3] pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-[#C6923A]/20"
           />
           {status === "streaming" || status === "submitted" ? (
             <Button

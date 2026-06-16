@@ -103,21 +103,42 @@ export function DashboardHeader({
   };
 
   return (
-    <Card className="overflow-hidden border-teal-100 bg-gradient-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
-      <CardContent className="relative p-6">
-        <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
-        <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
-        <div className="relative flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-extrabold text-slate-900">
-              Sat Sri Akal, {name}!
-            </h2>
-            <p className="text-sm text-slate-600">
-              {newLeadsCount} new leads this month, {newProjectsCount} active
-              projects across NSW. {followUpsCount} follow-ups due.
-            </p>
+    <Card className="border-border/70 bg-white/95 shadow-sm">
+      <CardContent className="p-4 sm:p-5 lg:p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div className="min-w-0 space-y-1">
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Operations today
+              </p>
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                Sat Sri Akal, {name}!
+              </h2>
+            </div>
+
+            <dl className="grid grid-cols-3 gap-3 text-left sm:min-w-[360px] sm:text-right">
+              <div>
+                <dt className="text-xs text-muted-foreground">Leads</dt>
+                <dd className="font-mono text-sm font-semibold text-foreground">
+                  {newLeadsCount}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Projects</dt>
+                <dd className="font-mono text-sm font-semibold text-foreground">
+                  {newProjectsCount}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Follow-ups</dt>
+                <dd className="font-mono text-sm font-semibold text-foreground">
+                  {followUpsCount}
+                </dd>
+              </div>
+            </dl>
           </div>
-          <div className="flex flex-wrap gap-2">
+
+          <div className="flex flex-wrap gap-2 lg:justify-end">
             <Button onClick={() => dispatch(openModal({ type: "createLead" }))}>
               <Plus className="mr-2 size-4" />
               Add Lead
@@ -144,6 +165,7 @@ export function DashboardHeader({
               size="icon"
               className="items-center justify-center"
               onClick={() => router.refresh()}
+              aria-label="Refresh dashboard"
             >
               <RotateCw className="size-4" />
             </Button>

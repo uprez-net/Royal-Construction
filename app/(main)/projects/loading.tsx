@@ -4,18 +4,23 @@ export default function ProjectsLoading() {
   return (
     <div className="grid gap-6">
       {/* KPI Skeleton Grid */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-lg border border-border bg-white p-6 space-y-3">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-16" />
-            <Skeleton className="h-3 w-32" />
+          <div
+            key={i}
+            className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg border border-border/70 bg-white px-4 py-3 shadow-sm"
+          >
+            <Skeleton className="size-9 rounded-lg" />
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-3 w-32" />
+            </div>
           </div>
         ))}
       </div>
 
       {/* Main Section */}
-      <div className="rounded-lg border border-border bg-white overflow-hidden">
+      <div className="overflow-hidden rounded-lg border border-border/70 bg-white shadow-sm">
         <div className="border-b border-border px-6 py-4 space-y-3">
           <div className="flex items-start justify-between">
             <div className="space-y-2">
@@ -49,7 +54,7 @@ export default function ProjectsLoading() {
           {/* Project Cards Grid */}
           <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3 mt-6">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-lg border border-border bg-white overflow-hidden">
+              <div key={i} className="overflow-hidden rounded-lg border border-border/70 bg-white">
                 <div className="h-1 bg-muted" />
                 <div className="p-5 space-y-4">
                   <div className="space-y-2">
@@ -75,7 +80,7 @@ export default function ProjectsLoading() {
                     <Skeleton className="h-12 w-full rounded" />
                   </div>
                 </div>
-                <div className="px-5 py-3 border-t border-border bg-muted/30">
+                <div className="border-t border-border bg-muted/30 px-5 py-3">
                   <Skeleton className="h-4 w-20 ml-auto" />
                 </div>
               </div>
