@@ -1,6 +1,7 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/utils/validators';
+import { unstable_rethrow } from 'next/navigation';
 import { NextResponse } from 'next/server';
 
 function requireAdminToken(request: Request, adminToken: string | undefined): NextResponse | null {
@@ -52,6 +53,7 @@ export async function GET(request: Request): Promise<Response> {
     const items = await client.listInbox(top, includeBody);
     return successResponse({ items });
   } catch (error) {
+    unstable_rethrow(error);
     console.error('Graph list failed', error);
     return errorResponse('Failed to list inbox', { status: 500, code: 'GRAPH_ERROR' });
   }
