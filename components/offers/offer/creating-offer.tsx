@@ -73,7 +73,7 @@ function CreatingOffer({
 
   const isComplete = status === "COMPLETED" && !failed;
   const isIdle = !runId && initialRunStatus !== "RUNNING";
-  const isFailed = initialRunStatus === "FAILED" ? true : failed;
+  const isFailed = failed || (initialRunStatus === "FAILED" && !runId);
   const isWorking = Boolean(runId) && (connected || loading || !isComplete);
 
   const { minutes, seconds } = useMemo(() => {
@@ -105,9 +105,9 @@ function CreatingOffer({
       }
     };
 
-    updateTimer();
-
     const interval = setInterval(updateTimer, 1000);
+
+    updateTimer();
 
     return () => clearInterval(interval);
   }, [isIdle, updatedAt]);
