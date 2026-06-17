@@ -140,7 +140,11 @@ export async function getAllUserClerkIds() {
 
 export async function resolveUserIdsToClerkIds(userIds: Array<string | null | undefined>): Promise<string[]> {
     try {
-        const validUserIds = [...new Set(userIds.filter((id): id is string => Boolean(id?.trim())))];
+        const validUserIds = [...new Set(
+            userIds
+                .map((id) => id?.trim())
+                .filter((id): id is string => Boolean(id))
+        )];
 
         if (validUserIds.length === 0) {
             return [];

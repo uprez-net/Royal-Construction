@@ -6,6 +6,8 @@ const novu = new Novu({ secretKey: process.env.NOVU_SECRET_KEY });
 
 const WORKFLOW_IDENTIFIER = "royal-consturction";
 
+type NotificationResult = { success: true } | { success: false; error: string };
+
 export async function triggerNotification(
     userId: Array<string | null | undefined>,
     content: {
@@ -13,7 +15,7 @@ export async function triggerNotification(
         message: string,
         url: string
     }
-) {
+): Promise<NotificationResult> {
     try {
         let users: string[] = [];
         if(userId.length === 0) {
@@ -33,6 +35,7 @@ export async function triggerNotification(
                 url: content.url
             }
         })
+        return { success: true };
     } catch (error) {
         console.error("Error triggering notification:", error);
         return { success: false, error: "Failed to trigger notification" };
