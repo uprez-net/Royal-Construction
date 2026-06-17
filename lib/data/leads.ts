@@ -41,6 +41,19 @@ function escapeEmailHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
+function getLeadDedupeLockKeys(email: string, phone: string) {
+  return [
+    email === "" ? null : `lead:email:${email.toLowerCase()}`,
+    phone === "" ? null : `lead:phone:${phone}`,
+  ].filter((key): key is string => key !== null).sort();
+}
+
+async function lockLeadDedupeKeys(tx: Prisma.TransactionClient, keys: string[]) {
+  for (const key of keys) {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+  }
+}
+
 async function sendLeadMentionEmails(input: {
   leadId: number;
   leadName: string;
@@ -444,7 +457,12 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
 
   const orConditions: Prisma.LeadWhereInput[] = [];
   if (normalizedEmail !== "") {
-    orConditions.push({ email: normalizedEmail });
+    orConditions.push({
+      email: {
+        equals: normalizedEmail,
+        mode: Prisma.QueryMode.insensitive,
+      },
+    });
   }
   if (normalizedPhone !== "") {
     orConditions.push({ phone: normalizedPhone });
@@ -457,9 +475,23 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     noteAnnotations: { orderBy: { createdAt: "desc" } },
   } satisfies Prisma.LeadInclude;
 
-  let created: PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null };
-  try {
-    created = await prisma.lead.create({
+  const leadCreateResult = await prisma.$transaction(async (tx) => {
+    const lockKeys = getLeadDedupeLockKeys(normalizedEmail, normalizedPhone);
+    if (lockKeys.length > 0) {
+      await lockLeadDedupeKeys(tx, lockKeys);
+
+      const existingLead = await tx.lead.findFirst({
+        where: { OR: orConditions },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        include: duplicateLeadInclude,
+      });
+
+      if (existingLead) {
+        return { createdLead: null, existingLead };
+      }
+    }
+
+    const createdLead = await tx.lead.create({
       data: {
         name: input.name,
         phone: normalizedPhone,
@@ -481,20 +513,15 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       },
       include: duplicateLeadInclude,
     });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && orConditions.length > 0) {
-      const existingLead = await prisma.lead.findFirst({
-        where: { OR: orConditions },
-        include: duplicateLeadInclude,
-      });
 
-      if (existingLead) {
-        return { message: "A lead with the same email or phone number already exists.", existingLead: mapLead(existingLead) };
-      }
-    }
+    return { createdLead, existingLead: null };
+  });
 
-    throw error;
+  if (leadCreateResult.existingLead) {
+    return { message: "A lead with the same email or phone number already exists.", existingLead: mapLead(leadCreateResult.existingLead) };
   }
+
+  const created = leadCreateResult.createdLead;
   const res = mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
 
   // ═══════════════════════════════════════════════════════

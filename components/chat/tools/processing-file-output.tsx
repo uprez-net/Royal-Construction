@@ -2,6 +2,7 @@ import type { FileProcessingToolOutput } from "@/types/chat";
 import { isPlainObject } from "@/utils/formatters";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { StatPill } from "./util";
+import Image from "next/image";
 
 function numberValue(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -16,7 +17,8 @@ export function FileProcessingOutput({
 }: {
   output: FileProcessingToolOutput;
 }) {
-  const data = output.data;
+  const data = output.data?.summary;
+  const images = output.data?.images;
   const totals =
     isPlainObject(data) && isPlainObject(data.totals)
       ? data.totals
@@ -70,6 +72,44 @@ export function FileProcessingOutput({
               <StatPill label="Pages" value={pageCount} />
               <StatPill label="Tables" value={tableCount} />
               <StatPill label="Quantities" value={quantityCount} />
+            </div>
+          ) : null}
+
+          {images && images.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2 max-h-48 overflow-y-auto no-scrollbar">
+              {images.map((image) => {
+                const id = image.id;
+                const imageData = image.parts.find(
+                  (part) => part.type === "file",
+                );
+
+                if (!imageData) return null;
+
+                const mediaType =
+                  imageData.mediaType &&
+                  imageData.mediaType.startsWith("image/")
+                    ? imageData.mediaType
+                    : "image/png";
+                const src = imageData.url.startsWith("data:")
+                  ? imageData.url
+                  : `data:${mediaType};base64,${imageData.url}`;
+
+                return (
+                  <div
+                    key={`${id}-${imageData.filename ?? "image"}`}
+                    className="relative h-24 w-24 overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm"
+                  >
+                    <Image
+                      src={src}
+                      alt={imageData.filename ?? `Extracted image ${id}`}
+                      height={96}
+                      width={96}
+                      unoptimized
+                      className="object-cover"
+                    />
+                  </div>
+                );
+              })}
             </div>
           ) : null}
         </div>

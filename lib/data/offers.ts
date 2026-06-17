@@ -1,6 +1,6 @@
 "use server";
 import { Prisma } from "@prisma/client";
-import { cacheTag, cacheLife, revalidateTag } from "next/cache";
+import { cacheTag, cacheLife } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
@@ -10,6 +10,7 @@ import { calculateTrend } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { assertCanAccessLead } from "@/lib/offer/access";
+import { createOrUpdateOfferInternal, type CreateOfferInput } from "@/lib/data/offers-internal";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -96,7 +97,7 @@ export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFil
         }
 
         const { offerItems, offerFiles, ...offer } = offerData;
-        const currentVersion = offerItems.reduce((max, item) => Math.max(max, item.version), 0) ?? 0;
+        const currentVersion = offerFiles.reduce((max, file) => Math.max(max, file.version), 0);
         const offerItemsRecord: Record<number, SafeOfferItem[]> = {};
         const filesRecord: Record<number, SafeOfferDBFile> = {};
         offerItems.forEach(item => {
@@ -302,37 +303,13 @@ export const getOfferKPIsCached = async () => {
     return getOfferKPIs();
 }
 
-interface CreateOfferInput {
-    leadId: number;
-    offerFileInput: {
-        id: string;
-        filename: string;
-        fileType: string;
-        filesize: number;
-        url: string;
-        offerContent: OfferFile;
-    };
-    amount: string;
-    gstAmount: string;
-    totalAmount: string;
-    offerItems: {
-        id: string;
-        item: string;
-        description: string;
-        quantity: number;
-        unitPrice: string;
-        totalPrice: string;
-        unit: string;
-    }[];
-}
-
 export const createOrUpdateOffer = async ({
     leadId,
     offerFileInput,
     amount,
     gstAmount,
     totalAmount,
-    offerItems
+    offerItems,
 }: CreateOfferInput) => {
     try {
         const { userId } = await auth();
@@ -347,78 +324,14 @@ export const createOrUpdateOffer = async ({
 
         await assertCanAccessLead(user, leadId);
 
-        const { version, newOffer, newOfferFile, offerItemsData } = await prisma.$transaction(async (tx) => {
-            const version = await tx.offerFile.count({
-                where: { offer: { leadId } },
-            }) + 1;
-            const newOffer = await tx.offer.upsert({
-                where: { leadId },
-                update: {
-                    amount: new Prisma.Decimal(amount),
-                    gstAmount: new Prisma.Decimal(gstAmount),
-                    totalAmount: new Prisma.Decimal(totalAmount),
-                },
-                create: {
-                    leadId,
-                    amount: new Prisma.Decimal(amount),
-                    gstAmount: new Prisma.Decimal(gstAmount),
-                    totalAmount: new Prisma.Decimal(totalAmount),
-                },
-                include: {
-                    lead: true,
-                }
-            });
-
-            const newOfferFile = await tx.offerFile.create({
-                data: {
-                    id: offerFileInput.id,
-                    offerId: newOffer.id,
-                    filename: offerFileInput.filename,
-                    fileType: offerFileInput.fileType,
-                    filesize: offerFileInput.filesize,
-                    url: offerFileInput.url,
-                    offerContent: offerFileInput.offerContent as Prisma.InputJsonValue,
-                    version: version,
-                },
-            });
-
-            const offerItemsData = await tx.offerItem.createManyAndReturn({
-                data: offerItems.map(item => ({
-                    id: item.id,
-                    offerId: newOffer.id,
-                    item: item.item,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unitPrice: new Prisma.Decimal(item.unitPrice),
-                    totalPrice: new Prisma.Decimal(item.totalPrice),
-                    unit: item.unit,
-                    version: version,
-                })),
-            });
-
-            return { version, newOffer, newOfferFile, offerItemsData };
+        return createOrUpdateOfferInternal({
+            leadId,
+            offerFileInput,
+            amount,
+            gstAmount,
+            totalAmount,
+            offerItems,
         });
-
-        revalidateTag("offers", CACHE_PROFILES.MEDIUM);
-        revalidateTag(`offer-${newOffer.id}`, CACHE_PROFILES.MEDIUM);
-        revalidateTag(`offer-lead-${newOffer.leadId}`, CACHE_PROFILES.MEDIUM);
-
-        return {
-            ...newOffer,
-            amount: newOffer.amount.toString(),
-            gstAmount: newOffer.gstAmount.toString(),
-            totalAmount: newOffer.totalAmount.toString(),
-            version: version,
-            newOfferItems: offerItemsData.map(item => ({
-                ...item,
-                unitPrice: item.unitPrice.toString(),
-                totalPrice: item.totalPrice.toString(),
-            })) ?? [],
-            newOfferFile: {
-                ...newOfferFile,
-                offerContent: newOfferFile.offerContent as OfferFile,
-            },
-        };
     } catch (error) {
         console.error("Error creating offer:", error);
         throw new Error("Failed to create offer");

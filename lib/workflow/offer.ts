@@ -4,7 +4,7 @@ import { buildCreationStarterPrompt, FacadeOptionWithImageUrl } from "@/lib/agen
 import { findLeadById } from "@/lib/data/leads";
 import { handleOfferFileGeneration, handleOfferLineItemGeneration } from "@/lib/agent/offerCreationAgent";
 import { v4 as uuidv4 } from "uuid";
-import { createOrUpdateOffer } from "@/lib/data/offers";
+import { createOrUpdateOfferInternal } from "@/lib/data/offers-internal";
 import { OfferCreationOutput } from "@/lib/agent/offer-prompts";
 import { Lead } from "@/lib/leads/types";
 import { createNotification } from "@/types/notification";
@@ -13,14 +13,16 @@ import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { getWritable } from "workflow";
 import { base64ToBlob, currency, dateFormat } from "@/utils/formatters";
-import { RunStatus } from "@prisma/client";
+import { RunStatus, Prisma } from "@prisma/client";
 import { put } from "@vercel/blob";
 import {
     calculateOfferLinePricing,
     calculateOfferTotals,
 } from "@/lib/offer/pricing";
-import { generateSafeOfferHTML } from "@/utils/handle-offer-template";
+import { generateSafeOfferHTMLServer } from "@/utils/handle-offer-template-server";
 import { generatePDF } from "../utils/generatePDF";
+import { ChatMessageAI } from "@/types/chat";
+import { sleep } from "workflow";
 
 export interface OfferCreationStatus {
     failed?: boolean;
@@ -53,12 +55,15 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
         const { offerItemsWithPricing, amount, gstAmount, totalAmount, output: lineItemOutput } = await buildOfferLineItems(prompt, lead);
 
         const offerCreationPrompt = `
+        ${prompt}
+
+        ## Line Item Creation Message:
+        ${lineItemOutput.creationMessage}
         ## Created Line Items:
         ${lineItemOutput.lineItemArray.map(item =>
             `- ${item.item} - (${item.description}): ${item.quantity} ${item.unit} at $${item.unitPrice} each (GST ${item.gstIncluded ? "included" : "excluded"})`).join("\n")
             }
 
-        ${prompt}
         `
         const { output: fileOutput, Options } = await buildOfferFile(offerCreationPrompt, lead);
 
@@ -74,10 +79,14 @@ export const createOfferWorkflow = async (leadId: number): Promise<OfferWithLead
             amount,
             gstAmount,
             totalAmount,
+            offerCreationMessage: fileOutput.creationMessage,
         });
 
         // Trigger notification step
         await triggerNotificationStep(newOffer, totalAmount);
+
+        await sleep(2000);
+        await closeWorkflowStream();
 
         return {
             ...newOffer,
@@ -148,7 +157,7 @@ async function buildOfferLineItems(prompt: string, lead: Lead) {
 
         console.log(`Built offer with message: ${output.creationMessage}, total amount: $${totalAmount}`);
         await writeToStream({
-            status: "SAVING_OFFER",
+            status: "BUILDING_OFFER",
             progress: 45,
             message: [
                 {
@@ -264,6 +273,7 @@ async function saveOffer({
     amount,
     gstAmount,
     totalAmount,
+    offerCreationMessage,
 }: {
     lead: Lead;
     output: OfferCreationOutput;
@@ -272,7 +282,7 @@ async function saveOffer({
     amount: number;
     gstAmount: number;
     totalAmount: number;
-
+    offerCreationMessage: string;
 }) {
     'use step';
     try {
@@ -283,7 +293,7 @@ async function saveOffer({
                 options: Options,
             } : undefined,
         };
-        const offerFileHTML = generateSafeOfferHTML({
+        const offerFileHTML = generateSafeOfferHTMLServer({
             ...offerFileContent,
             customerName: lead.name,
             projectName: `${lead.type}, ${lead.location}`,
@@ -303,7 +313,7 @@ async function saveOffer({
             },
         );
 
-        const newOffer = await createOrUpdateOffer({
+        const newOffer = await createOrUpdateOfferInternal({
             leadId: lead.id,
             offerFileInput: {
                 id: uuidv4(),
@@ -331,10 +341,39 @@ async function saveOffer({
             where: { leadId: lead.id },
             select: { id: true },
         });
+        const chatSessionMessage: ChatMessageAI = {
+            id: uuidv4(),
+            role: "assistant",
+            parts: [{
+                type: "text",
+                text: offerCreationMessage,
+            }],
+            metadata: {
+                createdAt: new Date().toISOString(),
+            },
+        }
         if (!existingChatSession) {
             await prisma.chatSession.create({
                 data: {
                     leadId: lead.id,
+                    messages: {
+                        create: {
+                            id: chatSessionMessage.id,
+                            role: chatSessionMessage.role,
+                            content: chatSessionMessage.parts as Prisma.InputJsonValue,
+                            timestamp: new Date(chatSessionMessage.metadata?.createdAt ?? Date.now()),
+                        }
+                    }
+                },
+            });
+        } else {
+            await prisma.chatMessage.create({
+                data: {
+                    id: chatSessionMessage.id,
+                    sessionId: existingChatSession.id,
+                    role: chatSessionMessage.role,
+                    content: chatSessionMessage.parts as Prisma.InputJsonValue,
+                    timestamp: new Date(chatSessionMessage.metadata?.createdAt ?? Date.now()),
                 },
             });
         }
@@ -343,7 +382,6 @@ async function saveOffer({
             where: { id: lead.id },
             data: {
                 runStatus: RunStatus.COMPLETED,
-                runId: null,
             },
         });
         revalidateTag(`chat-session-lead-${lead.id}`, CACHE_PROFILES.SHORT);
@@ -431,7 +469,6 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
                 },
             ]
         });
-        await closeWorkflowStream();
     } catch (error) {
         console.error("Error triggering notification:", error);
         await writeToStream({
@@ -457,7 +494,6 @@ async function triggerNotificationStep(offer: OfferWithLead, totalAmount: number
                 },
             ]
         });
-        await closeWorkflowStream();
         return;
     }
 }

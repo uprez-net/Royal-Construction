@@ -1,4 +1,4 @@
-import { ToolLoopAgent, Output, stepCountIs } from "ai";
+import { ToolLoopAgent, Output, stepCountIs, NoObjectGeneratedError, TypeValidationError } from "ai";
 import { gateway } from "@/lib/model";
 import { fetchOfferSheetRules } from "../tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "../tools/file-tools";
@@ -12,6 +12,7 @@ import { offerFileTool } from "@/lib/tools/offer-file";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 import type { OfferFile } from "@/context/ChatContext";
 import { applyOfferFileUpdate } from "@/utils/chat";
+import z from "zod";
 
 const MODEL_NAME = "google/gemini-2.5-flash" as const;
 export const OFFER_GENERATION_MAX_STEPS = 8;
@@ -38,7 +39,7 @@ const handleOfferLineItemGeneration = async (prompt: string) => {
             webSearch: webSearch,
             scrapeUserLinks: scrapeUserLinks,
         },
-        toolChoice: "required",
+        toolChoice: "auto",
         stopWhen: stepCountIs(OFFER_GENERATION_MAX_STEPS),
         instructions: OFFER_LINE_ITEM_CREATION_SYSTEM_PROMPT,
         stopSequences: [
@@ -49,9 +50,6 @@ const handleOfferLineItemGeneration = async (prompt: string) => {
     });
 
     const { text: lineItemOutput } = await offerLineItemCreatorAgent.generate({ prompt });
-
-    console.log("Line item generation output:", lineItemOutput);
-    console.dir(offerLineItems, { depth: Infinity, colors: true });
 
     return {
         lineItemArray: offerLineItems,
@@ -83,26 +81,38 @@ const handleOfferFileGeneration = async (prompt: string) => {
             webSearch: webSearch,
             scrapeUserLinks: scrapeUserLinks,
         },
-        toolChoice: "required",
+        toolChoice: "auto",
         stopWhen: stepCountIs(OFFER_GENERATION_MAX_STEPS),
         instructions: OFFER_FILE_CONTENT_CREATION_SYSTEM_PROMPT,
         stopSequences: [
             "<END_OFFER_CONTENT_CREATION>",
             "<END_GENERATION>",
         ],
-        output: Output.text(),
+        output: Output.object({
+            schema: z.object({
+                creationMessage: z.string().describe("A message describing the offer file creation progress or result or futher information request."),
+            }),
+        }),
     });
 
-    const { text: offerFileOutput } = await offerFileCreationAgent.generate({
-        prompt
-    });
+    let creationMessage = "Offer content was prepared, but the generation status message was unavailable.";
 
-    console.log("Offer file generation output:");
-    console.dir(offerFileContent, { depth: Infinity, colors: true });
+    try {
+        const { output } = await offerFileCreationAgent.generate({
+            prompt
+        });
+        creationMessage = output.creationMessage;
+    } catch (error) {
+        if (NoObjectGeneratedError.isInstance(error) || TypeValidationError.isInstance(error)) {
+            console.warn("Offer file generation completed without valid structured output.", error);
+        } else {
+            throw error;
+        }
+    }
 
     return {
         offerFileContent,
-        creationMessage: `Offer creation message: ${offerFileOutput}`,
+        creationMessage,
     };
 }
 

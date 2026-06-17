@@ -1,6 +1,5 @@
 import type { OfferFile } from "@/context/ChatContext";
 import { addDays } from "date-fns";
-import DOMPurify from "dompurify";
 import {
     ACCEPTANCE_BODY,
     COMPANY_INFO,
@@ -21,7 +20,53 @@ interface OfferFileTemplateProps extends OfferFile {
     contractAmount?: string;
 }
 
-export const generateSafeOfferHTML = ({
+const escapeHtml = (value: string): string =>
+    value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+const safeText = (value: unknown): string => {
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    return escapeHtml(String(value));
+}
+
+const safeUrl = (value: unknown): string => {
+    if (typeof value !== "string" || value.trim() === "") {
+        return "";
+    }
+
+    try {
+        const url = new URL(value);
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+            return "";
+        }
+
+        return escapeHtml(url.toString());
+    } catch {
+        return "";
+    }
+}
+
+const formatMoneyValue = (value: unknown): string => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        return "0";
+    }
+
+    return safeText(value.toLocaleString());
+}
+/**
+ * Generates a safe HTML offer file for server-side PDF generation.
+ * Don't use in client-side contexts as it relies on server-compatible sanitization.
+ * @param OfferFileTemplateProps - The properties of the offer file, including content and metadata.
+ * @returns HTML Offer File as a string, sanitized for PDF generation on the server.
+ */
+export const generateSafeOfferHTMLServer = ({
     projectWelcomeMessage,
     facadeOptions,
     termsAndConditions,
@@ -45,6 +90,18 @@ export const generateSafeOfferHTML = ({
             return "";
         }
     })();
+    const safeCustomerName = safeText(customerName);
+    const safeCustomerFirstName = safeText(customerName.split(" ")[0] || customerName);
+    const safeProjectName = safeText(projectName);
+    const safeSiteLocation = safeText(siteLocation);
+    const safeRevisionDate = safeText(revisionDate);
+    const safeCreatorName = safeText(creatorName);
+    const safeCreatorSignatureName = safeText(creatorName.split("—")[0].trim());
+    const safeContractAmount = safeText(contractAmount);
+    const safeValidUntil = safeText(validUntil);
+    const welcomeMarkup = projectWelcomeMessage
+        ? safeText(projectWelcomeMessage)
+        : '<span class="empty">No welcome message provided.</span>';
 
     const body = `
     <body>
@@ -57,41 +114,41 @@ export const generateSafeOfferHTML = ({
             <div class="cover-stars-banner">★ ★ ★ ★ ★</div>
 
             <div class="cover-company-block">
-            <div class="cover-company-name">${COMPANY_INFO.name}</div>
-            <div class="cover-company-sub">${COMPANY_INFO.tagline}</div>
+            <div class="cover-company-name">${safeText(COMPANY_INFO.name)}</div>
+            <div class="cover-company-sub">${safeText(COMPANY_INFO.tagline)}</div>
             </div>
 
             <div class="cover-proposal-type">
             <div class="cover-proposal-heading">Custom Home Proposal</div>
-            ${projectName ? `<div class="cover-proposal-subtitle">${projectName}</div>` : ""}
+            ${projectName ? `<div class="cover-proposal-subtitle">${safeProjectName}</div>` : ""}
 
             <table class="cover-meta-table">
                 <tr>
                 <td class="cover-meta-label">Prepared For</td>
-                <td class="cover-meta-value">${customerName}</td>
+                <td class="cover-meta-value">${safeCustomerName}</td>
                 </tr>
                 ${siteLocation
             ? `
                 <tr>
                 <td class="cover-meta-label">Site Address</td>
-                <td class="cover-meta-value">${siteLocation}</td>
+                <td class="cover-meta-value">${safeSiteLocation}</td>
                 </tr>`
             : ""
         }
                 ${revisionDate
             ? `<tr>
                         <td class="cover-meta-label">Revised Date</td>
-                        <td class="cover-meta-value">${revisionDate}</td>
+                        <td class="cover-meta-value">${safeRevisionDate}</td>
                     </tr>`
             : ""
         }
                 <tr>
                 <td class="cover-meta-label">Valid Until</td>
-                <td class="cover-meta-value">${validUntil}${validUntil ? " &nbsp;(28 days from original proposal)" : "28 days from original proposal"}</td>
+                <td class="cover-meta-value">${safeValidUntil}${safeValidUntil ? " &nbsp;(28 days from original proposal)" : "28 days from original proposal"}</td>
                 </tr>
                 <tr>
                 <td class="cover-meta-label">Prepared By</td>
-                <td class="cover-meta-value">${creatorName}</td>
+                <td class="cover-meta-value">${safeCreatorName}</td>
                 </tr>
             </table>
 
@@ -100,13 +157,13 @@ export const generateSafeOfferHTML = ({
                 <span class="star">★</span>&nbsp; Limited-Time Promotion &nbsp;<span class="star">★</span>
                 </div>
                 <div class="cover-promo-body">
-                ${PROMOTIONAL_PACKAGE.amount} ${PROMOTIONAL_PACKAGE.label}
+                ${safeText(PROMOTIONAL_PACKAGE.amount)} ${safeText(PROMOTIONAL_PACKAGE.label)}
                 </div>
-                <div class="cover-promo-sub">Sign before ${validUntil || "the expiry date"} to secure this offer</div>
+                <div class="cover-promo-sub">Sign before ${safeValidUntil || "the expiry date"} to secure this offer</div>
             </div>
 
             <div class="cover-footer">
-                Lic. No. ${COMPANY_INFO.licenceNo} &nbsp;·&nbsp; ${COMPANY_INFO.accreditation} &nbsp;·&nbsp; ${COMPANY_INFO.website}
+                Lic. No. ${safeText(COMPANY_INFO.licenceNo)} &nbsp;·&nbsp; ${safeText(COMPANY_INFO.accreditation)} &nbsp;·&nbsp; ${safeText(COMPANY_INFO.website)}
             </div>
             </div>
         </div>
@@ -115,29 +172,29 @@ export const generateSafeOfferHTML = ({
         <!-- WELCOME / LETTER                                    -->
         <!-- ═══════════════════════════════════════════════════ -->
         <div class="section-wrap">
-            <h2 class="section-heading">Welcome, ${customerName.split(" ")[0]}</h2>
+            <h2 class="section-heading">Welcome, ${safeCustomerFirstName}</h2>
             <div class="section-gold-rule"></div>
 
             <div class="welcome-body">
-            ${projectWelcomeMessage || '<span class="empty">No welcome message provided.</span>'}
+            ${welcomeMarkup}
             </div>
 
-            <div class="welcome-signature-name">${creatorName.split("—")[0].trim()}</div>
-            <div class="welcome-signature-role">${COMPANY_INFO.directorRole}</div>
+            <div class="welcome-signature-name">${safeCreatorSignatureName}</div>
+            <div class="welcome-signature-role">${safeText(COMPANY_INFO.directorRole)}</div>
 
             ${revisionChanges
             ? `
             <div class="revision-card">
             <div class="revision-card-header">
-                Revised Proposal — ${revisionDate} &nbsp;|&nbsp; Changes Agreed in Meeting
+                Revised Proposal — ${safeRevisionDate} &nbsp;|&nbsp; Changes Agreed in Meeting
             </div>
-            <div class="revision-card-desc">${revisionChanges.description}</div>
+            <div class="revision-card-desc">${safeText(revisionChanges.description)}</div>
             <div class="revision-card-stats">
-                Upgrade value added: $${revisionChanges.valueAdded.toLocaleString()}
+                Upgrade value added: $${formatMoneyValue(revisionChanges.valueAdded)}
                 &nbsp;|&nbsp;
-                Net price increase: $${(revisionChanges.valueAdded - revisionChanges.youSave).toLocaleString()}
+                Net price increase: $${formatMoneyValue(revisionChanges.valueAdded - revisionChanges.youSave)}
                 &nbsp;|&nbsp;
-                You save: $${revisionChanges.youSave.toLocaleString()}
+                You save: $${formatMoneyValue(revisionChanges.youSave)}
             </div>
             </div>`
             : ""
@@ -156,14 +213,14 @@ export const generateSafeOfferHTML = ({
                 .map(
                     (group) => `
                 <div class="scope-group">
-                <div class="scope-group-title">${group.sectionTitle}</div>
+                <div class="scope-group-title">${safeText(group.sectionTitle)}</div>
                 <ul class="scope-list">
                     ${group.items
                             .map(
                                 (item) => `
                     <li>
                         <span class="scope-star">★</span>
-                        <span>${item}</span>
+                        <span>${safeText(item)}</span>
                     </li>
                     `,
                             )
@@ -186,9 +243,9 @@ export const generateSafeOfferHTML = ({
 
             <div class="investment-price-hero">
             <div class="investment-price-label">Indicative Fixed Price</div>
-            <div class="investment-price-amount">${contractAmount}</div>
+            <div class="investment-price-amount">${safeContractAmount}</div>
             <div class="investment-price-gst">Inclusive of GST</div>
-            <div class="investment-price-sub">including ${PROMOTIONAL_PACKAGE.amount} promotional upgrade package</div>
+            <div class="investment-price-sub">including ${safeText(PROMOTIONAL_PACKAGE.amount)} promotional upgrade package</div>
             </div>
 
             <div class="investment-sub-heading">What Your Fixed Price Includes</div>
@@ -206,7 +263,7 @@ export const generateSafeOfferHTML = ({
                 .map(
                     (item) => `
                     <tr>
-                    <td>${item}</td>
+                    <td>${safeText(item)}</td>
                     <td><span class="fpi-yes">Yes</span></td>
                     </tr>
                 `,
@@ -222,12 +279,12 @@ export const generateSafeOfferHTML = ({
         <!-- YOUR $50,000 PROMOTIONAL UPGRADE PACKAGE           -->
         <!-- ═══════════════════════════════════════════════════ -->
         <div class="section-wrap">
-            <h2 class="section-heading">Your ${PROMOTIONAL_PACKAGE.amount} Promotional Upgrade Package</h2>
+            <h2 class="section-heading">Your ${safeText(PROMOTIONAL_PACKAGE.amount)} Promotional Upgrade Package</h2>
             <div class="section-gold-rule"></div>
 
             <p class="promo-intro">
             Every item below is included in your fixed price at no additional cost. This package represents
-            ${PROMOTIONAL_PACKAGE.amount} of upgrades — agreed and locked in as part of your revised proposal.
+            ${safeText(PROMOTIONAL_PACKAGE.amount)} of upgrades — agreed and locked in as part of your revised proposal.
             </p>
 
             <table class="promo-table">
@@ -254,13 +311,13 @@ export const generateSafeOfferHTML = ({
                     <tr>
                         <td style="width:50%">
                         <span class="promo-item-star">★</span>
-                        <span>${left}</span>
+                        <span>${safeText(left)}</span>
                         </td>
                         <td style="width:50%">
                         ${right
                         ? `
                         <span class="promo-item-star">★</span>
-                        <span>${right}</span>
+                        <span>${safeText(right)}</span>
                         `
                         : ""
                     }
@@ -275,7 +332,7 @@ export const generateSafeOfferHTML = ({
 
             <div class="inclusion-credit-card">
             <span class="star">★</span>
-            &nbsp;${PROMOTIONAL_PACKAGE.inclusionCreditAmount} ${PROMOTIONAL_PACKAGE.inclusionCreditLabel}&nbsp;
+            &nbsp;${safeText(PROMOTIONAL_PACKAGE.inclusionCreditAmount)} ${safeText(PROMOTIONAL_PACKAGE.inclusionCreditLabel)}&nbsp;
             <span class="star">★</span>
             </div>
         </div>
@@ -287,23 +344,28 @@ export const generateSafeOfferHTML = ({
             <h2 class="section-heading">Façade Options for Your Consideration</h2>
             <div class="section-gold-rule"></div>
 
-            <p class="facade-intro">${facadeOptions ? facadeOptions.optionsDescription : "No façade options available."}</p>
+            <p class="facade-intro">${facadeOptions ? safeText(facadeOptions.optionsDescription) : "No façade options available."}</p>
 
             ${facadeOptions && facadeOptions.options && facadeOptions.options.length > 0
             ? facadeOptions.options
                 .map(
-                    (option) => `
+                    (option) => {
+                        const imageUrl = safeUrl(option.imageUrl);
+                        const title = safeText(option.title);
+
+                        return `
                     <div class="facade-option">
-                    <div class="facade-option-title">${option.title}</div>
-                    <div class="facade-option-desc">${option.description}</div>
-                    <img class="facade-option-img" src="${option.imageUrl}" alt="${option.title}" />
+                    <div class="facade-option-title">${title}</div>
+                    <div class="facade-option-desc">${safeText(option.description)}</div>
+                    ${imageUrl ? `<img class="facade-option-img" src="${imageUrl}" alt="${title}" />` : ""}
                     </div>
-                    `,
+                    `;
+                    },
                 )
                 .join("")
             : ""
         }
-            <p class="empty">Façade images shown for illustrative purposes — final selections, materials and detailing confirmed at the design stage to suit your block at ${siteLocation}.</p>
+            <p class="empty">Façade images shown for illustrative purposes — final selections, materials and detailing confirmed at the design stage to suit your block at ${safeSiteLocation}.</p>
         </div>
 
         <!-- ═══════════════════════════════════════════════════ -->
@@ -326,14 +388,14 @@ export const generateSafeOfferHTML = ({
             (s, i) => `
                 <tr>
                     <td>${i + 1}</td>
-                    <td class="stage-name">${s.stage}</td>
-                    <td>${s.description}</td>
+                    <td class="stage-name">${safeText(s.stage)}</td>
+                    <td>${safeText(s.description)}</td>
                 </tr>
                 `,
         ).join("")}
             </tbody>
             </table>
-            <p class="timeline-footnote">${TIMELINE_FOOTNOTE}</p>
+            <p class="timeline-footnote">${safeText(TIMELINE_FOOTNOTE)}</p>
         </div>
 
         <!-- ═══════════════════════════════════════════════════ -->
@@ -354,8 +416,8 @@ export const generateSafeOfferHTML = ({
                 <li class="next-step-item">
                 <div class="next-step-num">${i + 1}</div>
                 <div class="next-step-body">
-                    <div class="next-step-title">${s.title}</div>
-                    <div class="next-step-desc">${s.description}</div>
+                    <div class="next-step-title">${safeText(s.title)}</div>
+                    <div class="next-step-desc">${safeText(s.description)}</div>
                 </div>
                 </li>
             `,
@@ -364,9 +426,9 @@ export const generateSafeOfferHTML = ({
 
             <div class="next-steps-cta">
             <div class="next-steps-cta-heading">Ready to Proceed?</div>
-            <div class="next-steps-cta-name">${COMPANY_INFO.director}, Royal Constructions</div>
+            <div class="next-steps-cta-name">${safeText(COMPANY_INFO.director)}, Royal Constructions</div>
             <div class="next-steps-cta-meta">
-                www.${COMPANY_INFO.website} &nbsp;·&nbsp; Licence No. ${COMPANY_INFO.licenceNo} &nbsp;·&nbsp; ${COMPANY_INFO.accreditation}
+                www.${safeText(COMPANY_INFO.website)} &nbsp;·&nbsp; Licence No. ${safeText(COMPANY_INFO.licenceNo)} &nbsp;·&nbsp; ${safeText(COMPANY_INFO.accreditation)}
             </div>
             </div>
         </div>
@@ -383,9 +445,9 @@ export const generateSafeOfferHTML = ({
                 .map(
                     (note) => `
             <div class="notes-item">
-                <div class="notes-item-title">${note.title}</div>
+                <div class="notes-item-title">${safeText(note.title)}</div>
                 <div class="notes-item-body">
-                ${note.description}
+                ${safeText(note.description)}
                 </div>
             </div>
             `,
@@ -403,18 +465,18 @@ export const generateSafeOfferHTML = ({
             <div class="section-gold-rule"></div>
 
             <div class="acceptance-card">
-            ${ACCEPTANCE_BODY(customerName, siteLocation)}
+            ${ACCEPTANCE_BODY(safeCustomerName, safeSiteLocation)}
 
             <div class="sig-grid">
                 <div>
-                <div class="sig-name">${customerName}</div>
+                <div class="sig-name">${safeCustomerName}</div>
                 <div class="sig-sublabel">Client</div>
                 <div class="sig-line">Signature</div>
                 <div class="sig-line" style="margin-top:20px;">Date</div>
                 </div>
                 <div>
-                <div class="sig-name">${COMPANY_INFO.director.split("—")[0].trim()}</div>
-                <div class="sig-sublabel">${COMPANY_INFO.directorRole}</div>
+                <div class="sig-name">${safeText(COMPANY_INFO.director.split("—")[0].trim())}</div>
+                <div class="sig-sublabel">${safeText(COMPANY_INFO.directorRole)}</div>
                 <div class="sig-line">Authorised Signature</div>
                 <div class="sig-line" style="margin-top:20px;">Date</div>
                 </div>
@@ -425,8 +487,6 @@ export const generateSafeOfferHTML = ({
         </div>
         </body>
     `
-
-    const cleanedBody = DOMPurify.sanitize(body, { USE_PROFILES: { html: true } });;
 
     const html = `
         <!DOCTYPE html>
@@ -1237,7 +1297,7 @@ export const generateSafeOfferHTML = ({
         }
         </style>
         </head>
-        ${cleanedBody}
+        ${body}
         </html>`;
 
     return html;
