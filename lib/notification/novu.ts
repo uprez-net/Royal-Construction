@@ -7,7 +7,7 @@ const novu = new Novu({ secretKey: process.env.NOVU_SECRET_KEY });
 const WORKFLOW_IDENTIFIER = "royal-consturction";
 
 export async function triggerNotification(
-    userId: string[],
+    userId: Array<string | null | undefined>,
     content: {
         title: string,
         message: string,
@@ -20,6 +20,9 @@ export async function triggerNotification(
             users = await getAllUserClerkIds();
         } else {
             users = await resolveUserIdsToClerkIds(userId);
+        }
+        if (users.length === 0) {
+            return { success: false, error: "No notification recipients found" };
         }
         await novu.trigger({
             workflowId: WORKFLOW_IDENTIFIER,
