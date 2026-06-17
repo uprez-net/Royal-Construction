@@ -37,6 +37,22 @@ const nullableTrimmedString = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : null;
 }, z.string().nullable());
 
+const nullableDateInput = z.preprocess((value) => {
+  if (value === null) return null;
+  if (value instanceof Date) return value;
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+
+  const dateInput = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+    ? `${trimmed}T00:00:00.000Z`
+    : trimmed;
+  const parsed = new Date(dateInput);
+
+  return Number.isNaN(parsed.getTime()) ? value : parsed;
+}, z.date().nullable());
+
 // const dateInputSchema = z.preprocess((value) => {
 //   if (typeof value !== "string" || value.trim() === "") {
 //     return null;
@@ -150,7 +166,7 @@ export const updateLeadSchema = z.object({
   notesDoc: leadRichTextDocumentSchema.nullable().optional(),
   annotationsToCreate: z.array(leadNoteAnnotationInputSchema).optional(),
 
-  followupDate: z.iso.datetime().describe("Follow-up date").optional(),
+  followupDate: nullableDateInput.describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
   followupNotes: nullableTrimmedString.optional(),
@@ -187,7 +203,7 @@ export const createLeadSchema = z.object({
 
   notes: nullableTrimmedString.optional(),
 
-  followupDate: z.iso.datetime().describe("Follow-up date").optional(),
+  followupDate: nullableDateInput.describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
 
