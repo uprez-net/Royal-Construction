@@ -78,20 +78,25 @@ export function FileProcessingOutput({
           {images && images.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-2 max-h-48 overflow-y-auto no-scrollbar">
               {images.map((image) => {
-                const id = image.id
+                const id = image.id;
                 const imageData = image.parts.find(
                   (part) => part.type === "file",
                 );
 
                 if (!imageData) return null;
 
+                const mediaType =
+                  imageData.mediaType &&
+                  imageData.mediaType.startsWith("image/")
+                    ? imageData.mediaType
+                    : "image/png";
                 const src = imageData.url.startsWith("data:")
                   ? imageData.url
-                  : `data:image/png;base64,${imageData.url}`;
+                  : `data:${mediaType};base64,${imageData.url}`;
 
                 return (
                   <div
-                    key={imageData.filename ?? `image-${id}`}
+                    key={`${id}-${imageData.filename ?? "image"}`}
                     className="relative h-24 w-24 overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm"
                   >
                     <Image

@@ -17,6 +17,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: s
     const parsed = updateLeadSchema.safeParse(json);
 
     if (!parsed.success) {
+      console.warn("/api/leads PATCH validation error", {
+        leadId: id,
+        issues: parsed.error.flatten().fieldErrors,
+      });
       return badRequestResponse(parsed.error.message);
     }
     const updated = await updateLead(id, parsed.data);

@@ -1,4 +1,4 @@
-import { ToolLoopAgent, Output, stepCountIs } from "ai";
+import { ToolLoopAgent, Output, stepCountIs, NoObjectGeneratedError, TypeValidationError } from "ai";
 import { gateway } from "@/lib/model";
 import { fetchOfferSheetRules } from "../tools/fetch-offer-sheet-rules";
 import { FileProcessingTool } from "../tools/file-tools";
@@ -101,13 +101,24 @@ const handleOfferFileGeneration = async (prompt: string) => {
         }),
     });
 
-    const { output } = await offerFileCreationAgent.generate({
-        prompt
-    });
+    let creationMessage = "Offer content was prepared, but the generation status message was unavailable.";
+
+    try {
+        const { output } = await offerFileCreationAgent.generate({
+            prompt
+        });
+        creationMessage = output.creationMessage;
+    } catch (error) {
+        if (NoObjectGeneratedError.isInstance(error) || TypeValidationError.isInstance(error)) {
+            console.warn("Offer file generation completed without valid structured output.", error);
+        } else {
+            throw error;
+        }
+    }
 
     return {
         offerFileContent,
-        creationMessage: output.creationMessage,
+        creationMessage,
     };
 }
 

@@ -4,7 +4,7 @@ import { buildCreationStarterPrompt, FacadeOptionWithImageUrl } from "@/lib/agen
 import { findLeadById } from "@/lib/data/leads";
 import { handleOfferFileGeneration, handleOfferLineItemGeneration } from "@/lib/agent/offerCreationAgent";
 import { v4 as uuidv4 } from "uuid";
-import { createOrUpdateOffer } from "@/lib/data/offers";
+import { createOrUpdateOfferInternal } from "@/lib/data/offers-internal";
 import { OfferCreationOutput } from "@/lib/agent/offer-prompts";
 import { Lead } from "@/lib/leads/types";
 import { createNotification } from "@/types/notification";
@@ -19,7 +19,7 @@ import {
     calculateOfferLinePricing,
     calculateOfferTotals,
 } from "@/lib/offer/pricing";
-import { generateSafeOfferHTMLServer } from "@/utils/handle-offer-template-sever";
+import { generateSafeOfferHTMLServer } from "@/utils/handle-offer-template-server";
 import { generatePDF } from "../utils/generatePDF";
 import { ChatMessageAI } from "@/types/chat";
 import { sleep } from "workflow";
@@ -313,7 +313,7 @@ async function saveOffer({
             },
         );
 
-        const newOffer = await createOrUpdateOffer({
+        const newOffer = await createOrUpdateOfferInternal({
             leadId: lead.id,
             offerFileInput: {
                 id: uuidv4(),
@@ -335,7 +335,6 @@ async function saveOffer({
                 totalPrice: pricing.totalPrice.toString(),
                 unit: item.unit,
             })),
-            isWorkflowRun: true,
         });
 
         const existingChatSession = await prisma.chatSession.findFirst({
@@ -365,6 +364,16 @@ async function saveOffer({
                             timestamp: new Date(chatSessionMessage.metadata?.createdAt ?? Date.now()),
                         }
                     }
+                },
+            });
+        } else {
+            await prisma.chatMessage.create({
+                data: {
+                    id: chatSessionMessage.id,
+                    sessionId: existingChatSession.id,
+                    role: chatSessionMessage.role,
+                    content: chatSessionMessage.parts as Prisma.InputJsonValue,
+                    timestamp: new Date(chatSessionMessage.metadata?.createdAt ?? Date.now()),
                 },
             });
         }

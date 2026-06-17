@@ -138,10 +138,20 @@ export async function getAllUserClerkIds() {
     }
 }
 
-export async function resolveUserIdsToClerkIds(userIds: string[]): Promise<string[]> {
+export async function resolveUserIdsToClerkIds(userIds: Array<string | null | undefined>): Promise<string[]> {
     try {
+        const validUserIds = [...new Set(
+            userIds
+                .map((id) => id?.trim())
+                .filter((id): id is string => Boolean(id))
+        )];
+
+        if (validUserIds.length === 0) {
+            return [];
+        }
+
         const users = await prisma.user.findMany({
-            where: { id: { in: userIds } },
+            where: { id: { in: validUserIds } },
             select: { clerkId: true },
         });
         return users.map(user => user.clerkId);
