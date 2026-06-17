@@ -681,16 +681,18 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     })
     await triggerNotification(res.assignedId ? [res.assignedId] : [], notificationPayload);
   } else {
-    const notificationPayload = createNotification("leadAssigned", {
-      leadId: res.id.toString(),
-      leadType: res.type,
-      location: res.location ?? "Not specified",
-      customerName: res.name ?? "Not specified",
-      customerEmail: res.email ?? "Not specified",
-      customerPhone: res.phone ?? "Not specified",
-      assignedTo: res.assignedUser?.name ?? "Unknown",
-    })
-    await triggerNotification([res.assignedId!], notificationPayload);
+    if (res.assignedId) {
+      const notificationPayload = createNotification("leadAssigned", {
+        leadId: res.id.toString(),
+        leadType: res.type,
+        location: res.location ?? "Not specified",
+        customerName: res.name ?? "Not specified",
+        customerEmail: res.email ?? "Not specified",
+        customerPhone: res.phone ?? "Not specified",
+        assignedTo: res.assignedUser?.name ?? "Unknown",
+      })
+      await triggerNotification([res.assignedId], notificationPayload);
+    }
   }
 
   return res;
