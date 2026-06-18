@@ -7,6 +7,12 @@ import { milestoneTemplates } from "@/constants/milestoneTemplate";
 import { v4 as randomUUID } from "uuid";
 import { addWeeks } from "date-fns";
 
+/**
+ * Gets all milestones for a given project, ordered by their specified order field. Each milestone includes its id, name, photo requirement status, current status, and order.
+ * @param projectId - the ID of the project to fetch milestones for
+ * @returns an array of milestones associated with the project
+ * @throws Error if database query fails
+ */
 export async function getMilestonesByProject(projectId: string) {
   const milestones = await prisma.milestone.findMany({
     where: { projectId },
@@ -23,6 +29,14 @@ export async function getMilestonesByProject(projectId: string) {
   return milestones;
 }
 
+/**
+ * Creates a new milestone for a project with the provided data, then triggers cache revalidation for the project to ensure fresh data is served. The new milestone's order is set to one greater than the current count of milestones for the project.
+ * @param projectId 
+ * @param data 
+ * @returns newly created milestone with its details
+ * @throws Error if milestone creation fails
+ * Also triggers revalidation of the project cache to ensure the new milestone appears in subsequent fetches.
+ */
 export async function createMilestone(projectId: string, data: MilestoneCreationData) {
   const newMilestone = await prisma.milestone.create({
     data: {
@@ -49,6 +63,15 @@ export async function createMilestone(projectId: string, data: MilestoneCreation
   };
 }
 
+/**
+ * Adds photos to an existing milestone by connecting file records to the milestone. After updating the milestone, it triggers cache revalidation for the associated project to ensure the new files are reflected in the UI.
+ * @param projectId 
+ * @param milestoneId 
+ * @param fileIds 
+ * @returns updated milestone with its associated files
+ * @throws Error if database update fails
+ * Also triggers revalidation of the project cache to ensure the milestone's new files appear in subsequent fetches.
+ */
 export async function addPhotosToMilestone(projectId: string, milestoneId: string, fileIds: string[]) {
   await prisma.milestone.update({ where: { id: milestoneId }, data: { files: { connect: fileIds.map((id) => ({ id })) } } });
 
@@ -75,13 +98,20 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
   };
 }
 
-
+/**
+ * Creates milestones for a project based on a template, starting from a specified date.
+ * @param projectId - the ID of the project for which to create milestones
+ * @param startDate - the date to start creating milestones from
+ * @param tx - an optional transaction client for database operations
+ * @returns a promise resolving to an object containing the result of the operation
+ */
 export async function createMilestonesFromTemplateForProject(
   projectId: string,
-  startDate: Date
+  startDate: Date,
+  tx?: Prisma.TransactionClient
 ) {
   try {
-    
+    const prismaClient = tx ?? prisma;
     const milestoneRecords = milestoneTemplates.map((template) => {
       const id = randomUUID();
 
@@ -95,8 +125,8 @@ export async function createMilestonesFromTemplateForProject(
     const milestoneIdByOrder = new Map(
       milestoneRecords.map((m) => [m.order, m.id])
     );
-
-    const newMilestones = await prisma.milestone.createMany({
+    
+    const newMilestones = await prismaClient.milestone.createMany({
       data: milestoneRecords.map((milestone) => ({
         id: milestone.id,
         projectId,

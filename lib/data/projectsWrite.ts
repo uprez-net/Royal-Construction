@@ -103,53 +103,58 @@ export interface CreateProjectWithLeadInput {
 
 export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
-    const lead = await prisma.lead.findUnique({
-      where: { id: leadId },
-      include: {
-        project: true,
+    const newProjectId = await prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.findUnique({
+        where: { id: leadId },
+        include: {
+          project: true,
+        }
+      });
+
+      if (!lead) {
+        throw new Error("LEAD_NOT_FOUND");
       }
-    });
 
-    if (!lead) {
-      throw new Error("LEAD_NOT_FOUND");
-    }
+      if (lead.project) {
+        throw new Error("PROJECT_ALREADY_EXISTS_FOR_LEAD");
+      }
 
-    if(lead.project) {
-      throw new Error("PROJECT_ALREADY_EXISTS_FOR_LEAD");
-    }
-
-    // Create customer first, then reference by customerId to satisfy Prisma types
-    const customer = await prisma.customer.create({
-      data: {
-        name: lead.name,
-        email: lead.email,
-        phone: lead.phone,
-      },
-    });
-
-    const newProject = await prisma.project.create({
-      data: {
-        leadId: lead.id,
-        name: `${lead.type.join(", ")} at ${lead.location}`,
-        buildingType: lead.type.join(", "),
-        description: lead.notes,
-        location: address,
-        council: council,
-        totalBudget: String(lead.budget) ?? "0",
-        lotSize: String(lotSize),
-        startDate: new Date(startDate),
-        estimatedEndDate: new Date(estimatedEndDate),
-        requirements: {
-          notes: lead.notes,
-          noteDoc: lead.notesDoc,
+      // Create customer first, then reference by customerId to satisfy Prisma types
+      const customer = await tx.customer.create({
+        data: {
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
         },
-        customerId: customer.id,
-      }
+      });
+
+      const newProject = await tx.project.create({
+        data: {
+          leadId: lead.id,
+          name: `${lead.type.join(", ")} at ${lead.location}`,
+          buildingType: lead.type.join(", "),
+          description: lead.notes,
+          location: address,
+          council: council,
+          totalBudget: String(lead.budget ?? 0),
+          lotSize: String(lotSize),
+          startDate: new Date(startDate),
+          estimatedEndDate: new Date(estimatedEndDate),
+          requirements: {
+            notes: lead.notes,
+            noteDoc: lead.notesDoc,
+          },
+          customerId: customer.id,
+        }
+      });
+
+      await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate), tx);
+
+      return newProject.id;
     });
 
-    await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate));
-    const newProjectDetail = await getCachedProjectById(newProject.id);
-    if(!newProjectDetail) {
+    const newProjectDetail = await getCachedProjectById(newProjectId);
+    if (!newProjectDetail) {
       throw new Error("PROJECT_DETAIL_NOT_FOUND");
     }
 
