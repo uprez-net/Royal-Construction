@@ -4,7 +4,7 @@ import { LineItem, OfferFile, useChatContext } from "@/context/ChatContext";
 import { cn } from "@/lib/utils";
 import { useRef, useState, useTransition } from "react";
 import { DataTable } from "@/components/common/data-table";
-import { Files, Download, Save } from "lucide-react";
+import { Files, Save } from "lucide-react";
 import {
   base64ToBlob,
   buildBlobPath,
