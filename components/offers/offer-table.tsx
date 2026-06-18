@@ -10,6 +10,7 @@ import { OfferStatusLabels, PaginatedOfferResult } from "@/types/offer";
 import { fetchOffers, setOffers } from "@/lib/store/slices/offerSlice";
 import { OfferPagination } from "./offer-pagination";
 import { useRouter } from "next/navigation";
+import { OfferStatusBadge } from "./offer/offer-status-badge";
 
 export function OfferTable({
   serverQuotes,
@@ -67,7 +68,7 @@ export function OfferTable({
           currency.format(parseFloat(row.totalAmount)),
           row.sentAt ? dateFormat.format(row.sentAt) : "-",
           row.acceptedAt ? dateFormat.format(row.acceptedAt) : "-",
-          OfferStatusLabels[row.offerStatus],
+          <OfferStatusBadge key={row.id} status={row.offerStatus} />,
         ])}
         onRowClick={(rowIndex) => {
           const offer = offers.items[rowIndex];

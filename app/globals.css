@@ -212,27 +212,57 @@
 }
 
 .toaster .cn-toast [data-description] {
-  color: var(--muted-foreground);
+  font-size: 13px;
 }
 
 .toaster .cn-toast[data-type="success"] {
   border-color: color-mix(in oklab, var(--primary) 24%, var(--border));
+  color: var(--primary);
+  --normal-bg: color-mix(in oklab, var(--primary) 12%, var(--card));
+}
+
+.toaster .cn-toast[data-type="success"] [data-description] {
+  color: color-mix(in oklab, var(--primary) 28%, var(--card-foreground)) !important;
 }
 
 .toaster .cn-toast[data-type="error"] {
   border-color: color-mix(in oklab, var(--destructive) 28%, var(--border));
+  color: var(--destructive);
+  --normal-bg: color-mix(in oklab, var(--destructive) 14%, var(--card));
+}
+
+.toaster .cn-toast[data-type="error"] [data-description] {
+  color: color-mix(in oklab, var(--destructive) 38%, var(--card-foreground)) !important;
 }
 
 .toaster .cn-toast[data-type="warning"] {
   border-color: color-mix(in oklab, var(--chart-3) 26%, var(--border));
+  color: var(--chart-3);
+  --normal-bg: color-mix(in oklab, var(--chart-3) 12%, var(--card));
+}
+
+.toaster .cn-toast[data-type="warning"] [data-description] {
+  color: color-mix(in oklab, var(--chart-3) 38%, var(--card-foreground)) !important;
 }
 
 .toaster .cn-toast[data-type="info"] {
-  border-color: color-mix(in oklab, var(--primary) 18%, var(--border));
+  border-color: color-mix(in oklab, var(--info) 18%, var(--border));
+  color: var(--info);
+  --normal-bg: color-mix(in oklab, var(--info) 12%, var(--card));
+}
+
+.toaster .cn-toast[data-type="info"] [data-description] {
+  color: color-mix(in oklab, var(--info) 28%, var(--card-foreground)) !important;
 }
 
 .toaster .cn-toast[data-type="loading"] {
   border-color: color-mix(in oklab, var(--muted-foreground) 18%, var(--border));
+  color: var(--muted-foreground);
+  --normal-bg: color-mix(in oklab, var(--muted-foreground) 12%, var(--card));
+}
+
+.toaster .cn-toast[data-type="loading"] [data-description] {
+  color: color-mix(in oklab, var(--muted-foreground) 28%, var(--card-foreground)) !important;
 }
 /* ----------------------------------------------
    LEADS COMPONENT STYLES — Royal Constructions Theme

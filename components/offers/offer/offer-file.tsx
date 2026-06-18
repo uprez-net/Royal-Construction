@@ -4,7 +4,7 @@ import { LineItem, OfferFile, useChatContext } from "@/context/ChatContext";
 import { cn } from "@/lib/utils";
 import { useRef, useState, useTransition } from "react";
 import { DataTable } from "@/components/common/data-table";
-import { ReceiptText, Files, Download, Save } from "lucide-react";
+import { Files, Download, Save } from "lucide-react";
 import {
   base64ToBlob,
   buildBlobPath,
@@ -28,6 +28,7 @@ import { ClientPayload } from "@/utils/validators/files";
 import { OfferVersionSelector } from "./offer-version-selector";
 import { calculateOfferTotals } from "@/lib/offer/pricing";
 import { deleteLeadBlob } from "@/lib/actions/blob";
+import { LineItemTable } from "./line-item-table";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
@@ -56,7 +57,13 @@ export function OfferFileCanvas({
   projectType: string;
   location: string;
 }) {
-  const { offerFile, lineItems, lastRevisionDate, proposalDate, appendVersion } = useChatContext();
+  const {
+    offerFile,
+    lineItems,
+    lastRevisionDate,
+    proposalDate,
+    appendVersion,
+  } = useChatContext();
   const offerFileRef = useRef<HTMLIFrameElement | null>(null);
   const [tabId, setTabId] = useState<"offer" | "files" | "line-items">("offer");
   const [isPending, startTransition] = useTransition();
@@ -144,10 +151,14 @@ export function OfferFileCanvas({
           unit: item.unit,
         })),
       });
-      appendVersion(newOffer.version, newOffer.newOfferItems, newOffer.newOfferFile);
+      appendVersion(
+        newOffer.version,
+        newOffer.newOfferItems,
+        newOffer.newOfferFile,
+      );
       toast.success("Offer saved.");
     } catch (error) {
-      if(fileUrl) {
+      if (fileUrl) {
         void deleteLeadBlob(fileUrl, leadId).catch((cleanupError) => {
           console.error("Error cleaning up uploaded offer file:", cleanupError);
         });
@@ -193,7 +204,6 @@ export function OfferFileCanvas({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-
           <OfferVersionSelector />
 
           <Button
@@ -236,45 +246,7 @@ export function OfferFileCanvas({
       )}
 
       {tabId === "line-items" && (
-        <div className="min-h-0 w-full flex-1 overflow-auto bg-muted/30 px-4 py-4 lg:px-5">
-          <DataTable
-            headers={[
-              "item",
-              "description",
-              "quantity",
-              "price",
-              "unit",
-              "gst",
-              "total",
-            ]}
-            rows={lineItems.map((item) => [
-              item.item,
-              item.description,
-              item.quantity,
-              currency.format(item.unitPrice),
-              item.unit,
-              currency.format(item.gstAmount),
-              currency.format(item.totalPrice),
-            ])}
-            emptyState={
-              <div className="flex flex-col items-center justify-center gap-3">
-                <div className="flex size-12 items-center justify-center">
-                  <ReceiptText className="size-5 text-muted-foreground" />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    No line items available
-                  </p>
-
-                  <p className="text-xs text-muted-foreground">
-                    Your line items will appear here.
-                  </p>
-                </div>
-              </div>
-            }
-          />
-        </div>
+        <LineItemTable />
       )}
 
       {tabId === "files" && (

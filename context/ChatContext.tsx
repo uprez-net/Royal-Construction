@@ -41,6 +41,11 @@ interface ChatContextValue {
     lineItems: SafeOfferItem[],
     offerFile: SafeOfferDBFile,
   ) => void;
+  setLineItems: (
+    id: string,
+    updates: Partial<Pick<LineItem, "unit" | "quantity" | "unitPrice">>,
+  ) => void;
+  addLineItem: (lineItem: LineItem) => void;
 }
 
 export interface LineItem {
@@ -398,6 +403,42 @@ export const ChatProvider = ({
     });
   };
 
+  const handleUpdateLineItem = (
+    id: string,
+    updates: Partial<Pick<LineItem, "unit" | "quantity" | "unitPrice">>,
+  ) => {
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+
+        const updated = {
+          ...item,
+          ...updates,
+        };
+
+        const totalPrice = updated.quantity * updated.unitPrice;
+        const gstAmount = totalPrice * updated.gstRate;
+        const netLine = updated.gstIncluded
+          ? totalPrice
+          : totalPrice + gstAmount;
+
+        return {
+          ...updated,
+          totalPrice,
+          gstAmount,
+          netLine,
+        };
+      }),
+    );
+
+    setVersion("current");
+  };
+
+  const handleAddLineItem = (lineItem: LineItem) => {
+    setLineItems((prev) => [...prev, lineItem]);
+    setVersion("current");
+  };
+
   return (
     <ChatContext.Provider
       value={{
@@ -418,6 +459,8 @@ export const ChatProvider = ({
         offerFile,
         setVersion: handleSetVersion,
         appendVersion,
+        setLineItems: handleUpdateLineItem,
+        addLineItem: handleAddLineItem,
       }}
     >
       {children}
