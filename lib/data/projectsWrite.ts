@@ -148,8 +148,12 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
     });
 
     await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate));
+    const newProjectDetail = await getCachedProjectById(newProject.id);
+    if(!newProjectDetail) {
+      throw new Error("PROJECT_DETAIL_NOT_FOUND");
+    }
 
-    return await getCachedProjectById(newProject.id);
+    return newProjectDetail;
   } catch (error) {
     console.error("Error creating project from lead:", error);
     throw error;
