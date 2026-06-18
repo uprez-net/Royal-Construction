@@ -1164,7 +1164,10 @@ const fileSeedsForMilestone = (
         url: asset(projectSlug, `milestones/m-${String(milestoneOrder).padStart(2, "0")}`, template.filename),
         uploadedBy: authorIds[template.author],
     }));
-
+/**
+ * @deprecated This function is only used for seeding the database with sample data. It should not be used because of the lead relationship.
+ * Generates a set of sample projects, milestones, materials, variations, schedules, and site updates for testing and development purposes.
+ */
 async function main() {
     await prisma.activityLog.deleteMany();
     await prisma.siteUpdate.deleteMany();
