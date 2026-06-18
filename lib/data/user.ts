@@ -21,7 +21,6 @@ export async function createUser(name: string, email: string, clerkId: string, p
         if (role === Role.CUSTOMER) {
             const customer = await prisma.customer.create({
                 data: {
-                    userId: newUser.id,
                     email,
                     name,
                     phone,
@@ -76,7 +75,6 @@ export async function updateUser(clerkId: string, updates: Partial<{ name: strin
         if (updates.role === Role.CUSTOMER) {
             const customer = await prisma.customer.create({
                 data: {
-                    userId: user.id,
                     email: user.email,
                     name: user.name,
                     phone: user.phone,

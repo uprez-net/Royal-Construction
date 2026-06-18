@@ -1235,7 +1235,6 @@ async function main() {
 
             const customer = await prisma.customer.create({
                 data: {
-                    userId: user.id,
                     name: customerSeed.name,
                     email: customerSeed.email,
                     phone: customerSeed.phone,

@@ -8,7 +8,6 @@ import {
   SafeVariation,
   TradieScheduleListItem,
   type AddProjectUpdateRequest,
-  type CreateProjectRequest,
   type CreateVariationRequest,
   type ProjectDetail,
   type ProjectMutationState,
