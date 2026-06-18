@@ -7,6 +7,13 @@ import { getOfferKPIsCached, getOffersCached } from "@/lib/data/offers";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import OfferPageSkeleton from "./loading";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Offers Management",
+  description: "Manage and track your construction project offers effectively.",
+};
+
 
 async function OfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.

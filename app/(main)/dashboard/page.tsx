@@ -10,6 +10,7 @@ import {
 import { connection } from "next/server";
 import type { DashboardKPI } from "@/types/dashboard";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
+import type { Metadata } from "next";
 
 const emptyDashboardKPI: DashboardKPI = {
   followUpsCount: 0,
@@ -51,6 +52,11 @@ async function settleDashboardSection<T>(
     return { data: fallback, warning: label };
   }
 }
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+  description: "Overviews and insights into your construction projects, KPIs, and follow-ups.",
+};
 
 export default async function DashboardPageClient() {
   await connection();

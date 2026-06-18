@@ -6,6 +6,28 @@ import { Suspense } from "react";
 import OfferDetailsPageSkeleton from "./loading";
 import { CreatingOfferClient } from "@/components/offers/offer/creating-offer";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+
+export async function generateMetadata(
+  { params }: { params: Promise<{ leadId: string }>; }
+): Promise<Metadata> {
+  const { leadId } = await params;
+  const parsedLeadId = Number(leadId);
+  const offerData = await getOfferByLeadIdCached(parsedLeadId);
+
+  if (offerData) {
+    return {
+      title: `Lead: #${leadId} Offer Details`,
+      description: `Details and management for offer related to lead #${leadId}, ${offerData.lead.name}.`,
+    };
+  } else {
+    return {
+      title: `Lead: #${leadId} Creating Offer`,
+      description: `Creating offer for lead #${leadId}.`,
+    };
+  }
+}
+
 
 async function OfferCreationContent({
   params,
