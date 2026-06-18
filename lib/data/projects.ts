@@ -337,6 +337,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
     console.error("Error fetching project by ID:", error);
     return {
       id: projectId,
+      leadId: 0,
       name: "Fallback Project",
       description: null,
       buildingType: "Double Storey 4BR + Study",
@@ -352,7 +353,6 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
       updatedAt: new Date(),
       customer: {
         id: "",
-        userId: "",
         name: "Mock Customer",
         email: "",
         phone: "",

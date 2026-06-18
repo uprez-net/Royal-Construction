@@ -3,6 +3,9 @@ import { Prisma } from "@prisma/client";
 import type { MilestoneCreationData, MilestoneUpdateData } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
+import { milestoneTemplates } from "@/constants/milestoneTemplate";
+import { v4 as randomUUID } from "uuid";
+import { addWeeks } from "date-fns";
 
 export async function getMilestonesByProject(projectId: string) {
   const milestones = await prisma.milestone.findMany({
@@ -70,4 +73,47 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
     budget: updated.budget.toString(),
     spend: updated.spend?.toString(),
   };
+}
+
+
+export async function createMilestonesFromTemplateForProject(
+  projectId: string,
+  startDate: Date
+) {
+  try {
+    
+    const milestoneRecords = milestoneTemplates.map((template) => {
+      const id = randomUUID();
+
+      return {
+        ...template,
+        targetDate: addWeeks(startDate, template.order * 2), // Example: each milestone is 2 weeks apart based on its order
+        id,
+      };
+    });
+
+    const milestoneIdByOrder = new Map(
+      milestoneRecords.map((m) => [m.order, m.id])
+    );
+
+    const newMilestones = await prisma.milestone.createMany({
+      data: milestoneRecords.map((milestone) => ({
+        id: milestone.id,
+        projectId,
+        name: milestone.name,
+        order: milestone.order,
+        targetDate: milestone.targetDate,
+        parentId: milestone.parentId
+          ? milestoneIdByOrder.get(milestone.parentId)
+          : null,
+      })),
+    });
+
+    return {
+      message: `Created ${newMilestones.count} milestones for project ${projectId}`,
+    };
+  } catch (error) {
+    console.error("Error creating milestones from template:", error);
+    throw error;
+  }
 }

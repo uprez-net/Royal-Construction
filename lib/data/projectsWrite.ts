@@ -1,3 +1,4 @@
+"use server";
 import prisma from "@/lib/prisma";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
@@ -6,7 +7,17 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
+import { createMilestonesFromTemplateForProject } from "./milestones";
+import { ProjectDetail } from "@/types/project";
+import { getCachedProjectById } from "./projects";
 
+/**
+ * @deprecated This function is not to be used use `createProjectWithLead` instead which creates a project directly from a lead and ensures data consistency.
+ * Creates a new project with the provided data. Handles both existing and new customers, and optionally associates a site manager.
+ * Also triggers a notification for the site manager if assigned.
+ * @param projectData 
+ * @returns new project ID
+ */
 export async function createProject(projectData: CreateProjectInput) {
   const customerMode = projectData.customerMode;
 
@@ -58,6 +69,7 @@ export async function createProject(projectData: CreateProjectInput) {
         notes: projectData.notes?.trim() || null,
         customerMode,
       },
+      leadId: 0, // To make this function fail
     },
     include: { customer: true },
   });
@@ -78,4 +90,68 @@ export async function createProject(projectData: CreateProjectInput) {
   revalidateTag(`project-${project.id}`, CACHE_PROFILES.MEDIUM);
 
   return project.id;
+}
+
+export interface CreateProjectWithLeadInput {
+  leadId: number;
+  lotSize: number;
+  startDate: string;
+  estimatedEndDate: string;
+  address: string;
+  council: string;
+}
+
+export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+  try {
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      include: {
+        project: true,
+      }
+    });
+
+    if (!lead) {
+      throw new Error("LEAD_NOT_FOUND");
+    }
+
+    if(lead.project) {
+      throw new Error("PROJECT_ALREADY_EXISTS_FOR_LEAD");
+    }
+
+    // Create customer first, then reference by customerId to satisfy Prisma types
+    const customer = await prisma.customer.create({
+      data: {
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+      },
+    });
+
+    const newProject = await prisma.project.create({
+      data: {
+        leadId: lead.id,
+        name: `${lead.type.join(", ")} at ${lead.location}`,
+        buildingType: lead.type.join(", "),
+        description: lead.notes,
+        location: address,
+        council: council,
+        totalBudget: String(lead.budget) ?? "0",
+        lotSize: String(lotSize),
+        startDate: new Date(startDate),
+        estimatedEndDate: new Date(estimatedEndDate),
+        requirements: {
+          notes: lead.notes,
+          noteDoc: lead.notesDoc,
+        },
+        customerId: customer.id,
+      }
+    });
+
+    await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate));
+
+    return await getCachedProjectById(newProject.id);
+  } catch (error) {
+    console.error("Error creating project from lead:", error);
+    throw error;
+  }
 }

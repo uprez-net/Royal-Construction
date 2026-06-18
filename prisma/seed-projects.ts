@@ -1797,6 +1797,7 @@ async function main() {
 
         const project = await prisma.project.create({
             data: {
+                leadId: 0,
                 name: projectSeed.name,
                 description: projectSeed.description,
                 buildingType: projectSeed.buildingType,

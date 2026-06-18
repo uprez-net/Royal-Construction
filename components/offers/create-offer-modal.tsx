@@ -34,6 +34,7 @@ import { ClientPayload } from "@/utils/validators/files";
 import { LeadCardList } from "./lead-card-list";
 import { useRouter } from "next/navigation";
 import { fetchJson } from "@/utils/fetch";
+import { Input } from "../ui/input";
 
 interface CreateOfferFileModalProps {
   open: boolean;
@@ -67,7 +68,7 @@ export function CreateOfferFileModal({
     const selectedLead = leadSearch.items.find(
       (lead) => lead.id === selectedLeadId,
     );
-    if(!selectedLead) return false;
+    if (!selectedLead) return false;
     return (
       selectedLead.creatingOffer ||
       selectedLead.runStatus === "RUNNING" ||
@@ -248,10 +249,10 @@ export function CreateOfferFileModal({
 
         <div className="mt-4 p-2 flex flex-col gap-6 max-h-[60vh] overflow-y-auto">
           <div className="space-y-4">
-            <input
+            <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search name, company, or trade type"
+              placeholder="Search by lead name, email, site address, or build type"
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
 
@@ -259,7 +260,10 @@ export function CreateOfferFileModal({
               loading={leadSearch.loading}
               items={leadSearch.items}
               selectedLeadId={selectedLeadId}
-              setSelectedLeadId={setSelectedLeadId}
+              setSelectedLeadId={(id, location) => {
+                console.log("Selected Lead ID:", id, "Location:", location);
+                setSelectedLeadId(id);
+              }}
               setPage={leadSearch.setPage}
               currentPage={leadSearch.pageInfo.page}
               totalPages={leadSearch.pageInfo.totalPages}

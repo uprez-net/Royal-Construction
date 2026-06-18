@@ -92,6 +92,7 @@ enum RunStatus {
 
 model Project {
   id               String   @id @default(uuid())
+  leadId           Int      @unique
   name             String
   description      String?
   buildingType     String   @default("Double Storey 4BR + Study")
@@ -112,6 +113,7 @@ model Project {
 
   customer        Customer         @relation("CustomerProjects", fields: [customerId], references: [id])
   siteManager     User?            @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
+  Lead            Lead             @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
   milestones      Milestone[]
   siteUpdates     SiteUpdate[]
   variations      Variation[]
@@ -305,7 +307,6 @@ model ActivityLog {
 
 model Customer {
   id     String  @id @default(uuid())
-  userId String? @unique
   name   String
   email  String  @unique
   phone  String  @unique
@@ -314,7 +315,6 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   projects Project[] @relation("CustomerProjects")
-  user     User?     @relation("CustomerUsers", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@index([phone])
@@ -333,7 +333,6 @@ model User {
   updatedAt DateTime @updatedAt
 
   files               File[]        @relation("UserFiles")
-  customer            Customer?     @relation("CustomerUsers")
   siteManagerProjects Project[]     @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
@@ -356,8 +355,8 @@ model Lead {
   source       String?
   sourceDetail String?
 
-  stage LeadStage @default(NEW)
-  runId String?
+  stage     LeadStage  @default(NEW)
+  runId     String?
   runStatus RunStatus?
 
   assignedId String? // <-- THE NEW FOREIGN KEY
@@ -389,6 +388,7 @@ model Lead {
   noteAnnotations LeadNoteAnnotation[]
   files           File[]               @relation("LeadFiles")
   assignedUser    User?                @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
+  project         Project?             @relation("LeadProject")
 
   @@index([stage])
   @@index([assignedId])
