@@ -1,5 +1,5 @@
 import { Check, Pencil, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,10 +55,6 @@ function NumericEditor({
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(currentValue);
 
-  useEffect(() => {
-    setValue(currentValue);
-  }, [currentValue]);
-
   const save = () => {
     onValueChange(value);
     setIsEditing(false);
@@ -112,10 +108,6 @@ function UnitEditor({
 }: UnitProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState<LineItemUnit>(currentValue);
-
-  useEffect(() => {
-    setValue(currentValue);
-  }, [currentValue]);
 
   const save = () => {
     onValueChange(value);
