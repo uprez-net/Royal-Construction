@@ -67,7 +67,8 @@ export function CreateProjectModal({
       form.selectedLocation !== null &&
       Number(form.lotSize) > 0 &&
       !!form.startDate &&
-      !!form.estimatedEndDate,
+      !!form.estimatedEndDate &&
+      new Date(form.startDate) < new Date(form.estimatedEndDate),
     [form],
   );
 
@@ -258,6 +259,7 @@ export function CreateProjectModal({
                   value={form.startDate}
                   onChange={(e) => updateForm("startDate", e.target.value)}
                   className="pl-9"
+                  max={form.estimatedEndDate || undefined}
                 />
               </div>
             </div>
@@ -279,6 +281,7 @@ export function CreateProjectModal({
                     updateForm("estimatedEndDate", e.target.value)
                   }
                   className="pl-9"
+                  min={form.startDate || undefined}
                 />
               </div>
             </div>
