@@ -1,7 +1,8 @@
-import { getOffers } from "@/lib/data/offers";
+import { getOffers, updateOfferStatus } from "@/lib/data/offers";
 import { PaginatedOfferResult } from "@/types/offer";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { OfferWithLead } from "@/types/offer";
+import { OfferStatus } from "@prisma/client";
 
 interface OffersState {
     offers: PaginatedOfferResult;
@@ -31,7 +32,20 @@ export const fetchOffers = createAsyncThunk(
         } catch (error) {
             return thunkAPI.rejectWithValue(error instanceof Error ? error.message : "Failed to fetch offers");
         }
-    })
+    });
+
+export const updateOffer = createAsyncThunk(
+    "offers/updateOfferStatus",
+    async ({ offerId, status }: { offerId: string; status: OfferStatus }, thunkAPI) => {
+        try {
+            // Call server action to update offer status
+            const updatedOffer = await updateOfferStatus(offerId, status);
+            return updatedOffer;
+        }
+        catch (error) {
+            return thunkAPI.rejectWithValue(error instanceof Error ? error.message : "Failed to update offer status");
+        }
+    });
 
 const offersSlice = createSlice({
     name: "offers",
@@ -58,6 +72,19 @@ const offersSlice = createSlice({
             })
             .addCase(fetchOffers.rejected, (state, action) => {
                 state.loading = false;
+                state.error = action.payload as string;
+            })
+            .addCase(updateOffer.pending, (state) => {
+                state.error = null;
+            })
+            .addCase(updateOffer.fulfilled, (state, action) => {
+                const updatedOffer = action.payload;
+                const index = state.offers.items.findIndex((offer) => offer.id === updatedOffer.id);
+                if (index !== -1) {
+                    state.offers.items[index].offerStatus = updatedOffer.offerStatus;
+                }
+            })
+            .addCase(updateOffer.rejected, (state, action) => {
                 state.error = action.payload as string;
             });
     }

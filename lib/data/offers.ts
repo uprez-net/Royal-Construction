@@ -1,6 +1,6 @@
 "use server";
-import { Prisma } from "@prisma/client";
-import { cacheTag, cacheLife } from "next/cache";
+import { LeadStage, OfferStatus, Prisma } from "@prisma/client";
+import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
@@ -335,5 +335,46 @@ export const createOrUpdateOffer = async ({
     } catch (error) {
         console.error("Error creating offer:", error);
         throw new Error("Failed to create offer");
+    }
+}
+
+// Map to determine how lead stage should be updated based on offer status changes
+const OFFER_TO_LEAD_STATUS_UPDATE_MAP: Record<OfferStatus, LeadStage> = {
+    PENDING: "NEGOTIATING",
+    SENT: "NEGOTIATING",
+    ACCEPTED: "WON",
+    REJECTED: "LOST",
+}
+
+export const updateOfferStatus = async (offerId: string, status: OfferStatus) => {
+    try {
+        const { userId } = await auth();
+        if (!userId) {
+            throw new Error("Unauthorized");
+        }
+        const user = await getUserByClerkIdCached(userId);
+        if (!user) {
+            throw new Error("Unauthorized");
+        }
+
+        const offer = await prisma.offer.update({
+            where: { id: offerId },
+            data: { 
+                offerStatus: status,
+                lead: {
+                    update: {
+                        stage: OFFER_TO_LEAD_STATUS_UPDATE_MAP[status],
+                    }
+                }
+            },
+        });
+
+        revalidateTag(`offer-lead-${offer.leadId}`, CACHE_PROFILES.SHORT);
+        revalidateTag("offers", CACHE_PROFILES.SHORT);
+
+        return offer;
+    } catch (error) {
+        console.error("Error updating offer status:", error);
+        throw new Error("Failed to update offer status");
     }
 }

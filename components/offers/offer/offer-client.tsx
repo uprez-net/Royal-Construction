@@ -50,6 +50,12 @@ export function OfferClient({
         dismissible: true,
       },
     );
+
+    return () => {
+      if (toastIdRef.current) {
+        toast.dismiss(toastIdRef.current);
+      }
+    };
   }, []);
   
   return (
