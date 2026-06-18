@@ -62,6 +62,7 @@ export function OfferFileCanvas({
     lineItems,
     lastRevisionDate,
     proposalDate,
+    versions,
     appendVersion,
   } = useChatContext();
   const offerFileRef = useRef<HTMLIFrameElement | null>(null);
@@ -72,27 +73,27 @@ export function OfferFileCanvas({
   const numericTotalAmount = offerTotals.totalAmount;
   const totalAmount = currency.format(numericTotalAmount);
 
-  const handleDownload = async () => {
-    if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
-    try {
-      const documentHtml =
-        offerFileRef.current.contentDocument.documentElement.outerHTML;
-      const generatedPdf = await generatePDF({ html: documentHtml });
+  // const handleDownload = async () => {
+  //   if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
+  //   try {
+  //     const documentHtml =
+  //       offerFileRef.current.contentDocument.documentElement.outerHTML;
+  //     const generatedPdf = await generatePDF({ html: documentHtml });
 
-      const blob = base64ToBlob(generatedPdf);
-      const url = URL.createObjectURL(blob);
+  //     const blob = base64ToBlob(generatedPdf);
+  //     const url = URL.createObjectURL(blob);
 
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `offer_${leadId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-      toast.error("Failed to generate PDF. Please try again.");
-    }
-  };
+  //     const link = document.createElement("a");
+  //     link.href = url;
+  //     link.download = `offer_${leadId}.pdf`;
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     document.body.removeChild(link);
+  //   } catch (error) {
+  //     console.error("Error generating PDF:", error);
+  //     toast.error("Failed to generate PDF. Please try again.");
+  //   }
+  // };
 
   const handleSave = async () => {
     if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
@@ -104,7 +105,7 @@ export function OfferFileCanvas({
       const generatedPdf = await generatePDF({ html: documentHtml });
       const blob = base64ToBlob(generatedPdf);
       const fileId = uuidv4(); // Generate a unique ID for the file
-      const fileName = `offer_${dateFormat.format(new Date())}_${leadId}.pdf`;
+      const fileName = `offer_${dateFormat.format(new Date())}_${leadId}_v${versions + 1}.pdf`;
 
       const uploadRes = await upload(
         buildBlobPath({
@@ -156,7 +157,16 @@ export function OfferFileCanvas({
         newOffer.newOfferItems,
         newOffer.newOfferFile,
       );
-      toast.success("Offer saved.");
+
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(`Offer saved with name ${fileName}.`);
     } catch (error) {
       if (fileUrl) {
         void deleteLeadBlob(fileUrl, leadId).catch((cleanupError) => {
@@ -206,7 +216,7 @@ export function OfferFileCanvas({
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <OfferVersionSelector />
 
-          <Button
+          {/* {<Button
             variant="outline"
             size="sm"
             disabled={shouldBeDisabled(offerFile, lineItems) || isPending}
@@ -215,7 +225,7 @@ export function OfferFileCanvas({
           >
             <Download className="size-4" />
             Download Offer
-          </Button>
+          </Button>} */}
 
           <Button
             variant="outline"
