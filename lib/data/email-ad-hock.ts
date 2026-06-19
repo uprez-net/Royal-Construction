@@ -544,3 +544,26 @@ export async function RemoveUrlFromBlob(blobUrl: string) {
     return { success: false, error: "Failed to delete blob." };
   }
 }
+
+// ─── Server Action: Send Campaign Email ─────────────────────────────────────
+// Bypasses the /api/graph/send route entirely — runs on the server with full
+// access to env vars and the Graph client, so no admin‑token header is needed.
+
+export async function sendCampaignEmail(
+  to: string,
+  subject: string,
+  body: string,
+): Promise<boolean> {
+  try {
+    const { getGraphConfig } = await import("@/lib/graph/config");
+    const { createGraphContext } = await import("@/lib/graph/client");
+
+    const config = getGraphConfig();
+    const client = await createGraphContext(config);
+    await client.sendMail({ to, subject, body, cc: config.cc });
+    return true;
+  } catch (error) {
+    console.error(`[Campaign] Failed to send email to ${to}:`, error);
+    return false;
+  }
+}
