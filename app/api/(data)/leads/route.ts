@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
 
     const created = await createLead(parsed.data);
     if ('message' in created) {
+     // console.log("Lead already exists:", created.message);
       return successResponse(created, { status: 409 });
     }
     return successResponse(created, { status: 201 });

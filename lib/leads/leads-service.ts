@@ -2,6 +2,7 @@
 import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadsStats, LeadStage } from './types';
 import { fetchJson } from '@/utils/fetch';
 import { findLeadById, getAllLeads, getAnalyticsData, getLeadsStats, handleCalendarFollowup, PaginatedLeadsResult } from '../data/leads';
+import { sendCampaignEmail } from '../data/email-ad-hock';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
   actionDate: string;
@@ -124,32 +125,8 @@ export async function deleteLead(id: number): Promise<{ success: boolean; messag
 
 
 export async function sendEmailToLead(to: string, subject: string, body: string): Promise<boolean> {
-  try {
-
-    //  const headers: Record<string, string> = {
-    //   'Content-Type': 'application/json',
-    // };
-
-    // const token = process.env.NEXT_PUBLIC_GRAPH_ADMIN_TOKEN;
-    //  console.log('Graph admin token for sending email:', token);
-    // ✅ Add the token to Authorization header
-    // if (token) {
-    //   headers['x-graph-admin-token'] = token;
-    // }
-
-    const response = await fetchJson(
-      '/api/graph/send',
-      {
-        method: 'POST',
-        // headers,
-        body: JSON.stringify({ to, subject, body }),
-      },
-      'Failed to send email via Graph API'
-    );
-
-    return response.success;
-  } catch (error) {
-    console.error('Failed to send email via Graph API', error);
-    return false;
-  }
+  // Delegate to the server action which calls the Graph client directly,
+  // bypassing the /api/graph/send route and its admin-token requirement.
+  // const { sendCampaignEmail } = await import('@/lib/data/email-ad-hock');
+  return sendCampaignEmail(to, subject, body);
 }

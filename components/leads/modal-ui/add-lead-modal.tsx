@@ -12,6 +12,7 @@ import {
   HistoryItem,
 } from "@/lib/leads/types";
 import { createLead } from "@/lib/leads/leads-service";
+import { FetchError } from "@/utils/fetch";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import {
   LEAD_SOURCE_OPTIONS,
@@ -208,6 +209,13 @@ export function AddLeadModal({
       }
     } catch (error) {
       console.error(error);
+      if (error instanceof FetchError) {
+        console.error("error Status:", error.status, "error Message:", error.message);
+        if (error.status === 409) {
+          showToast("A lead with the same email or phone number already exists. Check in Leads Table", "error");
+          return;
+        }
+      }
       showToast("Failed to create lead. Please try again.", "info");
     } finally {
       setSaving(false);

@@ -1,3 +1,14 @@
+
+export class FetchError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "FetchError";
+    this.status = status;
+  }
+}
+
 /**
  * Extract an error message from a response body object if present, otherwise return a fallback.
  * @param responseBody - parsed response body which may contain an `error` property
@@ -34,9 +45,8 @@ interface FetchJsonResponse<T> {
 export async function fetchJson<T>(input: RequestInfo | URL, init: RequestInit, fallback: string, signal?: AbortSignal): Promise<FetchJsonResponse<T>> {
   const response = await fetch(input, { ...init, signal });
   const body = await response.json().catch(() => null);
-
   if (!response.ok) {
-    throw new Error(fetchErrorMessage(body, fallback));
+    throw new FetchError(fetchErrorMessage(body, fallback), response.status);
   }
 
   return body as FetchJsonResponse<T>;
