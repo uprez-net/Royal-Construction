@@ -158,6 +158,21 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       throw new Error("PROJECT_DETAIL_NOT_FOUND");
     }
 
+    const notificationPayload = createNotification("projectCreated", {
+      projectId: newProjectDetail.id,
+      projectName: newProjectDetail.name,
+      projectType: newProjectDetail.buildingType,
+      location: newProjectDetail.location,
+      customerName: newProjectDetail.customer.name,
+      customerEmail: newProjectDetail.customer.email,
+      customerPhone: newProjectDetail.customer.phone,
+    });
+    await triggerNotification(newProjectDetail.siteManagerId ? [newProjectDetail.siteManagerId] : [], notificationPayload);
+
+
+    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${newProjectDetail.id}`, CACHE_PROFILES.MEDIUM);
+
     return newProjectDetail;
   } catch (error) {
     console.error("Error creating project from lead:", error);

@@ -72,7 +72,7 @@ export function OfferChat() {
       id: generateUUID(),
       parts: [{ type: "text", text }],
       metadata: {
-        createdAt: new Date(Date.now() - 10_000).toISOString(),
+        createdAt: new Date().toISOString(),
       },
     });
     setInput("");

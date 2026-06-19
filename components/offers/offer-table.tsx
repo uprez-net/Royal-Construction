@@ -50,9 +50,10 @@ export function OfferTable({
   const handleStatusChange = async (
     offerId: string,
     newStatus: OfferStatus,
+    leadId: number
   ) => {
     try {
-      await dispatch(updateOffer({ offerId, status: newStatus })).unwrap();
+      await dispatch(updateOffer({ offerId, status: newStatus, leadId })).unwrap();
       toast.success("Offer status updated to " + newStatus);
     } catch (error) {
       console.error("Error updating offer status", error);
@@ -90,7 +91,7 @@ export function OfferTable({
             key={row.id}
             status={row.offerStatus}
             onStatusChange={(newStatus) =>
-              handleStatusChange(row.id, newStatus)
+              handleStatusChange(row.id, newStatus, row.leadId)
             }
           />,
         ])}

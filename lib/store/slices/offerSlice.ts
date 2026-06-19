@@ -36,10 +36,10 @@ export const fetchOffers = createAsyncThunk(
 
 export const updateOffer = createAsyncThunk(
     "offers/updateOfferStatus",
-    async ({ offerId, status }: { offerId: string; status: OfferStatus }, thunkAPI) => {
+    async ({ offerId, leadId, status }: { offerId: string; leadId: number; status: OfferStatus }, thunkAPI) => {
         try {
             // Call server action to update offer status
-            const updatedOffer = await updateOfferStatus(offerId, status);
+            const updatedOffer = await updateOfferStatus(offerId, leadId, status);
             return updatedOffer;
         }
         catch (error) {

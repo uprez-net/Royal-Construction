@@ -139,15 +139,14 @@ export function CreateProjectModal({
       ).unwrap();
 
       toast.success(`Project created: ${createdProject.name}`);
+      onSuccess();
+      onOpenChange(false);
       router.push(`/projects/${createdProject.id}`);
     } catch (error) {
       console.error("Error creating project:", error);
       toast.error(
         `Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
-    } finally {
-      onSuccess();
-      onOpenChange(false);
     }
   };
 
