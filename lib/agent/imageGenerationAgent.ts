@@ -1,4 +1,4 @@
-import { ToolLoopAgent, Output, generateImage, tool } from "ai";
+import { generateText, Output, generateImage, tool } from "ai";
 import { gateway } from "@/lib/model";
 import z from "zod";
 import { put } from "@vercel/blob"
@@ -28,48 +28,53 @@ function mediaTypeToExtension(mediaType: string | undefined) {
     return "png";
 }
 
-export const imageGenerationAgent = new ToolLoopAgent({
-    model: gateway("google/gemini-2.5-flash"),
-    tools: {
-        generateImageTool: tool({
-            description: "Generates an image based on a textual description of a facade design.",
-            inputSchema: z.object({
-                title: z.string().describe("A brief title for the facade design, such as 'Modern Minimalist Facade with Wood and Glass' or 'Classic Victorian Facade with Brick and Ornate Details'."),
-                description: z.string().describe("Textual description of the desired facade design, including architectural style, materials, colors, and specific features."),
-            }),
-            execute: async ({ description, title }) => {
-                try {
-                    const { image } = await generateImage({
-                        model: gateway.image("google/imagen-4.0-fast-generate-001"),
-                        prompt: description,
-                        aspectRatio: "16:9",
-                    });
-                    if (!image?.base64) {
-                        throw new Error("Image generation returned no image data");
-                    }
-                    const contentType = image.mediaType || "image/png";
-                    const blob = await put(
-                        `facade-images/${sanitizeFilename(title)}.${mediaTypeToExtension(contentType)}`,
-                        Buffer.from(image.base64, "base64"),
-                        {
-                            access: "public",
-                            addRandomSuffix: true,
-                            contentType,
+export const imageGeneration = async (prompt: string) => {
+    const { output } = await generateText({
+        model: gateway("google/gemini-2.5-flash"),
+        tools: {
+            generateImageTool: tool({
+                description: "Generates an image based on a textual description of a facade design.",
+                inputSchema: z.object({
+                    title: z.string().describe("A brief title for the facade design, such as 'Modern Minimalist Facade with Wood and Glass' or 'Classic Victorian Facade with Brick and Ornate Details'."),
+                    description: z.string().describe("Textual description of the desired facade design, including architectural style, materials, colors, and specific features."),
+                }),
+                execute: async ({ description, title }) => {
+                    try {
+                        const { image } = await generateImage({
+                            model: gateway.image("google/imagen-4.0-fast-generate-001"),
+                            prompt: description,
+                            aspectRatio: "16:9",
+                        });
+                        if (!image?.base64) {
+                            throw new Error("Image generation returned no image data");
                         }
-                    )
+                        const contentType = image.mediaType || "image/png";
+                        const blob = await put(
+                            `facade-images/${sanitizeFilename(title)}.${mediaTypeToExtension(contentType)}`,
+                            Buffer.from(image.base64, "base64"),
+                            {
+                                access: "public",
+                                addRandomSuffix: true,
+                                contentType,
+                            }
+                        )
 
-                    return blob.url;
-                } catch (error) {
-                    console.error("Failed to generate facade image", { title, error });
-                    throw new Error(`Image generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+                        return blob.url;
+                    } catch (error) {
+                        console.error("Failed to generate facade image", { title, error });
+                        throw new Error(`Image generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+                    }
                 }
-            }
+            }),
+        },
+        system: FACADE_IMAGE_GENERATION_PROMPT,
+        output: Output.object({
+            schema: z.object({
+                imageUrl: z.string().describe("URL of the generated image"),
+            }),
         }),
-    },
-    instructions: FACADE_IMAGE_GENERATION_PROMPT,
-    output: Output.object({
-        schema: z.object({
-            imageUrl: z.string().describe("URL of the generated image"),
-        }),
-    }),
-})
+        prompt,
+    })
+
+    return output;
+}
