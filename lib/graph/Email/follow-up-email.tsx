@@ -28,7 +28,7 @@ import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context'
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
 const ICONS = {
-  chat: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23C6923A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'%3E%3C/path%3E%3C/svg%3E`,
+  chat: `https://api.iconify.design/lucide/message-square.svg?color=%23C6923A&width=18&height=18`,
 };
 
 // ─── Main Component ─────────────────────────────────────────────────────────
