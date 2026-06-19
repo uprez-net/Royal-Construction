@@ -7,6 +7,8 @@ import { del } from '@vercel/blob';
 import { stageToPrismaMap } from '@/types/lead';
 import type { LeadStage } from '@/lib/leads/types';
 import { Prisma } from '@prisma/client';
+import { getGraphConfig } from '../graph/config';
+import { createGraphContext } from '../graph/client';
 
 // ─── Static Header & Footer ────────────────────────────────────────────────
 
@@ -555,9 +557,6 @@ export async function sendCampaignEmail(
   body: string,
 ): Promise<boolean> {
   try {
-    const { getGraphConfig } = await import("@/lib/graph/config");
-    const { createGraphContext } = await import("@/lib/graph/client");
-
     const config = getGraphConfig();
     const client = await createGraphContext(config);
     await client.sendMail({ to, subject, body, cc: config.cc });

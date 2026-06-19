@@ -2,6 +2,7 @@
 import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadsStats, LeadStage } from './types';
 import { fetchJson } from '@/utils/fetch';
 import { findLeadById, getAllLeads, getAnalyticsData, getLeadsStats, handleCalendarFollowup, PaginatedLeadsResult } from '../data/leads';
+import { sendCampaignEmail } from '../data/email-ad-hock';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
   actionDate: string;
@@ -126,6 +127,6 @@ export async function deleteLead(id: number): Promise<{ success: boolean; messag
 export async function sendEmailToLead(to: string, subject: string, body: string): Promise<boolean> {
   // Delegate to the server action which calls the Graph client directly,
   // bypassing the /api/graph/send route and its admin-token requirement.
-  const { sendCampaignEmail } = await import('@/lib/data/email-ad-hock');
+  // const { sendCampaignEmail } = await import('@/lib/data/email-ad-hock');
   return sendCampaignEmail(to, subject, body);
 }
