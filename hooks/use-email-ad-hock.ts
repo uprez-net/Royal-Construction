@@ -212,6 +212,8 @@ export function useEmailAdHock() {
                   setErrors({});
             } catch (error) {
                   console.error('Error generating email:', error);
+                  const msg = error instanceof Error ? error.message : 'Unknown error';
+                  toast.error(`Failed to generate email: ${msg}`);
             } finally {
                   setIsGenerating(false);
             }
