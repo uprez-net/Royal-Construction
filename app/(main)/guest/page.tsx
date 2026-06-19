@@ -1,8 +1,14 @@
 import { Mail } from 'lucide-react';
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Access Pending",
+  description: "Your CRM access is being reviewed. Please wait for approval.",
+};
 
 export default function GuestPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8 text-center">
           <div className="mb-6">

@@ -12,7 +12,7 @@ interface LeadCardListProps {
   currentPage: number;
   totalPages: number;
   selectedLeadId: number | null;
-  setSelectedLeadId: (id: number | null) => void;
+  setSelectedLeadId: (id: number | null, location: string | null) => void;
   setPage: (page: number) => void;
 }
 
@@ -103,7 +103,7 @@ export function LeadCardList({
             lead.stage === "Quoted" && "opacity-75",
           )}
           onClick={() =>
-            setSelectedLeadId(lead.id === selectedLeadId ? null : lead.id)
+            setSelectedLeadId(lead.id === selectedLeadId ? null : lead.id, lead.location)
           }
         >
           <CardContent className="p-4">

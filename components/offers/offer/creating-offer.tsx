@@ -105,9 +105,9 @@ function CreatingOffer({
       }
     };
 
-    updateTimer();
-
     const interval = setInterval(updateTimer, 1000);
+
+    updateTimer();
 
     return () => clearInterval(interval);
   }, [isIdle, updatedAt]);

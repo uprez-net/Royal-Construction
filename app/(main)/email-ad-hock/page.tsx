@@ -1,6 +1,4 @@
 "use client";
-
-import React from 'react';
 import { Check, Send, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -79,12 +77,12 @@ export default function AdHocEmailPage() {
                 <li key={step.name} className="relative flex-1 flex flex-col items-center">
                   {index < STEPS.length - 1 && (
                     <div className={cn(
-                      "absolute left-[calc(50%+18px)] right-[calc(-50%+18px)] top-[18px] h-0.5 -translate-y-1/2",
+                      "absolute left-[calc(50%+18px)] right-[calc(-50%+18px)] top-4.5 h-0.5 -translate-y-1/2",
                       hook.currentStep > step.id ? "bg-[#C6923A]" : "bg-slate-200"
                     )} aria-hidden="true" />
                   )}
                   <div className={cn(
-                    "relative z-10 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                    "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                     hook.currentStep === step.id ? "border-[#C6923A] bg-[#C6923A] text-white"
                     : hook.currentStep > step.id ? "border-[#C6923A] bg-[#C6923A] text-white"
                     : "border-slate-300 bg-white text-slate-400"

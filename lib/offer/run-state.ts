@@ -18,6 +18,11 @@ type StartRunDecision = {
 
 export type OfferRunStartDecision = ReuseRunDecision | StartRunDecision;
 
+/**
+ * Decide whether to reuse an existing running offer creation workflow or start a new one.
+ * @param state - current run state containing runId and runStatus
+ * @returns decision object indicating `reuse` or `start` with metadata
+ */
 export function getOfferRunStartDecision(
   state: OfferRunState,
 ): OfferRunStartDecision {

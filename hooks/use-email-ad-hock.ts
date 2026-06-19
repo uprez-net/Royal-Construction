@@ -6,10 +6,11 @@ import {
       GetEmailAdHock, DeleteEmailAdHock, getAllLeadIdsForCampaign,
       getLeadsForCampaign,
       RemoveUrlFromBlob,
+      sendCampaignEmail,
 } from '@/lib/data/email-ad-hock';
 import { upload } from '@vercel/blob/client';
 import { toast } from 'sonner';
-import { sendEmailToLead, updateLead } from '@/lib/leads/leads-service';
+import { updateLead } from '@/lib/leads/leads-service';
 import { LinkItem, AttachmentItem, EmailTemplate, FormErrors, generateId, EmailAdHocTemplate, CampaignLead } from '@/types/email-ad-hock';
 import { handleTemplateHtmlSend } from "@/components/Email-adhock/handle-template-select";
 
@@ -311,7 +312,7 @@ export function useEmailAdHock() {
 
       // ─── Saved Template Load (Ensure section is marked) ──────────
       const handleSelectSavedTemplate = async (template: EmailAdHocTemplate) => {
-            const t = toast.loading('Loading saved template...');
+            //const t = toast.loading('Loading saved template...');
             try {
                   const res = await fetch(template.htmlUrl);
                   if (!res.ok) throw new Error('Failed to fetch template content');
@@ -322,10 +323,10 @@ export function useEmailAdHock() {
                   setGeneratedHtml(html);
                   setTemplateSection('saved-templates'); // Mark as saved template
                   setCurrentStep(2);
-                  toast.success('Template loaded!', { id: t });
+                  //toast.success('Template loaded!', { id: t });
             } catch (error) {
                   console.error('Error loading template:', error);
-                  toast.error('Failed to load template content.', { id: t });
+                  //toast.error('Failed to load template content.', { id: t });
             }
       };
 
@@ -390,7 +391,7 @@ export function useEmailAdHock() {
                               const personalizedSubject = personalize(emailSubject);
                               const personalizedHtml = personalize(generatedHtml);
 
-                              const sent = await sendEmailToLead(lead.email, personalizedSubject, personalizedHtml);
+                              const sent = await sendCampaignEmail(lead.email, personalizedSubject, personalizedHtml);
                               if (sent) {
                                     successCount++;
                                     const now = new Date();

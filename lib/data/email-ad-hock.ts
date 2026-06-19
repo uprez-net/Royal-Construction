@@ -7,6 +7,8 @@ import { del } from '@vercel/blob';
 import { stageToPrismaMap } from '@/types/lead';
 import type { LeadStage } from '@/lib/leads/types';
 import { Prisma } from '@prisma/client';
+import { getGraphConfig } from '../graph/config';
+import { createGraphContext } from '../graph/client';
 
 // ─── Static Header & Footer ────────────────────────────────────────────────
 
@@ -542,5 +544,25 @@ export async function RemoveUrlFromBlob(blobUrl: string) {
   } catch (error) {
     console.error("Failed to delete blob at URL:", blobUrl, error);
     return { success: false, error: "Failed to delete blob." };
+  }
+}
+
+// ─── Server Action: Send Campaign Email ─────────────────────────────────────
+// Bypasses the /api/graph/send route entirely — runs on the server with full
+// access to env vars and the Graph client, so no admin‑token header is needed.
+
+export async function sendCampaignEmail(
+  to: string,
+  subject: string,
+  body: string,
+): Promise<boolean> {
+  try {
+    const config = getGraphConfig();
+    const client = await createGraphContext(config);
+    await client.sendMail({ to, subject, body, cc: config.cc });
+    return true;
+  } catch (error) {
+    console.error(`[Campaign] Failed to send email to ${to}:`, error);
+    return false;
   }
 }

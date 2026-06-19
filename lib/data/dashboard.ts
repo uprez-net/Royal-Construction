@@ -39,7 +39,11 @@ type DashboardKPIQueryResult = {
     previous_quarter_actual_spend: number | null;
 };
 
-
+/**
+ * Gets key performance indicator data for the dashboard, including trends compared to previous periods. Requires user authentication and aggregates data across leads, projects, and milestones to provide insights on follow-ups, new leads, conversions, revenue, and spending.
+ * @returns DashboardKPI object containing various metrics and their trends
+ * @throws Error if user is not authenticated or if database queries fail
+ */
 export async function getDashboardKPIData(): Promise<DashboardKPI> {
     try {
         const { userId } = await auth();
@@ -233,7 +237,11 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
         throw new Error("Failed to fetch dashboard KPI data");
     }
 }
-
+/**
+ * Gets follow-up items for the dashboard, showing leads that are either in the follow-up stage or have a follow-up date that is due. Requires user authentication and returns items with status indicators based on due dates.
+ * @returns Array of FollowUpItem objects containing lead information and follow-up status
+ * @throws Error if user is not authenticated or if database queries fail
+ */
 export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
     try {
         const { userId } = await auth();
@@ -289,6 +297,11 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
     }
 }
 
+/**
+ * Gets graph data for the dashboard, including non-conversion reasons, lead and revenue trends over the past year, conversion breakdowns, and estimated vs actual spending. Requires user authentication and aggregates data across multiple dimensions to provide insights for visualizations.
+ * @returns Promise resolving to an object containing the graph data
+ * @throws Error if user is not authenticated or if database queries fail
+ */
 export async function getDashboardGraphData() {
     try {
         const { userId } = await auth();

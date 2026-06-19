@@ -6,10 +6,16 @@ import { ReceiptText, RefreshCw } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
-import { OfferStatusLabels, PaginatedOfferResult } from "@/types/offer";
-import { fetchOffers, setOffers } from "@/lib/store/slices/offerSlice";
+import { PaginatedOfferResult } from "@/types/offer";
+import {
+  fetchOffers,
+  setOffers,
+  updateOffer,
+} from "@/lib/store/slices/offerSlice";
 import { OfferPagination } from "./offer-pagination";
 import { useRouter } from "next/navigation";
+import { OfferStatusBadge } from "./offer/offer-status-badge";
+import { OfferStatus } from "@prisma/client";
 
 export function OfferTable({
   serverQuotes,
@@ -41,6 +47,19 @@ export function OfferTable({
     }
   };
 
+  const handleStatusChange = async (
+    offerId: string,
+    newStatus: OfferStatus,
+  ) => {
+    try {
+      await dispatch(updateOffer({ offerId, status: newStatus })).unwrap();
+      toast.success("Offer status updated to " + newStatus);
+    } catch (error) {
+      console.error("Error updating offer status", error);
+      toast.error("Failed to update offer status");
+    }
+  };
+
   return (
     <CardContent className="px-5 py-4">
       <DataTable
@@ -67,7 +86,13 @@ export function OfferTable({
           currency.format(parseFloat(row.totalAmount)),
           row.sentAt ? dateFormat.format(row.sentAt) : "-",
           row.acceptedAt ? dateFormat.format(row.acceptedAt) : "-",
-          OfferStatusLabels[row.offerStatus],
+          <OfferStatusBadge
+            key={row.id}
+            status={row.offerStatus}
+            onStatusChange={(newStatus) =>
+              handleStatusChange(row.id, newStatus)
+            }
+          />,
         ])}
         onRowClick={(rowIndex) => {
           const offer = offers.items[rowIndex];

@@ -45,16 +45,16 @@ const generateProjectDetailTabs = (
     (m) => m.status !== "DONE",
   ).length;
 
-  const tradieAlerts = project.tradieSchedules.filter(
-    (schedule) =>
-      schedule.status === "PENDING" ||
-      schedule.status === "PENDING_RESPONSE" ||
-      schedule.status === "NO_RESPONSE" ||
-      schedule.status === "DECLINED",
-  ).length;
+  // const tradieAlerts = project.tradieSchedules.filter(
+  //   (schedule) =>
+  //     schedule.status === "PENDING" ||
+  //     schedule.status === "PENDING_RESPONSE" ||
+  //     schedule.status === "NO_RESPONSE" ||
+  //     schedule.status === "DECLINED",
+  // ).length;
 
-  const siteUpdates = project.siteUpdates.length;
-  const variations = project.variations.length;
+  // const siteUpdates = project.siteUpdates.length;
+  // const variations = project.variations.length;
 
   const tabs: {
     key: ProjectDetailTabKey;
@@ -69,32 +69,32 @@ const generateProjectDetailTabs = (
       badge: pendingMilestones.toString(),
       badgeTone: "warning",
     },
-    { key: "materials", label: "Materials" },
+    // { key: "materials", label: "Materials" },
     { key: "payments", label: "Payments" },
-    {
-      key: "updates",
-      label: "Site Updates",
-      badge: siteUpdates.toString(),
-      badgeTone: "primary",
-    },
-    {
-      key: "tradies",
-      label: "Tradies",
-      badge: tradieAlerts.toString(),
-      badgeTone:
-        tradieAlerts > 4 ? "danger" : tradieAlerts > 2 ? "warning" : "neutral",
-    },
-    { key: "workers", label: "Workers & QR" },
+    // {
+    //   key: "updates",
+    //   label: "Site Updates",
+    //   badge: siteUpdates.toString(),
+    //   badgeTone: "primary",
+    // },
+    // {
+    //   key: "tradies",
+    //   label: "Tradies",
+    //   badge: tradieAlerts.toString(),
+    //   badgeTone:
+    //     tradieAlerts > 4 ? "danger" : tradieAlerts > 2 ? "warning" : "neutral",
+    // },
+    // { key: "workers", label: "Workers & QR" },
     { key: "docs", label: "Documents" },
     { key: "history", label: "History" },
     { key: "communications", label: "Communications" },
-    {
-      key: "variations",
-      label: "Variations",
-      badge: variations.toString(),
-      badgeTone:
-        variations > 4 ? "danger" : variations > 2 ? "warning" : "neutral",
-    },
+    // {
+    //   key: "variations",
+    //   label: "Variations",
+    //   badge: variations.toString(),
+    //   badgeTone:
+    //     variations > 4 ? "danger" : variations > 2 ? "warning" : "neutral",
+    // },
   ];
 
   return tabs;

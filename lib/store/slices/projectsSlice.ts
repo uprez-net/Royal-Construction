@@ -8,7 +8,6 @@ import {
   SafeVariation,
   TradieScheduleListItem,
   type AddProjectUpdateRequest,
-  type CreateProjectRequest,
   type CreateVariationRequest,
   type ProjectDetail,
   type ProjectMutationState,
@@ -20,6 +19,7 @@ import type { File as ProjectFiles } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
 import type { CreateScheduleRequest } from "./tradiesSlice";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey } from "@/utils/validators";
+import { createProjectWithLead, CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
 
 type MutationKey = "createProject" | "createVariation" | "addUpdate" | "addMaterial" | "createTradieSchedule" | "addMilestone" | "updateMilestone" | "addMilestonePhotos";
 
@@ -84,65 +84,12 @@ function syncProjectState(state: ProjectsState, project: ProjectDetail) {
 
 export const createProject = createAsyncThunk<
   ProjectDetail,
-  CreateProjectRequest,
+  CreateProjectWithLeadInput,
   { rejectValue: string }
 >("projects/createProject", async (payload, thunkApi) => {
   try {
-    const formData = new FormData();
-    formData.append("name", payload.name);
-    formData.append("propertyType", payload.propertyType);
-    formData.append("customerMode", payload.customerMode);
-    formData.append("location", payload.location);
-    formData.append("budget", String(payload.budget));
-    formData.append("lotSize", String(payload.lotSize));
-    formData.append("startDate", payload.startDate);
-
-    if (payload.customerId) {
-      formData.append("customerId", payload.customerId);
-    }
-
-    if (payload.customerName) {
-      formData.append("customerName", payload.customerName);
-    }
-
-    if (payload.customerPhone) {
-      formData.append("customerPhone", payload.customerPhone);
-    }
-
-    if (payload.customerEmail) {
-      formData.append("customerEmail", payload.customerEmail);
-    }
-
-    if (payload.council) {
-      formData.append("council", payload.council);
-    }
-
-    if (payload.siteManagerId) {
-      formData.append("siteManagerId", payload.siteManagerId);
-    }
-
-    if (payload.estimatedEndDate) {
-      formData.append("estimatedEndDate", payload.estimatedEndDate);
-    }
-
-    if (payload.notes) {
-      formData.append("notes", payload.notes);
-    }
-
-    if (payload.quoteFile) {
-      formData.append("quoteFile", payload.quoteFile);
-    }
-
-    const response = await fetchJson<ProjectDetail>(
-      "/api/projects",
-      {
-        method: "POST",
-        body: formData,
-      },
-      "Unable to create project",
-    );
-
-    return response.data;
+    const newProject = await createProjectWithLead(payload);
+    return newProject;
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to create project");
   }

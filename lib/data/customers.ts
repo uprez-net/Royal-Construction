@@ -21,7 +21,15 @@ const defaultPageSize = 10;
 function normalizeQuery(query?: string) {
     return query?.trim() ?? "";
 }
-
+/**
+ * Fetches a paginated list of customers for dropdown selection, with optional search query.
+ * @param page 
+ * @param limit 
+ * @param query 
+ * @returns PaginatedLookupResult containing the list of customers and pagination metadata
+ * @throws Error if database query fails
+ * Also applies pagination, search filtering, and orders results by creation date descending.
+ */
 async function getCustomersDropdownPage(
     page: number,
     limit: number,
@@ -67,6 +75,15 @@ async function getCustomersDropdownPage(
     };
 }
 
+/**
+ * Cached version of getCustomersDropdownPage. Applies caching with a medium lifespan and tags the cache for customers to allow targeted invalidation when customer data changes.
+ * @param page 
+ * @param limit 
+ * @param query 
+ * @returns PaginatedLookupResult containing the list of customers and pagination metadata
+ * @throws Error if database query fails
+ * Also applies pagination, search filtering, and orders results by creation date descending.
+ */
 export async function getCachedCustomersForDropdown(
     page = 1,
     limit = defaultPageSize,
@@ -80,15 +97,34 @@ export async function getCachedCustomersForDropdown(
 
     return getCustomersDropdownPage(page, limit, query);
 }
-
+/**
+ * Exposed function to fetch customers for dropdown without caching, allowing for real-time data retrieval when needed.
+ * @param page 
+ * @param limit 
+ * @param query 
+ * @returns PaginatedLookupResult containing the list of customers and pagination metadata
+ * @throws Error if database query fails
+ * Also applies pagination, search filtering, and orders results by creation date descending.
+ */
 export async function getCustomersForDropdown(page = 1, limit = defaultPageSize, query?: string) {
     return getCustomersDropdownPage(page, limit, query);
 }
 
+/**
+ * Fetch a single customer by their unique ID.
+ * @param customerId 
+ * @returns Customer
+ */
 export async function findCustomerById(customerId: string) {
     return prisma.customer.findUnique({ where: { id: customerId } });
 }
 
+/**
+ * Fetch a single customer by their email or phone number. If both are provided, email is prioritized.
+ * @param email 
+ * @param phone 
+ * @returns Customer
+ */
 export async function findCustomerByContact(email?: string | null, phone?: string | null) {
     if (email) {
         const customer = await prisma.customer.findUnique({ where: { email } });
@@ -102,8 +138,19 @@ export async function findCustomerByContact(email?: string | null, phone?: strin
 
     return null;
 }
-
+/**
+ * Creates a new customer for a project.
+ * @param input - Object containing customer details such as name, email, and phone
+ * @returns Customer - the newly created customer record
+ * @throws Error if customer creation fails
+ * Also triggers revalidation of the customers cache to ensure new customer appears in dropdowns.
+ */
 export async function createCustomerForProject(input: { name: string; email: string; phone: string }) {
+
+    const existing = await findCustomerByContact(input.email, input.phone);
+    if (existing) {
+        return existing;
+    }
 
     const customer = await prisma.customer.create({
         data: {

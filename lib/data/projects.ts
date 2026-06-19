@@ -271,7 +271,7 @@ export async function getProjectsForLookup(page = 1, limit = defaultLookupPageSi
   }
 }
 
-export async function getProjectById(projectId: string): Promise<ProjectDetail> {
+export async function getProjectById(projectId: string): Promise<ProjectDetail | null> {
   try {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -279,7 +279,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
     });
 
     if (!project) {
-      throw new Error("Project not found");
+      return null;
     }
 
     return {
@@ -335,41 +335,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail> 
     };
   } catch (error) {
     console.error("Error fetching project by ID:", error);
-    return {
-      id: projectId,
-      name: "Fallback Project",
-      description: null,
-      buildingType: "Double Storey 4BR + Study",
-      council: "Sydney City Council",
-      customerId: "",
-      location: "",
-      siteManagerId: null,
-      startDate: new Date(),
-      estimatedEndDate: new Date(),
-      requirements: null,
-      status: "ON_TRACK",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      customer: {
-        id: "",
-        userId: "",
-        name: "Mock Customer",
-        email: "",
-        phone: "",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      siteManager: null,
-      activityLogs: [],
-      milestones: [],
-      siteUpdates: [],
-      variations: [],
-      tradieSchedules: [],
-      files: [],
-      materials: [],
-      totalBudget: "0",
-      spent: "0",
-    };
+    throw error;
   }
 }
 

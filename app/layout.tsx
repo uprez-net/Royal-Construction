@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     template: "%s | Royal Constructions",
   },
   description:
-    "Construction management portal rebuilt from static mockups into a reusable Next.js architecture.",
+    "Construction management portal for Royal Constructions. Manage projects, track progress, and collaborate with your team.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

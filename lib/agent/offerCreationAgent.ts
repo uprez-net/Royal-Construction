@@ -90,7 +90,13 @@ const handleOfferFileGeneration = async (prompt: string) => {
         ],
         output: Output.object({
             schema: z.object({
-                creationMessage: z.string().describe("A message describing the offer file creation progress or result or futher information request."),
+                creationMessage: z
+                .string()
+                .describe(`
+                    A message describing the offer file creation progress or result or futher information request.
+                    For example, it could be a message summarising what got created, what got skipped and what futher information is needed to complete those sections. 
+                    It could also be a message indicating that the offer file creation is complete and ready for review.
+                `),
             }),
         }),
     });

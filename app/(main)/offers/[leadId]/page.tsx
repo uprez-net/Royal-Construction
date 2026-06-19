@@ -6,6 +6,36 @@ import { Suspense } from "react";
 import OfferDetailsPageSkeleton from "./loading";
 import { CreatingOfferClient } from "@/components/offers/offer/creating-offer";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ leadId: string }>;
+}): Promise<Metadata> {
+  const { leadId } = await params;
+  const parsedLeadId = Number(leadId);
+  const offerData = await getOfferByLeadIdCached(parsedLeadId);
+
+  if (!Number.isInteger(parsedLeadId) || parsedLeadId <= 0) {
+    return {
+      title: "Invalid Lead ID",
+      description: "The provided lead ID is invalid.",
+    };
+  }
+
+  if (offerData) {
+    return {
+      title: `Lead: #${leadId} Offer Details`,
+      description: `Details and management for offer related to lead #${leadId}, ${offerData.lead.name}.`,
+    };
+  } else {
+    return {
+      title: `Lead: #${leadId} Creating Offer`,
+      description: `Creating offer for lead #${leadId}.`,
+    };
+  }
+}
 
 async function OfferCreationContent({
   params,
@@ -24,11 +54,7 @@ async function OfferCreationContent({
     getOfferByLeadIdCached(parsedLeadId),
   ]);
 
-  const {
-    chatSession: chat,
-    files,
-    leadInfo,
-  } = chatData;
+  const { chatSession: chat, files, leadInfo } = chatData;
 
   if (!chat || !offerData || leadInfo.runStatus !== "COMPLETED") {
     return (
