@@ -14,14 +14,18 @@ import { LeadCardList } from "@/components/offers/lead-card-list";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus } from "lucide-react";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchJson } from "@/utils/fetch";
-import { SearchableSelect } from "@/components/common/searchable-select";
+import {
+  LookupOption,
+  SearchableSelect,
+} from "@/components/common/searchable-select";
 import type { AddressSuggestion } from "@/types/data";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { createProject } from "@/lib/store/slices/projectsSlice";
 import { useRouter } from "next/navigation";
+import { fetchSiteManagers } from "@/lib/store/slices/siteManagersSlice";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -37,6 +41,7 @@ type FormState = {
   lotSize: string;
   startDate: string;
   estimatedEndDate: string;
+  siteManagerId: string;
 };
 
 export function CreateProjectModal({
@@ -46,7 +51,9 @@ export function CreateProjectModal({
 }: CreateProjectModalProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const siteManagers = useAppSelector((state) => state.siteManagers);
   const leadSearch = useLeadSearch("");
+  const [managerSearch, setManagerSearch] = useState("");
   const [isPending, startTransition] = useTransition();
   const [locationSuggestions, setLocationSuggestions] = useState<
     AddressSuggestion[]
@@ -59,6 +66,7 @@ export function CreateProjectModal({
     lotSize: "",
     startDate: "",
     estimatedEndDate: "",
+    siteManagerId: "",
   });
 
   const isValid = useMemo(
@@ -71,6 +79,13 @@ export function CreateProjectModal({
       new Date(form.startDate) < new Date(form.estimatedEndDate),
     [form],
   );
+
+  const selectedSiteManager = useMemo(() => {
+    return (
+      siteManagers.items.find((manager) => manager.id === form.siteManagerId) ??
+      null
+    );
+  }, [form.siteManagerId, siteManagers.items]);
 
   const updateForm = <K extends keyof FormState>(
     key: K,
@@ -121,6 +136,26 @@ export function CreateProjectModal({
     };
   }, [form.location, open]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void dispatch(
+        fetchSiteManagers({
+          page: 1,
+          limit: 10,
+          query: managerSearch,
+        }),
+      );
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [dispatch, managerSearch, open]);
+
   const handleSubmit = async () => {
     if (!isValid) {
       toast.error("Please fill in all required fields.");
@@ -135,6 +170,7 @@ export function CreateProjectModal({
           estimatedEndDate: form.estimatedEndDate,
           address: form.selectedLocation!.label,
           council: form.selectedLocation!.council,
+          siteManagerId: form.siteManagerId,
         }),
       ).unwrap();
 
@@ -219,6 +255,34 @@ export function CreateProjectModal({
                     location: suggestion.label,
                     selectedLocation: suggestion,
                   }));
+                }}
+              />
+            </div>
+
+            {/* Site Manager */}
+            <div className="md:col-span-2">
+              <SearchableSelect
+                label="Site Manager"
+                placeholder="Assign manager..."
+                searchValue={managerSearch}
+                selectedItem={selectedSiteManager}
+                items={siteManagers.items}
+                loading={siteManagers.loading}
+                hasMore={siteManagers.page < siteManagers.totalPages}
+                onQueryChange={setManagerSearch}
+                onSelect={(item) => {
+                  updateForm("siteManagerId", item.id);
+
+                  setManagerSearch((item as LookupOption).name);
+                }}
+                onLoadMore={() => {
+                  void dispatch(
+                    fetchSiteManagers({
+                      page: siteManagers.page + 1,
+                      limit: 10,
+                      query: managerSearch,
+                    }),
+                  );
                 }}
               />
             </div>

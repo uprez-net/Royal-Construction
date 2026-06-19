@@ -10,6 +10,7 @@ import { triggerNotification } from "../notification/novu";
 import { createMilestonesFromTemplateForProject } from "./milestones";
 import { ProjectDetail } from "@/types/project";
 import { getCachedProjectById } from "./projects";
+import { Prisma } from "@prisma/client";
 
 /**
  * @deprecated This function is not to be used use `createProjectWithLead` instead which creates a project directly from a lead and ensures data consistency.
@@ -99,9 +100,23 @@ export interface CreateProjectWithLeadInput {
   estimatedEndDate: string;
   address: string;
   council: string;
+  siteManagerId: string;
 }
 
-export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+const parseBudget = (value: unknown): Prisma.Decimal => {
+  if (Prisma.Decimal.isDecimal(value)) {
+    return value;
+  }
+
+  const normalized = String(value ?? "")
+    .replace(/[^0-9.-]/g, "");
+
+  return normalized && !isNaN(Number(normalized))
+    ? new Prisma.Decimal(normalized)
+    : new Prisma.Decimal(0);
+};
+
+export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const newProjectId = await prisma.$transaction(async (tx) => {
       const lead = await tx.lead.findUnique({
@@ -120,30 +135,40 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       }
 
       // Create customer first, then reference by customerId to satisfy Prisma types
-      const customer = await tx.customer.create({
-        data: {
-          name: lead.name,
-          email: lead.email,
-          phone: lead.phone,
-        },
-      });
+      const customer = await createCustomerForProject({
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+      }, tx);
+
+      const projectType = lead.type.length > 0 ? lead.type.join(", ") : "General Construction";
+      const totalBudget = parseBudget(lead.budget);
+      // TBD: We can use AI to infer requirements based on lead notes and data
+      const inferredRequirements = [
+        'Garage',
+        'Garden',
+        'Swimming Pool',
+        'Solar Panels',
+        'Home Office',
+        'Open Plan Living',
+        'Sustainable Materials',
+        'Smart Home Integration',
+      ]
 
       const newProject = await tx.project.create({
         data: {
           leadId: lead.id,
-          name: `${lead.type.join(", ")} at ${lead.location}`,
-          buildingType: lead.type.join(", "),
+          name: `${projectType} at ${lead.location}`,
+          buildingType: projectType,
           description: lead.notes,
           location: address,
           council: council,
-          totalBudget: String(lead.budget ?? 0),
+          totalBudget: totalBudget,
           lotSize: String(lotSize),
           startDate: new Date(startDate),
           estimatedEndDate: new Date(estimatedEndDate),
-          requirements: {
-            notes: lead.notes,
-            noteDoc: lead.notesDoc,
-          },
+          siteManagerId: siteManagerId,
+          requirements: inferredRequirements,
           customerId: customer.id,
         }
       });
