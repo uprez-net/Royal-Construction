@@ -360,7 +360,7 @@ const OFFER_STATE_MACHINE: Record<OfferStatus, OfferStatus[]> = {
  * @returns The updated offer object
  * @throws Error if the user is unauthorized, the offer is not found, or the status transition is invalid
  */
-export const updateOfferStatus = async (offerId: string, leadId: number, status: OfferStatus) => {
+export const updateOfferStatus = async (offerId: string, status: OfferStatus) => {
     try {
         const { userId } = await auth();
         if (!userId) {
@@ -371,17 +371,17 @@ export const updateOfferStatus = async (offerId: string, leadId: number, status:
             throw new Error("Unauthorized");
         }
 
-        await assertCanAccessLead(user, leadId);
-
+        
         const currentOffer = await prisma.offer.findUnique({
             where: { id: offerId },
-            select: { offerStatus: true },
+            select: { offerStatus: true, leadId: true },
         });
-
+        
         if (!currentOffer) {
             throw new Error("OFFER_NOT_FOUND");
         }
-
+        
+        await assertCanAccessLead(user, currentOffer.leadId);
         const allowedNextStatuses = OFFER_STATE_MACHINE[currentOffer.offerStatus];
         if (!allowedNextStatuses.includes(status)) {
             throw new Error(`Invalid status transition from ${currentOffer.offerStatus} to ${status}`);
