@@ -114,7 +114,7 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
   }
   
   if (updateData.status === "DONE") {
-    normalizedUpdateData.invoiceId = await createInvoice({
+    const invoiceId = await createInvoice({
       milestoneId: milestoneId,
       projectId: milestone.projectId,
       milestoneAmount: parseFloat(milestone.budget.toString()),
@@ -122,6 +122,10 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
       dueDate: dateFormat.format(addWeeks(new Date(), 2)),
       milestoneName: milestone.name,
     });
+    normalizedUpdateData = {
+      ...normalizedUpdateData,
+      invoiceId,
+    };
   }
   const updated = await prisma.milestone.update({ where: { id: milestoneId }, data: normalizedUpdateData });
 

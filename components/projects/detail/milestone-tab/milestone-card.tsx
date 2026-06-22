@@ -299,7 +299,7 @@ export function MilestoneCard({
                 <div className="space-y-2">
                   {milestone.childrenMilestones.map((child, index) => (
                     <MilestoneCard
-                      key={child.id}
+                      key={`milestone-${child.id}-${index}`}
                       prevMilestone={prevMilestone}
                       milestone={child}
                       project={project}
