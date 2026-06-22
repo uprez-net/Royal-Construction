@@ -10,7 +10,7 @@ export async function logAction(input: ActivityLogEntry) {
                 type: input.type,
                 message: input.message,
                 authorId: input.authorId,
-                timestamp: new Date(input.timestamp),
+                createdAt: new Date(input.timestamp),
                 projectId: input.projectId,
                 milestoneId: input.milestoneId ?? null,
             },
