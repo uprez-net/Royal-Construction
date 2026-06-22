@@ -132,7 +132,7 @@ model Project {
 model Milestone {
   id              String          @id @default(uuid())
   projectId       String
-  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invoiceId       String?
   name            String
   order           Int
   description     String?
@@ -151,6 +151,7 @@ model Milestone {
   siteUpdates        SiteUpdate[]
   tradieSchedules    TradieSchedule[]
   activityLogs       ActivityLog[]
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   files              File[]           @relation("MilestoneFiles")
   tradies            Tradie[]         @relation("TradieMilestones")
   parentMilestone    Milestone?       @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
@@ -306,10 +307,10 @@ model ActivityLog {
 }
 
 model Customer {
-  id     String  @id @default(uuid())
-  name   String
-  email  String  @unique
-  phone  String  @unique
+  id    String @id @default(uuid())
+  name  String
+  email String @unique
+  phone String @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
