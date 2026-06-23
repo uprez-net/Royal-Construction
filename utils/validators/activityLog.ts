@@ -7,7 +7,7 @@ export const activityLogSchemas = {
         projectType: z.string(),
         location: z.string(),
         customerName: z.string(),
-        customerEmail: z.string().email(),
+        customerEmail: z.email(),
         customerPhone: z.string(),
     }),
 }

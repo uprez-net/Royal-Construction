@@ -191,7 +191,7 @@ export const updateLeadSchema = z.object({
   notesDoc: leadRichTextDocumentSchema.nullable().optional(),
   annotationsToCreate: z.array(leadNoteAnnotationInputSchema).optional(),
 
-  followupDate: nullableDateInput.describe("Follow-up date").optional(),
+  followupDate: z.iso.date().nullable().describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
   followupNotes: nullableTrimmedString.optional(),
@@ -228,7 +228,7 @@ export const createLeadSchema = z.object({
 
   notes: nullableTrimmedString.optional(),
 
-  followupDate: nullableDateInput.describe("Follow-up date").optional(),
+  followupDate: z.iso.date().nullable().describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
 
