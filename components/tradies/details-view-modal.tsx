@@ -140,7 +140,7 @@ export function TradieScheduleDetailsModal({
     reminderSentAt: schedule.reminderSentAt,
     updatedAt: new Date().toISOString(),
     durationDays: 1,
-    company: schedule.company,
+    abn: schedule.abn,
   } satisfies TradieScheduleListItem;
 
   const daysLeft = daysUntil(new Date(schedule.scheduledDate));
@@ -170,7 +170,7 @@ export function TradieScheduleDetailsModal({
 
                 <p className="mt-1 text-[12.5px] text-muted-foreground">
                   {schedule.tradeType} —{" "}
-                  {schedule.company ?? "Independent Tradie"}
+                  {schedule.abn}
                 </p>
               </div>
             </div>
@@ -194,12 +194,12 @@ export function TradieScheduleDetailsModal({
                 }
               />
 
-              {schedule.hourtlyRate && (
+              {schedule.hourlyRate && (
                 <DetailItem
                   label="Hourly Rate"
                   value={
                     <span className="truncate">
-                      {currency.format(Number(schedule.hourtlyRate))}/hr
+                      {currency.format(Number(schedule.hourlyRate))}/hr
                     </span>
                   }
                 />

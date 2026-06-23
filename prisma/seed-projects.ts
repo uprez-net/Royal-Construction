@@ -1269,14 +1269,18 @@ async function main() {
         { key: "glazing", name: "Clearview Glazing", company: "Clearview Glazing NSW", trade: "Glazier", tradeType: "Glazing", phone: "+61 408 100 213", email: "quotes@clearviewglazing.com.au", hourlyRate: 132, rating: 4.8 },
     ];
 
+    const generateRandomABN = () => {
+        const abn = Math.floor(Math.random() * 10000000000).toString().padStart(11, "0");
+        return `ABN${abn}`;
+    }
+
     const tradies = await Promise.all(
         tradieSeeds.map((tradieSeed) =>
             prisma.tradie.create({
                 data: {
                     name: tradieSeed.name,
-                    company: tradieSeed.company,
                     trade: tradieSeed.trade,
-                    tradeType: tradieSeed.tradeType,
+                    abn: generateRandomABN(),
                     phone: tradieSeed.phone,
                     email: tradieSeed.email,
                     hourlyRate: decimal(tradieSeed.hourlyRate),

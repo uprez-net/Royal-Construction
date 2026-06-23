@@ -55,7 +55,6 @@ export const notificationSchemas = {
         milestoneName: z.string(),
         tradieName: z.string(),
         tradieTrade: z.string(),
-        tradieCompany: z.string(),
         scheduleDate: z.string(),
     }),
 
@@ -65,7 +64,6 @@ export const notificationSchemas = {
         milestoneName: z.string(),
         tradieName: z.string(),
         tradieTrade: z.string(),
-        tradieCompany: z.string(),
         scheduleDate: z.string(),
         status: z.string(),
     }),

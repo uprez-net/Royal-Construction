@@ -226,7 +226,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
             key={tradies.length} // Force remount to reset internal state when tradies change
             headers={[
               "Trade",
-              "Company",
+              "ABN",
               "Contact",
               "Needed For",
               "Scheduled",
@@ -241,7 +241,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               </span>,
 
               <span className="text-[13px]" key={`${tradie.id}-company`}>
-                {tradie.tradie.company}
+                {tradie.tradie.abn}
               </span>,
 
               <span className="text-xs" key={`${tradie.id}-phone`}>
@@ -299,8 +299,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                               id: tradie.id,
                               tradieId: tradie.tradie.id,
                               tradieName: tradie.tradie.name,
-                              company: tradie.tradie.company,
-                              tradeType: tradie.tradie.tradeType,
+                              tradeType: tradie.tradie.trade,
+                              abn: tradie.tradie.abn,
                               projectId: project.id,
                               projectName: project.name,
                               taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
@@ -342,8 +342,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                             id: tradie.id,
                             tradieId: tradie.tradie.id,
                             tradieName: tradie.tradie.name,
-                            company: tradie.tradie.company,
-                            tradeType: tradie.tradie.tradeType,
+                            tradeType: tradie.tradie.trade,
+                            abn: tradie.tradie.abn,
                             projectId: project.id,
                             projectName: project.name,
                             taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
@@ -384,8 +384,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                             id: tradie.id,
                             tradieId: tradie.tradie.id,
                             tradieName: tradie.tradie.name,
-                            company: tradie.tradie.company,
-                            tradeType: tradie.tradie.tradeType,
+                            tradeType: tradie.tradie.trade,
+                            abn: tradie.tradie.abn,
                             projectId: project.id,
                             projectName: project.name,
                             taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
@@ -423,7 +423,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                     schedule: {
                       id: tradie.id,
                       tradieName: tradie.tradie.name,
-                      tradeType: tradie.tradie.tradeType,
+                      tradeType: tradie.tradie.trade,
+                      abn: tradie.tradie.abn,
                       projectName: project.name,
                       taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
                       scheduledDate: new Date(
@@ -434,7 +435,6 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                         new Date(),
                       ),
                       status: tradie.status,
-                      company: tradie.tradie.company,
                       contact: {
                         email: tradie.tradie.email,
                         phone: tradie.tradie.phone,

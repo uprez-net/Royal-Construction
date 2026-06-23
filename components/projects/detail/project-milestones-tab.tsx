@@ -240,7 +240,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                   <div>
                     <p className="text-[13px] font-bold text-slate-900">
                       {schedule.tradie.trade} •{" "}
-                      {schedule.tradie.company ?? schedule.tradie.name}
+                      {schedule.tradie.name}{" - "}{schedule.tradie.abn}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       Needed for: {schedule.milestone?.name ?? "General"} —{" "}
@@ -262,9 +262,9 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                             schedule.scheduledDate,
                           ).toISOString(),
                           status: schedule.status,
-                          company: schedule.tradie.company,
+                          abn: schedule.tradie.abn,
                           tradieName: schedule.tradie.name,
-                          tradeType: schedule.tradie.tradeType,
+                          tradeType: schedule.tradie.trade,
                           projectId: schedule.projectId,
                           projectName: project.name,
                           taskLabel: `${project.milestones.find((m) => m.id === schedule.milestoneId)?.name ?? "General"} - ${schedule.tradie.trade}`,

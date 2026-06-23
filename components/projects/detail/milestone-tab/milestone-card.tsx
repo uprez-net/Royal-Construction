@@ -247,10 +247,10 @@ export function MilestoneCard({
                     tradieId: t.tradieId,
                     milestoneId: t.milestoneId ?? undefined,
                     scheduledDate: new Date(t.scheduledDate).toISOString(),
+                    abn: t.tradie.abn,
                     status: t.status,
-                    company: t.tradie.company,
+                    tradeType: t.tradie.trade,
                     tradieName: t.tradie.name,
-                    tradeType: t.tradie.tradeType,
                     projectId: t.projectId,
                     projectName: project.name,
                     taskLabel: `${milestone.name} - ${t.tradie.trade}`,
@@ -265,6 +265,7 @@ export function MilestoneCard({
                       email: project.siteManager?.email ?? "Site Manager Email",
                       phone: project.siteManager?.phone ?? "Site Manager Phone",
                     },
+                    hourlyRate: t.tradie.hourlyRate,
                   } satisfies TradieScheduleListItem)
                 }
               >

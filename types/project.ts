@@ -123,9 +123,9 @@ export type TradieCoordinationQuery = {
 
 export type TradieScheduleListItem = {
   id: string;
+  abn: string;
   tradieId: string;
   tradieName: string;
-  company: string | null;
   tradeType: string;
   projectId: string;
   projectName: string;
@@ -137,7 +137,7 @@ export type TradieScheduleListItem = {
   status: TradieScheduleStatus;
   reminderSentAt?: string;
   updatedAt: string;
-  hourtlyRate?: string;
+  hourlyRate?: string;
   rating?: string;
   contact: {
     email: string;
@@ -197,6 +197,7 @@ export type TradieUrgentReminderItem = {
   id: string;
   tradieName: string;
   tradeType: string;
+  abn: string;
   projectName: string;
   milestoneName?: string;
   taskLabel: string;
@@ -204,12 +205,11 @@ export type TradieUrgentReminderItem = {
   daysLeft: number;
   status: TradieScheduleStatus;
   reminderSentAt?: string;
-  company: string | null;
   contact: {
     email: string;
     phone: string;
   };
-  hourtlyRate?: string;
+  hourlyRate?: string;
   rating?: string;
   siteManager: {
     name: string;

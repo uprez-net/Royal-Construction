@@ -16,7 +16,7 @@ const tradieScheduleInclude = {
   milestone: true,
 } as const;
 import { CACHE_PROFILES } from "@/types/cache";
-import { getTradieCoordinationDashboard } from "./tadie-dashboard";
+import { getTradieCoordinationDashboard } from "./tradie-dashboard";
 
 
 function toSafeTradie(tradie: Awaited<ReturnType<typeof prisma.tradie.findMany>>[number]): SafeTradie {
@@ -61,7 +61,7 @@ export async function getTradieSchedules(filters?: {
       where: {
         projectId: filters?.projectId,
         status: filters?.status,
-        tradie: filters?.tradeType ? { tradeType: filters.tradeType } : undefined,
+        tradie: filters?.tradeType ? { trade: filters.tradeType } : undefined,
       },
       include: tradieScheduleInclude,
       orderBy,
@@ -216,8 +216,8 @@ export async function getTradiesForLookup(limit = 20, search = "") {
       ? {
         OR: [
           { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { company: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { tradeType: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { abn: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { trade: { contains: search, mode: Prisma.QueryMode.insensitive } },
         ],
       }
       : undefined;
@@ -226,7 +226,7 @@ export async function getTradiesForLookup(limit = 20, search = "") {
       where,
       take: limit,
       orderBy: { name: "asc" },
-      select: { id: true, name: true, company: true, tradeType: true, phone: true, email: true },
+      select: { id: true, name: true, abn: true, phone: true, email: true },
     });
 
     return tradies;

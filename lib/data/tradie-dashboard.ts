@@ -7,6 +7,7 @@ import {
   TradieCoordinationSortBy,
   TradieStatusMetric,
   TradieCoordinationTab,
+  TradieScheduleListItem,
 } from "@/types/project";
 import { differenceInCalendarDays, startOfDay, addDays, startOfWeek } from "date-fns";
 
@@ -43,7 +44,7 @@ type ScheduleRow = {
   id: string;
   tradie_id: string;
   tradie_name: string;
-  company: string | null;
+  abn: string;
   trade_type: string;
   project_id: string;
   project_name: string;
@@ -108,7 +109,7 @@ type UrgentRow = {
   id: string;
   tradie_name: string;
   trade_type: string;
-  company: string | null;
+  abn: string;
   project_name: string;
   site_manager_name: string | null;
   site_manager_email: string | null;
@@ -166,10 +167,10 @@ function resolveCoordinationQuery(query?: TradieCoordinationQuery): ResolvedCoor
 
 const SORT_COLUMN_MAP: Record<TradieCoordinationSortBy, string> = {
   scheduledDate: 'ts."scheduledDate"',
-  tradieName:    "t.name",
-  tradeType:     "t.\"tradeType\"",
-  projectName:   "p.name",
-  status:        'ts.status::text',
+  tradieName: "t.name",
+  tradeType: "t.\"tradeType\"",
+  projectName: "p.name",
+  status: 'ts.status::text',
 };
 
 function getSortColumn(sortBy: TradieCoordinationSortBy): string {
@@ -301,22 +302,22 @@ export async function getTradieCoordinationDashboard(
   const resolved = resolveCoordinationQuery(query);
 
   // Date anchors (all at midnight UTC to match startOfDay behaviour)
-  const today       = startOfDay(new Date());
-  const nextWeek    = addDays(today, 8);
+  const today = startOfDay(new Date());
+  const nextWeek = addDays(today, 8);
   const prevWeekStart = addDays(today, -7);
   // prevWeekEnd = today (exclusive upper bound)
   const active14Start = addDays(today, -14);
-  const active14End   = addDays(today, 14);
+  const active14End = addDays(today, 14);
 
   // Trend window: date-fns startOfWeek defaults to Sunday (weekStartsOn: 0)
   const trendWindowStart = addDays(startOfWeek(today), -7 * 7); // 7 weeks before current week start
-  const trendWindowEnd   = addDays(startOfWeek(today), 7);      // 1 week after current week start
+  const trendWindowEnd = addDays(startOfWeek(today), 7);      // 1 week after current week start
 
-  const sortCol   = getSortColumn(resolved.sortBy);
-  const sortDir   = resolved.sortOrder === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`;
-  const offset    = (resolved.page - 1) * resolved.limit;
+  const sortCol = getSortColumn(resolved.sortBy);
+  const sortDir = resolved.sortOrder === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+  const offset = (resolved.page - 1) * resolved.limit;
 
-  const listWhere     = buildWhere(resolved, today, nextWeek);
+  const listWhere = buildWhere(resolved, today, nextWeek);
   const insightsWhere = buildWhere(resolved, today, nextWeek, { ignoreStatus: true, ignoreTab: true });
 
   try {
@@ -352,8 +353,8 @@ export async function getTradieCoordinationDashboard(
           ts.id,
           ts."tradieId"       AS tradie_id,
           t.name              AS tradie_name,
-          t.company,
-          t."tradeType"       AS trade_type,
+          t.abn               AS abn,
+          t.trade             AS trade_type,
           ts."projectId"      AS project_id,
           p.name              AS project_name,
           sm.name             AS site_manager_name,
@@ -393,10 +394,10 @@ export async function getTradieCoordinationDashboard(
 
       // 3. Distinct trade types for filter dropdown
       prisma.$queryRaw<TradeOptionRow[]>(Prisma.sql`
-        SELECT DISTINCT "tradeType" AS trade_type
+        SELECT DISTINCT "trade" AS trade_type
         FROM "Tradie"
-        WHERE "tradeType" IS NOT NULL
-        ORDER BY "tradeType" ASC
+        WHERE "trade" IS NOT NULL
+        ORDER BY "trade" ASC
       `),
 
       // 4. Total registered tradies
@@ -606,8 +607,8 @@ export async function getTradieCoordinationDashboard(
         SELECT
           ts.id,
           t.name              AS tradie_name,
-          t."tradeType"       AS trade_type,
-          t.company,
+          t.trade             AS trade_type,
+          t.abn               AS abn,
           p.name              AS project_name,
           sm.name             AS site_manager_name,
           sm.email            AS site_manager_email,
@@ -638,33 +639,33 @@ export async function getTradieCoordinationDashboard(
     // Scalar extractions
     // -----------------------------------------------------------------------
 
-    const totalCount        = n(totalCountRows[0]?.count ?? ZERO);
-    const totalTradies      = n(totalTradiesRows[0]?.count ?? ZERO);
-    const currentWeekSched  = n(currentWeekRows[0]?.count ?? ZERO);
-    const prevWeekSched     = n(prevWeekRows[0]?.count ?? ZERO);
+    const totalCount = n(totalCountRows[0]?.count ?? ZERO);
+    const totalTradies = n(totalTradiesRows[0]?.count ?? ZERO);
+    const currentWeekSched = n(currentWeekRows[0]?.count ?? ZERO);
+    const prevWeekSched = n(prevWeekRows[0]?.count ?? ZERO);
     const pendingNoResponse = n(pendingNoResponseRows[0]?.count ?? ZERO);
-    const confirmedCount    = n(confirmedCountRows[0]?.count ?? ZERO);
-    const completedCount    = n(completedCountRows[0]?.count ?? ZERO);
+    const confirmedCount = n(confirmedCountRows[0]?.count ?? ZERO);
+    const completedCount = n(completedCountRows[0]?.count ?? ZERO);
     const newTradiesCurrent = n(newTradiesCurrentRows[0]?.count ?? ZERO);
-    const newTradiesPrev    = n(newTradiesPrevRows[0]?.count ?? ZERO);
+    const newTradiesPrev = n(newTradiesPrevRows[0]?.count ?? ZERO);
 
     const sc = statusCountRows[0];
     const statusMetrics: TradieStatusMetric[] = [
-      { label: "Confirmed",        value: n(sc?.confirmed       ?? ZERO), status: TradieScheduleStatus.CONFIRMED },
-      { label: "Pending",          value: n(sc?.pending         ?? ZERO), status: TradieScheduleStatus.PENDING },
+      { label: "Confirmed", value: n(sc?.confirmed ?? ZERO), status: TradieScheduleStatus.CONFIRMED },
+      { label: "Pending", value: n(sc?.pending ?? ZERO), status: TradieScheduleStatus.PENDING },
       { label: "Pending Response", value: n(sc?.pending_response ?? ZERO), status: TradieScheduleStatus.PENDING_RESPONSE },
-      { label: "No Response",      value: n(sc?.no_response     ?? ZERO), status: TradieScheduleStatus.NO_RESPONSE },
-      { label: "Declined",         value: n(sc?.declined        ?? ZERO), status: TradieScheduleStatus.DECLINED },
-      { label: "Completed",        value: n(sc?.completed       ?? ZERO), status: TradieScheduleStatus.COMPLETED },
+      { label: "No Response", value: n(sc?.no_response ?? ZERO), status: TradieScheduleStatus.NO_RESPONSE },
+      { label: "Declined", value: n(sc?.declined ?? ZERO), status: TradieScheduleStatus.DECLINED },
+      { label: "Completed", value: n(sc?.completed ?? ZERO), status: TradieScheduleStatus.COMPLETED },
     ];
 
     const tc = tabCountRows[0];
     const tabCounts = {
-      all:       n(tc?.tab_all       ?? ZERO),
-      week:      n(tc?.tab_week      ?? ZERO),
+      all: n(tc?.tab_all ?? ZERO),
+      week: n(tc?.tab_week ?? ZERO),
       confirmed: n(tc?.tab_confirmed ?? ZERO),
-      pending:   n(tc?.tab_pending   ?? ZERO),
-      overdue:   n(tc?.tab_overdue   ?? ZERO),
+      pending: n(tc?.tab_pending ?? ZERO),
+      overdue: n(tc?.tab_overdue ?? ZERO),
       completed: n(tc?.tab_completed ?? ZERO),
     };
 
@@ -677,7 +678,7 @@ export async function getTradieCoordinationDashboard(
 
     const tradeTypeRows: TradeTypeRow[] = distinctTradieIds.length > 0
       ? await prisma.$queryRaw<TradeTypeRow[]>(Prisma.sql`
-          SELECT id, "tradeType" AS trade_type
+          SELECT id, "trade" AS trade_type
           FROM "Tradie"
           WHERE id = ANY(${distinctTradieIds}::uuid[])
         `)
@@ -729,14 +730,14 @@ export async function getTradieCoordinationDashboard(
       const key = rowWeekStart.toISOString();
       const target = trendMap.get(key);
       if (!target) continue;
-      target.total     += n(row.total);
+      target.total += n(row.total);
       target.confirmed += n(row.confirmed);
     }
 
     const utilizationTrend = trendSeries.map((p) => ({
-      weekLabel:   p.weekLabel,
+      weekLabel: p.weekLabel,
       utilization: p.total > 0 ? Math.round((p.confirmed / p.total) * 100) : 0,
-      target:      80,
+      target: 80,
     }));
 
     // -----------------------------------------------------------------------
@@ -744,33 +745,33 @@ export async function getTradieCoordinationDashboard(
     // -----------------------------------------------------------------------
 
     const schedules = scheduleRows.map((row) => ({
-      id:            row.id,
-      tradieId:      row.tradie_id,
-      tradieName:    row.tradie_name,
-      company:       row.company,
-      tradeType:     row.trade_type,
-      projectId:     row.project_id,
-      projectName:   row.project_name,
-      milestoneId:   row.milestone_id ?? undefined,
+      id: row.id,
+      tradieId: row.tradie_id,
+      tradieName: row.tradie_name,
+      tradeType: row.trade_type,
+      abn: row.abn,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      milestoneId: row.milestone_id ?? undefined,
       milestoneName: row.milestone_name ?? undefined,
-      taskLabel:     row.milestone_name ?? "General trade task",
+      taskLabel: row.milestone_name ?? "General trade task",
       scheduledDate: row.scheduled_date.toISOString(),
-      durationDays:  row.duration_days,
-      status:        row.status,
-      hourlyRate:    row.hourly_rate ?? undefined,
-      rating:        row.rating ?? undefined,
+      durationDays: row.duration_days,
+      status: row.status,
+      hourlyRate: row.hourly_rate ?? undefined,
+      rating: row.rating ?? undefined,
       reminderSentAt: row.reminder_sent_at?.toISOString(),
-      updatedAt:     row.updated_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
       contact: {
         email: row.tradie_email,
         phone: row.tradie_phone,
       },
       siteManager: {
-        name:  row.site_manager_name  ?? "Site manager",
+        name: row.site_manager_name ?? "Site manager",
         email: row.site_manager_email ?? "",
         phone: row.site_manager_phone ?? "",
       },
-    }));
+    } satisfies TradieScheduleListItem));
 
     // -----------------------------------------------------------------------
     // Activity feed
@@ -779,9 +780,9 @@ export async function getTradieCoordinationDashboard(
     const activity = activityRows.map((row) => {
       const mapped = mapScheduleStatus(row.status);
       return {
-        id:        row.id,
-        type:      mapped.type,
-        message:   `${row.tradie_name} ${mapped.label} for ${row.project_name}`,
+        id: row.id,
+        type: mapped.type,
+        message: `${row.tradie_name} ${mapped.label} for ${row.project_name}`,
         createdAt: row.updated_at.toISOString(),
       };
     });
@@ -791,27 +792,27 @@ export async function getTradieCoordinationDashboard(
     // -----------------------------------------------------------------------
 
     const urgentReminders = urgentRows.map((row) => ({
-      id:            row.id,
-      tradieName:    row.tradie_name,
-      tradeType:     row.trade_type,
-      projectName:   row.project_name,
+      id: row.id,
+      tradieName: row.tradie_name,
+      tradeType: row.trade_type,
+      projectName: row.project_name,
       milestoneName: row.milestone_name ?? undefined,
-      taskLabel:     row.milestone_name ?? "General trade task",
+      taskLabel: row.milestone_name ?? "General trade task",
       scheduledDate: row.scheduled_date.toISOString(),
-      daysLeft:      differenceInCalendarDays(startOfDay(row.scheduled_date), today),
-      company:       row.company,
-      status:        row.status,
+      daysLeft: differenceInCalendarDays(startOfDay(row.scheduled_date), today),
+      abn: row.abn,
+      status: row.status,
       contact: {
         email: row.tradie_email,
         phone: row.tradie_phone,
       },
       siteManager: {
-        name:  row.site_manager_name  ?? "Site manager",
+        name: row.site_manager_name ?? "Site manager",
         email: row.site_manager_email ?? "",
         phone: row.site_manager_phone ?? "",
       },
-      rating:        row.rating        ?? undefined,
-      hourlyRate:    row.hourly_rate   ?? undefined,
+      rating: row.rating ?? undefined,
+      hourlyRate: row.hourly_rate ?? undefined,
       reminderSentAt: row.reminder_sent_at?.toISOString(),
     }));
 
@@ -832,21 +833,21 @@ export async function getTradieCoordinationDashboard(
     return {
       query: resolved,
       pagination: {
-        page:       resolved.page,
-        limit:      resolved.limit,
+        page: resolved.page,
+        limit: resolved.limit,
         totalCount,
         totalPages: Math.max(1, Math.ceil(totalCount / resolved.limit)),
       },
       schedules,
       summary: {
-        registeredTradies:    totalTradies,
+        registeredTradies: totalTradies,
         registeredTrendDelta: newTradiesCurrent - newTradiesPrev,
-        scheduledThisWeek:    currentWeekSched,
-        scheduledWeekDelta:   currentWeekSched - prevWeekSched,
-        confirmedBookings:    confirmedCount,
+        scheduledThisWeek: currentWeekSched,
+        scheduledWeekDelta: currentWeekSched - prevWeekSched,
+        confirmedBookings: confirmedCount,
         pendingNoResponse,
-        activeTradies:        activeTradieCount,
-        inactiveTradies:      Math.max(0, totalTradies - activeTradieCount),
+        activeTradies: activeTradieCount,
+        inactiveTradies: Math.max(0, totalTradies - activeTradieCount),
         completionRate,
       },
       tabCounts,
@@ -854,8 +855,8 @@ export async function getTradieCoordinationDashboard(
       statusMetrics,
       tradeBreakdown,
       projectAllocations: projectAllocationRows.map((r) => ({
-        projectId:       r.project_id,
-        projectName:     r.project_name,
+        projectId: r.project_id,
+        projectName: r.project_name,
         allocationCount: n(r.allocation_count),
       })),
       utilizationTrend,
@@ -868,26 +869,26 @@ export async function getTradieCoordinationDashboard(
     const empty: TradieCoordinationDashboard = {
       query: resolved,
       pagination: { page: resolved.page, limit: resolved.limit, totalCount: 0, totalPages: 1 },
-      schedules:         [],
+      schedules: [],
       summary: {
-        registeredTradies:    0,
+        registeredTradies: 0,
         registeredTrendDelta: 0,
-        scheduledThisWeek:    0,
-        scheduledWeekDelta:   0,
-        confirmedBookings:    0,
-        pendingNoResponse:    0,
-        activeTradies:        0,
-        inactiveTradies:      0,
-        completionRate:       0,
+        scheduledThisWeek: 0,
+        scheduledWeekDelta: 0,
+        confirmedBookings: 0,
+        pendingNoResponse: 0,
+        activeTradies: 0,
+        inactiveTradies: 0,
+        completionRate: 0,
       },
-      tabCounts:          { all: 0, week: 0, confirmed: 0, pending: 0, overdue: 0, completed: 0 },
-      tradeOptions:       [],
-      statusMetrics:      [],
-      tradeBreakdown:     [],
+      tabCounts: { all: 0, week: 0, confirmed: 0, pending: 0, overdue: 0, completed: 0 },
+      tradeOptions: [],
+      statusMetrics: [],
+      tradeBreakdown: [],
       projectAllocations: [],
-      utilizationTrend:   [],
-      activity:           [],
-      urgentReminders:    [],
+      utilizationTrend: [],
+      activity: [],
+      urgentReminders: [],
     };
 
     return empty;

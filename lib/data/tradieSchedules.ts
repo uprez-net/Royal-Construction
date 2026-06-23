@@ -26,7 +26,6 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
     milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
     projectId: schedule.projectId,
     tradieTrade: schedule.tradie.trade,
-    tradieCompany: schedule.tradie.company ?? "Independent",
     scheduleDate: dateFormat.format(schedule.scheduledDate),
   });
   await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
@@ -52,7 +51,6 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
     milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
     projectId: schedule.projectId,
     tradieTrade: schedule.tradie.trade,
-    tradieCompany: schedule.tradie.company ?? "Independent",
     scheduleDate: dateFormat.format(schedule.scheduledDate),
     status: statusLabel,
   });
