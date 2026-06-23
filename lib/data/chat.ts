@@ -5,6 +5,13 @@ import { Prisma, type File, type RunStatus } from "@prisma/client";
 import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 
+/**
+ * Fetches an existing chat session for a lead or creates a new one if it doesn't exist.
+ * @param leadId 
+ * @returns ChatSessionWithMessages - the existing or newly created chat session with its messages
+ * @throws Error if database operations fail
+ * Also triggers revalidation of the chat session cache for the associated lead.
+ */
 export async function createOrGetChatSession(leadId: number): Promise<ChatSessionWithMessages> {
     try {
         const existingSession = await prisma.chatSession.findFirst({
@@ -38,6 +45,14 @@ export interface MessageData {
     timestamp: Date;
 }
 
+/**
+ * Creates multiple chat messages in the database.
+ * @param messages 
+ * @param leadId 
+ * @returns void
+ * @throws Error if message creation fails
+ * Also triggers revalidation of the chat session cache for the associated lead.
+ */
 export async function createChatMessages(messages: MessageData[], leadId: number): Promise<void> {
     try {
         await prisma.chatMessage.createMany({
@@ -56,6 +71,14 @@ export async function createChatMessages(messages: MessageData[], leadId: number
     }
 }
 
+/**
+ * Updates multiple chat messages in the database. Messages are matched by ID and updated with new content and timestamp.
+ * @param messages 
+ * @param leadId 
+ * @returns Promise<void>
+ * @throws Error if message update fails
+ * Also triggers revalidation of the chat session cache for the associated lead.
+ */
 export async function updateChatMessages(
     messages: MessageData[],
     leadId: number
@@ -114,6 +137,13 @@ interface FetchChatResponse {
     };
 }
 
+/**
+ * Fetches the chat session, associated files, and lead information for a given lead ID.
+ * @param leadId
+ * @return FetchChatResponse containing the chat session with messages, files, and lead information
+ * @throws Error if fetching data fails
+ * Also applies caching with a short lifespan and tags the cache with the lead ID for targeted invalidation.
+ */
 export async function getChatByLeadId(leadId: number): Promise<FetchChatResponse> {
     "use cache";
     cacheTag(`chat-session-lead-${leadId}`);

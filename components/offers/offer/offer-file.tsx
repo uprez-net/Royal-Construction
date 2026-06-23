@@ -4,7 +4,7 @@ import { LineItem, OfferFile, useChatContext } from "@/context/ChatContext";
 import { cn } from "@/lib/utils";
 import { useRef, useState, useTransition } from "react";
 import { DataTable } from "@/components/common/data-table";
-import { Files, Save } from "lucide-react";
+import { Files, Loader2, Save } from "lucide-react";
 import {
   base64ToBlob,
   buildBlobPath,
@@ -29,6 +29,7 @@ import { OfferVersionSelector } from "./offer-version-selector";
 import { calculateOfferTotals } from "@/lib/offer/pricing";
 import { deleteLeadBlob } from "@/lib/actions/blob";
 import { LineItemTable } from "./line-item-table";
+import { generateSafeOfferHTMLClient } from "@/utils/handle-offer-template-client";
 
 const shouldBeDisabled = (offerFile: OfferFile, lineItems: LineItem[]) => {
   if (lineItems.length === 0) return true;
@@ -73,36 +74,26 @@ export function OfferFileCanvas({
   const numericTotalAmount = offerTotals.totalAmount;
   const totalAmount = currency.format(numericTotalAmount);
 
-  // const handleDownload = async () => {
-  //   if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
-  //   try {
-  //     const documentHtml =
-  //       offerFileRef.current.contentDocument.documentElement.outerHTML;
-  //     const generatedPdf = await generatePDF({ html: documentHtml });
-
-  //     const blob = base64ToBlob(generatedPdf);
-  //     const url = URL.createObjectURL(blob);
-
-  //     const link = document.createElement("a");
-  //     link.href = url;
-  //     link.download = `offer_${leadId}.pdf`;
-  //     document.body.appendChild(link);
-  //     link.click();
-  //     document.body.removeChild(link);
-  //   } catch (error) {
-  //     console.error("Error generating PDF:", error);
-  //     toast.error("Failed to generate PDF. Please try again.");
-  //   }
-  // };
-
   const handleSave = async () => {
-    if (!offerFileRef.current || !offerFileRef.current.contentDocument) return;
     // First Upload the offer file to the server, then save the offer details and line items in the database
     let fileUrl: string | undefined;
     try {
-      const documentHtml =
-        offerFileRef.current.contentDocument.documentElement.outerHTML;
-      const generatedPdf = await generatePDF({ html: documentHtml });
+      const cleanedHtml = generateSafeOfferHTMLClient({
+        projectWelcomeMessage: offerFile.projectWelcomeMessage,
+        facadeOptions: offerFile.facadeOptions,
+        termsAndConditions: offerFile.termsAndConditions,
+        revisionChanges: offerFile.revisionChanges,
+        projectScope: offerFile.projectScope,
+        fixedPriceItems: offerFile.fixedPriceItems,
+        promotionalUpgrades: offerFile.promotionalUpgrades,
+        customerName,
+        projectName: `${projectType}, ${location}`,
+        siteLocation: location,
+        proposalDate,
+        revisionDate: lastRevisionDate,
+        contractAmount: numericTotalAmount > 0 ? totalAmount : undefined,
+      });
+      const generatedPdf = await generatePDF({ html: cleanedHtml });
       const blob = base64ToBlob(generatedPdf);
       const fileId = uuidv4(); // Generate a unique ID for the file
       const fileName = `offer_${dateFormat.format(new Date())}_${leadId}_v${versions + 1}.pdf`;
@@ -234,7 +225,11 @@ export function OfferFileCanvas({
             onClick={() => startTransition(handleSave)}
             className="bg-card hover:bg-muted"
           >
-            <Save className="size-4" />
+            {isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
             Save Offer
           </Button>
         </div>
@@ -255,9 +250,7 @@ export function OfferFileCanvas({
         </div>
       )}
 
-      {tabId === "line-items" && (
-        <LineItemTable />
-      )}
+      {tabId === "line-items" && <LineItemTable />}
 
       {tabId === "files" && (
         <div className="min-h-0 w-full flex-1 overflow-auto bg-muted/30 px-4 py-4 lg:px-5">

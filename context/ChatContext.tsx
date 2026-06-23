@@ -41,7 +41,7 @@ interface ChatContextValue {
     lineItems: SafeOfferItem[],
     offerFile: SafeOfferDBFile,
   ) => void;
-  setLineItems: (
+  updateLineItem: (
     id: string,
     updates: Partial<Pick<LineItem, "unit" | "quantity" | "unitPrice">>,
   ) => void;
@@ -389,7 +389,7 @@ export const ChatProvider = ({
           unitPrice: parseFloat(item.unitPrice),
           quantity: item.quantity,
           unit: item.unit,
-          totalPrice,
+          totalPrice: pricing.totalPrice,
           gstRate: 0.1,
           gstIncluded: true,
           netLine: pricing.netLine,
@@ -415,18 +415,14 @@ export const ChatProvider = ({
           ...item,
           ...updates,
         };
-
         const totalPrice = updated.quantity * updated.unitPrice;
-        const gstAmount = totalPrice * updated.gstRate;
-        const netLine = updated.gstIncluded
-          ? totalPrice
-          : totalPrice + gstAmount;
+        const pricing = hydratePricingFromStoredTotal(totalPrice);
 
         return {
           ...updated,
-          totalPrice,
-          gstAmount,
-          netLine,
+          totalPrice: pricing.totalPrice,
+          gstAmount: pricing.gstAmount,
+          netLine: pricing.netLine,
         };
       }),
     );
@@ -459,7 +455,7 @@ export const ChatProvider = ({
         offerFile,
         setVersion: handleSetVersion,
         appendVersion,
-        setLineItems: handleUpdateLineItem,
+        updateLineItem: handleUpdateLineItem,
         addLineItem: handleAddLineItem,
       }}
     >

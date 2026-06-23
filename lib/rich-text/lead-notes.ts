@@ -36,6 +36,14 @@ function escapeAttribute(value: string) {
   return escapeHtml(value).replace(/`/g, "&#096;");
 }
 
+/**
+ * Normalize and validate a user-provided link for rich text notes.
+ * - Returns null for dangerous or invalid protocols
+ * - Prepends https:// when a scheme is missing
+ * - Preserves internal links (/, #) and relative paths
+ * @param value - raw user-provided link
+ * @returns normalized URL string or null when unsafe/invalid
+ */
 export function normalizeRichTextLink(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;

@@ -10,6 +10,7 @@ import { triggerNotification } from "../notification/novu";
 import { createMilestonesFromTemplateForProject } from "./milestones";
 import { ProjectDetail } from "@/types/project";
 import { getCachedProjectById } from "./projects";
+import { Prisma } from "@prisma/client";
 
 /**
  * @deprecated This function is not to be used use `createProjectWithLead` instead which creates a project directly from a lead and ensures data consistency.
@@ -99,57 +100,105 @@ export interface CreateProjectWithLeadInput {
   estimatedEndDate: string;
   address: string;
   council: string;
+  siteManagerId: string;
 }
 
-export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+const parseBudget = (value: unknown): Prisma.Decimal => {
+  if (Prisma.Decimal.isDecimal(value)) {
+    return value;
+  }
+
+  const normalized = String(value ?? "")
+    .replace(/[^0-9.-]/g, "");
+
+  return normalized && !isNaN(Number(normalized))
+    ? new Prisma.Decimal(normalized)
+    : new Prisma.Decimal(0);
+};
+
+export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
-    const lead = await prisma.lead.findUnique({
-      where: { id: leadId },
-      include: {
-        project: true,
+    const newProjectId = await prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.findUnique({
+        where: { id: leadId },
+        include: {
+          project: true,
+        }
+      });
+
+      if (!lead) {
+        throw new Error("LEAD_NOT_FOUND");
       }
-    });
 
-    if (!lead) {
-      throw new Error("LEAD_NOT_FOUND");
-    }
+      if (lead.project) {
+        throw new Error("PROJECT_ALREADY_EXISTS_FOR_LEAD");
+      }
 
-    if(lead.project) {
-      throw new Error("PROJECT_ALREADY_EXISTS_FOR_LEAD");
-    }
-
-    // Create customer first, then reference by customerId to satisfy Prisma types
-    const customer = await prisma.customer.create({
-      data: {
+      // Create customer first, then reference by customerId to satisfy Prisma types
+      const customer = await createCustomerForProject({
         name: lead.name,
         email: lead.email,
         phone: lead.phone,
-      },
+      }, tx);
+
+      const projectType = lead.type.length > 0 ? lead.type.join(", ") : "General Construction";
+      const totalBudget = parseBudget(lead.budget);
+      // TBD: We can use AI to infer requirements based on lead notes and data
+      const inferredRequirements = [
+        'Garage',
+        'Garden',
+        'Swimming Pool',
+        'Solar Panels',
+        'Home Office',
+        'Open Plan Living',
+        'Sustainable Materials',
+        'Smart Home Integration',
+      ]
+
+      const newProject = await tx.project.create({
+        data: {
+          leadId: lead.id,
+          name: `${projectType} at ${lead.location}`,
+          buildingType: projectType,
+          description: lead.notes,
+          location: address,
+          council: council,
+          totalBudget: totalBudget,
+          lotSize: String(lotSize),
+          startDate: new Date(startDate),
+          estimatedEndDate: new Date(estimatedEndDate),
+          siteManagerId: siteManagerId,
+          requirements: inferredRequirements,
+          customerId: customer.id,
+        }
+      });
+
+      await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate), tx);
+
+      return newProject.id;
     });
 
-    const newProject = await prisma.project.create({
-      data: {
-        leadId: lead.id,
-        name: `${lead.type.join(", ")} at ${lead.location}`,
-        buildingType: lead.type.join(", "),
-        description: lead.notes,
-        location: address,
-        council: council,
-        totalBudget: String(lead.budget) ?? "0",
-        lotSize: String(lotSize),
-        startDate: new Date(startDate),
-        estimatedEndDate: new Date(estimatedEndDate),
-        requirements: {
-          notes: lead.notes,
-          noteDoc: lead.notesDoc,
-        },
-        customerId: customer.id,
-      }
+    const newProjectDetail = await getCachedProjectById(newProjectId);
+    if (!newProjectDetail) {
+      throw new Error("PROJECT_DETAIL_NOT_FOUND");
+    }
+
+    const notificationPayload = createNotification("projectCreated", {
+      projectId: newProjectDetail.id,
+      projectName: newProjectDetail.name,
+      projectType: newProjectDetail.buildingType,
+      location: newProjectDetail.location,
+      customerName: newProjectDetail.customer.name,
+      customerEmail: newProjectDetail.customer.email,
+      customerPhone: newProjectDetail.customer.phone,
     });
+    await triggerNotification(newProjectDetail.siteManagerId ? [newProjectDetail.siteManagerId] : [], notificationPayload);
 
-    await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate));
 
-    return await getCachedProjectById(newProject.id);
+    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${newProjectDetail.id}`, CACHE_PROFILES.MEDIUM);
+
+    return newProjectDetail;
   } catch (error) {
     console.error("Error creating project from lead:", error);
     throw error;

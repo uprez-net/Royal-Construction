@@ -103,6 +103,11 @@ export function variationStatusTone(status: VariationStatus) {
 }
 
 
+/**
+ * Replace invalid characters in a filename with dashes and collapse duplicates.
+ * @param fileName - original filename
+ * @returns sanitized filename safe for use in paths/urls
+ */
 export function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
 }
@@ -168,10 +173,20 @@ export const RoleLabelRecord: Partial<Record<Role, string>> & { undefined: strin
   undefined: "No role",
 }
 
+/**
+ * Narrowing helper: checks whether a value is a plain object (not null, not an array).
+ * @param value - unknown value to test
+ * @returns boolean indicating if the value is a plain object
+ */
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Check whether a value is a primitive (string, number, boolean, null or undefined).
+ * @param value - value to test
+ * @returns boolean indicating primitiveness
+ */
 export function isPrimitive(value: unknown): value is string | number | boolean | null | undefined {
   return value === null || value === undefined || ["string", "number", "boolean"].includes(typeof value);
 }

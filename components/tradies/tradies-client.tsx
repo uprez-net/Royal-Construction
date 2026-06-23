@@ -491,7 +491,7 @@ export function TradiesClient({
     <div key={`tradie-${row.id}`}>
       <p className="font-semibold text-slate-900">{row.tradieName}</p>
       <p className="text-xs text-muted-foreground">
-        {row.company ?? "Independent"}
+        {row.abn}
       </p>
     </div>,
 
@@ -658,7 +658,7 @@ export function TradiesClient({
                           reminderSentAt: item.reminderSentAt,
                           updatedAt: "item.updatedAt",
                           durationDays: 1,
-                          company: item.company,
+                          abn: item.abn,
                         } satisfies TradieScheduleListItem)
                       }
                     >
@@ -947,7 +947,7 @@ export function TradiesClient({
                             {row.tradieName}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {row.company ?? "Independent"}
+                            {row.abn}
                           </p>
                         </div>
                       </div>

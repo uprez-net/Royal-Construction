@@ -41,6 +41,11 @@ export type OfferFilePatchPayload = Partial<OfferFile> & {
   promotionalUpgradesPatch?: StringListPatch;
 };
 
+/**
+ * Convert backend `ChatMessage` rows into the UI friendly `ChatMessageAI` shape.
+ * @param message - array of messages from the database
+ * @returns messages formatted for the UI message components
+ */
 export const convertToUIMessage = (message: ChatMessage[]): ChatMessageAI[] => {
   return message.map((msg) => ({
     id: msg.id,
@@ -52,10 +57,20 @@ export const convertToUIMessage = (message: ChatMessage[]): ChatMessageAI[] => {
   }));
 }
 
+/**
+ * Type guard: whether a tooling-part value is a tool part (type begins with `tool-`).
+ * @param part - tool type to inspect
+ * @returns true when `part.type` starts with "tool-"
+ */
 export function isToolPart(part: ToolType): part is ToolPart {
   return part.type.startsWith("tool-");
 }
 
+/**
+ * Type guard for the tool lifecycle state values used by tool parts.
+ * @param x - unknown value to test
+ * @returns true when the value is a valid ToolState
+ */
 export function isToolState(x: unknown): x is ToolState {
   return (
     x === "pending" ||
@@ -66,14 +81,29 @@ export function isToolState(x: unknown): x is ToolState {
   );
 }
 
+/**
+ * Narrowing guard: test whether a `ToolPart` includes a `state` property.
+ * @param part - part to inspect
+ * @returns true when the part has a valid `state` field
+ */
 export function hasToolState(part: ToolPart): part is ToolPartWithState {
   return "state" in part && isToolState((part as { state?: unknown }).state);
 }
 
+/**
+ * Narrowing guard: test whether a `ToolPartWithState` currently has output available.
+ * @param part - part to inspect
+ * @returns true when the part state is `output-available` and an `output` exists
+ */
 export function hasToolOutput(part: ToolPartWithState): part is ToolPartWithOutput {
   return part.state === "output-available" && "output" in part;
 }
 
+/**
+ * Check whether a string matches a known tool name used by the chat tooling system.
+ * @param name - tool name to validate
+ * @returns true when the name is one of the recognised tool identifiers
+ */
 export function isKnownToolName(name: string): name is KnownToolName {
   return (
     name === "lineItemTool" ||
@@ -87,10 +117,21 @@ export function isKnownToolName(name: string): name is KnownToolName {
   );
 }
 
+/**
+ * Convert a `ToolPart.type` value (e.g. `tool-lineItemTool`) into the short tool name.
+ * @param type - `ToolPart.type` value
+ * @returns short tool name without the `tool-` prefix
+ */
 export function toolNameFromType(type: ToolPart["type"]): string {
   return type.replace(/^tool-/, "");
 }
 
+/**
+ * Scan a sequence of `ChatMessageAI` parts and extract any `LineItem` outputs
+ * produced by the `lineItemTool` tool.
+ * @param message - array of chat messages
+ * @returns array of extracted `LineItem` objects
+ */
 export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[] {
   const lineItems: LineItem[] = [];
   for (const msg of message) {
@@ -123,6 +164,12 @@ export function extractLineItemsFromMessage(message: ChatMessageAI[]): LineItem[
   return lineItems;
 }
 
+/**
+ * Scan `ChatMessageAI` parts for `offerFileTool` outputs and apply updates to an existing `OfferFile`.
+ * @param message - array of chat messages
+ * @param lastFile - last known OfferFile state to start from
+ * @returns updated OfferFile after applying any patches
+ */
 export function extractOfferFileFromMessage(message: ChatMessageAI[], lastFile: OfferFile): OfferFile {
   let offerFile: OfferFile = lastFile;
   
@@ -153,6 +200,11 @@ To get started, please provide me with some basic information about the lead and
 I'll be able to assist you in crafting an offer that meets your lead's requirements. 
 Let's work together to create a compelling offer!
 `
+/**
+ * Ensure there is at least one initial assistant message present; if not, return a starter message.
+ * @param msg - existing messages
+ * @returns original messages if non-empty, otherwise a single starter assistant message
+ */
 export function setInitialAgentMessage(msg: ChatMessageAI[]): ChatMessageAI[] {
   return msg.length > 0
     ? msg : [
@@ -188,6 +240,12 @@ export const serviceItemSchema = z.object({
 export type ServiceItem = z.infer<typeof serviceItemSchema>;
 
 
+/**
+ * Merge existing and incoming `ServiceItem` sections. Incoming sections replace items for the same id.
+ * @param existing - current service sections
+ * @param incoming - incoming sections to merge/append
+ * @returns merged array of ServiceItem
+ */
 export function mergeServiceItems(
   existing: ServiceItem[] = [],
   incoming: ServiceItem[] = []
@@ -372,6 +430,13 @@ function applyProjectScopePatch(
   return result;
 }
 
+/**
+ * Apply a patch payload to an existing `OfferFile`, merging and applying sub-patches.
+ * This function applies terms, project scope, and list patches in a safe manner.
+ * @param current - current OfferFile state
+ * @param incoming - partial payload containing updates/patches
+ * @returns new OfferFile with updates applied
+ */
 export function applyOfferFileUpdate(
   current: OfferFile,
   incoming: OfferFilePatchPayload,
