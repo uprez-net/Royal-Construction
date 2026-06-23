@@ -223,6 +223,7 @@ model Tradie {
   schedules  TradieSchedule[]
   incidents  TradieIncident[]
   approvals  TradieApproval[]
+  ratings    TradieRating[]
 
   @@index([name])
   @@index([trade])
@@ -261,6 +262,22 @@ model TradieApproval {
   tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
 
   @@index([tradieId])
+}
+
+model TradieRating {
+  id       String  @id @default(uuid())
+  tradieId String
+  userId   String
+  rating   Decimal @db.Decimal(2, 1)
+  comment  String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tradieId])
+  @@index([userId])
 }
 
 model File {
@@ -391,11 +408,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]        @relation("UserFiles")
-  siteManagerProjects Project[]     @relation("SiteManagerProjects")
+  files               File[]         @relation("UserFiles")
+  siteManagerProjects Project[]      @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
-  assignedLeads       Lead[]        @relation("LeadAssignee")
+  assignedLeads       Lead[]         @relation("LeadAssignee")
+  reviews             TradieRating[]
 
   @@index([email])
   @@index([phone])
