@@ -1801,9 +1801,21 @@ async function main() {
         const projectSlug = slugify(projectSeed.name);
         const projectStart = day(projectSeed.startDate);
 
+        const findRandomLeadWithoutProject = async (): Promise<number> => {
+            const lead = await prisma.lead.findFirst({
+                where: {
+                    project: null,
+                },
+            });
+            if (!lead) {
+                throw new Error("No available leads without a project");
+            }
+            return lead.id;
+        };
+
         const project = await prisma.project.create({
             data: {
-                leadId: 0,
+                leadId: await findRandomLeadWithoutProject(),
                 name: projectSeed.name,
                 description: projectSeed.description,
                 buildingType: projectSeed.buildingType,
