@@ -354,7 +354,7 @@ export async function getTradieCoordinationDashboard(
           ts.id,
           ts."tradieId"       AS tradie_id,
           t.name              AS tradie_name,
-          t.isFavourite       AS isFavourite,
+          t."isFavourite"       AS isFavourite,
           t.note              AS note,
           t.abn               AS abn,
           t.trade             AS trade_type,
@@ -683,7 +683,7 @@ export async function getTradieCoordinationDashboard(
       ? await prisma.$queryRaw<TradeTypeRow[]>(Prisma.sql`
           SELECT id, "trade" AS trade_type
           FROM "Tradie"
-          WHERE id = ANY(${distinctTradieIds}::uuid[])
+          WHERE id::text = ANY(${distinctTradieIds})
         `)
       : [];
 
