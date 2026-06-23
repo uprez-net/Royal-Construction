@@ -44,6 +44,8 @@ type ScheduleRow = {
   id: string;
   tradie_id: string;
   tradie_name: string;
+  isFavourite: boolean;
+  note: string | null;
   abn: string;
   trade_type: string;
   project_id: string;
@@ -213,8 +215,7 @@ function buildWhere(
     const pattern = `%${resolved.search}%`;
     parts.push(Prisma.sql`(
       t.name         ILIKE ${pattern}
-      OR t.company   ILIKE ${pattern}
-      OR t."tradeType" ILIKE ${pattern}
+      OR t.trade     ILIKE ${pattern}
       OR p.name      ILIKE ${pattern}
       OR m.name      ILIKE ${pattern}
     )`);
@@ -353,6 +354,8 @@ export async function getTradieCoordinationDashboard(
           ts.id,
           ts."tradieId"       AS tradie_id,
           t.name              AS tradie_name,
+          t.isFavourite       AS isFavourite,
+          t.note              AS note,
           t.abn               AS abn,
           t.trade             AS trade_type,
           ts."projectId"      AS project_id,
@@ -752,6 +755,8 @@ export async function getTradieCoordinationDashboard(
       abn: row.abn,
       projectId: row.project_id,
       projectName: row.project_name,
+      isFavourite: row.isFavourite ?? false,
+      note: row.note ?? null,
       milestoneId: row.milestone_id ?? undefined,
       milestoneName: row.milestone_name ?? undefined,
       taskLabel: row.milestone_name ?? "General trade task",

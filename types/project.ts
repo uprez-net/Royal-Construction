@@ -62,7 +62,6 @@ export interface ProjectWithStats extends SafeProject {
     status: Milestone["status"];
     tradies: {
       name: string;
-      company: string | null;
       tradeType: string;
     }[]
   }[];
@@ -135,6 +134,8 @@ export type TradieScheduleListItem = {
   scheduledDate: string;
   durationDays: number;
   status: TradieScheduleStatus;
+  isFavourite: boolean;
+  note: string | null;
   reminderSentAt?: string;
   updatedAt: string;
   hourlyRate?: string;

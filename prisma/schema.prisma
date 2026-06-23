@@ -207,16 +207,19 @@ model Material {
 }
 
 model Tradie {
-  id         String   @id @default(uuid())
-  name       String
-  trade      String
-  abn        String   @unique
-  phone      String   @unique
-  email      String   @unique
-  hourlyRate Decimal? @db.Decimal(8, 2)
-  rating     Decimal? @db.Decimal(2, 1)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(uuid())
+  name        String
+  trade       String
+  abn         String   @unique
+  phone       String   @unique
+  email       String   @unique
+  isFavourite Boolean  @default(false)
+  hourlyRate  Decimal? @db.Decimal(8, 2)
+  rating      Decimal? @db.Decimal(2, 1)
+  note        String?  @db.Text
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   projects   Project[]        @relation("ProjectTradies")
   milestones Milestone[]      @relation("TradieMilestones")

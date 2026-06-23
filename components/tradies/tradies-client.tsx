@@ -367,7 +367,10 @@ export function TradiesClient({
     URL.revokeObjectURL(url);
   };
 
-  const renderScheduleActions = (row: TradieScheduleListItem, large = false) => {
+  const renderScheduleActions = (
+    row: TradieScheduleListItem,
+    large = false,
+  ) => {
     const size = large ? "icon" : "sm";
     const btn = large ? "h-10 w-10" : "";
     return (
@@ -490,9 +493,7 @@ export function TradiesClient({
 
     <div key={`tradie-${row.id}`}>
       <p className="font-semibold text-slate-900">{row.tradieName}</p>
-      <p className="text-xs text-muted-foreground">
-        {row.abn}
-      </p>
+      <p className="text-xs text-muted-foreground">{row.abn}</p>
     </div>,
 
     row.tradeType,
@@ -508,11 +509,18 @@ export function TradiesClient({
       <p className="text-xs text-muted-foreground">{row.durationDays} day(s)</p>
     </div>,
 
-    <span key={`days-${row.id}`} className={daysLeftBadgeClass(row.scheduledDate)}>
+    <span
+      key={`days-${row.id}`}
+      className={daysLeftBadgeClass(row.scheduledDate)}
+    >
       {CalanderRow(row.scheduledDate)}
     </span>,
 
-    <StatusPill key={`status-${row.id}`} id={`status-${row.id}`} tone={statusToneMap[row.status]}>
+    <StatusPill
+      key={`status-${row.id}`}
+      id={`status-${row.id}`}
+      tone={statusToneMap[row.status]}
+    >
       {statusLabelMap[row.status]}
     </StatusPill>,
 
@@ -659,6 +667,8 @@ export function TradiesClient({
                           updatedAt: "item.updatedAt",
                           durationDays: 1,
                           abn: item.abn,
+                          isFavourite: false,
+                          note: null,
                         } satisfies TradieScheduleListItem)
                       }
                     >
