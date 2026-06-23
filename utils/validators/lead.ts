@@ -62,21 +62,24 @@ function parseDateOnlyInput(value: string): Date | null {
 
 const nullableDateInput = z.preprocess((value) => {
   if (value === null) return null;
-  if (value instanceof Date) return value;
+  if (value instanceof Date) return value.toISOString();
   if (typeof value !== "string") return value;
 
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
 
   const dateOnly = parseDateOnlyInput(trimmed);
-  if (dateOnly) return dateOnly;
+  if (dateOnly) return dateOnly.toISOString();
 
   if (!isoDateTimeInput.safeParse(trimmed).success) {
     return value;
   }
 
-  return new Date(trimmed);
-}, z.date().nullable());
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return parsed.toISOString();
+}, z.iso.datetime().nullable());
 
 // const dateInputSchema = z.preprocess((value) => {
 //   if (typeof value !== "string" || value.trim() === "") {
@@ -171,7 +174,7 @@ export const historySchema = z.object({
     .enum(["system", "call", "email", "referral"])
     .optional()
     .default("system"),
-  actionDate: z.iso.datetime().describe("Action date").optional(),
+  actionDate: z.iso.datetime().nullable().describe("Action date").optional(),
 });
 
 export const updateLeadSchema = z.object({

@@ -93,39 +93,81 @@ export type QueryInput = z.infer<typeof querySchema>;
 
 /**
  * Validates ISO date strings and date objects
- * Parses to Date instance
+ * Parses to ISO date string (JSON-safe)
  */
-export const isoDateSchema = z
-  .string()
-  .trim()
-  .or(z.date())
-  .pipe(z.coerce.date())
-  .refine((date) => !Number.isNaN(date.getTime()), "Invalid date");
+const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
+const isoDateTimeInput = z.iso.datetime();
+
+function parseDateOnlyInput(value: string): Date | null {
+  const match = dateOnlyPattern.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+export const isoDateSchema = z.preprocess((value) => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return value;
+    return value.toISOString();
+  }
+
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return value;
+
+  const dateOnly = parseDateOnlyInput(trimmed);
+  if (dateOnly) return dateOnly.toISOString();
+
+  if (!isoDateTimeInput.safeParse(trimmed).success) return value;
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return parsed.toISOString();
+}, z.iso.datetime().describe("ISO date string"));
 
 /**
  * Optional ISO date that allows null/empty values
  */
 export const optionalIsoDateSchema = z
-  .union([
-    z.string().trim().pipe(z.coerce.date()),
-    z.date(),
-    z.literal(""),
-    z.null(),
-  ])
-  .optional()
-  .transform((val) => {
-    if (!val || (typeof val === "string" && val === "")) return null;
-    if (val instanceof Date) return val;
-    if (typeof val === "string") {
-      try {
-        const date = new Date(val);
-        return Number.isNaN(date.getTime()) ? null : date;
-      } catch {
-        return null;
-      }
+  .preprocess((value) => {
+    if (value === undefined || value === null) return null;
+
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return value;
+      return value.toISOString();
     }
-    return null;
-  });
+
+    if (typeof value !== "string") return value;
+
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return null;
+
+    const dateOnly = parseDateOnlyInput(trimmed);
+    if (dateOnly) return dateOnly.toISOString();
+
+    if (!isoDateTimeInput.safeParse(trimmed).success) return value;
+
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return value;
+
+    return parsed.toISOString();
+  }, z.iso.datetime().nullable())
+  .optional();
 
 export const isoDateStringSchema = z.iso.datetime().describe("ISO date string");
 
@@ -140,7 +182,12 @@ export const dateRangeSchema = z
   .refine(
     (data) => {
       if (!data.startDate || !data.endDate) return true;
-      return data.startDate <= data.endDate;
+
+      const startTime = Date.parse(data.startDate);
+      const endTime = Date.parse(data.endDate);
+
+      if (Number.isNaN(startTime) || Number.isNaN(endTime)) return false;
+      return startTime <= endTime;
     },
     "Start date must be before end date"
   );
