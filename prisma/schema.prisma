@@ -90,6 +90,31 @@ enum RunStatus {
   FAILED
 }
 
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TradieIncidentStatus {
+  OPEN
+  RESOLVED
+  CLOSED
+}
+
+enum TradieApprovalActionType {
+  PRICE_CHANGE
+  INCIDENT_RESOLUTION
+  TRADIE_REMOVAL
+}
+
+enum TradieApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Project {
   id               String   @id @default(uuid())
   leadId           Int      @unique
@@ -132,7 +157,7 @@ model Project {
 model Milestone {
   id              String          @id @default(uuid())
   projectId       String
-  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invoiceId       String?
   name            String
   order           Int
   description     String?
@@ -151,6 +176,7 @@ model Milestone {
   siteUpdates        SiteUpdate[]
   tradieSchedules    TradieSchedule[]
   activityLogs       ActivityLog[]
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   files              File[]           @relation("MilestoneFiles")
   tradies            Tradie[]         @relation("TradieMilestones")
   parentMilestone    Milestone?       @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
@@ -183,9 +209,8 @@ model Material {
 model Tradie {
   id         String   @id @default(uuid())
   name       String
-  company    String?
   trade      String
-  tradeType  String
+  abn        String   @unique
   phone      String   @unique
   email      String   @unique
   hourlyRate Decimal? @db.Decimal(8, 2)
@@ -196,12 +221,46 @@ model Tradie {
   projects   Project[]        @relation("ProjectTradies")
   milestones Milestone[]      @relation("TradieMilestones")
   schedules  TradieSchedule[]
+  incidents  TradieIncident[]
+  approvals  TradieApproval[]
 
   @@index([name])
   @@index([trade])
-  @@index([tradeType])
   @@index([email])
   @@index([phone])
+}
+
+model TradieIncident {
+  id          String           @id @default(uuid())
+  tradieId    String
+  type        String
+  severity    IncidentSeverity
+  description String
+
+  status TradieIncidentStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+
+  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+
+  @@index([tradieId])
+  @@index([severity])
+}
+
+model TradieApproval {
+  id           String                   @id @default(uuid())
+  tradieId     String
+  actionType   TradieApprovalActionType
+  status       TradieApprovalStatus     @default(PENDING)
+  reason       String                   @db.Text
+  updationData Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+
+  @@index([tradieId])
 }
 
 model File {
@@ -306,10 +365,10 @@ model ActivityLog {
 }
 
 model Customer {
-  id     String  @id @default(uuid())
-  name   String
-  email  String  @unique
-  phone  String  @unique
+  id    String @id @default(uuid())
+  name  String
+  email String @unique
+  phone String @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

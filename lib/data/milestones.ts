@@ -1,11 +1,13 @@
 import prisma from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { MilestoneStatus, Prisma } from "@prisma/client";
 import type { MilestoneCreationData, MilestoneUpdateData } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { milestoneTemplates } from "@/constants/milestoneTemplate";
 import { v4 as randomUUID } from "uuid";
 import { addWeeks } from "date-fns";
+import { createInvoice } from "./invoice";
+import { dateFormat } from "@/utils/formatters";
 
 /**
  * Gets all milestones for a given project, ordered by their specified order field. Each milestone includes its id, name, photo requirement status, current status, and order.
@@ -81,14 +83,52 @@ export async function addPhotosToMilestone(projectId: string, milestoneId: strin
   return { id: milestoneId, projectId, files: addedFiles };
 }
 
+const MILESTONE_STATE_MACHINE: Record<MilestoneStatus, MilestoneStatus[]> = {
+  PENDING: ["ACTIVE"],
+  ACTIVE: ["DONE"],
+  DONE: [],
+}
+
+/**
+ * Updates an existing milestone with new data. Only the fields provided in the updateData object will be updated. After updating the milestone, it triggers cache revalidation for the associated project to ensure the updated milestone data is reflected in the UI.
+ * @param milestoneId 
+ * @param updateData 
+ * @returns updated milestone with its new details
+ * @throws Error if database update fails
+ * Also triggers revalidation of the project cache to ensure the updated milestone data appears in subsequent fetches.
+ */
 export async function updateMilestone(milestoneId: string, updateData: MilestoneUpdateData) {
-  const normalizedUpdateData = {
+  let normalizedUpdateData = {
     ...updateData,
     startDate: updateData.startDate ? new Date(updateData.startDate) : undefined,
     actualDate: updateData.actualDate ? new Date(updateData.actualDate) : undefined,
+    invoiceId: null as string | null, // Ensure invoiceId is set to null if not provided
   };
+  const milestone = await prisma.milestone.findUnique({ where: { id: milestoneId } });
+  if (!milestone) {
+    throw new Error(`Milestone with ID ${milestoneId} not found.`);
+  }
 
+  if (updateData.status && !MILESTONE_STATE_MACHINE[milestone.status].includes(updateData.status)) {
+    throw new Error(`Invalid status transition from ${milestone.status} to ${updateData.status}.`);
+  }
+  
+  if (updateData.status === "DONE") {
+    const invoiceId = await createInvoice({
+      milestoneId: milestoneId,
+      projectId: milestone.projectId,
+      milestoneAmount: parseFloat(milestone.budget.toString()),
+      date: dateFormat.format(new Date()),
+      dueDate: dateFormat.format(addWeeks(new Date(), 2)),
+      milestoneName: milestone.name,
+    });
+    normalizedUpdateData = {
+      ...normalizedUpdateData,
+      invoiceId,
+    };
+  }
   const updated = await prisma.milestone.update({ where: { id: milestoneId }, data: normalizedUpdateData });
+
   revalidateTag(`project-${updated.projectId}`, CACHE_PROFILES.MEDIUM);
 
   return {
@@ -125,7 +165,7 @@ export async function createMilestonesFromTemplateForProject(
     const milestoneIdByOrder = new Map(
       milestoneRecords.map((m) => [m.order, m.id])
     );
-    
+
     const newMilestones = await prismaClient.milestone.createMany({
       data: milestoneRecords.map((milestone) => ({
         id: milestone.id,
