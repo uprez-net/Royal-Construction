@@ -53,7 +53,6 @@ const projectInclude = {
       tradies: {
         select: {
           name: true,
-          company: true,
           tradeType: true,
         },
       }

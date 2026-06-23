@@ -455,6 +455,8 @@ const projectsSlice = createSlice({
               phone: schedule.contact.phone,
               trade: schedule.tradeType,
               abn: schedule.abn,
+              isFavourite: schedule.isFavourite,
+              note: null
             },
             createdAt: new Date(),
             updatedAt: new Date(),
