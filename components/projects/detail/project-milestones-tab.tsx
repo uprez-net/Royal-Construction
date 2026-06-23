@@ -1,9 +1,4 @@
-import {
-  CalendarCheck2,
-  Bell,
-  Wrench,
-  Plus,
-} from "lucide-react";
+import { CalendarCheck2, Bell, Wrench, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DonutChartCard } from "@/components/charts/donut-chart-card";
 import type { ProjectMilestoneMix } from "@/types/ui";
@@ -239,8 +234,9 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
 
                   <div>
                     <p className="text-[13px] font-bold text-slate-900">
-                      {schedule.tradie.trade} •{" "}
-                      {schedule.tradie.name}{" - "}{schedule.tradie.abn}
+                      {schedule.tradie.trade} • {schedule.tradie.name}
+                      {" - "}
+                      {schedule.tradie.abn}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       Needed for: {schedule.milestone?.name ?? "General"} —{" "}
@@ -283,6 +279,8 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                               project.siteManager?.phone ??
                               "Site Manager Phone",
                           },
+                          isFavourite: schedule.tradie.isFavourite,
+                          note: schedule.tradie.note,
                         } satisfies TradieScheduleListItem)
                       }
                     >

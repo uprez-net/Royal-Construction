@@ -266,6 +266,8 @@ export function MilestoneCard({
                       phone: project.siteManager?.phone ?? "Site Manager Phone",
                     },
                     hourlyRate: t.tradie.hourlyRate,
+                    isFavourite: t.tradie.isFavourite,
+                    note: t.tradie.note,
                   } satisfies TradieScheduleListItem)
                 }
               >
