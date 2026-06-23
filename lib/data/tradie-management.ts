@@ -1,10 +1,33 @@
 'use server';
-import { CreateTradieInput, DeleteInput, RatingInput, TradieDetails, TradieRow, TradiesByCategory, UpdatePriceInput } from "@/types/tradie";
+import type {
+    ApprovalInput,
+    CreateTradieInput,
+    DeleteInput,
+    IncidentReportApprovalPayload,
+    RatingInput,
+    ReportIncidentInput,
+    TradieDetails,
+    TradieRow,
+    TradiesByCategory,
+    TradieTableQuery,
+    UpdatePriceApprovalPayload,
+    UpdatePriceInput
+} from "@/types/tradie";
 import prisma from "../prisma";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
-import { TradieApprovalActionType } from "@prisma/client";
+import { TradieApprovalActionType, TradieIncident, Prisma } from "@prisma/client";
+import { cacheLife, cacheTag } from "next/cache";
+import { CACHE_PROFILES } from "@/types/cache";
+import { after } from "next/server"
 
+/**
+ * Creates a new tradie record and returns a mapped tradie row.
+ *
+ * @param input - Tradie creation payload.
+ * @returns Newly created tradie formatted for table display.
+ * @throws Error if the tradie cannot be created.
+ */
 export async function createTradie(input: CreateTradieInput): Promise<TradieRow> {
     try {
         const res = await prisma.tradie.create({
@@ -30,6 +53,12 @@ export async function createTradie(input: CreateTradieInput): Promise<TradieRow>
     }
 }
 
+/**
+ * Retrieves a tradie with ratings, incidents, and completed job statistics.
+ *
+ * @param tradieId - Tradie identifier.
+ * @returns Detailed tradie information or null if not found.
+ */
 export async function getTradieById(tradieId: string): Promise<TradieDetails | null> {
     try {
         const tradie = await prisma.tradie.findUnique({
@@ -83,6 +112,31 @@ export async function getTradieById(tradieId: string): Promise<TradieDetails | n
     }
 }
 
+/**
+ * `CACHED` version of `getTradieById` that retrieves a tradie with ratings, incidents, and completed job statistics.
+ * Uses caching to improve performance for frequently accessed tradie details.
+ * 
+ * Retrieves a tradie with ratings, incidents, and completed job statistics.
+ *
+ * @param tradieId - Tradie identifier.
+ * @returns Detailed tradie information or null if not found.
+ */
+export async function getTradieByIdCached(tradieId: string): Promise<TradieDetails | null> {
+    'use cache';
+    cacheTag(`tradie-${tradieId}`);
+    cacheLife(CACHE_PROFILES.MEDIUM);
+
+    return getTradieById(tradieId);
+}
+
+/**
+ * Creates an approval request for updating a tradie's hourly rate.
+ *
+ * Requires an authenticated user.
+ *
+ * @param input - Price update request details.
+ * @throws Error if the user, tradie, or approval request creation fails.
+ */
 export async function updateTradiePrice(input: UpdatePriceInput) {
     try {
         const { userId } = await auth()
@@ -117,6 +171,14 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
     }
 }
 
+/**
+ * Creates an approval request to remove a tradie.
+ *
+ * Requires an authenticated user.
+ *
+ * @param input - Tradie removal request details.
+ * @throws Error if the user, tradie, or approval request creation fails.
+ */
 export async function deleteTradie(input: DeleteInput) {
     try {
         const { userId } = await auth()
@@ -147,6 +209,15 @@ export async function deleteTradie(input: DeleteInput) {
     }
 }
 
+/**
+ * Submits a rating for a tradie and recalculates their average rating.
+ *
+ * Requires an authenticated user.
+ *
+ * @param input - Rating value and optional review comment.
+ * @returns The tradie ID and updated average rating.
+ * @throws Error if the user, tradie, or rating operation fails.
+ */
 export async function rateTradie(input: RatingInput) {
     try {
         const { userId } = await auth()
@@ -188,6 +259,11 @@ export async function rateTradie(input: RatingInput) {
             }
         });
 
+        after(() => {
+            cacheTag(`tradie-${input.tradieId}`);
+            cacheTag('tradie-management');
+        });
+
         return {
             id: tradie.id,
             newRating: (avgRating._avg.rating ?? 0).toString()
@@ -197,12 +273,378 @@ export async function rateTradie(input: RatingInput) {
         throw new Error("Failed to rate tradie");
     }
 }
+/**
+ * Reports a new incident against a tradie and creates an approval workflow
+ * for incident resolution review.
+ *
+ * Creates:
+ * - A tradie incident record with the supplied details.
+ * - A corresponding approval request used to track and approve the incident's resolution.
+ *
+ * Requires an authenticated user and a valid tradie.
+ *
+ * @param input - Incident details including tradie ID, type, severity, and description.
+ *
+ * @throws Error If:
+ * - The user is not authenticated.
+ * - The user cannot be found.
+ * - The specified tradie does not exist.
+ * - The incident or approval request cannot be created.
+ */
+export async function reportTradieIncident(input: ReportIncidentInput): Promise<TradieIncident> {
+    try {
+        const { userId } = await auth()
+        if (!userId) {
+            throw new Error("User not authenticated");
+        }
+        const user = await getUserByClerkIdCached(userId);
+        if (!user) {
+            throw new Error("User not found");
+        }
+        const tradie = await prisma.tradie.findUnique({
+            where: { id: input.tradieId }
+        });
 
-// export async function getTradieGroupedByCategory(): Promise<TradiesByCategory[]> {
-//     try {
-//         const tradies
-//     } catch (error) {
-//         console.error("Error fetching tradies grouped by category:", error);
-//         throw new Error("Failed to fetch tradies grouped by category");
-//     }
-// }
+        if (!tradie) {
+            throw new Error("Tradie not found");
+        }
+
+        const incident = await prisma.tradieIncident.create({
+            data: {
+                tradieId: input.tradieId,
+                type: input.incidentType,
+                severity: input.incidentSeverity,
+                description: input.incidentDescription,
+            }
+        });
+
+        await prisma.tradieApproval.create({
+            data: {
+                tradieId: input.tradieId,
+                actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
+                reason: input.incidentDescription,
+                updationData: {
+                    incidentId: incident.id,
+                    incidentType: input.incidentType,
+                    incidentSeverity: input.incidentSeverity,
+                    incidentDescription: input.incidentDescription,
+                }
+            }
+        })
+
+        after(() => {
+            cacheTag(`tradie-${input.tradieId}`);
+            cacheTag('tradie-management');
+        });
+
+        return incident;
+    } catch (error) {
+        console.error("Error reporting tradie incident:", error);
+        throw new Error("Failed to report tradie incident");
+    }
+}
+
+/**
+ * Retrieves all tradies grouped by trade category with aggregated metrics.
+ *
+ * Calculates:
+ * - Average category rating
+ * - Total completed jobs per category
+ * - Open and resolved incident counts per tradie
+ *
+ * @returns Tradies grouped by trade category.
+ * @throws Error if the data cannot be retrieved.
+ */
+
+export async function getTradieGroupedByCategory(): Promise<TradiesByCategory[]> {
+    try {
+        const tradies = await prisma.tradie.findMany({
+            include: {
+                schedules: {
+                    select: {
+                        id: true,
+                        status: true,
+                    },
+                },
+                incidents: {
+                    select: {
+                        status: true,
+                    },
+                },
+            },
+            orderBy: {
+                trade: "asc",
+            },
+        });
+
+        const grouped = new Map<string, TradieRow[]>();
+
+        for (const tradie of tradies) {
+            const row: TradieRow = {
+                id: tradie.id,
+                name: tradie.name,
+                trade: tradie.trade,
+                isFavourite: tradie.isFavourite,
+                hourlyRate: tradie.hourlyRate?.toString() ?? null,
+                rating: tradie.rating?.toString() ?? null,
+
+                jobsCompleted: tradie.schedules.filter(
+                    (s) => s.status === "COMPLETED",
+                ).length,
+
+                incidentCount: {
+                    open: tradie.incidents.filter(
+                        (i) => i.status === "OPEN",
+                    ).length,
+
+                    resolved: tradie.incidents.filter(
+                        (i) => i.status === "RESOLVED",
+                    ).length,
+                },
+            };
+
+            const existing = grouped.get(tradie.trade);
+
+            if (existing) {
+                existing.push(row);
+            } else {
+                grouped.set(tradie.trade, [row]);
+            }
+        }
+
+        return Array.from(grouped.entries()).map(
+            ([category, tradies]): TradiesByCategory => {
+                const ratings = tradies
+                    .map((t) => (t.rating ? Number(t.rating) : null))
+                    .filter((r): r is number => r !== null);
+
+                return {
+                    category,
+
+                    avgRating:
+                        ratings.length > 0
+                            ? Number(
+                                (
+                                    ratings.reduce((sum, rating) => sum + rating, 0) /
+                                    ratings.length
+                                ).toFixed(1),
+                            )
+                            : 0,
+
+                    totalCategoryJobsCompleted: tradies.reduce(
+                        (sum, tradie) => sum + tradie.jobsCompleted,
+                        0,
+                    ),
+
+                    tradies,
+                };
+            },
+        );
+    } catch (error) {
+        console.error("Error fetching tradies grouped by category:", error);
+        throw new Error("Failed to fetch tradies grouped by category");
+    }
+}
+
+/**
+ * Retrieves all `cached` tradies grouped by trade category with aggregated metrics.
+ *
+ * Calculates:
+ * - Average category rating
+ * - Total completed jobs per category
+ * - Open and resolved incident counts per tradie
+ *
+ * @returns `CACHED` Tradies grouped by trade category.
+ * @throws Error if the data cannot be retrieved.
+ */
+
+export async function getTradieGroupedByCategoryCached(): Promise<TradiesByCategory[]> {
+    'use cache';
+    cacheTag('tradie-management');
+    cacheLife(CACHE_PROFILES.MEDIUM);
+
+    return getTradieGroupedByCategory();
+}
+
+/**
+ * Processes an admin approval request and executes the corresponding action.
+ *
+ * Supported approval actions:
+ * - PRICE_CHANGE: Updates a tradie's hourly rate when approved.
+ * - TRADIE_REMOVAL: Permanently removes a tradie when approved.
+ * - INCIDENT_RESOLUTION: Updates an incident's resolution details and status.
+ *
+ * Requires an authenticated user and a valid approval request.
+ *
+ * @param input - Approval request containing the action type, resolution, and action-specific payload.
+ * @returns Details of the processed action, including the final resolution and any affected entities.
+ *
+ * @throws Error If:
+ * - The user is not authenticated.
+ * - The user cannot be found.
+ * - The approval request does not exist.
+ * - The approval action type is unsupported.
+ * - Any database operation fails.
+ */
+export async function handleAdminApproval(input: ApprovalInput) {
+    try {
+        const { userId } = await auth()
+        if (!userId) {
+            throw new Error("User not authenticated");
+        }
+
+        const user = await getUserByClerkIdCached(userId);
+        if (!user) {
+            throw new Error("User not found");
+        }
+
+        const approval = await prisma.tradieApproval.findUnique({
+            where: { id: input.approvalId }
+        });
+        if (!approval) {
+            throw new Error("Approval request not found");
+        }
+
+        after(() => {
+            cacheTag(`tradie-${approval.tradieId}`);
+            cacheTag('tradie-management');
+        });
+
+        switch (input.type) {
+            case TradieApprovalActionType.PRICE_CHANGE: {
+                const payload = input.payload as UpdatePriceApprovalPayload;
+                const isApproved = input.resolution === "approved";
+                await prisma.tradie.update({
+                    where: { id: approval.tradieId },
+                    data: {
+                        hourlyRate: isApproved ? payload.newHourlyRate : undefined
+                    }
+                });
+                return {
+                    actionType: TradieApprovalActionType.PRICE_CHANGE,
+                    tradieId: approval.tradieId,
+                    newHourlyRate: isApproved ? payload.newHourlyRate : undefined,
+                    resolution: input.resolution
+                }
+            }
+            case TradieApprovalActionType.TRADIE_REMOVAL: {
+                const isApproved = input.resolution === "approved";
+                if (isApproved) {
+                    await prisma.tradie.delete({
+                        where: { id: approval.tradieId }
+                    });
+                }
+                return {
+                    actionType: TradieApprovalActionType.TRADIE_REMOVAL,
+                    tradieId: approval.tradieId,
+                    resolution: input.resolution
+                };
+            }
+            case TradieApprovalActionType.INCIDENT_RESOLUTION: {
+                const payload = input.payload as IncidentReportApprovalPayload;
+                const incidentData = approval.updationData as {
+                    incidentId: string;
+                };
+                const isApproved = input.resolution === "approved";
+                // Handle incident resolution logic here
+                const updatedIncident = await prisma.tradieIncident.update({
+                    where: { id: incidentData.incidentId },
+                    data: {
+                        resolution: payload.resolution,
+                        status: isApproved ? "RESOLVED" : "OPEN"
+                    }
+                });
+
+                return {
+                    actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
+                    tradieId: approval.tradieId,
+                    incidentId: updatedIncident.id,
+                    updatedIncident,
+                }
+            }
+            default:
+                throw new Error("Unknown approval action type");
+        }
+    } catch (error) {
+        console.error("Error handling admin approval:", error);
+        throw new Error("Failed to handle admin approval");
+    }
+}
+
+/**
+ * Retrieves tradies matching the supplied table filters and returns them
+ * in a format suitable for UI table rendering.
+ *
+ * Supported filters:
+ * - Text search across tradie name, trade, and ABN.
+ * - Trade category.
+ * - Minimum rating.
+ * - Favourite status.
+ * - Flagged tradies (tradies with at least one open incident).
+ *
+ * Additionally calculates:
+ * - Completed job count.
+ * - Open incident count.
+ * - Resolved incident count.
+ *
+ * Decimal database values are converted to strings to ensure safe
+ * serialization for client-side consumption.
+ *
+ * @param input - Table query filters and search criteria.
+ * @returns A list of tradies enriched with job and incident statistics.
+ *
+ * @throws Error If the tradies cannot be retrieved.
+ */
+export async function fetchFilteredTradies(input: TradieTableQuery): Promise<TradieRow[]> {
+    try {
+        const whereClause: Prisma.TradieWhereInput = {
+            ...(input.search ? {
+                OR: [
+                    { name: { contains: input.search, mode: "insensitive" } },
+                    { trade: { contains: input.search, mode: "insensitive" } },
+                    { abn: { contains: input.search, mode: "insensitive" } },
+                ]
+            } : undefined),
+            ...(input.category ? { trade: input.category } : undefined),
+            ...(input.rating ? { rating: { gte: input.rating } } : undefined),
+            ...(input.favourite !== undefined ? { isFavourite: input.favourite } : undefined),
+            ...(input.tab === "flagged" ? { incidents: { some: { status: "OPEN" } } } : undefined)
+        };
+
+        const tradies = await prisma.tradie.findMany({
+            where: whereClause,
+            include: {
+                schedules: {
+                    select: {
+                        id: true,
+                        status: true,
+                    },
+                },
+                incidents: {
+                    select: {
+                        status: true,
+                    },
+                },
+            },
+            orderBy: {
+                trade: "asc",
+            },
+        });
+
+        return tradies.map(tradie => {
+            return {
+                ...tradie,
+                hourlyRate: tradie.hourlyRate?.toString() ?? null,
+                rating: tradie.rating?.toString() ?? null,
+                jobsCompleted: tradie.schedules.filter(s => s.status === "COMPLETED").length,
+                incidentCount: {
+                    open: tradie.incidents.filter(i => i.status === "OPEN").length,
+                    resolved: tradie.incidents.filter(i => i.status === "RESOLVED").length,
+                }
+            };
+        });
+    } catch (error) {
+        console.error("Error fetching filtered tradies:", error);
+        throw new Error("Failed to fetch filtered tradies");
+    }
+}

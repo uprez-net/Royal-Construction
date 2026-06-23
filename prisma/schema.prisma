@@ -218,8 +218,8 @@ model Tradie {
   rating      Decimal? @db.Decimal(2, 1)
   note        String?  @db.Text
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   projects   Project[]        @relation("ProjectTradies")
   milestones Milestone[]      @relation("TradieMilestones")
@@ -239,7 +239,8 @@ model TradieIncident {
   tradieId    String
   type        String
   severity    IncidentSeverity
-  description String
+  description String           @db.Text
+  resolution  String?          @db.Text
 
   status TradieIncidentStatus @default(OPEN)
 
