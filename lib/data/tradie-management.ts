@@ -17,6 +17,9 @@ import prisma from "../prisma";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
 import { TradieApprovalActionType, TradieIncident, Prisma } from "@prisma/client";
+import { cacheLife, cacheTag } from "next/cache";
+import { CACHE_PROFILES } from "@/types/cache";
+import { after } from "next/server"
 
 /**
  * Creates a new tradie record and returns a mapped tradie row.
@@ -107,6 +110,23 @@ export async function getTradieById(tradieId: string): Promise<TradieDetails | n
         console.error("Error fetching tradie details:", error);
         return null;
     }
+}
+
+/**
+ * `CACHED` version of `getTradieById` that retrieves a tradie with ratings, incidents, and completed job statistics.
+ * Uses caching to improve performance for frequently accessed tradie details.
+ * 
+ * Retrieves a tradie with ratings, incidents, and completed job statistics.
+ *
+ * @param tradieId - Tradie identifier.
+ * @returns Detailed tradie information or null if not found.
+ */
+export async function getTradieByIdCached(tradieId: string): Promise<TradieDetails | null> {
+    'use cache';
+    cacheTag(`tradie-${tradieId}`);
+    cacheLife(CACHE_PROFILES.MEDIUM);
+
+    return getTradieById(tradieId);
 }
 
 /**
@@ -239,6 +259,11 @@ export async function rateTradie(input: RatingInput) {
             }
         });
 
+        after(() => {
+            cacheTag(`tradie-${input.tradieId}`);
+            cacheTag('tradie-management');
+        });
+
         return {
             id: tradie.id,
             newRating: (avgRating._avg.rating ?? 0).toString()
@@ -306,6 +331,11 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
                 }
             }
         })
+
+        after(() => {
+            cacheTag(`tradie-${input.tradieId}`);
+            cacheTag('tradie-management');
+        });
 
         return incident;
     } catch (error) {
@@ -417,6 +447,26 @@ export async function getTradieGroupedByCategory(): Promise<TradiesByCategory[]>
 }
 
 /**
+ * Retrieves all `cached` tradies grouped by trade category with aggregated metrics.
+ *
+ * Calculates:
+ * - Average category rating
+ * - Total completed jobs per category
+ * - Open and resolved incident counts per tradie
+ *
+ * @returns `CACHED` Tradies grouped by trade category.
+ * @throws Error if the data cannot be retrieved.
+ */
+
+export async function getTradieGroupedByCategoryCached(): Promise<TradiesByCategory[]> {
+    'use cache';
+    cacheTag('tradie-management');
+    cacheLife(CACHE_PROFILES.MEDIUM);
+
+    return getTradieGroupedByCategory();
+}
+
+/**
  * Processes an admin approval request and executes the corresponding action.
  *
  * Supported approval actions:
@@ -454,6 +504,11 @@ export async function handleAdminApproval(input: ApprovalInput) {
         if (!approval) {
             throw new Error("Approval request not found");
         }
+
+        after(() => {
+            cacheTag(`tradie-${approval.tradieId}`);
+            cacheTag('tradie-management');
+        });
 
         switch (input.type) {
             case TradieApprovalActionType.PRICE_CHANGE: {

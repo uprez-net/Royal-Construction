@@ -1,7 +1,7 @@
-import { getTradieGroupedByCategory } from "@/lib/data/tradie-management";
+import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
 
 export default async function TradieManagementPage() {
-  const tradies = await getTradieGroupedByCategory();
+  const tradies = await getTradieGroupedByCategoryCached();
 
   return (
     <div className="flex flex-col gap-4 p-4">
