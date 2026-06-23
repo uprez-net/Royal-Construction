@@ -53,7 +53,7 @@ const projectInclude = {
       tradies: {
         select: {
           name: true,
-          tradeType: true,
+          trade: true,
         },
       }
     },
@@ -187,6 +187,13 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
 
     return {
       ...project,
+      milestones: project.milestones.map((milestone) => ({
+        ...milestone,
+        tradies: milestone.tradies.map((tradie) => ({
+          name: tradie.name,
+          tradeType: tradie.trade,
+        })),
+      })),
       lotSize: project.lotSize?.toString() ?? undefined,
       totalBudget: project.totalBudget.toString(),
       spent: project.spent.toString(),
@@ -354,6 +361,13 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
 
       return {
         ...project,
+        milestones: project.milestones.map((milestone) => ({
+          ...milestone,
+          tradies: milestone.tradies.map((tradie) => ({
+            name: tradie.name,
+            tradeType: tradie.trade,
+          })),
+        })),
         lotSize: project.lotSize?.toString() ?? undefined,
         totalBudget: project.totalBudget.toString(),
         spent: project.spent.toString(),
