@@ -319,6 +319,12 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
                 type: input.incidentType,
                 severity: input.incidentSeverity,
                 description: input.incidentDescription,
+                files:
+                    input.fileIds?.length
+                        ? {
+                            connect: input.fileIds.map((id) => ({ id })),
+                        }
+                        : undefined,
             }
         });
 
@@ -800,4 +806,26 @@ export async function fetchTradieKPIDataCached(): Promise<TradieKPIData> {
     cacheLife(CACHE_PROFILES.MEDIUM);
 
     return fetchTradieKPIData();
+}
+
+export async function toggleTradieFavourite(tradieId: string, isFavourite: boolean) {
+    try {
+        const updatedTradie = await prisma.tradie.update({
+            where: { id: tradieId },
+            data: { isFavourite }
+        });
+
+        after(() => {
+            cacheTag(`tradie-${tradieId}`);
+            cacheTag('tradie-management');
+        });
+
+        return {
+            id: updatedTradie.id,
+            isFavourite: updatedTradie.isFavourite,
+        };
+    } catch (error) {
+        console.error("Error toggling tradie favourite status:", error);
+        throw new Error("Failed to toggle tradie favourite status");
+    }
 }

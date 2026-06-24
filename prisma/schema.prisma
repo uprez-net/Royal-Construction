@@ -247,6 +247,7 @@ model TradieIncident {
   createdAt DateTime @default(now())
 
   tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  files  File[] @relation("TradieIncidentFiles")
 
   @@index([tradieId])
   @@index([severity])
@@ -289,6 +290,7 @@ model File {
   projectId   String?
   milestoneId String?
   leadId      Int?
+  incidentId  String?
   filename    String
   fileType    String
   filesize    Int
@@ -297,10 +299,11 @@ model File {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project   Project?   @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
-  milestone Milestone? @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  lead      Lead?      @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
-  User      User       @relation("UserFiles", fields: [uploadedBy], references: [id])
+  project   Project?        @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone?      @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  lead      Lead?           @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
+  incident  TradieIncident? @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
+  User      User            @relation("UserFiles", fields: [uploadedBy], references: [id])
 
   @@index([projectId])
   @@index([milestoneId])

@@ -1,11 +1,11 @@
 import { DataTable } from "@/components/common/data-table";
 import { RatingStars } from "@/components/common/rating-stars";
-import { Button } from "@/components/ui/button";
 import { TradieRow } from "@/types/tradie";
 import { currency } from "@/utils/formatters";
-import { HardHat, MoreVertical } from "lucide-react";
+import { HardHat } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TradieBadge } from "../trade-badge";
+import { TradieActionsDropdown } from "../tradie-actions";
 
 export function TradieTable({
   filteredTradies,
@@ -37,16 +37,7 @@ export function TradieTable({
           <RatingStars rating={parseFloat(tradie.rating ?? "0")} key={`rating-${tradie.id}`} />,
           tradie.jobsCompleted,
           `${tradie.incidentCount.open} open / ${tradie.incidentCount.resolved} closed`,
-          <Button
-            key={`actions-${tradie.id}`}
-            variant="ghost"
-            size="icon"
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-          >
-            <MoreVertical className="h-4 w-4" />
-          </Button>,
+          <TradieActionsDropdown tradieRow={tradie} key={`actions-${tradie.id}`} /> ,
         ])}
         emptyState={
           <div className="flex flex-col items-center justify-center gap-3">

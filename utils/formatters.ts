@@ -202,12 +202,13 @@ interface BlobPathParams {
   projectId?: string;
   leadId?: string;
   offerId?: string;
+  tradieId?: string;
 }
 /**
  * Builds a storage path for uploaded files based on the entity
  * the file belongs to.
  *
- * Supports project, milestone, lead, and offer file uploads.
+ * Supports project, milestone, lead, offer, and tradie file uploads.
  *
  * @param params - Blob path generation parameters.
  * @returns Relative blob storage path.
@@ -220,11 +221,15 @@ interface BlobPathParams {
  * })
  * // projects/abc/123-quote.pdf
  */
-export function buildBlobPath({ fileId, fileName, milestoneId, projectId, leadId, offerId }: BlobPathParams) {
+export function buildBlobPath({ fileId, fileName, milestoneId, projectId, leadId, offerId, tradieId }: BlobPathParams) {
   if (milestoneId) {
     return `projects/${projectId ?? "Unknown"}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
   }
-  
+
+  if (tradieId) {
+    return `tradies/${tradieId}/${fileId}-${sanitizeFileName(fileName)}`;
+  }
+
   if (leadId) {
     return `leads/${leadId}/${fileId}-${sanitizeFileName(fileName)}`;
   }

@@ -57,6 +57,7 @@ export interface ReportIncidentInput {
     incidentType: string;
     incidentSeverity: IncidentSeverity;
     incidentDescription: string;
+    fileIds?: string[];
 }
 
 export interface RatingInput {

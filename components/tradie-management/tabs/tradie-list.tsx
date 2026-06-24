@@ -9,12 +9,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { MoreVertical, Square, Star } from "lucide-react";
+import { Square, Star } from "lucide-react";
 import { currency } from "@/utils/formatters";
 import { randomColourHexGenerator } from "@/utils/generator";
 import { useRouter } from "next/navigation";
+import { TradieActionsDropdown } from "../tradie-actions";
 
 const convertCategoryToTradieType = (
   category: string,
@@ -180,15 +180,7 @@ function TradieListItem({
           <p className="text-xs text-muted-foreground">jobs</p>
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
-        >
-          <MoreVertical className="h-4 w-4" />
-        </Button>
+        <TradieActionsDropdown tradieRow={tradie} />
       </div>
     </Card>
   );

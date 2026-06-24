@@ -35,6 +35,12 @@ import AddMilestoneModal from "../projects/detail/add-milestone-modal";
 import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
 import { CreateOfferFileModal } from "../offers/create-offer-modal";
 import { AddLeadModal } from "../leads/modal-ui/add-lead-modal";
+import AddTradieModal from "../tradie-management/modal/add-tradie-modal";
+import { TradieRow } from "@/types/tradie";
+import DeleteTradieModal from "../tradie-management/modal/delete-tradie-modal";
+import ReportTradieModal from "../tradie-management/modal/report-tradie-modal";
+import PriceChangeTradieModal from "../tradie-management/modal/price-change-tradie-modal";
+import RateTradieModal from "../tradie-management/modal/rate-tradie-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -336,6 +342,20 @@ export function ModalManager() {
           }}
         />
       );
+    case "addTradie":
+      return <AddTradieModal open onClose={handleClose} />;
+    case "rateTradie":
+      const rateTradie = modal.payload as { tradie: TradieRow };
+      return <RateTradieModal open onClose={handleClose} tradie={rateTradie.tradie} />;
+    case "deleteTradie":
+      const deleteTradie = modal.payload as { tradie: TradieRow };
+      return <DeleteTradieModal open onClose={handleClose} tradie={deleteTradie.tradie} />;
+    case "reportTradie":
+      const reportTradie = modal.payload as { tradie: TradieRow };
+      return <ReportTradieModal open onClose={handleClose} tradie={reportTradie.tradie} />;
+    case "priceChangeTradie":
+      const priceChangeTradie = modal.payload as { tradie: TradieRow };
+      return <PriceChangeTradieModal open onClose={handleClose} tradie={priceChangeTradie.tradie} />;
     default:
       return null;
   }

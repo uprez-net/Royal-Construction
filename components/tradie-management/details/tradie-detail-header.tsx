@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { TradieBadge } from "../trade-badge";
+import { TradieRow } from "@/types/tradie";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 export function TradieCard() {
   const dispatch = useAppDispatch();
@@ -20,25 +22,50 @@ export function TradieCard() {
   if (!tradieDetails) {
     return null;
   }
-  
+
   const { name, trade, incidents } = tradieDetails;
   const openIncidentsCount = incidents.filter(
     (incident) => incident.status === "OPEN",
   ).length;
+  const tradieRow = {
+    incidentCount: {
+      open: openIncidentsCount,
+      resolved: tradieDetails.incidents.length - openIncidentsCount,
+    },
+    id: tradieDetails.id,
+    name: tradieDetails.name,
+    trade: tradieDetails.trade,
+    isFavourite: tradieDetails.isFavourite,
+    hourlyRate: tradieDetails.hourlyRate ?? null,
+    rating: tradieDetails.rating ?? null,
+    jobsCompleted: tradieDetails.jobsCompleted,
+  } satisfies TradieRow;
   const initials = name
     .split(" ")
     .map((n) => n[0])
     .join("");
 
   const handlePriceChange = () => {
-    // Handle price change logic here
+    dispatch(
+      openModal({ type: "priceChangeTradie", payload: { tradie: tradieRow } }),
+    );
   };
 
-  const handleReport = () => {};
+  const handleReport = () => {
+    dispatch(
+      openModal({ type: "reportTradie", payload: { tradie: tradieRow } }),
+    );
+  };
 
-  const handleSetPriority = () => {};
+  const handleSetPriority = () => {
+    dispatch(openModal({ type: "rateTradie", payload: { tradie: tradieRow } }));
+  };
 
-  const handleDelete = () => {};
+  const handleDelete = () => {
+    dispatch(
+      openModal({ type: "deleteTradie", payload: { tradie: tradieRow } }),
+    );
+  };
 
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm">

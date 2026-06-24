@@ -5,6 +5,7 @@ import {
     fetchFilteredTradies,
     rateTradie,
     reportTradieIncident,
+    toggleTradieFavourite,
     updateTradiePrice,
 } from "@/lib/data/tradie-management";
 import {
@@ -158,6 +159,21 @@ export const reportTradieIncidentThunk = createAsyncThunk<TradieIncident, Report
     },
 );
 
+export const toggleTradieFavouriteThunk = createAsyncThunk<{ id: string; isFavourite: boolean }, { tradieId: string; isFavourite: boolean }>(
+    "tradieManagement/toggleTradieFavourite",
+    async (input, thunkAPI) => {
+        try {
+            // Call the server action to toggle the favourite status of the tradie
+            const updatedTradie = await toggleTradieFavourite(input.tradieId, input.isFavourite);
+            return updatedTradie;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(
+                error instanceof Error ? error.message : "Failed to toggle tradie favourite status",
+            );
+        }
+    }
+);
+
 const tradieManagementSlice = createSlice({
     name: "tradieManagement",
     initialState,
@@ -256,6 +272,22 @@ const tradieManagementSlice = createSlice({
                 }
             })
             .addCase(reportTradieIncidentThunk.rejected, (state, action) => {
+                state.error = action.payload as string;
+            })
+            .addCase(toggleTradieFavouriteThunk.pending, (state) => {
+                state.error = null;
+            })
+            .addCase(toggleTradieFavouriteThunk.fulfilled, (state, action) => {
+                const { id, isFavourite } = action.payload;
+                const tradie = state.tradies.findIndex((t) => t.id === id);
+                if (tradie !== -1) {
+                    state.tradies[tradie].isFavourite = isFavourite;
+                }
+                if (state.selectedTradieId === id && state.selectedTradieDetails) {
+                    state.selectedTradieDetails.isFavourite = isFavourite;
+                }
+            })
+            .addCase(toggleTradieFavouriteThunk.rejected, (state, action) => {
                 state.error = action.payload as string;
             });
     },
