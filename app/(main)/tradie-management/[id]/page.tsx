@@ -1,9 +1,9 @@
 import { TradieDetailClient } from "@/components/tradie-management/details/tradie-detail-client";
 import { getTradieByIdCached } from "@/lib/data/tradie-management";
-import { Loader2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Metadata } from "next";
+import TradieDetailsSkeleton from "./loading";
 
 interface TradieDetailPageProps {
   params: Promise<{
@@ -59,7 +59,7 @@ async function TradieDetailContent({ params }: TradieDetailPageProps) {
 export default function TradieDetailPage({ params }: TradieDetailPageProps) {
   return (
     <Suspense
-      fallback={<Loader2 className="animate-spin text-blue-500 size-14" />}
+      fallback={<TradieDetailsSkeleton />}
     >
       <TradieDetailContent params={params} />
     </Suspense>

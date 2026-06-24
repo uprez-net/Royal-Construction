@@ -3,7 +3,7 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default function ProjectsError({
+export default function TradieManagementError({
   error,
   reset,
 }: {
@@ -29,7 +29,7 @@ export default function ProjectsError({
 
           {/* Message */}
           <p className="mb-6 text-sm text-red-700">
-            We encountered an error while loading your projects. This could be a temporary
+            We encountered an error while loading your tradies. This could be a temporary
             issue with your connection or our service. Please try again.
           </p>
 
