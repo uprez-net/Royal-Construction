@@ -5,6 +5,7 @@ import { TradieRow } from "@/types/tradie";
 import { currency } from "@/utils/formatters";
 import { HardHat, MoreVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { TradieBadge } from "../trade-badge";
 
 export function TradieTable({
   filteredTradies,
@@ -26,7 +27,7 @@ export function TradieTable({
         ]}
         rows={filteredTradies.map((tradie) => [
           tradie.name,
-          tradie.trade,
+          <TradieBadge trade={tradie.trade} key={`trade-${tradie.id}`} />,
           <span key={`rate-${tradie.id}`}>
             {tradie.hourlyRate
               ? currency.format(parseFloat(tradie.hourlyRate))
