@@ -14,7 +14,7 @@ import prisma from "../prisma";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
 import { TradieApprovalActionType, TradieIncident, Prisma } from "@prisma/client";
-import { cacheLife, cacheTag } from "next/cache";
+import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { after } from "next/server"
 import { DataPoint } from "@/components/common/metric-card";
@@ -218,7 +218,7 @@ export async function deleteTradie(input: DeleteInput) {
         if (!tradie) {
             throw new Error("Tradie not found");
         }
-        const approval= await prisma.tradieApproval.create({
+        const approval = await prisma.tradieApproval.create({
             data: {
                 tradieId: input.tradieId,
                 actionType: TradieApprovalActionType.TRADIE_REMOVAL,
@@ -298,8 +298,8 @@ export async function rateTradie(input: RatingInput) {
         });
 
         after(() => {
-            cacheTag(`tradie-${input.tradieId}`);
-            cacheTag('tradie-management');
+            revalidateTag(`tradie-${input.tradieId}`, CACHE_PROFILES.MEDIUM);
+            revalidateTag('tradie-management', CACHE_PROFILES.MEDIUM);
         });
 
         return {
@@ -347,41 +347,44 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
             throw new Error("Tradie not found");
         }
 
-        const incident = await prisma.tradieIncident.create({
-            data: {
-                tradieId: input.tradieId,
-                type: input.incidentType,
-                severity: input.incidentSeverity,
-                description: input.incidentDescription,
-                files:
-                    input.fileIds?.length
+        const { incident, approval } = await prisma.$transaction(async (tx) => {
+            const incident = await tx.tradieIncident.create({
+                data: {
+                    tradieId: input.tradieId,
+                    type: input.incidentType,
+                    severity: input.incidentSeverity,
+                    description: input.incidentDescription,
+                    files: input.fileIds?.length
                         ? {
                             connect: input.fileIds.map((id) => ({ id })),
                         }
                         : undefined,
-            }
+                },
+            });
+
+            const approval = await tx.tradieApproval.create({
+                data: {
+                    tradieId: input.tradieId,
+                    actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
+                    reason: input.incidentDescription,
+                    updationData: {
+                        incidentId: incident.id,
+                        incidentType: input.incidentType,
+                        incidentSeverity: input.incidentSeverity,
+                        incidentDescription: input.incidentDescription,
+                    },
+                },
+            });
+
+            return { incident, approval };
         });
 
-        const approvalId = await prisma.tradieApproval.create({
-            data: {
-                tradieId: input.tradieId,
-                actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
-                reason: input.incidentDescription,
-                updationData: {
-                    incidentId: incident.id,
-                    incidentType: input.incidentType,
-                    incidentSeverity: input.incidentSeverity,
-                    incidentDescription: input.incidentDescription,
-                }
-            }
-        })
-
         after(async () => {
-            cacheTag(`tradie-${input.tradieId}`);
-            cacheTag('tradie-management');
+            revalidateTag(`tradie-${input.tradieId}`, CACHE_PROFILES.MEDIUM);
+            revalidateTag('tradie-management', CACHE_PROFILES.MEDIUM);
 
             const notificationPayload = createNotification('tradieIncidentReport', {
-                approvalId: approvalId.id,
+                approvalId: approval.id,
                 incidentId: incident.id,
                 tradieId: input.tradieId,
                 tradieName: tradie.name,
@@ -777,8 +780,8 @@ export async function toggleTradieFavourite(tradieId: string, isFavourite: boole
         });
 
         after(() => {
-            cacheTag(`tradie-${tradieId}`);
-            cacheTag('tradie-management');
+            revalidateTag(`tradie-${tradieId}`, CACHE_PROFILES.MEDIUM);
+            revalidateTag('tradie-management', CACHE_PROFILES.MEDIUM);
         });
 
         return {
@@ -788,5 +791,55 @@ export async function toggleTradieFavourite(tradieId: string, isFavourite: boole
     } catch (error) {
         console.error("Error toggling tradie favourite status:", error);
         throw new Error("Failed to toggle tradie favourite status");
+    }
+}
+
+/**
+ * Exports all tradies with aggregated job and incident statistics.
+ *
+ * Retrieves tradies along with their schedules and incidents, then
+ * transforms the data into an export-friendly format by:
+ * - Converting `hourlyRate` and `rating` decimals to strings.
+ * - Calculating the number of scheduled jobs (`CONFIRMED` and `PENDING`).
+ * - Calculating the number of completed jobs (`COMPLETED`).
+ * - Calculating the number of open incidents (`OPEN`).
+ *
+ * @returns A list of tradies enriched with computed metrics:
+ * - `scheduledJobs`
+ * - `jobsCompleted`
+ * - `openIncidents`
+ *
+ * @throws {Error} If the tradie export operation fails.
+ */
+export async function exportTradies() {
+    try {
+        const tradies = await prisma.tradie.findMany({
+            include: {
+                schedules: {
+                    select: {
+                        id: true,
+                        status: true,
+                    }
+                },
+                incidents: {
+                    select: {
+                        id: true,
+                        status: true,
+                    }
+                }
+            }
+        });
+
+        return tradies.map(({ schedules, incidents, ...tradie }) => ({
+            ...tradie,
+            hourlyRate: tradie.hourlyRate?.toString() ?? null,
+            rating: tradie.rating?.toString() ?? null,
+            scheduledJobs: schedules.filter(s => ["CONFIRMED", "PENDING"].includes(s.status)).length,
+            jobsCompleted: schedules.filter(s => s.status === "COMPLETED").length,
+            openIncidents: incidents.filter(i => i.status === "OPEN").length,
+        }))
+    } catch (error) {
+        console.error("Error exporting tradies:", error);
+        throw new Error("Failed to export tradies");
     }
 }

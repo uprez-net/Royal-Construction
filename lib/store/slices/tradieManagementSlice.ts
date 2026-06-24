@@ -178,9 +178,8 @@ const tradieManagementSlice = createSlice({
     name: "tradieManagement",
     initialState,
     reducers: {
-        clearState(state) {
-            state = initialState;
-            console.log("State cleared:", state);
+        clearState() {
+            return initialState;
         },
         setActiveTab(state, action: PayloadAction<"category" | "list" | "table">) {
             state.activeTab = action.payload;

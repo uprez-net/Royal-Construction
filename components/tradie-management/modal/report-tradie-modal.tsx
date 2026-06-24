@@ -54,6 +54,8 @@ export const INCIDENT_TYPES = [
   "OTHER",
 ] as const;
 
+const INCIDENT_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+
 const startCase = (str: string) =>
   str
     .toLowerCase()
@@ -90,8 +92,10 @@ export default function ReportTradieModal({
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
+      Object.values(uploadControllersRef.current).forEach((controller) => {
+        controller.abort();
+      });
       onClose();
-      uploadControllersRef.current = {};
       resetQueue();
       dispatch(clearProjectUploads(tradie.id));
     }
@@ -237,21 +241,15 @@ export default function ReportTradieModal({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select type..." />
+                  <SelectValue placeholder="Select incident type..." />
                 </SelectTrigger>
 
                 <SelectContent>
-                  <SelectItem value="SAFETY">Safety</SelectItem>
-
-                  <SelectItem value="QUALITY">Quality</SelectItem>
-
-                  <SelectItem value="BEHAVIOUR">Behaviour</SelectItem>
-
-                  <SelectItem value="ATTENDANCE">Attendance</SelectItem>
-
-                  <SelectItem value="DAMAGE">Damage</SelectItem>
-
-                  <SelectItem value="OTHER">Other</SelectItem>
+                  {INCIDENT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {startCase(type)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -273,13 +271,13 @@ export default function ReportTradieModal({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select severity..." />
                 </SelectTrigger>
 
                 <SelectContent>
-                  {INCIDENT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {startCase(type)}
+                  {INCIDENT_SEVERITIES.map((severity) => (
+                    <SelectItem key={severity} value={severity}>
+                      {startCase(severity)}
                     </SelectItem>
                   ))}
                 </SelectContent>

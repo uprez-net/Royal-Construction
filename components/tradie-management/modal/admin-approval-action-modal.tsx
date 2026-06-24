@@ -26,14 +26,13 @@ export function AdminApprovalActionModal({
   approvalType,
   onClose,
 }: AdminApprovalActionModalProps) {
-  const { data, isLoading } = useQuery<SafeTradieApproval>({
+  const { data, isLoading, isError, error } = useQuery<SafeTradieApproval>({
     queryKey: ["approval", approvalId],
     queryFn: () => fetchTradieApprovalById(approvalId),
     enabled: open && !!approvalId,
   });
 
   console.log("approvalType", approvalType);
-  console.log("data", data, isLoading);
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
@@ -44,7 +43,7 @@ export function AdminApprovalActionModal({
   const renderForm = () => {
     if (!data) return null;
 
-    switch (approvalType) {
+    switch (data.actionType) {
       case TradieApprovalActionType.PRICE_CHANGE:
         return <PriceChangeApprovalForm approval={data} onSuccess={onClose} />;
 
@@ -73,6 +72,11 @@ export function AdminApprovalActionModal({
               Please wait while the form is loading.
             </DialogDescription>
             <Loader2 className="size-6 animate-spin" />
+          </div>
+        ) : isError ? (
+          <div className="space-y-2 p-4">
+            <DialogTitle>Unable to load approval</DialogTitle>
+            <DialogDescription>{error.message}</DialogDescription>
           </div>
         ) : (
           renderForm()

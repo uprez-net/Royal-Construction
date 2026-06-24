@@ -50,7 +50,12 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
     }
   };
 
-  const handleInputChange = (field: keyof CreateTradieInput, value: string) => {
+  const handleInputChange = <
+    K extends Exclude<keyof CreateTradieInput, "hourlyRate">,
+  >(
+    field: K,
+    value: CreateTradieInput[K],
+  ) => {
     setFormData((prevData) => ({
       ...prevData,
       [field]: value,
@@ -166,7 +171,10 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                 placeholder="e.g. 85"
                 value={formData.hourlyRate}
                 onChange={(e) =>
-                  handleInputChange("hourlyRate", e.target.value)
+                  setFormData((prev) => ({
+                    ...prev,
+                    hourlyRate: Number(e.target.value),
+                  }))
                 }
               />
             </div>

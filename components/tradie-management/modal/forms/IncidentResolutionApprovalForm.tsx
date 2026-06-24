@@ -23,9 +23,10 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
       approvalId: approval.id,
       type: TradieApprovalActionType.INCIDENT_RESOLUTION,
       resolution: resolutionStatus,
-      payload: {
-        resolution,
-      },
+      payload:
+        resolutionStatus === "approved"
+          ? { resolution: resolution.trim() }
+          : undefined,
     });
   };
 

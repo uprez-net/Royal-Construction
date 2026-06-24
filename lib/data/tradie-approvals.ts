@@ -147,7 +147,7 @@ export async function handleAdminApproval(input: ApprovalInput) {
                 const updatedIncident = await prisma.tradieIncident.update({
                     where: { id: incidentData.incidentId },
                     data: {
-                        resolution: payload.resolution,
+                        resolution: isApproved ? payload.resolution : null,
                         status: isApproved ? "RESOLVED" : "OPEN"
                     }
                 });

@@ -129,14 +129,16 @@ export function ProjectsClient({
 
   useEffect(() => {
     dispatch(setProjects(projects));
+  }, [projects, dispatch]);
 
+  useEffect(() => {
     return () => {
       if (!pathname.includes("projects")) {
         dispatch(resetProjects());
       }
       dispatch(clearProjectFilters());
-    }
-  }, [projects, dispatch, pathname]);
+    };
+  }, [dispatch, pathname]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -246,7 +248,6 @@ export function ProjectsClient({
       `Royal_Consturction_Projects_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
-  
 
   return (
     <div className="grid gap-6">

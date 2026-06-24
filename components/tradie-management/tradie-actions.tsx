@@ -37,21 +37,27 @@ export function TradieActionsDropdown({
   const onViewDetails = () => {
     router.push(`/tradie-management/${tradieRow.id}`);
   };
-  const onPriceChange = (e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>) => {
+  const onPriceChange = (
+    e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>,
+  ) => {
     e.stopPropagation();
     dispatch(
       openModal({ type: "priceChangeTradie", payload: { tradie: tradieRow } }),
     );
   };
 
-  const onReportIncident = (e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>) => {
+  const onReportIncident = (
+    e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>,
+  ) => {
     e.stopPropagation();
     dispatch(
       openModal({ type: "reportTradie", payload: { tradie: tradieRow } }),
     );
   };
 
-  const onSetPriority = (e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>) => {
+  const onSetPriority = (
+    e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>,
+  ) => {
     e.stopPropagation();
     dispatch(openModal({ type: "rateTradie", payload: { tradie: tradieRow } }));
   };
@@ -63,7 +69,9 @@ export function TradieActionsDropdown({
     );
   };
 
-  const onToggleFavourite = async (e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>) => {
+  const onToggleFavourite = async (
+    e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>,
+  ) => {
     e.stopPropagation();
     try {
       const toastId = toast.loading(
@@ -90,7 +98,12 @@ export function TradieActionsDropdown({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={(e) => e.stopPropagation()}
+        >
           <MoreVertical className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>

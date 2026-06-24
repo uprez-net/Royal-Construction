@@ -1,9 +1,11 @@
 import { Building2, CalendarDays, Mail, Phone, Star } from "lucide-react";
 import { dateFormat } from "@/utils/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAppSelector } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { Button } from "@/components/ui/button";
 import { RatingStars } from "@/components/common/rating-star";
+import { openModal } from "@/lib/store/slices/uiSlice";
+import { TradieRow } from "@/types/tradie";
 
 export function TradieBusinessDetailsCard() {
   const tradieDetails = useAppSelector(
@@ -78,6 +80,7 @@ export function TradieBusinessDetailsCard() {
 }
 
 export function TradiePriorityCard() {
+  const dispatch = useAppDispatch();
   const tradieDetails = useAppSelector(
     (state) => state.tradieManagement.selectedTradieDetails,
   );
@@ -89,7 +92,24 @@ export function TradiePriorityCard() {
   const { rating, hourlyRate, jobsCompleted } = tradieDetails;
 
   const handleRatingChange = () => {
-    // Handle rating change logic here
+    const tradieRow = {
+      id: tradieDetails.id,
+      name: tradieDetails.name,
+      trade: tradieDetails.trade,
+      isFavourite: tradieDetails.isFavourite,
+      hourlyRate: tradieDetails.hourlyRate ?? null,
+      rating: tradieDetails.rating ?? null,
+      jobsCompleted: tradieDetails.jobsCompleted,
+      incidentCount: {
+        open: tradieDetails.incidents.filter(
+          (incident) => incident.status === "OPEN",
+        ).length,
+        resolved: tradieDetails.incidents.filter(
+          (incident) => incident.status === "RESOLVED",
+        ).length,
+      },
+    } satisfies TradieRow;
+    dispatch(openModal({ type: "rateTradie", payload: { tradie: tradieRow } }));
   };
 
   return (

@@ -1,19 +1,63 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { exportTradies } from "@/lib/data/tradie-management";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
 import { Download, Plus } from "lucide-react";
 import { useTransition } from "react";
+import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 export function TradieHeader() {
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
 
   const handleExport = async () => {
-    // Implement export functionality here
-    console.log("Export button clicked");
+    try {
+      // Implement export functionality here
+      const allTradies = await exportTradies();
+      const tradieHeader = [
+        "name",
+        "trade",
+        "phone",
+        "email",
+        "hourlyRate",
+        "rating",
+        "open incidents",
+        "scheduled jobs",
+        "jobs completed",
+      ];
+
+      const tradieRows = allTradies.map((t) => [
+        t.name,
+        t.trade,
+        t.phone,
+        t.email,
+        t.hourlyRate,
+        t.rating,
+        t.openIncidents,
+        t.scheduledJobs,
+        t.jobsCompleted,
+      ]);
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet([tradieHeader, ...tradieRows]),
+        "Tradie Data",
+      );
+
+      XLSX.writeFile(
+        wb,
+        `Royal_Constructions_Tradies_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      );
+      toast.success("Tradies exported successfully!");
+    } catch (error) {
+      toast.error("Error exporting tradies. Please try again.");
+      console.error("Error exporting tradies:", error);
+    }
   };
 
   return (

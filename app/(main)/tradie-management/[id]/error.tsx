@@ -46,7 +46,7 @@ export default function TradieDetailError({
             variant="outline"
             className="w-full sm:w-auto px-6 h-10 rounded-lg border-border/80 text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
           >
-            <Link href="/tradies">
+            <Link href="/tradie-management">
               <ArrowLeft className="mr-2 size-4" />
               Back to Tradies
             </Link>

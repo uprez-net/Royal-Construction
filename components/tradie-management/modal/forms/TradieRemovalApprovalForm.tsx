@@ -48,11 +48,11 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => submit("rejected")}>
+          <Button variant="outline" onClick={() => submit("rejected")} disabled={mutation.isPending}>
             Reject
           </Button>
 
-          <Button variant="destructive" onClick={() => submit("approved")}>
+          <Button variant="destructive" onClick={() => submit("approved")} disabled={mutation.isPending}>
             Remove Tradie
           </Button>
         </div>

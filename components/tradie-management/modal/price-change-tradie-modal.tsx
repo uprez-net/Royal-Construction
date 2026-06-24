@@ -31,7 +31,7 @@ export default function PriceChangeTradieModal({
   const [isPending, startTransition] = useTransition();
 
   const [formData, setFormData] = useState({
-    newHourlyRate: 0,
+    newHourlyRate: Number(tradie.hourlyRate ?? 0),
     reason: "",
   });
 
@@ -39,7 +39,7 @@ export default function PriceChangeTradieModal({
     if (!open) {
       onClose();
       setFormData({
-        newHourlyRate: Number(tradie.hourlyRate ?? 0),
+        newHourlyRate: 0,
         reason: "",
       });
     }

@@ -53,7 +53,6 @@ export function TradieTabs() {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const searchQuery = e.target.value;
-    if (searchQuery.trim() === "") return;
     dispatch(setQuery({ search: searchQuery }));
   };
 
