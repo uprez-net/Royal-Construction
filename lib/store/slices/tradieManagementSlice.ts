@@ -1,3 +1,4 @@
+import { DataPoint } from "@/components/common/metric-card";
 import {
     createTradie,
     deleteTradie,
@@ -27,6 +28,12 @@ import {
 interface TradieManagementState {
     tradies: TradieRow[];
     tradiesByCategory: TradiesByCategory[];
+    kpiData: {
+        registeredTradies: DataPoint;
+        incidentLodged: DataPoint;
+        favouriteTradies: DataPoint;
+    };
+    selectedCategory: string | null;
     activeTab: "category" | "list" | "table";
     selectedTradieId: string | null;
     selectedTradieDetails: TradieDetails | null;
@@ -38,6 +45,12 @@ interface TradieManagementState {
 const initialState: TradieManagementState = {
     tradies: [],
     tradiesByCategory: [],
+    kpiData: {
+        registeredTradies: { total: 0, trendDelta: 0 },
+        incidentLodged: { total: 0, trendDelta: 0 },
+        favouriteTradies: { total: 0, trendDelta: 0 },
+    },
+    selectedCategory: null,
     activeTab: "category",
     selectedTradieId: null,
     selectedTradieDetails: null,
@@ -151,6 +164,7 @@ const tradieManagementSlice = createSlice({
     reducers: {
         clearState(state) {
             state = initialState;
+            console.log("State cleared:", state);
         },
         setActiveTab(state, action: PayloadAction<"category" | "list" | "table">) {
             state.activeTab = action.payload;
@@ -165,7 +179,20 @@ const tradieManagementSlice = createSlice({
         setSelectedTradie(state, action: PayloadAction<TradieDetails | null>) {
             state.selectedTradieDetails = action.payload;
             state.selectedTradieId = action.payload ? action.payload.id : null;
-        }
+        },
+        setKPIData(state, action: PayloadAction<{
+            registeredTradies: DataPoint;
+            incidentLodged: DataPoint;
+            favouriteTradies: DataPoint;
+        }>) {
+            state.kpiData = action.payload;
+        },
+        setQuery(state, action: PayloadAction<Partial<TradieTableQuery>>) {
+            state.query = { ...state.query, ...action.payload };
+        },
+        setSelectedCategory(state, action: PayloadAction<string | null>) {
+            state.selectedCategory = action.payload;
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -239,5 +266,8 @@ export const {
     setActiveTab,
     setTradies,
     setSelectedTradie,
+    setKPIData,
+    setQuery,
+    setSelectedCategory,
 } = tradieManagementSlice.actions;
 export default tradieManagementSlice.reducer;
