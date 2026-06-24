@@ -20,6 +20,9 @@ import { TradieApprovalActionType, TradieIncident, Prisma } from "@prisma/client
 import { cacheLife, cacheTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { after } from "next/server"
+import { DataPoint } from "@/components/common/metric-card";
+import { startOfMonth, subMonths } from "date-fns";
+import { calculateTrend } from "@/utils/formatters";
 
 /**
  * Creates a new tradie record and returns a mapped tradie row.
@@ -113,6 +116,7 @@ export async function getTradieById(tradieId: string): Promise<TradieDetails | n
 }
 
 /**
+ * Cached wrapper around {@link getTradieById}.
  * `CACHED` version of `getTradieById` that retrieves a tradie with ratings, incidents, and completed job statistics.
  * Uses caching to improve performance for frequently accessed tradie details.
  * 
@@ -447,7 +451,7 @@ export async function getTradieGroupedByCategory(): Promise<TradiesByCategory[]>
 }
 
 /**
- * Retrieves all `cached` tradies grouped by trade category with aggregated metrics.
+ * Cached wrapper around {@link getTradieGroupedByCategory}.
  *
  * Calculates:
  * - Average category rating
@@ -647,4 +651,153 @@ export async function fetchFilteredTradies(input: TradieTableQuery): Promise<Tra
         console.error("Error fetching filtered tradies:", error);
         throw new Error("Failed to fetch filtered tradies");
     }
+}
+
+interface TradieKPIQueryResult {
+    registered_tradies: bigint;
+    registered_current_month: bigint;
+    registered_previous_month: bigint;
+
+    incidents_lodged: bigint;
+    incidents_current_month: bigint;
+    incidents_previous_month: bigint;
+
+    favourite_tradies: bigint;
+    favourites_current_month: bigint;
+    favourites_previous_month: bigint;
+}
+
+interface TradieKPIData {
+    registeredTradies: DataPoint;
+    incidentLodged: DataPoint;
+    favouriteTradies: DataPoint;
+}
+
+/**
+ * Fetches KPI metrics for Tradie Management.
+ *
+ * Retrieves aggregated counts for:
+ * - Total registered tradies
+ * - Total incidents lodged
+ * - Total favourite tradies
+ *
+ * Trend values are calculated by comparing the current totals against
+ * records created during the previous calendar month. All metrics are
+ * fetched using a single database query for efficiency.
+ *
+ * If an error occurs, a fallback object containing zeroed KPI values
+ * is returned.
+ *
+ * @returns A promise resolving to tradie KPI metrics and trend data.
+ */
+export async function fetchTradieKPIData(): Promise<TradieKPIData> {
+    try {
+        const currentMonthStart = startOfMonth(new Date());
+        const previousMonthStart = subMonths(currentMonthStart, 1);
+
+        const [result] = await prisma.$queryRaw<TradieKPIQueryResult[]>`
+            SELECT
+                /* Registered Tradies */
+                (
+                    SELECT COUNT(*)
+                    FROM "Tradie"
+                ) AS registered_tradies,
+
+                (
+                    SELECT COUNT(*)
+                    FROM "Tradie"
+                    WHERE "createdAt" >= ${currentMonthStart}
+                ) AS registered_current_month,
+
+                (
+                    SELECT COUNT(*)
+                    FROM "Tradie"
+                    WHERE "createdAt" >= ${previousMonthStart}
+                    AND "createdAt" < ${currentMonthStart}
+                ) AS registered_previous_month,
+
+                /* Incidents */
+                (
+                    SELECT COUNT(*)
+                    FROM "TradieIncident"
+                ) AS incidents_lodged,
+
+                (
+                    SELECT COUNT(*)
+                    FROM "TradieIncident"
+                    WHERE "createdAt" >= ${currentMonthStart}
+                ) AS incidents_current_month,
+
+                (
+                    SELECT COUNT(*)
+                    FROM "TradieIncident"
+                    WHERE "createdAt" >= ${previousMonthStart}
+                    AND "createdAt" < ${currentMonthStart}
+                ) AS incidents_previous_month,
+
+                /* Favourites */
+                (
+                    SELECT COUNT(*)
+                    FROM "Tradie"
+                    WHERE "isFavourite" = true
+                ) AS favourite_tradies,
+
+                (
+                    SELECT COUNT(*)
+                    FROM "Tradie"
+                    WHERE "isFavourite" = true
+                    AND "createdAt" >= ${currentMonthStart}
+                ) AS favourites_current_month,
+
+                (
+                    SELECT COUNT(*)
+                    FROM "Tradie"
+                    WHERE "isFavourite" = true
+                    AND "createdAt" >= ${previousMonthStart}
+                    AND "createdAt" < ${currentMonthStart}
+                ) AS favourites_previous_month
+        `;
+
+        return {
+            registeredTradies: calculateTrend(
+                Number(result.registered_tradies),
+                Number(result.registered_previous_month)
+            ),
+
+            incidentLodged: calculateTrend(
+                Number(result.incidents_lodged),
+                Number(result.incidents_previous_month)
+            ),
+
+            favouriteTradies: calculateTrend(
+                Number(result.favourite_tradies),
+                Number(result.favourites_previous_month)
+            ),
+        };
+    } catch (error) {
+        console.error("Error fetching tradie KPI data:", error);
+
+        return {
+            registeredTradies: { total: 0, trendDelta: 0 },
+            incidentLodged: { total: 0, trendDelta: 0 },
+            favouriteTradies: { total: 0, trendDelta: 0 },
+        };
+    }
+}
+
+/**
+ * Cached wrapper around {@link fetchTradieKPIData}.
+ *
+ * Uses Next.js cache directives to reduce database load for frequently
+ * accessed dashboard KPI data. Results are tagged under
+ * `tradie-management` and cached using the medium cache profile.
+ *
+ * @returns A promise resolving to cached tradie KPI metrics and trend data.
+ */
+export async function fetchTradieKPIDataCached(): Promise<TradieKPIData> {
+    'use cache';
+    cacheTag('tradie-management');
+    cacheLife(CACHE_PROFILES.MEDIUM);
+
+    return fetchTradieKPIData();
 }

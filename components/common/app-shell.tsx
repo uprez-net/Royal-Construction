@@ -41,12 +41,13 @@ export function AppShell({
   const [time, setTime] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
+  const activeTradie = useAppSelector((state) => state.tradieManagement.selectedTradieDetails);
   const pathName = usePathname();
   const lastSegment = pathName.split("/").filter(Boolean).pop() ?? "";
   const activeSlug = isUUID(lastSegment)
     ? "Loading..."
     : (pathName.split("/").pop() ?? "dashboard");
-  const title = activeProject ? activeProject.name : getScreenTitle(activeSlug);
+  const title = activeProject ? activeProject.name : activeTradie ? activeTradie.name : getScreenTitle(activeSlug);
   const isOfferDetailPage = /^\/offers\/[^/]+$/.test(pathName);
 
   useEffect(() => {

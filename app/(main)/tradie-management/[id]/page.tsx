@@ -1,3 +1,4 @@
+import { TradieDetailClient } from "@/components/tradie-management/details/tradie-detail-client";
 import { getTradieByIdCached } from "@/lib/data/tradie-management";
 import { Loader2 } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -17,11 +18,7 @@ async function TradieDetailContent({ params }: TradieDetailPageProps) {
     notFound();
   }
 
-  return (
-    <div className="flex flex-col gap-4 p-4">
-      {JSON.stringify(tradieDetails, null, 2)}
-    </div>
-  );
+  return <TradieDetailClient tradie={tradieDetails} />;
 }
 
 export default function TradieDetailPage({ params }: TradieDetailPageProps) {
