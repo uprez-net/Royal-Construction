@@ -1,16 +1,13 @@
 'use server';
 import type {
-    ApprovalInput,
     CreateTradieInput,
     DeleteInput,
-    IncidentReportApprovalPayload,
     RatingInput,
     ReportIncidentInput,
     TradieDetails,
     TradieRow,
     TradiesByCategory,
     TradieTableQuery,
-    UpdatePriceApprovalPayload,
     UpdatePriceInput
 } from "@/types/tradie";
 import prisma from "../prisma";
