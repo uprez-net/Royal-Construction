@@ -71,6 +71,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
+import {useRouter} from "next/navigation"
 
 const statusLabelMap: Record<TradieScheduleStatus, string> = {
   PENDING: "Pending",
@@ -149,6 +150,7 @@ export function TradiesClient({
   initialTradies: SafeTradie[];
 }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const tradiesState = useAppSelector((state) => state.tradies);
 
   const [searchInput, setSearchInput] = useState(initialDashboard.query.search);
@@ -552,7 +554,9 @@ export function TradiesClient({
               </Button>
               <Button
                 variant="outline"
-                onClick={() => dispatch(openModal({ type: "tradieDirectory" }))}
+                // onClick={() => dispatch(openModal({ type: "tradieDirectory" }))}
+                  onClick={() => router.push("/tradie-new")}
+
               >
                 <Users className="mr-2 size-4" />
                 Directory

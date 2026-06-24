@@ -35,6 +35,7 @@ import AddMilestoneModal from "../projects/detail/add-milestone-modal";
 import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
 import { CreateOfferFileModal } from "../offers/create-offer-modal";
 import { AddLeadModal } from "../leads/modal-ui/add-lead-modal";
+import { AddTradieModal } from "../tradies/add-tradie-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -334,6 +335,16 @@ export function ModalManager() {
               toast.info(message);
             }
           }}
+        />
+      );
+    case "addTradie":
+      return (
+        <AddTradieModal
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+          onSuccess={handleSuccess}
         />
       );
     default:
