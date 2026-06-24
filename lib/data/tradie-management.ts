@@ -808,6 +808,26 @@ export async function fetchTradieKPIDataCached(): Promise<TradieKPIData> {
     return fetchTradieKPIData();
 }
 
+/**
+ * Toggles the favourite status of a tradie.
+ *
+ * Updates the `isFavourite` flag for a specific tradie in the database
+ * and triggers cache invalidation for related tags.
+ *
+ * @param {string} tradieId - The unique identifier of the tradie.
+ * @param {boolean} isFavourite - The new favourite status to set.
+ *
+ * @returns {Promise<{ id: string; isFavourite: boolean }>} 
+ * An object containing the tradie's ID and updated favourite status.
+ *
+ * @throws {Error} Throws an error if the update operation fails.
+ *
+ * @sideEffects
+ * - Updates the database via Prisma.
+ * - Invalidates cache for:
+ *   - `tradie-{tradieId}`
+ *   - `tradie-management`
+ */
 export async function toggleTradieFavourite(tradieId: string, isFavourite: boolean) {
     try {
         const updatedTradie = await prisma.tradie.update({
