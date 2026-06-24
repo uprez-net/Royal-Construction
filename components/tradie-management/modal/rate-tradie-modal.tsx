@@ -1,4 +1,4 @@
-import { Star, Send, Info } from "lucide-react";
+import { Star, Info } from "lucide-react";
 
 import { TradieRow } from "@/types/tradie";
 
@@ -12,7 +12,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { toast } from "sonner";
 
@@ -35,21 +35,14 @@ export default function RateTradieModal({
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
 
-  const [rating, setRating] = useState(0);
-
-  useEffect(() => {
-    if (open) {
-      setRating(
-        tradie.rating
-          ? Math.round(parseFloat(tradie.rating))
-          : 0,
-      );
-    }
-  }, [open, tradie.rating]);
+  const [rating, setRating] = useState(
+    tradie.rating ? parseFloat(tradie.rating) : 0,
+  );
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       onClose();
+      setRating(0);
     }
   };
 
@@ -72,24 +65,16 @@ export default function RateTradieModal({
 
         onClose();
       } catch (error) {
-        toast.error(
-          "Error rating tradie. Please try again.",
-        );
+        toast.error("Error rating tradie. Please try again.");
 
-        console.error(
-          "Error rating tradie:",
-          error,
-        );
+        console.error("Error rating tradie:", error);
       }
     });
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={handleOpenChange}
-    >
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-106.25">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Star className="h-5 w-5 text-amber-500 fill-amber-500" />
@@ -111,9 +96,7 @@ export default function RateTradieModal({
 
             <div className="flex items-center gap-3">
               <RatingStars
-                rating={parseFloat(
-                  tradie.rating ?? "0",
-                )}
+                rating={parseFloat(tradie.rating ?? "0")}
                 size={20}
               />
             </div>
@@ -122,15 +105,10 @@ export default function RateTradieModal({
           {/* New Rating */}
 
           <div className="space-y-2">
-            <div className="text-sm font-medium">
-              New Rating
-            </div>
+            <div className="text-sm font-medium">New Rating</div>
 
             <div className="rounded-lg border p-4">
-              <StarRatingInput
-                value={rating}
-                onChange={setRating}
-              />
+              <StarRatingInput value={rating} onChange={setRating} />
             </div>
           </div>
 
@@ -141,9 +119,8 @@ export default function RateTradieModal({
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
 
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Updating a tradie's rating affects
-                their overall performance score and
-                visibility throughout the platform.
+                Updating a tradie&apos;s rating affects their overall performance
+                score and visibility throughout the platform.
               </p>
             </div>
           </div>
@@ -151,23 +128,14 @@ export default function RateTradieModal({
           {/* Footer */}
 
           <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              disabled={isPending}
-            >
+            <Button variant="outline" onClick={onClose} disabled={isPending}>
               Cancel
             </Button>
 
-            <Button
-              onClick={handleSubmit}
-              disabled={isPending || rating === 0}
-            >
+            <Button onClick={handleSubmit} disabled={isPending || rating === 0}>
               <Star className="mr-2 h-4 w-4" />
 
-              {isPending
-                ? "Submitting..."
-                : "Submit Rating"}
+              {isPending ? "Submitting..." : "Submit Rating"}
             </Button>
           </div>
         </div>

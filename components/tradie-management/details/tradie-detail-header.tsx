@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   BadgeAlert,
-  Fan,
   Star,
   Tag,
   Trash2,

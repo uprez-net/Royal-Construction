@@ -93,7 +93,7 @@ export default function DeleteTradieModal({
                 </h4>
 
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  You are requesting to permanently delete this tradie's profile
+                  You are requesting to permanently delete this tradie&apos;s profile
                   from the active list. This request will be submitted for
                   review and confirmation before any action is taken.
                 </p>

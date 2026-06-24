@@ -1,4 +1,4 @@
-import { AlertTriangle, Forward, ImagePlus, Send } from "lucide-react";
+import { AlertTriangle, Forward, Send } from "lucide-react";
 
 import { ReportIncidentInput, TradieRow } from "@/types/tradie";
 
@@ -78,7 +78,6 @@ export default function ReportTradieModal({
     markUploading,
     updateProgress,
     markUploaded,
-    markFailed,
   } = useUploadQueue({ maxFiles });
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
   const [formData, setFormData] = useState<
