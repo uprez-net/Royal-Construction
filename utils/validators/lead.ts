@@ -37,61 +37,6 @@ const nullableTrimmedString = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : null;
 }, z.string().nullable());
 
-const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
-const isoDateTimeInput = z.iso.datetime();
-
-function parseDateOnlyInput(value: string): Date | null {
-  const match = dateOnlyPattern.exec(value);
-  if (!match) return null;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-
-  if (
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
-  ) {
-    return null;
-  }
-
-  return parsed;
-}
-
-const nullableDateInput = z.preprocess((value) => {
-  if (value === null) return null;
-  if (value instanceof Date) return value;
-  if (typeof value !== "string") return value;
-
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return null;
-
-  const dateOnly = parseDateOnlyInput(trimmed);
-  if (dateOnly) return dateOnly;
-
-  if (!isoDateTimeInput.safeParse(trimmed).success) {
-    return value;
-  }
-
-  return new Date(trimmed);
-}, z.date().nullable());
-
-// const dateInputSchema = z.preprocess((value) => {
-//   if (typeof value !== "string" || value.trim() === "") {
-//     return null;
-//   }
-
-//   const parsed = new Date(value);
-
-//   if (Number.isNaN(parsed.getTime())) {
-//     return null;
-//   }
-
-//   return parsed;
-// }, z.date().nullable());
-
 const typeSchema = z.preprocess((value) => {
   if (Array.isArray(value)) {
     return value

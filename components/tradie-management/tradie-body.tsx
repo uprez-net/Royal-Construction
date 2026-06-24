@@ -1,5 +1,4 @@
 import { useAppSelector } from "@/lib/store/hooks";
-import { TradieRow, TradiesByCategory } from "@/types/tradie";
 import { useMemo } from "react";
 import { TradieCategory } from "./tabs/tradie-category";
 import { TradieTable } from "./tabs/tradie-table";

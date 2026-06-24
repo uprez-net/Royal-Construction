@@ -12,7 +12,7 @@ export function TradieDetailClient({ tradie }: { tradie: TradieDetails }) {
     return () => {
       dispatch(setSelectedTradie(null));
     };
-  }, [tradie]);
+  }, [tradie, dispatch]);
 
   return (
     <div className="flex flex-col gap-4 p-4">

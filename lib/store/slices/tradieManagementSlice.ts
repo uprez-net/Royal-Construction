@@ -164,6 +164,7 @@ const tradieManagementSlice = createSlice({
     reducers: {
         clearState(state) {
             state = initialState;
+            console.log("State cleared:", state);
         },
         setActiveTab(state, action: PayloadAction<"category" | "list" | "table">) {
             state.activeTab = action.payload;
