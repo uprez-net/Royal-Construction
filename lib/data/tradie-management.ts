@@ -22,7 +22,11 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { after } from "next/server"
 import { DataPoint } from "@/components/common/metric-card";
 import { startOfMonth, subMonths } from "date-fns";
-import { calculateTrend } from "@/utils/formatters";
+import { calculateTrend, dateFormat } from "@/utils/formatters";
+import { createNotification } from "@/types/notification";
+import { triggerNotification } from "../notification/novu";
+
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
 
 /**
  * Creates a new tradie record and returns a mapped tradie row.
@@ -159,7 +163,7 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
             throw new Error("Tradie not found");
         }
 
-        await prisma.tradieApproval.create({
+        const approval = await prisma.tradieApproval.create({
             data: {
                 tradieId: input.tradieId,
                 actionType: TradieApprovalActionType.PRICE_CHANGE,
@@ -167,7 +171,24 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
                 updationData: {
                     newHourlyRate: input.newHourlyRate,
                 }
+            },
+            select: {
+                id: true
             }
+        })
+
+        after(async () => {
+            const notificationPayload = createNotification('tradiePriceUpdate', {
+                approvalId: approval.id,
+                tradieId: input.tradieId,
+                tradieName: tradie.name,
+                trade: tradie.trade,
+                newPrice: input.newHourlyRate,
+                oldPrice: parseFloat((tradie.hourlyRate ?? 0).toString()),
+                priceChangeDate: dateFormat.format(new Date()),
+            });
+
+            await triggerNotification([ADMIN_USER_ID], notificationPayload);
         })
     } catch (error) {
         console.error("Error updating tradie price:", error);
@@ -200,13 +221,29 @@ export async function deleteTradie(input: DeleteInput) {
         if (!tradie) {
             throw new Error("Tradie not found");
         }
-        await prisma.tradieApproval.create({
+        const approval= await prisma.tradieApproval.create({
             data: {
                 tradieId: input.tradieId,
                 actionType: TradieApprovalActionType.TRADIE_REMOVAL,
                 reason: input.reason,
+            },
+            select: {
+                id: true
             }
         })
+
+        after(async () => {
+            const notificationPayload = createNotification('deleteTradieApproval', {
+                approvalId: approval.id,
+                tradieId: input.tradieId,
+                tradieName: tradie.name,
+                trade: tradie.trade,
+                tradieEmail: tradie.email,
+                tradiePhone: tradie.phone,
+                requestedBy: user.name,
+            });
+            await triggerNotification([ADMIN_USER_ID], notificationPayload);
+        });
     } catch (error) {
         console.error("Error deleting tradie:", error);
         throw new Error("Failed to delete tradie");
@@ -328,7 +365,7 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
             }
         });
 
-        await prisma.tradieApproval.create({
+        const approvalId = await prisma.tradieApproval.create({
             data: {
                 tradieId: input.tradieId,
                 actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
@@ -342,9 +379,21 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
             }
         })
 
-        after(() => {
+        after(async () => {
             cacheTag(`tradie-${input.tradieId}`);
             cacheTag('tradie-management');
+
+            const notificationPayload = createNotification('tradieIncidentReport', {
+                approvalId: approvalId.id,
+                incidentId: incident.id,
+                tradieId: input.tradieId,
+                tradieName: tradie.name,
+                trade: tradie.trade,
+                incidentDescription: input.incidentDescription,
+                incidentDate: new Date().toISOString(),
+            });
+
+            await triggerNotification([ADMIN_USER_ID], notificationPayload);
         });
 
         return incident;
@@ -474,111 +523,6 @@ export async function getTradieGroupedByCategoryCached(): Promise<TradiesByCateg
     cacheLife(CACHE_PROFILES.MEDIUM);
 
     return getTradieGroupedByCategory();
-}
-
-/**
- * Processes an admin approval request and executes the corresponding action.
- *
- * Supported approval actions:
- * - PRICE_CHANGE: Updates a tradie's hourly rate when approved.
- * - TRADIE_REMOVAL: Permanently removes a tradie when approved.
- * - INCIDENT_RESOLUTION: Updates an incident's resolution details and status.
- *
- * Requires an authenticated user and a valid approval request.
- *
- * @param input - Approval request containing the action type, resolution, and action-specific payload.
- * @returns Details of the processed action, including the final resolution and any affected entities.
- *
- * @throws Error If:
- * - The user is not authenticated.
- * - The user cannot be found.
- * - The approval request does not exist.
- * - The approval action type is unsupported.
- * - Any database operation fails.
- */
-export async function handleAdminApproval(input: ApprovalInput) {
-    try {
-        const { userId } = await auth()
-        if (!userId) {
-            throw new Error("User not authenticated");
-        }
-
-        const user = await getUserByClerkIdCached(userId);
-        if (!user) {
-            throw new Error("User not found");
-        }
-
-        const approval = await prisma.tradieApproval.findUnique({
-            where: { id: input.approvalId }
-        });
-        if (!approval) {
-            throw new Error("Approval request not found");
-        }
-
-        after(() => {
-            cacheTag(`tradie-${approval.tradieId}`);
-            cacheTag('tradie-management');
-        });
-
-        switch (input.type) {
-            case TradieApprovalActionType.PRICE_CHANGE: {
-                const payload = input.payload as UpdatePriceApprovalPayload;
-                const isApproved = input.resolution === "approved";
-                await prisma.tradie.update({
-                    where: { id: approval.tradieId },
-                    data: {
-                        hourlyRate: isApproved ? payload.newHourlyRate : undefined
-                    }
-                });
-                return {
-                    actionType: TradieApprovalActionType.PRICE_CHANGE,
-                    tradieId: approval.tradieId,
-                    newHourlyRate: isApproved ? payload.newHourlyRate : undefined,
-                    resolution: input.resolution
-                }
-            }
-            case TradieApprovalActionType.TRADIE_REMOVAL: {
-                const isApproved = input.resolution === "approved";
-                if (isApproved) {
-                    await prisma.tradie.delete({
-                        where: { id: approval.tradieId }
-                    });
-                }
-                return {
-                    actionType: TradieApprovalActionType.TRADIE_REMOVAL,
-                    tradieId: approval.tradieId,
-                    resolution: input.resolution
-                };
-            }
-            case TradieApprovalActionType.INCIDENT_RESOLUTION: {
-                const payload = input.payload as IncidentReportApprovalPayload;
-                const incidentData = approval.updationData as {
-                    incidentId: string;
-                };
-                const isApproved = input.resolution === "approved";
-                // Handle incident resolution logic here
-                const updatedIncident = await prisma.tradieIncident.update({
-                    where: { id: incidentData.incidentId },
-                    data: {
-                        resolution: payload.resolution,
-                        status: isApproved ? "RESOLVED" : "OPEN"
-                    }
-                });
-
-                return {
-                    actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
-                    tradieId: approval.tradieId,
-                    incidentId: updatedIncident.id,
-                    updatedIncident,
-                }
-            }
-            default:
-                throw new Error("Unknown approval action type");
-        }
-    } catch (error) {
-        console.error("Error handling admin approval:", error);
-        throw new Error("Failed to handle admin approval");
-    }
 }
 
 /**
