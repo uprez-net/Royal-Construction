@@ -107,6 +107,7 @@ enum TradieApprovalActionType {
   PRICE_CHANGE
   INCIDENT_RESOLUTION
   TRADIE_REMOVAL
+  SCHEDULE_APPROVAL
 }
 
 enum TradieApprovalStatus {
@@ -218,8 +219,8 @@ model Tradie {
   rating      Decimal? @db.Decimal(2, 1)
   note        String?  @db.Text
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   projects   Project[]        @relation("ProjectTradies")
   milestones Milestone[]      @relation("TradieMilestones")
@@ -239,13 +240,15 @@ model TradieIncident {
   tradieId    String
   type        String
   severity    IncidentSeverity
-  description String
+  description String           @db.Text
+  resolution  String?          @db.Text
 
   status TradieIncidentStatus @default(OPEN)
 
   createdAt DateTime @default(now())
 
   tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  files  File[] @relation("TradieIncidentFiles")
 
   @@index([tradieId])
   @@index([severity])
@@ -258,13 +261,16 @@ model TradieApproval {
   status       TradieApprovalStatus     @default(PENDING)
   reason       String                   @db.Text
   updationData Json?
+  requestedBy  String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  tradie Tradie  @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
 
   @@index([tradieId])
+  @@index([requestedBy])
 }
 
 model TradieRating {
@@ -288,6 +294,7 @@ model File {
   projectId   String?
   milestoneId String?
   leadId      Int?
+  incidentId  String?
   filename    String
   fileType    String
   filesize    Int
@@ -296,13 +303,16 @@ model File {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project   Project?   @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
-  milestone Milestone? @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  lead      Lead?      @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
-  User      User       @relation("UserFiles", fields: [uploadedBy], references: [id])
+  project   Project?        @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone?      @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  lead      Lead?           @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
+  incident  TradieIncident? @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
+  User      User            @relation("UserFiles", fields: [uploadedBy], references: [id])
 
   @@index([projectId])
   @@index([milestoneId])
+  @@index([incidentId])
+  @@index([leadId])
   @@index([uploadedBy])
 }
 
@@ -411,12 +421,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]         @relation("UserFiles")
-  siteManagerProjects Project[]      @relation("SiteManagerProjects")
+  files               File[]           @relation("UserFiles")
+  siteManagerProjects Project[]        @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
-  assignedLeads       Lead[]         @relation("LeadAssignee")
+  assignedLeads       Lead[]           @relation("LeadAssignee")
   reviews             TradieRating[]
+  approvalRequests    TradieApproval[]
 
   @@index([email])
   @@index([phone])

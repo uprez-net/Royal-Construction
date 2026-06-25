@@ -1,5 +1,5 @@
-import { SafeTradie } from "./project";
-import { TradieRating, TradieIncident, IncidentSeverity } from "@prisma/client";
+import type { SafeTradie } from "./project";
+import type { TradieRating, TradieIncident, IncidentSeverity, TradieApprovalActionType, TradieApproval } from "@prisma/client";
 
 export interface TradieRow {
     id: string;
@@ -77,4 +77,24 @@ export interface TradieTableQuery {
     rating?: number;
     favourite?: boolean;
     tab: "all" | "flagged";
+}
+
+export interface UpdatePriceApprovalPayload {
+    newHourlyRate: number;
+}
+
+export interface IncidentReportApprovalPayload {
+    resolution: string;
+}
+
+export interface ApprovalInput {
+    approvalId: string;
+    resolution: "approved" | "rejected";
+    type: TradieApprovalActionType;
+    payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload
+}
+
+export interface SafeTradieApproval extends Omit<TradieApproval, "requestedBy"> {
+    tradie: SafeTradie;
+    requestBy: string; 
 }

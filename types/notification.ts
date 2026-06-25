@@ -1,5 +1,6 @@
 import { notificationSchemas } from "@/utils/validators";
 import { z } from "zod";
+import { TradieApprovalActionType, TradieApprovalStatus } from "@prisma/client";
 
 export type NotificationType = keyof typeof notificationSchemas;
 
@@ -61,7 +62,7 @@ export const notificationTemplates: NotificationTemplateFactory = {
     message: `${data.tradieName}'s schedule is now ${data.status}`,
     url: `/projects/${data.projectId}?activeTab=milestones`,
   }),
-  
+
   variationCreated: (data) => ({
     title: `Variation Created: ${data.projectName} for ${data.variationAmount}`,
     message: `A new variation has been created asking for ${data.variationDescription}`,
@@ -84,6 +85,24 @@ export const notificationTemplates: NotificationTemplateFactory = {
     title: `Offer Generation Failed: for Lead LED-#${data.leadId}`,
     message: `Failed to generate offer: ${data.errorMessage}`,
     url: `/offers/${data.leadId}`,
+  }),
+
+  deleteTradieApproval: (data) => ({
+    title: `Approval for removing tradie: ${data.tradieName} ${data.trade}`,
+    message: `A request to delete ${data.tradieName} (${data.trade}) has been sent for approval`,
+    url: `/admin-approvals?q=${encodeURIComponent(data.tradieName)}&approvalType=${TradieApprovalActionType.TRADIE_REMOVAL}&status=${TradieApprovalStatus.PENDING}&approvalId=${data.approvalId}`,
+  }),
+
+  tradieIncidentReport: (data) => ({
+    title: `Incident Report: ${data.tradieName} ${data.trade}`,
+    message: `An incident report has been submitted for ${data.tradieName} (${data.trade})`,
+    url: `/admin-approvals?q=${encodeURIComponent(data.tradieName)}&approvalType=${TradieApprovalActionType.INCIDENT_RESOLUTION}&status=${TradieApprovalStatus.PENDING}&approvalId=${data.approvalId}`,
+  }),
+
+  tradiePriceUpdate: (data) => ({
+    title: `Price Update: ${data.tradieName} ${data.trade}`,
+    message: `The price for ${data.tradieName} (${data.trade}) has been updated`,
+    url: `/admin-approvals?q=${encodeURIComponent(data.tradieName)}&approvalType=${TradieApprovalActionType.PRICE_CHANGE}&status=${TradieApprovalStatus.PENDING}&approvalId=${data.approvalId}`,
   }),
 };
 

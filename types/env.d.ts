@@ -65,5 +65,8 @@ namespace NodeJS {
         XERO_CLIENT_ID: string;
         XERO_CLIENT_SECRET: string;
         XERO_TENANT_ID: string;
+
+        //ADMIN USER ID
+        ADMIN_USER_ID: string;
     }
 }

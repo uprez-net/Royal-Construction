@@ -1,0 +1,55 @@
+import {
+  Zap,
+  Wrench,
+  Hammer,
+  Paintbrush,
+  House,
+  Fan,
+  Trees,
+  BrickWall,
+  SquareStack,
+  PanelTop,
+  Building2,
+  Grid3X3,
+  LayoutGrid,
+  LucideIcon,
+} from "lucide-react";
+
+export const TRADIE_TYPES = {
+  ELECTRICIAN: "Electrician",
+  PLUMBER: "Plumbing",
+  CARPENTER: "Carpentry",
+  PAINTER: "Painting",
+  ROOFER: "Roofing",
+  HVAC_TECHNICIAN: "HVAC",
+  LANDSCAPER: "Landscaping",
+  MASON: "Masonry",
+  BRICKLAYER: "Bricklaying",
+  PLASTERER: "Plastering",
+  TILING_SPECIALIST: "Tiling",
+  GLAZIER: "Glazing",
+  FLOORING_SPECIALIST: "Flooring",
+  KITCHEN_SPECIALIST: "Kitchen Installation",
+  CONCRETE_SPECIALIST: "Concrete",
+} as const;
+
+export const TRADIE_TYPE_ICONS: Record<
+  keyof typeof TRADIE_TYPES,
+  LucideIcon
+> = {
+  ELECTRICIAN: Zap,
+  PLUMBER: Wrench,
+  CARPENTER: Hammer,
+  PAINTER: Paintbrush,
+  ROOFER: House,
+  HVAC_TECHNICIAN: Fan,
+  LANDSCAPER: Trees,
+  MASON: BrickWall,
+  BRICKLAYER: BrickWall,
+  PLASTERER: PanelTop,
+  TILING_SPECIALIST: Grid3X3,
+  GLAZIER: SquareStack,
+  FLOORING_SPECIALIST: LayoutGrid,
+  KITCHEN_SPECIALIST: Building2,
+  CONCRETE_SPECIALIST: Hammer,
+};

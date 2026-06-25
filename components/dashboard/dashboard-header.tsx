@@ -116,7 +116,7 @@ export function DashboardHeader({
               </h2>
             </div>
 
-            <dl className="grid grid-cols-3 gap-3 text-left sm:min-w-[360px] sm:text-right">
+            <dl className="grid grid-cols-3 gap-3 text-left sm:min-w-90 sm:text-right">
               <div>
                 <dt className="text-xs text-muted-foreground">Leads</dt>
                 <dd className="font-mono text-sm font-semibold text-foreground">
