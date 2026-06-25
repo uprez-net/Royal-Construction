@@ -107,6 +107,7 @@ enum TradieApprovalActionType {
   PRICE_CHANGE
   INCIDENT_RESOLUTION
   TRADIE_REMOVAL
+  SCHEDULE_APPROVAL
 }
 
 enum TradieApprovalStatus {
@@ -260,13 +261,16 @@ model TradieApproval {
   status       TradieApprovalStatus     @default(PENDING)
   reason       String                   @db.Text
   updationData Json?
+  requestedBy  String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  tradie Tradie  @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
 
   @@index([tradieId])
+  @@index([requestedBy])
 }
 
 model TradieRating {
@@ -417,12 +421,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]         @relation("UserFiles")
-  siteManagerProjects Project[]      @relation("SiteManagerProjects")
+  files               File[]           @relation("UserFiles")
+  siteManagerProjects Project[]        @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
-  assignedLeads       Lead[]         @relation("LeadAssignee")
+  assignedLeads       Lead[]           @relation("LeadAssignee")
   reviews             TradieRating[]
+  approvalRequests    TradieApproval[]
 
   @@index([email])
   @@index([phone])

@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { exportTradies } from "@/lib/data/tradie-management";
-import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
 import { Download, Plus } from "lucide-react";

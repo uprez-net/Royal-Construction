@@ -165,6 +165,7 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
                 tradieId: input.tradieId,
                 actionType: TradieApprovalActionType.PRICE_CHANGE,
                 reason: input.reason,
+                requestedBy: user.id,
                 updationData: {
                     newHourlyRate: input.newHourlyRate,
                 }
@@ -175,6 +176,8 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
         })
 
         after(async () => {
+            revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+            revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
             const notificationPayload = createNotification('tradiePriceUpdate', {
                 approvalId: approval.id,
                 tradieId: input.tradieId,
@@ -223,6 +226,7 @@ export async function deleteTradie(input: DeleteInput) {
                 tradieId: input.tradieId,
                 actionType: TradieApprovalActionType.TRADIE_REMOVAL,
                 reason: input.reason,
+                requestedBy: user.id,
             },
             select: {
                 id: true
@@ -230,6 +234,8 @@ export async function deleteTradie(input: DeleteInput) {
         })
 
         after(async () => {
+            revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+            revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
             const notificationPayload = createNotification('deleteTradieApproval', {
                 approvalId: approval.id,
                 tradieId: input.tradieId,
@@ -367,6 +373,7 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
                     tradieId: input.tradieId,
                     actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
                     reason: input.incidentDescription,
+                    requestedBy: user.id,
                     updationData: {
                         incidentId: incident.id,
                         incidentType: input.incidentType,
@@ -382,6 +389,8 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
         after(async () => {
             revalidateTag(`tradie-${input.tradieId}`, CACHE_PROFILES.MEDIUM);
             revalidateTag('tradie-management', CACHE_PROFILES.MEDIUM);
+            revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+            revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
 
             const notificationPayload = createNotification('tradieIncidentReport', {
                 approvalId: approval.id,

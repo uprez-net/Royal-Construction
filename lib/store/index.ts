@@ -7,6 +7,7 @@ import tradiesReducer from "./slices/tradiesSlice";
 import uiReducer from "./slices/uiSlice";
 import quotesReducer from "./slices/offerSlice";
 import tradieManagementReducer from "./slices/tradieManagementSlice";
+import tradieApprovalReducer from "./slices/tradieApprovalSlice";
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
     tradies: tradiesReducer,
     offers: quotesReducer,
     tradieManagement: tradieManagementReducer,
+    tradieApproval: tradieApprovalReducer,
     ui: uiReducer,
   },
   middleware: (getDefaultMiddleware) =>

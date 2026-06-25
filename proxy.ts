@@ -2,13 +2,15 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth"
 
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
+
 const isPublicRoute = createRouteMatcher([
   "/api/webhook/clerk(.*)",
   "/api/graph(.*)",
   '/.well-known(.*)',
-  '/mcp(.*)',
-  '/sse(.*)',
-  'message(.*)',
+  '/api/mcp(.*)',
+  '/api/sse(.*)',
+  '/api/message(.*)',
   "/api/cron(.*)",
   "/book-consultation",
   "/api/upload(.*)",
@@ -16,6 +18,7 @@ const isPublicRoute = createRouteMatcher([
 ])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
+const isAdminRoute = createRouteMatcher(["/admin-approvals(.*)"])
 
 export default clerkMiddleware(async (auth, request) => {
   // Dev auth routes always pass through — they create the session
@@ -37,6 +40,12 @@ export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request) && !isAuthRoute(request)) await auth.protect()
 
   const { userId, sessionClaims } = await auth()
+  if (isAdminRoute(request) && userId !== ADMIN_USER_ID) {
+    return new Response(null, {
+      status: 302,
+      headers: { location: "/dashboard" },
+    })
+  }
   if(sessionClaims?.public_metadata.role === "GUEST") {
     return new Response(null, {
       status: 302,
