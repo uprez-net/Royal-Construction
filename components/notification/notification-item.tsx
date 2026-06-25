@@ -6,8 +6,31 @@ import { Button } from "../ui/button";
 import { Archive, Bell, CheckCheck } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 type NotificationItemExtended = Notification & { payload?: string };
+
+const isAdminApprovalNotification = (
+  url: string,
+): {
+  is_admin_approval: boolean;
+  approval_id: string;
+  approval_type: string;
+} => {
+  const queryString = (url.startsWith("/") ? url.slice(1) : url).replaceAll(
+    "&amp;",
+    "&",
+  );
+
+  const params = new URLSearchParams(queryString);
+
+  return {
+    is_admin_approval: params.get("isAdminApproval") === "true",
+    approval_id: params.get("approvalId") ?? "",
+    approval_type: params.get("approvalType") ?? "",
+  };
+};
 
 export function NotificationItem({
   n,
@@ -22,6 +45,7 @@ export function NotificationItem({
   handleArchive: (id: string) => Promise<void>;
   close: () => void;
 }) {
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const title = n.subject ?? "No title";
   const body = n.body ?? "";
@@ -32,6 +56,8 @@ export function NotificationItem({
     >);
   const createdAt = n.createdAt ? new Date(n.createdAt) : null;
   const isBusy = busyId === n.id;
+  const { is_admin_approval, approval_id, approval_type } =
+    isAdminApprovalNotification(url);
 
   return (
     <div
@@ -39,6 +65,24 @@ export function NotificationItem({
         if (url) {
           // nice UX: mark read when user engages
           if (!n.isRead) handleMarkOne(n.id);
+          if (is_admin_approval) {
+            console.log(
+              "Dispatching admin approval modal for approvalId:",
+              approval_id,
+              "approvalType:",
+              approval_type,
+            );
+            dispatch(
+              openModal({
+                type: "adminApproval",
+                payload: {
+                  approvalId: approval_id,
+                  approvalType: approval_type,
+                },
+              }),
+            );
+            return;
+          }
           // If it's an internal link, use router.push for faster navigation
           if (target === "_self") {
             router.push(url);
@@ -70,7 +114,7 @@ export function NotificationItem({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900">
+              <p className="text-sm font-semibold text-slate-900 wrap-break-word">
                 {title}
               </p>
               {createdAt && (
@@ -130,7 +174,7 @@ export function NotificationItem({
           </div>
 
           {body && (
-            <p className="mt-2 line-clamp-2 text-sm text-slate-600">{body}</p>
+            <p className="mt-2 text-sm text-slate-600 wrap-break-word">{body}</p>
           )}
 
           {(url || (n as NotificationItemExtended)?.payload) && (

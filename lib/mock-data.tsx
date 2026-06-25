@@ -73,8 +73,8 @@ export const navigationItems: NavItem[] = [
   //   icon: <Banknote className="size-4" />,
   // },
   {
-    slug: "tradie",
-    label: "Tradie Coordination",
+    slug: "tradie-management",
+    label: "Tradie Management",
     icon: <Hammer className="size-4" />,
   },
   // {

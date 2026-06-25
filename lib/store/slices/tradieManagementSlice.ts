@@ -1,9 +1,11 @@
+import { DataPoint } from "@/components/common/metric-card";
 import {
     createTradie,
     deleteTradie,
     fetchFilteredTradies,
     rateTradie,
     reportTradieIncident,
+    toggleTradieFavourite,
     updateTradiePrice,
 } from "@/lib/data/tradie-management";
 import {
@@ -27,6 +29,12 @@ import {
 interface TradieManagementState {
     tradies: TradieRow[];
     tradiesByCategory: TradiesByCategory[];
+    kpiData: {
+        registeredTradies: DataPoint;
+        incidentLodged: DataPoint;
+        favouriteTradies: DataPoint;
+    };
+    selectedCategory: string | null;
     activeTab: "category" | "list" | "table";
     selectedTradieId: string | null;
     selectedTradieDetails: TradieDetails | null;
@@ -38,6 +46,12 @@ interface TradieManagementState {
 const initialState: TradieManagementState = {
     tradies: [],
     tradiesByCategory: [],
+    kpiData: {
+        registeredTradies: { total: 0, trendDelta: 0 },
+        incidentLodged: { total: 0, trendDelta: 0 },
+        favouriteTradies: { total: 0, trendDelta: 0 },
+    },
+    selectedCategory: null,
     activeTab: "category",
     selectedTradieId: null,
     selectedTradieDetails: null,
@@ -145,12 +159,27 @@ export const reportTradieIncidentThunk = createAsyncThunk<TradieIncident, Report
     },
 );
 
+export const toggleTradieFavouriteThunk = createAsyncThunk<{ id: string; isFavourite: boolean }, { tradieId: string; isFavourite: boolean }>(
+    "tradieManagement/toggleTradieFavourite",
+    async (input, thunkAPI) => {
+        try {
+            // Call the server action to toggle the favourite status of the tradie
+            const updatedTradie = await toggleTradieFavourite(input.tradieId, input.isFavourite);
+            return updatedTradie;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(
+                error instanceof Error ? error.message : "Failed to toggle tradie favourite status",
+            );
+        }
+    }
+);
+
 const tradieManagementSlice = createSlice({
     name: "tradieManagement",
     initialState,
     reducers: {
-        clearState(state) {
-            state = initialState;
+        clearState() {
+            return initialState;
         },
         setActiveTab(state, action: PayloadAction<"category" | "list" | "table">) {
             state.activeTab = action.payload;
@@ -165,7 +194,20 @@ const tradieManagementSlice = createSlice({
         setSelectedTradie(state, action: PayloadAction<TradieDetails | null>) {
             state.selectedTradieDetails = action.payload;
             state.selectedTradieId = action.payload ? action.payload.id : null;
-        }
+        },
+        setKPIData(state, action: PayloadAction<{
+            registeredTradies: DataPoint;
+            incidentLodged: DataPoint;
+            favouriteTradies: DataPoint;
+        }>) {
+            state.kpiData = action.payload;
+        },
+        setQuery(state, action: PayloadAction<Partial<TradieTableQuery>>) {
+            state.query = { ...state.query, ...action.payload };
+        },
+        setSelectedCategory(state, action: PayloadAction<string | null>) {
+            state.selectedCategory = action.payload;
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -230,6 +272,22 @@ const tradieManagementSlice = createSlice({
             })
             .addCase(reportTradieIncidentThunk.rejected, (state, action) => {
                 state.error = action.payload as string;
+            })
+            .addCase(toggleTradieFavouriteThunk.pending, (state) => {
+                state.error = null;
+            })
+            .addCase(toggleTradieFavouriteThunk.fulfilled, (state, action) => {
+                const { id, isFavourite } = action.payload;
+                const tradie = state.tradies.findIndex((t) => t.id === id);
+                if (tradie !== -1) {
+                    state.tradies[tradie].isFavourite = isFavourite;
+                }
+                if (state.selectedTradieId === id && state.selectedTradieDetails) {
+                    state.selectedTradieDetails.isFavourite = isFavourite;
+                }
+            })
+            .addCase(toggleTradieFavouriteThunk.rejected, (state, action) => {
+                state.error = action.payload as string;
             });
     },
 });
@@ -239,5 +297,8 @@ export const {
     setActiveTab,
     setTradies,
     setSelectedTradie,
+    setKPIData,
+    setQuery,
+    setSelectedCategory,
 } = tradieManagementSlice.actions;
 export default tradieManagementSlice.reducer;

@@ -371,8 +371,20 @@ const projectsSlice = createSlice({
       };
     },
     resetProjectDetailUiState(state, action: PayloadAction<string>) {
+      if (action.payload === state.activeProject?.id) {
+        state.activeProject = null;
+      }
+      delete state.uploadsByProjectId[action.payload];
       delete state.detailUi.byProjectId[action.payload];
     },
+    resetProjects(state) {
+      state.projects = [];
+      state.activeProject = null;
+      state.optimisticUpdates = {};
+      state.mutations = initialMutationState();
+      state.uploadsByProjectId = {};
+      state.detailUi.byProjectId = {};
+    }
   },
   extraReducers(builder) {
     builder
@@ -543,6 +555,7 @@ export const {
   setProjectDetailActivityFilter,
   setProjectDetailChartRange,
   resetProjectDetailUiState,
+  resetProjects,
 } = projectsSlice.actions;
 
 export const selectProjectsState = (state: RootState) => state.projects;

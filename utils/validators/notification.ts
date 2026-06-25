@@ -94,4 +94,35 @@ export const notificationSchemas = {
         leadId: z.string(),
         errorMessage: z.string(),
     }),
+
+    deleteTradieApproval: z.object({
+        approvalId: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        tradieEmail: z.email(),
+        tradiePhone: z.string(),
+        requestedBy: z.string(),
+    }),
+
+    tradieIncidentReport: z.object({
+        approvalId: z.string(),
+        incidentId: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        incidentDescription: z.string(),
+        incidentDate: z.string(),
+    }),
+
+    tradiePriceUpdate: z.object({
+        approvalId: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        oldPrice: z.number(),
+        newPrice: z.number(),
+        priceChangeDate: z.string(),
+    }),
+
 } as const;

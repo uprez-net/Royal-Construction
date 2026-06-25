@@ -154,6 +154,7 @@ export const clientPayloadSchema = z.object({
     projectId: z.string().trim().min(1, 'Project ID is required').optional(),
     milestoneId: z.string().trim().optional().nullable(),
     leadId: z.coerce.string().trim().optional(),
+    tradieId: z.coerce.string().trim().optional(),
     isOfferFile: z.boolean().optional().default(false),
     uploadType: z.enum(["email-template", "email-attachment"]).optional()
 });

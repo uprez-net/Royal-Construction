@@ -1,5 +1,6 @@
 import { notificationSchemas } from "@/utils/validators";
 import { z } from "zod";
+import { TradieApprovalActionType } from "@prisma/client";
 
 export type NotificationType = keyof typeof notificationSchemas;
 
@@ -84,6 +85,24 @@ export const notificationTemplates: NotificationTemplateFactory = {
     title: `Offer Generation Failed: for Lead LED-#${data.leadId}`,
     message: `Failed to generate offer: ${data.errorMessage}`,
     url: `/offers/${data.leadId}`,
+  }),
+
+  deleteTradieApproval: (data) => ({
+    title: `Approval for removing tradie: ${data.tradieName} ${data.trade}`,
+    message: `A request to delete ${data.tradieName} (${data.trade}) has been sent for approval`,
+    url: `/isAdminApproval=true&approvalId=${data.approvalId}&approvalType=${TradieApprovalActionType.TRADIE_REMOVAL}`,
+  }),
+
+  tradieIncidentReport: (data) => ({
+    title: `Incident Report: ${data.tradieName} ${data.trade}`,
+    message: `An incident report has been submitted for ${data.tradieName} (${data.trade})`,
+    url: `/isAdminApproval=true&approvalId=${data.approvalId}&approvalType=${TradieApprovalActionType.INCIDENT_RESOLUTION}`,
+  }),
+
+  tradiePriceUpdate: (data) => ({
+    title: `Price Update: ${data.tradieName} ${data.trade}`,
+    message: `The price for ${data.tradieName} (${data.trade}) has been updated`,
+    url: `/isAdminApproval=true&approvalId=${data.approvalId}&approvalType=${TradieApprovalActionType.PRICE_CHANGE}`,
   }),
 };
 
