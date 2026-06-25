@@ -217,7 +217,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
             }
           >
             <Plus className="mr-1 size-3.5" />
-            Add Tradie
+            Schedule Tradies
           </Button>
         }
       >
@@ -305,7 +305,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                               projectName: project.name,
                               taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
                               scheduledDate: new Date(
-                                tradie.scheduledDate,
+                                tradie.scheduledDate
                               ).toISOString(),
                               durationDays: tradie.durationDays,
                               status: tradie.status,
@@ -321,6 +321,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                               },
                               isFavourite: tradie.tradie.isFavourite,
                               note: tradie.tradie.note,
+                              requiresQuote: tradie.requiresQuote,
+                              quotedPrice: tradie.quotedPrice ?? undefined,
                             } satisfies TradieScheduleListItem,
                           },
                         }),
@@ -350,7 +352,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                             projectName: project.name,
                             taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
                             scheduledDate: new Date(
-                              tradie.scheduledDate,
+                              tradie.scheduledDate
                             ).toISOString(),
                             durationDays: tradie.durationDays,
                             status: tradie.status,
@@ -365,7 +367,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                               phone: project.siteManager?.phone ?? "N/A",
                             },
                             isFavourite: tradie.tradie.isFavourite,
-                              note: tradie.tradie.note,
+                            note: tradie.tradie.note,
+                            requiresQuote: false
                           } satisfies TradieScheduleListItem,
                         },
                       }),
@@ -394,7 +397,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                             projectName: project.name,
                             taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
                             scheduledDate: new Date(
-                              tradie.scheduledDate,
+                              tradie.scheduledDate
                             ).toISOString(),
                             durationDays: tradie.durationDays,
                             status: tradie.status,
@@ -410,6 +413,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                             },
                             isFavourite: tradie.tradie.isFavourite,
                             note: tradie.tradie.note,
+                            requiresQuote: false
                           } satisfies TradieScheduleListItem,
                         },
                       }),

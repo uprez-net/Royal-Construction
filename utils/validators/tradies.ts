@@ -83,6 +83,8 @@ export const createTradieScheduleSchema = z.object({
     .positive("Duration must be greater than 0")
     .optional()
     .default(1),
+
+  requiresQuote: z.boolean().optional().default(false),
 });
 
 export type CreateTradieScheduleInput = z.infer<typeof createTradieScheduleSchema>;

@@ -45,13 +45,13 @@ const generateProjectDetailTabs = (
     (m) => m.status !== "DONE",
   ).length;
 
-  // const tradieAlerts = project.tradieSchedules.filter(
-  //   (schedule) =>
-  //     schedule.status === "PENDING" ||
-  //     schedule.status === "PENDING_RESPONSE" ||
-  //     schedule.status === "NO_RESPONSE" ||
-  //     schedule.status === "DECLINED",
-  // ).length;
+  const tradieAlerts = project.tradieSchedules.filter(
+    (schedule) =>
+      schedule.status === "PENDING" ||
+      schedule.status === "PENDING_RESPONSE" ||
+      schedule.status === "NO_RESPONSE" ||
+      schedule.status === "DECLINED",
+  ).length;
 
   // const siteUpdates = project.siteUpdates.length;
   // const variations = project.variations.length;
@@ -77,13 +77,13 @@ const generateProjectDetailTabs = (
     //   badge: siteUpdates.toString(),
     //   badgeTone: "primary",
     // },
-    // {
-    //   key: "tradies",
-    //   label: "Tradies",
-    //   badge: tradieAlerts.toString(),
-    //   badgeTone:
-    //     tradieAlerts > 4 ? "danger" : tradieAlerts > 2 ? "warning" : "neutral",
-    // },
+    {
+      key: "tradies",
+      label: "Tradies",
+      badge: tradieAlerts.toString(),
+      badgeTone:
+        tradieAlerts > 4 ? "danger" : tradieAlerts > 2 ? "warning" : "neutral",
+    },
     // { key: "workers", label: "Workers & QR" },
     { key: "docs", label: "Documents" },
     { key: "history", label: "History" },
@@ -124,7 +124,7 @@ export function ProjectTabNavigation({
             type="button"
             onClick={() => onTabChange(tab.key)}
             className={cn(
-              "relative inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-[18px] py-[11px] text-[12.5px] font-medium text-muted-foreground transition-all hover:text-teal-600 focus:outline-none",
+              "relative inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4.5 py-2.75 text-[12.5px] font-medium text-muted-foreground transition-all hover:text-teal-600 focus:outline-none",
               activeTab === tab.key &&
                 "border-teal-600 font-bold text-teal-600",
             )}
@@ -134,7 +134,7 @@ export function ProjectTabNavigation({
             {tab.badge ? (
               <span
                 className={cn(
-                  "ml-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[5px] text-[10px] font-bold leading-none",
+                  "ml-1 inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1.25 text-[10px] font-bold leading-none",
                   tab.badgeTone === "warning" && "bg-amber-100 text-[#D97706]",
                   tab.badgeTone === "danger" && "bg-red-100 text-red-600",
                   tab.badgeTone === "primary" && "bg-teal-600/15 text-teal-600",

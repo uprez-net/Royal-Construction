@@ -140,6 +140,8 @@ export type TradieScheduleListItem = {
   updatedAt: string;
   hourlyRate?: string;
   rating?: string;
+  requiresQuote: boolean;
+  quotedPrice?: string;
   contact: {
     email: string;
     phone: string;
