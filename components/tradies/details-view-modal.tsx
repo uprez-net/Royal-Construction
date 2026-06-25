@@ -143,6 +143,7 @@ export function TradieScheduleDetailsModal({
     abn: schedule.abn,
     isFavourite: false,
     note: null,
+    requiresQuote: false
   } satisfies TradieScheduleListItem;
 
   const daysLeft = daysUntil(new Date(schedule.scheduledDate));

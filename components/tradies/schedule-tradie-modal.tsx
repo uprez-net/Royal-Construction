@@ -155,6 +155,7 @@ export function ScheduleTradieModal({
             milestoneId: milestoneId || undefined,
             scheduledDate,
             durationDays: Number(durationDays),
+            requiresQuote: false
           }),
         )
           .unwrap()
@@ -176,6 +177,7 @@ export function ScheduleTradieModal({
             milestoneId: milestoneId || undefined,
             scheduledDate,
             durationDays: Number(durationDays),
+            requiresQuote: false
           }),
         )
           .unwrap()

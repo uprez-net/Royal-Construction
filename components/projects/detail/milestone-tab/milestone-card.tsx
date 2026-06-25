@@ -268,6 +268,8 @@ export function MilestoneCard({
                     hourlyRate: t.tradie.hourlyRate,
                     isFavourite: t.tradie.isFavourite,
                     note: t.tradie.note,
+                    requiresQuote: t.requiresQuote,
+                    quotedPrice: t.quotedPrice ?? undefined,
                   } satisfies TradieScheduleListItem)
                 }
               >
