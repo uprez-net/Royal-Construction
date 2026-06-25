@@ -266,8 +266,8 @@ model TradieApproval {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tradie Tradie  @relation(fields: [tradieId], references: [id], onDelete: Cascade)
-  user   User    @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
 
   @@index([tradieId])
   @@index([requestedBy])
@@ -360,6 +360,8 @@ model TradieSchedule {
   milestoneId    String?
   scheduledDate  DateTime
   durationDays   Int                  @default(1)
+  requiresQuote  Boolean              @default(false)
+  quotedPrice    String?
   status         TradieScheduleStatus @default(PENDING)
   reminderSentAt DateTime?
   createdAt      DateTime             @default(now())

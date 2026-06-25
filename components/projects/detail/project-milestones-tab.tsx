@@ -281,6 +281,8 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                           },
                           isFavourite: schedule.tradie.isFavourite,
                           note: schedule.tradie.note,
+                          requiresQuote: schedule.requiresQuote,
+                          quotedPrice: schedule.quotedPrice ?? undefined,
                         } satisfies TradieScheduleListItem)
                       }
                     >

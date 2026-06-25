@@ -8,7 +8,6 @@ import { CreateVariationModal } from "@/components/projects/create-variation-mod
 
 import { ConfirmStatusModal } from "@/components/tradies/confirm-status-modal";
 import { LogCallModal } from "@/components/tradies/log-call-modal";
-import { ScheduleTradieModal } from "@/components/tradies/schedule-tradie-modal";
 import { TradieDirectoryModal } from "@/components/tradies/tradie-directory-modal";
 
 import type {
@@ -49,6 +48,7 @@ import { AdminApprovalActionModal } from "../tradie-management/modal/admin-appro
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
+import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -167,13 +167,16 @@ export function ModalManager() {
           }))
         : undefined;
 
+      if(!project || !milestones) {
+        return null;
+      }
+
       return (
         <ScheduleTradieModal
           open
-          project={project}
+          onClose={handleClose}
+          projectId={project.id}
           milestones={milestones}
-          onOpenChange={(open) => !open && handleClose()}
-          onSuccess={handleSuccess}
         />
       );
     case "logCall": {

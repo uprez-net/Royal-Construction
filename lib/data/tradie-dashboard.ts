@@ -64,6 +64,8 @@ type ScheduleRow = {
   updated_at: Date;
   tradie_email: string;
   tradie_phone: string;
+  requiresQuote: boolean;
+  quotedPrice: string | null;
 };
 
 type CountRow = { count: bigint };
@@ -374,6 +376,8 @@ export async function getTradieCoordinationDashboard(
           ts."updatedAt"       AS updated_at,
           t.email              AS tradie_email,
           t.phone              AS tradie_phone
+          t."requiresQuote"    AS requiresQuote,
+          ts."quotedPrice"     AS quotedPrice
         FROM "TradieSchedule" ts
         JOIN "Tradie"  t  ON t.id  = ts."tradieId"
         JOIN "Project" p  ON p.id  = ts."projectId"
@@ -776,6 +780,8 @@ export async function getTradieCoordinationDashboard(
         email: row.site_manager_email ?? "",
         phone: row.site_manager_phone ?? "",
       },
+      requiresQuote: row.requiresQuote,
+      quotedPrice: row.quotedPrice ?? undefined,
     } satisfies TradieScheduleListItem));
 
     // -----------------------------------------------------------------------

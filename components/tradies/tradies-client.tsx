@@ -669,6 +669,8 @@ export function TradiesClient({
                           abn: item.abn,
                           isFavourite: false,
                           note: null,
+                          requiresQuote: false,
+                          quotedPrice: undefined,
                         } satisfies TradieScheduleListItem)
                       }
                     >
