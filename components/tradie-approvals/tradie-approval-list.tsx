@@ -7,7 +7,7 @@ import {
   selectApproval,
 } from "@/lib/store/slices/tradieApprovalSlice";
 import { toast } from "sonner";
-import { useRef } from "react";
+import { useState } from "react";
 import { RefreshCw, UserCheck } from "lucide-react";
 import { openModal } from "@/lib/store/slices/uiSlice";
 
@@ -68,7 +68,7 @@ const handlePayload = (approval: SafeTradieApproval, resolution: string) => {
 
 export function TradieApprovalList() {
   const dispatch = useAppDispatch();
-  const processingRequestIdsRef = useRef<Set<string>>(new Set());
+  const [processingRequestIds, setProcessingRequestIds] = useState<Set<string>>(new Set());
   const { approvals, selectedApprovalIds, loading, error } = useAppSelector(
     (state) => state.tradieApproval,
   );
@@ -78,7 +78,7 @@ export function TradieApprovalList() {
   };
 
   const handleApprove = async (approvalId: string) => {
-    processingRequestIdsRef.current.add(approvalId);
+    setProcessingRequestIds((prev) => new Set(prev).add(approvalId));
     try {
       const approval = approvals.find((a) => a.id === approvalId);
       if (!approval) {
@@ -99,12 +99,16 @@ export function TradieApprovalList() {
         error instanceof Error ? error.message : "An unexpected error occurred",
       );
     } finally {
-      processingRequestIdsRef.current.delete(approvalId);
+      setProcessingRequestIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(approvalId);
+        return newSet;
+      });
     }
   };
 
   const handleReject = async (approvalId: string) => {
-    processingRequestIdsRef.current.add(approvalId);
+    setProcessingRequestIds((prev) => new Set(prev).add(approvalId));
     try {
       const approval = approvals.find((a) => a.id === approvalId);
       if (!approval) {
@@ -124,7 +128,11 @@ export function TradieApprovalList() {
         error instanceof Error ? error.message : "An unexpected error occurred",
       );
     } finally {
-      processingRequestIdsRef.current.delete(approvalId);
+      setProcessingRequestIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(approvalId);
+        return newSet;
+      });
     }
   };
 
@@ -200,7 +208,7 @@ export function TradieApprovalList() {
             requestedBy={approval.requestBy}
             createdAt={dateFormat.format(approval.createdAt)}
             selected={selectedApprovalIds.includes(approval.id)}
-            disabled={processingRequestIdsRef.current.has(approval.id)}
+            disabled={processingRequestIds.has(approval.id)}
             onSelect={() => handleSelectApproval(approval.id)}
             onApprove={() => handleApprove(approval.id)}
             onReject={() => handleReject(approval.id)}

@@ -228,7 +228,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
               <p className="font-medium text-blue-900">Approval Impact</p>
 
               <p className="mt-1 text-sm text-blue-800">
-                Approving this request will update the tradie's hourly rate from
+                Approving this request will update the tradie&amp;s hourly rate from
                 ${data.currentHourlyRate} to ${data.newHourlyRate}. Future
                 estimates, quotations and project calculations will use the
                 updated rate.

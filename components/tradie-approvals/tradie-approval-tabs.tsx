@@ -88,7 +88,7 @@ export function TradieApprovalTabs() {
 
   useEffect(() => {
     dispatch(fetchApprovalsByQuery(query));
-  }, [query]);
+  }, [query, dispatch]);
 
   const handleSelectedApprove = async () => {
     try {

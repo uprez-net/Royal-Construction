@@ -53,7 +53,8 @@ export const fetchApprovalsByQuery = createAsyncThunk<PaginatedTradieApprovals, 
 
             return res;
         } catch (error) {
-            return rejectWithValue("Failed to fetch approvals");
+            console.error("Error fetching approvals:", error);
+            return rejectWithValue(error instanceof Error ? error.message : "Failed to fetch approvals");
         }
     });
 
@@ -65,7 +66,8 @@ export const approveRequests = createAsyncThunk<Awaited<ReturnType<typeof handle
 
             return res;
         } catch (error) {
-            return rejectWithValue("Failed to approve requests");
+            console.error("Error approving requests:", error);
+            return rejectWithValue(error instanceof Error ? error.message : "Failed to approve requests");
         }
     });
 

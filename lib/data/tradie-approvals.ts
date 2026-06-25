@@ -291,14 +291,14 @@ export async function fetchTradieApprovals(query: TradieApprovalQuery): Promise<
             }),
         ]);
 
-        const safeApprovals: SafeTradieApproval[] = approvals.map(({user, requestedBy, ...approval}) => ({
+        const safeApprovals: SafeTradieApproval[] = approvals.map(approval => ({
             ...approval,
             tradie: {
                 ...approval.tradie,
                 hourlyRate: approval.tradie.hourlyRate?.toString(),
                 rating: approval.tradie.rating?.toString(),
             },
-            requestBy: user.name,
+            requestBy: approval.user.name,
         }));
 
         return {
