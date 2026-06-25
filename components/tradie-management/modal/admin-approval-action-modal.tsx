@@ -64,7 +64,7 @@ export function AdminApprovalActionModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-106.25">
+      <DialogContent className="max-h-[70vh] w-full max-w-2xl overflow-y-auto no-scrollbar">
         {isLoading ? (
           <div className="flex h-40 items-center justify-center">
             <DialogTitle className="sr-only">Loading Form...</DialogTitle>

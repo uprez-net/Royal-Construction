@@ -94,6 +94,7 @@ export interface ApprovalInput {
     payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload
 }
 
-export interface SafeTradieApproval extends TradieApproval {
+export interface SafeTradieApproval extends Omit<TradieApproval, "requestedBy"> {
     tradie: SafeTradie;
+    requestBy: string; 
 }

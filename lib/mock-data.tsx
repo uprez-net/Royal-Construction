@@ -16,6 +16,7 @@ import {
   // ShieldCheck,
   // ShoppingCart,
   Users,
+  CheckSquare,
 } from "lucide-react";
 import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, ProjectPaymentItem, QuoteRequestItem, WorkerAttendanceItem } from "@/types/ui";
 import { SiteManagerPerformance } from "@/components/dashboard/dashboard-site-manager-table";
@@ -91,6 +92,11 @@ export const navigationItems: NavItem[] = [
     slug: "team",
     label: "Team Management",
     icon: <Users className="size-4" />,
+  },
+  {
+    slug: "admin-approvals",
+    label: "Approvals",
+    icon: <CheckSquare className="size-4" />,
   }
 ];
 
