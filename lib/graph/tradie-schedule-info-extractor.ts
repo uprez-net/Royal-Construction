@@ -7,7 +7,7 @@ import { gateway } from '../model';
 const tradieScheduleInfoSchema = z.object({
     scheduleDate: z.string().describe('The date of the scheduled appointment in YYYY-MM-DD format.'),
     scheduleConfirmation: z.boolean().describe('True if the appointment is confirmed, false otherwise.'),
-    scheduleQuote: z.string().optional().describe("The quote provided for the scheduled appointment, if any only in case when standard rates weren't applicable."),
+    scheduleQuote: z.string().optional().describe("The quote provided for the scheduled appointment, if any only in case when standard rates weren't applicable. eg. $5000.00"),
     projectLocation: z.string().describe('The location of the project or appointment.'),
 });
 

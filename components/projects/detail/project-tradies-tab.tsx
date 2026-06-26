@@ -287,7 +287,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               </StatusPill>,
 
               <span className="text-xs text-semibold" key={`${tradie.id}-cost`}>
-                {calculateScheduleTotalCost(parseFloat(tradie.tradie.hourlyRate ?? "0"), tradie.durationDays)}
+                {tradie.quotedPrice ?? calculateScheduleTotalCost(parseFloat(tradie.tradie.hourlyRate ?? "0"), tradie.durationDays)}
               </span>,
 
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
