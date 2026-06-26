@@ -1,10 +1,12 @@
 'use server';
 import prisma from '@/lib/prisma';
 import { ActivityLogEntry } from '@/types/activityLog';
+import { Prisma } from '@prisma/client';
 
-export async function logAction(input: ActivityLogEntry) {
+export async function logAction(input: ActivityLogEntry, tx?: Prisma.TransactionClient) {
     try {
-        await prisma.activityLog.create({
+        const prismaClient = tx ?? prisma;
+        await prismaClient.activityLog.create({
             data: {
                 id: input.id,
                 type: input.type,

@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Edit, Loader2 } from "lucide-react";
+import { currency } from "@/utils/formatters";
 
 interface UpdateMilestoneModalProps {
   milestoneId: string;
@@ -316,10 +317,10 @@ export default function UpdateMilestoneModal({
                   </Label>
                   <Input
                     id="spend"
-                    type="number"
+                    type="text"
                     className={inputClassName}
                     placeholder="Enter actual spend"
-                    value={formState.spend ?? "0"}
+                    value={currency.format(formState.spend ?? "0")}
                     // onChange={(e) =>
                     //   handleFormChange("spend", Number(e.target.value))
                     // }

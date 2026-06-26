@@ -13,6 +13,8 @@ import { getCachedProjectById } from "./projects";
 import { after } from "next/server"
 import { handleProjectSpecsGeneration } from "../agent/projectCreationAgent";
 import { createLeadProjectInferencePrompt } from "../agent/project-prompt";
+import { createActivityLogEntry } from "@/types/activityLog";
+import { logAction } from "./actionLog";
 
 /**
  * @deprecated This function is not to be used use `createProjectWithLead` instead which creates a project directly from a lead and ensures data consistency.
@@ -156,6 +158,17 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       });
 
       await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate), tx);
+
+      const activityLogEntry = createActivityLogEntry("projectCreated", {
+        projectType: projectType,
+        customerEmail: customer.email,
+        customerPhone: customer.phone,
+        projectId: newProject.id,
+        projectName: newProject.name,
+        location: newProject.location,
+        customerName: customer.name
+      });
+      await logAction(activityLogEntry, tx);
 
       return newProject.id;
     });
