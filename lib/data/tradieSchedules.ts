@@ -302,7 +302,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
             actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
             requestedBy: userId,
             reason: `${schedule.tradie.name} has confirmed their availability for the scheduled task on ${dateFormat.format(schedule.scheduledDate)}. Please review and approve.`,
-            payload: {
+            updationData: {
               scheduleId: schedule.id,
               projectId: schedule.projectId,
               projectName: schedule.project.name,

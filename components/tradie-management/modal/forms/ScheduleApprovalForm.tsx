@@ -15,6 +15,7 @@ import {
   Clock3,
   CalendarDays,
   FileText,
+  LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,7 @@ function InfoRow({
   label,
   value,
 }: {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   value: React.ReactNode;
 }) {
