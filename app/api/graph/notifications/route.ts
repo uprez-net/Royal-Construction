@@ -220,7 +220,7 @@ export async function POST(request: Request): Promise<Response> {
               const schedule = await prisma.tradieSchedule.findFirst({
                 where: {
                   tradieId: tradie!.id,
-                  scheduleDate: new Date(tradieInfo.scheduleDate),
+                  scheduledDate: new Date(tradieInfo.scheduleDate),
                   project: {
                     location: {
                       contains: tradieInfo.projectLocation ?? "",
