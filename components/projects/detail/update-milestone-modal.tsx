@@ -14,11 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { updateProjectMilestoneStatus } from "@/lib/store/slices/projectsSlice";
 import { MilestoneUpdateData, milestoneUpdateSchema } from "@/utils/validators";
 import type { MilestoneStatus } from "@prisma/client";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +46,12 @@ const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Completed", value: "DONE" },
 ];
 
+const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
+  PENDING: ["ACTIVE"],
+  ACTIVE: ["DONE", "PENDING"],
+  DONE: [],
+};
+
 type MilestoneUpdateErrors = Partial<Record<keyof MilestoneUpdateData, string>>;
 
 const inputClassName =
@@ -62,10 +68,38 @@ export default function UpdateMilestoneModal({
   onClose,
 }: UpdateMilestoneModalProps) {
   const dispatch = useAppDispatch();
+  const project = useAppSelector((state) => state.projects.activeProject);
+  const milestone = useMemo(
+    () => project?.milestones.find((m) => m.id === milestoneId),
+    [project, milestoneId],
+  );
+  const spend = useMemo(
+    () => {
+      const milestoneSchedules = project?.tradieSchedules.filter((schedule => schedule.milestoneId === milestoneId));
+      if (!milestoneSchedules || milestoneSchedules.length === 0) {
+        return 0;
+      }
+      const totalSpend = milestoneSchedules.reduce((acc, schedule) => {
+        if(schedule.requiresQuote) {
+          return acc + parseFloat(schedule.quotedPrice ?? "0");
+        }
+        else {
+          const hourlyRate = parseFloat(schedule.tradie.hourlyRate ?? "0");
+          const totalHours = schedule.durationDays * 8;
+          return acc + (hourlyRate * totalHours);
+        }
+      }, 0);
+
+      return totalSpend;
+    },
+    [project, milestoneId],
+  );
   const [isPending, startTransition] = useTransition();
   const [formState, setFormState] = useState<MilestoneUpdateData>({
     ...initialFormState,
     status: status ?? "PENDING",
+    startDate: milestone?.startDate?.toISOString() ?? undefined,
+    spend: spend,
   });
   const [fieldErrors, setFieldErrors] = useState<MilestoneUpdateErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -74,7 +108,7 @@ export default function UpdateMilestoneModal({
     if (!open) {
       setFormState({
         ...initialFormState,
-        status: status ?? "PENDING",
+        status: status ?? milestone?.status ?? "PENDING",
       });
       setFieldErrors({});
       setSubmitError(null);
@@ -194,15 +228,22 @@ export default function UpdateMilestoneModal({
                 </SelectTrigger>
                 <SelectContent>
                   {statusOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      disabled={
+                        !STATE_MACHES[
+                          status ?? milestone?.status ?? "PENDING"
+                        ].includes(option.value)
+                      }
+                    >
                       {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-500">
-                Active milestones need a start date. Completed milestones also
-                require an actual date and spend.
+                Select the next status for the milestone
               </p>
             </div>
 
@@ -219,6 +260,7 @@ export default function UpdateMilestoneModal({
                   type="date"
                   className={inputClassName}
                   value={formState.startDate || ""}
+                  disabled={formState.status === "DONE"}
                   onChange={(e) =>
                     handleFormChange("startDate", e.target.value)
                   }
@@ -270,17 +312,18 @@ export default function UpdateMilestoneModal({
                     htmlFor="spend"
                     className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
                   >
-                    Spend
+                    Spent
                   </Label>
                   <Input
                     id="spend"
                     type="number"
                     className={inputClassName}
                     placeholder="Enter actual spend"
-                    value={formState.spend || ""}
-                    onChange={(e) =>
-                      handleFormChange("spend", Number(e.target.value))
-                    }
+                    value={formState.spend ?? "0"}
+                    // onChange={(e) =>
+                    //   handleFormChange("spend", Number(e.target.value))
+                    // }
+                    disabled
                     aria-invalid={Boolean(fieldErrors.spend)}
                     aria-describedby={
                       fieldErrors.spend ? "spend-error" : undefined
