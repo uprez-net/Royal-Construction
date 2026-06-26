@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { MilestoneStatus } from "@prisma/client";
 import { useMemo } from "react";
 import { MilestoneCard } from "./milestone-tab/milestone-card";
+import { addWeeks, isWithinInterval } from "date-fns";
 
 const convertToVisualMilestone = (
   milestones: MilestoneWithFilesTradiesUpdates[],
@@ -50,22 +51,35 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     () => convertToVisualMilestone(project.milestones),
     [project.milestones],
   );
-  const tradieAlerts = useMemo(
-    () =>
-      project.tradieSchedules.filter(
-        (schedule) =>
-          schedule.status === "PENDING_RESPONSE" ||
-          schedule.status === "NO_RESPONSE" ||
-          schedule.status === "DECLINED",
-      ),
-    [project.tradieSchedules],
-  );
+
+  const tradieAlerts = useMemo(() => {
+    const now = new Date();
+    const nextWeek = addWeeks(now, 1);
+
+    return project.tradieSchedules.filter((schedule) => {
+      const hasAlertStatus =
+        // schedule.status === "PENDING_RESPONSE" ||
+        schedule.status === "CONFIRMED"
+        // schedule.status === "NO_RESPONSE" ||
+        // schedule.status === "DECLINED";
+
+      const targetDate = schedule.milestone?.targetDate;
+      const isMilestoneDueSoon =
+        targetDate &&
+        isWithinInterval(new Date(targetDate), {
+          start: now,
+          end: nextWeek,
+        });
+
+      return hasAlertStatus || isMilestoneDueSoon;
+    });
+  }, [project.tradieSchedules]);
 
   const tradieAlertsByMilestone = useMemo(() => {
     return tradieAlerts.reduce<
       Record<string, TradieScheduleWithTradieAndMilestone[]>
     >((acc, schedule) => {
-      if (!schedule.milestoneId) {
+      if (!schedule.milestoneId || schedule.status !== "CONFIRMED") {
         return acc;
       }
 
