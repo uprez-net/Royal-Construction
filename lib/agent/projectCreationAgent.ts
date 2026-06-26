@@ -40,6 +40,27 @@ const fetchOfferFileTool = tool({
     }
 })
 
+const fetchAdditionalLeadInfoTool = tool({
+    description: "Fetches additional lead information from the database based on the provided lead ID.",
+    inputSchema: z.object({
+        leadId: z.number().describe("The ID of the lead for which to fetch additional information."),
+    }),
+    execute: async ({ leadId }) => {
+        const leadInfo = await prisma.lead.findUnique({
+            where: { id: leadId },
+            include: {
+                history: true,
+                noteAnnotations: true,
+            }
+        });
+
+        if (!leadInfo) {
+            throw new Error(`No lead information found for lead ID: ${leadId}`);
+        }
+        return leadInfo;
+    }
+});
+
 export const handleProjectSpecsGeneration = async (prompt: string): Promise<ProjectSpecs> => {
     try {
         const { output } = await generateText({
@@ -49,6 +70,7 @@ export const handleProjectSpecsGeneration = async (prompt: string): Promise<Proj
             system: LEAD_INFO_TO_PROJECT_INFERENCE_PROMPT,
             tools: {
                 fetchOfferFile: fetchOfferFileTool,
+                fetchAdditionalLeadInfo: fetchAdditionalLeadInfoTool,
             },
             output: Output.object({
                 schema: projectSpecsSchema,

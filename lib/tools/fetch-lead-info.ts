@@ -66,6 +66,7 @@ export const fetchLeadInfoTool = tool({
             success: leadInfo !== null,
             message: leadInfo ? "Lead context retrieved and summarized for offer work." : "Lead not found.",
             data: summarizeLeadForOffer(leadInfo),
+            fullContext: leadInfo, // Include the full lead context for reference, even if not summarized
         };
     }
 });
