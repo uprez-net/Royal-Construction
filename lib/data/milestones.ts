@@ -5,7 +5,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { milestoneTemplates } from "@/constants/milestoneTemplate";
 import { v4 as randomUUID } from "uuid";
-import { addWeeks } from "date-fns";
+import { addDays, addWeeks } from "date-fns";
 import { createInvoice } from "./invoice";
 import { dateFormat } from "@/utils/formatters";
 
@@ -157,7 +157,7 @@ export async function createMilestonesFromTemplateForProject(
 
       return {
         ...template,
-        targetDate: addWeeks(startDate, template.order * 2), // Example: each milestone is 2 weeks apart based on its order
+        targetDate: addDays(startDate, template.order * 4), // Example: each milestone is 4 days apart based on its order
         id,
       };
     });

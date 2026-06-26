@@ -5,11 +5,12 @@ import { getUserByClerkIdCached } from "./user";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { after } from "next/server"
-import { ApprovalInput, IncidentReportApprovalPayload, SafeTradieApproval, UpdatePriceApprovalPayload } from "@/types/tradie";
-import { TradieApprovalActionType } from "@prisma/client";
+import { ApprovalInput, IncidentReportApprovalPayload, SafeTradieApproval, ScheduleApprovalJsonPayload, TradieApprovalPayload, UpdatePriceApprovalPayload } from "@/types/tradie";
+import { TradieApprovalActionType, TradieScheduleStatus } from "@prisma/client";
 import { ApprovalKPI, PaginatedTradieApprovals, TradieApprovalQuery } from "@/types/tradie-approvals";
 import { Prisma } from "@prisma/client";
 import pLimit from "p-limit";
+import { updateTradieSchedule } from "./tradieSchedules";
 
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
 
@@ -64,6 +65,7 @@ export async function fetchTradieApprovalById(approvalId: string): Promise<SafeT
 
         return {
             ...approval,
+            updationData: approval.updationData as unknown as TradieApprovalPayload,
             tradie: {
                 ...approval.tradie,
                 hourlyRate: approval.tradie.hourlyRate?.toString(),
@@ -101,7 +103,11 @@ export async function handleAdminApproval(input: ApprovalInput) {
     try {
         await authorisedForApproval();
         const approval = await prisma.tradieApproval.findUnique({
-            where: { id: input.approvalId }
+            where: { id: input.approvalId },
+            include: {
+                tradie: true,
+                user: true,
+            },
         });
         if (!approval) {
             throw new Error("Approval request not found");
@@ -184,6 +190,35 @@ export async function handleAdminApproval(input: ApprovalInput) {
                         tradieId: approval.tradieId,
                         incidentId: updatedIncident.id,
                         updatedIncident,
+                        resolution: input.resolution,
+                    };
+                }
+
+                case TradieApprovalActionType.SCHEDULE_APPROVAL: {
+                    const isApproved = input.resolution === "approved";
+                    const scheduleData = approval.updationData as unknown as ScheduleApprovalJsonPayload;
+
+                    const updatedSchedule = await tx.tradieSchedule.update({
+                        where: { id: scheduleData.scheduleId },
+                        data: {
+                            status: isApproved ? "CONFIRMED" : "DECLINED",
+                        },
+                    });
+
+                    after(async () => {
+                        if (isApproved) {
+                            await updateTradieSchedule(updatedSchedule.id, { status: TradieScheduleStatus.CONFIRMED });
+                        } else {
+                            await updateTradieSchedule(updatedSchedule.id, { status: TradieScheduleStatus.DECLINED });
+                        }
+                    })
+
+                    return {
+                        approvalId: approval.id,
+                        actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+                        tradieId: approval.tradieId,
+                        scheduleId: updatedSchedule.id,
+                        updatedSchedule,
                         resolution: input.resolution,
                     };
                 }
@@ -293,6 +328,7 @@ export async function fetchTradieApprovals(query: TradieApprovalQuery): Promise<
 
         const safeApprovals: SafeTradieApproval[] = approvals.map(approval => ({
             ...approval,
+            updationData: approval.updationData as unknown as TradieApprovalPayload,
             tradie: {
                 ...approval.tradie,
                 hourlyRate: approval.tradie.hourlyRate?.toString(),

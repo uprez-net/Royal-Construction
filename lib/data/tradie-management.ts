@@ -2,6 +2,8 @@
 import type {
     CreateTradieInput,
     DeleteInput,
+    IncidentReportJsonPayload,
+    PriceUpdateJsonPayload,
     RatingInput,
     ReportIncidentInput,
     TradieDetails,
@@ -168,7 +170,7 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
                 requestedBy: user.id,
                 updationData: {
                     newHourlyRate: input.newHourlyRate,
-                }
+                } satisfies PriceUpdateJsonPayload
             },
             select: {
                 id: true
@@ -379,7 +381,7 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
                         incidentType: input.incidentType,
                         incidentSeverity: input.incidentSeverity,
                         incidentDescription: input.incidentDescription,
-                    },
+                    } satisfies IncidentReportJsonPayload,
                 },
             });
 

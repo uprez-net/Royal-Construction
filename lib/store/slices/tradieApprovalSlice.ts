@@ -140,9 +140,9 @@ const tradieApprovalSlice = createSlice({
                             case "TRADIE_REMOVAL":
                                 state.kpiData.deletionCount -= 1;
                                 break;
-                            // case "SCHEDULE_APPROVAL":
-                            //     state.kpiData.scheduleCount -= 1;
-                            //     break;
+                            case "SCHEDULE_APPROVAL":
+                                state.kpiData.scheduleCount -= 1;
+                                break;
                         }
                     }
                 }
