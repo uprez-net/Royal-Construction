@@ -16,6 +16,7 @@ import {
   TradieScheduleInputRow,
   TradieScheduleRowErrors,
 } from "./schedule-tradie-modal";
+import { cn } from "@/lib/utils";
 
 interface TradieScheduleRowProps {
   row: TradieScheduleInputRow;
@@ -36,8 +37,8 @@ export function TradieScheduleRow({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-12 gap-3">
-        <div className="col-span-3">
+      <div className="grid grid-cols-3 gap-4">
+        <div className={cn("space-y-2", errors.tradeCategory && "text-destructive")}>
           <Label>Trade Category</Label>
 
           <Select
@@ -52,11 +53,11 @@ export function TradieScheduleRow({
               });
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-auto min-w-full">
               <SelectValue placeholder="Select Category" />
             </SelectTrigger>
 
-            <SelectContent>
+            <SelectContent className="w-auto min-w-full rounded-md border border-gray-200 bg-white shadow-lg">
               {Object.entries(TRADIE_TYPES).map(([key, label]) => {
                 const Icon =
                   TRADIE_TYPE_ICONS[key as keyof typeof TRADIE_TYPES];
@@ -76,7 +77,7 @@ export function TradieScheduleRow({
           <FieldError message={errors.tradeCategory} />
         </div>
 
-        <div className="col-span-3">
+        <div className={cn("space-y-2", errors.tradieId && "text-destructive")}>
           <Label>Tradie</Label>
 
           <Select
@@ -89,13 +90,13 @@ export function TradieScheduleRow({
               })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-auto min-w-full">
               <SelectValue
                 placeholder={query ? "Select Tradie" : "Select Category First"}
               />
             </SelectTrigger>
 
-            <SelectContent>
+            <SelectContent className="w-auto min-w-full rounded-md border border-gray-200 bg-white shadow-lg">
               {items.map((item) => (
                 <SelectItem key={item.id} value={item.id}>
                   {item.name}
@@ -107,7 +108,7 @@ export function TradieScheduleRow({
           <FieldError message={errors.tradieId} />
         </div>
 
-        <div className="col-span-2">
+        <div className={cn("space-y-2", errors.milestoneId && "text-destructive")}>
           <Label>Milestone</Label>
 
           <Select
@@ -119,11 +120,11 @@ export function TradieScheduleRow({
               })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-auto min-w-full">
               <SelectValue placeholder="Milestone" />
             </SelectTrigger>
 
-            <SelectContent>
+            <SelectContent className="w-auto min-w-full rounded-md border border-gray-200 bg-white shadow-lg">
               {milestones.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {m.name}
@@ -134,7 +135,7 @@ export function TradieScheduleRow({
           <FieldError message={errors.milestoneId} />
         </div>
 
-        <div className="col-span-2">
+        <div className={cn("space-y-2", errors.scheduledDate && "text-destructive")}>
           <Label>Date</Label>
 
           <Input
@@ -150,7 +151,7 @@ export function TradieScheduleRow({
           <FieldError message={errors.scheduledDate} />
         </div>
 
-        <div className="col-span-1">
+        <div className={cn("space-y-2", errors.durationDays && "text-destructive")}>
           <Label>Days</Label>
 
           <Input

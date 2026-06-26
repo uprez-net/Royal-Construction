@@ -11,6 +11,9 @@ import { createMilestonesFromTemplateForProject } from "./milestones";
 import { ProjectDetail } from "@/types/project";
 import { getCachedProjectById } from "./projects";
 import { Prisma } from "@prisma/client";
+import { after } from "next/server"
+import { handleProjectSpecsGeneration } from "../agent/projectCreationAgent";
+import { createLeadProjectInferencePrompt } from "../agent/project-prompt";
 
 /**
  * @deprecated This function is not to be used use `createProjectWithLead` instead which creates a project directly from a lead and ensures data consistency.
@@ -75,25 +78,26 @@ export async function createProject(projectData: CreateProjectInput) {
     include: { customer: true },
   });
 
-  const notificationPayload = createNotification("projectCreated", {
-    projectId: project.id,
-    projectName: project.name,
-    projectType: project.buildingType,
-    location: project.location,
-    customerName: project.customer.name,
-    customerEmail: project.customer.email,
-    customerPhone: project.customer.phone,
-  });
-  await triggerNotification(project.siteManagerId ? [project.siteManagerId] : [], notificationPayload);
-
-
-  revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-  revalidateTag(`project-${project.id}`, CACHE_PROFILES.MEDIUM);
+  after(async () => {
+    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${project.id}`, CACHE_PROFILES.MEDIUM);
+    const notificationPayload = createNotification("projectCreated", {
+      projectId: project.id,
+      projectName: project.name,
+      projectType: project.buildingType,
+      location: project.location,
+      customerName: project.customer.name,
+      customerEmail: project.customer.email,
+      customerPhone: project.customer.phone,
+    });
+    await triggerNotification(project.siteManagerId ? [project.siteManagerId] : [], notificationPayload);
+  })
 
   return project.id;
 }
 
 export interface CreateProjectWithLeadInput {
+  projectName: string;
   leadId: number;
   lotSize: number;
   startDate: string;
@@ -103,20 +107,7 @@ export interface CreateProjectWithLeadInput {
   siteManagerId: string;
 }
 
-const parseBudget = (value: unknown): Prisma.Decimal => {
-  if (Prisma.Decimal.isDecimal(value)) {
-    return value;
-  }
-
-  const normalized = String(value ?? "")
-    .replace(/[^0-9.-]/g, "");
-
-  return normalized && !isNaN(Number(normalized))
-    ? new Prisma.Decimal(normalized)
-    : new Prisma.Decimal(0);
-};
-
-export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const newProjectId = await prisma.$transaction(async (tx) => {
       const lead = await tx.lead.findUnique({
@@ -141,34 +132,26 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
         phone: lead.phone,
       }, tx);
 
-      const projectType = lead.type.length > 0 ? lead.type.join(", ") : "General Construction";
-      const totalBudget = parseBudget(lead.budget);
-      // TBD: We can use AI to infer requirements based on lead notes and data
-      const inferredRequirements = [
-        'Garage',
-        'Garden',
-        'Swimming Pool',
-        'Solar Panels',
-        'Home Office',
-        'Open Plan Living',
-        'Sustainable Materials',
-        'Smart Home Integration',
-      ]
+      const {
+        projectType,
+        projectBudget,
+        projectRequirements
+      } = await handleProjectSpecsGeneration(createLeadProjectInferencePrompt(lead));
 
       const newProject = await tx.project.create({
         data: {
           leadId: lead.id,
-          name: `${projectType} at ${lead.location}`,
+          name: projectName,
           buildingType: projectType,
           description: lead.notes,
           location: address,
           council: council,
-          totalBudget: totalBudget,
+          totalBudget: projectBudget,
           lotSize: String(lotSize),
           startDate: new Date(startDate),
           estimatedEndDate: new Date(estimatedEndDate),
           siteManagerId: siteManagerId,
-          requirements: inferredRequirements,
+          requirements: projectRequirements,
           customerId: customer.id,
         }
       });
@@ -183,20 +166,21 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       throw new Error("PROJECT_DETAIL_NOT_FOUND");
     }
 
-    const notificationPayload = createNotification("projectCreated", {
-      projectId: newProjectDetail.id,
-      projectName: newProjectDetail.name,
-      projectType: newProjectDetail.buildingType,
-      location: newProjectDetail.location,
-      customerName: newProjectDetail.customer.name,
-      customerEmail: newProjectDetail.customer.email,
-      customerPhone: newProjectDetail.customer.phone,
-    });
-    await triggerNotification(newProjectDetail.siteManagerId ? [newProjectDetail.siteManagerId] : [], notificationPayload);
+    after(async () => {
+      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+      revalidateTag(`project-${newProjectDetail.id}`, CACHE_PROFILES.MEDIUM);
 
-
-    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-    revalidateTag(`project-${newProjectDetail.id}`, CACHE_PROFILES.MEDIUM);
+      const notificationPayload = createNotification("projectCreated", {
+        projectId: newProjectDetail.id,
+        projectName: newProjectDetail.name,
+        projectType: newProjectDetail.buildingType,
+        location: newProjectDetail.location,
+        customerName: newProjectDetail.customer.name,
+        customerEmail: newProjectDetail.customer.email,
+        customerPhone: newProjectDetail.customer.phone,
+      });
+      await triggerNotification(newProjectDetail.siteManagerId ? [newProjectDetail.siteManagerId] : [], notificationPayload);
+    })
 
     return newProjectDetail;
   } catch (error) {
