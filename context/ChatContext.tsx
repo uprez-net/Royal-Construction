@@ -447,6 +447,9 @@ export const ChatProvider = ({
         sendMessage: (params) =>
           sendMessage(params, {
             body: { leadId: parseInt(leadId), offerFile, lineItems },
+            metadata: {
+              createdAt: new Date(Date.now() - 3000),
+            }
           }),
         setMessages,
         stop,

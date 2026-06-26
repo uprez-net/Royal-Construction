@@ -9,6 +9,10 @@ import { createNotification } from "@/types/notification";
 import { dateFormat } from "@/utils/formatters";
 import { after } from "next/server"
 import { TradieScheduleListItem } from "@/types/project";
+import { auth } from "@clerk/nextjs/server";
+import { getUserByClerkIdCached } from "./user";
+import { generateTradieOutreachEmail } from "@/utils/generate-email";
+import { sendEmail } from "../azureClient";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
   tradie: Tradie;
@@ -16,7 +20,16 @@ interface TradieScheduleWithRelations extends TradieSchedule {
   milestone: Milestone | null;
 }
 
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
 
+/**
+ * Converts a Prisma tradie schedule with its related entities into a
+ * UI-friendly {@link TradieScheduleListItem}.
+ *
+ * @param schedule - The schedule including tradie, project, site manager,
+ * and milestone relations.
+ * @returns A formatted tradie schedule list item ready for display.
+ */
 const convertToTradieScheduleListItem = (schedule: TradieScheduleWithRelations): TradieScheduleListItem => {
   const coverted = {
     id: schedule.id,
@@ -49,96 +62,221 @@ const convertToTradieScheduleListItem = (schedule: TradieScheduleWithRelations):
   return coverted;
 }
 
+/**
+ * Ensures the currently authenticated user is the site manager of the
+ * specified project before allowing schedule operations.
+ *
+ * @param projectId - The project whose schedule access should be validated.
+ * @throws {Error} If the user is not authenticated.
+ * @throws {Error} If the user cannot be found.
+ * @throws {Error} If the project does not exist.
+ * @throws {Error} If the authenticated user is not the project's site manager.
+ */
+const userHasAccessToSchedule = async (projectId: string) => {
+  const { userId } = await auth();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+  const user = await getUserByClerkIdCached(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { siteManager: true }
+  });
+  if (!project) {
+    throw new Error("Project not found");
+  }
+  if (project.siteManagerId !== user.id && user.id !== ADMIN_USER_ID) {
+    throw new Error("User does not have access to this schedule");
+  }
+}
+
+/**
+ * Creates a new tradie schedule for a project.
+ *
+ * The schedule is created with a default status of `PENDING`. After creation,
+ * relevant cache tags are revalidated and a notification is sent to the
+ * project's site manager.
+ *
+ * @param input - The schedule creation payload.
+ * @returns The newly created schedule formatted as a {@link TradieScheduleListItem}.
+ * @throws {Error} If the user does not have permission to create schedules
+ * for the project or if the schedule cannot be created.
+ */
 export async function createTradieSchedule(input: CreateTradieScheduleInput) {
-  const schedule = await prisma.tradieSchedule.create({
-    data: {
-      tradieId: input.tradieId,
-      projectId: input.projectId,
-      milestoneId: input.milestoneId ?? null,
-      scheduledDate: new Date(input.scheduledDate),
-      durationDays: input.durationDays ?? 1,
-      status: TradieScheduleStatus.PENDING,
-    },
-    include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
-  });
-  const siteManagerId = schedule.project.siteManagerId;
-  const notificationPayload = createNotification("tradieScheduleCreated", {
-    tradieName: schedule.tradie.name,
-    projectName: schedule.project.name,
-    milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
-    projectId: schedule.projectId,
-    tradieTrade: schedule.tradie.trade,
-    scheduleDate: dateFormat.format(schedule.scheduledDate),
-  });
-  await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+  try {
+    await userHasAccessToSchedule(input.projectId);
+    const schedule = await prisma.tradieSchedule.create({
+      data: {
+        tradieId: input.tradieId,
+        projectId: input.projectId,
+        milestoneId: input.milestoneId ?? null,
+        scheduledDate: new Date(input.scheduledDate),
+        durationDays: input.durationDays ?? 1,
+        status: input.requiresQuote ? TradieScheduleStatus.AWAITING_QUOTE : TradieScheduleStatus.PENDING,
+        requiresQuote: input.requiresQuote ?? false,
+      },
+      include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
+    });
+    const result = convertToTradieScheduleListItem(schedule);
 
-  revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+    after(async () => {
+      revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+      revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
+      const siteManagerId = schedule.project.siteManagerId;
+      const notificationPayload = createNotification("tradieScheduleCreated", {
+        tradieName: schedule.tradie.name,
+        projectName: schedule.project.name,
+        milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+        projectId: schedule.projectId,
+        tradieTrade: schedule.tradie.trade,
+        scheduleDate: dateFormat.format(schedule.scheduledDate),
+      });
+      await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+      const emailContent = generateTradieOutreachEmail(result);
+      await sendEmail({
+        to: schedule.tradie.email,
+        subject: emailContent.subject,
+        body: emailContent.html,
+      });
+    });
 
-  return convertToTradieScheduleListItem(schedule);
+
+    return result;
+  }
+  catch (error) {
+    console.error("Error creating tradie schedule:", error);
+    throw new Error("Failed to create tradie schedule.");
+  }
 }
 
+
+/**
+ * Creates multiple tradie schedules in a single operation.
+ *
+ * All schedules are created with a default status of `PENDING`. After
+ * successful creation, cache tags are revalidated and notifications are
+ * sent for each created schedule.
+ *
+ * @param inputs - An array of schedule creation payloads.
+ * @returns An array of formatted {@link TradieScheduleListItem} objects.
+ * @throws {Error} If no inputs are provided.
+ * @throws {Error} If the user does not have permission to create schedules
+ * for the project or if the operation fails.
+ */
 export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInput[]) {
-  const schedules = await prisma.tradieSchedule.createManyAndReturn({
-    data: inputs.map(input => ({
-      tradieId: input.tradieId,
-      projectId: input.projectId,
-      milestoneId: input.milestoneId ?? null,
-      scheduledDate: new Date(input.scheduledDate),
-      durationDays: input.durationDays ?? 1,
-      status: TradieScheduleStatus.PENDING,
-      requiresQuote: input.requiresQuote ?? false,
-    })),
-    include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
-  });
-
-  after(async () => {
-    const projectIds = Array.from(new Set(schedules.map(schedule => schedule.projectId)));
-    revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
-    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-    for (const projectId of projectIds) {
-      revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+  try {
+    if (inputs.length === 0) {
+      throw new Error("No inputs provided for bulk creation.");
     }
-    for (const schedule of schedules) {
-      if (schedule.project.siteManagerId) {
-        const siteManagerId = schedule.project.siteManagerId;
-        const notificationPayload = createNotification("tradieScheduleCreated", {
-          tradieName: schedule.tradie.name,
-          projectName: schedule.project.name,
-          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
-          projectId: schedule.projectId,
-          tradieTrade: schedule.tradie.trade,
-          scheduleDate: dateFormat.format(schedule.scheduledDate),
-        });
-        await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+    const projectId = inputs[0].projectId;
+    await userHasAccessToSchedule(projectId);
+    const schedules = await prisma.tradieSchedule.createManyAndReturn({
+      data: inputs.map(input => ({
+        tradieId: input.tradieId,
+        projectId: input.projectId,
+        milestoneId: input.milestoneId ?? null,
+        scheduledDate: new Date(input.scheduledDate),
+        durationDays: input.durationDays ?? 1,
+        status: input.requiresQuote ? TradieScheduleStatus.AWAITING_QUOTE : TradieScheduleStatus.PENDING,
+        requiresQuote: input.requiresQuote ?? false,
+      })),
+      include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
+    });
+
+    after(async () => {
+      const projectIds = Array.from(new Set(schedules.map(schedule => schedule.projectId)));
+      revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+      for (const projectId of projectIds) {
+        revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
       }
-    }
-  });
+      for (const schedule of schedules) {
+        if (schedule.project.siteManagerId) {
+          const siteManagerId = schedule.project.siteManagerId;
+          const notificationPayload = createNotification("tradieScheduleCreated", {
+            tradieName: schedule.tradie.name,
+            projectName: schedule.project.name,
+            milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+            projectId: schedule.projectId,
+            tradieTrade: schedule.tradie.trade,
+            scheduleDate: dateFormat.format(schedule.scheduledDate),
+          });
+          await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+          const emailContent = generateTradieOutreachEmail(convertToTradieScheduleListItem(schedule));
+          await sendEmail({
+            to: schedule.tradie.email,
+            subject: emailContent.subject,
+            body: emailContent.html,
+          });
+        }
+      }
+    });
 
-  return schedules.map(convertToTradieScheduleListItem);
+    return schedules.map(convertToTradieScheduleListItem);
+  } catch (error) {
+    console.error("Error bulk creating tradie schedules:", error);
+    throw new Error("Failed to bulk create tradie schedules.");
+  }
 }
 
+/**
+ * Updates the status of an existing tradie schedule.
+ *
+ * If the updated status is `DECLINED`, the returned result indicates that
+ * the schedule requires a replacement tradie. After updating, cache tags
+ * are revalidated and the project site manager is notified.
+ *
+ * @param scheduleId - The ID of the schedule to update.
+ * @param updates - The schedule update payload.
+ * @returns An object containing the updated schedule and a flag indicating
+ * whether a replacement tradie is required.
+ * @throws {Error} If the schedule does not exist.
+ * @throws {Error} If the user does not have permission to update the schedule.
+ * @throws {Error} If the update operation fails.
+ */
 export async function updateTradieSchedule(scheduleId: string, updates: UpdateTradieScheduleInput) {
-  const schedule = await prisma.tradieSchedule.update({
-    where: { id: scheduleId },
-    data: { status: updates.status },
-    include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
-  });
+  try {
+    const existingSchedule = await prisma.tradieSchedule.findUnique({
+      where: { id: scheduleId },
+      include: { project: true },
+    });
+    if (!existingSchedule) {
+      throw new Error("Schedule not found");
+    }
+    await userHasAccessToSchedule(existingSchedule.projectId);
+    const schedule = await prisma.tradieSchedule.update({
+      where: { id: scheduleId },
+      data: { status: updates.status },
+      include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
+    });
 
-  const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
-  const statusLabel = schedule.status.split("_").map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(" ");
-  const siteManagerId = schedule.project.siteManagerId;
-  const notificationPayload = createNotification("tradieScheduleUpdated", {
-    tradieName: schedule.tradie.name,
-    projectName: schedule.project.name,
-    milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
-    projectId: schedule.projectId,
-    tradieTrade: schedule.tradie.trade,
-    scheduleDate: dateFormat.format(schedule.scheduledDate),
-    status: statusLabel,
-  });
-  await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+    const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
+    after(async () => {
+      revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+      revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
+      const statusLabel = schedule.status.split("_").map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(" ");
+      const siteManagerId = schedule.project.siteManagerId;
+      const notificationPayload = createNotification("tradieScheduleUpdated", {
+        tradieName: schedule.tradie.name,
+        projectName: schedule.project.name,
+        milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+        projectId: schedule.projectId,
+        tradieTrade: schedule.tradie.trade,
+        scheduleDate: dateFormat.format(schedule.scheduledDate),
+        status: statusLabel,
+      });
+      await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+    });
 
-  revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+    return { schedule: convertToTradieScheduleListItem(schedule), requiresReplacement };
+  } catch (error) {
+    console.error("Error updating tradie schedule:", error);
+    throw new Error("Failed to update tradie schedule.");
+  }
 
-  return { schedule: convertToTradieScheduleListItem(schedule), requiresReplacement };
 }

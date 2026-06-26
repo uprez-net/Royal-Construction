@@ -1,5 +1,6 @@
 import type { SafeTradie } from "./project";
 import type { TradieRating, TradieIncident, IncidentSeverity, TradieApprovalActionType, TradieApproval } from "@prisma/client";
+import { TradieScheduleStatus } from "@prisma/client";
 
 export interface TradieRow {
     id: string;
@@ -97,4 +98,38 @@ export interface ApprovalInput {
 export interface SafeTradieApproval extends Omit<TradieApproval, "requestedBy"> {
     tradie: SafeTradie;
     requestBy: string; 
+}
+
+export const TRADIE_SCHEDULE_STATE_MACHINE: Record<TradieScheduleStatus, TradieScheduleStatus[]> = {
+  [TradieScheduleStatus.PENDING]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.NO_RESPONSE,
+    TradieScheduleStatus.PENDING_RESPONSE,
+  ],
+  [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
+    TradieScheduleStatus.CONFIRMED,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.PENDING_RESPONSE]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.CONFIRMED]: [
+    TradieScheduleStatus.COMPLETED,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.NO_RESPONSE]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.DECLINED]: [],
+  [TradieScheduleStatus.COMPLETED]: [],
+  [TradieScheduleStatus.AWAITING_QUOTE]: [
+    TradieScheduleStatus.QUOTE_RECEIVED,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.QUOTE_RECEIVED]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
 }

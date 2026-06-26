@@ -87,7 +87,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Build project
-        run: pnpm build:webpack
+        run: pnpm build
 
   vercel-deploy-production:
     if: github.ref == 'refs/heads/main'

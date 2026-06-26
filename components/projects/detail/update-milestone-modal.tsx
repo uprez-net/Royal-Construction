@@ -105,7 +105,9 @@ export default function UpdateMilestoneModal({
       if (!validatedData.success) {
         const nextFieldErrors = validatedData.error.issues.reduce(
           (acc, issue) => {
-            const field = issue.path[0] as keyof MilestoneUpdateErrors | undefined;
+            const field = issue.path[0] as
+              | keyof MilestoneUpdateErrors
+              | undefined;
 
             if (field && !acc[field]) {
               acc[field] = issue.message;
@@ -125,6 +127,12 @@ export default function UpdateMilestoneModal({
         updateProjectMilestoneStatus({
           projectId,
           milestoneId,
+          startDate: validatedData.data.startDate
+            ? new Date(validatedData.data.startDate).toISOString()
+            : undefined,
+          actualDate: validatedData.data.actualDate
+            ? new Date(validatedData.data.actualDate).toISOString()
+            : undefined,
           ...validatedData.data,
         }),
       ).unwrap();
@@ -149,7 +157,8 @@ export default function UpdateMilestoneModal({
             Update Milestone Status
           </DialogTitle>
           <DialogDescription className="text-[13px] text-slate-500">
-            Move the milestone forward with the dates and spend required for its status.
+            Move the milestone forward with the dates and spend required for its
+            status.
           </DialogDescription>
         </DialogHeader>
 
@@ -169,7 +178,10 @@ export default function UpdateMilestoneModal({
 
           <div className="grid gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="status" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <Label
+                htmlFor="status"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+              >
                 Status
               </Label>
               <Select
@@ -189,13 +201,17 @@ export default function UpdateMilestoneModal({
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-500">
-                Active milestones need a start date. Completed milestones also require an actual date and spend.
+                Active milestones need a start date. Completed milestones also
+                require an actual date and spend.
               </p>
             </div>
 
             {(formState.status === "ACTIVE" || formState.status === "DONE") && (
               <div className="space-y-1.5">
-                <Label htmlFor="startDate" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                <Label
+                  htmlFor="startDate"
+                  className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                >
                   Start Date
                 </Label>
                 <Input
@@ -221,7 +237,10 @@ export default function UpdateMilestoneModal({
             {formState.status === "DONE" && (
               <div className="space-y-4 rounded-[14px] border border-border/70 bg-slate-50/50 p-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="actualDate" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <Label
+                    htmlFor="actualDate"
+                    className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                  >
                     Actual Date
                   </Label>
                   <Input
@@ -238,13 +257,19 @@ export default function UpdateMilestoneModal({
                     }
                   />
                   {fieldErrors.actualDate ? (
-                    <p id="actualDate-error" className="text-xs text-destructive">
+                    <p
+                      id="actualDate-error"
+                      className="text-xs text-destructive"
+                    >
                       {fieldErrors.actualDate}
                     </p>
                   ) : null}
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="spend" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <Label
+                    htmlFor="spend"
+                    className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                  >
                     Spend
                   </Label>
                   <Input
@@ -257,7 +282,9 @@ export default function UpdateMilestoneModal({
                       handleFormChange("spend", Number(e.target.value))
                     }
                     aria-invalid={Boolean(fieldErrors.spend)}
-                    aria-describedby={fieldErrors.spend ? "spend-error" : undefined}
+                    aria-describedby={
+                      fieldErrors.spend ? "spend-error" : undefined
+                    }
                   />
                   {fieldErrors.spend ? (
                     <p id="spend-error" className="text-xs text-destructive">
