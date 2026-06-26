@@ -448,3 +448,76 @@ export function calculateTrend(
         ),
     };
 }
+
+/**
+ * Removes quoted email thread history, signatures, and common reply markers from
+ * an email body, leaving only the latest message content.
+ *
+ * Supports common email clients including Gmail, Outlook, Exchange, and mobile
+ * email clients by stripping both HTML thread containers and plain-text reply
+ * markers.
+ *
+ * @param text - The raw email body, either plain text or HTML.
+ * @returns The cleaned email body containing only the most recent message.
+ */
+export function stripEmailThread(text: string): string {
+  if (!text) return '';
+
+  // 1. Remove HTML-specific thread containers first (if input contains HTML)
+  let cleanedText = text
+    .replace(/<div class="gmail_quote">[\s\S]*?<\/div>/gi, '')
+    .replace(/<blockquote[^>]*>[\s\S]*?<\/blockquote>/gi, '')
+    .replace(/<span id="OLK_SRC_BODY_SECTION">[\s\S]*?<\/span>/gi, '')
+    .replace(/<div id="divRplyFwdMsg"[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<div style="border-top:\s*solid\s+#[a-f0-9]{3,6}\s+1\.0pt[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<div style="border-top:\s*none[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<hr[^>]*(id="stopSpelling"|tabindex="-1"|style="[^"]*width:\s*98%")[^>]*>[\s\S]*/gi, '')
+    .replace(/<div class="gmail_signature"[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<div class="outlook_signature"[^>]*>[\s\S]*?<\/div>/gi, '');
+
+  // 2. Common text-based markers indicating the start of a thread history or previous replies
+  const threadMarkers = [
+    /________________________________/i,     // Outlook divider line
+    /-----Original Message-----/i,           // Standard desktop email clients
+    /\n\s*From:/i,                            // Outlook/Exchange format "From: ..."
+    /\n\s*On\s+.+?wrote:/i,                   // Gmail format "On [Date], [User] wrote:"
+    /\n\s*On\s+.+?at\s+.+?/i,                 // Alternative iOS/Gmail format
+    /Sent from my iPhone/i,                   // Trim default mobile signatures
+    /Get Outlook for/i                        // Trim Outlook mobile signatures
+  ];
+
+  for (const marker of threadMarkers) {
+    const match = cleanedText.match(marker);
+    if (match && match.index !== undefined) {
+      cleanedText = cleanedText.substring(0, match.index);
+    }
+  }
+
+  return cleanedText.trim();
+}
+
+/**
+ * Converts an HTML string into plain text by removing HTML tags, scripts,
+ * styles, and decoding the most common HTML entities.
+ *
+ * This is useful for indexing, searching, or processing email and rich-text
+ * content where formatting is not required.
+ *
+ * @param html - The HTML content to convert into plain text.
+ * @returns A whitespace-normalized plain text representation of the HTML.
+ */
+export function stripHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ') // Remove style blocks
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ') // Remove script blocks
+    .replace(/<[^>]+>/g, ' ') // Remove all HTML tags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s{2,}/g, ' ') // Collapse multiple spaces/newlines into one space
+    .trim();
+}
