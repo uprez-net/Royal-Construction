@@ -375,8 +375,8 @@ export async function getTradieCoordinationDashboard(
           ts."reminderSentAt"  AS reminder_sent_at,
           ts."updatedAt"       AS updated_at,
           t.email              AS tradie_email,
-          t.phone              AS tradie_phone
-          t."requiresQuote"    AS requiresQuote,
+          t.phone              AS tradie_phone,
+          ts."requiresQuote"    AS requiresQuote,
           ts."quotedPrice"     AS quotedPrice
         FROM "TradieSchedule" ts
         JOIN "Tradie"  t  ON t.id  = ts."tradieId"
