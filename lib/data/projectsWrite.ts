@@ -10,7 +10,6 @@ import { triggerNotification } from "../notification/novu";
 import { createMilestonesFromTemplateForProject } from "./milestones";
 import { ProjectDetail } from "@/types/project";
 import { getCachedProjectById } from "./projects";
-import { Prisma } from "@prisma/client";
 import { after } from "next/server"
 import { handleProjectSpecsGeneration } from "../agent/projectCreationAgent";
 import { createLeadProjectInferencePrompt } from "../agent/project-prompt";

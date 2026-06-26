@@ -79,6 +79,9 @@ const statusLabelMap: Record<TradieScheduleStatus, string> = {
   NO_RESPONSE: "No Response",
   DECLINED: "Declined",
   COMPLETED: "Completed",
+  AWAITING_QUOTE: "Awaiting Quote",
+  QUOTE_RECEIVED: "Quote Received",
+  AWAITING_ADMIN_APPROVAL: "Awaiting Admin Approval",
 };
 
 const statusToneMap: Record<
@@ -91,6 +94,9 @@ const statusToneMap: Record<
   NO_RESPONSE: "danger",
   DECLINED: "danger",
   COMPLETED: "neutral",
+  AWAITING_QUOTE: "warning",
+  QUOTE_RECEIVED: "warning",
+  AWAITING_ADMIN_APPROVAL: "warning"
 };
 
 function CalanderRow(scheduledData: string): ReactNode {
@@ -529,7 +535,7 @@ export function TradiesClient({
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden border-teal-100 bg-gradient-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
+      <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
         <CardContent className="relative p-6">
           <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
@@ -729,7 +735,7 @@ export function TradiesClient({
 
                     <span
                       className={cn(
-                        "ml-2 inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
+                        "ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
                         active
                           ? "bg-teal-600 text-white"
                           : "bg-muted text-muted-foreground group-hover:bg-background",
@@ -747,7 +753,7 @@ export function TradiesClient({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative max-w-[280px] flex-1">
+              <div className="relative max-w-70 flex-1">
                 <label htmlFor="search" className="sr-only">
                   Search
                 </label>
@@ -763,7 +769,7 @@ export function TradiesClient({
                 />
               </div>
 
-              <div className="min-w-[180px] flex-1 lg:max-w-[220px]">
+              <div className="min-w-45 flex-1 lg:max-w-55">
                 <SearchableSelect
                   label=""
                   placeholder="All Projects"
@@ -807,7 +813,7 @@ export function TradiesClient({
                   )
                 }
               >
-                <SelectTrigger className="h-9 min-w-[160px] rounded-md border-border bg-background text-[12.5px] font-medium shadow-none transition-all focus:ring-4 focus:ring-teal-500/10 focus:ring-offset-0">
+                <SelectTrigger className="h-9 min-w-40 rounded-md border-border bg-background text-[12.5px] font-medium shadow-none transition-all focus:ring-4 focus:ring-teal-500/10 focus:ring-offset-0">
                   <SelectValue placeholder="All Trades" />
                 </SelectTrigger>
 
@@ -835,7 +841,7 @@ export function TradiesClient({
                   )
                 }
               >
-                <SelectTrigger className="h-9 min-w-[160px] rounded-md border-border bg-background text-[12.5px] font-medium shadow-none transition-all focus:ring-4 focus:ring-teal-500/10 focus:ring-offset-0">
+                <SelectTrigger className="h-9 min-w-40 rounded-md border-border bg-background text-[12.5px] font-medium shadow-none transition-all focus:ring-4 focus:ring-teal-500/10 focus:ring-offset-0">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
 
@@ -1124,7 +1130,7 @@ export function TradiesClient({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
-            <div className="relative pl-7 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-[2px] before:bg-border before:rounded-full">
+            <div className="relative pl-7 before:absolute before:left-1.25 before:top-2 before:bottom-2 before:w-0.5 before:bg-border before:rounded-full">
               {tradiesState.activity.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No recent tradie activity found.
@@ -1133,7 +1139,7 @@ export function TradiesClient({
                 tradiesState.activity.map((entry) => (
                   <article key={entry.id} className="relative pb-5 last:pb-0">
                     <div
-                      className={`absolute -left-[27.5px] top-1 size-[10px] rounded-full border-2 border-white ring-2 ring-offset-background z-10 ${entry.type === "done" ? "bg-green-600 ring-green-600" : entry.type === "warn" ? "bg-yellow-500 ring-yellow-500" : "bg-red-400 ring-red-400"}`}
+                      className={`absolute left-[-27.5px] top-1 size-2.5 rounded-full border-2 border-white ring-2 ring-offset-background z-10 ${entry.type === "done" ? "bg-green-600 ring-green-600" : entry.type === "warn" ? "bg-yellow-500 ring-yellow-500" : "bg-red-400 ring-red-400"}`}
                     />
                     <p className="mt-1 text-[13px] text-muted-foreground max-w-2xl">
                       {entry.message}
