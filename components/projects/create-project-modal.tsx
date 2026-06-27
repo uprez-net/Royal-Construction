@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { createProject } from "@/lib/store/slices/projectsSlice";
 import { useRouter } from "next/navigation";
 import { fetchSiteManagers } from "@/lib/store/slices/siteManagersSlice";
-import { addMonths } from "date-fns";
+import { addMonths, format } from "date-fns";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -94,27 +94,29 @@ export function CreateProjectModal({
     key: K,
     value: FormState[K],
   ) => {
-    let estimatedEndDate = form.estimatedEndDate;
-    let projectName = form.projectName;
-    if (key === "startDate") {
-      const newStartDate = new Date(value as string);
-      // Add 8 months to the new start date use date-fns
-      estimatedEndDate = addMonths(newStartDate, 8).toISOString();
-    }
-    if (key === "selectedLocation") {
-      const selectedLocation = value as AddressSuggestion | null;
-      if (selectedLocation) {
-        projectName = `${selectedLocation.label} Project`;
-      } else {
-        projectName = "";
+    setForm((prev) => {
+      const next = {
+        ...prev,
+        [key]: value,
+      };
+
+      if (key === "startDate") {
+        console.log("startDate changed:", value);
+        next.estimatedEndDate = format(
+          addMonths(new Date(value as string), 8),
+          "yyyy-MM-dd",
+        );
       }
-    }
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-      estimatedEndDate,
-      projectName,
-    }));
+
+      if (key === "selectedLocation") {
+        const location = value as AddressSuggestion | null;
+        if (location) {
+          next.projectName = `${location.label} Project`;
+        }
+      }
+
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -283,11 +285,8 @@ export function CreateProjectModal({
                 onSelect={(item) => {
                   const suggestion = item as AddressSuggestion;
 
-                  setForm((prev) => ({
-                    ...prev,
-                    location: suggestion.label,
-                    selectedLocation: suggestion,
-                  }));
+                  updateForm("selectedLocation", suggestion);
+                  updateForm("location", suggestion.label);
                 }}
               />
             </div>

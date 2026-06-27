@@ -13,13 +13,30 @@ import { getCachedProjectById } from "./projects";
 import { after } from "next/server"
 import { handleProjectSpecsGeneration } from "../agent/projectCreationAgent";
 import { createLeadProjectInferencePrompt } from "../agent/project-prompt";
+import { createActivityLogEntry } from "@/types/activityLog";
+import { logAction } from "./actionLog";
 
 /**
- * @deprecated This function is not to be used use `createProjectWithLead` instead which creates a project directly from a lead and ensures data consistency.
- * Creates a new project with the provided data. Handles both existing and new customers, and optionally associates a site manager.
- * Also triggers a notification for the site manager if assigned.
- * @param projectData 
- * @returns new project ID
+ * Creates a new project from manually entered project data.
+ *
+ * @deprecated Use {@link createProjectWithLead} instead. This function exists only
+ * for legacy flows and intentionally fails if used without an associated lead.
+ *
+ * The function performs the following operations:
+ * - Resolves or creates the customer depending on the selected customer mode.
+ * - Validates the assigned site manager (if provided).
+ * - Creates the project record.
+ * - Schedules cache revalidation after the request completes.
+ * - Sends a project creation notification to the assigned site manager.
+ *
+ * @param projectData - Validated project creation payload.
+ * @returns The ID of the newly created project.
+ *
+ * @throws {Error} CUSTOMER_NOT_FOUND
+ * Thrown when an existing customer ID cannot be found.
+ *
+ * @throws {Error} SITE_MANAGER_NOT_FOUND
+ * Thrown when the supplied site manager ID is invalid.
  */
 export async function createProject(projectData: CreateProjectInput) {
   const customerMode = projectData.customerMode;
@@ -95,6 +112,9 @@ export async function createProject(projectData: CreateProjectInput) {
   return project.id;
 }
 
+/**
+ * Input required to create a project directly from an existing lead.
+ */
 export interface CreateProjectWithLeadInput {
   projectName: string;
   leadId: number;
@@ -106,6 +126,54 @@ export interface CreateProjectWithLeadInput {
   siteManagerId: string;
 }
 
+/**
+ * Creates a new project from an existing lead.
+ *
+ * This is the preferred project creation workflow as it guarantees data
+ * consistency between leads, customers, projects, milestones, and activity logs.
+ *
+ * The entire creation process is executed inside a database transaction and
+ * performs the following operations:
+ *
+ * - Validates that the lead exists.
+ * - Ensures the lead has not already been converted into a project.
+ * - Creates a customer from the lead details.
+ * - Uses the AI project inference agent to determine:
+ *   - Project type
+ *   - Estimated budget
+ *   - Structured project requirements
+ * - Creates the project.
+ * - Generates the default milestone template.
+ * - Records an activity log entry for auditing.
+ * - Retrieves the fully populated cached project details.
+ * - Schedules cache revalidation after the response is sent.
+ * - Sends a project creation notification to the assigned site manager.
+ *
+ * @param input - Project creation information along with the source lead.
+ * @param input.leadId - ID of the lead being converted into a project.
+ * @param input.projectName - Name of the new project.
+ * @param input.lotSize - Size of the construction lot.
+ * @param input.startDate - Planned project start date (ISO string).
+ * @param input.estimatedEndDate - Estimated project completion date (ISO string).
+ * @param input.address - Project site address.
+ * @param input.council - Responsible local council.
+ * @param input.siteManagerId - Assigned site manager ID.
+ *
+ * @returns The complete project details for the newly created project.
+ *
+ * @throws {Error} `LEAD_NOT_FOUND`
+ * Thrown when the specified lead does not exist.
+ *
+ * @throws {Error} `PROJECT_ALREADY_EXISTS_FOR_LEAD`
+ * Thrown when the lead has already been converted into a project.
+ *
+ * @throws {Error} `PROJECT_DETAIL_NOT_FOUND`
+ * Thrown if the project is successfully created but cannot be retrieved afterwards.
+ *
+ * @throws {Error}
+ * Re-throws any database, AI inference, milestone generation, notification,
+ * or transaction errors encountered during execution.
+ */
 export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const newProjectId = await prisma.$transaction(async (tx) => {
@@ -156,6 +224,17 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       });
 
       await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate), tx);
+
+      const activityLogEntry = createActivityLogEntry("projectCreated", {
+        projectType: projectType,
+        customerEmail: customer.email,
+        customerPhone: customer.phone,
+        projectId: newProject.id,
+        projectName: newProject.name,
+        location: newProject.location,
+        customerName: customer.name
+      });
+      await logAction(activityLogEntry, tx);
 
       return newProject.id;
     });

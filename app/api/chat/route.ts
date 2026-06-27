@@ -138,8 +138,7 @@ export async function POST(request: NextRequest) {
 
                 const result = streamText({
                     model: gateway("google/gemini-3-flash"),
-                    temperature: 0.2,   // slightly higher — user-facing replies need to feel natural
-                    topK: 25,
+                    temperature: 0.4,   // slightly higher — user-facing replies need to feel natural
                     system: `
                     ${OFFER_CHAT_SYSTEM_PROMPT}
 
@@ -163,7 +162,7 @@ export async function POST(request: NextRequest) {
                     providerOptions: {
                         google: {
                             thinkingConfig: {
-                                includeThoughts: true,
+                                includeThoughts: false,
                                 thinkingLevel: "medium",
                             }
                         } satisfies GoogleLanguageModelOptions,

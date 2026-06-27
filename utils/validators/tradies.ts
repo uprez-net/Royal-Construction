@@ -93,11 +93,12 @@ export type CreateTradieScheduleInput = z.infer<typeof createTradieScheduleSchem
  * Update tradie schedule status
  */
 export const updateTradieScheduleSchema = z.object({
-  status: z.nativeEnum(TradieScheduleStatus, {
+  status: z.enum(TradieScheduleStatus, {
     error: () => ({
       message: `Status must be one of: ${Object.values(TradieScheduleStatus).join(", ")}`,
     }),
   }),
+  quote: z.string().optional(),
 });
 
 export type UpdateTradieScheduleInput = z.infer<typeof updateTradieScheduleSchema>;

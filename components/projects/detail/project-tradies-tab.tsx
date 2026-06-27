@@ -24,6 +24,7 @@ import { differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { calculateScheduleTotalCost } from "@/utils/calculations";
 
 export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const getStatusTone = (status: TradieScheduleStatus) => {
@@ -233,6 +234,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               "1-Week Reminder",
               "Confirmed",
               "Status",
+              "Cost",
               "Action",
             ]}
             rows={tradies.map((tradie) => [
@@ -283,6 +285,10 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               >
                 {getStatusText(tradie.status)}
               </StatusPill>,
+
+              <span className="text-xs text-semibold" key={`${tradie.id}-cost`}>
+                {tradie.quotedPrice ?? calculateScheduleTotalCost(parseFloat(tradie.tradie.hourlyRate ?? "0"), tradie.durationDays)}
+              </span>,
 
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
                 {tradie.status !== "COMPLETED" && (
