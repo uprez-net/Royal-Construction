@@ -8,7 +8,7 @@ import {
   LeadNoteAnnotationInput,
   LeadRichTextDocument,
 } from "@/lib/leads/types";
-import { FollowupCalendarCreation } from "@/lib/leads/leads-service";
+// import { FollowupCalendarCreation } from "@/lib/leads/leads-service";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
 
 /* ── Constants ────────────────────────────────────────── */
@@ -246,37 +246,37 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
 
 /* ── Calendar event helpers ───────────────────────────── */
 
-export async function createCalendarEventIfValid(
-  lead: {
-    name: string;
-    email: string;
-    followupDate: string;
-    followupTime: string;
-  },
-  showToast: (msg: string, type?: "success" | "info") => void,
-): Promise<boolean> {
-  if (!lead.followupDate || !lead.followupTime) {
-    showToast("Please provide follow-up date and time.", "info");
-    return false;
-  }
-  const result = await FollowupCalendarCreation(
-    lead.name,
-    lead.email,
-    lead.followupDate,
-    lead.followupTime,
-  );
-  if (result !== "Follow-up calendar event successfully created") {
-    console.error("Failed to create calendar event:", result);
-    showToast(
-      "Failed to create follow-up calendar event. Please try again.",
-      "info",
-    );
-    return false;
-  }
-  return true;
-}
+// export async function createCalendarEventIfValid(
+//   lead: {
+//     name: string;
+//     email: string;
+//     followupDate: string;
+//     followupTime: string;
+//   },
+//   showToast: (msg: string, type?: "success" | "info") => void,
+// ): Promise<boolean> {
+//   if (!lead.followupDate || !lead.followupTime) {
+//     showToast("Please provide follow-up date and time.", "info");
+//     return false;
+//   }
+//   const result = await FollowupCalendarCreation(
+//     lead.name,
+//     lead.email,
+//     lead.followupDate,
+//     lead.followupTime,
+//   );
+//   if (result !== "Follow-up calendar event successfully created") {
+//     console.error("Failed to create calendar event:", result);
+//     showToast(
+//       "Failed to create follow-up calendar event. Please try again.",
+//       "info",
+//     );
+//     return false;
+//   }
+//   return true;
+// }
 
-export function shouldCreateCalendarEvent(
+export function shouldSetFollowupStage(
   originalLead: Lead,
   formData: LeadDetailFormData,
 ): boolean {
@@ -298,13 +298,13 @@ const isFollowupDateTimeAdded =
   return isNewlyMovingToFollowup || isReschedulingFollowup || isFollowupDateTimeAdded;
 }
 
-export function buildCalendarHistoryEntry(
+export function buildFollowupHistoryEntry(
   date: string,
   time: string,
 ): HistoryItem {
   return {
-    action: "Calendar event creation for Followup Stage",
-    detail: `Calendar event created for Followup Stage at Time ${date} at ${time}`,
+    action: "New Followup Stage Created",
+    detail: `Followup Stage at Time ${date} at ${time}`,
     type: "system",
     date,
     time,

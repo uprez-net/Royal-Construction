@@ -19,7 +19,6 @@ import {
   PROJECT_TYPE_OPTIONS,
   HISTORY_TYPE_OPTIONS,
   BUDGET_OPTIONS,
-  createCalendarEventIfValid,
 } from "@/lib/leads/lead-helpers";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -149,18 +148,18 @@ export function AddLeadModal({
       const stage: LeadStage =
         form.followupDate && form.followupTime ? "In Follow-up" : "Contacted";
 
-      let calendarCreated = true;
-      if (stage === "In Follow-up") {
-        calendarCreated = await createCalendarEventIfValid(
-          {
-            name: form.name,
-            email: form.email,
-            followupDate: form.followupDate,
-            followupTime: form.followupTime,
-          },
-          showToast,
-        );
-      }
+      // let calendarCreated = true;
+      // if (stage === "In Follow-up") {
+      //   calendarCreated = await createCalendarEventIfValid(
+      //     {
+      //       name: form.name,
+      //       email: form.email,
+      //       followupDate: form.followupDate,
+      //       followupTime: form.followupTime,
+      //     },
+      //     showToast,
+      //   );
+      // }
 
       const today = new Date();
       const historyEntries = form.historyEntries.map((entry) => ({
@@ -197,16 +196,16 @@ export function AddLeadModal({
       onSuccess(createdLead);
       showToast(`Lead added: ${form.name}`, "success");
 
-      if (!calendarCreated) {
-        showToast("Lead was saved, but the calendar reminder could not be created.", "info");
-      }
+      // if (!calendarCreated) {
+      //   showToast("Lead was saved, but the calendar reminder could not be created.", "info");
+      // }
 
-      if (setReminder && calendarCreated) {
-        showToast(
-          `Reminder set for ${form.followupDate || today.toISOString().split("T")[0]} at ${form.followupTime || "10:00"}`,
-          "info",
-        );
-      }
+      // if (setReminder && calendarCreated) {
+      //   showToast(
+      //     `Reminder set for ${form.followupDate || today.toISOString().split("T")[0]} at ${form.followupTime || "10:00"}`,
+      //     "info",
+      //   );
+      // }
     } catch (error) {
       console.error(error);
       if (error instanceof FetchError) {
@@ -400,6 +399,9 @@ export function AddLeadModal({
               id={fieldId("followup-date")}
               className={fieldCls}
               type="date"
+              min={new Date().toLocaleDateString("en-CA", {
+                timeZone: "Australia/Sydney",
+              })}
               value={form.followupDate}
               onChange={(e) => updateField("followupDate", e.target.value)}
             />
@@ -581,7 +583,7 @@ export function AddLeadModal({
                 <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[color:var(--royal-gold)] border-t-transparent" />
                 Saving & Setting Reminder...
               </>
-            ):null}
+            ) : null}
             {!savingWithReminder && (
               <>
                 <Bell size={15} /> Save & Set Reminder

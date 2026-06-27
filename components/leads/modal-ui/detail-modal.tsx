@@ -7,9 +7,8 @@ import {
   LEAD_SOURCE_OPTIONS,
   LEAD_STAGE_OPTIONS,
   BUDGET_OPTIONS,
-  createCalendarEventIfValid,
-  shouldCreateCalendarEvent,
-  buildCalendarHistoryEntry,
+  shouldSetFollowupStage,
+  buildFollowupHistoryEntry,
   isLostStage,
 } from "@/lib/leads/lead-helpers";
 import { ModalShell } from "@/components/common/modal-shell";
@@ -110,12 +109,12 @@ export function DetailModal({
       let stage = form.stage;
       const historyToSend: HistoryItem[] = [];
 
-      if (shouldCreateCalendarEvent(lead, form)) {
-        const success = await createCalendarEventIfValid(form, showToast);
-        if (!success) return;
+      if (shouldSetFollowupStage(lead, form)) {
+        // const success = await createCalendarEventIfValid(form, showToast);
+        // if (!success) return;
         stage = "In Follow-up";
         historyToSend.push(
-          buildCalendarHistoryEntry(form.followupDate, form.followupTime),
+          buildFollowupHistoryEntry(form.followupDate, form.followupTime),
         );
       }
 
@@ -399,6 +398,9 @@ export function DetailModal({
               id={fieldId("followup-date")}
               type="date"
               className={inputCls}
+              min={new Date().toLocaleDateString("en-CA", {
+                timeZone: "Australia/Sydney",
+              })}
               value={form.followupDate}
               onChange={(e) => patch({ followupDate: e.target.value })}
             />
@@ -543,14 +545,14 @@ export function DetailModal({
 
           {(form.stage === "Won" ||
             (isLostStage(form.stage) && lead.lostReason)) && (
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full border border-[color:var(--destructive)]/30 bg-[color:var(--destructive-light)] px-4 py-2 text-xs font-medium text-[color:var(--destructive)] transition hover:border-[color:var(--destructive)]/50"
-              onClick={() => onDeleteClick(lead)}
-            >
-              Delete Lead
-            </button>
-          )}
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-full border border-[color:var(--destructive)]/30 bg-[color:var(--destructive-light)] px-4 py-2 text-xs font-medium text-[color:var(--destructive)] transition hover:border-[color:var(--destructive)]/50"
+                onClick={() => onDeleteClick(lead)}
+              >
+                Delete Lead
+              </button>
+            )}
 
           <button
             type="button"
