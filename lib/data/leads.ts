@@ -302,128 +302,128 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
   return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[]; assignedUser: { id: string; name: string; email: string } | null });
 }
 
-export async function handleCalendarFollowup(
-  lead: Lead,
-  followupDate: string, // e.g., "2026-06-06"
-  followupTime: string  // e.g., "09:00" or "21:00"
-): Promise<string | null> {
+// export async function handleCalendarFollowup(
+//   lead: Lead,
+//   followupDate: string, // e.g., "2026-06-06"
+//   followupTime: string  // e.g., "09:00" or "21:00"
+// ): Promise<string | null> {
 
-  const config = getGraphConfig();
-  if (config.mode !== 'app-only' || !config.senderUpn) {
-    return "Graph API configuration is not set for app-only mode with a valid sender UPN.";
-  }
+//   const config = getGraphConfig();
+//   if (config.mode !== 'app-only' || !config.senderUpn) {
+//     return "Graph API configuration is not set for app-only mode with a valid sender UPN.";
+//   }
 
-  const credential = new ClientSecretCredential(config.tenantId, config.clientId, config.clientSecret);
-  const tokenResult = await credential.getToken('https://graph.microsoft.com/.default');
-  const accessToken = tokenResult?.token;
+//   const credential = new ClientSecretCredential(config.tenantId, config.clientId, config.clientSecret);
+//   const tokenResult = await credential.getToken('https://graph.microsoft.com/.default');
+//   const accessToken = tokenResult?.token;
 
-  if (!accessToken) throw new Error('Unable to acquire Graph access token');
+//   if (!accessToken) throw new Error('Unable to acquire Graph access token');
 
-  // ─── 1. Date & Time Parsing & Formatting ─────────────────────────────
+//   // ─── 1. Date & Time Parsing & Formatting ─────────────────────────────
 
-  // Parse local start time (Assuming followupDate is YYYY-MM-DD and followupTime is HH:mm)
-  const startDateTime = new Date(`${followupDate}T${followupTime}:00`);
+//   // Parse local start time (Assuming followupDate is YYYY-MM-DD and followupTime is HH:mm)
+//   const startDateTime = new Date(`${followupDate}T${followupTime}:00`);
 
-  // Calculate end time locally (adds 1 hour, automatically handles day rollovers like 23:30 -> 00:30)
-  const endDateTimeObj = new Date(startDateTime.getTime() + 60 * 60 * 1000);
+//   // Calculate end time locally (adds 1 hour, automatically handles day rollovers like 23:30 -> 00:30)
+//   const endDateTimeObj = new Date(startDateTime.getTime() + 60 * 60 * 1000);
 
-  // Helper: Format Date object to Graph API accepted Local String "YYYY-MM-DDTHH:mm:ss"
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  const formatToGraphDateTime = (d: Date) =>
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+//   // Helper: Format Date object to Graph API accepted Local String "YYYY-MM-DDTHH:mm:ss"
+//   const pad = (n: number) => n.toString().padStart(2, '0');
+//   const formatToGraphDateTime = (d: Date) =>
+//     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 
-  const graphStartStr = formatToGraphDateTime(startDateTime);
-  const graphEndStr = formatToGraphDateTime(endDateTimeObj);
+//   const graphStartStr = formatToGraphDateTime(startDateTime);
+//   const graphEndStr = formatToGraphDateTime(endDateTimeObj);
 
-  // Helper: Format Date object to requested email display strings
-  const formatDisplayDate = (d: Date) =>
-    d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); // "Saturday 6 June 2026"
+//   // Helper: Format Date object to requested email display strings
+//   const formatDisplayDate = (d: Date) =>
+//     d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); // "Saturday 6 June 2026"
 
-  const formatDisplayTime = (d: Date) => {
-    const hours = d.getHours();
-    const minutes = d.getMinutes();
-    const ampm = hours >= 12 ? 'pm' : 'am';
-    const formattedHours = (hours % 12 || 12).toString().padStart(2, '0');
-    const formattedMinutes = minutes.toString().padStart(2, '0');
-    return `${formattedHours}:${formattedMinutes} ${ampm}`;
-  };
+//   const formatDisplayTime = (d: Date) => {
+//     const hours = d.getHours();
+//     const minutes = d.getMinutes();
+//     const ampm = hours >= 12 ? 'pm' : 'am';
+//     const formattedHours = (hours % 12 || 12).toString().padStart(2, '0');
+//     const formattedMinutes = minutes.toString().padStart(2, '0');
+//     return `${formattedHours}:${formattedMinutes} ${ampm}`;
+//   };
 
-  const displayDate = formatDisplayDate(startDateTime);
-  const displayTime = `${formatDisplayTime(startDateTime)} - ${formatDisplayTime(endDateTimeObj)} (AEST)`;
+//   const displayDate = formatDisplayDate(startDateTime);
+//   const displayTime = `${formatDisplayTime(startDateTime)} - ${formatDisplayTime(endDateTimeObj)} (AEST)`;
 
-  // ─── 2. Render React Email to HTML String ────────────────────────────
+//   // ─── 2. Render React Email to HTML String ────────────────────────────
 
-  const emailHtml = await render(
-    FollowUpStageMeeting({
-      name: lead.name,
-      formattedDate: displayDate,
-      formattedTime: displayTime,
+//   const emailHtml = await render(
+//     FollowUpStageMeeting({
+//       name: lead.name,
+//       formattedDate: displayDate,
+//       formattedTime: displayTime,
 
-    })
-  );
+//     })
+//   );
 
-  const attendees = [
-    {
-      emailAddress: { address: lead.email, name: lead.name },
-      type: 'required' // Main Lead
-    }
-  ];
+//   const attendees = [
+//     {
+//       emailAddress: { address: lead.email, name: lead.name },
+//       type: 'required' // Main Lead
+//     }
+//   ];
 
-  // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
-  const ccEmail = process.env.MAIL_ID_CC;
-  if (ccEmail) {
-    attendees.push({
-      emailAddress: { address: ccEmail, name: 'Admin' },
-      type: 'optional' // This acts as the CC in Outlook Calendar
-    });
-  }
+//   // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
+//   const ccEmail = process.env.MAIL_ID_CC;
+//   if (ccEmail) {
+//     attendees.push({
+//       emailAddress: { address: ccEmail, name: 'Admin' },
+//       type: 'optional' // This acts as the CC in Outlook Calendar
+//     });
+//   }
 
-  // ─── 3. Construct Graph API Payload ──────────────────────────────────
+//   // ─── 3. Construct Graph API Payload ──────────────────────────────────
 
-  const event = {
-    subject: `Follow-Up Calendar Event with ${lead.name} - Royal Constructions`,
-    body: {
-      contentType: 'HTML',
-      content: emailHtml, // Inject the beautifully styled React Email HTML
-    },
-    start: {
-      dateTime: graphStartStr,
-      timeZone: 'Australia/Sydney'
-    },
-    end: {
-      dateTime: graphEndStr,
-      timeZone: 'Australia/Sydney'
-    },
-    location: { displayName: 'Royal Constructions' },
-    attendees: attendees,
-  };
+//   const event = {
+//     subject: `Follow-Up Calendar Event with ${lead.name} - Royal Constructions`,
+//     body: {
+//       contentType: 'HTML',
+//       content: emailHtml, // Inject the beautifully styled React Email HTML
+//     },
+//     start: {
+//       dateTime: graphStartStr,
+//       timeZone: 'Australia/Sydney'
+//     },
+//     end: {
+//       dateTime: graphEndStr,
+//       timeZone: 'Australia/Sydney'
+//     },
+//     location: { displayName: 'Royal Constructions' },
+//     attendees: attendees,
+//   };
 
-  // ─── 4. Send Request to Graph API ────────────────────────────────────
+//   // ─── 4. Send Request to Graph API ────────────────────────────────────
 
-  const response = await fetch(
-    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        // This header makes Graph return timezone properties in AEST in the response
-        'Prefer': 'outlook.timezone="Australia/Sydney"'
-      },
-      body: JSON.stringify(event),
-    }
-  );
+//   const response = await fetch(
+//     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
+//     {
+//       method: 'POST',
+//       headers: {
+//         Authorization: `Bearer ${accessToken}`,
+//         'Content-Type': 'application/json',
+//         // This header makes Graph return timezone properties in AEST in the response
+//         'Prefer': 'outlook.timezone="Australia/Sydney"'
+//       },
+//       body: JSON.stringify(event),
+//     }
+//   );
 
-  if (!response.ok) {
-    const detail = await response.text();
-    console.error('Graph event create failed:', detail);
-    return "Failed to create follow-up calendar event";
-  }
+//   if (!response.ok) {
+//     const detail = await response.text();
+//     console.error('Graph event create failed:', detail);
+//     return "Failed to create follow-up calendar event";
+//   }
 
-  //console.log('Checking the Response from Graph API for Event Creation:', await response.json());
+//   //console.log('Checking the Response from Graph API for Event Creation:', await response.json());
 
-  return "Follow-up calendar event successfully created";
-}
+//   return "Follow-up calendar event successfully created";
+// }
 
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
@@ -448,7 +448,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     if (input.stage !== 'In Follow-up') {
       historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date() });
     } else {
-      historyCreate.push({ action: "Lead created with Follow-up Calender set", detail: "Lead manually created and Also Assign the Follow-up Calender", type: "SYSTEM", actionDate: new Date() });
+      historyCreate.push({ action: "Lead created with Follow-up set", detail: "Lead manually created and Also Assign the Follow-up Stage", type: "SYSTEM", actionDate: new Date() });
     }
   }
 

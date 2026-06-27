@@ -235,10 +235,10 @@ function BookingContent() {
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, backgroundColor: BRAND.white, border: `1px solid ${BRAND.border}`, borderRadius: 50, padding: '6px 16px', marginBottom: 20 }}>
             <Calendar size={14} color={BRAND.gold} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.gold, letterSpacing: '0.5px' }}>BOOKING PAGE</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.gold, letterSpacing: '0.5px' }}>SCHEDULE MEETING</span>
           </div>
           <h1 style={{ color: BRAND.text, fontSize: 42, fontWeight: 500, margin: '0 0 8px', letterSpacing: '-1.2px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase', lineHeight: 1 }}>
-            Book Your<br />Consultation
+            Schedule Your<br />Consultation Meeting
           </h1>
           <p style={{ color: BRAND.muted, fontSize: 14, margin: 0, fontWeight: 350 }}>
             Welcome, <strong style={{ color: BRAND.gold }}>{displayName}</strong>. Choose a date and time below.
@@ -453,7 +453,7 @@ function BookingContent() {
                       </>
                     ) : (
                       <>
-                        <span>Confirm Booking</span>
+                        <span>Confirm Meeting</span>
                         <ArrowRight size={18} />
                       </>
                     )}
