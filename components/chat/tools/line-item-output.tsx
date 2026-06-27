@@ -19,7 +19,7 @@ export function LineItemOutput({ output }: { output: LineItemToolOutput }) {
     if (!uuid) {
       return msg;
     }
-    let index = lineItems.findIndex((item) => item.id === uuid);
+    const index = lineItems.findIndex((item) => item.id === uuid);
     if(index === -1) {
       return msg;
     }

@@ -27,7 +27,6 @@ import { createProject } from "@/lib/store/slices/projectsSlice";
 import { useRouter } from "next/navigation";
 import { fetchSiteManagers } from "@/lib/store/slices/siteManagersSlice";
 import { addMonths, format } from "date-fns";
-import { dateFormat } from "@/utils/formatters";
 
 interface CreateProjectModalProps {
   open: boolean;
