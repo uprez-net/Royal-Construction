@@ -25,6 +25,7 @@ import { OFFER_CHAT_SYSTEM_PROMPT } from "@/lib/agent/offer-prompts";
 import { scrapeUserLinks, webSearch } from "@/lib/tools/web-search";
 import type { OfferFile, LineItem } from "@/context/ChatContext";
 import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
+import { type GoogleLanguageModelOptions } from "@ai-sdk/google"
 
 interface ChatRequestBody {
     leadId: number;
@@ -159,6 +160,14 @@ export async function POST(request: NextRequest) {
                     ],
                     experimental_transform: smoothStream({ chunking: "word" }),
                     toolChoice: "auto",
+                    providerOptions: {
+                        google: {
+                            thinkingConfig: {
+                                includeThoughts: true,
+                                thinkingLevel: "medium",
+                            }
+                        } satisfies GoogleLanguageModelOptions,
+                    },
                     tools: {
                         lineItemTool: lineItemTool(dataStream),
                         offerFileTool: offerFileTool(dataStream),
