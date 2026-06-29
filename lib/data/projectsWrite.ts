@@ -177,34 +177,33 @@ export interface CreateProjectWithLeadInput {
  */
 export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      include: {
+        project: true,
+      }
+    });
+
+    if (!lead) {
+      throw new Error("LEAD_NOT_FOUND");
+    }
+
+    if (lead.project) {
+      throw new Error("PROJECT_ALREADY_EXISTS_FOR_LEAD");
+    }
+
+    const {
+      projectType,
+      projectBudget,
+      projectRequirements
+    } = await handleProjectSpecsGeneration(createLeadProjectInferencePrompt(lead));
     const newProjectId = await prisma.$transaction(async (tx) => {
-      const lead = await tx.lead.findUnique({
-        where: { id: leadId },
-        include: {
-          project: true,
-        }
-      });
-
-      if (!lead) {
-        throw new Error("LEAD_NOT_FOUND");
-      }
-
-      if (lead.project) {
-        throw new Error("PROJECT_ALREADY_EXISTS_FOR_LEAD");
-      }
-
       // Create customer first, then reference by customerId to satisfy Prisma types
       const customer = await createCustomerForProject({
         name: lead.name,
         email: lead.email,
         phone: lead.phone,
       }, tx);
-
-      const {
-        projectType,
-        projectBudget,
-        projectRequirements
-      } = await handleProjectSpecsGeneration(createLeadProjectInferencePrompt(lead));
 
       const newProject = await tx.project.create({
         data: {

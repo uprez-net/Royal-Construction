@@ -31,7 +31,7 @@ export async function logAction(input: ActivityLogEntry, tx?: Prisma.Transaction
                 id: input.id,
                 type: input.type,
                 message: input.message,
-                authorId: input.authorId,
+                // authorId: input.authorId,
                 createdAt: new Date(input.timestamp),
                 projectId: input.projectId,
                 milestoneId: input.milestoneId ?? null,
