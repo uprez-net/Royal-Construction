@@ -111,6 +111,7 @@ export async function createMilestone(projectId: string, data: MilestoneCreation
  * @throws {Error} If the milestone update or file lookup fails.
  */
 export async function addPhotosToMilestone(projectId: string, milestoneId: string, fileIds: string[]) {
+  await new Promise((resolve) => setTimeout(resolve, 5_000));
   const updatedMilestone = await prisma.milestone.update({ where: { id: milestoneId }, data: { files: { connect: fileIds.map((id) => ({ id })) } } });
 
   const addedFiles = await prisma.file.findMany({ where: { id: { in: fileIds } } });
