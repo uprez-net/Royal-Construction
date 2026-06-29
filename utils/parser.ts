@@ -25,3 +25,20 @@ export function daysUntil(value: string | Date): number {
     startOfDay(new Date()),
   );
 }
+
+/**
+ * Parses a currency-formatted string into a numeric value.
+ *
+ * Removes all non-numeric characters except the decimal point before
+ * attempting to parse the value. Returns `undefined` if the resulting
+ * value is not a valid number.
+ *
+ * @param value - The currency string to parse (e.g. "$1,234.56", "₹500", "1000").
+ * @returns The parsed numeric value, or `undefined` if the input cannot be parsed.
+ */
+export function parseCurrency(value: string): number | undefined {
+  // Remove any non-numeric characters except for the decimal point
+  const cleanedValue = value.replace(/[^0-9.]/g, "");
+  const parsedValue = parseFloat(cleanedValue);
+  return isNaN(parsedValue) ? undefined : parsedValue;
+}

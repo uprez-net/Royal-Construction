@@ -56,34 +56,52 @@ export function TradieApprovalTabs() {
 
   const handleTabChange = (tab: TabKey) => {
     dispatch(setActiveTab(tab));
+
+    const updates: Partial<typeof query> = { page: 1 };
+
     switch (tab) {
       case "all":
-        dispatch(setQuery({ status: undefined, type: undefined, page: 1 }));
-        return;
+        updates.status = undefined;
+        updates.type = undefined;
+        break;
       case "pending":
-        dispatch(setQuery({ status: "PENDING", page: 1 }));
-        return;
+        updates.type = undefined;
+        updates.status = "PENDING";
+        break;
       case "approved":
-        dispatch(setQuery({ status: "APPROVED", page: 1 }));
-        return;
+        updates.type = undefined;
+        updates.status = "APPROVED";
+        break;
       case "rejected":
-        dispatch(setQuery({ status: "REJECTED", page: 1 }));
-        return;
+        updates.type = undefined;
+        updates.status = "REJECTED";
+        break;
       case "delete":
-        dispatch(setQuery({ type: "TRADIE_REMOVAL", page: 1 }));
-        return;
+        updates.type = "TRADIE_REMOVAL";
+        updates.status = undefined;
+        break;
       case "incident":
-        dispatch(setQuery({ type: "INCIDENT_RESOLUTION", page: 1 }));
-        return;
+        updates.type = "INCIDENT_RESOLUTION";
+        updates.status = undefined;
+        break;
       case "price":
-        dispatch(setQuery({ type: "PRICE_CHANGE", page: 1 }));
-        return;
+        updates.type = "PRICE_CHANGE";
+        updates.status = undefined;
+        break;
       case "schedule":
-        dispatch(setQuery({ type: "SCHEDULE_APPROVAL", page: 1 }));
-        return;
+        updates.type = "SCHEDULE_APPROVAL";
+        updates.status = undefined;
+        break;
       default:
         return;
     }
+
+    dispatch(
+      setQuery({
+        ...query,
+        ...updates,
+      }),
+    );
   };
 
   useEffect(() => {
@@ -226,10 +244,8 @@ function ApprovalTabs({ activeTab, onTabChange }: ApprovalTabsProps) {
       label: "All",
       count:
         kpiData.pendingCount +
-        kpiData.priceChangeCount +
-        kpiData.incidentReportCount +
-        kpiData.deletionCount +
-        kpiData.scheduleCount,
+        kpiData.resolvedCount.accepted +
+        kpiData.resolvedCount.rejected,
       icon: Clock3,
     },
     {

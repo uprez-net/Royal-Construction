@@ -165,6 +165,24 @@ export const notificationTemplates: NotificationTemplateFactory = {
     message: `The schedule for ${data.tradieName} (${data.trade}) for project ${data.projectName} on ${data.scheduledDate} has been rejected`,
     url: `/projects/${data.projectId}?activeTab=milestones`,
   }),
+
+  milestoneStatusChanged: (data) => ({
+    title: `Milestone Status Changed: ${data.milestoneName}`,
+    message: `The status of milestone ${data.milestoneName} has been changed to ${data.newStatus}`,
+    url: `/projects/${data.projectId}?activeTab=milestones`,
+  }),
+
+  milestoneAdded: (data) => ({
+    title: `Milestone Added: ${data.milestoneName}`,
+    message: `New Milestone ${data.milestoneName} added to project ${data.projectName}`,
+    url: `/projects/${data.projectId}?activeTab=milestones`,
+  }),
+
+  newMilestonePhotoUploaded: (data) => ({
+    title: `New Photos Uploaded for Milestone: ${data.milestoneName}`,
+    message: `${data.fileCount} photos uploaded for milestone ${data.milestoneName} in project ${data.projectName}`,
+    url: `/projects/${data.projectId}?activeTab=milestones`,
+  }),
 };
 
 /**

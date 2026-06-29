@@ -25,6 +25,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Edit, Loader2 } from "lucide-react";
 import { currency } from "@/utils/formatters";
+import { format } from "date-fns";
+import { parseCurrency } from "@/utils/parser";
 
 interface UpdateMilestoneModalProps {
   milestoneId: string;
@@ -74,32 +76,32 @@ export default function UpdateMilestoneModal({
     () => project?.milestones.find((m) => m.id === milestoneId),
     [project, milestoneId],
   );
-  const spend = useMemo(
-    () => {
-      const milestoneSchedules = project?.tradieSchedules.filter((schedule => schedule.milestoneId === milestoneId));
-      if (!milestoneSchedules || milestoneSchedules.length === 0) {
-        return 0;
+  const spend = useMemo(() => {
+    const milestoneSchedules = project?.tradieSchedules.filter(
+      (schedule) => schedule.milestoneId === milestoneId,
+    );
+    if (!milestoneSchedules || milestoneSchedules.length === 0) {
+      return 0;
+    }
+    const totalSpend = milestoneSchedules.reduce((acc, schedule) => {
+      if (schedule.requiresQuote) {
+        return acc + parseFloat(schedule.quotedPrice ?? "0");
+      } else {
+        const hourlyRate = parseFloat(schedule.tradie.hourlyRate ?? "0");
+        const totalHours = schedule.durationDays * 8;
+        return acc + hourlyRate * totalHours;
       }
-      const totalSpend = milestoneSchedules.reduce((acc, schedule) => {
-        if(schedule.requiresQuote) {
-          return acc + parseFloat(schedule.quotedPrice ?? "0");
-        }
-        else {
-          const hourlyRate = parseFloat(schedule.tradie.hourlyRate ?? "0");
-          const totalHours = schedule.durationDays * 8;
-          return acc + (hourlyRate * totalHours);
-        }
-      }, 0);
+    }, 0);
 
-      return totalSpend;
-    },
-    [project, milestoneId],
-  );
+    return totalSpend;
+  }, [project, milestoneId]);
   const [isPending, startTransition] = useTransition();
   const [formState, setFormState] = useState<MilestoneUpdateData>({
     ...initialFormState,
     status: status ?? "PENDING",
-    startDate: milestone?.startDate?.toISOString() ?? undefined,
+    startDate: milestone?.startDate
+      ? format(milestone.startDate, "yyyy-MM-dd")
+      : undefined,
     spend: spend,
   });
   const [fieldErrors, setFieldErrors] = useState<MilestoneUpdateErrors>({});
@@ -136,7 +138,10 @@ export default function UpdateMilestoneModal({
   const handleSubmit = async (data: MilestoneUpdateData) => {
     try {
       setSubmitError(null);
-      const validatedData = milestoneUpdateSchema.safeParse(data);
+      const validatedData = milestoneUpdateSchema.safeParse({
+        ...data,
+        spend: data.spend && data.spend > 0 ? data.spend : undefined,
+      });
       if (!validatedData.success) {
         const nextFieldErrors = validatedData.error.issues.reduce(
           (acc, issue) => {
@@ -152,7 +157,7 @@ export default function UpdateMilestoneModal({
           },
           {} as MilestoneUpdateErrors,
         );
-
+        console.log("Validation errors:", nextFieldErrors);
         setFieldErrors(nextFieldErrors);
         setSubmitError("Review the highlighted fields and try again.");
         return;
@@ -284,7 +289,7 @@ export default function UpdateMilestoneModal({
                     htmlFor="actualDate"
                     className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
                   >
-                    Actual Date
+                    Completed On
                   </Label>
                   <Input
                     id="actualDate"
@@ -313,18 +318,22 @@ export default function UpdateMilestoneModal({
                     htmlFor="spend"
                     className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
                   >
-                    Spent
+                    Money Spent
                   </Label>
                   <Input
                     id="spend"
                     type="text"
                     className={inputClassName}
-                    placeholder="Enter actual spend"
-                    value={currency.format(formState.spend ?? "0")}
-                    // onChange={(e) =>
-                    //   handleFormChange("spend", Number(e.target.value))
-                    // }
-                    disabled
+                    placeholder="Enter amount spent"
+                    value={
+                      formState.spend && formState.spend > 0
+                        ? currency.format(formState.spend)
+                        : ""
+                    }
+                    onChange={(e) =>
+                      handleFormChange("spend", parseCurrency(e.target.value))
+                    }
+                    disabled={spend > 0}
                     aria-invalid={Boolean(fieldErrors.spend)}
                     aria-describedby={
                       fieldErrors.spend ? "spend-error" : undefined

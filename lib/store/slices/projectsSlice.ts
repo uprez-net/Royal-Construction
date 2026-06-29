@@ -569,6 +569,24 @@ const projectsSlice = createSlice({
           const milestoneIndex = state.activeProject.milestones.findIndex((m) => m.id === action.meta.arg.milestoneId);
           if (milestoneIndex !== -1) {
             state.activeProject!.milestones[milestoneIndex] = { ...state.activeProject!.milestones[milestoneIndex], ...action.payload };
+            const parentId = state.activeProject!.milestones[milestoneIndex].parentId;
+            if (parentId && action.payload.status === "DONE") {
+              const allChildrenMilestonesNotCompleted = state.activeProject!.milestones.filter((m) => m.parentId === parentId && m.status !== "DONE");
+              if (allChildrenMilestonesNotCompleted.length === 0) {
+                const parentIndex = state.activeProject!.milestones.findIndex((m) => m.id === parentId);
+                const totalChildSpent = state.activeProject!.milestones.filter((m) => m.parentId === parentId).reduce((sum, m) => sum + (Number(m.spend) || 0), 0);
+                if (parentIndex !== -1) {
+                  state.activeProject!.milestones[parentIndex] = { ...state.activeProject!.milestones[parentIndex], status: "DONE", spend: totalChildSpent.toString(), actualDate: action.payload.actualDate };
+                  state.activeProject!.spent = (Number(state.activeProject!.spent) + totalChildSpent).toString();
+                }
+              }
+            }
+            if (parentId && action.payload.status === "ACTIVE") {
+              const parentIndex = state.activeProject!.milestones.findIndex((m) => m.id === parentId);
+              if (parentIndex !== -1 && state.activeProject!.milestones[parentIndex].status !== "ACTIVE") {
+                state.activeProject!.milestones[parentIndex] = { ...state.activeProject!.milestones[parentIndex], status: "ACTIVE", startDate: action.payload.startDate };
+              }
+            }
           }
         }
       })

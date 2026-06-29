@@ -207,8 +207,8 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
         <CardContent className="space-y-3 pt-5">
           {visualMilestones.map((milestone, index) => (
             <MilestoneCard
-              key={milestone.id}
-              prevMilestone={visualMilestones[index - 1]}
+              key={`milestone-${milestone.id}-${index}-${milestone.status}`}
+              prevMilestone={visualMilestones.find((m) => m.order === milestone.order - 1)}
               milestone={milestone}
               project={project}
               tradieAlertsByMilestone={tradieAlertsByMilestone}

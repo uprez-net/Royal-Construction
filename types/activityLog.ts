@@ -161,6 +161,36 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
         milestoneId: data.milestoneId,
     }),
+
+    milestoneStatusChanged: (data) => ({
+        id: uuidv4(),
+        type: "milestoneStatusChanged",
+        message: `Milestone ${data.milestoneName} status changed to ${data.newStatus}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+        milestoneId: data.milestoneId,
+    }),
+
+    newMilestonePhotoUploaded: (data) => ({
+        id: uuidv4(),
+        type: "newMilestonePhotoUploaded",
+        message: `${data.fileCount} photos uploaded for milestone ${data.milestoneName}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+        milestoneId: data.milestoneId,
+    }),
+
+    milestoneAdded: (data) => ({
+        id: uuidv4(),
+        type: "milestoneAdded",
+        message: `New Milestone ${data.milestoneName} added`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+        milestoneId: data.milestoneId,
+    }),
 };
 
 /**

@@ -17,8 +17,8 @@ export function ProjectStatCards() {
       {/* Contract Value */}
       <div className="rounded-xl border border-border/70 bg-white p-5 shadow-sm transition-all hover:shadow-md">
         <div className="mb-2 flex items-start justify-between">
-          <div className="flex size-[44px] items-center justify-center rounded-xl bg-teal-600 text-xl text-white">
-            <Wallet2 className="size-[20px]" />
+          <div className="flex size-11 items-center justify-center rounded-xl bg-teal-600 text-xl text-white">
+            <Wallet2 className="size-5" />
           </div>
           <div className="inline-flex items-center gap-1 rounded-md bg-green-600/10 px-2 py-0.5 text-[10.5px] font-bold text-green-700">
             <ArrowUpRight className="size-3" />
@@ -34,8 +34,8 @@ export function ProjectStatCards() {
       {/* Spent */}
       <div className="rounded-xl border border-border/70 bg-white p-5 shadow-sm transition-all hover:shadow-md">
         <div className="mb-2 flex items-start justify-between">
-          <div className="flex size-[44px] items-center justify-center rounded-xl bg-[#E8730C] text-xl text-white">
-            <ReceiptText className="size-[20px]" />
+          <div className="flex size-11 items-center justify-center rounded-xl bg-[#E8730C] text-xl text-white">
+            <ReceiptText className="size-5" />
           </div>
           <div className="text-[11px] font-bold text-muted-foreground">
             {budgetSummary.spentPercent}%
@@ -50,8 +50,8 @@ export function ProjectStatCards() {
       {/* Remaining */}
       <div className="rounded-xl border border-border/70 bg-white p-5 shadow-sm transition-all hover:shadow-md">
         <div className="mb-2 flex items-start justify-between">
-          <div className="flex size-[44px] items-center justify-center rounded-xl bg-green-600 text-xl text-white">
-            <PiggyBank className="size-[20px]" />
+          <div className="flex size-11 items-center justify-center rounded-xl bg-green-600 text-xl text-white">
+            <PiggyBank className="size-5" />
           </div>
         </div>
         <div className="mt-2 text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
@@ -63,8 +63,8 @@ export function ProjectStatCards() {
       {/* Workers */}
       <div className="rounded-xl border border-border/70 bg-white p-5 shadow-sm transition-all hover:shadow-md">
         <div className="mb-2 flex items-start justify-between">
-          <div className="flex size-[44px] items-center justify-center rounded-xl bg-blue-600 text-xl text-white">
-            <Users className="size-[20px]" />
+          <div className="flex size-11 items-center justify-center rounded-xl bg-blue-600 text-xl text-white">
+            <Users className="size-5" />
           </div>
           <div className="inline-flex items-center rounded-full bg-green-600/10 px-2 py-0.5 text-[9px] font-bold text-green-700">
             Live

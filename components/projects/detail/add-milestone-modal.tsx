@@ -123,7 +123,7 @@ export default function AddMilestoneModal({
       await dispatch(
         addProjectMilestone({
           ...validatedData.data,
-          targetDate: new Date(validatedData.data.targetDate).toISOString(),
+          // targetDate: new Date(validatedData.data.targetDate).toISOString(),
           projectId,
         }),
       ).unwrap();

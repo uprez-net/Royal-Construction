@@ -18,12 +18,13 @@ export function MilestoneActionGroup({
   onSendInvoice: () => void;
 }) {
   const isFirstMilestone = milestone.order === 1;
+  const isChildOfFirstMilestone = prevMilestone?.order === 1 && milestone.parentId === prevMilestone.id;
   const hasChildren = milestone.childrenMilestones.length > 0;
 
   const canStart =
     milestone.status === "PENDING" &&
     !hasChildren &&
-    (isFirstMilestone || prevMilestone?.status === "DONE");
+    (isFirstMilestone || isChildOfFirstMilestone || prevMilestone?.status === "DONE");
 
   const isActive = milestone.status === "ACTIVE";
   const isDone = milestone.status === "DONE";
@@ -45,10 +46,12 @@ export function MilestoneActionGroup({
           Add Photo
         </Button>
 
-        <Button size="sm" onClick={() => onStatusUpdate(milestone.id)}>
-          <FilePenLine className="mr-1 h-4 w-4" />
-          Update Status
-        </Button>
+        {!hasChildren && (
+          <Button size="sm" onClick={() => onStatusUpdate(milestone.id)}>
+            <FilePenLine className="mr-1 h-4 w-4" />
+            Update Status
+          </Button>
+        )}
       </div>
     );
   }

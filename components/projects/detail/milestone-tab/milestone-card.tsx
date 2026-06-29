@@ -304,8 +304,8 @@ export function MilestoneCard({
                 <div className="space-y-2">
                   {milestone.childrenMilestones.map((child, index) => (
                     <MilestoneCard
-                      key={`milestone-${child.id}-${index}`}
-                      prevMilestone={prevMilestone}
+                      key={`milestone-${child.id}-${index}-${child.status}`}
+                      prevMilestone={milestone.childrenMilestones.find((m) => m.order === child.order - 1) ?? milestone}
                       milestone={child}
                       project={project}
                       depth={depth + 1}
