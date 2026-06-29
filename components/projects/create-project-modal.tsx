@@ -204,7 +204,7 @@ export function CreateProjectModal({
     } catch (error) {
       console.error("Error creating project:", error);
       toast.error(
-        `Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `${error}`
       );
     }
   };
