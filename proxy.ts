@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth"
+import { getUserByClerkId } from "./lib/data/user";
 
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
 
@@ -41,10 +42,10 @@ export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request) && !isAuthRoute(request)) await auth.protect()
 
   const { userId, sessionClaims } = await auth()
-  if (isAdminRoute(request) && userId !== ADMIN_USER_ID) {
+  if (isAdminRoute(request) && (await getUserByClerkId(userId ?? ""))?.id !== ADMIN_USER_ID) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-  if(sessionClaims?.public_metadata.role === "GUEST") {
+  if (sessionClaims?.public_metadata.role === "GUEST") {
     return NextResponse.redirect(new URL("/guest", request.url))
   }
   if (isAuthRoute(request) && userId) {
