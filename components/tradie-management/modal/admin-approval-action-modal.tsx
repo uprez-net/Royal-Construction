@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import { PriceChangeApprovalForm } from "./forms/PriceChangeApprovalForm";
 import { TradieRemovalApprovalForm } from "./forms/TradieRemovalApprovalForm";
 import { IncidentResolutionApprovalForm } from "./forms/IncidentResolutionApprovalForm";
+import { ScheduleApprovalForm } from "./forms/ScheduleApprovalForm";
 
 interface AdminApprovalActionModalProps {
   open: boolean;
@@ -55,6 +56,11 @@ export function AdminApprovalActionModal({
       case TradieApprovalActionType.INCIDENT_RESOLUTION:
         return (
           <IncidentResolutionApprovalForm approval={data} onSuccess={onClose} />
+        );
+      
+      case TradieApprovalActionType.SCHEDULE_APPROVAL:
+        return (
+          <ScheduleApprovalForm approval={data} onSuccess={onClose} />
         );
 
       default:

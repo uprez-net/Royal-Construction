@@ -95,41 +95,66 @@ export interface ApprovalInput {
     payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload
 }
 
-export interface SafeTradieApproval extends Omit<TradieApproval, "requestedBy"> {
+export interface ScheduleApprovalJsonPayload {
+    scheduleId: string;
+    projectId: string;
+    projectName: string;
+    milestoneId?: string;
+    milestoneName: string;
+    scheduledDate: string;
+    durationDays: number;
+    cost: string;
+}
+
+export interface PriceUpdateJsonPayload {
+    newHourlyRate: number;
+}
+
+export interface IncidentReportJsonPayload {
+    incidentId: string;
+    incidentType: string;
+    incidentSeverity: IncidentSeverity;
+    incidentDescription: string;
+}
+
+export type TradieApprovalPayload = ScheduleApprovalJsonPayload | PriceUpdateJsonPayload | IncidentReportJsonPayload | undefined;
+
+export interface SafeTradieApproval extends Omit<TradieApproval, "requestedBy" | "updationData"> {
     tradie: SafeTradie;
-    requestBy: string; 
+    requestBy: string;
+    updationData: TradieApprovalPayload;
 }
 
 export const TRADIE_SCHEDULE_STATE_MACHINE: Record<TradieScheduleStatus, TradieScheduleStatus[]> = {
-  [TradieScheduleStatus.PENDING]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.NO_RESPONSE,
-    TradieScheduleStatus.PENDING_RESPONSE,
-  ],
-  [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
-    TradieScheduleStatus.CONFIRMED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.PENDING_RESPONSE]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.CONFIRMED]: [
-    TradieScheduleStatus.COMPLETED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.NO_RESPONSE]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.DECLINED]: [],
-  [TradieScheduleStatus.COMPLETED]: [],
-  [TradieScheduleStatus.AWAITING_QUOTE]: [
-    TradieScheduleStatus.QUOTE_RECEIVED,
-    TradieScheduleStatus.DECLINED,
-  ],
-  [TradieScheduleStatus.QUOTE_RECEIVED]: [
-    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-    TradieScheduleStatus.DECLINED,
-  ],
+    [TradieScheduleStatus.PENDING]: [
+        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        TradieScheduleStatus.NO_RESPONSE,
+        TradieScheduleStatus.PENDING_RESPONSE,
+    ],
+    [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
+        TradieScheduleStatus.CONFIRMED,
+        TradieScheduleStatus.DECLINED,
+    ],
+    [TradieScheduleStatus.PENDING_RESPONSE]: [
+        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        TradieScheduleStatus.DECLINED,
+    ],
+    [TradieScheduleStatus.CONFIRMED]: [
+        TradieScheduleStatus.COMPLETED,
+        TradieScheduleStatus.DECLINED,
+    ],
+    [TradieScheduleStatus.NO_RESPONSE]: [
+        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        TradieScheduleStatus.DECLINED,
+    ],
+    [TradieScheduleStatus.DECLINED]: [],
+    [TradieScheduleStatus.COMPLETED]: [],
+    [TradieScheduleStatus.AWAITING_QUOTE]: [
+        TradieScheduleStatus.QUOTE_RECEIVED,
+        TradieScheduleStatus.DECLINED,
+    ],
+    [TradieScheduleStatus.QUOTE_RECEIVED]: [
+        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        TradieScheduleStatus.DECLINED,
+    ],
 }

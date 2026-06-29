@@ -1,18 +1,22 @@
 'use server';
 import prisma from "@/lib/prisma";
-import { TradieSchedule, TradieScheduleStatus, Tradie, Project, User, Milestone } from "@prisma/client";
+import { TradieSchedule, TradieScheduleStatus, Tradie, Project, User, Milestone, TradieApprovalActionType } from "@prisma/client";
 import type { CreateTradieScheduleInput, UpdateTradieScheduleInput } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
 import { createNotification } from "@/types/notification";
-import { dateFormat } from "@/utils/formatters";
+import { currency, dateFormat } from "@/utils/formatters";
 import { after } from "next/server"
 import { TradieScheduleListItem } from "@/types/project";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
+import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
+import { createActivityLogEntry } from "@/types/activityLog";
+import { logAction } from "./actionLog";
+import { calculateScheduleTotalCost as calculateTotalCost } from "@/utils/calculations";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
   tradie: Tradie;
@@ -91,6 +95,8 @@ const userHasAccessToSchedule = async (projectId: string) => {
   if (project.siteManagerId !== user.id && user.id !== ADMIN_USER_ID) {
     throw new Error("User does not have access to this schedule");
   }
+
+  return user.id;
 }
 
 /**
@@ -135,6 +141,19 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
         tradieTrade: schedule.tradie.trade,
         scheduleDate: dateFormat.format(schedule.scheduledDate),
       });
+      const activityLogEntry = createActivityLogEntry("tradieScheduleCreated", {
+        projectId: schedule.projectId,
+        scheduleId: schedule.id,
+        tradieId: schedule.tradieId,
+        tradieName: schedule.tradie.name,
+        trade: schedule.tradie.trade,
+        scheduleDate: dateFormat.format(schedule.scheduledDate),
+        durationDays: schedule.durationDays,
+        cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.hourlyRate?.toString() ?? "0"), schedule.durationDays),
+        milestoneId: schedule.milestoneId ?? undefined,
+        milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+      });
+      await logAction(activityLogEntry);
       await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
       const emailContent = generateTradieOutreachEmail(result);
       await sendEmail({
@@ -195,25 +214,37 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
         revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
       }
       for (const schedule of schedules) {
-        if (schedule.project.siteManagerId) {
-          const siteManagerId = schedule.project.siteManagerId;
-          const notificationPayload = createNotification("tradieScheduleCreated", {
-            tradieName: schedule.tradie.name,
-            projectName: schedule.project.name,
-            milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
-            projectId: schedule.projectId,
-            tradieTrade: schedule.tradie.trade,
-            scheduleDate: dateFormat.format(schedule.scheduledDate),
-          });
-          await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
-          const emailContent = generateTradieOutreachEmail(convertToTradieScheduleListItem(schedule));
-          await sendEmail({
-            to: schedule.tradie.email,
-            subject: emailContent.subject,
-            body: emailContent.html,
-          });
-        }
+        const siteManagerId = schedule.project.siteManagerId;
+        const notificationPayload = createNotification("tradieScheduleCreated", {
+          tradieName: schedule.tradie.name,
+          projectName: schedule.project.name,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+          projectId: schedule.projectId,
+          tradieTrade: schedule.tradie.trade,
+          scheduleDate: dateFormat.format(schedule.scheduledDate),
+        });
+        const activityLogEntry = createActivityLogEntry("tradieScheduleCreated", {
+          projectId: schedule.projectId,
+          scheduleId: schedule.id,
+          tradieId: schedule.tradieId,
+          tradieName: schedule.tradie.name,
+          trade: schedule.tradie.trade,
+          scheduleDate: dateFormat.format(schedule.scheduledDate),
+          durationDays: schedule.durationDays,
+          cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.hourlyRate?.toString() ?? "0"), schedule.durationDays),
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+        });
+        await logAction(activityLogEntry);
+        await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+        const emailContent = generateTradieOutreachEmail(convertToTradieScheduleListItem(schedule));
+        await sendEmail({
+          to: schedule.tradie.email,
+          subject: emailContent.subject,
+          body: emailContent.html,
+        });
       }
+
     });
 
     return schedules.map(convertToTradieScheduleListItem);
@@ -247,7 +278,10 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
     if (!existingSchedule) {
       throw new Error("Schedule not found");
     }
-    await userHasAccessToSchedule(existingSchedule.projectId);
+    const userId = await userHasAccessToSchedule(existingSchedule.projectId);
+    if (!TRADIE_SCHEDULE_STATE_MACHINE[existingSchedule.status].includes(updates.status)) {
+      throw new Error(`Invalid status transition from ${existingSchedule.status} to ${updates.status}`);
+    }
     const schedule = await prisma.tradieSchedule.update({
       where: { id: scheduleId },
       data: { status: updates.status },
@@ -259,18 +293,153 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
-      const statusLabel = schedule.status.split("_").map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(" ");
-      const siteManagerId = schedule.project.siteManagerId;
-      const notificationPayload = createNotification("tradieScheduleUpdated", {
-        tradieName: schedule.tradie.name,
-        projectName: schedule.project.name,
-        milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
-        projectId: schedule.projectId,
-        tradieTrade: schedule.tradie.trade,
-        scheduleDate: dateFormat.format(schedule.scheduledDate),
-        status: statusLabel,
-      });
-      await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+      const totalCost = calculateTotalCost(parseFloat(schedule.tradie.hourlyRate?.toString() ?? "0"), schedule.durationDays);
+
+      if (updates.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL) {
+        const approval = await prisma.tradieApproval.create({
+          data: {
+            tradieId: schedule.tradieId,
+            actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+            requestedBy: userId,
+            reason: `${schedule.tradie.name} has confirmed their availability for the scheduled task on ${dateFormat.format(schedule.scheduledDate)}. Please review and approve.`,
+            updationData: {
+              scheduleId: schedule.id,
+              projectId: schedule.projectId,
+              projectName: schedule.project.name,
+              milestoneId: schedule.milestoneId ?? undefined,
+              milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+              scheduledDate: dateFormat.format(schedule.scheduledDate),
+              durationDays: schedule.durationDays,
+              cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+            } satisfies ScheduleApprovalJsonPayload,
+          },
+          select: {
+            id: true,
+          }
+        });
+        revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+        revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
+        const notificationPayload = createNotification('tradieScheduleApproval', {
+          approvalId: approval.id,
+          scheduleId: schedule.id,
+          projectId: schedule.projectId,
+          projectName: schedule.project.name,
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+          scheduledDate: dateFormat.format(schedule.scheduledDate),
+          durationDays: schedule.durationDays,
+          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          tradieId: schedule.tradieId,
+          tradieName: schedule.tradie.name,
+          trade: schedule.tradie.trade,
+        });
+        const activityLogEntry = createActivityLogEntry('tradieScheduleAvailable', {
+          projectId: schedule.projectId,
+          scheduleId: schedule.id,
+          tradieId: schedule.tradieId,
+          tradieName: schedule.tradie.name,
+          trade: schedule.tradie.trade,
+          scheduleDate: dateFormat.format(schedule.scheduledDate),
+          durationDays: schedule.durationDays,
+          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+        });
+        await logAction(activityLogEntry);
+        await triggerNotification([ADMIN_USER_ID], notificationPayload);
+      }
+      else if (updates.status === TradieScheduleStatus.QUOTE_RECEIVED) {
+        const activityLogEntry = createActivityLogEntry("tradieScheduleQuoted", {
+          projectId: schedule.projectId,
+          milestoneId: schedule.milestoneId ?? undefined,
+          scheduleId: schedule.id,
+          tradieId: schedule.tradieId,
+          tradieName: schedule.tradie.name,
+          trade: schedule.tradie.trade,
+          scheduleDate: dateFormat.format(schedule.scheduledDate),
+          durationDays: schedule.durationDays,
+          quote: schedule.quotedPrice ?? totalCost,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+        });
+        await logAction(activityLogEntry);
+        await updateTradieSchedule(schedule.id, { status: TradieScheduleStatus.AWAITING_ADMIN_APPROVAL });
+      }
+      else if (updates.status === TradieScheduleStatus.CONFIRMED) {
+        const activityLogPayload = createActivityLogEntry('tradieScheduleUpdated', {
+          projectId: schedule.projectId,
+          scheduleId: schedule.id,
+          tradieId: schedule.tradieId,
+          tradieName: schedule.tradie.name,
+          trade: schedule.tradie.trade,
+          scheduleDate: dateFormat.format(schedule.scheduledDate),
+          durationDays: schedule.durationDays,
+          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+          approved: true,
+        });
+        const notificationPayload = createNotification('tradieScheduleApproved', {
+          approvalId: "approval.id",
+          scheduleId: schedule.id,
+          projectId: schedule.projectId,
+          projectName: schedule.project.name,
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+          scheduledDate: dateFormat.format(schedule.scheduledDate),
+          durationDays: schedule.durationDays,
+          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          tradieId: schedule.tradieId,
+          tradieName: schedule.tradie.name,
+          trade: schedule.tradie.trade,
+        });
+        await logAction(activityLogPayload);
+        await triggerNotification(schedule.project.siteManagerId ? [schedule.project.siteManagerId] : [], notificationPayload);
+      }
+      else if (updates.status === TradieScheduleStatus.DECLINED) {
+        const activityLogPayload = createActivityLogEntry('tradieScheduleUpdated', {
+          projectId: schedule.projectId,
+          scheduleId: schedule.id,
+          tradieId: schedule.tradieId,
+          tradieName: schedule.tradie.name,
+          trade: schedule.tradie.trade,
+          scheduleDate: dateFormat.format(schedule.scheduledDate),
+          durationDays: schedule.durationDays,
+          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+          approved: false,
+        });
+        const notificationPayload = createNotification('tradieScheduleRejected', {
+          approvalId: "approval.id",
+          scheduleId: schedule.id,
+          projectId: schedule.projectId,
+          projectName: schedule.project.name,
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+          scheduledDate: dateFormat.format(schedule.scheduledDate),
+          durationDays: schedule.durationDays,
+          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          tradieId: schedule.tradieId,
+          tradieName: schedule.tradie.name,
+          trade: schedule.tradie.trade,
+        });
+        await triggerNotification(schedule.project.siteManagerId ? [schedule.project.siteManagerId] : [], notificationPayload);
+        await logAction(activityLogPayload);
+      }
+      else {
+        const statusLabel = schedule.status.split("_").map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(" ");
+        const siteManagerId = schedule.project.siteManagerId;
+        const notificationPayload = createNotification("tradieScheduleUpdated", {
+          tradieName: schedule.tradie.name,
+          projectName: schedule.project.name,
+          milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
+          projectId: schedule.projectId,
+          tradieTrade: schedule.tradie.trade,
+          scheduleDate: dateFormat.format(schedule.scheduledDate),
+          status: statusLabel,
+        });
+        await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+      }
     });
 
     return { schedule: convertToTradieScheduleListItem(schedule), requiresReplacement };

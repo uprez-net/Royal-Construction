@@ -4,6 +4,7 @@ import { revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
+import { after } from "next/server"
 
 export async function createProjectUpdate(input: {
   projectId: string;
@@ -46,17 +47,19 @@ export async function createProjectUpdate(input: {
     }
   });
 
-  if (updatedMilestone) {
-    const notificationPayload = createNotification("projectSiteUpdates", {
-      projectId: updatedMilestone.projectId,
-      projectName: updatedMilestone.project.name,
-      milestoneName: updatedMilestone.name,
-      updateNote: notes,
-    });
-    await triggerNotification(updatedMilestone.project.siteManagerId ? [updatedMilestone.project.siteManagerId] : [], notificationPayload);
-  }
+  after(async () => {
+    if (updatedMilestone) {
+      const notificationPayload = createNotification("projectSiteUpdates", {
+        projectId: updatedMilestone.projectId,
+        projectName: updatedMilestone.project.name,
+        milestoneName: updatedMilestone.name,
+        updateNote: notes,
+      });
+      await triggerNotification(updatedMilestone.project.siteManagerId ? [updatedMilestone.project.siteManagerId] : [], notificationPayload);
+    }
 
-  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+  })
 
   return {
     milestoneWasPhotoRequired: Boolean(milestone?.isPhotoRequired),

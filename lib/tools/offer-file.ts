@@ -20,7 +20,6 @@ const offerFileContentAppendSchema = offerFileContentSchema.extend({
 
     leadId: z
         .number()
-        .optional()
         .describe(
             "Lead identifier associated with this offer. Typically provided during offer creation and rarely changed afterwards."
         ),

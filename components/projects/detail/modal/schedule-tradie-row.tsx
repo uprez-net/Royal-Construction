@@ -37,7 +37,7 @@ export function TradieScheduleRow({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-3 grid-cols-1 gap-4">
         <div className={cn("space-y-2", errors.tradeCategory && "text-destructive")}>
           <Label>Trade Category</Label>
 
