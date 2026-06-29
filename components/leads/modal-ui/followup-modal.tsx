@@ -31,7 +31,7 @@ export function FollowupModal({
     if (!date) return;
     setSaving(true);
     try {
-      const tempLead = { ...lead, followupDate: date, followupTime: time };
+      //const tempLead = { ...lead, followupDate: date, followupTime: time };
       // const success = await createCalendarEventIfValid(tempLead, showToast);
       // if (!success) {
       //   showToast("Calendar event could not be created", "error");
