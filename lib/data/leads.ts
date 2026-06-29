@@ -3,16 +3,13 @@ import prisma from "@/lib/prisma";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage, Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
-import type { Lead, LeadsStats, Lead as UiLead } from "@/lib/leads/types";
+import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
 import { Prisma, ChatSession } from "@prisma/client";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
-import { ClientSecretCredential } from "@azure/identity";
-import { render } from "@react-email/components";
-import FollowUpStageMeeting from "../graph/Email/followupstageMeetingcreation";
 import {
   format,
   subMonths,

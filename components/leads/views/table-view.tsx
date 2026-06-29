@@ -31,6 +31,10 @@ interface TableViewProps {
   onLeadDelete: (leadId: number) => void;
   activeMetric: string | null;
   onActiveMetricChange: (metric: string | null) => void;
+  user: {
+    clerkUserId: string | null;
+    fullName: string | null;
+  };
 }
 
 export default function TableView({
@@ -40,6 +44,7 @@ export default function TableView({
   onLeadDelete,
   activeMetric,
   onActiveMetricChange,
+  user
 }: TableViewProps) {
   /* ── Shared hooks ── */
   const { toasts, showToast, dismissToast } = useToast();
@@ -80,7 +85,7 @@ export default function TableView({
   };
 
   const redirectToScheduleMeeting = (lead: Lead) => {
-    const url = `/book-consultation?name=${lead.name}&email=${lead.email}&id=${lead.id}`;
+    const url = `/book-consultation?TeammateName=${user?.fullName ?? ''}&name=${lead.name}&email=${lead.email}&id=${lead.id}`;
     window.location.assign(url);
   }
 

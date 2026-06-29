@@ -40,6 +40,7 @@ import { useSearchParams } from "next/navigation";
 import TableView from "./views/table-view";
 import FollowupsView from "./views/followups-view";
 import AnalyticsView from "./views/analytics-view";
+import { useUser } from "@clerk/nextjs";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -47,6 +48,7 @@ export default function Leads() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("query");
   const initialStatus = searchParams.get("status");
+  const { user, isLoaded } = useUser();
 
   /* ── Hooks ── */
   const {
@@ -291,6 +293,14 @@ export default function Leads() {
     );
   }
 
+  if (isLoaded && !leads) {
+    return (
+      <div className="leads-loading-container">
+        <div className="leads-loading-message">Loading leads...</div>
+      </div>
+    );
+  }
+
   /* ── Render ── */
   return (
     <div className="leads-container space-y-6">
@@ -468,6 +478,10 @@ export default function Leads() {
                   onLeadDelete={removeLeadFromList}
                   activeMetric={activeMetric}
                   onActiveMetricChange={handleMetricClick}
+                  user={{
+                    clerkUserId: user?.id ?? null,
+                    fullName: user?.fullName ?? null,
+                  }}
                 />
               )}
               {activeTab === "followups" && (
