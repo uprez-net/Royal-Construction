@@ -16,7 +16,6 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import { createNotification } from "@/types/notification";
 import { logAction } from "./actionLog";
 import { triggerNotification } from "../notification/novu";
-import { af } from "date-fns/locale";
 
 
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
@@ -192,10 +191,10 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
     //   dueDate: dateFormat.format(addWeeks(new Date(), 2)),
     //   milestoneName: milestone.name,
     // });
-    // normalizedUpdateData = {
-    //   ...normalizedUpdateData,
-    //   invoiceId,
-    // };
+    normalizedUpdateData = {
+      ...normalizedUpdateData,
+      invoiceId: null,
+    };
   }
   const updated = await prisma.milestone.update({ where: { id: milestoneId }, data: normalizedUpdateData });
 
