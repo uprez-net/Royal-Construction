@@ -411,7 +411,7 @@ const projectsSlice = createSlice({
       .addCase(createProject.rejected, (state, action) => {
         state.mutations.createProject = {
           status: "failed",
-          error: action.payload ?? action.error.message ?? "Unable to create project",
+          error: action.error.message ?? "Unable to create project",
         };
       })
       .addCase(createVariation.pending, (state) => {
@@ -426,7 +426,7 @@ const projectsSlice = createSlice({
       .addCase(createVariation.rejected, (state, action) => {
         state.mutations.createVariation = {
           status: "failed",
-          error: action.payload ?? action.error.message ?? "Unable to create variation",
+          error: action.error.message ?? "Unable to create variation",
         };
       })
       .addCase(addProjectUpdate.pending, (state) => {
@@ -439,7 +439,7 @@ const projectsSlice = createSlice({
       .addCase(addProjectUpdate.rejected, (state, action) => {
         state.mutations.addUpdate = {
           status: "failed",
-          error: action.payload ?? action.error.message ?? "Unable to add site update",
+          error: action.error.message ?? "Unable to add site update",
         };
       })
       .addCase(addMaterialToProject.pending, (state) => {
@@ -454,7 +454,7 @@ const projectsSlice = createSlice({
       .addCase(addMaterialToProject.rejected, (state, action) => {
         state.mutations.addMaterial = {
           status: "failed",
-          error: action.payload ?? action.error.message ?? "Unable to add material to project",
+          error: action.error.message ?? "Unable to add material to project",
         };
       })
       .addCase(createTradieScheduleForProject.pending, (state) => {

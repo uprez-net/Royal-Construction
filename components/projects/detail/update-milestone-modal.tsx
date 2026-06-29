@@ -51,7 +51,7 @@ const statusOptions: { label: string; value: MilestoneStatus }[] = [
 
 const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
   PENDING: ["ACTIVE"],
-  ACTIVE: ["DONE", "PENDING"],
+  ACTIVE: ["DONE"],
   DONE: [],
 };
 

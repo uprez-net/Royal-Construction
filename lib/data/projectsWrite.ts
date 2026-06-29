@@ -263,6 +263,20 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
     return newProjectDetail;
   } catch (error) {
     console.error("Error creating project from lead:", error);
-    throw error;
+    if (error instanceof Error) {
+      switch (error.message) {
+        case "LEAD_NOT_FOUND":
+          throw new Error(`Lead with ID ${leadId} not found.`);
+        case "PROJECT_ALREADY_EXISTS_FOR_LEAD":
+          throw new Error(`A project has already been created for lead ID ${leadId}.`);
+        case "PROJECT_DETAIL_NOT_FOUND":
+          throw new Error(`Project was created but could not be retrieved for lead ID ${leadId}.`);
+        default:
+          throw new Error(`An unexpected error occurred while creating the project: ${error.message}`);
+      }
+    }
+    else {
+      throw new Error("An unknown error occurred while creating the project.");
+    }
   }
 }
