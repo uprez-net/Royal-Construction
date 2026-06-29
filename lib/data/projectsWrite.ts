@@ -15,6 +15,7 @@ import { handleProjectSpecsGeneration } from "../agent/projectCreationAgent";
 import { createLeadProjectInferencePrompt } from "../agent/project-prompt";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
+import { Prisma } from "@prisma/client";
 
 /**
  * Creates a new project from manually entered project data.
@@ -213,7 +214,7 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
           description: lead.notes,
           location: address,
           council: council,
-          totalBudget: projectBudget,
+          totalBudget: new Prisma.Decimal(projectBudget),
           lotSize: String(lotSize),
           startDate: new Date(startDate),
           estimatedEndDate: new Date(estimatedEndDate),

@@ -11,7 +11,7 @@ const MODEL_NAME = "google/gemini-2.5-flash" as const;
 
 const projectSpecsSchema = z.object({
     projectType: z.string().describe("The type of the project, e.g., granny flat, extension, etc."),
-    projectBudget: z.string().describe("The budget for the project, e.g., $50,000"),
+    projectBudget: z.number().describe("The budget for the project should not be a range should be a specific amount, e.g., 50,000"),
     projectRequirements: z.array(z.string()).describe("A list of specific requirements or features for the project, e.g., 2 bedrooms, 1 bathroom, open-plan kitchen."),
 });
 

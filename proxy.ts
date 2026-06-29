@@ -42,22 +42,13 @@ export default clerkMiddleware(async (auth, request) => {
 
   const { userId, sessionClaims } = await auth()
   if (isAdminRoute(request) && userId !== ADMIN_USER_ID) {
-    return new Response(null, {
-      status: 302,
-      headers: { location: "/dashboard" },
-    })
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   if(sessionClaims?.public_metadata.role === "GUEST") {
-    return new Response(null, {
-      status: 302,
-      headers: { location: "/guest" },
-    })
+    return NextResponse.redirect(new URL("/guest", request.url))
   }
   if (isAuthRoute(request) && userId) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: "/dashboard" },
-    })
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 })
 
