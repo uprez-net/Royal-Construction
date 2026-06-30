@@ -93,6 +93,12 @@ function handleValidationToken(request: Request): Response | null {
   return textResponse(200, validationToken);
 }
 
+const LEAD_SUBJECT_LINES = new Set([
+  '"i want to build" form submission',
+  'get in touch form submission',
+  'general enquiry form submission',
+]);
+
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
   if (validation) {
@@ -256,6 +262,19 @@ export async function POST(request: Request): Promise<Response> {
                 body: content,
                 sentAt: new Date(message.receivedDateTime),
               });
+              continue;
+            }
+
+            // Check if the message subject matches any of the predefined lead subject lines
+            const normalizedSubject = (message.subject ?? "")
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, " ");
+
+            if (!LEAD_SUBJECT_LINES.has(normalizedSubject)) {
+              console.log(
+                `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
+              );
               continue;
             }
 
