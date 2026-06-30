@@ -431,22 +431,22 @@ export const base64ToBlob = (base64: string) => {
  * // { total: 120, trendDelta: 20 }
  */
 export function calculateTrend(
-    current: number,
-    previous: number
+  current: number,
+  previous: number
 ): DataPoint {
-    if (previous === 0) {
-        return {
-            total: current,
-            trendDelta: current > 0 ? 100 : 0,
-        };
-    }
-
+  if (previous === 0) {
     return {
-        total: current,
-        trendDelta: Number(
-            (((current - previous) / previous) * 100).toFixed(1)
-        ),
+      total: current,
+      trendDelta: current > 0 ? 100 : 0,
     };
+  }
+
+  return {
+    total: current,
+    trendDelta: Number(
+      (((current - previous) / previous) * 100).toFixed(1)
+    ),
+  };
 }
 
 /**
