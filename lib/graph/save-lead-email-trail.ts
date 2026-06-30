@@ -1,8 +1,9 @@
 'use server';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { getAllEmailThreads } from '@/utils/email-parser';
+import { getAllEmailThreads, parseEmailDate } from '@/utils/email-parser';
 import { generateEmailChecksum } from '@/utils/generator';
+import { dataTimeFormat } from '@/utils/formatters';
 
 interface SaveLeadEmailTrailParams {
     from: string;
@@ -59,14 +60,15 @@ export async function saveLeadEmailTrail({ from, to, subject, body, sentAt }: Sa
         }
         const createManyData: Prisma.LeadEmailsCreateManyInput[] = [];
         for (const thread of threads) {
-            const checksum = await generateEmailChecksum(thread.subject, thread.body, from);
+            const persistedSubject = thread.subject.trim() || subject;
+            const checksum = await generateEmailChecksum(persistedSubject, thread.body, from, thread.sentAt);
             createManyData.push({
                 leadId: leadId.id,
                 emailTo: to,
-                subject: thread.subject,
+                subject: persistedSubject,
                 body: thread.body,
                 checksum: checksum,
-                sentAt: sentAt,
+                sentAt: parseEmailDate(thread.sentAt) ?? new Date(sentAt),
                 emailFrom: from,
             });
         }

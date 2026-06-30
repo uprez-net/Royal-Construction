@@ -23,6 +23,7 @@ import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
 import { FollowupModal } from "@/components/leads/modal-ui/followup-modal";
 import { AssignedModal } from "@/components/leads/modal-ui/assigned-modal";
 import { ToastContainer, useToast } from "@/components/common/use-toast";
+import type { LeadEmails } from "@prisma/client";
 
 interface TableViewProps {
   loading: boolean;
@@ -31,6 +32,7 @@ interface TableViewProps {
   onLeadDelete: (leadId: number) => void;
   activeMetric: string | null;
   onActiveMetricChange: (metric: string | null) => void;
+  appendEmailToLead: (leadId: number, email: LeadEmails) => void;
   user: {
     clerkUserId: string | null;
     fullName: string | null;
@@ -44,7 +46,8 @@ export default function TableView({
   onLeadDelete,
   activeMetric,
   onActiveMetricChange,
-  user
+  user,
+  appendEmailToLead
 }: TableViewProps) {
   /* ── Shared hooks ── */
   const { toasts, showToast, dismissToast } = useToast();
@@ -186,7 +189,7 @@ export default function TableView({
                           {!lead.followupDate || !lead.followupTime ? (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold-light)] hover:text-[color:var(--royal-gold)]"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setFollowupLead(lead);
@@ -198,7 +201,7 @@ export default function TableView({
                             </button>
                           ) : (
                             <span
-                              className={`followup-date-text cursor-pointer transition-colors hover:text-[color:var(--royal-gold)] ${lead.urgent ? "followup-urgent text-[color:var(--destructive)] font-semibold hover:text-[color:var(--destructive)]" : ""}`}
+                              className={`followup-date-text cursor-pointer transition-colors hover:text-royal-gold ${lead.urgent ? "followup-urgent text-destructive font-semibold hover:text-destructive" : ""}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setFollowupLead(lead);
@@ -215,7 +218,7 @@ export default function TableView({
                           {!lead.assignedId ? (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold-light)] hover:text-[color:var(--royal-gold)]"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setAssignedLead(lead);
@@ -227,7 +230,7 @@ export default function TableView({
                             </button>
                           ) : (
                             <span
-                              className="assigned-name cursor-pointer transition-colors hover:text-[color:var(--royal-gold)]"
+                              className="assigned-name cursor-pointer transition-colors hover:text-royal-gold"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setAssignedLead(lead);
@@ -438,6 +441,7 @@ export default function TableView({
           onDeleteClick={(lead) => setLeadToDelete(lead)}
           showToast={showToast}
           availableUsers={availableUsers}
+          appendEmailToLead={appendEmailToLead}
         />
       )}
 

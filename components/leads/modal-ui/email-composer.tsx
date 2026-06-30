@@ -3,15 +3,13 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Loader2, Mail, Send, X } from "lucide-react";
 import { toast } from "sonner";
-
 import { sendLeadEmail } from "@/lib/data/leads";
-import { useLeadsData } from "@/hooks/use-leads-data";
-
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { LeadEmails } from "@prisma/client";
 
 interface LeadEmailComposerProps {
   leadId: number;
@@ -20,6 +18,7 @@ interface LeadEmailComposerProps {
   defaultSubject?: string;
   defaultBody?: string;
   onSent?: () => void;
+  appendEmailToLead: (leadId: number, email: LeadEmails) => void;
 }
 
 export function LeadEmailComposer({
@@ -28,10 +27,9 @@ export function LeadEmailComposer({
   title,
   defaultSubject = "",
   defaultBody = "",
+  appendEmailToLead,
   onSent,
 }: LeadEmailComposerProps) {
-  const { appendEmailToLead } = useLeadsData();
-
   const [subject, setSubject] = useState(defaultSubject);
   const [body, setBody] = useState(defaultBody);
   const [sending, startTransition] = useTransition();

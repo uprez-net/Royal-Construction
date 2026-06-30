@@ -1,6 +1,7 @@
 export interface EmailThread {
   subject: string;
   body: string;
+  sentAt: string;
 }
 
 /* ========================================================================== *
@@ -8,6 +9,50 @@ export interface EmailThread {
  * ========================================================================== */
 const MAX_INPUT_LENGTH = 2_000_000; // ~2MB; far beyond any real email body
 const MAX_RECURSION_DEPTH = 60; // a thread 60 replies deep is already absurd
+
+/**
+ * Parses a date string from an email header into a JavaScript Date object.
+ *
+ * Handles common variations in formatting, including:
+ * - Standard date formats
+ * - Gmail's "at" suffix
+ * - Outlook's timezone display
+ * - Weekday prefixes
+ *
+ * @param value - The date string to parse.
+ * @returns A Date object if parsing is successful; otherwise, null.
+ */
+export function parseEmailDate(value?: string): Date | null {
+  if (!value) return null;
+
+  let normalized = value.trim();
+
+  // Remove "at" used by Gmail
+  normalized = normalized.replace(/\bat\b/i, "");
+
+  // Remove Outlook timezone display
+  normalized = normalized.replace(
+    /\s*\(UTC[+-]\d{2}:\d{2}\).*$/i,
+    ""
+  );
+
+  // First try
+  let date = new Date(normalized);
+
+  if (!Number.isNaN(date.getTime())) {
+    return date;
+  }
+
+  // Try removing weekday
+  normalized = normalized.replace(
+    /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/i,
+    ""
+  );
+
+  date = new Date(normalized);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 /* ========================================================================== *
  * HTML entity decoding (no DOM dependency required)
@@ -396,9 +441,12 @@ function splitPlainTextThread(text: string): EmailThread[] {
       const body = seg.lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
       const subjectMatch = body.match(/^[ \t]*Subject:[ \t]*(.*)$/im);
       const subject = subjectMatch ? subjectMatch[1].trim() : "";
-      return { subject, body };
+      const sentMatch = body.match(/^[ \t]*(?:Sent|Date):[ \t]*(.*)$/im);
+      const sentAt = sentMatch ? sentMatch[1].trim() : "";
+
+      return { subject, body, sentAt };
     })
-    .filter((t) => t.body.length > 0);
+    .filter((t) => t.body.length > 0 || t.sentAt.length > 0); // discard empty segments (e.g. a "wrote:" line with no content)
 }
 
 /* ========================================================================== *

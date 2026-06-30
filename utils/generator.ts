@@ -67,7 +67,8 @@ export const randomColourHexGenerator = (key: string): string => {
 export async function generateEmailChecksum(
   subject: string,
   body: string,
-  from: string
+  from: string,
+  sentAt: string
 ): Promise<string> {
   const normalize = (value: string) =>
     value
@@ -80,6 +81,7 @@ export async function generateEmailChecksum(
     from: normalize(from),
     subject: normalize(subject),
     body: normalize(body),
+    sentAt: normalize(sentAt),
   });
 
   const buffer = await crypto.subtle.digest(

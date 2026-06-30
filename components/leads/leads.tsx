@@ -66,6 +66,7 @@ export default function Leads() {
     removeLeadFromList,
     prependLead,
     replaceLeads,
+    appendEmailToLead,
   } = useLeadsData();
 
   const { toasts, showToast, dismissToast } = useToast();
@@ -482,6 +483,7 @@ export default function Leads() {
                     clerkUserId: user?.id ?? null,
                     fullName: user?.fullName ?? null,
                   }}
+                  appendEmailToLead={appendEmailToLead}
                 />
               )}
               {activeTab === "followups" && (

@@ -18,16 +18,19 @@ import { cn } from "@/lib/utils";
 import { LeadEmailReply } from "./reply-email";
 import { LeadEmailComposer } from "./email-composer";
 
+
 interface LeadEmailSectionProps {
   emails: LeadEmails[];
   leadId: number;
   leadEmail: string;
+  appendEmailToLead: (leadId: number, email: LeadEmails) => void;
 }
 
 export function LeadEmailSection({
   emails,
   leadId,
   leadEmail,
+  appendEmailToLead,
 }: LeadEmailSectionProps) {
   const [openItems, setOpenItems] = useState<Record<string, boolean>>(
     emails.reduce(
@@ -151,7 +154,7 @@ export function LeadEmailSection({
                             <pre className="whitespace-pre-wrap wrap-break-word font-sans text-sm leading-6 text-foreground">
                               {email.body}
                             </pre>
-                            <LeadEmailReply email={email} />
+                            <LeadEmailReply email={email} appendEmailToLead={appendEmailToLead} />
                           </div>
                         </div>
                       </CollapsibleContent>
@@ -169,6 +172,7 @@ export function LeadEmailSection({
               to={leadEmail}
               title={`Compose Email to ${leadEmail}`}
               onSent={() => setIsComposing(false)}
+              appendEmailToLead={appendEmailToLead}
             />
           </div>
         )}

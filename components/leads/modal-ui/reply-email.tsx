@@ -15,15 +15,15 @@ import { sendLeadEmail } from "@/lib/data/leads";
 
 interface LeadEmailReplyProps {
   email: LeadEmails;
+  appendEmailToLead: (leadId: number, email: LeadEmails) => void;
 }
 
-export function LeadEmailReply({ email }: LeadEmailReplyProps) {
+export function LeadEmailReply({ email, appendEmailToLead }: LeadEmailReplyProps) {
   const [subject, setSubject] = useState(
     email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
   );
   const [body, setBody] = useState("");
   const [sending, startTransition] = useTransition();
-  const { appendEmailToLead } = useLeadsData();
 
   async function handleSend() {
     try {
