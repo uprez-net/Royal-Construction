@@ -9,7 +9,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useLeadsData } from "@/hooks/use-leads-data";
 import { toast } from "sonner";
 import { sendLeadEmail } from "@/lib/data/leads";
 
@@ -18,7 +17,10 @@ interface LeadEmailReplyProps {
   appendEmailToLead: (leadId: number, email: LeadEmails) => void;
 }
 
-export function LeadEmailReply({ email, appendEmailToLead }: LeadEmailReplyProps) {
+export function LeadEmailReply({
+  email,
+  appendEmailToLead,
+}: LeadEmailReplyProps) {
   const [subject, setSubject] = useState(
     email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
   );
@@ -54,7 +56,14 @@ export function LeadEmailReply({ email, appendEmailToLead }: LeadEmailReplyProps
         <div className="space-y-2">
           <Label>To</Label>
 
-          <Input disabled value={email.emailFrom} />
+          <Input
+            disabled
+            value={
+              !email.emailFrom.includes("@royalconstructions.com.au")
+                ? email.emailFrom
+                : email.emailTo
+            }
+          />
         </div>
 
         <div className="space-y-2">

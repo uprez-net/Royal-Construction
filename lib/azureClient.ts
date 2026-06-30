@@ -31,26 +31,16 @@ interface EmailInput {
  */
 export async function sendEmail(email: EmailInput) {
   const graphClient = await graphClientPromise;
-  let primaryTo: string = "";
-  let ccList: string[] = [...(Array.isArray(email.cc) ? email.cc : email.cc ? [email.cc] : [])];
   if(Array.isArray(email.to) && email.to.length === 0) {
     throw new Error("Email 'to' field cannot be an empty array.");
-  }
-  if(Array.isArray(email.to)){
-    const firstEmail = email.to[0];
-    if(!firstEmail || firstEmail.trim() === "") {
-      throw new Error("Email 'to' field cannot contain empty strings.");
-    }
-    primaryTo = firstEmail;
-    const restEmails = email.to.slice(1);
-    ccList = ccList.concat(restEmails.filter(email => email && email.trim() !== ""));
   }
 
 
   await graphClient.sendMail({
     subject: email.subject,
     body: email.body,
-    to: primaryTo,
-    cc: ccList.length > 0 ? ccList : undefined,
+    to: email.to,
+    cc: email.cc,
+    bcc: email.bcc,
   });
 }
