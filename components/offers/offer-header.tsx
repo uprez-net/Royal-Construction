@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { Plus } from "lucide-react";
+import Link from "next/link";
 
 export function OfferHeader() {
   const dispatch = useAppDispatch();
@@ -24,6 +25,11 @@ export function OfferHeader() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/offers/new-workflow">
+                Open new workflow
+              </Link>
+            </Button>
             <Button
               onClick={() => dispatch(openModal({ type: "createOfferFile" }))}
             >
