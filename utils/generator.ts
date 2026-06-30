@@ -68,6 +68,7 @@ export async function generateEmailChecksum(
   subject: string,
   body: string,
   from: string,
+  to: string,
   sentAt: string
 ): Promise<string> {
   const normalize = (value: string) =>
@@ -78,6 +79,7 @@ export async function generateEmailChecksum(
       .replace(/\s+/g, " ");
 
   const payload = JSON.stringify({
+    to: normalize(to),
     from: normalize(from),
     subject: normalize(subject),
     body: normalize(body),

@@ -1,4 +1,6 @@
 export interface EmailThread {
+  to: string;
+  from: string;
   subject: string;
   body: string;
   sentAt: string;
@@ -440,13 +442,26 @@ function splitPlainTextThread(text: string): EmailThread[] {
     .map((seg): EmailThread => {
       const body = seg.lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
       const subjectMatch = body.match(/^[ \t]*Subject:[ \t]*(.*)$/im);
-      const subject = subjectMatch ? subjectMatch[1].trim() : "";
+      const fromMatch = body.match(/^[ \t]*From:[ \t]*(.*)$/im);
+      const toMatch = body.match(/^[ \t]*To:[ \t]*(.*)$/im);
       const sentMatch = body.match(/^[ \t]*(?:Sent|Date):[ \t]*(.*)$/im);
-      const sentAt = sentMatch ? sentMatch[1].trim() : "";
 
-      return { subject, body, sentAt };
+      const subject = subjectMatch?.[1].trim() ?? "";
+      const from = fromMatch?.[1].trim() ?? "";
+      const to = toMatch?.[1].trim() ?? "";
+      const sentAt = sentMatch?.[1].trim() ?? "";
+
+      return {
+        from,
+        to,
+        subject,
+        body,
+        sentAt,
+      };
     })
-    .filter((t) => t.body.length > 0 || t.sentAt.length > 0); // discard empty segments (e.g. a "wrote:" line with no content)
+    .filter(({ body, subject, sentAt, from, to }) =>
+      [body, subject, sentAt, from, to].some((value) => value.trim().length > 0)
+    ); // discard empty segments (e.g. a "wrote:" line with no content)
 }
 
 /* ========================================================================== *

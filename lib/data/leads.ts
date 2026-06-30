@@ -27,6 +27,7 @@ import {
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { sendEmail } from "../azureClient";
 import { generateEmailChecksum } from "@/utils/generator";
+import { dataTimeFormat } from "@/utils/formatters";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
@@ -1033,7 +1034,7 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
       subject,
       body,
     });
-    const checksum = await generateEmailChecksum(subject, body, process.env.GRAPH_SENDER_UPN ?? to);
+    const checksum = await generateEmailChecksum(subject, body, process.env.GRAPH_SENDER_UPN ?? to, to, dataTimeFormat.format(new Date()));
     const emailRecord = await prisma.leadEmails.create({
       data: {
         leadId,

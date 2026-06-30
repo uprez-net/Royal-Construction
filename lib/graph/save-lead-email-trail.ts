@@ -61,15 +61,15 @@ export async function saveLeadEmailTrail({ from, to, subject, body, sentAt }: Sa
         const createManyData: Prisma.LeadEmailsCreateManyInput[] = [];
         for (const thread of threads) {
             const persistedSubject = thread.subject.trim() || subject;
-            const checksum = await generateEmailChecksum(persistedSubject, thread.body, from, thread.sentAt);
+            const checksum = await generateEmailChecksum(persistedSubject, thread.body, thread.from, thread.to, thread.sentAt);
             createManyData.push({
                 leadId: leadId.id,
-                emailTo: to,
+                emailTo: thread.to,
                 subject: persistedSubject,
                 body: thread.body,
                 checksum: checksum,
                 sentAt: parseEmailDate(thread.sentAt) ?? new Date(sentAt),
-                emailFrom: from,
+                emailFrom: thread.from,
             });
         }
 
