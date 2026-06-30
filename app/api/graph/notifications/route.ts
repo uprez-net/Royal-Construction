@@ -4,8 +4,8 @@ import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
 import { Prisma } from '@prisma/client';
-import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
-import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
+// import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
+// import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 
 // export const runtime = 'nodejs';
 
