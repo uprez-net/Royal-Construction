@@ -358,13 +358,13 @@ export function AddLeadModal({
                 className={cn(
                   "inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
                   form.type.includes(option)
-                    ? "border-[color:var(--royal-gold)] bg-[color:var(--royal-gold-light)] text-[color:var(--royal-gold)]"
-                    : "border-border bg-background text-muted-foreground hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold-light)]",
+                    ? "border-royal-gold bg-royal-gold-light text-royal-gold"
+                    : "border-border bg-background text-muted-foreground hover:border-royal-gold hover:bg-royal-gold-light",
                 )}
               >
                 <input
                   type="checkbox"
-                  className="size-3.5 accent-[var(--royal-gold)]"
+                  className="size-3.5 accent-royal-gold"
                   checked={form.type.includes(option)}
                   onChange={() => toggleProjectType(option)}
                 />
@@ -425,7 +425,7 @@ export function AddLeadModal({
           <input
             id={fieldId("urgent")}
             type="checkbox"
-            className="size-3.5 accent-[var(--royal-gold)]"
+            className="size-3.5 accent-royal-gold"
             checked={form.urgent}
             onChange={(e) =>
               setForm((prev) => ({ ...prev, urgent: e.target.checked }))
@@ -580,7 +580,7 @@ export function AddLeadModal({
           >
             {savingWithReminder ? (
               <>
-                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[color:var(--royal-gold)] border-t-transparent" />
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-royal-gold border-t-transparent" />
                 Saving & Setting Reminder...
               </>
             ) : null}

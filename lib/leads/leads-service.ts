@@ -14,7 +14,7 @@ export interface FetchLeadsParams {
   q?: string;
 }
 
-export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer' | 'runId' | 'runStatus'> & {
+export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer' | 'runId' | 'runStatus' | 'emails'> & {
   type?: string | string[];
   history?: LeadHistoryInput[];
 };
@@ -86,7 +86,7 @@ export async function createLead(leadData: LeadCreatePayload): Promise<Lead | { 
   return payload;
 }
 
-type LeadUpdatePayload = Partial<Omit<Lead, "runId">> & {
+type LeadUpdatePayload = Partial<Omit<Lead, "runId" | "emails">> & {
   annotationsToCreate?: LeadNoteAnnotationInput[];
 };
 
