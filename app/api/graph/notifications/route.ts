@@ -47,18 +47,6 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
   }
 }
 
-async function isTradieMessage(fromEmail: string): Promise<boolean> {
-  try {
-    const existingTradie = await prisma.tradie.findUnique({
-      where: { email: fromEmail },
-    });
-    return existingTradie !== null;
-  } catch (error) {
-    console.error(`Error checking if fromEmail ${fromEmail} is a tradie message:`, error);
-    return false;
-  }
-}
-
 async function CheckLeadPresentwithEmailPhone(Email: string, ContactNo: string): Promise<boolean> {
   const orConditions: Prisma.LeadWhereInput[] = [];
   if (Email && Email.trim() !== "") {
@@ -91,6 +79,12 @@ function handleValidationToken(request: Request): Response | null {
   console.log('Received Graph webhook validation request');
   return textResponse(200, validationToken);
 }
+
+const LEAD_SUBJECT_LINES = new Set([
+  '"i want to build" form submission',
+  'get in touch form submission',
+  'general enquiry form submission',
+]);
 
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
@@ -190,58 +184,15 @@ export async function POST(request: Request): Promise<Response> {
               continue;
             }
 
-            // Check if the message is from a tradie and extract tradie schedule info
-            if (message.from && await isTradieMessage(message.from)) {
-              const tradie = await prisma.tradie.findUnique({
-                where: { email: message.from },
-              });
-              const tradieSchedules = await prisma.tradieSchedule.findMany({
-                where: {
-                  tradieId: tradie!.id,
-                  status: {
-                    not: {
-                      in: ['DECLINED', 'AWAITING_ADMIN_APPROVAL', 'CONFIRMED', 'QUOTE_RECEIVED']
-                    }
-                  } // Only consider non-declined schedules 
-                },
-              });
-              console.log(`  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`);
-              if(tradieSchedules.length === 0) {
-                console.log(`  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`);
-                continue;
-              }
-              console.log(`  Message from ${message.from} is identified as a tradie message. Skipping lead extraction.`);
-              const tradieInfo = await extractTradieScheduleInfoFromMessage(message.subject ?? '', content);
-              if (!tradieInfo) {
-                console.log('  No tradie schedule information could be extracted from the message.');
-                continue;
-              }
-              console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
-              const schedule = await prisma.tradieSchedule.findFirst({
-                where: {
-                  tradieId: tradie!.id,
-                  scheduledDate: new Date(tradieInfo.scheduleDate),
-                  project: {
-                    location: {
-                      contains: tradieInfo.projectLocation ?? "",
-                      mode: "insensitive",
-                    },
-                  },
-                },
-              });
-              if (!schedule) {
-                console.log(`  Tradie schedule already exists for tradieId: ${tradie!.id}, scheduleDate: ${tradieInfo.scheduleDate}, projectLocation: ${tradieInfo.projectLocation}. Skipping duplicate processing.`);
-                continue;
-              }
-              const status = tradieInfo.scheduleConfirmation
-                ? tradieInfo.scheduleQuote != null
-                  ? "QUOTE_RECEIVED"
-                  : "AWAITING_ADMIN_APPROVAL"
-                : "DECLINED";
-              await updateTradieSchedule(schedule.id, {
-                status,
-                quote: tradieInfo.scheduleQuote ?? undefined,
-              });
+            const normalizedSubject = (message.subject ?? "")
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, " ");
+
+            if (!LEAD_SUBJECT_LINES.has(normalizedSubject)) {
+              console.log(
+                `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
+              );
               continue;
             }
 
