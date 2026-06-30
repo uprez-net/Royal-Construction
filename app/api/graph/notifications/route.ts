@@ -45,18 +45,18 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
   }
 }
 
-async function CheckLeadPresentwithEmailPhone(Email:string,ContactNo:string):Promise<boolean>{
+async function CheckLeadPresentwithEmailPhone(Email: string, ContactNo: string): Promise<boolean> {
   const orConditions: Prisma.LeadWhereInput[] = [];
-    if (Email && Email.trim() !== "") {
-      orConditions.push({ email: Email.trim() });
-    }
-    if (ContactNo && ContactNo.trim() !== "" && ContactNo.trim() !== "0") {
-      orConditions.push({ phone: ContactNo.trim() });
-    }
+  if (Email && Email.trim() !== "") {
+    orConditions.push({ email: Email.trim() });
+  }
+  if (ContactNo && ContactNo.trim() !== "" && ContactNo.trim() !== "0") {
+    orConditions.push({ phone: ContactNo.trim() });
+  }
   try {
     const existingLead = await prisma.lead.findFirst({
-      where: { 
-          OR: orConditions,
+      where: {
+        OR: orConditions,
       },
     });
     return existingLead !== null;
@@ -77,6 +77,12 @@ function handleValidationToken(request: Request): Response | null {
   console.log('Received Graph webhook validation request');
   return textResponse(200, validationToken);
 }
+
+const LEAD_SUBJECT_LINES = new Set([
+  '"i want to build" form submission',
+  'get in touch form submission',
+  'general enquiry form submission',
+]);
 
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
@@ -176,6 +182,18 @@ export async function POST(request: Request): Promise<Response> {
               continue;
             }
 
+            const normalizedSubject = (message.subject ?? "")
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, " ");
+
+            if (!LEAD_SUBJECT_LINES.has(normalizedSubject)) {
+              console.log(
+                `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
+              );
+              continue;
+            }
+
             const extracted = await extractLeadFromMessage(
               message.subject ?? '',
               content,
@@ -188,7 +206,7 @@ export async function POST(request: Request): Promise<Response> {
                 if (message.id && await isMessageAlreadyProcessed(message.id)) {
                   console.log(`  Lead with MicrosoftmessageId: ${message.id} was already processed while extracting. Aborting database save.`);
                   continue;
-                }else if ( await CheckLeadPresentwithEmailPhone(extracted.Email, extracted.ContactNo == null ? "" : String(extracted.ContactNo))){
+                } else if (await CheckLeadPresentwithEmailPhone(extracted.Email, extracted.ContactNo == null ? "" : String(extracted.ContactNo))) {
                   console.log(`  Lead with Email: ${extracted.Email} or ContactNo: ${extracted.ContactNo} already exists in database. Aborting database save.`);
                   continue;
                 }
@@ -198,7 +216,7 @@ export async function POST(request: Request): Promise<Response> {
                 const newLead = await prisma.lead.create({
                   data: {
                     name: extracted.Name || 'Unknown Lead',
-                    email:  message.from || extracted.Email ,
+                    email: message.from || extracted.Email,
                     phone: phoneVal,
                     location: extracted.Address || '',
                     sourceDetail: 'Website',
