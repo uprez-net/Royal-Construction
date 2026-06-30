@@ -456,6 +456,7 @@ export function DetailModal({
 
         {/* Emails */}
         <LeadEmailSection
+          key={`${lead.emails.length}-${lead.id}`} // Force re-render when emails change
           emails={lead.emails}
           leadId={lead.id}
           leadEmail={lead.email}
