@@ -6,6 +6,7 @@ import { renderEmailHtml } from '@/lib/leads/render-email-html';
 import { Prisma } from '@prisma/client';
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
 import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
+import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 
 // export const runtime = 'nodejs';
 
@@ -268,8 +269,23 @@ export async function POST(request: Request): Promise<Response> {
                 status,
                 quote: tradieInfo.scheduleQuote ?? undefined,
               });
+              continue;
             }
 
+            //Check if the message is part of a lead trail
+            if (await CheckLeadPresentwithEmailPhone(message.from, "")) {
+              console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
+              await saveLeadEmailTrail({
+                from: message.from,
+                to: process.env.GRAPH_SENDER_UPN,
+                subject: message.subject,
+                body: content,
+                sentAt: new Date(message.receivedDateTime),
+              });
+              continue;
+            }
+
+            // Check if the message subject matches any of the predefined lead subject lines
             const normalizedSubject = (message.subject ?? "")
               .trim()
               .toLowerCase()
