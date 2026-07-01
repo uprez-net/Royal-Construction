@@ -483,6 +483,7 @@ model Lead {
   history         LeadHistory[]
   noteAnnotations LeadNoteAnnotation[]
   files           File[]               @relation("LeadFiles")
+  emails          LeadEmails[]         @relation("LeadEmails")
   assignedUser    User?                @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
   project         Project?             @relation("LeadProject")
 
@@ -623,4 +624,24 @@ model EmailAdHock {
   updatedAt    DateTime @updatedAt
 
   @@map("email_adhoc")
+}
+
+model LeadEmails {
+  id        String   @id @default(uuid())
+  leadId    Int
+  emailFrom String
+  emailTo   String
+  subject   String
+  body      String   @db.Text
+  checksum  String   @unique @db.Text
+  sentAt    DateTime
+
+  createdAt DateTime @default(now())
+
+  lead Lead @relation("LeadEmails", fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([emailFrom])
+  @@index([leadId, sentAt(sort: Desc)])
+  @@index([sentAt(sort: Desc)])
 }

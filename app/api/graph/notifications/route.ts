@@ -6,6 +6,7 @@ import { renderEmailHtml } from '@/lib/leads/render-email-html';
 import { Prisma } from '@prisma/client';
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
 import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
+import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 
 // export const runtime = 'nodejs';
 
@@ -91,6 +92,12 @@ function handleValidationToken(request: Request): Response | null {
   console.log('Received Graph webhook validation request');
   return textResponse(200, validationToken);
 }
+
+const LEAD_SUBJECT_LINES = new Set([
+  '"i want to build" form submission',
+  'get in touch form submission',
+  'general enquiry form submission',
+]);
 
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
@@ -206,7 +213,7 @@ export async function POST(request: Request): Promise<Response> {
                 },
               });
               console.log(`  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`);
-              if(tradieSchedules.length === 0) {
+              if (tradieSchedules.length === 0) {
                 console.log(`  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`);
                 continue;
               }
@@ -242,6 +249,32 @@ export async function POST(request: Request): Promise<Response> {
                 status,
                 quote: tradieInfo.scheduleQuote ?? undefined,
               });
+              continue;
+            }
+
+            //Check if the message is part of a lead trail
+            if (await CheckLeadPresentwithEmailPhone(message.from, "")) {
+              console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
+              await saveLeadEmailTrail({
+                from: message.from,
+                to: process.env.GRAPH_SENDER_UPN,
+                subject: message.subject,
+                body: content,
+                sentAt: new Date(message.receivedDateTime),
+              });
+              continue;
+            }
+
+            // Check if the message subject matches any of the predefined lead subject lines
+            const normalizedSubject = (message.subject ?? "")
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, " ");
+
+            if (!LEAD_SUBJECT_LINES.has(normalizedSubject)) {
+              console.log(
+                `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
+              );
               continue;
             }
 
