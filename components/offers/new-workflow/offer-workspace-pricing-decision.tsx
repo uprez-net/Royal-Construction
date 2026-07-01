@@ -1,11 +1,12 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, BadgeDollarSign } from "lucide-react";
+import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency } from "./offer-workspace-format";
 
 type PricingDecisionPanelProps = {
@@ -26,7 +27,12 @@ export function PricingDecisionPanel({
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <CardTitle>Customer Offer price</CardTitle>
+        <OfferCardHeading
+          description="Choose the fixed inc-GST price shown to the client, with a required reason when it differs from the computed build-up."
+          icon={<BadgeDollarSign className="size-4" aria-hidden="true" />}
+          singleLineDescription
+          title="Customer Offer price"
+        />
       </CardHeader>
       <CardContent className="grid gap-4 pt-4 md:grid-cols-[minmax(0,1fr)_220px]">
         <label>
@@ -73,7 +79,7 @@ export function PricingDecisionPanel({
         </label>
         {customerPrice.needsOverrideReason ? (
           <div className="md:col-span-2 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive-light p-3 text-sm text-destructive">
-            <AlertTriangle className="size-4" />
+            <AlertTriangle className="size-4" aria-hidden="true" />
             Add the commercial reason before sending this Offer document.
           </div>
         ) : null}

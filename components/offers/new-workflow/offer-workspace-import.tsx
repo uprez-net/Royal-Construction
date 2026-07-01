@@ -1,24 +1,23 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import { parseRoyalQuoteWorkbook } from "@/lib/offer/workspace-import";
-import { FileSpreadsheet, Upload } from "lucide-react";
+import { FileSpreadsheet } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useState } from "react";
 import { read } from "xlsx";
 
-type WorkbookImportPanelProps = {
+type WorkbookImportControlProps = {
   readonly importResult: OfferWorkbookImportResult | null;
   readonly onImported: (result: OfferWorkbookImportResult) => void;
 };
 
-export function WorkbookImportPanel({
+export function WorkbookImportControl({
   importResult,
   onImported,
-}: WorkbookImportPanelProps) {
+}: WorkbookImportControlProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -42,40 +41,53 @@ export function WorkbookImportPanel({
   }
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
-      <CardHeader className="border-b border-border/70">
-        <div className="flex items-center gap-2">
-          <FileSpreadsheet className="size-4 text-royal-gold" />
-          <CardTitle>Excel quote import</CardTitle>
+    <section
+      aria-labelledby="offer-workbook-import-title"
+      className="grid gap-3 rounded-lg border border-royal-gold/25 bg-royal-gold-light/40 p-3"
+    >
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,280px)] md:items-start">
+        <div className="flex min-w-0 items-start gap-2">
+          <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-royal-gold shadow-sm">
+            <FileSpreadsheet className="size-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h3
+              className="text-sm font-semibold text-foreground"
+              id="offer-workbook-import-title"
+            >
+              Import workbook rows
+            </h3>
+            <p className="max-w-prose text-sm text-muted-foreground">
+              Optional shortcut for existing quote files. It fills this cost
+              schedule and skips Project actuals, invoices and payment fields.
+            </p>
+          </div>
         </div>
-      </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className={buttonVariants({ variant: "outline" })}>
-            <Upload className="size-4" />
-            Import workbook
-            <input
-              accept=".xlsx,.xlsm,.xls"
-              className="sr-only"
-              type="file"
-              onChange={handleFileChange}
-            />
-          </label>
-          <p className="text-sm text-muted-foreground">
-            Imports quote rows and helper assumptions only. Actuals, invoices and
-            payment fields stay for Project costing.
-          </p>
-        </div>
-        {errorMessage !== null ? (
-          <p className="rounded-lg border border-destructive/30 bg-destructive-light p-3 text-sm text-destructive">
-            {errorMessage}
-          </p>
-        ) : null}
-        {importResult !== null ? (
-          <ImportSummary importResult={importResult} />
-        ) : null}
-      </CardContent>
-    </Card>
+        <label
+          className="grid w-full gap-1"
+          htmlFor="offer-workbook-import"
+        >
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Workbook file
+          </span>
+          <Input
+            accept=".xlsx,.xlsm,.xls"
+            className="bg-white/95"
+            id="offer-workbook-import"
+            type="file"
+            onChange={handleFileChange}
+          />
+        </label>
+      </div>
+      {errorMessage !== null ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive-light p-3 text-sm text-destructive">
+          {errorMessage}
+        </p>
+      ) : null}
+      {importResult !== null ? (
+        <ImportSummary importResult={importResult} />
+      ) : null}
+    </section>
   );
 }
 
@@ -88,7 +100,7 @@ function ImportSummary({
     <div className="grid gap-3 rounded-lg border border-border bg-background/70 p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <Badge className="bg-royal-gold text-white">
-          {importResult.costLines.length} offer rows
+          {importResult.costLines.length} Offer rows
         </Badge>
         <Badge variant="outline">{importResult.sourceName}</Badge>
         {importResult.validationMessages.length > 0 ? (

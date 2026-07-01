@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import type {
   OfferDocumentDraft,
@@ -13,7 +13,8 @@ import type {
   MarginStatus,
   OfferWorkspacePricing,
 } from "@/lib/offer/workspace-pricing";
-import { CircleDashed, CircleDot, FileText, LockKeyhole } from "lucide-react";
+import { FileText, ReceiptText } from "lucide-react";
+import { OfferCardHeading } from "./offer-workspace-card-heading";
 import {
   formatCurrency,
   formatPercent,
@@ -31,16 +32,6 @@ type OfferDocumentPreviewProps = {
   readonly job: OfferWorkspaceJob;
   readonly pricing: OfferWorkspacePricing;
 };
-
-const HANDOFF_STEPS = [
-  "Offer workspace draft",
-  "Offer document sent",
-  "Offer agreed and frozen",
-  "Tender generated and signed",
-  "MBA Contract uploaded",
-  "Initial payment recorded",
-  "Project created with milestones",
-] as const;
 
 function getMarginBadgeClass(status: MarginStatus): string {
   switch (status) {
@@ -67,7 +58,11 @@ export function PricingSummary({ pricing }: PricingSummaryProps) {
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <CardTitle>Pricing build-up</CardTitle>
+        <OfferCardHeading
+          description="Live internal price stack from direct cost through margin and GST."
+          icon={<ReceiptText className="size-4" aria-hidden="true" />}
+          title="Pricing build-up"
+        />
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         <div className="rounded-lg bg-royal-gold-light/70 p-4">
@@ -124,10 +119,11 @@ export function OfferDocumentPreview({
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <div className="flex items-center gap-2">
-          <FileText className="size-4 text-royal-gold" />
-          <CardTitle>Customer Offer document preview</CardTitle>
-        </div>
+        <OfferCardHeading
+          description="Client-visible summary only: reference, site, included scope, exclusions, fixed price and validity."
+          icon={<FileText className="size-4" aria-hidden="true" />}
+          title="Customer Offer document preview"
+        />
       </CardHeader>
       <CardContent className="pt-4">
         <article className="rounded-lg border border-border bg-background p-5">
@@ -175,38 +171,6 @@ export function OfferDocumentPreview({
   );
 }
 
-export function HandoffTrail() {
-  return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
-      <CardHeader className="border-b border-border/70">
-        <CardTitle>Downstream relationship</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 pt-4">
-        {HANDOFF_STEPS.map((step, index) => {
-          const isCurrent = index === 0;
-          const Icon = isCurrent ? CircleDot : CircleDashed;
-
-          return (
-            <div key={step} className="flex items-center gap-3 text-sm">
-              <Icon
-                className={
-                  isCurrent ? "size-4 text-royal-gold" : "size-4 text-muted-foreground"
-                }
-              />
-              <span className={isCurrent ? "font-medium" : "text-muted-foreground"}>
-                {step}
-              </span>
-              {!isCurrent ? (
-                <LockKeyhole className="ml-auto size-3 text-muted-foreground" />
-              ) : null}
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
-}
-
 function PreviewList({
   items,
   title,
@@ -220,7 +184,10 @@ function PreviewList({
       <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
         {items.map((item) => (
           <li key={item} className="flex gap-2">
-            <span className="mt-2 size-1.5 rounded-full bg-royal-gold" />
+            <span
+              className="mt-2 size-1.5 rounded-full bg-royal-gold"
+              aria-hidden="true"
+            />
             <span>{item}</span>
           </li>
         ))}

@@ -1,11 +1,13 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OfferWorkspaceScopeItem } from "@/lib/offer/workspace-model";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
+import { ListChecks } from "lucide-react";
+import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency } from "./offer-workspace-format";
 
 type ScopePanelProps = {
@@ -30,7 +32,12 @@ export function ScopePanel({
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <CardTitle>Allowances and exclusions</CardTitle>
+        <OfferCardHeading
+          description="Control the allowances and exclusions that appear on the one-page Offer document without exposing internal cost lines."
+          icon={<ListChecks className="size-4" aria-hidden="true" />}
+          singleLineDescription
+          title="Allowances and exclusions"
+        />
       </CardHeader>
       <CardContent className="grid gap-4 pt-4 xl:grid-cols-2">
         <ScopeList

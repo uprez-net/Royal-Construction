@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { LegacyWorkbookPricingSettings } from "@/lib/offer/workspace-pricing";
 import {
@@ -8,6 +8,7 @@ import {
   parseNonNegativeNumberInput,
 } from "@/lib/offer/workspace-pricing";
 import { Calculator } from "lucide-react";
+import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency } from "./offer-workspace-format";
 
 type LegacyPricingPanelProps = {
@@ -34,10 +35,12 @@ export function LegacyPricingPanel({
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <div className="flex items-center gap-2">
-          <Calculator className="size-4 text-royal-gold" />
-          <CardTitle>Legacy workbook pricing</CardTitle>
-        </div>
+        <OfferCardHeading
+          description="Mirror the familiar workbook build-up so imported quotes can be checked before the customer price is selected."
+          icon={<Calculator className="size-4" aria-hidden="true" />}
+          singleLineDescription
+          title="Pricing Fixes"
+        />
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">
         <div className="grid gap-3 md:grid-cols-3">

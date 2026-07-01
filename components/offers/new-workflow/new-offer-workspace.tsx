@@ -37,11 +37,9 @@ import {
 } from "./offer-workspace-header";
 import { JobSetupPanel } from "./offer-workspace-job";
 import {
-  HandoffTrail,
   OfferDocumentPreview,
   PricingSummary,
 } from "./offer-workspace-preview";
-import { WorkbookImportPanel } from "./offer-workspace-import";
 import { LegacyPricingPanel } from "./offer-workspace-legacy-pricing";
 import { PricingDecisionPanel } from "./offer-workspace-pricing-decision";
 import { ScopePanel } from "./offer-workspace-scope";
@@ -185,7 +183,7 @@ export function NewOfferWorkspace() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" aria-labelledby="new-offer-workspace-title">
       <OfferWorkspaceHeader
         customerPrice={customerPrice}
         job={job}
@@ -193,23 +191,20 @@ export function NewOfferWorkspace() {
         onDownloadPreview={() => window.print()}
         onMarkSent={() => setStatus("sent")}
       />
+      <OfferWorkflowSteps />
 
-      <div className="grid gap-5 xl:grid-cols-[180px_minmax(0,1fr)_360px]">
-        <OfferWorkflowSteps />
-
-        <main className="space-y-5">
-          <WorkbookImportPanel
-            importResult={importResult}
-            onImported={importWorkbook}
-          />
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="min-w-0 space-y-5">
           <JobSetupPanel job={job} onJobChange={updateJob} />
           <AreaCalculatorPanel
             area={areaCalculator}
             onAreaChange={updateAreaCalculator}
           />
           <CostSchedulePanel
+            importResult={importResult}
             lines={lines}
             onAddLine={addLine}
+            onImported={importWorkbook}
             onLineChange={updateLine}
           />
           <LegacyPricingPanel
@@ -234,7 +229,7 @@ export function NewOfferWorkspace() {
           <OfferDocumentEditor draft={draft} onDraftChange={updateDraft} />
         </main>
 
-        <aside className="space-y-5 xl:sticky xl:top-24 xl:self-start">
+        <aside className="min-w-0 space-y-5 xl:sticky xl:top-24 xl:self-start">
           <PricingSummary pricing={pricing} />
           <OfferDocumentPreview
             customerPrice={customerPrice}
@@ -243,7 +238,6 @@ export function NewOfferWorkspace() {
             job={job}
             pricing={pricing}
           />
-          <HandoffTrail />
         </aside>
       </div>
     </div>

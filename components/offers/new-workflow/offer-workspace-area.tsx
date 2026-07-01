@@ -1,12 +1,13 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
 import { calculateOfferArea } from "@/lib/offer/workspace-area";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Ruler } from "lucide-react";
 import type { PropsWithChildren } from "react";
+import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency } from "./offer-workspace-format";
 
 type AreaCalculatorPanelProps = {
@@ -31,10 +32,12 @@ export function AreaCalculatorPanel({
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <div className="flex items-center gap-2">
-          <Ruler className="size-4 text-royal-gold" />
-          <CardTitle>Area helper calculations</CardTitle>
-        </div>
+        <OfferCardHeading
+          description="Use workbook-style helper assumptions for slab, frame, brick and tile packages before they become cost rows."
+          icon={<Ruler className="size-4" aria-hidden="true" />}
+          singleLineDescription
+          title="Area helper calculations"
+        />
       </CardHeader>
       <CardContent className="grid gap-5 pt-4">
         <div className="grid gap-3 md:grid-cols-3">

@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth"
 
+const isDevelopment = process.env.NODE_ENV === "development"
 const isPublicRoute = createRouteMatcher([
   "/api/webhook/clerk(.*)",
   "/api/graph(.*)",
@@ -11,6 +12,7 @@ const isPublicRoute = createRouteMatcher([
   'message(.*)',
   "/api/cron(.*)",
   "/book-consultation",
+  ...(isDevelopment ? ["/offers/new-workflow(.*)"] : []),
   "/api/upload(.*)",
   "/api/resume-stream(.*)",
 ])

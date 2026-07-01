@@ -1,9 +1,11 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OfferDocumentDraft } from "@/lib/offer/workspace-model";
+import { FilePenLine } from "lucide-react";
+import { OfferCardHeading } from "./offer-workspace-card-heading";
 
 type OfferDocumentEditorProps = {
   readonly draft: OfferDocumentDraft;
@@ -28,7 +30,11 @@ export function OfferDocumentEditor({
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <CardTitle>Offer document copy</CardTitle>
+        <OfferCardHeading
+          description="Edit the customer-facing one-pager copy: headline, intro, inclusion bullets and validity terms."
+          icon={<FilePenLine className="size-4" aria-hidden="true" />}
+          title="Offer document copy"
+        />
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">
         <label>

@@ -1,10 +1,12 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
+import { ClipboardList } from "lucide-react";
 import type { PropsWithChildren } from "react";
+import { OfferCardHeading } from "./offer-workspace-card-heading";
 
 type JobSetupPanelProps = {
   readonly job: OfferWorkspaceJob;
@@ -27,7 +29,11 @@ export function JobSetupPanel({ job, onJobChange }: JobSetupPanelProps) {
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <CardTitle>Job setup</CardTitle>
+        <OfferCardHeading
+          description="Capture the client, site, validity and build-size facts used across the Offer document and Tender draft."
+          icon={<ClipboardList className="size-4" aria-hidden="true" />}
+          title="Job setup"
+        />
       </CardHeader>
       <CardContent className="grid gap-4 pt-4 md:grid-cols-2 xl:grid-cols-4">
         <Field label="Client names">
