@@ -92,6 +92,27 @@ function handleValidationToken(request: Request): Response | null {
   return textResponse(200, validationToken);
 }
 
+const LEAD_SUBJECT_LINES = new Set([
+  '"i want to build" form submission',
+  'get in touch form submission',
+  'general enquiry form submission',
+]);
+
+/**
+ * Returns true if the text contains letters from a non-Latin script.
+ * English and other Latin-based languages (French, German, Spanish, etc.)
+ * will return false.
+ */
+export function isNonLatinScript(text: string): boolean {
+  const letters = text.match(/\p{L}/gu);
+
+  if (!letters) {
+    return false; // no letters present
+  }
+
+  return letters.some((char) => !/\p{Script=Latin}/u.test(char));
+}
+
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
   if (validation) {
@@ -184,6 +205,11 @@ export async function POST(request: Request): Promise<Response> {
               `  body(${contentType}): ${content || '[no body]'}`,
             );
 
+            if (isNonLatinScript(message.subject ?? '') || isNonLatinScript(content)) {
+              console.log('  Message contains non-Latin script. Skipping lead extraction.');
+              continue;
+            }
+
             // Check if this message was already processed before calling the LLM extraction
             if (message.id && await isMessageAlreadyProcessed(message.id)) {
               console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
@@ -206,7 +232,7 @@ export async function POST(request: Request): Promise<Response> {
                 },
               });
               console.log(`  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`);
-              if(tradieSchedules.length === 0) {
+              if (tradieSchedules.length === 0) {
                 console.log(`  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`);
                 continue;
               }
@@ -242,6 +268,17 @@ export async function POST(request: Request): Promise<Response> {
                 status,
                 quote: tradieInfo.scheduleQuote ?? undefined,
               });
+            }
+
+            const normalizedSubject = (message.subject ?? "")
+              .trim()
+              .toLowerCase()
+              .replace(/\s+/g, " ");
+
+            if (!LEAD_SUBJECT_LINES.has(normalizedSubject)) {
+              console.log(
+                `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
+              );
               continue;
             }
 
