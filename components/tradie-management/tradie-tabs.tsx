@@ -130,7 +130,7 @@ export function TradieTabs() {
                 return (
                   <SelectItem
                     key={key}
-                    value={key}
+                    value={label}
                     className="text-sm text-gray-700"
                   >
                     <div className="flex items-center gap-2">

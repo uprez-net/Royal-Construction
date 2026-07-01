@@ -161,13 +161,15 @@ export function ModalManager() {
           }
         : undefined;
       const milestones = projectPayload
-        ? projectPayload.milestones.map((m) => ({
-            id: m.id,
-            name: m.name,
-          }))
+        ? projectPayload.milestones
+            .filter((m) => m.status !== MilestoneStatus.DONE)
+            .map((m) => ({
+              id: m.id,
+              name: m.name,
+            }))
         : undefined;
 
-      if(!project || !milestones) {
+      if (!project || !milestones) {
         return null;
       }
 
@@ -412,11 +414,7 @@ export function ModalManager() {
         approval: SafeTradieApproval;
       };
       return (
-        <ApprovalDetailModal
-          open
-          onClose={handleClose}
-          approval={approval}
-        />
+        <ApprovalDetailModal open onClose={handleClose} approval={approval} />
       );
     default:
       return null;

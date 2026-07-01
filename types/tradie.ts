@@ -44,7 +44,7 @@ export interface CreateTradieInput {
     abn: string;
     phone: string;
     email: string;
-    notes?: string;
+    note?: string;
 }
 
 export interface UpdatePriceInput {

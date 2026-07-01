@@ -41,7 +41,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
     abn: "",
     phone: "",
     email: "",
-    notes: undefined,
+    note: undefined,
   });
 
   const handleOpenChange = (open: boolean) => {
@@ -116,7 +116,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                     return (
                       <SelectItem
                         key={key}
-                        value={key}
+                        value={label}
                         className="text-sm text-gray-700"
                       >
                         <div className="flex items-center gap-2">
@@ -185,8 +185,8 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
             <Textarea
               rows={3}
               placeholder="Any additional notes..."
-              value={formData.notes}
-              onChange={(e) => handleInputChange("notes", e.target.value)}
+              value={formData.note}
+              onChange={(e) => handleInputChange("note", e.target.value)}
             />
           </div>
 

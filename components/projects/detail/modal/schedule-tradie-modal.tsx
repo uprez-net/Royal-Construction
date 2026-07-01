@@ -94,12 +94,12 @@ export default function ScheduleTradieModal({
   };
 
   const updateRow = (index: number, updatedRow: TradieScheduleInputRow) => {
-    const errors = validateRow(updatedRow);
-    setRowErrors((prev) => {
-      const newErrors = [...prev];
-      newErrors[index] = errors;
-      return newErrors;
-    });
+    // const errors = validateRow(updatedRow);
+    // setRowErrors((prev) => {
+    //   const newErrors = [...prev];
+    //   newErrors[index] = errors;
+    //   return newErrors;
+    // });
     setScheduleRows((prev) =>
       prev.map((row, i) => (i === index ? updatedRow : row)),
     );
@@ -117,7 +117,7 @@ export default function ScheduleTradieModal({
     setRowErrors(errors);
 
     const hasErrors = errors.some(
-      (rowError) => Object.keys(rowError).length > 0,
+      (rowError) => Object.keys(rowError).length > 1, // ID would always be present, so we check for other keys
     );
 
     if (hasErrors) {
@@ -138,6 +138,8 @@ export default function ScheduleTradieModal({
           })),
         ),
       );
+      toast.success("Tradies scheduled successfully!");
+      onClose();
     } catch (error) {
       console.error("Error scheduling tradie:", error);
       toast.error("Failed to schedule tradie. Please try again.");

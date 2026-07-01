@@ -8,6 +8,7 @@ import {
   setSelectedCategory,
   setActiveTab,
 } from "@/lib/store/slices/tradieManagementSlice";
+import { convertCategoryToTradieType, type TradieType } from "@/utils/normalize-tradie-type";
 
 interface CategoryCardProps {
   name: string;
@@ -17,16 +18,6 @@ interface CategoryCardProps {
   color?: string;
   onClick?: () => void;
 }
-
-const convertCategoryToTradieType = (
-  category: string,
-): keyof typeof TRADIE_TYPES | null => {
-  const entry = Object.entries(TRADIE_TYPES).find(
-    ([, value]) => value === category,
-  );
-
-  return (entry?.[0] as keyof typeof TRADIE_TYPES) ?? null;
-};
 
 export function TradieCategory({
   filteredTradies,
@@ -49,12 +40,12 @@ export function TradieCategory({
         return (
           <CategoryCard
             key={category.category}
-            name={category.category}
+            name={TRADIE_TYPES[category.category as TradieType]}
             count={category.tradies.length}
             totalJobs={category.totalCategoryJobsCompleted}
             icon={<Icon className="h-5 w-5" />}
-            color={randomColourHexGenerator(category.category)}
-            onClick={() => handleActionClick(category.category)}
+            color={randomColourHexGenerator(TRADIE_TYPES[category.category as TradieType])}
+            onClick={() => handleActionClick(TRADIE_TYPES[category.category as TradieType])}
           />
         );
       })}
