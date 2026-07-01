@@ -550,8 +550,26 @@ const projectsSlice = createSlice({
       })
       .addCase(addProjectMilestone.fulfilled, (state, action) => {
         state.mutations.addMilestone = { status: "succeeded", error: null };
+
         if (state.activeProject?.id === action.payload.projectId) {
-          state.activeProject.milestones.push(action.payload);
+          const newMilestone = action.payload;
+          const parentMilestone = newMilestone.parentId ? state.activeProject.milestones.find((m) => m.id === newMilestone.parentId) : null;
+
+          if (parentMilestone?.status === "ACTIVE") {
+            parentMilestone.status = "PENDING";
+          }
+
+          state.activeProject.milestones.forEach((milestone) => {
+            if (milestone.order >= newMilestone.order) {
+              milestone.order += 1;
+            }
+          });
+
+          state.activeProject.milestones.push(newMilestone);
+
+          // Optional, if consumers expect the array to be ordered.
+          state.activeProject.milestones.sort((a, b) => a.order - b.order);
+
         }
       })
       .addCase(addProjectMilestone.rejected, (state, action) => {
@@ -570,6 +588,10 @@ const projectsSlice = createSlice({
           if (milestoneIndex !== -1) {
             state.activeProject!.milestones[milestoneIndex] = { ...state.activeProject!.milestones[milestoneIndex], ...action.payload };
             const parentId = state.activeProject!.milestones[milestoneIndex].parentId;
+            if (action.payload.status === "DONE") {
+              const spent = Number(action.payload.spend) ?? 0;
+              state.activeProject!.spent = (Number(state.activeProject!.spent) + spent).toString();
+            }
             if (parentId && action.payload.status === "DONE") {
               const allChildrenMilestonesNotCompleted = state.activeProject!.milestones.filter((m) => m.parentId === parentId && m.status !== "DONE");
               if (allChildrenMilestonesNotCompleted.length === 0) {
@@ -577,7 +599,6 @@ const projectsSlice = createSlice({
                 const totalChildSpent = state.activeProject!.milestones.filter((m) => m.parentId === parentId).reduce((sum, m) => sum + (Number(m.spend) || 0), 0);
                 if (parentIndex !== -1) {
                   state.activeProject!.milestones[parentIndex] = { ...state.activeProject!.milestones[parentIndex], status: "DONE", spend: totalChildSpent.toString(), actualDate: action.payload.actualDate };
-                  state.activeProject!.spent = (Number(state.activeProject!.spent) + totalChildSpent).toString();
                 }
               }
             }

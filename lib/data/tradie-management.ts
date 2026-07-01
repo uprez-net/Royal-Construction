@@ -24,6 +24,7 @@ import { startOfMonth, subMonths } from "date-fns";
 import { calculateTrend, dateFormat } from "@/utils/formatters";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
+import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
 
@@ -38,6 +39,11 @@ export async function createTradie(input: CreateTradieInput): Promise<TradieRow>
     try {
         const res = await prisma.tradie.create({
             data: input
+        });
+
+        after(() => {
+            revalidateTag('tradie-management', CACHE_PROFILES.MEDIUM);
+            revalidateTag(`tradie-${res.id}`, CACHE_PROFILES.MEDIUM);
         });
 
         return {
@@ -473,12 +479,12 @@ export async function getTradieGroupedByCategory(): Promise<TradiesByCategory[]>
                 },
             };
 
-            const existing = grouped.get(tradie.trade);
+            const existing = grouped.get(convertCategoryToTradieType(tradie.trade) ?? "Others");
 
             if (existing) {
                 existing.push(row);
             } else {
-                grouped.set(tradie.trade, [row]);
+                grouped.set(convertCategoryToTradieType(tradie.trade) ?? "Others", [row]);
             }
         }
 

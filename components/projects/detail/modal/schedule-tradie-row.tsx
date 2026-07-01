@@ -33,12 +33,17 @@ export function TradieScheduleRow({
   onChange,
   onRemove,
 }: TradieScheduleRowProps) {
-  const { items, query, setQuery } = useTradieSearch();
+  const { items, query, loading, setQuery } = useTradieSearch();
 
   return (
     <div className="space-y-4">
       <div className="grid md:grid-cols-3 grid-cols-1 gap-4">
-        <div className={cn("space-y-2", errors.tradeCategory && "text-destructive")}>
+        <div
+          className={cn(
+            "space-y-2",
+            errors.tradeCategory && "text-destructive",
+          )}
+        >
           <Label>Trade Category</Label>
 
           <Select
@@ -49,7 +54,7 @@ export function TradieScheduleRow({
               onChange({
                 ...row,
                 tradeCategory: value,
-                tradieId: undefined,
+                tradieId: "",
               });
             }}
           >
@@ -63,7 +68,7 @@ export function TradieScheduleRow({
                   TRADIE_TYPE_ICONS[key as keyof typeof TRADIE_TYPES];
 
                 return (
-                  <SelectItem key={key} value={key}>
+                  <SelectItem key={key} value={label}>
                     <div className="flex items-center gap-2">
                       <Icon className="h-4 w-4" />
                       {label}
@@ -82,7 +87,7 @@ export function TradieScheduleRow({
 
           <Select
             value={row.tradieId}
-            disabled={!query}
+            disabled={!query || loading || items.length === 0}
             onValueChange={(value) =>
               onChange({
                 ...row,
@@ -92,7 +97,15 @@ export function TradieScheduleRow({
           >
             <SelectTrigger className="w-auto min-w-full">
               <SelectValue
-                placeholder={query ? "Select Tradie" : "Select Category First"}
+                placeholder={
+                  query
+                    ? "Select Tradie"
+                    : loading
+                      ? "Loading Tradies..."
+                      : items.length === 0
+                        ? "No Tradies Available"
+                        : "Select Category First"
+                }
               />
             </SelectTrigger>
 
@@ -108,7 +121,9 @@ export function TradieScheduleRow({
           <FieldError message={errors.tradieId} />
         </div>
 
-        <div className={cn("space-y-2", errors.milestoneId && "text-destructive")}>
+        <div
+          className={cn("space-y-2", errors.milestoneId && "text-destructive")}
+        >
           <Label>Milestone</Label>
 
           <Select
@@ -135,7 +150,12 @@ export function TradieScheduleRow({
           <FieldError message={errors.milestoneId} />
         </div>
 
-        <div className={cn("space-y-2", errors.scheduledDate && "text-destructive")}>
+        <div
+          className={cn(
+            "space-y-2",
+            errors.scheduledDate && "text-destructive",
+          )}
+        >
           <Label>Date</Label>
 
           <Input
@@ -151,7 +171,9 @@ export function TradieScheduleRow({
           <FieldError message={errors.scheduledDate} />
         </div>
 
-        <div className={cn("space-y-2", errors.durationDays && "text-destructive")}>
+        <div
+          className={cn("space-y-2", errors.durationDays && "text-destructive")}
+        >
           <Label>Days</Label>
 
           <Input

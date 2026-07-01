@@ -227,7 +227,10 @@ export default function UpdateMilestoneModal({
               <Select
                 disabled={status === "ACTIVE"}
                 value={formState.status}
-                onValueChange={(value) => handleFormChange("status", value)}
+                onValueChange={(value) => {
+                  handleFormChange("status", value)
+                  if(value === "DONE") handleFormChange("actualDate", format(new Date(), "yyyy-MM-dd"))
+                }}
               >
                 <SelectTrigger className={selectTriggerClassName}>
                   <SelectValue placeholder="Select status" />
@@ -294,6 +297,7 @@ export default function UpdateMilestoneModal({
                   <Input
                     id="actualDate"
                     type="date"
+                    disabled
                     className={inputClassName}
                     value={formState.actualDate || ""}
                     onChange={(e) =>

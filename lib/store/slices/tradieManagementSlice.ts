@@ -1,4 +1,5 @@
 import { DataPoint } from "@/components/common/metric-card";
+import { TRADIE_TYPES } from "@/constants/tradieTypes";
 import {
     createTradie,
     deleteTradie,
@@ -19,6 +20,7 @@ import {
     TradieTableQuery,
     UpdatePriceInput,
 } from "@/types/tradie";
+import { convertCategoryToTradieType, TradieType } from "@/utils/normalize-tradie-type";
 import { TradieIncident } from "@prisma/client";
 import {
     createAsyncThunk,
@@ -228,6 +230,20 @@ const tradieManagementSlice = createSlice({
             })
             .addCase(addTradie.fulfilled, (state, action) => {
                 state.tradies.push(action.payload);
+                state.kpiData.registeredTradies.total += 1;
+                state.kpiData.registeredTradies.trendDelta += 5; // Example increment, adjust as needed
+                const tradeCategory = convertCategoryToTradieType(action.payload.trade);
+                if (tradeCategory) {
+                    state.tradiesByCategory = state.tradiesByCategory.map((cat) => {
+                        if (cat.category === tradeCategory) {
+                            return {
+                                ...cat,
+                                tradies: [...cat.tradies, action.payload],
+                            };
+                        }
+                        return cat;
+                    });
+                }
             })
             .addCase(addTradie.rejected, (state, action) => {
                 state.error = action.payload as string;

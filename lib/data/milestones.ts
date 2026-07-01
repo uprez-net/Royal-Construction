@@ -46,47 +46,131 @@ export async function getMilestonesByProject(projectId: string) {
 /**
  * Creates a new milestone for a project.
  *
- * The milestone is assigned the next available order within the project,
- * persists the supplied metadata, and revalidates the project's cache so
- * subsequent requests receive fresh data.
+ * If a parent milestone is provided, the new milestone is inserted
+ * immediately after the parent in the milestone sequence. All subsequent
+ * milestones have their order incremented to preserve a contiguous ordering.
+ * If no parent is provided, the milestone is appended to the end of the
+ * project's milestone queue.
+ *
+ * The operation is executed within a transaction to ensure milestone ordering
+ * remains consistent, and the project's cache is revalidated after creation.
  *
  * @param projectId - The ID of the project the milestone belongs to.
  * @param data - The milestone creation payload.
  * @returns The newly created milestone with decimal fields serialized as strings.
- * @throws {Error} If the milestone cannot be created.
+ * @throws {Error} If the specified parent milestone does not exist or the milestone cannot be created.
  */
 export async function createMilestone(projectId: string, data: MilestoneCreationData) {
-  const newMilestone = await prisma.milestone.create({
-    data: {
-      name: data.name,
-      order: await prisma.milestone.count({ where: { projectId } }) + 1,
-      description: data.description,
-      targetDate: new Date(data.targetDate),
-      budget: new Prisma.Decimal(data.budget),
-      projectId,
-      parentId: data.parentId,
-    },
+  const newMilestone = await prisma.$transaction(async (tx) => {
+    let order: number;
+
+    if (data.parentId) {
+      const parentMilestone = await tx.milestone.findUnique({
+        where: { id: data.parentId },
+        select: {
+          order: true,
+          status: true,
+          childrenMilestones: {
+            select: { order: true },
+            orderBy: { order: "asc" },
+          },
+        },
+      });
+
+      if (!parentMilestone) {
+        throw new Error("Parent milestone not found");
+      }
+
+      order = parentMilestone.childrenMilestones.length > 0
+        ? parentMilestone.childrenMilestones[
+          parentMilestone.childrenMilestones.length - 1
+        ].order + 1
+        : parentMilestone.order + 1;
+
+      if (parentMilestone.status === "ACTIVE") {
+        await tx.milestone.update({
+          where: { id: data.parentId },
+          data: {
+            status: "PENDING",
+          },
+        });
+      }
+
+      // Shift all milestones after the insertion point.
+      const milestonesToShift = await tx.milestone.findMany({
+        where: {
+          projectId,
+          order: {
+            gte: order,
+          },
+        },
+        orderBy: {
+          order: "desc",
+        },
+        select: {
+          id: true,
+          order: true,
+        },
+      });
+
+      for (const milestone of milestonesToShift) {
+        await tx.milestone.update({
+          where: {
+            id: milestone.id,
+          },
+          data: {
+            order: milestone.order + 1,
+          },
+        });
+      }
+    } else {
+      // Append to the end.
+      order = (await tx.milestone.count({ where: { projectId } })) + 1;
+    }
+
+    return tx.milestone.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        targetDate: new Date(data.targetDate),
+        budget: new Prisma.Decimal(data.budget),
+        order,
+        projectId,
+        parentId: data.parentId,
+      },
+    });
   });
 
   after(async () => {
-    const projectName = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true, siteManagerId: true } });
+    const projectName = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { name: true, siteManagerId: true },
+    });
+
     const activityPayload = createActivityLogEntry("milestoneAdded", {
       projectId: newMilestone.projectId,
       milestoneId: newMilestone.id,
       milestoneName: newMilestone.name,
     });
+
     const notificationPayload = createNotification("milestoneAdded", {
       projectId: newMilestone.projectId,
       milestoneId: newMilestone.id,
       milestoneName: newMilestone.name,
       projectName: projectName?.name ?? "Unknown Project",
     });
+
     await logAction(activityPayload);
-    await triggerNotification(projectName?.siteManagerId ? [projectName.siteManagerId, ADMIN_USER_ID] : [ADMIN_USER_ID], notificationPayload);
+
+    await triggerNotification(
+      projectName?.siteManagerId
+        ? [projectName.siteManagerId, ADMIN_USER_ID]
+        : [ADMIN_USER_ID],
+      notificationPayload,
+    );
 
     revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
-  })
-
+  });
 
   return {
     ...newMilestone,
