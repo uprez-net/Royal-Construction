@@ -31,15 +31,15 @@ interface EmailInput {
  */
 export async function sendEmail(email: EmailInput) {
   const graphClient = await graphClientPromise;
-  if(Array.isArray(email.to) && email.to.length === 0) {
-    throw new Error("Email 'to' field cannot be an empty array.");
+  const toList = (Array.isArray(email.to) ? email.to : [email.to]).filter((addr) => addr?.trim());
+  if (toList.length === 0) {
+    throw new Error("Email 'to' field must contain at least one non-empty recipient.");
   }
-
 
   await graphClient.sendMail({
     subject: email.subject,
     body: email.body,
-    to: email.to,
+    to: toList,
     cc: email.cc,
     bcc: email.bcc,
   });
