@@ -54,7 +54,12 @@ export async function saveLeadEmailTrail({ from, to, subject, body, sentAt }: Sa
             console.log(`  No lead found with email: ${from}. Aborting save to email trail.`);
             throw new Error(`No lead found with email: ${from}. Aborting save to email trail.`);
         }
-        const threads = getAllEmailThreads(body);
+        const threads = getAllEmailThreads(body, {
+            from: from,
+            to: to,
+            subject: subject,
+            sentAt: dataTimeFormat.format(new Date(sentAt))
+        });
         if (threads.length === 0) {
             return;
         }
