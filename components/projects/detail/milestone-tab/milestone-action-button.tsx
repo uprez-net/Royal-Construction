@@ -1,9 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useAppSelector } from "@/lib/store/hooks";
-import type {
-  MilestoneWithFilesTradiesUpdates,
-  UIMilestone,
-} from "@/types/project";
+import type { UIMilestone } from "@/types/project";
 import { Camera, Download, FilePenLine, Play } from "lucide-react";
 import { useMemo } from "react";
 
@@ -23,16 +20,16 @@ export function MilestoneActionGroup({
   onSendInvoice: () => void;
 }) {
   const project = useAppSelector((state) => state.projects.activeProject);
-  const milestones = project?.milestones ?? [];
   const isFirstMilestone = milestone.order === 1;
   const isChildOfFirstMilestone =
     prevMilestone?.order === 1 && milestone.parentId === prevMilestone.id;
   const hasChildren = milestone.childrenMilestones.length > 0;
   const prevMilestoneToParent = useMemo(() => {
+    const milestones = project?.milestones ?? [];
     const parentMilestone = milestones.find((m) => m.id === milestone.parentId);
     if (!parentMilestone) return undefined;
     return milestones.find((m) => m.order === parentMilestone.order - 1);
-  }, [milestones, milestone]);
+  }, [project?.milestones, milestone]);
 
   const isPending = milestone.status === "PENDING";
   const hasNoChildren = !hasChildren;

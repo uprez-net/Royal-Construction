@@ -1,5 +1,4 @@
 import { DataPoint } from "@/components/common/metric-card";
-import { TRADIE_TYPES } from "@/constants/tradieTypes";
 import {
     createTradie,
     deleteTradie,
@@ -20,7 +19,7 @@ import {
     TradieTableQuery,
     UpdatePriceInput,
 } from "@/types/tradie";
-import { convertCategoryToTradieType, TradieType } from "@/utils/normalize-tradie-type";
+import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 import { TradieIncident } from "@prisma/client";
 import {
     createAsyncThunk,
