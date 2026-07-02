@@ -72,9 +72,9 @@ export function AppShell({
   );
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#F7F6F2] text-slate-900">
+    <div className="relative h-dvh overflow-hidden bg-[#F7F6F2] text-slate-900">
       {/* Clean Light Background matching Email Theme */}
-      <div className="flex min-h-screen">
+      <div className="flex h-full">
         
         {/* ── Desktop Sidebar ── */}
         <aside className="hidden w-16 shrink-0 border-r border-[#E2E8F0] bg-white text-slate-600 shadow-sm md:flex md:flex-col md:items-center md:py-4">
@@ -216,7 +216,7 @@ export function AppShell({
           </Sheet>
 
           {/* ── Top Header ── */}
-          <header className="sticky top-0 z-30 border-b border-[#E2E8F0] bg-white text-slate-900 shadow-sm backdrop-blur">
+          <header className="shrink-0 z-30 border-b border-[#E2E8F0] bg-white text-slate-900 shadow-sm backdrop-blur">
             <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-4">
                 <Button
@@ -298,7 +298,7 @@ export function AppShell({
 
           <main
             className={cn(
-              "mx-auto flex h-[calc(100dvh-65px)] w-full flex-1 flex-col gap-6",
+              "mx-auto flex min-h-0 w-full flex-1 flex-col gap-6",
               isOfferDetailPage ? "max-w-none" : "max-w-screen-2xl",
               "overflow-y-auto",
               "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",

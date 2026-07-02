@@ -58,8 +58,9 @@ export function WorkbookImportControl({
               Import workbook rows
             </h3>
             <p className="max-w-prose text-sm text-muted-foreground">
-              Optional shortcut for existing quote files. It fills this cost
-              schedule and skips Project actuals, invoices and payment fields.
+              Optional shortcut for existing quote files. It fills this
+              calculation workbook and skips Project actuals, invoices and
+              payment fields.
             </p>
           </div>
         </div>

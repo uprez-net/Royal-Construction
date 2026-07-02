@@ -3,13 +3,23 @@ import { utils } from "xlsx";
 import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
 import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
-import type { LegacyWorkbookPricingSettings } from "@/lib/offer/workspace-pricing";
-import { DEFAULT_LEGACY_PRICING_SETTINGS } from "@/lib/offer/workspace-model";
+import {
+  DEFAULT_LEGACY_PRICING_SETTINGS,
+  DEFAULT_WORKSPACE_PRICING_SETTINGS,
+  OFFER_STAGE_CATALOG,
+  applyTaskMappingToCostLine,
+  type OfferStageCode,
+} from "@/lib/offer/workspace-model";
+import type {
+  LegacyWorkbookPricingSettings,
+  OfferWorkspacePricingSettings,
+} from "@/lib/offer/workspace-pricing";
 
 export type OfferWorkbookImportResult = {
   readonly sourceName: string;
   readonly costLines: readonly OfferWorkspaceCostLine[];
   readonly areaCalculator: OfferAreaCalculator;
+  readonly workspacePricingSettings: OfferWorkspacePricingSettings;
   readonly legacyPricingSettings: LegacyWorkbookPricingSettings;
   readonly validationMessages: readonly string[];
   readonly ignoredProjectFields: readonly string[];
@@ -32,26 +42,37 @@ export function parseRoyalQuoteWorkbook(
   workbook: WorkBook,
   sourceName: string,
 ): OfferWorkbookImportResult {
+  const quoteRows = readRows(workbook.Sheets.QUOTE, true);
   const sampleRows = readRows(workbook.Sheets["SAMPLE QUOTE"], true);
   const sampleDisplayRows = readRows(workbook.Sheets["SAMPLE QUOTE"], false);
   const costingDisplayRows = readRows(workbook.Sheets["costing report"], false);
   const areaRows = readRows(workbook.Sheets["area "], true);
-  const costLines = parseSampleQuoteRows(sampleRows);
+  const coverRows = readRows(workbook.Sheets.COVER, true);
+  const settingsRows = readRows(workbook.Sheets.SETTINGS, true);
+  const costLines =
+    quoteRows.length > 0 ? parseV2QuoteRows(quoteRows) : parseSampleQuoteRows(sampleRows);
+  const areaCalculator =
+    coverRows.length > 0 ? parseCoverArea(coverRows) : parseAreaCalculator(areaRows);
   const formulaErrors = [
     ...findFormulaErrors("SAMPLE QUOTE", sampleDisplayRows),
     ...findFormulaErrors("costing report", costingDisplayRows),
     ...findFormulaErrors("area", readRows(workbook.Sheets["area "], false)),
+    ...findFormulaErrors("QUOTE", readRows(workbook.Sheets.QUOTE, false)),
+    ...findFormulaErrors("COVER", readRows(workbook.Sheets.COVER, false)),
   ];
   const legacyPricingSettings = parseLegacyPricingSettings(sampleRows);
   const validationMessages = [
     ...formulaErrors,
-    ...findLegacyPricingWarnings(sampleRows, legacyPricingSettings),
+    ...(sampleRows.length > 0
+      ? findLegacyPricingWarnings(sampleRows, legacyPricingSettings)
+      : []),
   ];
 
   return {
     sourceName,
     costLines,
-    areaCalculator: parseAreaCalculator(areaRows),
+    areaCalculator,
+    workspacePricingSettings: parseWorkspacePricingSettings(settingsRows),
     legacyPricingSettings,
     validationMessages,
     ignoredProjectFields: findIgnoredProjectFields(costingDisplayRows),
@@ -122,10 +143,12 @@ function parseSampleQuoteRows(
     }
 
     const sourceRow = rowIndex + 1;
-    lines.push({
+    const line: OfferWorkspaceCostLine = {
       id: `imported-${sourceRow}-${itemName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
       stageCode: inferStageCode(itemName),
       itemName,
+      buildingSequenceTasks: [],
+      offerTenderLineItem: "",
       tradeOrVendor: textValue(getCell(rows, rowIndex, 4)),
       notesOrSpec: [getCell(rows, rowIndex, 5), getCell(rows, rowIndex, 6)]
         .map(textValue)
@@ -134,10 +157,69 @@ function parseSampleQuoteRows(
       costExGst,
       includedInContract: true,
       sourceReference: `SAMPLE QUOTE!H${sourceRow}`,
-    });
+    };
+
+    lines.push(applyTaskMappingToCostLine(line, itemName));
   }
 
   return lines;
+}
+
+function parseV2QuoteRows(
+  rows: readonly (readonly unknown[])[],
+): readonly OfferWorkspaceCostLine[] {
+  const lines: OfferWorkspaceCostLine[] = [];
+  let currentStageCode: OfferStageCode = "A";
+
+  rows.forEach((row, rowIndex) => {
+    const itemOrStage = textValue(row[0]);
+    const detectedStageCode = getStageCodeFromLabel(itemOrStage);
+    if (detectedStageCode !== null) {
+      currentStageCode = detectedStageCode;
+      return;
+    }
+
+    const costExGst = numberValue(row[4]);
+    if (itemOrStage.length === 0 || costExGst === null || costExGst <= 0) {
+      return;
+    }
+
+    const sourceRow = rowIndex + 1;
+    const line: OfferWorkspaceCostLine = {
+      id: `quote-${sourceRow}-${itemOrStage.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      stageCode: currentStageCode,
+      itemName: itemOrStage,
+      buildingSequenceTasks: [],
+      offerTenderLineItem: "",
+      tradeOrVendor: textValue(row[1]),
+      notesOrSpec: [row[2], row[3], row[5]]
+        .map(textValue)
+        .filter((value) => value.length > 0)
+        .join(" / "),
+      costExGst,
+      includedInContract: true,
+      sourceReference: `QUOTE!E${sourceRow}`,
+    };
+
+    lines.push(applyTaskMappingToCostLine(line, itemOrStage));
+  });
+
+  return lines;
+}
+
+function getStageCodeFromLabel(value: string): OfferStageCode | null {
+  const normalized = value.trim().toUpperCase();
+  for (const stage of OFFER_STAGE_CATALOG) {
+    if (
+      normalized === stage.code ||
+      normalized.startsWith(`${stage.code} -`) ||
+      normalized.startsWith(`${stage.code} —`)
+    ) {
+      return stage.code;
+    }
+  }
+
+  return null;
 }
 
 function inferStageCode(itemName: string): OfferWorkspaceCostLine["stageCode"] {
@@ -298,12 +380,74 @@ function findLegacyPricingWarnings(
 
 function parsePercentFromText(value: string): number | null {
   const match = /(\d+(?:\.\d+)?)%/.exec(value);
-  if (match === null) {
+  const percentText = match?.[1];
+  if (percentText === undefined) {
     return null;
   }
 
-  const parsed = Number(match[1]);
+  const parsed = Number(percentText);
   return Number.isFinite(parsed) ? parsed / 100 : null;
+}
+
+function parseWorkspacePricingSettings(
+  rows: readonly (readonly unknown[])[],
+): OfferWorkspacePricingSettings {
+  return {
+    targetMarkupPct: firstNumber(
+      [getCell(rows, 3, 1)],
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.targetMarkupPct,
+    ),
+    minimumMarkupPct: firstNumber(
+      [getCell(rows, 4, 1)],
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.minimumMarkupPct,
+    ),
+    gstRate: firstNumber(
+      [getCell(rows, 5, 1)],
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.gstRate,
+    ),
+    hbcfRate: firstNumber(
+      [getCell(rows, 6, 1)],
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.hbcfRate,
+    ),
+    adminCostFixed: firstNumber(
+      [getCell(rows, 7, 1)],
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.adminCostFixed,
+    ),
+    projectManagementCostFixed: firstNumber(
+      [getCell(rows, 8, 1)],
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.projectManagementCostFixed,
+    ),
+    contingencyPct: firstNumber(
+      [getCell(rows, 9, 1)],
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.contingencyPct,
+    ),
+  };
+}
+
+function parseCoverArea(rows: readonly (readonly unknown[])[]): OfferAreaCalculator {
+  return {
+    ...INITIAL_AREA_CALCULATOR,
+    groundFloorSqm: firstNumber(
+      [getCell(rows, 17, 1)],
+      INITIAL_AREA_CALCULATOR.groundFloorSqm,
+    ),
+    firstFloorSqm: firstNumber(
+      [getCell(rows, 18, 1)],
+      INITIAL_AREA_CALCULATOR.firstFloorSqm,
+    ),
+    garageSqm: firstNumber(
+      [getCell(rows, 19, 1)],
+      INITIAL_AREA_CALCULATOR.garageSqm,
+    ),
+    alfrescoSqm: firstNumber(
+      [getCell(rows, 20, 1)],
+      INITIAL_AREA_CALCULATOR.alfrescoSqm,
+    ),
+    porchSqm: firstNumber(
+      [getCell(rows, 21, 1)],
+      INITIAL_AREA_CALCULATOR.porchSqm,
+    ),
+  };
 }
 
 function parseAreaCalculator(

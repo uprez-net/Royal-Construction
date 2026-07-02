@@ -129,6 +129,95 @@ assert.deepEqual(result.ignoredProjectFields, [
   "PAYMENTS",
 ]);
 
+const v2QuoteRows = makeRows(160);
+v2QuoteRows[3] = [
+  "Stage / Item",
+  "Trade / Vendor",
+  "Notes / Spec",
+  "Unit Cost",
+  "Cost (ex-GST)",
+  "Comments",
+];
+v2QuoteRows[4][0] = "A - GENERAL REQUIREMENTS";
+v2QuoteRows[5][0] = "Plans & Specifications";
+v2QuoteRows[5][1] = "Architect";
+v2QuoteRows[5][2] = "CAS project plans";
+v2QuoteRows[5][4] = 12000;
+v2QuoteRows[16][0] = "B - SITE PREPARATION";
+v2QuoteRows[17][0] = "Site clearing";
+v2QuoteRows[17][1] = "Excavator";
+v2QuoteRows[17][4] = 4500;
+v2QuoteRows[142][4] = 16500;
+
+const v2CoverRows = makeRows(40);
+v2CoverRows[17][1] = 202.2;
+v2CoverRows[18][1] = 170.35;
+v2CoverRows[19][1] = 0;
+v2CoverRows[20][1] = 27.5;
+v2CoverRows[21][1] = 8.5;
+
+const v2SettingsRows = makeRows(12);
+v2SettingsRows[3][1] = 0.18;
+v2SettingsRows[4][1] = 0.12;
+v2SettingsRows[5][1] = 0.1;
+v2SettingsRows[6][1] = 0.014;
+v2SettingsRows[7][1] = 6000;
+v2SettingsRows[8][1] = 12000;
+v2SettingsRows[9][1] = 0.03;
+
+const v2Workbook = utils.book_new();
+utils.book_append_sheet(v2Workbook, utils.aoa_to_sheet(v2CoverRows), "COVER");
+utils.book_append_sheet(v2Workbook, utils.aoa_to_sheet(v2QuoteRows), "QUOTE");
+utils.book_append_sheet(
+  v2Workbook,
+  utils.aoa_to_sheet(v2SettingsRows),
+  "SETTINGS",
+);
+
+const v2Result = parseRoyalQuoteWorkbook(v2Workbook, "quote template v2.xlsx");
+
+assert.deepEqual(
+  v2Result.costLines.map((line) => ({
+    itemName: line.itemName,
+    stageCode: line.stageCode,
+    tradeOrVendor: line.tradeOrVendor,
+    costExGst: line.costExGst,
+    sourceReference: line.sourceReference,
+  })),
+  [
+    {
+      itemName: "Plans & Specifications",
+      stageCode: "A",
+      tradeOrVendor: "Architect",
+      costExGst: 12000,
+      sourceReference: "QUOTE!E6",
+    },
+    {
+      itemName: "Site clearing",
+      stageCode: "B",
+      tradeOrVendor: "Excavator",
+      costExGst: 4500,
+      sourceReference: "QUOTE!E18",
+    },
+  ],
+);
+assert.deepEqual(v2Result.workspacePricingSettings, {
+  targetMarkupPct: 0.18,
+  minimumMarkupPct: 0.12,
+  gstRate: 0.1,
+  hbcfRate: 0.014,
+  adminCostFixed: 6000,
+  projectManagementCostFixed: 12000,
+  contingencyPct: 0.03,
+});
+assert.equal(v2Result.areaCalculator.groundFloorSqm, 202.2);
+assert.equal(v2Result.areaCalculator.firstFloorSqm, 170.35);
+assert.equal(v2Result.areaCalculator.alfrescoSqm, 27.5);
+assert.equal(v2Result.areaCalculator.porchSqm, 8.5);
+assert.deepEqual(v2Result.validationMessages, []);
+
 function makeRows(count: number): unknown[][] {
-  return Array.from({ length: count }, () => []);
+  return Array.from({ length: count }, () =>
+    Array.from({ length: 30 }, () => ""),
+  );
 }

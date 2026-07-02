@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
+  calculateRateCardComparison,
   calculateDirectTotal,
+  calculateStageSubtotals,
   calculateLegacyWorkbookPricing,
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
@@ -49,6 +51,30 @@ assert.equal(
     { costExGst: 12500.42, includedInContract: true },
   ]),
   112500.42,
+);
+
+assert.deepEqual(
+  calculateStageSubtotals([
+    { stageCode: "A", costExGst: 12000, includedInContract: true },
+    { stageCode: "A", costExGst: 3000, includedInContract: false },
+    { stageCode: "C", costExGst: 40500, includedInContract: true },
+  ]),
+  [
+    {
+      stageCode: "A",
+      stageName: "General Requirements",
+      includedTotal: 12000,
+      rowCount: 2,
+      includedRowCount: 1,
+    },
+    {
+      stageCode: "C",
+      stageName: "Footings & Slab",
+      includedTotal: 40500,
+      rowCount: 1,
+      includedRowCount: 1,
+    },
+  ],
 );
 
 assert.equal(
@@ -131,6 +157,49 @@ assert.deepEqual(
     hasManualOverride: false,
     needsOverrideReason: false,
   },
+);
+
+assert.deepEqual(
+  calculateRateCardComparison({
+    product: "DOUBLE_STOREY",
+    tier: "MID",
+    totalAreaSqm: 407.71,
+    selectedContractValueIncGst: 945000,
+  }),
+  {
+    product: "DOUBLE_STOREY",
+    productLabel: "Double storey",
+    tier: "MID",
+    tierLabel: "Mid",
+    sellRatePerSqmIncGst: 2700,
+    marginFloorRatePerSqmIncGst: 2376,
+    targetContractValueIncGst: 1100817,
+    floorContractValueIncGst: 968718.96,
+    selectedContractValueIncGst: 945000,
+    varianceToTargetIncGst: -155817,
+    varianceToFloorIncGst: -23718.96,
+    status: "below_floor",
+  },
+);
+
+assert.equal(
+  calculateRateCardComparison({
+    product: "DOUBLE_STOREY",
+    tier: "MID",
+    totalAreaSqm: 407.71,
+    selectedContractValueIncGst: 1000000,
+  }).status,
+  "between_floor_and_target",
+);
+
+assert.equal(
+  calculateRateCardComparison({
+    product: "DOUBLE_STOREY",
+    tier: "MID",
+    totalAreaSqm: 407.71,
+    selectedContractValueIncGst: 1110000,
+  }).status,
+  "at_or_above_target",
 );
 
 assert.deepEqual(

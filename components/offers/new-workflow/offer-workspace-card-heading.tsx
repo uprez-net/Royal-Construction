@@ -36,3 +36,17 @@ export function OfferCardHeading({
     </div>
   );
 }
+
+type OfferSummaryBadgeProps = {
+  readonly label: string;
+  readonly value: number;
+};
+
+export function OfferSummaryBadge({ label, value }: OfferSummaryBadgeProps) {
+  return (
+    <span className="rounded-md border border-border bg-background px-2 py-1">
+      <span className="font-mono font-semibold text-foreground">{value}</span>{" "}
+      {label}
+    </span>
+  );
+}

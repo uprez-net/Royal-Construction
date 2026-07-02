@@ -1,4 +1,12 @@
 import { roundCurrency } from "@/lib/offer/pricing";
+import { OFFER_STAGE_CATALOG, type OfferStageCode } from "./workspace-model";
+export { calculateRateCardComparison } from "./workspace-rate-card";
+export type {
+  RateCardComparison,
+  RateCardProduct,
+  RateCardStatus,
+  RateCardTier,
+} from "./workspace-rate-card";
 
 export type MarginStatus =
   | "at_target"
@@ -73,8 +81,17 @@ export type OfferCustomerPrice = {
 };
 
 export type WorkspaceCostLinePricingInput = {
+  readonly stageCode?: OfferStageCode;
   readonly costExGst: number;
   readonly includedInContract: boolean;
+};
+
+export type OfferStageSubtotal = {
+  readonly stageCode: OfferStageCode;
+  readonly stageName: string;
+  readonly includedTotal: number;
+  readonly rowCount: number;
+  readonly includedRowCount: number;
 };
 
 export function calculateDirectTotal(
@@ -86,6 +103,27 @@ export function calculateDirectTotal(
       0,
     ),
   );
+}
+
+export function calculateStageSubtotals(
+  lines: readonly (WorkspaceCostLinePricingInput & {
+    readonly stageCode: OfferStageCode;
+  })[],
+): readonly OfferStageSubtotal[] {
+  return OFFER_STAGE_CATALOG.map((stage) => {
+    const stageLines = lines.filter((line) => line.stageCode === stage.code);
+    const includedLines = stageLines.filter((line) => line.includedInContract);
+
+    return {
+      stageCode: stage.code,
+      stageName: stage.name,
+      includedTotal: roundCurrency(
+        includedLines.reduce((sum, line) => sum + line.costExGst, 0),
+      ),
+      rowCount: stageLines.length,
+      includedRowCount: includedLines.length,
+    };
+  }).filter((stage) => stage.rowCount > 0);
 }
 
 export function parseNonNegativeNumberInput(value: string): number | null {

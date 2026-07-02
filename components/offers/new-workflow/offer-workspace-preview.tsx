@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import type {
   OfferDocumentDraft,
+  OfferWorkspaceCostLine,
   OfferWorkspaceJob,
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
+import { getIncludedOfferTenderLineItems } from "@/lib/offer/workspace-model";
 import type {
   OfferCustomerPrice,
   MarginStatus,
@@ -30,7 +32,10 @@ type OfferDocumentPreviewProps = {
   readonly draft: OfferDocumentDraft;
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
+  readonly lines: readonly OfferWorkspaceCostLine[];
+  readonly priceAdjustmentLabel: string;
   readonly pricing: OfferWorkspacePricing;
+  readonly standardPriceIncGst: number | null;
 };
 
 function getMarginBadgeClass(status: MarginStatus): string {
@@ -110,11 +115,19 @@ export function OfferDocumentPreview({
   draft,
   exclusions,
   job,
+  lines,
+  priceAdjustmentLabel,
   pricing,
+  standardPriceIncGst,
 }: OfferDocumentPreviewProps) {
   const visibleExclusions = exclusions.filter(
     (item) => item.includedInOfferDocument,
   );
+  const offerTenderLineItems = getIncludedOfferTenderLineItems(lines);
+  const saving =
+    standardPriceIncGst !== null
+      ? standardPriceIncGst - customerPrice.selectedContractValueIncGst
+      : null;
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -140,12 +153,22 @@ export function OfferDocumentPreview({
               </p>
             </div>
             <div className="text-right">
+              {standardPriceIncGst !== null && saving !== null && saving > 0 ? (
+                <p className="font-mono text-xs text-muted-foreground line-through">
+                  {formatCurrency(standardPriceIncGst)}
+                </p>
+              ) : null}
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Fixed price inc GST
               </p>
               <p className="font-heading text-2xl font-semibold">
                 {formatCurrency(customerPrice.selectedContractValueIncGst)}
               </p>
+              {saving !== null && saving > 0 ? (
+                <p className="font-mono text-xs text-royal-gold">
+                  {priceAdjustmentLabel || "Saving"} {formatCurrency(saving)}
+                </p>
+              ) : null}
               {customerPrice.hasManualOverride ? (
                 <p className="font-mono text-xs text-muted-foreground">
                   Internal build-up {formatCurrency(pricing.contractValueIncGst)}
@@ -154,7 +177,14 @@ export function OfferDocumentPreview({
             </div>
           </div>
           <p className="mt-4 text-sm leading-6">{draft.introText}</p>
-          <PreviewList items={draft.inclusionBullets} title="Included scope" />
+          <PreviewList
+            items={
+              offerTenderLineItems.length > 0
+                ? offerTenderLineItems
+                : draft.inclusionBullets
+            }
+            title="Offer/Tender line items"
+          />
           <PreviewList
             items={visibleExclusions.map((item) => item.label)}
             title="Excluded scope"

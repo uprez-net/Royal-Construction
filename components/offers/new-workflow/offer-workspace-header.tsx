@@ -2,24 +2,71 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type {
-  OfferWorkspaceJob,
-  OfferWorkspaceStatus,
+import {
+  OFFER_STATUS_LABEL,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import { Download, Send } from "lucide-react";
+import {
+  activeOfferPhase,
+  offerPhaseIndex,
+  type OfferWorkflowPhase,
+} from "@/lib/offer/workflow";
+import { cn } from "@/lib/utils";
+import { Check, Download, Send } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
 
-const WORKFLOW_STEPS = [
-  { label: "Job setup", phase: "offer", state: "current" },
-  { label: "Cost schedule", phase: "offer", state: "available" },
-  { label: "Pricing", phase: "offer", state: "available" },
-  { label: "Scope", phase: "offer", state: "available" },
-  { label: "Offer document", phase: "offer", state: "available" },
-  { label: "Tender", phase: "downstream", state: "locked" },
-  { label: "Handoff", phase: "downstream", state: "locked" },
-  { label: "Project", phase: "downstream", state: "locked" },
-] as const;
+// The workflow runs across three phases — Offer, Tender, Contract — then the
+// signed Contract is handed off to Project. See CONTEXT.md and ADR 0001.
+// Phase order + status→phase mapping live in @/lib/offer/workflow.
+const WORKFLOW_PHASES: readonly {
+  readonly id: OfferWorkflowPhase;
+  readonly label: string;
+}[] = [
+  { id: "offer", label: "Offer" },
+  { id: "tender", label: "Tender" },
+  { id: "contract", label: "Contract" },
+  { id: "handoff", label: "Handoff" },
+];
+
+const WORKFLOW_STEPS: readonly {
+  readonly label: string;
+  readonly phase: OfferWorkflowPhase;
+  readonly target: string | null;
+}[] = [
+  { label: "Job setup", phase: "offer", target: "offer-step-job-setup" },
+  { label: "Cost schedule", phase: "offer", target: "offer-step-cost-schedule" },
+  { label: "Pricing", phase: "offer", target: "offer-step-pricing" },
+  { label: "Scope", phase: "offer", target: "offer-step-scope" },
+  { label: "Offer document", phase: "offer", target: "offer-step-offer-document" },
+  { label: "Send & negotiate", phase: "offer", target: "offer-step-send" },
+  { label: "Tender", phase: "tender", target: "offer-step-tender" },
+  { label: "Contract", phase: "contract", target: "offer-step-contract" },
+  { label: "Project", phase: "handoff", target: "offer-step-project" },
+];
+
+// Current node label per status; the active phase comes from activeOfferPhase.
+function currentStepLabel(status: OfferWorkspaceStatus): string {
+  switch (status) {
+    case "sent":
+      return "Send & negotiate";
+    case "agreed":
+    case "tender_draft":
+    case "tender_sent":
+    case "tender_signed":
+      return "Tender";
+    case "contract_draft":
+    case "contract_sent":
+    case "contract_signed":
+      return "Contract";
+    case "project":
+      return "Project";
+    case "pending":
+    default:
+      return "Job setup";
+  }
+}
 
 type OfferWorkspaceHeaderProps = {
   readonly customerPrice: OfferCustomerPrice;
@@ -37,14 +84,14 @@ export function OfferWorkspaceHeader({
   status,
 }: OfferWorkspaceHeaderProps) {
   return (
-    <section className="sticky top-0 z-20 rounded-lg border border-border/70 bg-white/95 p-4 shadow-sm">
+    <section className="rounded-lg border border-border/70 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge className="bg-royal-gold text-white">
               {job.reference}-{job.revision}
             </Badge>
-            <Badge variant="outline">{status === "sent" ? "Sent" : "Pending"}</Badge>
+            <Badge variant="secondary">{OFFER_STATUS_LABEL[status]}</Badge>
             <Badge variant="secondary">Working draft</Badge>
           </div>
           <h1
@@ -68,17 +115,17 @@ export function OfferWorkspaceHeader({
           </div>
           <Button type="button" variant="outline" onClick={onDownloadPreview}>
             <Download className="size-4" aria-hidden="true" />
-            Download preview
+            Download offer
           </Button>
           <Button
-            disabled={customerPrice.needsOverrideReason || status === "sent"}
+            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+            disabled={customerPrice.needsOverrideReason || status !== "pending"}
             title={
               customerPrice.needsOverrideReason
                 ? "Add an override reason before marking the Offer document sent."
                 : undefined
             }
             type="button"
-            variant="outline"
             onClick={onMarkSent}
           >
             <Send className="size-4" aria-hidden="true" />
@@ -90,54 +137,177 @@ export function OfferWorkspaceHeader({
   );
 }
 
-export function OfferWorkflowSteps() {
+function getScrollableAncestor(node: HTMLElement): HTMLElement {
+  let el = node.parentElement;
+  while (el) {
+    const overflowY = getComputedStyle(el).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      el.scrollHeight > el.clientHeight
+    ) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return (document.scrollingElement as HTMLElement) ?? document.body;
+}
+
+function scrollToWorkflowStep(target: string) {
+  const el = document.getElementById(target);
+  if (!el) {
+    return;
+  }
+  const scroller = getScrollableAncestor(el);
+  const scrollerTop = scroller.getBoundingClientRect().top;
+
+  // Clear the sticky header + stepper that stay pinned at the scroller's top.
+  // Measure the chrome's bottom relative to the scroller so the offset stays
+  // correct across the scroller's own padding and responsive header heights.
+  const stickyHeader = document.querySelector<HTMLElement>(
+    "[data-offer-sticky-header]",
+  );
+  const chromeBottom = stickyHeader
+    ? stickyHeader.getBoundingClientRect().bottom - scrollerTop
+    : 128;
+  const offset = chromeBottom + 12;
+  const top =
+    el.getBoundingClientRect().top - scrollerTop + scroller.scrollTop - offset;
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  const nextTop = Math.max(0, top);
+
+  if (prefersReducedMotion) {
+    scroller.scrollTop = nextTop;
+  } else {
+    scroller.scrollTo({ top: nextTop, behavior: "smooth" });
+  }
+}
+
+export function OfferWorkflowSteps({
+  status,
+}: {
+  readonly status: OfferWorkspaceStatus;
+}) {
+  const currentLabel = currentStepLabel(status);
+  const activeIndex = offerPhaseIndex(activeOfferPhase(status));
+  const currentIndex = WORKFLOW_STEPS.findIndex(
+    (step) => step.label === currentLabel,
+  );
+
   return (
     <nav
       aria-label="Offer workflow stages"
-      className="max-w-full overflow-hidden rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
+      className="max-w-full overflow-x-auto rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
     >
-      <ol className="flex min-w-[920px] overflow-x-auto">
+      {/* Phase bands: Offer / Tender / Contract, with Project set apart as handoff */}
+      <ol aria-hidden="true" className="flex min-w-[920px]">
+        {WORKFLOW_PHASES.map((phase) => {
+          const count = WORKFLOW_STEPS.filter(
+            (step) => step.phase === phase.id,
+          ).length;
+          const reached = offerPhaseIndex(phase.id) <= activeIndex;
+          const isHandoff = phase.id === "handoff";
+
+          return (
+            <li
+              key={phase.id}
+              style={{ flexGrow: count }}
+              className="min-w-0 basis-0 px-1"
+            >
+              <div
+                className={cn(
+                  "border-b-2 pb-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors",
+                  isHandoff
+                    ? "border-dashed border-muted-foreground/35 text-muted-foreground/70"
+                    : reached
+                      ? "border-royal-gold/70 text-royal-gold-dark"
+                      : "border-border text-muted-foreground",
+                )}
+              >
+                {phase.label}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+
+      {/* Node rail */}
+      <ol className="flex min-w-[920px] pt-3">
         {WORKFLOW_STEPS.map((step, index) => {
           const isFirst = index === 0;
           const isLast = index === WORKFLOW_STEPS.length - 1;
-          const isCurrent = step.state === "current";
-          const isAvailableOffer = step.state === "available";
-          const isLocked = step.state === "locked";
+          const nodePhaseIndex = offerPhaseIndex(step.phase);
+          const isCurrent = step.label === currentLabel;
+          const isComplete =
+            !isCurrent &&
+            (nodePhaseIndex < activeIndex ||
+              (nodePhaseIndex === activeIndex && index < currentIndex));
+          const isAvailable =
+            nodePhaseIndex === activeIndex && !isCurrent && !isComplete;
+          const isLocked = nodePhaseIndex > activeIndex;
+          const isReached = nodePhaseIndex <= activeIndex;
+          const isNavigable = step.target !== null;
+          const leftDashed = step.phase === "handoff";
+          const rightDashed = WORKFLOW_STEPS[index + 1]?.phase === "handoff";
+          const connectorClass = isReached
+            ? "bg-royal-gold/60"
+            : "bg-muted-foreground/35";
 
-          return (
-            <li key={step.label} className="relative flex flex-1 flex-col items-center">
+          const stepContent = (
+            <>
               <div className="relative flex h-9 w-full items-center justify-center">
                 {!isFirst ? (
-                  <span
-                    aria-hidden="true"
-                    className={
-                      step.phase === "offer"
-                        ? "absolute left-0 right-1/2 top-1/2 h-1 -translate-y-1/2 bg-royal-gold/60"
-                        : "absolute left-0 right-1/2 top-1/2 h-1 -translate-y-1/2 bg-muted-foreground/35"
-                    }
-                  />
+                  leftDashed ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-0 right-1/2 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-muted-foreground/40"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "absolute left-0 right-1/2 top-1/2 h-1 -translate-y-1/2",
+                        connectorClass,
+                      )}
+                    />
+                  )
                 ) : null}
                 {!isLast ? (
-                  <span
-                    aria-hidden="true"
-                    className={
-                      step.phase === "offer"
-                        ? "absolute left-1/2 right-0 top-1/2 h-1 -translate-y-1/2 bg-royal-gold/60"
-                        : "absolute left-1/2 right-0 top-1/2 h-1 -translate-y-1/2 bg-muted-foreground/35"
-                    }
-                  />
+                  rightDashed ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-1/2 right-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-muted-foreground/40"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "absolute left-1/2 right-0 top-1/2 h-1 -translate-y-1/2",
+                        connectorClass,
+                      )}
+                    />
+                  )
                 ) : null}
                 <span
                   aria-current={isCurrent ? "step" : undefined}
-                  className={
+                  className={cn(
+                    "relative z-10 flex size-8 items-center justify-center rounded-full font-mono text-xs font-medium transition-shadow",
+                    isComplete
+                      ? "border-2 border-royal-gold bg-royal-gold text-white"
+                      : "bg-background",
                     isCurrent
-                      ? "relative z-10 flex size-8 items-center justify-center rounded-full border-2 border-royal-gold bg-background shadow-[0_0_0_8px_var(--royal-gold-light)]"
-                      : isAvailableOffer
-                        ? "relative z-10 flex size-7 items-center justify-center rounded-full border border-royal-gold/50 bg-background font-mono text-xs font-medium text-foreground"
-                        : "relative z-10 flex size-3 items-center justify-center rounded-full bg-background ring-2 ring-muted-foreground/40"
-                  }
+                      ? "border-2 border-royal-gold text-royal-gold-dark shadow-[0_0_0_6px_var(--royal-gold-light)]"
+                      : isAvailable
+                        ? "border border-royal-gold/50 text-foreground group-hover:border-royal-gold group-hover:shadow-[0_0_0_5px_var(--royal-gold-light)]"
+                        : isLocked
+                          ? "border border-dashed border-muted-foreground/40 text-muted-foreground"
+                          : "",
+                  )}
                 >
-                  {isCurrent ? (
+                  {isComplete ? (
+                    <Check className="size-4" aria-hidden="true" />
+                  ) : isCurrent ? (
                     <>
                       <span
                         className="absolute size-5 rounded-full bg-royal-gold/35 motion-safe:animate-ping"
@@ -148,24 +318,45 @@ export function OfferWorkflowSteps() {
                         aria-hidden="true"
                       />
                     </>
-                  ) : isAvailableOffer ? (
-                    index + 1
                   ) : (
-                    <span className="sr-only">{index + 1}</span>
+                    index + 1
                   )}
                 </span>
               </div>
               <span
-                className={
+                className={cn(
+                  "mt-2 text-center text-sm transition-colors group-hover:text-royal-gold-dark",
                   isCurrent
-                    ? "mt-2 text-center text-sm font-semibold text-foreground"
+                    ? "font-semibold text-foreground"
                     : isLocked
-                      ? "mt-2 text-center text-sm text-muted-foreground"
-                      : "mt-2 text-center text-sm font-medium text-foreground"
-                }
+                      ? "text-muted-foreground"
+                      : "font-medium text-foreground",
+                )}
               >
                 {step.label}
               </span>
+            </>
+          );
+
+          return (
+            <li
+              key={step.label}
+              className="relative flex flex-1 flex-col items-center"
+            >
+              {isNavigable ? (
+                <button
+                  type="button"
+                  aria-label={`Jump to ${step.label}`}
+                  onClick={() => scrollToWorkflowStep(step.target as string)}
+                  className="group flex w-full cursor-pointer flex-col items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+                >
+                  {stepContent}
+                </button>
+              ) : (
+                <div className="flex w-full flex-col items-center">
+                  {stepContent}
+                </div>
+              )}
             </li>
           );
         })}

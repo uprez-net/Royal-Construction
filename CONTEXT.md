@@ -5,18 +5,22 @@ Royal Constructions moves a **Lead** from qualification through **Offer** negoti
 ## End-to-end workflow (decided direction)
 
 ```text
-Lead → Offer (negotiate) → Tender signed → MBA Contract signed off-system → Contract uploaded → Project → Costing report
+Lead → Offer (build → send → negotiate → agreed)
+     → Tender (payment schedule → generate → DocuSign sign: builder + customer)
+     → Contract (generate → DocuSign sign) → Project → Costing report
 ```
 
-| Phase | What happens | Primary document |
-|-------|----------------|------------------|
-| Lead | Qualification, plans, lead discussion | — |
-| Offer | Assumptions, internal costing, inclusions/exclusions discussed; client negotiates price and scope | **Offer document** (summary for negotiation) |
-| Tender | Full fixed-price package after agreement; signed by **builder and customer** | **Tender** (legal) |
-| Handoff | Signed Tender, MBA Contract upload, initial payment | All three required before Project |
-| Project | Job execution; budget vs actual tracked | **Costing report** (SAMPLE QUOTE pattern) |
+Three workflow **phases** drive the top-card stepper — **Offer**, **Tender**, **Contract** — after which the signed Contract is **handed off to Project**.
 
-_Avoid_: Treating negotiation PDF and signed Tender as the same document; creating Project before Contract
+| Phase | What happens | Primary document | Stepper steps |
+|-------|----------------|------------------|---------------|
+| Lead | Qualification, plans, lead discussion | — | — |
+| **Offer** | Assumptions, internal costing, pricing, inclusions/exclusions; Offer document generated, **sent through the system**, client negotiates, revisions, **agreed** | **Offer document** (summary for negotiation) | Job setup · Cost schedule · Pricing · Scope · Offer document · Send & negotiate |
+| **Tender** | After **agreed**: payment schedule decided, fixed-price **Tender** generated and sent via **DocuSign**; signed by **builder and customer** | **Tender** (legal) | Tender |
+| **Contract** | Contract **generated in-app** from Tender data, sent via **DocuSign**; signed by both parties | **Contract** | Contract |
+| Project (handoff) | Created once the **Contract is signed**; job execution, budget vs actual tracked | **Costing report** (SAMPLE QUOTE pattern) | Project |
+
+_Avoid_: Treating negotiation PDF and signed Tender as the same document; off-system MBA upload as the contract system of record (superseded — see ADR 0001); creating Project before the Contract is signed
 
 ## Language
 
@@ -28,6 +32,10 @@ _Avoid_: Quote, quotation, using Offer to mean the signed legal package
 The **customer-facing negotiation output** — a **summary one-pager** (v1): cover (client, site, ref), bullet **inclusions** and **exclusions**, single **contract value (inc GST)**, and validity. **No numbered inclusion table** on the Offer document; that appears on the **Tender** after **Offer agreed**. Sent in **revisions** during negotiation.
 _Avoid_: Tender (legal package), full Tender sections during negotiation
 
+**Building Proposal** (observed legacy label):
+A customer-facing proposal document title used in existing Dropbox files. In this context it maps to **Offer document** when it is a pre-signature proposal/negotiation output; it is not the signed legal **Tender** unless the document itself contains Tender acceptance/signature evidence.
+_Avoid_: Treating the proposal title as proof of Tender status
+
 **Offer internal work** (decided):
 During **Offer** creation the builder runs the **full internal cost schedule** (stages A–O, contract build-up, margin analysis, inclusion–cost linking) from assumptions and plans. This work is **never shown to the client** on the Offer document. It drives the one-pager total and seeds the **Tender** inclusion table when the Offer is **agreed**.
 _Avoid_: Skipping internal costing until Tender, exposing margin or trade lines on the Offer document
@@ -36,13 +44,12 @@ _Avoid_: Skipping internal costing until Tender, exposing margin or trade lines 
 The **final legal fixed-price document** issued after negotiation is settled. Full client metadata, inclusion tables with status, payment schedule, exclusions, terms and conditions, and **acceptance** signed by **builder and customer**. Maps to `Royal Constructions TENDER TEMPLATE v3 (NCC 2025).docx`. Distinct from the negotiation **Offer document**.
 _Avoid_: Offer document, quotation PDF
 
-**Contract** (decided):
-Royal Construction uses an **MBA contract**, completed via an **external portal** (outside this app), signed offline, then **uploaded** to the Offer as the signed Contract PDF. The app does **not** fill or generate MBA contracts — upload is the system of record. Distinct from the signed **Tender**.
-_Avoid_: In-app MBA merge/generation, treating Tender upload as Contract
+**Contract** (decided — supersedes off-system upload; see ADR 0001):
+The **legal building contract** generated **in-app** from the signed **Tender** data, then sent for e-signature via **DocuSign** (a DocuSign template pulls the app-supplied fields). Signed by **builder and customer** in DocuSign; the executed PDF returns to the Offer as system of record. Distinct from the signed **Tender**.
+_Avoid_: Off-system MBA portal as system of record, manual signed-PDF upload as the contract path, treating Tender sign as Contract sign
 
-**Contract upload** (decided):
-After **tender_signed**, staff complete the MBA contract on the **external portal**, collect signatures offline, and **upload** the signed Contract PDF to the Offer. Optional metadata: contract date, MBA reference.
-_Avoid_: Project before Contract upload, generating Contract inside the app in v1
+**Contract upload** (superseded):
+Former off-system model (external MBA portal + manual signed-PDF upload). Replaced by in-app **Contract** generation + **DocuSign** e-signature — see **Contract** and ADR 0001.
 
 **Costing report** (decided):
 The **Project-phase** budget tracker — quote (budget) vs actual vs variance per trade line, plus invoices. Maps to `SAMPLE QUOTE.xlsx` (`SAMPLE QUOTE` + `costing report` sheets). Seeded from the accepted Offer’s internal cost lines via the **catalog crosswalk** when the **Project** is created. Not used during Offer negotiation with the client.
@@ -76,17 +83,17 @@ _Avoid_: One chat per Lead for all revisions (current code behaviour)
 The main chat panel shows **Offer chat only**. **Lead discussion** is injected as **agent context** (transcript summary and/or messages + files) on every revision; it is not shown as a separate transcript panel in v1.
 _Avoid_: Unified lead+offer timeline, side-by-side lead transcript panel (deferred)
 
-**Offer status** (decided):
-The **Offer** entity tracks status through **tender_signed**: **pending**, **sent**, **agreed**, **tender_draft** / **tender_sent**, **tender_signed**, **rejected**, **superseded**. Handoff checklist (Tender PDF, Contract upload, initial payment) applies after **tender_signed**. **Project** once all three are complete.
-_Avoid_: Separate Tender/Contract records in v1, Offer status ending at “agreed” with no tender_signed state
+**Offer status** (decided — extended for the Contract phase; see ADR 0001):
+The **Offer** entity tracks the full lifecycle: **pending**, **sent**, **agreed**, **tender_draft**, **tender_sent** (DocuSign out for signature), **tender_signed**, **contract_draft**, **contract_sent** (DocuSign out), **contract_signed**, **rejected**, **superseded**. **Project** is created once **contract_signed** (no deposit or upload gate). Status drives the top-card stepper's active node and phase.
+_Avoid_: Offer status ending at "agreed" or "tender_signed" with no contract states, deposit/upload as a Project gate
 
-**Offer handoff checklist** (decided):
-After **tender_signed**, **Create Project** requires **all three**: (1) **signed Tender PDF** on the Offer, (2) **uploaded signed MBA Contract PDF**, and (3) **initial payment recorded**. MBA Contract is completed off-system via the external portal. Deposit amount is **flexible** (org default with per-Offer override when recording).
-_Avoid_: Project missing any checklist item, in-app MBA contract generation
+**Offer handoff** (decided — supersedes the 3-item checklist; see ADR 0001):
+**Create Project** is gated solely on **contract_signed** (Contract executed via DocuSign). The former three-item checklist (signed Tender PDF + uploaded MBA Contract PDF + initial payment) is **dropped**: signing is in-app via DocuSign and the deposit is no longer a handoff precondition (tracked in Project financials instead).
+_Avoid_: Deposit or PDF-upload as a Project precondition, Project before contract_signed
 
-**Marking an Offer sent** (decided direction):
-**Download Offer document** while pending does not change status. **Send Offer document** (in-app or mark as sent) sets **sent** when the negotiation package goes to the client. Distinct from sending the final **Tender**.
-_Avoid_: Auto-sent on PDF download, sending Tender during negotiation phase
+**Marking an Offer sent** (decided):
+**Download Offer document** while pending does not change status. **Send Offer document** emails the one-pager with a **tracked link** (open telemetry) and sets **sent**. The customer **replies by email**; staff **log the requested changes** and create a **new revision** (v1 has **no customer self-service portal**). Distinct from sending the final **Tender** via DocuSign.
+_Avoid_: Auto-sent on PDF download, customer self-service portal in v1, sending Tender during negotiation
 
 **Offer agreed** (decided):
 Estimator marks when the client and builder have **settled scope and price** after negotiation. **Freezes** the internal snapshot and **auto-generates** the full **Tender** — numbered inclusion items, statuses, payment schedule, T&C, and acceptance — from internal cost schedule + catalog mapping. Estimator **reviews and edits** Tender before send. Does not mean Tender is signed yet.
@@ -96,24 +103,32 @@ _Avoid_: Using “agreed” to mean Tender signed, manual re-keying of Tender fr
 On **Offer agreed**, the app builds the **Tender** from internal data (inclusion items, statuses, contract value, metadata). The **Offer document** one-pager bullets may be **auto-summarized** from the same source during negotiation; the generated Tender is the authoritative detailed scope for legal sign-off.
 _Avoid_: Tender built only from one-pager bullets, blank Tender at agree
 
-**Tender signed** (decided):
-Both **builder and customer** have signed the **Tender** acceptance. **Signed Tender PDF** uploaded to the Offer. Required before Contract upload and **Project** creation.
-_Avoid_: Marking tender signed without signed Tender PDF on file
+**Tender signed** (decided — via DocuSign; see ADR 0001):
+Both **builder and customer** have signed the **Tender** through **DocuSign**. The executed PDF returns to the Offer automatically on envelope completion. Precedes in-app **Contract** generation.
+_Avoid_: Manual signed-PDF upload as the signing path, marking signed without a completed DocuSign envelope
 
 **Marking an Offer rejected** (decided):
 Estimator **Mark rejected** when the client declines during or after negotiation. **Rejected reason** is **required**. Enables **New revision** from a rejected Offer.
 _Avoid_: Auto-reject on validity expiry (v1), rejected without reason
 
-**Initial payment** (decided):
-First client payment tied to the Offer — typically tender deposit; **flexible amount** (org default with per-Offer override when recording). **Third handoff checklist item** with signed Tender and uploaded Contract — all three required before **Create Project**. Optional **admin override** if deposit incomplete.
-_Avoid_: Fixed-only deposit with no override path, Project without deposit recorded
+**Initial payment** (decided — no longer a Project gate; see ADR 0001):
+First client payment (typically a tender deposit), **flexible amount**. Tracked against the Offer/Project for financials but **not a precondition** for **Create Project**. Handoff is gated on **contract_signed** alone.
+_Avoid_: Deposit as a Project gate, blocking handoff on payment
 
-**Project from Offer** (decided):
-**Project** is created when the Offer has **signed Tender PDF**, **uploaded MBA Contract PDF**, and **initial payment recorded**. Pre-filled from Lead, Offer, and Tender. On creation, seed the **Costing report** from internal cost lines via SAMPLE crosswalk.
-_Avoid_: Project on Tender sign alone, Project before Contract upload or deposit
+**Project from Offer** (decided — gated on contract_signed; see ADR 0001):
+**Project** is created once the Offer reaches **contract_signed** (Contract executed via DocuSign). Pre-filled from Lead, Offer, Tender, and Contract. On creation, seed the **Costing report** from internal cost lines via SAMPLE crosswalk.
+_Avoid_: Project on Tender sign alone, Project before Contract signed, deposit/upload preconditions
 
 **Project from accepted Offer** (superseded wording):
-See **Project from Offer** — **tender_signed + Contract upload + initial payment → Project**.
+See **Project from Offer** — now **contract_signed → Project** (no upload or deposit gate).
+
+**Contract signed** (decided — via DocuSign; see ADR 0001):
+Both **builder and customer** have signed the app-generated **Contract** through **DocuSign**; the executed PDF returns to the Offer on envelope completion. The sole gate for **Create Project**.
+_Avoid_: Treating Tender signed as Contract signed, upload/deposit as an additional gate
+
+**Payment schedule** (decided):
+The staged payment breakdown (deposit, base/frame/lock-up/fixing/completion, etc.) decided in the **Tender** phase after **agreed**, before **Tender generation**. Seeds the Tender's payment schedule and downstream Project milestones.
+_Avoid_: Deciding the schedule on the Offer document during negotiation, treating it as a customer-facing Offer artifact
 
 **Offer editing persistence** (decided):
 While an Offer is in **pending**, **sent**, or pre-**agreed** negotiation, changes to the internal cost schedule and **Offer document** **auto-save** (debounced). Once **agreed**, the agreed snapshot is frozen for Tender generation. Tender, Contract, and superseded Offers are read-only.
@@ -154,6 +169,10 @@ _Avoid_: Milestone (project phase — related but not identical), Section 1 / Se
 One editable row within a cost stage: item name, trade/vendor, notes, cost (ex-GST). Distinct from a tender **inclusion item** (narrative + status, no price).
 _Avoid_: Offer price row, quote item
 
+**Offer/Tender wording** (decided):
+The customer-visible narrative sentence that explains a costing task on the **Offer document** or generated **Tender** without exposing the internal cost, margin, trade quote, or supplier line. It may summarize one or many **Building sequence tasks**.
+_Avoid_: Cost line, priced row, trade booking instruction
+
 **Inclusion item**:
 A numbered row on the Tender (e.g. 1.10 Site Preparation) with description and **inclusion status**. No unit cost shown to client.
 _Avoid_: Cost line, service inclusion (UI label)
@@ -192,7 +211,23 @@ _Avoid_: Grand total (ambiguous GST)
 
 ## Downstream use
 
-When a **Project** is created from a **Contract**, the Offer’s internal cost schedule seeds the **Costing report** (SAMPLE crosswalk). Milestone budgets and materials may follow in a later **Pricing Model** pass.
+When a **Project** is created from a **Contract**, the Offer’s internal cost schedule seeds the **Costing report** (SAMPLE crosswalk). A valid Project milestone source, budget mapping, and materials may follow in a later **Pricing Model** pass.
+
+**Building Sequence** (decided):
+The ordered Project execution checklist created after **Project from Offer**. It breaks accepted scope into site tasks that can be scheduled, inspected, and booked with trades; sequence identifiers are ordering aids, not stable commercial references.
+_Avoid_: Internal cost schedule, Tender inclusion table
+
+**Building sequence task** (decided):
+One executable task in the **Building Sequence**, such as peg-out survey, piering and pouring, frame inspection, waterproofing inspection, or driveway pour. It may trace back to one **Cost line** task during Offer costing and may roll up into one **Offer/Tender wording** sentence.
+_Avoid_: Cost line, inclusion item
+
+**Trade to book** (decided):
+The trade or coordinator role that should be booked for a **Building sequence task** during Project execution. It is downstream handoff metadata and does not appear as customer-facing Offer/Tender wording.
+_Avoid_: Trade/vendor cost field, customer-visible contractor list
+
+**Stage/milestone mapping source** (rejected):
+The workbook's stage/milestone mapping is not an authoritative relationship for Offer, Tender, or Project creation. Ignore it until Royal Constructions defines a separate valid Project milestone source.
+_Avoid_: Using workbook stage/milestone labels to drive Offer/Tender wording or Project creation
 
 ## Planned (deferred)
 
@@ -202,7 +237,7 @@ When a **Project** is created from a **Contract**, the Offer’s internal cost s
 - Per-m² rate card and build-type multipliers
 - Multi-dwelling cost allocation across offer price rows
 - PC allowance caps and variation triggers
-- Stage-to-milestone budget mapping on project handoff
+- Valid Project milestone source and budget mapping on project handoff
 
 Do not implement pricing policy in the Offer UI until this section is written.
 
