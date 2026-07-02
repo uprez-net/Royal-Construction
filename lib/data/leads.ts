@@ -28,6 +28,8 @@ import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { sendEmail } from "../azureClient";
 import { generateEmailChecksum } from "@/utils/generator";
 import { dataTimeFormat } from "@/utils/formatters";
+import { auth } from "@clerk/nextjs/server";
+import { getUserByClerkIdCached } from "./user";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
@@ -200,13 +202,14 @@ export async function getAllLeads(): Promise<UiLead[]> {
 }
 
 /**
- * Retrieves a paginated list of leads with optional search, stage filtering,
- * and date-range filtering.
+ * Retrieves a paginated list of leads with optional search, stage filtering, 
+ * date-range filtering, and filtering for leads without an associated project.
  *
  * Supports filtering by:
  * - Lead stage(s)
  * - Search term (name, email, phone or location)
  * - Created date range relative to the Australia/Sydney timezone
+ * - Leads without an associated project
  *
  * Results are ordered by newest first and include all related entities
  * required by the leads interface.
@@ -216,9 +219,10 @@ export async function getAllLeads(): Promise<UiLead[]> {
  * @param query - Optional search query.
  * @param status - Optional list of stages to filter by.
  * @param filterTiming - Optional predefined date range.
+ * @param filterLeadsWithoutProject - Optional flag to filter leads that do not have an associated project.
  * @returns Paginated lead collection.
  */
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string): Promise<PaginatedLeadsResult> {
+export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string, filterLeadsWithoutProject?: boolean): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
   const search = normalizeSearch(query);
@@ -296,6 +300,11 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     const leads = await prisma.lead.findMany({
       where: {
         ...where,
+        ...(filterLeadsWithoutProject && {
+          project: {
+            is: null,
+          },
+        }),
         ...timingFilter,
         ...(status && status.length > 0
           ? { stage: { in: status } }
@@ -1025,14 +1034,32 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
  */
 export async function sendLeadEmail(leadId: number, subject: string, body: string, to: string) {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("User not authenticated");
+    }
+    const user = await getUserByClerkIdCached(userId);
+    if (!user) {
+      throw new Error("Authenticated user not found");
+    }
     const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
     if (!existingLead) {
       throw new Error("Lead not found");
     }
+    const signedBody = `
+    Hi ${existingLead.name},
+    <br> 
+    ${body}
+    <br><br>
+    ${user.name},
+    <br>
+    ${user.email},
+    Royal Constructions Team
+    `
     await sendEmail({
       to,
       subject,
-      body,
+      body: signedBody, // Just for better salutation, the actual email body is stored in the database without the signature.
     });
     const checksum = await generateEmailChecksum(subject, body, process.env.GRAPH_SENDER_UPN ?? to, to, dataTimeFormat.format(new Date()));
     const emailRecord = await prisma.leadEmails.create({

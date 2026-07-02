@@ -1,107 +1,40 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Reply, X } from "lucide-react";
 import type { LeadEmails } from "@prisma/client";
-import { Mail, Send, Loader2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { sendLeadEmail } from "@/lib/data/leads";
-
-interface LeadEmailReplyProps {
+interface ReplyBannerProps {
   email: LeadEmails;
-  appendEmailToLead: (leadId: number, email: LeadEmails) => void;
+  onCancel: () => void;
 }
 
-export function LeadEmailReply({
-  email,
-  appendEmailToLead,
-}: LeadEmailReplyProps) {
-  const [subject, setSubject] = useState(
-    email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
-  );
-  const [body, setBody] = useState("");
-  const [sending, startTransition] = useTransition();
-
-  async function handleSend() {
-    try {
-      const newEmail = await sendLeadEmail(
-        email.leadId,
-        subject,
-        body,
-        email.emailFrom,
-      );
-      setBody("");
-      appendEmailToLead(email.leadId, newEmail);
-      toast.success("Email sent successfully!");
-    } catch (error) {
-      console.error("Error sending email:", error);
-      toast.error("Failed to send email. Please try again.");
-    }
-  }
-
+/**
+ * Small, reusable "replying to" chip. Shows which message is being replied
+ * to and lets the user back out of the reply. Deliberately dumb/presentational
+ * so it can be reused anywhere a reply context needs to be surfaced.
+ */
+export function ReplyBanner({ email, onCancel }: ReplyBannerProps) {
   return (
-    <Card className="border-dashed bg-background p-4">
-      <div className="mb-4 flex items-center gap-2">
-        <Mail className="size-4 text-primary" />
+    <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2">
+      <Reply className="size-3.5 shrink-0 text-primary" />
 
-        <h4 className="text-sm font-medium">Reply</h4>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Replying to
+        </p>
+        <p className="truncate text-xs text-foreground">
+          {email.body.replace(/\s+/g, " ").trim()}
+        </p>
       </div>
 
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label>To</Label>
-
-          <Input
-            disabled
-            value={
-              !email.emailFrom.includes("@royalconstructions.com.au")
-                ? email.emailFrom
-                : email.emailTo
-            }
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Subject</Label>
-
-          <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Message</Label>
-
-          <Textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Write your reply..."
-            className="min-h-40 resize-y"
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <Button
-            disabled={!body.trim() || sending}
-            onClick={() => startTransition(handleSend)}
-          >
-            {sending ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <Send className="size-4" />
-                Send Reply
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </Card>
+      <button
+        type="button"
+        onClick={onCancel}
+        aria-label="Cancel reply"
+        className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
   );
 }

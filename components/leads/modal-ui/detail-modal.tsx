@@ -460,6 +460,8 @@ export function DetailModal({
           emails={lead.emails}
           leadId={lead.id}
           leadEmail={lead.email}
+          projectType={lead.type}
+          location={lead.location}
           appendEmailToLead={appendEmailToLead}
         />
 
