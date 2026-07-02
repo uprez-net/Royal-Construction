@@ -263,6 +263,7 @@ export function NewOfferWorkspace() {
         onSendContract={() => setStatus("contract_sent")}
         onRecallContract={() => setStatus("contract_draft")}
         onMarkContractSigned={() => setStatus("contract_signed")}
+        onCreateProject={() => setStatus("project")}
         onOverrideReasonChange={setOverrideReason}
         onPaymentScheduleChange={setPaymentSchedule}
         onPriceAdjustmentLabelChange={setPriceAdjustmentLabel}

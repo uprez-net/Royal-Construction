@@ -29,6 +29,7 @@ import {
 import { JobSetupPanel } from "./offer-workspace-job";
 import { LegacyPricingPanel } from "./offer-workspace-legacy-pricing";
 import { ContractPanel } from "./offer-workspace-contract";
+import { ProjectHandoffPanel } from "./offer-workspace-project-handoff";
 import { TenderPanel } from "./offer-workspace-tender";
 import {
   OfferDocumentPreview,
@@ -99,6 +100,7 @@ type OfferWorkspaceScreenProps = {
   readonly onSendContract: () => void;
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
+  readonly onCreateProject: () => void;
   readonly onOverrideReasonChange: (value: string) => void;
   readonly onPaymentScheduleChange: (
     rows: readonly OfferPaymentScheduleRow[],
@@ -154,6 +156,7 @@ export function OfferWorkspaceScreen({
   onSendContract,
   onRecallContract,
   onMarkContractSigned,
+  onCreateProject,
   onOverrideReasonChange,
   onPaymentScheduleChange,
   onPriceAdjustmentLabelChange,
@@ -330,7 +333,16 @@ export function OfferWorkspaceScreen({
             title="Project"
             unlocked={isOfferPhaseUnlocked(status, "handoff")}
             unlockHint="Unlocks once the Contract is signed. Create the Project and seed the costing report from the internal cost lines."
-          />
+          >
+            <ProjectHandoffPanel
+              customerPrice={customerPrice}
+              job={job}
+              lines={lines}
+              paymentSchedule={paymentSchedule}
+              status={status}
+              onCreateProject={onCreateProject}
+            />
+          </OfferPhaseGate>
         </div>
         <aside className="min-w-0 space-y-5 xl:sticky xl:top-24 xl:self-start">
           <PricingSummary pricing={pricing} />
