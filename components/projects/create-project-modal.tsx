@@ -54,7 +54,7 @@ export function CreateProjectModal({
   const router = useRouter();
   const dispatch = useAppDispatch();
   const siteManagers = useAppSelector((state) => state.siteManagers);
-  const leadSearch = useLeadSearch("");
+  const leadSearch = useLeadSearch("", 1, true);
   const [managerSearch, setManagerSearch] = useState("");
   const [isPending, startTransition] = useTransition();
   const [locationSuggestions, setLocationSuggestions] = useState<

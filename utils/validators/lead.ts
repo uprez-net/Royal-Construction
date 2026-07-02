@@ -261,6 +261,7 @@ export const leadLookupParamSchema = z.object({
   q: z.string().trim().default(""),
   status: z.string().optional(),
   filterTiming: z.string().optional(),
+  filterLeadsWithoutProject: z.string().optional(),
 })
 
 export const leadStatusSchema = z.enum(leadStages);
