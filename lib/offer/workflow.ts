@@ -17,7 +17,9 @@ export function offerPhaseIndex(phase: OfferWorkflowPhase): number {
   return OFFER_WORKFLOW_PHASES.indexOf(phase);
 }
 
-// The phase the Offer is currently working in, derived from its status.
+// The phase the Offer is currently working in, derived from its status. A
+// completed (*_signed) state belongs to the NEXT phase, since finishing one
+// phase opens the work of the next (e.g. tender_signed → Contract begins).
 export function activeOfferPhase(
   status: OfferWorkspaceStatus,
 ): OfferWorkflowPhase {
@@ -25,12 +27,12 @@ export function activeOfferPhase(
     case "agreed":
     case "tender_draft":
     case "tender_sent":
-    case "tender_signed":
       return "tender";
+    case "tender_signed":
     case "contract_draft":
     case "contract_sent":
-    case "contract_signed":
       return "contract";
+    case "contract_signed":
     case "project":
       return "handoff";
     case "pending":

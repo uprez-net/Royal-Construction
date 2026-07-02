@@ -54,12 +54,12 @@ function currentStepLabel(status: OfferWorkspaceStatus): string {
     case "agreed":
     case "tender_draft":
     case "tender_sent":
-    case "tender_signed":
       return "Tender";
+    case "tender_signed":
     case "contract_draft":
     case "contract_sent":
-    case "contract_signed":
       return "Contract";
+    case "contract_signed":
     case "project":
       return "Project";
     case "pending":

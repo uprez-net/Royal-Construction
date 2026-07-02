@@ -255,6 +255,10 @@ export function NewOfferWorkspace() {
         onMarkSent={() => setStatus("sent")}
         onMarkAgreed={() => setStatus("agreed")}
         onMarkRejected={() => setStatus("rejected")}
+        onGenerateTender={() => setStatus("tender_draft")}
+        onSendTender={() => setStatus("tender_sent")}
+        onRecallTender={() => setStatus("tender_draft")}
+        onMarkTenderSigned={() => setStatus("tender_signed")}
         onOverrideReasonChange={setOverrideReason}
         onPaymentScheduleChange={setPaymentSchedule}
         onPriceAdjustmentLabelChange={setPriceAdjustmentLabel}

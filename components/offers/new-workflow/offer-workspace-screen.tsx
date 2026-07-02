@@ -28,7 +28,7 @@ import {
 } from "./offer-workspace-header";
 import { JobSetupPanel } from "./offer-workspace-job";
 import { LegacyPricingPanel } from "./offer-workspace-legacy-pricing";
-import { PaymentSchedulePanel } from "./offer-workspace-payment-schedule";
+import { TenderPanel } from "./offer-workspace-tender";
 import {
   OfferDocumentPreview,
   PricingSummary,
@@ -90,6 +90,10 @@ type OfferWorkspaceScreenProps = {
   readonly onMarkSent: () => void;
   readonly onMarkAgreed: () => void;
   readonly onMarkRejected: () => void;
+  readonly onGenerateTender: () => void;
+  readonly onSendTender: () => void;
+  readonly onRecallTender: () => void;
+  readonly onMarkTenderSigned: () => void;
   readonly onOverrideReasonChange: (value: string) => void;
   readonly onPaymentScheduleChange: (
     rows: readonly OfferPaymentScheduleRow[],
@@ -137,6 +141,10 @@ export function OfferWorkspaceScreen({
   onMarkSent,
   onMarkAgreed,
   onMarkRejected,
+  onGenerateTender,
+  onSendTender,
+  onRecallTender,
+  onMarkTenderSigned,
   onOverrideReasonChange,
   onPaymentScheduleChange,
   onPriceAdjustmentLabelChange,
@@ -270,10 +278,18 @@ export function OfferWorkspaceScreen({
             unlocked={isOfferPhaseUnlocked(status, "tender")}
             unlockHint="Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
           >
-            <PaymentSchedulePanel
+            <TenderPanel
               customerPrice={customerPrice}
-              rows={paymentSchedule}
-              onRowsChange={onPaymentScheduleChange}
+              draft={draft}
+              exclusions={exclusions}
+              job={job}
+              paymentSchedule={paymentSchedule}
+              status={status}
+              onGenerateTender={onGenerateTender}
+              onMarkTenderSigned={onMarkTenderSigned}
+              onPaymentScheduleChange={onPaymentScheduleChange}
+              onRecallTender={onRecallTender}
+              onSendTender={onSendTender}
             />
           </OfferPhaseGate>
 
