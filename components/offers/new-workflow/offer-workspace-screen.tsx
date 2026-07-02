@@ -28,6 +28,7 @@ import {
 } from "./offer-workspace-header";
 import { JobSetupPanel } from "./offer-workspace-job";
 import { LegacyPricingPanel } from "./offer-workspace-legacy-pricing";
+import { ContractPanel } from "./offer-workspace-contract";
 import { TenderPanel } from "./offer-workspace-tender";
 import {
   OfferDocumentPreview,
@@ -94,6 +95,10 @@ type OfferWorkspaceScreenProps = {
   readonly onSendTender: () => void;
   readonly onRecallTender: () => void;
   readonly onMarkTenderSigned: () => void;
+  readonly onGenerateContract: () => void;
+  readonly onSendContract: () => void;
+  readonly onRecallContract: () => void;
+  readonly onMarkContractSigned: () => void;
   readonly onOverrideReasonChange: (value: string) => void;
   readonly onPaymentScheduleChange: (
     rows: readonly OfferPaymentScheduleRow[],
@@ -145,6 +150,10 @@ export function OfferWorkspaceScreen({
   onSendTender,
   onRecallTender,
   onMarkTenderSigned,
+  onGenerateContract,
+  onSendContract,
+  onRecallContract,
+  onMarkContractSigned,
   onOverrideReasonChange,
   onPaymentScheduleChange,
   onPriceAdjustmentLabelChange,
@@ -300,7 +309,19 @@ export function OfferWorkspaceScreen({
             title="Contract"
             unlocked={isOfferPhaseUnlocked(status, "contract")}
             unlockHint="Unlocks once the Tender is signed. Generate the Contract from the Tender data and send it via DocuSign for both parties to sign."
-          />
+          >
+            <ContractPanel
+              customerPrice={customerPrice}
+              draft={draft}
+              job={job}
+              paymentSchedule={paymentSchedule}
+              status={status}
+              onGenerateContract={onGenerateContract}
+              onMarkContractSigned={onMarkContractSigned}
+              onRecallContract={onRecallContract}
+              onSendContract={onSendContract}
+            />
+          </OfferPhaseGate>
 
           <OfferPhaseGate
             id="offer-step-project"
