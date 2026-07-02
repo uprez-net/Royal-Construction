@@ -15,7 +15,8 @@
     "prisma:seed": "prisma db seed",
     "prisma:generate": "prisma generate",
     "prisma:migrate-deploy": "prisma migrate deploy",
-    "seed:projects": "tsx prisma/seed-projects.ts"
+    "seed:projects": "tsx prisma/seed-projects.ts",
+    "seed:tradies": "tsx prisma/seed-tradie.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.73",
