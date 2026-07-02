@@ -4,8 +4,9 @@ import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
 import { Prisma } from '@prisma/client';
-// import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
-// import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
+import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
+import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
+import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 
 // export const runtime = 'nodejs';
 
@@ -43,6 +44,18 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
     return existingLead !== null;
   } catch (error) {
     console.error(`Error checking if messageId ${messageId} is processed:`, error);
+    return false;
+  }
+}
+
+async function isTradieMessage(fromEmail: string): Promise<boolean> {
+  try {
+    const existingTradie = await prisma.tradie.findUnique({
+      where: { email: fromEmail },
+    });
+    return existingTradie !== null;
+  } catch (error) {
+    console.error(`Error checking if fromEmail ${fromEmail} is a tradie message:`, error);
     return false;
   }
 }
@@ -85,6 +98,21 @@ const LEAD_SUBJECT_LINES = new Set([
   'get in touch form submission',
   'general enquiry form submission',
 ]);
+
+/**
+ * Returns true if the text contains letters from a non-Latin script.
+ * English and other Latin-based languages (French, German, Spanish, etc.)
+ * will return false.
+ */
+export function isNonLatinScript(text: string): boolean {
+  const letters = text.match(/\p{L}/gu);
+
+  if (!letters) {
+    return false; // no letters present
+  }
+
+  return letters.some((char) => !/\p{Script=Latin}/u.test(char));
+}
 
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
@@ -178,12 +206,86 @@ export async function POST(request: Request): Promise<Response> {
               `  body(${contentType}): ${content || '[no body]'}`,
             );
 
+            if (isNonLatinScript(message.subject ?? '') || isNonLatinScript(content)) {
+              console.log('  Message contains non-Latin script. Skipping lead extraction.');
+              continue;
+            }
+
             // Check if this message was already processed before calling the LLM extraction
             if (message.id && await isMessageAlreadyProcessed(message.id)) {
               console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
               continue;
             }
 
+            // Check if the message is from a tradie and extract tradie schedule info
+            if (message.from && await isTradieMessage(message.from)) {
+              const tradie = await prisma.tradie.findUnique({
+                where: { email: message.from },
+              });
+              const tradieSchedules = await prisma.tradieSchedule.findMany({
+                where: {
+                  tradieId: tradie!.id,
+                  status: {
+                    not: {
+                      in: ['DECLINED', 'AWAITING_ADMIN_APPROVAL', 'CONFIRMED', 'QUOTE_RECEIVED']
+                    }
+                  } // Only consider non-declined schedules 
+                },
+              });
+              console.log(`  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`);
+              if (tradieSchedules.length === 0) {
+                console.log(`  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`);
+                continue;
+              }
+              console.log(`  Message from ${message.from} is identified as a tradie message. Skipping lead extraction.`);
+              const tradieInfo = await extractTradieScheduleInfoFromMessage(message.subject ?? '', content);
+              if (!tradieInfo) {
+                console.log('  No tradie schedule information could be extracted from the message.');
+                continue;
+              }
+              console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
+              const schedule = await prisma.tradieSchedule.findFirst({
+                where: {
+                  tradieId: tradie!.id,
+                  scheduledDate: new Date(tradieInfo.scheduleDate),
+                  project: {
+                    location: {
+                      contains: tradieInfo.projectLocation ?? "",
+                      mode: "insensitive",
+                    },
+                  },
+                },
+              });
+              if (!schedule) {
+                console.log(`  Tradie schedule already exists for tradieId: ${tradie!.id}, scheduleDate: ${tradieInfo.scheduleDate}, projectLocation: ${tradieInfo.projectLocation}. Skipping duplicate processing.`);
+                continue;
+              }
+              const status = tradieInfo.scheduleConfirmation
+                ? tradieInfo.scheduleQuote != null
+                  ? "QUOTE_RECEIVED"
+                  : "AWAITING_ADMIN_APPROVAL"
+                : "DECLINED";
+              await updateTradieSchedule(schedule.id, {
+                status,
+                quote: tradieInfo.scheduleQuote ?? undefined,
+              });
+              continue;
+            }
+
+            //Check if the message is part of a lead trail
+            if (await CheckLeadPresentwithEmailPhone(message.from, "")) {
+              console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
+              await saveLeadEmailTrail({
+                from: message.from,
+                to: process.env.GRAPH_SENDER_UPN,
+                subject: message.subject,
+                body: content,
+                sentAt: new Date(message.receivedDateTime),
+              });
+              continue;
+            }
+
+            // Check if the message subject matches any of the predefined lead subject lines
             const normalizedSubject = (message.subject ?? "")
               .trim()
               .toLowerCase()

@@ -88,4 +88,26 @@ export const activityLogSchemas = {
         fileType: z.string(),
         fileSize: z.number(),
     }),
+
+    milestoneStatusChanged: z.object({
+        projectId: z.string(),
+        milestoneId: z.string(),
+        milestoneName: z.string(),
+        oldStatus: z.string(),
+        newStatus: z.string(),
+    }),
+
+    milestoneAdded: z.object({
+        projectId: z.string(),
+        milestoneId: z.string(),
+        milestoneName: z.string(),
+    }),
+
+
+    newMilestonePhotoUploaded: z.object({
+        projectId: z.string(),
+        milestoneId: z.string(),
+        milestoneName: z.string(),
+        fileCount: z.number(),
+    })
 }

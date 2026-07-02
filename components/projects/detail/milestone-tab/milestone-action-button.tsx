@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
-import { UIMilestone } from "@/types/project";
+import { useAppSelector } from "@/lib/store/hooks";
+import type { UIMilestone } from "@/types/project";
 import { Camera, Download, FilePenLine, Play } from "lucide-react";
+import { useMemo } from "react";
 
 export function MilestoneActionGroup({
   prevMilestone,
@@ -17,13 +19,43 @@ export function MilestoneActionGroup({
   onStartMilestone: (id: string) => void;
   onSendInvoice: () => void;
 }) {
+  const project = useAppSelector((state) => state.projects.activeProject);
   const isFirstMilestone = milestone.order === 1;
+  const isChildOfFirstMilestone =
+    prevMilestone?.order === 1 && milestone.parentId === prevMilestone.id;
   const hasChildren = milestone.childrenMilestones.length > 0;
+  const prevMilestoneToParent = useMemo(() => {
+    const milestones = project?.milestones ?? [];
+    const parentMilestone = milestones.find((m) => m.id === milestone.parentId);
+    if (!parentMilestone) return undefined;
+    return milestones.find((m) => m.order === parentMilestone.order - 1);
+  }, [project?.milestones, milestone]);
 
-  const canStart =
-    milestone.status === "PENDING" &&
-    !hasChildren &&
-    (isFirstMilestone || prevMilestone?.status === "DONE");
+  const isPending = milestone.status === "PENDING";
+  const hasNoChildren = !hasChildren;
+  const isFirstChildOfMilestone =
+    prevMilestone?.id === milestone.parentId &&
+    prevMilestone?.order === milestone.order - 1;
+
+  const isUnlocked =
+    isFirstMilestone ||
+    isChildOfFirstMilestone ||
+    prevMilestone?.status === "DONE" ||
+    (prevMilestoneToParent?.status === "DONE" && isFirstChildOfMilestone);
+
+  console.log("isUnlocked", isUnlocked, {
+    name: milestone.name,
+    order: milestone.order,
+    prevMilestone: prevMilestone?.name,
+    prevMilestoneOrder: prevMilestone?.order,
+    isFirstMilestone,
+    isChildOfFirstMilestone,
+    prevMilestoneStatus: prevMilestone?.status,
+    prevMilestoneChildren: prevMilestone?.childrenMilestones.length,
+    prevMilestoneToParentStatus: prevMilestoneToParent?.status,
+  });
+
+  const canStart = isPending && hasNoChildren && isUnlocked;
 
   const isActive = milestone.status === "ACTIVE";
   const isDone = milestone.status === "DONE";
@@ -45,10 +77,12 @@ export function MilestoneActionGroup({
           Add Photo
         </Button>
 
-        <Button size="sm" onClick={() => onStatusUpdate(milestone.id)}>
-          <FilePenLine className="mr-1 h-4 w-4" />
-          Update Status
-        </Button>
+        {!hasChildren && (
+          <Button size="sm" onClick={() => onStatusUpdate(milestone.id)}>
+            <FilePenLine className="mr-1 h-4 w-4" />
+            Update Status
+          </Button>
+        )}
       </div>
     );
   }

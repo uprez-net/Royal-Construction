@@ -69,7 +69,7 @@ const handlePayload = (approval: SafeTradieApproval, resolution: string) => {
 export function TradieApprovalList() {
   const dispatch = useAppDispatch();
   const [processingRequestIds, setProcessingRequestIds] = useState<Set<string>>(new Set());
-  const { approvals, selectedApprovalIds, loading, error } = useAppSelector(
+  const { approvals, activeTab, selectedApprovalIds, loading, error } = useAppSelector(
     (state) => state.tradieApproval,
   );
 
@@ -172,7 +172,7 @@ export function TradieApprovalList() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" key={`${approvals.length}-${activeTab}`}>
       {approvals.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 h-60 bg-white rounded-sm">
           <div className="flex size-12 items-center justify-center">

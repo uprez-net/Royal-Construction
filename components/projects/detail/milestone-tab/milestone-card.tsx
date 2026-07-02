@@ -1,9 +1,14 @@
 import { StatusPill } from "@/components/common/status-pill";
 import { cn } from "@/lib/utils";
-import { ProjectDetail, TradieScheduleListItem, TradieScheduleWithTradieAndMilestone, UIMilestone } from "@/types/project";
+import {
+  ProjectDetail,
+  TradieScheduleListItem,
+  TradieScheduleWithTradieAndMilestone,
+  UIMilestone,
+} from "@/types/project";
 import { currency, dateFormat, formatStatus } from "@/utils/formatters";
 import { ReactNode } from "react";
-import Image from "next/image"
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Bell,
@@ -20,7 +25,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MilestoneActionGroup } from "./milestone-action-button"
+import { MilestoneActionGroup } from "./milestone-action-button";
 
 function getMilestoneTone(status: string) {
   if (status === "DONE") {
@@ -178,6 +183,7 @@ export function MilestoneCard({
         </div>
 
         <MilestoneActionGroup
+          key={`milestone-action-group-${milestone.id}`}
           prevMilestone={prevMilestone}
           milestone={milestone}
           onOpenAddUpdateModal={onOpenAddUpdateModal}
@@ -304,8 +310,12 @@ export function MilestoneCard({
                 <div className="space-y-2">
                   {milestone.childrenMilestones.map((child, index) => (
                     <MilestoneCard
-                      key={`milestone-${child.id}-${index}`}
-                      prevMilestone={prevMilestone}
+                      key={`milestone-${child.id}-${index}-${child.status}`}
+                      prevMilestone={
+                        milestone.childrenMilestones
+                          .flatMap((m) => [m, ...m.childrenMilestones])
+                          .find((m) => m.order === child.order - 1) ?? milestone
+                      }
                       milestone={child}
                       project={project}
                       depth={depth + 1}

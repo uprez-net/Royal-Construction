@@ -15,16 +15,7 @@ import { currency } from "@/utils/formatters";
 import { randomColourHexGenerator } from "@/utils/generator";
 import { useRouter } from "next/navigation";
 import { TradieActionsDropdown } from "../tradie-actions";
-
-const convertCategoryToTradieType = (
-  category: string,
-): keyof typeof TRADIE_TYPES | null => {
-  const entry = Object.entries(TRADIE_TYPES).find(
-    ([, value]) => value === category,
-  );
-
-  return (entry?.[0] as keyof typeof TRADIE_TYPES) ?? null;
-};
+import { convertCategoryToTradieType, type TradieType } from "@/utils/normalize-tradie-type";
 
 export function TradieList({
   filteredTradies,
@@ -61,8 +52,8 @@ export function TradieList({
           <TradieCategoryAccordion
             key={category.category}
             icon={<Icon className="h-5 w-5" />}
-            color={randomColourHexGenerator(category.category)}
-            name={category.category}
+            color={randomColourHexGenerator(TRADIE_TYPES[category.category as TradieType])}
+            name={TRADIE_TYPES[category.category as TradieType]}
             tradieCount={category.tradies.length}
             tradies={category.tradies}
           />

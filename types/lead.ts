@@ -4,6 +4,7 @@ import type {
     Lead as PrismaLead,
     LeadHistory as PrismaLeadHistory,
     LeadStage as PrismaLeadStage,
+    LeadEmails
 } from "@prisma/client";
 import type { HistoryItem, Lead as UiLead, LeadStage } from "@/lib/leads/types";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
@@ -97,6 +98,7 @@ export function mapLead(
             createdAt: Date;
             resolvedAt: Date | null;
         }>;
+        emails: LeadEmails[];
     }
 ): UiLead {
     const assignedUserFromRelation = lead.assignedUser ?? null;
@@ -136,6 +138,7 @@ export function mapLead(
         creatingOffer: lead.chatSessions.length > 0,
         runId: lead.runId,
         runStatus: lead.runStatus,
+        emails: lead.emails,
     };
 }
 

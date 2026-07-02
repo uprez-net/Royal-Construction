@@ -7,10 +7,11 @@ import {
 import { type GraphConfig } from './config';
 
 export interface EmailInput {
-  to: string;
+  to: string | string[];
   subject: string;
   body: string;
   cc?: string | string[];
+  bcc?: string | string[];
 }
 
 export interface GraphMessage {
@@ -246,16 +247,19 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       const message = await graphRequest<GraphApiMessage>('GET', url, token, undefined, headers);
       return mapMessage(message, includeBody);
     },
-    sendMail: async ({ to, subject, body,cc }) => {
+    sendMail: async ({ to, subject, body, cc, bcc }) => {
+      const formatRecipients = (value?: string | string[]) =>
+        value
+          ? (Array.isArray(value) ? value : [value]).map(email => ({
+            emailAddress: {
+              address: email,
+            },
+          }))
+          : undefined;
 
-      // 2. Format CC recipients if provided
-      const ccRecipients = cc
-        ? (Array.isArray(cc) ? cc : [cc]).map(email => ({
-          emailAddress: {
-            address: email,
-          },
-        }))
-        : undefined;
+      const toRecipients = formatRecipients(to);
+      const ccRecipients = formatRecipients(cc);
+      const bccRecipients = formatRecipients(bcc);
 
       const token = await getAccessToken();
       await graphRequest(
@@ -269,14 +273,9 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
               contentType: 'HTML',
               content: body,
             },
-            toRecipients: [
-              {
-                emailAddress: {
-                  address: to,
-                },
-              },
-            ],
+            toRecipients,
             ...(ccRecipients && { ccRecipients }),
+            ...(bccRecipients && { bccRecipients }),
           },
           saveToSentItems: true,
         },

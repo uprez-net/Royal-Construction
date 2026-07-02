@@ -42,6 +42,7 @@ export const milestoneUpdateSchema = z
                     message: "Start date is required when milestone is active",
                 });
             }
+            return; // No need to check further if status is ACTIVE
         }
 
         // DONE milestone validation
@@ -66,7 +67,7 @@ export const milestoneUpdateSchema = z
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     path: ["spend"],
-                    message: "Spend is required when milestone is completed",
+                    message: "A milestone with zero expenditure cannot be marked as completed. Please enter the actual spend.",
                 });
             }
 

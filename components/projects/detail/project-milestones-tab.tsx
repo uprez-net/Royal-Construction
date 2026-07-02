@@ -59,9 +59,9 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     return project.tradieSchedules.filter((schedule) => {
       const hasAlertStatus =
         // schedule.status === "PENDING_RESPONSE" ||
-        schedule.status === "CONFIRMED"
-        // schedule.status === "NO_RESPONSE" ||
-        // schedule.status === "DECLINED";
+        schedule.status === "CONFIRMED";
+      // schedule.status === "NO_RESPONSE" ||
+      // schedule.status === "DECLINED";
 
       const targetDate = schedule.milestone?.targetDate;
       const isMilestoneDueSoon =
@@ -207,8 +207,10 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
         <CardContent className="space-y-3 pt-5">
           {visualMilestones.map((milestone, index) => (
             <MilestoneCard
-              key={milestone.id}
-              prevMilestone={visualMilestones[index - 1]}
+              key={`milestone-${milestone.id}-${index}-${milestone.status}`}
+              prevMilestone={visualMilestones
+                .flatMap((m) => [m, ...m.childrenMilestones])
+                .find((m) => m.order === milestone.order - 1)}
               milestone={milestone}
               project={project}
               tradieAlertsByMilestone={tradieAlertsByMilestone}
