@@ -8,8 +8,6 @@ export type ModalType =
   | "confirmStatus"
   | "tradieDirectory"
   | "createProject"
-  | "createMilestone"
-  | "createTradie"
   | "tradieReminder"
   | "tradieScheduleDetails"
   | "projectDetail"
@@ -20,6 +18,13 @@ export type ModalType =
   | "updateMilestoneStatus"
   | "createOfferFile"
   | "createLead"
+  | "addTradie"
+  | "deleteTradie"
+  | "rateTradie"
+  | "reportTradie"
+  | "priceChangeTradie"
+  | "adminApproval"
+  | "approvalDetails"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;

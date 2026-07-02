@@ -15,7 +15,8 @@
     "prisma:seed": "prisma db seed",
     "prisma:generate": "prisma generate",
     "prisma:migrate-deploy": "prisma migrate deploy",
-    "seed:projects": "tsx prisma/seed-projects.ts"
+    "seed:projects": "tsx prisma/seed-projects.ts",
+    "seed:tradies": "tsx prisma/seed-tradie.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.73",
@@ -68,6 +69,7 @@
     "mcp-handler": "^1.1.0",
     "next": "16.2.6",
     "next-themes": "^0.4.6",
+    "p-limit": "^7.3.0",
     "pg": "^8.20.0",
     "platejs": "^53.0.7",
     "puppeteer": "^25.1.0",
@@ -92,6 +94,7 @@
     "uuid": "^14.0.0",
     "vaul": "^1.1.2",
     "workflow": "^4.4.0",
+    "xero-node": "^18.0.0",
     "xlsx": "^0.18.5",
     "zod": "4"
   },

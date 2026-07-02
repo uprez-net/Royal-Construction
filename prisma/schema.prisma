@@ -35,7 +35,10 @@ enum VariationStatus {
 
 enum TradieScheduleStatus {
   PENDING
+  AWAITING_QUOTE
   PENDING_RESPONSE
+  QUOTE_RECEIVED
+  AWAITING_ADMIN_APPROVAL
   CONFIRMED
   NO_RESPONSE
   DECLINED
@@ -90,6 +93,32 @@ enum RunStatus {
   FAILED
 }
 
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TradieIncidentStatus {
+  OPEN
+  RESOLVED
+  CLOSED
+}
+
+enum TradieApprovalActionType {
+  PRICE_CHANGE
+  INCIDENT_RESOLUTION
+  TRADIE_REMOVAL
+  SCHEDULE_APPROVAL
+}
+
+enum TradieApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Project {
   id               String   @id @default(uuid())
   leadId           Int      @unique
@@ -132,7 +161,7 @@ model Project {
 model Milestone {
   id              String          @id @default(uuid())
   projectId       String
-  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invoiceId       String?
   name            String
   order           Int
   description     String?
@@ -151,6 +180,7 @@ model Milestone {
   siteUpdates        SiteUpdate[]
   tradieSchedules    TradieSchedule[]
   activityLogs       ActivityLog[]
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   files              File[]           @relation("MilestoneFiles")
   tradies            Tradie[]         @relation("TradieMilestones")
   parentMilestone    Milestone?       @relation("MilestoneHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
@@ -181,27 +211,85 @@ model Material {
 }
 
 model Tradie {
-  id         String   @id @default(uuid())
-  name       String
-  company    String?
-  trade      String
-  tradeType  String
-  phone      String   @unique
-  email      String   @unique
-  hourlyRate Decimal? @db.Decimal(8, 2)
-  rating     Decimal? @db.Decimal(2, 1)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String   @id @default(uuid())
+  name        String
+  trade       String
+  abn         String   @unique
+  phone       String   @unique
+  email       String   @unique
+  isFavourite Boolean  @default(false)
+  hourlyRate  Decimal? @db.Decimal(8, 2)
+  rating      Decimal? @db.Decimal(2, 1)
+  note        String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   projects   Project[]        @relation("ProjectTradies")
   milestones Milestone[]      @relation("TradieMilestones")
   schedules  TradieSchedule[]
+  incidents  TradieIncident[]
+  approvals  TradieApproval[]
+  ratings    TradieRating[]
 
   @@index([name])
   @@index([trade])
-  @@index([tradeType])
   @@index([email])
   @@index([phone])
+}
+
+model TradieIncident {
+  id          String           @id @default(uuid())
+  tradieId    String
+  type        String
+  severity    IncidentSeverity
+  description String           @db.Text
+  resolution  String?          @db.Text
+
+  status TradieIncidentStatus @default(OPEN)
+
+  createdAt DateTime @default(now())
+
+  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  files  File[] @relation("TradieIncidentFiles")
+
+  @@index([tradieId])
+  @@index([severity])
+}
+
+model TradieApproval {
+  id           String                   @id @default(uuid())
+  tradieId     String
+  actionType   TradieApprovalActionType
+  status       TradieApprovalStatus     @default(PENDING)
+  reason       String                   @db.Text
+  updationData Json?
+  requestedBy  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+
+  @@index([tradieId])
+  @@index([requestedBy])
+}
+
+model TradieRating {
+  id       String  @id @default(uuid())
+  tradieId String
+  userId   String
+  rating   Decimal @db.Decimal(2, 1)
+  comment  String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  tradie Tradie @relation(fields: [tradieId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tradieId])
+  @@index([userId])
 }
 
 model File {
@@ -209,6 +297,7 @@ model File {
   projectId   String?
   milestoneId String?
   leadId      Int?
+  incidentId  String?
   filename    String
   fileType    String
   filesize    Int
@@ -217,13 +306,16 @@ model File {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project   Project?   @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
-  milestone Milestone? @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  lead      Lead?      @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
-  User      User       @relation("UserFiles", fields: [uploadedBy], references: [id])
+  project   Project?        @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone?      @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  lead      Lead?           @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
+  incident  TradieIncident? @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
+  User      User            @relation("UserFiles", fields: [uploadedBy], references: [id])
 
   @@index([projectId])
   @@index([milestoneId])
+  @@index([incidentId])
+  @@index([leadId])
   @@index([uploadedBy])
 }
 
@@ -271,6 +363,8 @@ model TradieSchedule {
   milestoneId    String?
   scheduledDate  DateTime
   durationDays   Int                  @default(1)
+  requiresQuote  Boolean              @default(false)
+  quotedPrice    String?
   status         TradieScheduleStatus @default(PENDING)
   reminderSentAt DateTime?
   createdAt      DateTime             @default(now())
@@ -306,10 +400,10 @@ model ActivityLog {
 }
 
 model Customer {
-  id     String  @id @default(uuid())
-  name   String
-  email  String  @unique
-  phone  String  @unique
+  id    String @id @default(uuid())
+  name  String
+  email String @unique
+  phone String @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -332,11 +426,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]        @relation("UserFiles")
-  siteManagerProjects Project[]     @relation("SiteManagerProjects")
+  files               File[]           @relation("UserFiles")
+  siteManagerProjects Project[]        @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
-  assignedLeads       Lead[]        @relation("LeadAssignee")
+  assignedLeads       Lead[]           @relation("LeadAssignee")
+  reviews             TradieRating[]
+  approvalRequests    TradieApproval[]
 
   @@index([email])
   @@index([phone])
@@ -387,6 +483,7 @@ model Lead {
   history         LeadHistory[]
   noteAnnotations LeadNoteAnnotation[]
   files           File[]               @relation("LeadFiles")
+  emails          LeadEmails[]         @relation("LeadEmails")
   assignedUser    User?                @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
   project         Project?             @relation("LeadProject")
 
@@ -527,4 +624,24 @@ model EmailAdHock {
   updatedAt    DateTime @updatedAt
 
   @@map("email_adhoc")
+}
+
+model LeadEmails {
+  id        String   @id @default(uuid())
+  leadId    Int
+  emailFrom String
+  emailTo   String
+  subject   String
+  body      String   @db.Text
+  checksum  String   @unique @db.Text
+  sentAt    DateTime
+
+  createdAt DateTime @default(now())
+
+  lead Lead @relation("LeadEmails", fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([emailFrom])
+  @@index([leadId, sentAt(sort: Desc)])
+  @@index([sentAt(sort: Desc)])
 }

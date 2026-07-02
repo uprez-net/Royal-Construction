@@ -16,6 +16,7 @@ export interface KPIListItem {
   Icon: LucideIcon;
   iconTone: string;
   isCurrency?: boolean;
+  isInverse?: boolean; // Indicates if the trend delta should be treated as inverse (e.g., a negative trend is good)
 }
 
 interface MetricCardProps {
@@ -25,6 +26,7 @@ interface MetricCardProps {
   iconTone: string;
   Icon: LucideIcon;
   isCurrency?: boolean;
+  isInverse?: boolean; // Indicates if the trend delta should be treated as inverse (e.g., a negative trend is good)
 }
 
 export function MetricCard({
@@ -34,6 +36,7 @@ export function MetricCard({
   iconTone,
   Icon,
   isCurrency,
+  isInverse,
 }: MetricCardProps) {
   const displayValue = isCurrency
     ? (() => {
@@ -64,7 +67,7 @@ export function MetricCard({
           </p>
         </div>
         {trendDelta !== undefined && trendDelta !== 0 && (
-          <TrendBadge value={trendDelta} />
+          <TrendBadge value={trendDelta} isInverse={isInverse} />
         )}
       </CardContent>
     </Card>

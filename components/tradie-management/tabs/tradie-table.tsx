@@ -1,0 +1,66 @@
+import { DataTable } from "@/components/common/data-table";
+import { RatingStars } from "@/components/common/rating-stars";
+import { TradieRow } from "@/types/tradie";
+import { currency } from "@/utils/formatters";
+import { HardHat } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { TradieBadge } from "../trade-badge";
+import { TradieActionsDropdown } from "../tradie-actions";
+
+export function TradieTable({
+  filteredTradies,
+}: {
+  filteredTradies: TradieRow[];
+}) {
+  const router = useRouter();
+  return (
+    <div className="space-y-4">
+      <DataTable
+        headers={[
+          "Tradie",
+          "Trade",
+          "Rate",
+          "Rating",
+          "Jobs",
+          "Incidents",
+          "Actions",
+        ]}
+        rows={filteredTradies.map((tradie) => [
+          tradie.name,
+          <TradieBadge trade={tradie.trade} key={`trade-${tradie.id}`} />,
+          <span key={`rate-${tradie.id}`}>
+            {tradie.hourlyRate
+              ? currency.format(parseFloat(tradie.hourlyRate))
+              : "-"}
+              <span className="text-xs text-muted-foreground">/hr</span>
+          </span>,
+          <RatingStars rating={parseFloat(tradie.rating ?? "0")} key={`rating-${tradie.id}`} />,
+          tradie.jobsCompleted,
+          `${tradie.incidentCount.open} open / ${tradie.incidentCount.resolved} closed`,
+          <TradieActionsDropdown tradieRow={tradie} key={`actions-${tradie.id}`} /> ,
+        ])}
+        emptyState={
+          <div className="flex flex-col items-center justify-center gap-3">
+            <div className="flex size-12 items-center justify-center">
+              <HardHat className="size-5 text-muted-foreground" />
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                No tradies found
+              </p>
+
+              <p className="text-xs text-muted-foreground">
+                Your tradies will appear here.
+              </p>
+            </div>
+          </div>
+        }
+        onRowClick={(row) => {
+          const tradieId = filteredTradies[row].id;
+          router.push(`/tradie-management/${tradieId}`);
+        }}
+      />
+    </div>
+  );
+}

@@ -3,8 +3,7 @@ import { ModalShell } from "@/components/common/modal-shell";
 import { Lead } from "@/lib/leads/types";
 import { updateLead } from "@/lib/leads/leads-service";
 import {
-  createCalendarEventIfValid,
-  buildCalendarHistoryEntry,
+  buildFollowupHistoryEntry,
 } from "@/lib/leads/lead-helpers";
 
 interface FollowupModalProps {
@@ -32,17 +31,17 @@ export function FollowupModal({
     if (!date) return;
     setSaving(true);
     try {
-      const tempLead = { ...lead, followupDate: date, followupTime: time };
-      const success = await createCalendarEventIfValid(tempLead, showToast);
-      if (!success) {
-        showToast("Calendar event could not be created", "error");
-        return;
-      }
+      //const tempLead = { ...lead, followupDate: date, followupTime: time };
+      // const success = await createCalendarEventIfValid(tempLead, showToast);
+      // if (!success) {
+      //   showToast("Calendar event could not be created", "error");
+      //   return;
+      // }
 
       const updated = await updateLead(lead.id, {
         followupDate: date,
         followupTime: time,
-        history: [buildCalendarHistoryEntry(date, time)],
+        history: [buildFollowupHistoryEntry(date, time)],
         stage: "In Follow-up",
       });
 

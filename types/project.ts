@@ -62,7 +62,6 @@ export interface ProjectWithStats extends SafeProject {
     status: Milestone["status"];
     tradies: {
       name: string;
-      company: string | null;
       tradeType: string;
     }[]
   }[];
@@ -123,9 +122,9 @@ export type TradieCoordinationQuery = {
 
 export type TradieScheduleListItem = {
   id: string;
+  abn: string;
   tradieId: string;
   tradieName: string;
-  company: string | null;
   tradeType: string;
   projectId: string;
   projectName: string;
@@ -135,10 +134,14 @@ export type TradieScheduleListItem = {
   scheduledDate: string;
   durationDays: number;
   status: TradieScheduleStatus;
+  isFavourite: boolean;
+  note: string | null;
   reminderSentAt?: string;
   updatedAt: string;
-  hourtlyRate?: string;
+  hourlyRate?: string;
   rating?: string;
+  requiresQuote: boolean;
+  quotedPrice?: string;
   contact: {
     email: string;
     phone: string;
@@ -197,6 +200,7 @@ export type TradieUrgentReminderItem = {
   id: string;
   tradieName: string;
   tradeType: string;
+  abn: string;
   projectName: string;
   milestoneName?: string;
   taskLabel: string;
@@ -204,12 +208,11 @@ export type TradieUrgentReminderItem = {
   daysLeft: number;
   status: TradieScheduleStatus;
   reminderSentAt?: string;
-  company: string | null;
   contact: {
     email: string;
     phone: string;
   };
-  hourtlyRate?: string;
+  hourlyRate?: string;
   rating?: string;
   siteManager: {
     name: string;

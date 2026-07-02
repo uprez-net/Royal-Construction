@@ -2,17 +2,10 @@ import { MilestoneStatus } from "@prisma/client";
 import { z } from "zod";
 
 
-const dateField = z
-    .string()
-    .trim()
-    .refine((date) => !isNaN(Date.parse(date)), {
-        message: "Invalid date format",
-    });
-
 export const milestoneCreationSchema = z.object({
     name: z.string().min(1, "Milestone name is required"),
     description: z.string().optional(),
-    targetDate: dateField,
+    targetDate: z.iso.date(),
     budget: z.coerce.number().positive("Budget must be a positive number"),
     parentId: z.string().optional(),
 });
@@ -24,10 +17,10 @@ export const milestoneUpdateSchema = z
         status: z.enum(MilestoneStatus),
 
         // Required when milestone becomes ACTIVE or DONE
-        startDate: dateField.optional(),
+        startDate: z.iso.date().optional(),
 
         // Required only when DONE
-        actualDate: dateField.optional(),
+        actualDate: z.iso.date().optional(),
 
         // Required only when DONE
         spend: z.coerce
@@ -49,6 +42,7 @@ export const milestoneUpdateSchema = z
                     message: "Start date is required when milestone is active",
                 });
             }
+            return; // No need to check further if status is ACTIVE
         }
 
         // DONE milestone validation
@@ -73,7 +67,7 @@ export const milestoneUpdateSchema = z
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     path: ["spend"],
-                    message: "Spend is required when milestone is completed",
+                    message: "A milestone with zero expenditure cannot be marked as completed. Please enter the actual spend.",
                 });
             }
 

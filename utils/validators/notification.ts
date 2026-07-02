@@ -55,7 +55,6 @@ export const notificationSchemas = {
         milestoneName: z.string(),
         tradieName: z.string(),
         tradieTrade: z.string(),
-        tradieCompany: z.string(),
         scheduleDate: z.string(),
     }),
 
@@ -65,7 +64,6 @@ export const notificationSchemas = {
         milestoneName: z.string(),
         tradieName: z.string(),
         tradieTrade: z.string(),
-        tradieCompany: z.string(),
         scheduleDate: z.string(),
         status: z.string(),
     }),
@@ -96,4 +94,103 @@ export const notificationSchemas = {
         leadId: z.string(),
         errorMessage: z.string(),
     }),
+
+    deleteTradieApproval: z.object({
+        approvalId: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        tradieEmail: z.email(),
+        tradiePhone: z.string(),
+        requestedBy: z.string(),
+    }),
+
+    tradieIncidentReport: z.object({
+        approvalId: z.string(),
+        incidentId: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        incidentDescription: z.string(),
+        incidentDate: z.string(),
+    }),
+
+    tradiePriceUpdate: z.object({
+        approvalId: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        oldPrice: z.number(),
+        newPrice: z.number(),
+        priceChangeDate: z.string(),
+    }),
+
+    tradieScheduleApproval: z.object({
+        approvalId: z.string(),
+        scheduleId: z.string(),
+        projectId: z.string(),
+        projectName: z.string(),
+        milestoneId: z.string().optional(),
+        milestoneName: z.string().optional(),
+        scheduledDate: z.string(),
+        durationDays: z.number(),
+        cost: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+    }),
+
+    tradieScheduleApproved: z.object({
+        approvalId: z.string(),
+        scheduleId: z.string(),
+        projectId: z.string(),
+        projectName: z.string(),
+        milestoneId: z.string().optional(),
+        milestoneName: z.string().optional(),
+        scheduledDate: z.string(),
+        durationDays: z.number(),
+        cost: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+    }),
+
+    tradieScheduleRejected: z.object({
+        approvalId: z.string(),
+        scheduleId: z.string(),
+        projectId: z.string(),
+        projectName: z.string(),
+        milestoneId: z.string().optional(),
+        milestoneName: z.string().optional(),
+        scheduledDate: z.string(),
+        durationDays: z.number(),
+        cost: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+    }),
+
+    milestoneStatusChanged: z.object({
+        projectId: z.string(),
+        milestoneId: z.string(),
+        milestoneName: z.string(),
+        oldStatus: z.string(),
+        newStatus: z.string(),
+    }),
+
+    milestoneAdded: z.object({
+        projectId: z.string(),
+        milestoneId: z.string(),
+        milestoneName: z.string(),
+        projectName: z.string(),
+    }),
+
+    newMilestonePhotoUploaded: z.object({
+        projectId: z.string(),
+        milestoneId: z.string(),
+        milestoneName: z.string(),
+        fileCount: z.number(),
+        projectName: z.string(),
+    })
+
 } as const;

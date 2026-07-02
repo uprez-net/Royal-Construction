@@ -1,9 +1,12 @@
-import { createGraphContext } from '@/lib/graph/client';
+import { createGraphContext, GraphMessage } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
 import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
 import { Prisma } from '@prisma/client';
+import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
+import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
+import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 import { evaluateEmail } from '@/utils/spam-detector';
 
 // export const runtime = 'nodejs';
@@ -42,6 +45,18 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
     return existingLead !== null;
   } catch (error) {
     console.error(`Error checking if messageId ${messageId} is processed:`, error);
+    return false;
+  }
+}
+
+async function isTradieMessage(fromEmail: string): Promise<boolean> {
+  try {
+    const existingTradie = await prisma.tradie.findUnique({
+      where: { email: fromEmail },
+    });
+    return existingTradie !== null;
+  } catch (error) {
+    console.error(`Error checking if fromEmail ${fromEmail} is a tradie message:`, error);
     return false;
   }
 }
@@ -142,7 +157,7 @@ export async function POST(request: Request): Promise<Response> {
       console.log(`  tenantId: ${notification.tenantId ?? 'unknown'}`);
 
       if (graphClient && notification.resource) {
-        let message = null;
+        let message: GraphMessage | null = null;
         let attempt = 0;
         const maxAttempts = 3;
 
@@ -191,6 +206,75 @@ export async function POST(request: Request): Promise<Response> {
               continue;
             }
 
+            // Check if the message is from a tradie and extract tradie schedule info
+            if (message.from && await isTradieMessage(message.from)) {
+              const tradie = await prisma.tradie.findUnique({
+                where: { email: message.from },
+              });
+              const tradieSchedules = await prisma.tradieSchedule.findMany({
+                where: {
+                  tradieId: tradie!.id,
+                  status: {
+                    not: {
+                      in: ['DECLINED', 'AWAITING_ADMIN_APPROVAL', 'CONFIRMED', 'QUOTE_RECEIVED']
+                    }
+                  } // Only consider non-declined schedules 
+                },
+              });
+              console.log(`  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`);
+              if (tradieSchedules.length === 0) {
+                console.log(`  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`);
+                continue;
+              }
+              console.log(`  Message from ${message.from} is identified as a tradie message. Skipping lead extraction.`);
+              const tradieInfo = await extractTradieScheduleInfoFromMessage(message.subject ?? '', content);
+              if (!tradieInfo) {
+                console.log('  No tradie schedule information could be extracted from the message.');
+                continue;
+              }
+              console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
+              const schedule = await prisma.tradieSchedule.findFirst({
+                where: {
+                  tradieId: tradie!.id,
+                  scheduledDate: new Date(tradieInfo.scheduleDate),
+                  project: {
+                    location: {
+                      contains: tradieInfo.projectLocation ?? "",
+                      mode: "insensitive",
+                    },
+                  },
+                },
+              });
+              if (!schedule) {
+                console.log(`  Tradie schedule already exists for tradieId: ${tradie!.id}, scheduleDate: ${tradieInfo.scheduleDate}, projectLocation: ${tradieInfo.projectLocation}. Skipping duplicate processing.`);
+                continue;
+              }
+              const status = tradieInfo.scheduleConfirmation
+                ? tradieInfo.scheduleQuote != null
+                  ? "QUOTE_RECEIVED"
+                  : "AWAITING_ADMIN_APPROVAL"
+                : "DECLINED";
+              await updateTradieSchedule(schedule.id, {
+                status,
+                quote: tradieInfo.scheduleQuote ?? undefined,
+              });
+              continue;
+            }
+
+            //Check if the message is part of a lead trail
+            if (await CheckLeadPresentwithEmailPhone(message.from, "")) {
+              console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
+              await saveLeadEmailTrail({
+                from: message.from,
+                to: process.env.GRAPH_SENDER_UPN,
+                subject: message.subject,
+                body: content,
+                sentAt: new Date(message.receivedDateTime),
+              });
+              continue;
+            }
+
+            // Check if the message subject matches any of the predefined lead subject lines
             const normalizedSubject = (message.subject ?? "")
               .trim()
               .toLowerCase()

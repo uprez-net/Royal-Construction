@@ -1,18 +1,15 @@
 "use server";
 import prisma from "@/lib/prisma";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
-import type { LeadStage, Lead as PrismaLead, LeadHistory as PrismaLeadHistory } from "@prisma/client";
+import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
-import type { Lead, LeadsStats, Lead as UiLead } from "@/lib/leads/types";
+import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
-import { Prisma, ChatSession } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
-import { ClientSecretCredential } from "@azure/identity";
-import { render } from "@react-email/components";
-import FollowUpStageMeeting from "../graph/Email/followupstageMeetingcreation";
 import {
   format,
   subMonths,
@@ -28,10 +25,22 @@ import {
   endOfYear,
 } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { sendEmail } from "../azureClient";
+import { generateEmailChecksum } from "@/utils/generator";
+import { dataTimeFormat } from "@/utils/formatters";
+import { auth } from "@clerk/nextjs/server";
+import { getUserByClerkIdCached } from "./user";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
+/**
+ * Escapes HTML-sensitive characters to prevent HTML injection when embedding
+ * user-provided values inside email templates.
+ *
+ * @param value - Raw string to escape.
+ * @returns The escaped HTML-safe string.
+ */
 function escapeEmailHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -41,6 +50,18 @@ function escapeEmailHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
+/**
+ * Builds a deterministic set of advisory lock keys used to prevent duplicate
+ * lead creation when multiple requests attempt to create the same lead
+ * concurrently.
+ *
+ * A lock key is generated for the lead's email and phone (when provided),
+ * sorted to ensure a consistent locking order and avoid deadlocks.
+ *
+ * @param email - Lead email address.
+ * @param phone - Lead phone number.
+ * @returns Sorted advisory lock keys.
+ */
 function getLeadDedupeLockKeys(email: string, phone: string) {
   return [
     email === "" ? null : `lead:email:${email.toLowerCase()}`,
@@ -48,12 +69,33 @@ function getLeadDedupeLockKeys(email: string, phone: string) {
   ].filter((key): key is string => key !== null).sort();
 }
 
+/**
+ * Acquires PostgreSQL transaction-scoped advisory locks for the provided
+ * deduplication keys.
+ *
+ * Locks remain held until the surrounding transaction completes, ensuring
+ * only one transaction can create a lead with the same identifying values.
+ *
+ * @param tx - Prisma transaction client.
+ * @param keys - Advisory lock keys to acquire.
+ */
 async function lockLeadDedupeKeys(tx: Prisma.TransactionClient, keys: string[]) {
   for (const key of keys) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
   }
 }
 
+/**
+ * Sends email notifications to users mentioned in a lead annotation.
+ *
+ * Each mentioned user receives an email containing the lead information,
+ * selected note text, annotation comment, and a link to the CRM.
+ *
+ * Users without email addresses are ignored. Individual email failures are
+ * logged without preventing delivery to other recipients.
+ *
+ * @param input - Mention notification payload.
+ */
 async function sendLeadMentionEmails(input: {
   leadId: number;
   leadName: string;
@@ -114,6 +156,14 @@ async function sendLeadMentionEmails(input: {
   }
 }
 
+/**
+ * Normalizes a search query by trimming surrounding whitespace.
+ *
+ * Returns an empty string when the value is undefined.
+ *
+ * @param search - Optional search query.
+ * @returns Normalized search string.
+ */
 function normalizeSearch(search?: string) {
   return search?.trim() ?? "";
 }
@@ -126,6 +176,13 @@ export interface PaginatedLeadsResult {
   totalPages: number;
 }
 
+/**
+ * Retrieves every lead in the system along with all related data required by
+ * the UI and maps the database model into the frontend representation.
+ *
+ * @returns All mapped leads.
+ * @throws {Error} If the leads cannot be retrieved.
+ */
 export async function getAllLeads(): Promise<UiLead[]> {
   try {
     const leads = await prisma.lead.findMany({
@@ -134,6 +191,7 @@ export async function getAllLeads(): Promise<UiLead[]> {
         chatSessions: true,
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
+        emails: { orderBy: { createdAt: "desc" } },
       },
     });
     return leads.map((lead) => mapLead(lead));
@@ -143,7 +201,28 @@ export async function getAllLeads(): Promise<UiLead[]> {
   }
 }
 
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string): Promise<PaginatedLeadsResult> {
+/**
+ * Retrieves a paginated list of leads with optional search, stage filtering, 
+ * date-range filtering, and filtering for leads without an associated project.
+ *
+ * Supports filtering by:
+ * - Lead stage(s)
+ * - Search term (name, email, phone or location)
+ * - Created date range relative to the Australia/Sydney timezone
+ * - Leads without an associated project
+ *
+ * Results are ordered by newest first and include all related entities
+ * required by the leads interface.
+ *
+ * @param page - 1-based page number.
+ * @param limit - Maximum number of leads per page.
+ * @param query - Optional search query.
+ * @param status - Optional list of stages to filter by.
+ * @param filterTiming - Optional predefined date range.
+ * @param filterLeadsWithoutProject - Optional flag to filter leads that do not have an associated project.
+ * @returns Paginated lead collection.
+ */
+export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string, filterLeadsWithoutProject?: boolean): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
   const search = normalizeSearch(query);
@@ -221,6 +300,11 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     const leads = await prisma.lead.findMany({
       where: {
         ...where,
+        ...(filterLeadsWithoutProject && {
+          project: {
+            is: null,
+          },
+        }),
         ...timingFilter,
         ...(status && status.length > 0
           ? { stage: { in: status } }
@@ -231,6 +315,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
         chatSessions: true,
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
+        emails: { orderBy: { createdAt: "desc" } },
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -246,7 +331,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
       }
     });
 
-    const items = leads.map((lead) => mapLead(lead as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null }));
+    const items = leads.map((lead) => mapLead(lead));
 
     return {
       items,
@@ -271,6 +356,14 @@ type CreateLeadOptions = {
   skipWelcomeEmail?: boolean;
 };
 
+/**
+ * Retrieves a single lead by its unique identifier.
+ *
+ * Includes history, annotations, emails, assigned user and chat sessions.
+ *
+ * @param id - Lead identifier.
+ * @returns The mapped lead or null if not found.
+ */
 export async function findLeadById(id: number): Promise<UiLead | null> {
   const lead = await prisma.lead.findUnique({
     where: { id },
@@ -281,12 +374,25 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
+      emails: { orderBy: { createdAt: "desc" } },
     }
   });
   if (!lead) return null;
   return mapLead(lead);
 }
 
+/**
+ * Retrieves a lead using its unique identifier.
+ *
+ * Includes all related entities required by the CRM UI.
+ *
+ * @param id - Lead identifier.
+ * @returns The mapped lead or null if not found.
+ *
+ * @remarks
+ * Despite its name, this function currently performs a lookup by lead ID
+ * rather than by email address.
+ */
 export async function findLeadByEmail(id: number): Promise<UiLead | null> {
   const lead = await prisma.lead.findUnique({
     where: { id },
@@ -295,136 +401,153 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
+      emails: { orderBy: { createdAt: "desc" } },
     }
   });
   if (!lead) return null;
 
-  return mapLead(lead as PrismaLead & { history: PrismaLeadHistory[]; chatSessions: ChatSession[]; assignedUser: { id: string; name: string; email: string } | null });
+  return mapLead(lead);
 }
 
-export async function handleCalendarFollowup(
-  lead: Lead,
-  followupDate: string, // e.g., "2026-06-06"
-  followupTime: string  // e.g., "09:00" or "21:00"
-): Promise<string | null> {
+// export async function handleCalendarFollowup(
+//   lead: Lead,
+//   followupDate: string, // e.g., "2026-06-06"
+//   followupTime: string  // e.g., "09:00" or "21:00"
+// ): Promise<string | null> {
 
-  const config = getGraphConfig();
-  if (config.mode !== 'app-only' || !config.senderUpn) {
-    return "Graph API configuration is not set for app-only mode with a valid sender UPN.";
-  }
+//   const config = getGraphConfig();
+//   if (config.mode !== 'app-only' || !config.senderUpn) {
+//     return "Graph API configuration is not set for app-only mode with a valid sender UPN.";
+//   }
 
-  const credential = new ClientSecretCredential(config.tenantId, config.clientId, config.clientSecret);
-  const tokenResult = await credential.getToken('https://graph.microsoft.com/.default');
-  const accessToken = tokenResult?.token;
+//   const credential = new ClientSecretCredential(config.tenantId, config.clientId, config.clientSecret);
+//   const tokenResult = await credential.getToken('https://graph.microsoft.com/.default');
+//   const accessToken = tokenResult?.token;
 
-  if (!accessToken) throw new Error('Unable to acquire Graph access token');
+//   if (!accessToken) throw new Error('Unable to acquire Graph access token');
 
-  // ─── 1. Date & Time Parsing & Formatting ─────────────────────────────
+//   // ─── 1. Date & Time Parsing & Formatting ─────────────────────────────
 
-  // Parse local start time (Assuming followupDate is YYYY-MM-DD and followupTime is HH:mm)
-  const startDateTime = new Date(`${followupDate}T${followupTime}:00`);
+//   // Parse local start time (Assuming followupDate is YYYY-MM-DD and followupTime is HH:mm)
+//   const startDateTime = new Date(`${followupDate}T${followupTime}:00`);
 
-  // Calculate end time locally (adds 1 hour, automatically handles day rollovers like 23:30 -> 00:30)
-  const endDateTimeObj = new Date(startDateTime.getTime() + 60 * 60 * 1000);
+//   // Calculate end time locally (adds 1 hour, automatically handles day rollovers like 23:30 -> 00:30)
+//   const endDateTimeObj = new Date(startDateTime.getTime() + 60 * 60 * 1000);
 
-  // Helper: Format Date object to Graph API accepted Local String "YYYY-MM-DDTHH:mm:ss"
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  const formatToGraphDateTime = (d: Date) =>
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+//   // Helper: Format Date object to Graph API accepted Local String "YYYY-MM-DDTHH:mm:ss"
+//   const pad = (n: number) => n.toString().padStart(2, '0');
+//   const formatToGraphDateTime = (d: Date) =>
+//     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 
-  const graphStartStr = formatToGraphDateTime(startDateTime);
-  const graphEndStr = formatToGraphDateTime(endDateTimeObj);
+//   const graphStartStr = formatToGraphDateTime(startDateTime);
+//   const graphEndStr = formatToGraphDateTime(endDateTimeObj);
 
-  // Helper: Format Date object to requested email display strings
-  const formatDisplayDate = (d: Date) =>
-    d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); // "Saturday 6 June 2026"
+//   // Helper: Format Date object to requested email display strings
+//   const formatDisplayDate = (d: Date) =>
+//     d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); // "Saturday 6 June 2026"
 
-  const formatDisplayTime = (d: Date) => {
-    const hours = d.getHours();
-    const minutes = d.getMinutes();
-    const ampm = hours >= 12 ? 'pm' : 'am';
-    const formattedHours = (hours % 12 || 12).toString().padStart(2, '0');
-    const formattedMinutes = minutes.toString().padStart(2, '0');
-    return `${formattedHours}:${formattedMinutes} ${ampm}`;
-  };
+//   const formatDisplayTime = (d: Date) => {
+//     const hours = d.getHours();
+//     const minutes = d.getMinutes();
+//     const ampm = hours >= 12 ? 'pm' : 'am';
+//     const formattedHours = (hours % 12 || 12).toString().padStart(2, '0');
+//     const formattedMinutes = minutes.toString().padStart(2, '0');
+//     return `${formattedHours}:${formattedMinutes} ${ampm}`;
+//   };
 
-  const displayDate = formatDisplayDate(startDateTime);
-  const displayTime = `${formatDisplayTime(startDateTime)} - ${formatDisplayTime(endDateTimeObj)} (AEST)`;
+//   const displayDate = formatDisplayDate(startDateTime);
+//   const displayTime = `${formatDisplayTime(startDateTime)} - ${formatDisplayTime(endDateTimeObj)} (AEST)`;
 
-  // ─── 2. Render React Email to HTML String ────────────────────────────
+//   // ─── 2. Render React Email to HTML String ────────────────────────────
 
-  const emailHtml = await render(
-    FollowUpStageMeeting({
-      name: lead.name,
-      formattedDate: displayDate,
-      formattedTime: displayTime,
+//   const emailHtml = await render(
+//     FollowUpStageMeeting({
+//       name: lead.name,
+//       formattedDate: displayDate,
+//       formattedTime: displayTime,
 
-    })
-  );
+//     })
+//   );
 
-  const attendees = [
-    {
-      emailAddress: { address: lead.email, name: lead.name },
-      type: 'required' // Main Lead
-    }
-  ];
+//   const attendees = [
+//     {
+//       emailAddress: { address: lead.email, name: lead.name },
+//       type: 'required' // Main Lead
+//     }
+//   ];
 
-  // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
-  const ccEmail = process.env.MAIL_ID_CC;
-  if (ccEmail) {
-    attendees.push({
-      emailAddress: { address: ccEmail, name: 'Admin' },
-      type: 'optional' // This acts as the CC in Outlook Calendar
-    });
-  }
+//   // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
+//   const ccEmail = process.env.MAIL_ID_CC;
+//   if (ccEmail) {
+//     attendees.push({
+//       emailAddress: { address: ccEmail, name: 'Admin' },
+//       type: 'optional' // This acts as the CC in Outlook Calendar
+//     });
+//   }
 
-  // ─── 3. Construct Graph API Payload ──────────────────────────────────
+//   // ─── 3. Construct Graph API Payload ──────────────────────────────────
 
-  const event = {
-    subject: `Follow-Up Calendar Event with ${lead.name} - Royal Constructions`,
-    body: {
-      contentType: 'HTML',
-      content: emailHtml, // Inject the beautifully styled React Email HTML
-    },
-    start: {
-      dateTime: graphStartStr,
-      timeZone: 'Australia/Sydney'
-    },
-    end: {
-      dateTime: graphEndStr,
-      timeZone: 'Australia/Sydney'
-    },
-    location: { displayName: 'Royal Constructions' },
-    attendees: attendees,
-  };
+//   const event = {
+//     subject: `Follow-Up Calendar Event with ${lead.name} - Royal Constructions`,
+//     body: {
+//       contentType: 'HTML',
+//       content: emailHtml, // Inject the beautifully styled React Email HTML
+//     },
+//     start: {
+//       dateTime: graphStartStr,
+//       timeZone: 'Australia/Sydney'
+//     },
+//     end: {
+//       dateTime: graphEndStr,
+//       timeZone: 'Australia/Sydney'
+//     },
+//     location: { displayName: 'Royal Constructions' },
+//     attendees: attendees,
+//   };
 
-  // ─── 4. Send Request to Graph API ────────────────────────────────────
+//   // ─── 4. Send Request to Graph API ────────────────────────────────────
 
-  const response = await fetch(
-    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        // This header makes Graph return timezone properties in AEST in the response
-        'Prefer': 'outlook.timezone="Australia/Sydney"'
-      },
-      body: JSON.stringify(event),
-    }
-  );
+//   const response = await fetch(
+//     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
+//     {
+//       method: 'POST',
+//       headers: {
+//         Authorization: `Bearer ${accessToken}`,
+//         'Content-Type': 'application/json',
+//         // This header makes Graph return timezone properties in AEST in the response
+//         'Prefer': 'outlook.timezone="Australia/Sydney"'
+//       },
+//       body: JSON.stringify(event),
+//     }
+//   );
 
-  if (!response.ok) {
-    const detail = await response.text();
-    console.error('Graph event create failed:', detail);
-    return "Failed to create follow-up calendar event";
-  }
+//   if (!response.ok) {
+//     const detail = await response.text();
+//     console.error('Graph event create failed:', detail);
+//     return "Failed to create follow-up calendar event";
+//   }
 
-  //console.log('Checking the Response from Graph API for Event Creation:', await response.json());
+//   //console.log('Checking the Response from Graph API for Event Creation:', await response.json());
 
-  return "Follow-up calendar event successfully created";
-}
+//   return "Follow-up calendar event successfully created";
+// }
 
+/**
+ * Creates a new lead while preventing duplicate creation using PostgreSQL
+ * advisory locks and email/phone deduplication.
+ *
+ * A default history entry is automatically generated when one is not supplied.
+ * If a duplicate lead already exists, the existing lead is returned instead of
+ * creating a new record.
+ *
+ * After successful creation the function:
+ * - Sends a lead created notification
+ * - Optionally sends a welcome email
+ *
+ * @param input - Lead creation payload.
+ * @param options - Optional creation behaviour flags.
+ * @returns The newly created lead or the existing duplicate lead.
+ */
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
@@ -448,7 +571,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     if (input.stage !== 'In Follow-up') {
       historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date() });
     } else {
-      historyCreate.push({ action: "Lead created with Follow-up Calender set", detail: "Lead manually created and Also Assign the Follow-up Calender", type: "SYSTEM", actionDate: new Date() });
+      historyCreate.push({ action: "Lead created with Follow-up set", detail: "Lead manually created and Also Assign the Follow-up Stage", type: "SYSTEM", actionDate: new Date() });
     }
   }
 
@@ -473,6 +596,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     chatSessions: true,
     assignedUser: { select: { id: true, name: true, email: true } },
     noteAnnotations: { orderBy: { createdAt: "desc" } },
+    emails: { orderBy: { createdAt: "desc" } },
   } satisfies Prisma.LeadInclude;
 
   const leadCreateResult = await prisma.$transaction(async (tx) => {
@@ -522,7 +646,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   }
 
   const created = leadCreateResult.createdLead;
-  const res = mapLead(created as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
+  const res = mapLead(created);
 
   // ═══════════════════════════════════════════════════════
   // SEND NOTIFICATION TO NOVU ABOUT NEW LEAD
@@ -585,6 +709,24 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   return res
 }
 
+/**
+ * Updates an existing lead and all supported editable fields.
+ *
+ * Supports updating:
+ * - Lead details
+ * - Assignment
+ * - Follow-up information
+ * - Notes
+ * - Rich note annotations
+ * - History entries
+ *
+ * Mention notifications are sent for newly created annotations and lead
+ * assignment/update notifications are dispatched when appropriate.
+ *
+ * @param id - Lead identifier.
+ * @param input - Updated lead values.
+ * @returns The updated lead.
+ */
 export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
   const mappedStage = input.stage ? stageToPrismaMap[input.stage] : undefined;
   const updateData: Prisma.LeadUpdateInput = {};
@@ -650,7 +792,13 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
-    include: { history: { orderBy: { actionDate: "asc" } }, chatSessions: true, assignedUser: { select: { id: true, name: true, email: true } }, noteAnnotations: { orderBy: { createdAt: "desc" } } },
+    include: {
+      history: { orderBy: { actionDate: "asc" } },
+      chatSessions: true,
+      assignedUser: { select: { id: true, name: true, email: true } },
+      noteAnnotations: { orderBy: { createdAt: "desc" } },
+      emails: { orderBy: { createdAt: "desc" } }
+    },
   });
 
   for (const annotation of annotationInputs) {
@@ -667,7 +815,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     }
   }
 
-  const res = mapLead(updated as PrismaLead & { history: PrismaLeadHistory[] } & { chatSessions: ChatSession[] } & { assignedUser: { id: string; name: string; email: string } | null });
+  const res = mapLead(updated);
   if (input.assignedId === existingLead?.assignedId) {
     const notificationPayload = createNotification("leadUpdated", {
       leadId: res.id.toString(),
@@ -698,11 +846,27 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   return res;
 }
 
+/**
+ * Permanently deletes a lead.
+ *
+ * Related entities configured with cascading deletes are automatically removed.
+ *
+ * @param id - Lead identifier.
+ * @returns Success status.
+ */
 export async function deleteLead(id: number) {
   await prisma.lead.delete({ where: { id } });
   return { success: true };
 }
 
+/**
+ * Retrieves aggregate statistics for the lead pipeline.
+ *
+ * Counts are calculated directly in PostgreSQL using aggregate filters for
+ * improved performance.
+ *
+ * @returns Summary statistics used by the leads dashboard.
+ */
 export async function getLeadsStats(): Promise<LeadsStats> {
   const [stats] = await prisma.$queryRaw<
     {
@@ -740,6 +904,19 @@ export async function getLeadsStats(): Promise<LeadsStats> {
   };
 }
 
+/**
+ * Retrieves analytics datasets used throughout the CRM dashboard.
+ *
+ * Includes:
+ * - Lead source distribution
+ * - Conversion statistics by source
+ * - Monthly lead trend for the past 12 months
+ * - Lost lead reason distribution
+ *
+ * Aggregation is performed directly in PostgreSQL for efficiency.
+ *
+ * @returns Analytics datasets for chart rendering.
+ */
 export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
   const [sourceRows, trendRows, lostReasonRows] = await Promise.all([
     prisma.$queryRaw<
@@ -838,4 +1015,69 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
     monthlyTrend,
     lostReasons,
   };
+}
+
+/**
+ * Sends an email to a lead and records the outgoing message in the lead's
+ * email history.
+ *
+ * The email is delivered using the configured Graph email provider and a
+ * deterministic checksum is generated to uniquely identify the stored email.
+ *
+ * @param leadId - Lead identifier.
+ * @param subject - Email subject.
+ * @param body - Email body.
+ * @param to - Recipient email address.
+ * @returns The persisted email record.
+ *
+ * @throws {Error} If the lead does not exist or the email could not be sent.
+ */
+export async function sendLeadEmail(leadId: number, subject: string, body: string, to: string) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("User not authenticated");
+    }
+    const user = await getUserByClerkIdCached(userId);
+    if (!user) {
+      throw new Error("Authenticated user not found");
+    }
+    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!existingLead) {
+      throw new Error("Lead not found");
+    }
+    const signedBody = `
+    Hi ${existingLead.name},
+    <br> 
+    ${body}
+    <br><br>
+    ${user.name},
+    <br>
+    ${user.email},
+    Royal Constructions Team
+    `
+    await sendEmail({
+      to,
+      subject,
+      body: signedBody, // Just for better salutation, the actual email body is stored in the database without the signature.
+    });
+    const checksum = await generateEmailChecksum(subject, body, process.env.GRAPH_SENDER_UPN ?? to, to, dataTimeFormat.format(new Date()));
+    const emailRecord = await prisma.leadEmails.create({
+      data: {
+        leadId,
+        subject,
+        body,
+        emailTo: to,
+        emailFrom: process.env.GRAPH_SENDER_UPN ?? 'info@royalconstructions.com.au',
+        checksum,
+        sentAt: new Date(),
+      },
+    });
+    console.log(`[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`);
+
+    return emailRecord;
+  } catch (error) {
+    console.error(`[Lead ${leadId}] Failed to send email:`, error);
+    throw new Error("Failed to send email");
+  }
 }

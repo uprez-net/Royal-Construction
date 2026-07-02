@@ -1,5 +1,12 @@
-export function TrendBadge({ value }: { value: number }) {
-  const isPositive = value >= 0;
+export function TrendBadge({
+  value,
+  isInverse,
+}: {
+  value: number;
+  isInverse?: boolean;
+}) {
+  const isPositive = isInverse ? value <= 0 : value >= 0;
+
   return (
     <span
       className={[
@@ -9,7 +16,7 @@ export function TrendBadge({ value }: { value: number }) {
           : "bg-red-100 text-red-700",
       ].join(" ")}
     >
-      {isPositive ? "+" : ""}
+      {value > 0 ? "+" : ""}
       {value}%
     </span>
   );

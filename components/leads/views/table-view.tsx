@@ -7,6 +7,7 @@ import {
   Search,
   RefreshCw,
   Trash2,
+  CalendarCheck,
 } from "lucide-react";
 import { Lead } from "@/lib/leads/types";
 import { useAvailableUsers } from "@/hooks/use-available-users";
@@ -22,6 +23,7 @@ import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
 import { FollowupModal } from "@/components/leads/modal-ui/followup-modal";
 import { AssignedModal } from "@/components/leads/modal-ui/assigned-modal";
 import { ToastContainer, useToast } from "@/components/common/use-toast";
+import type { LeadEmails } from "@prisma/client";
 
 interface TableViewProps {
   loading: boolean;
@@ -30,6 +32,11 @@ interface TableViewProps {
   onLeadDelete: (leadId: number) => void;
   activeMetric: string | null;
   onActiveMetricChange: (metric: string | null) => void;
+  appendEmailToLead: (leadId: number, email: LeadEmails) => void;
+  user: {
+    clerkUserId: string | null;
+    fullName: string | null;
+  };
 }
 
 export default function TableView({
@@ -39,6 +46,8 @@ export default function TableView({
   onLeadDelete,
   activeMetric,
   onActiveMetricChange,
+  user,
+  appendEmailToLead
 }: TableViewProps) {
   /* ── Shared hooks ── */
   const { toasts, showToast, dismissToast } = useToast();
@@ -77,6 +86,11 @@ export default function TableView({
     const dial = dialablePhone(lead.phone);
     if (dial) window.location.assign(`tel:${dial}`);
   };
+
+  const redirectToScheduleMeeting = (lead: Lead) => {
+    const url = `/book-consultation?TeammateName=${user?.fullName ?? ''}&name=${lead.name}&email=${lead.email}&id=${lead.id}`;
+    window.location.assign(url);
+  }
 
   /* ── Render ── */
   return (
@@ -126,176 +140,188 @@ export default function TableView({
           <>
             <div className="table-wrapper">
               <table className="leads-table">
-              <thead>
-                <tr>
-                  <th className="col-lead">Lead</th>
-                  <th className="col-phone">Phone</th>
-                  <th className="col-location">Location</th>
-                  <th className="col-source">Source Detail</th>
-                  <th className="col-stage">Stage</th>
-                  <th className="col-followup">Follow-up</th>
-                  <th className="col-assigned">Assigned</th>
-                  <th className="col-actions">Actions</th>
-                </tr>
-              </thead>
-              {!loading ? (
-                <tbody>
-                  {leads.map((lead) => (
-                    <tr
-                      key={lead.id}
-                      className={
-                        lead.urgent ? "urgent-row bg-rose-50/50" : ""
-                      }
-                      onClick={() => setDetailLead(lead)}
-                    >
-                      <td className="col-lead">
-                        <div className="cell-name">
-                          {lead.urgent && (
-                            <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
+                <thead>
+                  <tr>
+                    <th className="col-lead">Lead</th>
+                    <th className="col-phone">Phone</th>
+                    <th className="col-location">Location</th>
+                    <th className="col-source">Source Detail</th>
+                    <th className="col-stage">Stage</th>
+                    <th className="col-followup">Follow-up</th>
+                    <th className="col-assigned">Assigned</th>
+                    <th className="col-actions">Actions</th>
+                  </tr>
+                </thead>
+                {!loading ? (
+                  <tbody>
+                    {leads.map((lead) => (
+                      <tr
+                        key={lead.id}
+                        className={
+                          lead.urgent ? "urgent-row bg-rose-50/50" : ""
+                        }
+                        onClick={() => setDetailLead(lead)}
+                      >
+                        <td className="col-lead">
+                          <div className="cell-name">
+                            {lead.urgent && (
+                              <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
+                            )}
+                            <div className="cell-name-text">
+                              <strong>{lead.name}</strong>
+                              <small>{lead.email}</small>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="col-phone">{lead.phone}</td>
+                        <td className="col-location">{lead.location}</td>
+                        <td className="col-source-detail">
+                          {lead.sourceDetail}
+                        </td>
+                        <td className="col-stage">
+                          <span
+                            className={`stage-badge ${STAGE_STYLES[lead.stage]}`}
+                          >
+                            {lead.stage}
+                          </span>
+                        </td>
+                        <td className="col-followup">
+                          {!lead.followupDate || !lead.followupTime ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFollowupLead(lead);
+                              }}
+                              title="Set Follow-up"
+                            >
+                              <Calendar size={12} />
+                              <span>Set date</span>
+                            </button>
+                          ) : (
+                            <span
+                              className={`followup-date-text cursor-pointer transition-colors hover:text-royal-gold ${lead.urgent ? "followup-urgent text-destructive font-semibold hover:text-destructive" : ""}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFollowupLead(lead);
+                              }}
+                            >
+                              {formatFollowup(
+                                lead.followupDate,
+                                lead.followupTime,
+                              )}
+                            </span>
                           )}
-                          <div className="cell-name-text">
-                            <strong>{lead.name}</strong>
-                            <small>{lead.email}</small>
+                        </td>
+                        <td className="col-assigned">
+                          {!lead.assignedId ? (
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAssignedLead(lead);
+                              }}
+                              title="Assign Lead"
+                            >
+                              <UserPlus size={12} />
+                              <span>Assign</span>
+                            </button>
+                          ) : (
+                            <span
+                              className="assigned-name cursor-pointer transition-colors hover:text-royal-gold"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAssignedLead(lead);
+                              }}
+                            >
+                              {lead.assignedUser?.name}
+                            </span>
+                          )}
+                        </td>
+                        <td className="col-actions">
+                          <div className="action-buttons">
+                            {!isTerminalStage(lead.stage) && (
+                              <button
+                                type="button"
+                                className="action-btn-icon"
+                                title={`Call ${lead.name}`}
+                                aria-label={`Call ${lead.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCall(lead);
+                                }}
+                              >
+                                <Phone size={15} />
+                              </button>
+                            )}
+                            {lead.email && (
+                              <button
+                                type="button"
+                                className="action-btn-icon"
+                                title={`Send follow-up email to ${lead.name}`}
+                                aria-label={`Send follow-up email to ${lead.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEmailLead(lead);
+                                }}
+                              >
+                                <Mail size={15} />
+                              </button>
+                            )}
+                            {isTerminalStage(lead.stage) && (
+                              <button
+                                type="button"
+                                className="action-btn-icon"
+                                title={`Delete ${lead.name}`}
+                                aria-label={`Delete ${lead.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLeadToDelete(lead);
+                                }}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="action-btn-icon"
+                              title={`Meeting schedule for ${lead.name}`}
+                              aria-label={`Meeting schedule for ${lead.name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                redirectToScheduleMeeting(lead);
+                              }}
+                            >
+                              <CalendarCheck size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                ) : (
+                  <tbody>
+                    <tr>
+                      <td colSpan={8} className="px-4 py-16 text-center">
+                        <div className="flex flex-col items-center justify-center gap-3">
+                          <div className="flex size-12 items-center justify-center">
+                            <RefreshCw className="animate-spin size-5 text-muted-foreground" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold text-foreground">
+                              Loading leads...
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Your leads will appear here.
+                            </p>
                           </div>
                         </div>
                       </td>
-                      <td className="col-phone">{lead.phone}</td>
-                      <td className="col-location">{lead.location}</td>
-                      <td className="col-source-detail">
-                        {lead.sourceDetail}
-                      </td>
-                      <td className="col-stage">
-                        <span
-                          className={`stage-badge ${STAGE_STYLES[lead.stage]}`}
-                        >
-                          {lead.stage}
-                        </span>
-                      </td>
-                      <td className="col-followup">
-                        {!lead.followupDate || !lead.followupTime ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold-light)] hover:text-[color:var(--royal-gold)]"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setFollowupLead(lead);
-                            }}
-                            title="Set Follow-up"
-                          >
-                            <Calendar size={12} />
-                            <span>Set date</span>
-                          </button>
-                        ) : (
-                          <span
-                            className={`followup-date-text cursor-pointer transition-colors hover:text-[color:var(--royal-gold)] ${lead.urgent ? "followup-urgent text-[color:var(--destructive)] font-semibold hover:text-[color:var(--destructive)]" : ""}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setFollowupLead(lead);
-                            }}
-                          >
-                            {formatFollowup(
-                              lead.followupDate,
-                              lead.followupTime,
-                            )}
-                          </span>
-                        )}
-                      </td>
-                      <td className="col-assigned">
-                        {!lead.assignedId ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold-light)] hover:text-[color:var(--royal-gold)]"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAssignedLead(lead);
-                            }}
-                            title="Assign Lead"
-                          >
-                            <UserPlus size={12} />
-                            <span>Assign</span>
-                          </button>
-                        ) : (
-                          <span
-                            className="assigned-name cursor-pointer transition-colors hover:text-[color:var(--royal-gold)]"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAssignedLead(lead);
-                            }}
-                          >
-                            {lead.assignedUser?.name}
-                          </span>
-                        )}
-                      </td>
-                      <td className="col-actions">
-                        <div className="action-buttons">
-                          {!isTerminalStage(lead.stage) && (
-                            <button
-                              type="button"
-                              className="action-btn-icon"
-                              title={`Call ${lead.name}`}
-                              aria-label={`Call ${lead.name}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCall(lead);
-                              }}
-                            >
-                              <Phone size={15} />
-                            </button>
-                          )}
-                          {lead.email && (
-                            <button
-                              type="button"
-                              className="action-btn-icon"
-                              title={`Send follow-up email to ${lead.name}`}
-                              aria-label={`Send follow-up email to ${lead.name}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEmailLead(lead);
-                              }}
-                            >
-                              <Mail size={15} />
-                            </button>
-                          )}
-                          {isTerminalStage(lead.stage) && (
-                            <button
-                              type="button"
-                              className="action-btn-icon"
-                              title={`Delete ${lead.name}`}
-                              aria-label={`Delete ${lead.name}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setLeadToDelete(lead);
-                              }}
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              ) : (
-                <tbody>
-                  <tr>
-                    <td colSpan={8} className="px-4 py-16 text-center">
-                      <div className="flex flex-col items-center justify-center gap-3">
-                        <div className="flex size-12 items-center justify-center">
-                          <RefreshCw className="animate-spin size-5 text-muted-foreground" />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm font-semibold text-foreground">
-                            Loading leads...
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Your leads will appear here.
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              )}
+                  </tbody>
+                )}
               </table>
             </div>
             <div className="mobile-lead-list">
@@ -386,6 +412,15 @@ export default function TableView({
                         Email
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="mobile-action-btn"
+                      onClick={() => redirectToScheduleMeeting(lead)}
+                      aria-label={`Meeting Schedule for ${lead.name}`}
+                    >
+                      <CalendarCheck size={15} />
+                      Actions
+                    </button>
                   </div>
                 </article>
               ))}
@@ -406,6 +441,7 @@ export default function TableView({
           onDeleteClick={(lead) => setLeadToDelete(lead)}
           showToast={showToast}
           availableUsers={availableUsers}
+          appendEmailToLead={appendEmailToLead}
         />
       )}
 

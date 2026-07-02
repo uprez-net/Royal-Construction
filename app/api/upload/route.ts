@@ -72,7 +72,6 @@ export async function POST(request: Request): Promise<NextResponse> {
                     addRandomSuffix,
                     allowOverwrite,
                     maximumSizeInBytes: UPLOAD_CONSTRAINTS.maxFileSizeBytes,
-                    callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/upload`,
                     tokenPayload: JSON.stringify({
                         userId,
                         projectId: clientPayload.projectId,

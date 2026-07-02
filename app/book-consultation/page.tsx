@@ -49,6 +49,7 @@ const generateTimeSlots = (date: Date | null) => {
 
 function BookingContent() {
   const searchParams = useSearchParams();
+  const TeammateName = searchParams.get('TeammateName') || '';
   const initialName = searchParams.get('name') || '';
   const initialEmail = searchParams.get('email') || '';
   const initialId = searchParams.get('id') || '';
@@ -160,12 +161,12 @@ function BookingContent() {
   };
 
   const displayName = clientName.trim() || 'Client';
-  
-  const labelStyle = { 
-    fontSize: 11, 
-    fontWeight: 600, 
-    color: BRAND.muted, 
-    textTransform: 'uppercase' as const, 
+
+  const labelStyle = {
+    fontSize: 11,
+    fontWeight: 600,
+    color: BRAND.muted,
+    textTransform: 'uppercase' as const,
     letterSpacing: '0.8px',
     marginBottom: '6px',
     display: 'block'
@@ -235,14 +236,16 @@ function BookingContent() {
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, backgroundColor: BRAND.white, border: `1px solid ${BRAND.border}`, borderRadius: 50, padding: '6px 16px', marginBottom: 20 }}>
             <Calendar size={14} color={BRAND.gold} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.gold, letterSpacing: '0.5px' }}>BOOKING PAGE</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.gold, letterSpacing: '0.5px' }}>SCHEDULE MEETING</span>
           </div>
           <h1 style={{ color: BRAND.text, fontSize: 42, fontWeight: 500, margin: '0 0 8px', letterSpacing: '-1.2px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase', lineHeight: 1 }}>
-            Book Your<br />Consultation
+            Schedule Your<br />Consultation Meeting
           </h1>
-          <p style={{ color: BRAND.muted, fontSize: 14, margin: 0, fontWeight: 350 }}>
-            Welcome, <strong style={{ color: BRAND.gold }}>{displayName}</strong>. Choose a date and time below.
-          </p>
+          {!TeammateName ? (
+            <p style={{ color: BRAND.muted, fontSize: 14, margin: 0, fontWeight: 350 }}>
+              Welcome, <strong style={{ color: BRAND.gold }}>{displayName}</strong>. Please choose a convenient date and time below.
+            </p>
+          ) : null}
         </div>
 
         {loading ? (
@@ -258,7 +261,7 @@ function BookingContent() {
               <div style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: BRAND.gold }} />
-                  <h3 style={{ margin: 0, color: BRAND.text, fontSize: 17, fontWeight: 500, letterSpacing: '0.3px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase' }}>Your Details</h3>
+                  <h3 style={{ margin: 0, color: BRAND.text, fontSize: 17, fontWeight: 500, letterSpacing: '0.3px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase' }}>{TeammateName ? 'Client Details' : 'Your Details'}</h3>
                 </div>
                 <p style={{ fontSize: 13, color: BRAND.muted, marginTop: 0, marginBottom: 20, fontWeight: 350 }}>Confirm your contact details so we can send the invite.</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
@@ -279,7 +282,7 @@ function BookingContent() {
               <div style={{ padding: '24px 24px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: BRAND.gold }} />
-                  <h3 style={{ margin: 0, color: BRAND.text, fontSize: 17, fontWeight: 500, letterSpacing: '0.3px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase' }}>Project Notes</h3>
+                  <h3 style={{ margin: 0, color: BRAND.text, fontSize: 17, fontWeight: 500, letterSpacing: '0.3px', fontFamily: "'IBM Plex Sans Condensed', sans-serif", textTransform: 'uppercase' }}>{TeammateName?'Agenda':'Project Notes'}</h3>
                 </div>
                 <p style={{ fontSize: 13, color: BRAND.muted, marginTop: 0, marginBottom: 12, fontWeight: 350 }}>{NOTES_HELPER}</p>
               </div>
@@ -453,7 +456,7 @@ function BookingContent() {
                       </>
                     ) : (
                       <>
-                        <span>Confirm Booking</span>
+                        <span>Confirm Meeting</span>
                         <ArrowRight size={18} />
                       </>
                     )}

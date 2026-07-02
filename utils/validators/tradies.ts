@@ -83,6 +83,8 @@ export const createTradieScheduleSchema = z.object({
     .positive("Duration must be greater than 0")
     .optional()
     .default(1),
+
+  requiresQuote: z.boolean().optional().default(false),
 });
 
 export type CreateTradieScheduleInput = z.infer<typeof createTradieScheduleSchema>;
@@ -91,11 +93,12 @@ export type CreateTradieScheduleInput = z.infer<typeof createTradieScheduleSchem
  * Update tradie schedule status
  */
 export const updateTradieScheduleSchema = z.object({
-  status: z.nativeEnum(TradieScheduleStatus, {
+  status: z.enum(TradieScheduleStatus, {
     error: () => ({
       message: `Status must be one of: ${Object.values(TradieScheduleStatus).join(", ")}`,
     }),
   }),
+  quote: z.string().optional(),
 });
 
 export type UpdateTradieScheduleInput = z.infer<typeof updateTradieScheduleSchema>;
@@ -129,6 +132,7 @@ export type ScheduleStatusFilter = z.infer<typeof scheduleStatusFilterSchema>;
  */
 export const tradieCoordinationListQuerySchema = z
   .object({
+    mode: z.literal("coordination"),
     page: z.coerce
       .number()
       .int()

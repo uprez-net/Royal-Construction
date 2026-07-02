@@ -8,7 +8,6 @@ import { CreateVariationModal } from "@/components/projects/create-variation-mod
 
 import { ConfirmStatusModal } from "@/components/tradies/confirm-status-modal";
 import { LogCallModal } from "@/components/tradies/log-call-modal";
-import { ScheduleTradieModal } from "@/components/tradies/schedule-tradie-modal";
 import { TradieDirectoryModal } from "@/components/tradies/tradie-directory-modal";
 
 import type {
@@ -26,7 +25,11 @@ import {
   updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
-import { MilestoneStatus, TradieScheduleStatus } from "@prisma/client";
+import {
+  MilestoneStatus,
+  TradieApprovalActionType,
+  TradieScheduleStatus,
+} from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
 import { PreviewPictureModal } from "../common/preview-picture-modal";
@@ -35,10 +38,22 @@ import AddMilestoneModal from "../projects/detail/add-milestone-modal";
 import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
 import { CreateOfferFileModal } from "../offers/create-offer-modal";
 import { AddLeadModal } from "../leads/modal-ui/add-lead-modal";
+import AddTradieModal from "../tradie-management/modal/add-tradie-modal";
+import { SafeTradieApproval, TradieRow } from "@/types/tradie";
+import DeleteTradieModal from "../tradie-management/modal/delete-tradie-modal";
+import ReportTradieModal from "../tradie-management/modal/report-tradie-modal";
+import PriceChangeTradieModal from "../tradie-management/modal/price-change-tradie-modal";
+import RateTradieModal from "../tradie-management/modal/rate-tradie-modal";
+import { AdminApprovalActionModal } from "../tradie-management/modal/admin-approval-action-modal";
+import { useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
+import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
   const dispatch = useAppDispatch();
+  const [queryClient] = useState(() => new QueryClient());
 
   const handleClose = () => dispatch(closeModal());
   const handleSuccess = () => {
@@ -146,19 +161,24 @@ export function ModalManager() {
           }
         : undefined;
       const milestones = projectPayload
-        ? projectPayload.milestones.map((m) => ({
-            id: m.id,
-            name: m.name,
-          }))
+        ? projectPayload.milestones
+            .filter((m) => m.status !== MilestoneStatus.DONE)
+            .map((m) => ({
+              id: m.id,
+              name: m.name,
+            }))
         : undefined;
+
+      if (!project || !milestones) {
+        return null;
+      }
 
       return (
         <ScheduleTradieModal
           open
-          project={project}
+          onClose={handleClose}
+          projectId={project.id}
           milestones={milestones}
-          onOpenChange={(open) => !open && handleClose()}
-          onSuccess={handleSuccess}
         />
       );
     case "logCall": {
@@ -335,6 +355,66 @@ export function ModalManager() {
             }
           }}
         />
+      );
+    case "addTradie":
+      return <AddTradieModal open onClose={handleClose} />;
+    case "rateTradie":
+      const rateTradie = modal.payload as { tradie: TradieRow };
+      return (
+        <RateTradieModal
+          open
+          onClose={handleClose}
+          tradie={rateTradie.tradie}
+        />
+      );
+    case "deleteTradie":
+      const deleteTradie = modal.payload as { tradie: TradieRow };
+      return (
+        <DeleteTradieModal
+          open
+          onClose={handleClose}
+          tradie={deleteTradie.tradie}
+        />
+      );
+    case "reportTradie":
+      const reportTradie = modal.payload as { tradie: TradieRow };
+      return (
+        <ReportTradieModal
+          open
+          onClose={handleClose}
+          tradie={reportTradie.tradie}
+        />
+      );
+    case "priceChangeTradie":
+      const priceChangeTradie = modal.payload as { tradie: TradieRow };
+      return (
+        <PriceChangeTradieModal
+          open
+          onClose={handleClose}
+          tradie={priceChangeTradie.tradie}
+        />
+      );
+    case "adminApproval":
+      const { approvalId, approvalType } = modal.payload as {
+        approvalId: string;
+        approvalType: TradieApprovalActionType;
+      };
+      return (
+        <QueryClientProvider client={queryClient}>
+          <AdminApprovalActionModal
+            open
+            approvalId={approvalId}
+            approvalType={approvalType}
+            onClose={handleClose}
+          />
+        </QueryClientProvider>
+      );
+    case "approvalDetails":
+      const { approval } = modal.payload as {
+        approval: SafeTradieApproval;
+      };
+      return (
+        <ApprovalDetailModal open onClose={handleClose} approval={approval} />
       );
     default:
       return null;

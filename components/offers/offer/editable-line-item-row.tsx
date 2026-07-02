@@ -83,7 +83,10 @@ function NumericEditor({
       <Input
         type="number"
         value={value}
-        onChange={(e) => setValue(Math.max(0, Number(e.target.value) ?? 0))}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          setValue(Math.max(0, Number.isNaN(n) ? 0 : n));
+        }}
         className="h-8 w-24"
         onKeyDown={(e) => {
           if (e.key === "Enter") save();

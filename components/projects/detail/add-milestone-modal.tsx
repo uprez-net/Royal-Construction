@@ -123,6 +123,7 @@ export default function AddMilestoneModal({
       await dispatch(
         addProjectMilestone({
           ...validatedData.data,
+          // targetDate: new Date(validatedData.data.targetDate).toISOString(),
           projectId,
         }),
       ).unwrap();
@@ -270,7 +271,9 @@ export default function AddMilestoneModal({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">No parent milestone</SelectItem>
-                  {milestones.map((milestone) => (
+                  {milestones
+                  .filter((milestone) => milestone.status === "PENDING")
+                  .map((milestone) => (
                     <SelectItem key={milestone.id} value={milestone.id}>
                       {milestone.name}
                     </SelectItem>

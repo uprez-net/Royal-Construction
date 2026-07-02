@@ -24,6 +24,7 @@ import { differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { calculateScheduleTotalCost } from "@/utils/calculations";
 
 export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const getStatusTone = (status: TradieScheduleStatus) => {
@@ -217,7 +218,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
             }
           >
             <Plus className="mr-1 size-3.5" />
-            Add Tradie
+            Schedule Tradies
           </Button>
         }
       >
@@ -226,13 +227,14 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
             key={tradies.length} // Force remount to reset internal state when tradies change
             headers={[
               "Trade",
-              "Company",
+              "ABN",
               "Contact",
               "Needed For",
               "Scheduled",
               "1-Week Reminder",
               "Confirmed",
               "Status",
+              "Cost",
               "Action",
             ]}
             rows={tradies.map((tradie) => [
@@ -241,7 +243,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               </span>,
 
               <span className="text-[13px]" key={`${tradie.id}-company`}>
-                {tradie.tradie.company}
+                {tradie.tradie.abn}
               </span>,
 
               <span className="text-xs" key={`${tradie.id}-phone`}>
@@ -284,6 +286,10 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                 {getStatusText(tradie.status)}
               </StatusPill>,
 
+              <span className="text-xs text-semibold" key={`${tradie.id}-cost`}>
+                {tradie.quotedPrice ?? calculateScheduleTotalCost(parseFloat(tradie.tradie.hourlyRate ?? "0"), tradie.durationDays)}
+              </span>,
+
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
                 {tradie.status !== "COMPLETED" && (
                   <Button
@@ -299,13 +305,13 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                               id: tradie.id,
                               tradieId: tradie.tradie.id,
                               tradieName: tradie.tradie.name,
-                              company: tradie.tradie.company,
-                              tradeType: tradie.tradie.tradeType,
+                              tradeType: tradie.tradie.trade,
+                              abn: tradie.tradie.abn,
                               projectId: project.id,
                               projectName: project.name,
                               taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
                               scheduledDate: new Date(
-                                tradie.scheduledDate,
+                                tradie.scheduledDate
                               ).toISOString(),
                               durationDays: tradie.durationDays,
                               status: tradie.status,
@@ -319,6 +325,10 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                                 email: project.siteManager?.email ?? "N/A",
                                 phone: project.siteManager?.phone ?? "N/A",
                               },
+                              isFavourite: tradie.tradie.isFavourite,
+                              note: tradie.tradie.note,
+                              requiresQuote: tradie.requiresQuote,
+                              quotedPrice: tradie.quotedPrice ?? undefined,
                             } satisfies TradieScheduleListItem,
                           },
                         }),
@@ -342,13 +352,13 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                             id: tradie.id,
                             tradieId: tradie.tradie.id,
                             tradieName: tradie.tradie.name,
-                            company: tradie.tradie.company,
-                            tradeType: tradie.tradie.tradeType,
+                            tradeType: tradie.tradie.trade,
+                            abn: tradie.tradie.abn,
                             projectId: project.id,
                             projectName: project.name,
                             taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
                             scheduledDate: new Date(
-                              tradie.scheduledDate,
+                              tradie.scheduledDate
                             ).toISOString(),
                             durationDays: tradie.durationDays,
                             status: tradie.status,
@@ -362,6 +372,9 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                               email: project.siteManager?.email ?? "N/A",
                               phone: project.siteManager?.phone ?? "N/A",
                             },
+                            isFavourite: tradie.tradie.isFavourite,
+                            note: tradie.tradie.note,
+                            requiresQuote: false
                           } satisfies TradieScheduleListItem,
                         },
                       }),
@@ -384,13 +397,13 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                             id: tradie.id,
                             tradieId: tradie.tradie.id,
                             tradieName: tradie.tradie.name,
-                            company: tradie.tradie.company,
-                            tradeType: tradie.tradie.tradeType,
+                            tradeType: tradie.tradie.trade,
+                            abn: tradie.tradie.abn,
                             projectId: project.id,
                             projectName: project.name,
                             taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
                             scheduledDate: new Date(
-                              tradie.scheduledDate,
+                              tradie.scheduledDate
                             ).toISOString(),
                             durationDays: tradie.durationDays,
                             status: tradie.status,
@@ -404,6 +417,9 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                               email: project.siteManager?.email ?? "N/A",
                               phone: project.siteManager?.phone ?? "N/A",
                             },
+                            isFavourite: tradie.tradie.isFavourite,
+                            note: tradie.tradie.note,
+                            requiresQuote: false
                           } satisfies TradieScheduleListItem,
                         },
                       }),
@@ -423,7 +439,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                     schedule: {
                       id: tradie.id,
                       tradieName: tradie.tradie.name,
-                      tradeType: tradie.tradie.tradeType,
+                      tradeType: tradie.tradie.trade,
+                      abn: tradie.tradie.abn,
                       projectName: project.name,
                       taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
                       scheduledDate: new Date(
@@ -434,7 +451,6 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                         new Date(),
                       ),
                       status: tradie.status,
-                      company: tradie.tradie.company,
                       contact: {
                         email: tradie.tradie.email,
                         phone: tradie.tradie.phone,
