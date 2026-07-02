@@ -28,6 +28,8 @@ import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { sendEmail } from "../azureClient";
 import { generateEmailChecksum } from "@/utils/generator";
 import { dataTimeFormat } from "@/utils/formatters";
+import { auth } from "@clerk/nextjs/server";
+import { getUserByClerkIdCached } from "./user";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
@@ -1025,14 +1027,32 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
  */
 export async function sendLeadEmail(leadId: number, subject: string, body: string, to: string) {
   try {
+    const { userId } = await auth();
+    if(!userId) {
+      throw new Error("User not authenticated");
+    }
+    const user = await getUserByClerkIdCached(userId);
+    if(!user) {
+      throw new Error("Authenticated user not found");
+    }
     const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
     if (!existingLead) {
       throw new Error("Lead not found");
     }
+    const signedBody = `
+    Hi ${existingLead.name},
+    <br> 
+    ${body}
+    <br><br>
+    ${user.name},
+    <br>
+    ${user.email},
+    Royal Constructions Team
+    `
     await sendEmail({
       to,
       subject,
-      body,
+      body: signedBody, // Just for better salutation, the actual email body is stored in the database without the signature.
     });
     const checksum = await generateEmailChecksum(subject, body, process.env.GRAPH_SENDER_UPN ?? to, to, dataTimeFormat.format(new Date()));
     const emailRecord = await prisma.leadEmails.create({

@@ -1,52 +1,69 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Loader2, Mail, Send, X } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { sendLeadEmail } from "@/lib/data/leads";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { LeadEmails } from "@prisma/client";
+import { ReplyBanner } from "./reply-email";
 
-interface LeadEmailComposerProps {
+const ROYAL_DOMAIN = "@royalconstructions.com.au";
+
+interface EmailComposerProps {
   leadId: number;
+  /** Default recipient, used when composing a fresh (non-reply) message. */
   to: string;
-  title: string;
-  defaultSubject?: string;
-  defaultBody?: string;
-  onSent?: () => void;
+  /** The message being replied to, if any. Presence of this drives reply mode. */
+  replyTo?: LeadEmails | null;
+  projectType: string;
+  location: string;
+  onCancelReply?: () => void;
+  onSent?: (email: LeadEmails) => void;
   appendEmailToLead: (leadId: number, email: LeadEmails) => void;
 }
 
-export function LeadEmailComposer({
+/** Deterministically derives the "Re: ..." subject for a reply, avoiding "Re: Re: ..." stacking. */
+function buildReplySubject(subject: string) {
+  const stripped = subject.replace(/^(re:\s*)+/i, "").trim();
+  return `Re: ${stripped}`;
+}
+
+/** Replies go to whichever side of the thread isn't Royal Constructions. */
+function getReplyRecipient(email: LeadEmails) {
+  return email.emailFrom.includes(ROYAL_DOMAIN)
+    ? email.emailTo
+    : email.emailFrom;
+}
+
+export function EmailComposer({
   leadId,
   to,
-  title,
-  defaultSubject = "",
-  defaultBody = "",
+  replyTo,
+  onCancelReply,
   appendEmailToLead,
   onSent,
-}: LeadEmailComposerProps) {
-  const [subject, setSubject] = useState(defaultSubject);
-  const [body, setBody] = useState(defaultBody);
+  projectType,
+  location
+}: EmailComposerProps) {
+  const [body, setBody] = useState("");
   const [sending, startTransition] = useTransition();
-
-  const subjectRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
+  const isReply = !!replyTo;
+  const recipient = replyTo ? getReplyRecipient(replyTo) : to;
+
   useEffect(() => {
-    if (defaultSubject.trim()) {
-      bodyRef.current?.focus();
-    } else {
-      subjectRef.current?.focus();
-    }
-  }, [defaultSubject]);
+    bodyRef.current?.focus();
+  }, [replyTo]);
 
   async function handleSend() {
-    if (!subject.trim()) {
+    const finalSubject = replyTo
+      ? buildReplySubject(replyTo.subject)
+      : `Follow Up on your request - ${projectType} (${location})`;
+
+    if (!isReply && !finalSubject) {
       toast.error("Please enter a subject.");
       return;
     }
@@ -59,22 +76,16 @@ export function LeadEmailComposer({
     try {
       const email = await sendLeadEmail(
         leadId,
-        subject.trim(),
+        finalSubject,
         body.trim(),
-        to,
+        recipient,
       );
 
       appendEmailToLead(leadId, email);
-
       setBody("");
-
-      if (!defaultSubject) {
-        setSubject("");
-      }
-
-      toast.success("Email sent successfully.");
-
-      onSent?.();
+      onCancelReply?.();
+      toast.success("Email sent.");
+      onSent?.(email);
     } catch (error) {
       console.error(error);
       toast.error("Failed to send email.");
@@ -82,79 +93,41 @@ export function LeadEmailComposer({
   }
 
   return (
-    <Card className="border-dashed bg-background p-4">
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Mail className="size-4 text-primary" />
-          <h4 className="text-sm font-medium">{title}</h4>
-        </div>
+    <div className="border-t bg-background">
+      {replyTo && (
+        <ReplyBanner email={replyTo} onCancel={() => onCancelReply?.()} />
+      )}
 
-        <Button variant="ghost" size="icon" onClick={() => onSent?.()}>
-          <X className="size-4" />
+      <div className="flex items-end gap-2 p-3">
+        <Textarea
+          ref={bodyRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder={
+            isReply ? `Message ${recipient}...` : "Write a message..."
+          }
+          className="min-h-11 max-h-40 flex-1 resize-none"
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              startTransition(handleSend);
+            }
+          }}
+        />
+
+        <Button
+          size="icon"
+          className="bg-royal-gold text-white shrink-0 hover:bg-royal-gold/90"
+          disabled={sending || !body.trim()}
+          onClick={() => startTransition(handleSend)}
+        >
+          {sending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Send className="size-4" />
+          )}
         </Button>
       </div>
-
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label>To</Label>
-
-          <Input value={to} readOnly className="bg-muted" />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Subject</Label>
-
-          <Input
-            ref={subjectRef}
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="Enter subject..."
-          />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Message</Label>
-
-            <span className="text-xs text-muted-foreground">
-              {body.length} characters
-            </span>
-          </div>
-
-          <Textarea
-            ref={bodyRef}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Write your email..."
-            className="min-h-40 resize-y"
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                startTransition(handleSend);
-              }
-            }}
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <Button
-            disabled={sending || !to.trim() || !subject.trim() || !body.trim()}
-            onClick={() => startTransition(handleSend)}
-          >
-            {sending ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <Send className="size-4" />
-                Send Email
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </Card>
+    </div>
   );
 }
