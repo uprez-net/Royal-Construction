@@ -4,6 +4,7 @@ import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
 import { Prisma } from '@prisma/client';
+import { evaluateEmail } from '@/utils/spam-detector';
 
 // export const runtime = 'nodejs';
 
@@ -83,21 +84,6 @@ const LEAD_SUBJECT_LINES = new Set([
   'get in touch form submission',
   'general enquiry form submission',
 ]);
-
-/**
- * Returns true if the text contains letters from a non-Latin script.
- * English and other Latin-based languages (French, German, Spanish, etc.)
- * will return false.
- */
-export function isNonLatinScript(text: string): boolean {
-  const letters = text.match(/\p{L}/gu);
-
-  if (!letters) {
-    return false; // no letters present
-  }
-
-  return letters.some((char) => !/\p{Script=Latin}/u.test(char));
-}
 
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
@@ -191,9 +177,12 @@ export async function POST(request: Request): Promise<Response> {
               `  body(${contentType}): ${content || '[no body]'}`,
             );
 
-            if(isNonLatinScript(message.subject ?? '') || isNonLatinScript(content)) {
-              console.log('  Message contains non-Latin script. Skipping lead extraction.');
-              continue;
+            const emailEvaluation = evaluateEmail(message.subject ?? '', content, { from: message.from });
+            if (!emailEvaluation.shouldEvaluate) {
+              console.log(`  Email evaluation scored ${emailEvaluation.score}. Language: ${emailEvaluation.language ?? 'unknown'}.`);
+              console.log(` Email evaluation signals: ${emailEvaluation.signals.map(signal => `${signal.code} (${signal.delta}): ${signal.reason}`).join('; ')}`);
+              console.log(`  Email evaluation indicates this message is likely spam. Reasons: ${emailEvaluation.reasons.join(', ')}`);
+              continue; // Skip processing this message
             }
 
             // Check if this message was already processed before calling the LLM extraction
