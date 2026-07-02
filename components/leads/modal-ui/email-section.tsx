@@ -42,7 +42,6 @@ export function LeadEmailSection({
     ),
   );
   const [isComposing, setIsComposing] = useState(false);
-
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -82,9 +81,12 @@ export function LeadEmailSection({
         ) : (
           <ScrollArea className="max-h-137.5 pr-3">
             <div className="space-y-3">
-              {emails.map((email) => {
+              {emails.map((email,index) => {
                 const isOpen = openItems[email.id];
-
+                console.log("Checking the EmailAt Value",email.sentAt)
+                //console.log("Checking the EmailAt Value is checking",dataTimeFormat.format(email.sentAt))
+                console.log(index, email.sentAt, new Date(email.sentAt), new Date(email.sentAt).getTime());
+                 console.log(index, dataTimeFormat.format(new Date(email.sentAt)));
                 return (
                   <Collapsible
                     key={email.id}
@@ -132,7 +134,7 @@ export function LeadEmailSection({
 
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                                   <Clock3 className="size-3" />
-                                  {dataTimeFormat.format(email.sentAt)}
+                                  {dataTimeFormat.format(new Date(email.sentAt))}
                                 </div>
                               </div>
 
