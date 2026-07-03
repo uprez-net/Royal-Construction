@@ -21,7 +21,6 @@ import {
 import {
   Check,
   ChevronsDown,
-  ChevronsUpDown,
   Loader2,
   Square,
 } from "lucide-react";

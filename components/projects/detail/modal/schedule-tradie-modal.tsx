@@ -13,7 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { TradieScheduleRow } from "./schedule-tradie-row";
 import { v4 as uuidv4 } from "uuid";
-import { clearState, setTradies, setTradieLoading } from "@/lib/store/slices/tradieManagementSlice";
+import {
+  clearState,
+  setTradies,
+  setTradieLoading,
+} from "@/lib/store/slices/tradieManagementSlice";
 import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
 
 interface ScheduleTradieModalProps {
@@ -62,22 +66,41 @@ export default function ScheduleTradieModal({
   const [rowErrors, setRowErrors] = useState<TradieScheduleRowErrors[]>([]);
 
   useEffect(() => {
-    if(open) {
-      dispatch(setTradieLoading(true));
-      getTradieGroupedByCategoryCached()
-      .then((data) => {
-        dispatch(setTradies(data));
-        dispatch(setTradieLoading(false));
-      })
-      .catch((error) => {
-        console.error("Error fetching tradies:", error);
-        toast.error("Failed to fetch tradies. Please try again.");
-      });
-    }
-    else {
+    let cancelled = false;
+
+    if (!open) {
       dispatch(clearState());
+      return;
     }
-  }, [open]);
+
+    const fetchTradies = async () => {
+      try {
+        dispatch(setTradieLoading(true));
+
+        const data = await getTradieGroupedByCategoryCached();
+
+        if (!cancelled) {
+          dispatch(setTradies(data));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error fetching tradies:", error);
+          toast.error("Failed to fetch tradies. Please try again.");
+        }
+      } finally {
+        if (!cancelled) {
+          dispatch(setTradieLoading(false));
+        }
+      }
+    };
+
+    fetchTradies();
+
+    return () => {
+      cancelled = true;
+      dispatch(clearState());
+    };
+  }, [open, dispatch]);
 
   function validateRow(row: TradieScheduleInputRow): TradieScheduleRowErrors {
     const errors: TradieScheduleRowErrors = {

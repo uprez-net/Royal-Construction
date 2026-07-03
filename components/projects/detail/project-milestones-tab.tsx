@@ -4,7 +4,6 @@ import {
   Wrench,
   Plus,
   DollarSign,
-  ChevronsUpDown,
   ListChecks,
   ChevronsDown,
 } from "lucide-react";

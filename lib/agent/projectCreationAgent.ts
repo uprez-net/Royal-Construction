@@ -4,6 +4,7 @@ import { gateway } from "@/lib/model";
 import z from "zod";
 import { LEAD_INFO_TO_PROJECT_INFERENCE_PROMPT } from "./project-prompt";
 import prisma from "@/lib/prisma";
+import type { OfferFile } from "@/context/ChatContext";
 
 
 const MODEL_NAME = "google/gemini-2.5-flash" as const;
@@ -45,6 +46,11 @@ const fetchAdditionalOfferInfoTool = tool({
                 gstAmount: offer.gstAmount.toString(),
                 totalAmount: offer.totalAmount.toString(),
                 version: currentVersion,
+                lineItems: offerItems,
+                offerFilesContent: offerFiles.map(file => ({
+                    version: file.version,
+                    ...(file.offerContent as OfferFile),
+                })),
             };
         } catch (error) {
             console.error(`Error fetching additional offer info for lead ID ${leadId}:`, error);
