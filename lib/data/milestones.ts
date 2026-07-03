@@ -125,7 +125,34 @@ export async function createMilestone(projectId: string, data: MilestoneCreation
       }
     } else {
       // Append to the end.
-      order = (await tx.milestone.count({ where: { projectId } })) + 1;
+      order = (await tx.milestone.count({ where: { projectId, projectStage: data.projectStage } })) + 1;
+      // Shift all milestones after the insertion point.
+      const milestonesToShift = await tx.milestone.findMany({
+        where: {
+          projectId,
+          order: {
+            gte: order,
+          },
+        },
+        orderBy: {
+          order: "desc",
+        },
+        select: {
+          id: true,
+          order: true,
+        },
+      });
+
+      for (const milestone of milestonesToShift) {
+        await tx.milestone.update({
+          where: {
+            id: milestone.id,
+          },
+          data: {
+            order: milestone.order + 1,
+          },
+        });
+      }
     }
 
     return tx.milestone.create({
