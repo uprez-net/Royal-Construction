@@ -1059,14 +1059,14 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
     await sendEmail({
       to,
       subject,
-      body: signedBody, // Just for better salutation, the actual email body is stored in the database without the signature.
+      body: signedBody,
     });
-    const checksum = await generateEmailChecksum(subject, body, process.env.GRAPH_SENDER_UPN ?? to, to, dataTimeFormat.format(new Date()));
+    const checksum = await generateEmailChecksum(subject, signedBody, process.env.GRAPH_SENDER_UPN ?? to, to, dataTimeFormat.format(new Date()));
     const emailRecord = await prisma.leadEmails.create({
       data: {
         leadId,
         subject,
-        body,
+        body: signedBody,
         emailTo: to,
         emailFrom: process.env.GRAPH_SENDER_UPN ?? 'info@royalconstructions.com.au',
         checksum,
