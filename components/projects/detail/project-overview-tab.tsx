@@ -25,7 +25,7 @@ function DetailItem({
   valueClass?: string;
 }) {
   return (
-    <div className="rounded-[10px] border border-border bg-slate-50 p-3">
+    <div className="rounded-[10px] border border-border bg-slate-50 p-3 max-h-46 no-scrollbar overflow-y-auto">
       <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground mb-0.5">
         {label}
       </p>
@@ -92,6 +92,12 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                 value={projectOverviewMock.architect}
               />
               <DetailItem label="Building Type" value={project.buildingType} />
+              {project.description && (
+                <DetailItem
+                  label="Project Description"
+                  value={project.description}
+                />
+              )}
               <DetailItem
                 label="Lot Size"
                 value={`${Number(project.lotSize ?? "0.0").toLocaleString()} m²`}
@@ -165,11 +171,11 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-0 pt-5 max-h-80 overflow-y-auto no-scrollbar">
-            <div className="relative pl-7 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-[2px] before:bg-border before:rounded-full">
+            <div className="relative pl-7 before:absolute before:left-1.25 before:top-2 before:bottom-2 before:w-0.5 before:bg-border before:rounded-full">
               {activityLog.map((item) => (
                 <article key={item.id} className="relative pb-5 last:pb-0">
                   <div
-                    className={`absolute -left-[27.5px] top-1 size-[10px] rounded-full border-2 border-white ring-2 ring-offset-background z-10 bg-green-600 ring-green-600`}
+                    className={`absolute left-[-27.5px] top-1 size-2.5 rounded-full border-2 border-white ring-2 ring-offset-background z-10 bg-green-600 ring-green-600`}
                   />
                   <p className="text-[13px] font-bold text-slate-900">
                     {toLabel(item.type)}

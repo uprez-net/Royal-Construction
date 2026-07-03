@@ -1,4 +1,4 @@
-import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material } from "@prisma/client";
+import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage } from "@prisma/client";
 
 export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize"> {
   totalBudget: string;
@@ -307,4 +307,22 @@ export type AddProjectUpdateRequest = {
 
 export interface UIMilestone extends MilestoneWithFilesTradiesUpdates {
   childrenMilestones: UIMilestone[];
+}
+
+export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
+  Deposit: "Deposit (5%)",
+  Slab: "Slab (15%)",
+  Frame: "Frame (25%)",
+  Lockup: "Lock Up (25%)",
+  Interior_Fit_Out: "Interior Fit-Out (20%)",
+  Final: "Final (10%)",
+}
+
+export const PROJECT_STAGE_PERCENTAGE: Record<ProjectStage, number> = {
+  Deposit: 0.05,
+  Slab: 0.15,
+  Frame: 0.25,
+  Lockup: 0.25,
+  Interior_Fit_Out: 0.20,
+  Final: 0.10,
 }

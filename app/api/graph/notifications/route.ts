@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
 import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
+import { evaluateEmail } from '@/utils/spam-detector';
 
 // export const runtime = 'nodejs';
 
@@ -51,7 +52,9 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
 async function isTradieMessage(fromEmail: string): Promise<boolean> {
   try {
     const existingTradie = await prisma.tradie.findUnique({
-      where: { email: fromEmail },
+      where: {
+        email: fromEmail,
+      }
     });
     return existingTradie !== null;
   } catch (error) {
@@ -60,25 +63,74 @@ async function isTradieMessage(fromEmail: string): Promise<boolean> {
   }
 }
 
-async function CheckLeadPresentwithEmailPhone(Email: string, ContactNo: string): Promise<boolean> {
+/**
+ * Checks whether a lead already exists by matching:
+ * - sender email
+ * - recipient emails
+ * - contact number
+ *
+ * Returns true if any matching lead exists.
+ *
+ * @param fromEmail - Email address of the sender
+ * @param toEmails - Recipient email addresses
+ * @param contactNo - Extracted contact number
+ */
+export async function checkLeadPresentWithEmailPhone(
+  fromEmail?: string,
+  toEmails: string[] = [],
+  contactNo?: string
+): Promise<boolean> {
   const orConditions: Prisma.LeadWhereInput[] = [];
-  if (Email && Email.trim() !== "") {
-    orConditions.push({ email: Email.trim() });
-  }
-  if (ContactNo && ContactNo.trim() !== "" && ContactNo.trim() !== "0") {
-    orConditions.push({ phone: ContactNo.trim() });
-  }
-  try {
-    const existingLead = await prisma.lead.findFirst({
-      where: {
-        OR: orConditions,
+
+  const normalizedFromEmail = fromEmail?.trim().toLowerCase();
+  const normalizedContactNo = contactNo?.trim();
+
+  const normalizedToEmails = toEmails
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (normalizedFromEmail) {
+    orConditions.push({
+      email: {
+        equals: normalizedFromEmail,
+        mode: "insensitive",
       },
     });
-    return existingLead !== null;
-  } catch (error) {
-    console.error(`Error checking if lead with Email ${Email} or ContactNo ${ContactNo} is present:`, error);
+  }
+
+  if (normalizedToEmails.length > 0) {
+    orConditions.push({
+      email: {
+        in: normalizedToEmails,
+        mode: "insensitive",
+      },
+    });
+  }
+
+  if (
+    normalizedContactNo &&
+    normalizedContactNo !== "0"
+  ) {
+    orConditions.push({
+      phone: normalizedContactNo,
+    });
+  }
+
+  // Nothing useful to search with
+  if (orConditions.length === 0) {
     return false;
   }
+
+  const existingLead = await prisma.lead.findFirst({
+    where: {
+      OR: orConditions,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return Boolean(existingLead);
 }
 
 function handleValidationToken(request: Request): Response | null {
@@ -98,21 +150,6 @@ const LEAD_SUBJECT_LINES = new Set([
   'get in touch form submission',
   'general enquiry form submission',
 ]);
-
-/**
- * Returns true if the text contains letters from a non-Latin script.
- * English and other Latin-based languages (French, German, Spanish, etc.)
- * will return false.
- */
-export function isNonLatinScript(text: string): boolean {
-  const letters = text.match(/\p{L}/gu);
-
-  if (!letters) {
-    return false; // no letters present
-  }
-
-  return letters.some((char) => !/\p{Script=Latin}/u.test(char));
-}
 
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
@@ -206,11 +243,6 @@ export async function POST(request: Request): Promise<Response> {
               `  body(${contentType}): ${content || '[no body]'}`,
             );
 
-            if (isNonLatinScript(message.subject ?? '') || isNonLatinScript(content)) {
-              console.log('  Message contains non-Latin script. Skipping lead extraction.');
-              continue;
-            }
-
             // Check if this message was already processed before calling the LLM extraction
             if (message.id && await isMessageAlreadyProcessed(message.id)) {
               console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
@@ -273,7 +305,7 @@ export async function POST(request: Request): Promise<Response> {
             }
 
             //Check if the message is part of a lead trail
-            if (await CheckLeadPresentwithEmailPhone(message.from, "")) {
+            if (await checkLeadPresentWithEmailPhone(message.from, message.to, "")) {
               console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
               await saveLeadEmailTrail({
                 from: message.from,
@@ -298,6 +330,15 @@ export async function POST(request: Request): Promise<Response> {
               continue;
             }
 
+            // Evaluate the email for spam likelihood before proceeding with lead extraction
+            const emailEvaluation = evaluateEmail(message.subject ?? '', content, message.headers);
+            if (!emailEvaluation.shouldEvaluate) {
+              console.log(`  Email evaluation scored ${emailEvaluation.score}. Language: ${emailEvaluation.language ?? 'unknown'}.`);
+              console.log(` Email evaluation signals: ${emailEvaluation.signals.map(signal => `${signal.code} (${signal.delta}): ${signal.reason}`).join('; ')}`);
+              console.log(`  Email evaluation indicates this message is likely spam. Reasons: ${emailEvaluation.reasons.join(', ')}`);
+              continue; // Skip processing this message
+            }
+
             const extracted = await extractLeadFromMessage(
               message.subject ?? '',
               content,
@@ -310,7 +351,8 @@ export async function POST(request: Request): Promise<Response> {
                 if (message.id && await isMessageAlreadyProcessed(message.id)) {
                   console.log(`  Lead with MicrosoftmessageId: ${message.id} was already processed while extracting. Aborting database save.`);
                   continue;
-                } else if (await CheckLeadPresentwithEmailPhone(extracted.Email, extracted.ContactNo == null ? "" : String(extracted.ContactNo))) {
+                }
+                else if (await checkLeadPresentWithEmailPhone(extracted.Email, [], extracted.ContactNo == null ? "" : String(extracted.ContactNo))) {
                   console.log(`  Lead with Email: ${extracted.Email} or ContactNo: ${extracted.ContactNo} already exists in database. Aborting database save.`);
                   continue;
                 }

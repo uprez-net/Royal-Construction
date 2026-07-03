@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useAppSelector } from "@/lib/store/hooks";
 import type { UIMilestone } from "@/types/project";
-import { Camera, Download, FilePenLine, Play } from "lucide-react";
+import { BanIcon, Camera, Download, FilePenLine, Play } from "lucide-react";
 import { useMemo } from "react";
 
 export function MilestoneActionGroup({
@@ -11,6 +11,7 @@ export function MilestoneActionGroup({
   onStatusUpdate,
   onStartMilestone,
   onSendInvoice,
+  onMarkasNotRequired,
 }: {
   prevMilestone?: UIMilestone;
   milestone: UIMilestone;
@@ -18,6 +19,7 @@ export function MilestoneActionGroup({
   onStatusUpdate: (id: string) => void;
   onStartMilestone: (id: string) => void;
   onSendInvoice: () => void;
+  onMarkasNotRequired: (id: string) => void;
 }) {
   const project = useAppSelector((state) => state.projects.activeProject);
   const isFirstMilestone = milestone.order === 1;
@@ -41,7 +43,10 @@ export function MilestoneActionGroup({
     isFirstMilestone ||
     isChildOfFirstMilestone ||
     prevMilestone?.status === "DONE" ||
-    (prevMilestoneToParent?.status === "DONE" && isFirstChildOfMilestone);
+    prevMilestone?.status === "NOT_REQUIRED" ||
+    ((prevMilestoneToParent?.status === "DONE" ||
+      prevMilestoneToParent?.status === "NOT_REQUIRED") &&
+      isFirstChildOfMilestone);
 
   console.log("isUnlocked", isUnlocked, {
     name: milestone.name,
@@ -62,10 +67,15 @@ export function MilestoneActionGroup({
 
   if (canStart) {
     return (
-      <Button size="sm" onClick={() => onStartMilestone(milestone.id)}>
-        <Play className="mr-1 h-4 w-4" />
-        Start Milestone
-      </Button>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button size="sm" onClick={() => onStartMilestone(milestone.id)}>
+          <Play className="mr-1 h-4 w-4" />
+          Start Milestone
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => onMarkasNotRequired(milestone.id)}>
+          <BanIcon className="mr-1 h-4 w-4" />
+        </Button>
+      </div>
     );
   }
 

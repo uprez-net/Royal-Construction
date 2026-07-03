@@ -15,7 +15,8 @@
     "prisma:seed": "prisma db seed",
     "prisma:generate": "prisma generate",
     "prisma:migrate-deploy": "prisma migrate deploy",
-    "seed:projects": "tsx prisma/seed-projects.ts"
+    "seed:projects": "tsx prisma/seed-projects.ts",
+    "seed:tradies": "tsx prisma/seed-tradie.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.73",
@@ -60,6 +61,7 @@
     "dompurify": "^3.4.9",
     "dotenv": "^17.4.2",
     "embla-carousel-react": "^8.6.0",
+    "franc": "^6.2.0",
     "input-otp": "^1.4.2",
     "libphonenumber-js": "^1.13.1",
     "limiter": "^3.0.0",

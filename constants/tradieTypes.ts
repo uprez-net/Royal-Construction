@@ -13,6 +13,16 @@ import {
   Grid3X3,
   LayoutGrid,
   LucideIcon,
+  Warehouse,
+  Sofa,
+  ShieldCheck,
+  DoorOpen,
+  Drill,
+  Ruler,
+  Bug,
+  Compass,
+  Droplets,
+  Construction,
 } from "lucide-react";
 
 export const TRADIE_TYPES = {
@@ -31,6 +41,20 @@ export const TRADIE_TYPES = {
   FLOORING_SPECIALIST: "Flooring",
   KITCHEN_SPECIALIST: "Kitchen Installation",
   CONCRETE_SPECIALIST: "Concrete",
+
+  // Added
+  WINDOW_DOOR_SPECIALIST: "Windows & Doors",
+  JOINER: "Joinery",
+  STRUCTURAL_ENGINEER: "Structural Engineering",
+  PEST_CONTROL: "Pest Control",
+  SURVEYOR: "Surveying",
+  WATER_AUTHORITY: "Sydney Water",
+  SCAFFOLDER: "Scaffolding",
+  WATERPROOFER: "Waterproofing",
+  FITOUT_CARPENTER: "Fit-out Carpentry",
+  INTERIOR_FITOUT: "Interior Fit-out",
+  GYPROCK_INSTALLER: "Gyprock",
+  METAL_ROOFER: "Metal Roofing",
 } as const;
 
 export const TRADIE_TYPE_ICONS: Record<
@@ -52,4 +76,18 @@ export const TRADIE_TYPE_ICONS: Record<
   FLOORING_SPECIALIST: LayoutGrid,
   KITCHEN_SPECIALIST: Building2,
   CONCRETE_SPECIALIST: Hammer,
+
+  // Added
+  WINDOW_DOOR_SPECIALIST: DoorOpen,
+  JOINER: Drill,
+  STRUCTURAL_ENGINEER: Ruler,
+  PEST_CONTROL: Bug,
+  SURVEYOR: Compass,
+  WATER_AUTHORITY: Droplets,
+  SCAFFOLDER: Construction,
+  WATERPROOFER: ShieldCheck,
+  FITOUT_CARPENTER: Hammer,
+  INTERIOR_FITOUT: Sofa,
+  GYPROCK_INSTALLER: PanelTop,
+  METAL_ROOFER: Warehouse,
 };

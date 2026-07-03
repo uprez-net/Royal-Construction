@@ -21,13 +21,6 @@ interface LeadEmailSectionProps {
 
 const ROYAL_DOMAIN = "@royalconstructions.com.au";
 
-/** Strips repeated "Re:" prefixes so we can tell whether the thread topic actually changed. */
-function normalizeSubject(subject: string) {
-  return subject
-    .replace(/^(re:\s*)+/i, "")
-    .trim()
-    .toLowerCase();
-}
 
 export function LeadEmailSection({
   emails,

@@ -47,12 +47,14 @@ const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Pending", value: "PENDING" },
   { label: "In Progress", value: "ACTIVE" },
   { label: "Completed", value: "DONE" },
+  { label: "Not Required", value: "NOT_REQUIRED" },
 ];
 
 const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: ["ACTIVE"],
+  PENDING: ["ACTIVE", "NOT_REQUIRED"],
   ACTIVE: ["DONE"],
   DONE: [],
+  NOT_REQUIRED: [],
 };
 
 type MilestoneUpdateErrors = Partial<Record<keyof MilestoneUpdateData, string>>;
@@ -225,7 +227,7 @@ export default function UpdateMilestoneModal({
                 Status
               </Label>
               <Select
-                disabled={status === "ACTIVE"}
+                disabled={status === "ACTIVE" || status === "NOT_REQUIRED"}
                 value={formState.status}
                 onValueChange={(value) => {
                   handleFormChange("status", value)

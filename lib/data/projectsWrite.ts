@@ -193,6 +193,7 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
     }
 
     const {
+      projectDescription,
       projectType,
       projectBudget,
       projectRequirements
@@ -209,8 +210,8 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
         data: {
           leadId: lead.id,
           name: projectName,
+          description: projectDescription,
           buildingType: projectType,
-          description: lead.notes,
           location: address,
           council: council,
           totalBudget: new Prisma.Decimal(projectBudget),

@@ -71,7 +71,7 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
             clearTimeout(timer);
             controller.abort();
         };
-    }, [query, pageInfo.page, items.length]);
+    }, [query, pageInfo.page, items.length, getLeadsWithoutProject]);
 
     return { query, setQuery, items, loading, error, pageInfo, setPage, loadingMore } as const;
 }
