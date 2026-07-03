@@ -5,6 +5,7 @@ import {
   type DeviceCodeInfo,
 } from '@azure/identity';
 import { type GraphConfig } from './config';
+import { type EmailHeaders } from '@/utils/spam-detector';
 
 export interface EmailInput {
   to: string | string[];
@@ -17,14 +18,23 @@ export interface EmailInput {
 export interface GraphMessage {
   id: string;
   subject: string;
+
   from: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+
   receivedDateTime: string;
   isRead: boolean;
+
   bodyPreview?: string;
+
   body?: {
     contentType: string;
     content: string;
   };
+
+  headers: EmailHeaders;
 }
 
 export interface GraphSubscription {
@@ -49,21 +59,36 @@ interface TokenProvider {
   getToken(scopes: string | string[]): Promise<string>;
 }
 
+interface GraphInternetMessageHeader {
+  name: string;
+  value: string;
+}
+
+interface GraphRecipient {
+  emailAddress?: {
+    address?: string;
+  };
+}
+
 interface GraphApiMessage {
   id?: string;
   subject?: string;
+
+  from?: GraphRecipient;
+
+  toRecipients?: GraphRecipient[];
+  ccRecipients?: GraphRecipient[];
+  bccRecipients?: GraphRecipient[];
+
+  internetMessageHeaders?: GraphInternetMessageHeader[];
+
   receivedDateTime?: string;
   isRead?: boolean;
   bodyPreview?: string;
+
   body?: {
     contentType?: string;
     content?: string;
-  };
-  from?: {
-    emailAddress?: {
-      address?: string;
-      name?: string;
-    };
   };
 }
 
@@ -106,14 +131,56 @@ async function graphRequest<T>(
   return (await toJson(response)) as T;
 }
 
-function mapMessage(item: GraphApiMessage, includeBody: boolean): GraphMessage {
+function extractEmailHeaders(
+  headers?: GraphInternetMessageHeader[]
+): EmailHeaders {
+  if (!headers?.length) {
+    return {};
+  }
+
+  const getHeader = (name: string) =>
+    headers.find(
+      (header) => header.name.toLowerCase() === name.toLowerCase()
+    )?.value;
+
+  return {
+    from: getHeader('From'),
+    replyTo: getHeader('Reply-To'),
+    listUnsubscribe: getHeader('List-Unsubscribe'),
+  };
+}
+
+function mapMessage(
+  item: GraphApiMessage,
+  includeBody: boolean
+): GraphMessage {
+  const mapRecipients = (
+    recipients?: GraphRecipient[]
+  ): string[] => {
+    return (
+      recipients
+        ?.map((recipient) => recipient.emailAddress?.address)
+        .filter((address): address is string => Boolean(address)) ?? []
+    );
+  };
+
   return {
     id: item.id ?? '',
     subject: item.subject ?? '(No Subject)',
+
     from: item.from?.emailAddress?.address ?? 'Unknown',
+
+    to: mapRecipients(item.toRecipients),
+    cc: mapRecipients(item.ccRecipients),
+    bcc: mapRecipients(item.bccRecipients),
+
+    headers: extractEmailHeaders(item.internetMessageHeaders),
+
     receivedDateTime: item.receivedDateTime ?? '',
     isRead: item.isRead ?? false,
+
     bodyPreview: item.bodyPreview ?? undefined,
+
     body: includeBody
       ? {
         contentType: item.body?.contentType ?? 'text',
@@ -237,8 +304,8 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
     getMessageByResource: async (resource: string, includeBody = true) => {
       const token = await getAccessToken();
       const select = includeBody
-        ? 'subject,from,receivedDateTime,isRead,body,bodyPreview'
-        : 'subject,from,receivedDateTime,isRead,bodyPreview';
+        ? 'subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,body,bodyPreview,internetMessageHeaders'
+        : 'subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,bodyPreview,internetMessageHeaders';
       const url = buildGraphUrl(resource, select);
 
       // 2. Request plain text body to save LLM tokens if body is included
