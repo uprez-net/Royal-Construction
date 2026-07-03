@@ -192,6 +192,9 @@ const tradieManagementSlice = createSlice({
             );
             state.tradies = allTradies;
         },
+        setTradieLoading(state, action: PayloadAction<boolean>) {
+            state.loading = action.payload;
+        },
         setSelectedTradie(state, action: PayloadAction<TradieDetails | null>) {
             state.selectedTradieDetails = action.payload;
             state.selectedTradieId = action.payload ? action.payload.id : null;
@@ -315,5 +318,6 @@ export const {
     setKPIData,
     setQuery,
     setSelectedCategory,
+    setTradieLoading,
 } = tradieManagementSlice.actions;
 export default tradieManagementSlice.reducer;

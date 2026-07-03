@@ -29,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, Loader2, Plus } from "lucide-react";
 import { ProjectStage } from "@prisma/client";
 import { PROJECT_STAGE_LABELS } from "@/types/project";
+import { currency } from "@/utils/formatters";
+import { parseCurrency } from "@/utils/parser";
 
 interface AddMilestoneProps {
   projectId: string;
@@ -255,12 +257,16 @@ export default function AddMilestoneModal({
               </Label>
               <Input
                 id="budget"
-                type="number"
+                type="text"
                 className={inputClassName}
                 placeholder="Enter milestone budget"
-                value={formState.budget}
+                value={
+                  formState.budget && formState.budget > 0
+                    ? currency.format(formState.budget)
+                    : ""
+                }
                 onChange={(e) =>
-                  handleFormChange("budget", Number(e.target.value))
+                  handleFormChange("budget", parseCurrency(e.target.value))
                 }
                 aria-invalid={Boolean(fieldErrors.budget)}
                 aria-describedby={

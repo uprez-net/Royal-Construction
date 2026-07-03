@@ -49,6 +49,7 @@ const generateProjectDetailTabs = (
     (schedule) =>
       schedule.status === "PENDING" ||
       schedule.status === "PENDING_RESPONSE" ||
+      schedule.status === "AWAITING_QUOTE" ||
       schedule.status === "NO_RESPONSE" ||
       schedule.status === "DECLINED",
   ).length;
