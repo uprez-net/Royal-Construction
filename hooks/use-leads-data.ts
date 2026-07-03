@@ -157,11 +157,14 @@ export function useLeadsData() {
   }, []);
 
   const appendEmailToLead = useCallback(
-    async (leadId: number, newEmail: LeadEmails) => {
+    (leadId: number, newEmail: LeadEmails) => {
       setLeads((prev) =>
         prev.map((lead) =>
           lead.id === leadId
-            ? { ...lead, emails: [newEmail, ...lead.emails] }
+            ? {
+              ...lead,
+              emails: [newEmail, ...lead.emails]
+            }
             : lead,
         ),
       );
