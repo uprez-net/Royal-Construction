@@ -1046,16 +1046,15 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
     if (!existingLead) {
       throw new Error("Lead not found");
     }
-    const signedBody = `
-    Hi ${existingLead.name},
-    <br> 
-    ${body}
-    <br><br>
-    ${user.name},
-    <br>
-    ${user.email},
-    Royal Constructions Team
-    `
+    const signedBody = [
+      `Hi ${existingLead.name},`,
+      body,
+      "",
+      `${user.name},`,
+      `${user.email},`,
+      "Royal Constructions Team",
+    ].join("<br>");
+
     await sendEmail({
       to,
       subject,
