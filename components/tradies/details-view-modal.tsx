@@ -42,6 +42,7 @@ function getStatusStyles(status: string) {
 
     case "PENDING":
     case "PENDING_RESPONSE":
+    case "AWAITING_QUOTE":
       return "border-transparent bg-warning-light text-warning";
 
     case "NO_RESPONSE":
@@ -102,11 +103,11 @@ function DetailItem({
 }) {
   return (
     <div className={cn("space-y-1", className)}>
-      <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
         {label}
       </div>
 
-      <div className="flex items-center gap-1.5 text-[13px] font-[600] text-foreground">
+      <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
         {icon}
         {value}
       </div>
@@ -154,7 +155,7 @@ export function TradieScheduleDetailsModal({
       <DialogContent
         className={cn(
           "border-border/70 p-0",
-          "max-h-[85vh] overflow-y-auto max-w-[calc(100%-2rem)] gap-0 sm:max-h-[60vh] sm:max-w-[720px]",
+          "max-h-[85vh] overflow-y-auto max-w-[calc(100%-2rem)] gap-0 sm:max-h-[60vh] sm:max-w-180",
           "rounded-[18px] bg-card shadow-lg",
         )}
       >
@@ -167,7 +168,7 @@ export function TradieScheduleDetailsModal({
           <div className="border-b border-border/70 px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="truncate text-[20px] font-[800] tracking-[-0.02em] text-foreground">
+                <h2 className="truncate text-[20px] font-extrabold tracking-[-0.02em] text-foreground">
                   {schedule.tradieName}
                 </h2>
 
@@ -234,14 +235,14 @@ export function TradieScheduleDetailsModal({
               />
 
               <div className="space-y-1">
-                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                   Days Until
                 </div>
 
                 <Badge
                   className={cn(
-                    "inline-flex rounded-[6px] px-[9px] py-[3px]",
-                    "text-[10.5px] font-[700]",
+                    "inline-flex rounded-[6px] px-2.25 py-0.75",
+                    "text-[10.5px] font-bold",
                     daysBadge.className,
                   )}
                 >
@@ -261,7 +262,7 @@ export function TradieScheduleDetailsModal({
               />
 
               <div className="space-y-1">
-                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                   Task
                 </div>
 
@@ -271,14 +272,14 @@ export function TradieScheduleDetailsModal({
               </div>
 
               <div className="space-y-1">
-                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                   Status
                 </div>
 
                 <Badge
                   className={cn(
-                    "rounded-full px-[10px] py-[3px]",
-                    "text-[10.5px] font-[600]",
+                    "rounded-full px-2.5 py-0.75",
+                    "text-[10.5px] font-semibold",
                     getStatusStyles(schedule.status),
                   )}
                 >
@@ -287,7 +288,7 @@ export function TradieScheduleDetailsModal({
               </div>
 
               <div className="space-y-1">
-                <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted-foreground">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                   Reminder
                 </div>
 
@@ -319,7 +320,7 @@ export function TradieScheduleDetailsModal({
                   </div>
 
                   <div>
-                    <div className="text-[13px] font-[700] text-foreground">
+                    <div className="text-[13px] font-bold text-foreground">
                       Contact Information
                     </div>
 
@@ -339,7 +340,7 @@ export function TradieScheduleDetailsModal({
                   >
                     <span className="text-muted-foreground">Phone</span>
 
-                    <span className="font-[600] text-foreground">
+                    <span className="font-semibold text-foreground">
                       {schedule.contact.phone}
                     </span>
                   </div>
@@ -353,7 +354,7 @@ export function TradieScheduleDetailsModal({
                   >
                     <span className="text-muted-foreground">Email</span>
 
-                    <span className="truncate font-[600] text-foreground">
+                    <span className="truncate font-semibold text-foreground">
                       {schedule.contact.email}
                     </span>
                   </div>
@@ -370,10 +371,10 @@ export function TradieScheduleDetailsModal({
                     onClick={() => onMarkAsDone(item)}
                     className={cn(
                       "h-auto rounded-[7px]",
-                      "bg-primary px-[14px] py-[7px]",
-                      "text-[12.5px] font-[600] text-primary-foreground",
+                      "bg-primary px-3.5 py-1.75",
+                      "text-[12.5px] font-semibold text-primary-foreground",
                       "transition-all duration-200",
-                      "hover:-translate-y-[1px]",
+                      "hover:-translate-y-px",
                       "hover:bg-primary/90",
                     )}
                   >
@@ -384,15 +385,16 @@ export function TradieScheduleDetailsModal({
 
               {(schedule.status === "NO_RESPONSE" ||
                 schedule.status === "PENDING" ||
+                schedule.status === "AWAITING_QUOTE" ||
                 schedule.status === "PENDING_RESPONSE") && (
                 <Button
                   onClick={() => onCall(item)}
                   className={cn(
                     "h-auto rounded-[7px]",
-                    "bg-warning px-[14px] py-[7px]",
-                    "text-[12.5px] font-[600] text-primary-foreground",
+                    "bg-warning px-3.5 py-1.75",
+                    "text-[12.5px] font-semibold text-primary-foreground",
                     "transition-all duration-200",
-                    "hover:-translate-y-[1px]",
+                    "hover:-translate-y-px",
                     "hover:bg-warning/90",
                   )}
                 >
@@ -407,8 +409,8 @@ export function TradieScheduleDetailsModal({
                 className={cn(
                   "h-auto rounded-[7px]",
                   "border-border/70 bg-card",
-                  "px-[14px] py-[7px]",
-                  "text-[12.5px] font-[500] text-foreground",
+                  "px-3.5 py-1.75",
+                  "text-[12.5px] font-medium text-foreground",
                   "hover:border-primary",
                   "hover:bg-muted/40",
                   "hover:text-primary",
@@ -425,8 +427,8 @@ export function TradieScheduleDetailsModal({
                   className={cn(
                     "h-auto rounded-[7px]",
                     "border-border/70 bg-card",
-                    "px-[14px] py-[7px]",
-                    "text-[12.5px] font-[500] text-foreground",
+                    "px-3.5 py-1.75",
+                    "text-[12.5px] font-medium text-foreground",
                     "hover:border-primary",
                     "hover:bg-muted/40",
                     "hover:text-primary",

@@ -17,8 +17,6 @@ import {
   createLeadNotesDocument,
   extractMentionedUserIds,
 } from "@/lib/rich-text/lead-notes";
-import { LeadEmailSection } from "./email-section";
-import type { LeadEmails } from "@prisma/client";
 
 interface DetailModalProps {
   lead: Lead;
@@ -26,7 +24,6 @@ interface DetailModalProps {
   onLeadUpdate: (lead: Lead, options?: { keepOpen?: boolean }) => void;
   onDeleteClick: (lead: Lead) => void;
   showToast: (msg: string, type?: "success" | "info" | "error") => void;
-  appendEmailToLead: (leadId: number, email: LeadEmails) => void;
   availableUsers: { id: string; name: string }[];
 }
 
@@ -36,7 +33,6 @@ export function DetailModal({
   onLeadUpdate,
   onDeleteClick,
   showToast,
-  appendEmailToLead,
   availableUsers,
 }: DetailModalProps) {
   const [form, setForm] = useState<LeadDetailFormData>(() =>
@@ -453,17 +449,6 @@ export function DetailModal({
             </div>
           )}
         </div>
-
-        {/* Emails */}
-        <LeadEmailSection
-          key={`${lead.emails.length}-${lead.id}`} // Force re-render when emails change
-          emails={lead.emails}
-          leadId={lead.id}
-          leadEmail={lead.email}
-          projectType={lead.type}
-          location={lead.location}
-          appendEmailToLead={appendEmailToLead}
-        />
 
         {/* Lost reason */}
         {isLostStage(form.stage) && (

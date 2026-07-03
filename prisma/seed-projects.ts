@@ -1851,6 +1851,7 @@ async function main() {
                     spend: milestoneSeed.spend !== undefined ? decimal(milestoneSeed.spend) : null,
                     status: milestoneSeed.status,
                     isPhotoRequired: milestoneSeed.isPhotoRequired ?? true,
+                    projectStage: "Deposit"
                 },
             });
 

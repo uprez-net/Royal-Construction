@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { dateFormat } from "@/utils/formatters";
 import {
+  Ban,
   Bell,
   CalendarDays,
   Camera,
@@ -53,6 +54,11 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
               dotClass: "bg-border text-muted-foreground",
               titleClass: "text-foreground font-medium",
             },
+            NOT_REQUIRED: {
+              icon: Ban,
+              dotClass: "bg-border text-muted-foreground line-through",
+              titleClass: "text-foreground font-medium",
+            }
           }[m.status];
 
           const StatusIcon = statusConfig.icon;

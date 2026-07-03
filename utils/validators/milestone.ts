@@ -1,4 +1,4 @@
-import { MilestoneStatus } from "@prisma/client";
+import { MilestoneStatus, ProjectStage } from "@prisma/client";
 import { z } from "zod";
 
 
@@ -8,6 +8,8 @@ export const milestoneCreationSchema = z.object({
     targetDate: z.iso.date(),
     budget: z.coerce.number().positive("Budget must be a positive number"),
     parentId: z.string().optional(),
+    // Project Stage
+    projectStage: z.enum(ProjectStage),
 });
 
 export type MilestoneCreationData = z.infer<typeof milestoneCreationSchema>;

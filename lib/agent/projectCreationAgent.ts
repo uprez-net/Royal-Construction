@@ -4,39 +4,58 @@ import { gateway } from "@/lib/model";
 import z from "zod";
 import { LEAD_INFO_TO_PROJECT_INFERENCE_PROMPT } from "./project-prompt";
 import prisma from "@/lib/prisma";
-import type { OfferFile } from "@prisma/client";
+import type { OfferFile } from "@/context/ChatContext";
 
 
 const MODEL_NAME = "google/gemini-2.5-flash" as const;
 
 const projectSpecsSchema = z.object({
+    projectDescription: z.string().describe("A detailed description of the project, including its purpose, scope, and any relevant context. This should be inferred from the offer details."),
     projectType: z.string().describe("The type of the project, e.g., granny flat, extension, etc."),
-    projectBudget: z.number().describe("The budget for the project should not be a range should be a specific amount, e.g., 50,000"),
-    projectRequirements: z.array(z.string()).describe("A list of specific requirements or features for the project, e.g., 2 bedrooms, 1 bathroom, open-plan kitchen."),
+    projectBudget: z.number().describe("The budget for the project should not be a range should be a specific amount. this should be the estimate of what it would cost to build this project infer this from the offer details, e.g., 50,000"),
+    projectRequirements: z.array(z.string()).min(2).describe("A list of specific requirements or features for the project infer this from the offer details should have atleast 2 requirements, e.g., 2 bedrooms, 1 bathroom, open-plan kitchen."),
 });
 
 type ProjectSpecs = z.infer<typeof projectSpecsSchema>;
 
-const fetchOfferFileTool = tool({
-    description: "Fetches the latest offer file from the database based on the provided lead ID.",
+const fetchAdditionalOfferInfoTool = tool({
+    description: "Fetches additional offer information from the database based on the provided lead ID.",
     inputSchema: z.object({
-        leadId: z.number().describe("The ID of the lead for which to fetch the offer file."),
+        leadId: z.number().describe("The ID of the lead for which to fetch additional offer information."),
     }),
     execute: async ({ leadId }) => {
-        const offerFile = await prisma.offerFile.findFirst({
-            where: {
-                offer: {
-                    leadId: leadId,
-                }
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+        try {
+            const offerData = await prisma.offer.findUnique({
+                where: { leadId },
+                include: {
+                    offerItems: true,
+                    offerFiles: true,
+                },
+            });
 
-        if (!offerFile) {
-            throw new Error(`No offer file found for lead ID: ${leadId}`);
+            if (!offerData) {
+                console.warn(`No offer found for lead ID: ${leadId}`);
+                throw new Error(`No offer found for lead ID: ${leadId}`);
+            }
+            const { offerItems, offerFiles, ...offer } = offerData;
+            const currentVersion = offerFiles.reduce((max, file) => Math.max(max, file.version), 0);
+
+            return {
+                ...offer,
+                amount: offer.amount.toString(),
+                gstAmount: offer.gstAmount.toString(),
+                totalAmount: offer.totalAmount.toString(),
+                version: currentVersion,
+                lineItems: offerItems,
+                offerFilesContent: offerFiles.map(file => ({
+                    version: file.version,
+                    ...(file.offerContent as OfferFile),
+                })),
+            };
+        } catch (error) {
+            console.error(`Error fetching additional offer info for lead ID ${leadId}:`, error);
+            throw new Error(`Failed to fetch additional offer info for lead ID ${leadId}`);
         }
-
-        return offerFile.offerContent as unknown as OfferFile;
     }
 })
 
@@ -49,8 +68,13 @@ const fetchAdditionalLeadInfoTool = tool({
         const leadInfo = await prisma.lead.findUnique({
             where: { id: leadId },
             include: {
-                history: true,
-                noteAnnotations: true,
+                history: {
+                    orderBy: { actionDate: "asc" }
+                },
+                chatSessions: true,
+                assignedUser: { select: { id: true, name: true, email: true } },
+                noteAnnotations: { orderBy: { createdAt: "desc" } },
+                emails: { orderBy: { createdAt: "desc" } },
             }
         });
 
@@ -69,9 +93,10 @@ export const handleProjectSpecsGeneration = async (prompt: string): Promise<Proj
             stopWhen: stepCountIs(3),
             system: LEAD_INFO_TO_PROJECT_INFERENCE_PROMPT,
             tools: {
-                fetchOfferFile: fetchOfferFileTool,
                 fetchAdditionalLeadInfo: fetchAdditionalLeadInfoTool,
+                fetchAdditionalOfferInfo: fetchAdditionalOfferInfoTool,
             },
+            toolChoice: "auto",
             output: Output.object({
                 schema: projectSpecsSchema,
             }),

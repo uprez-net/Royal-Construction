@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Trash2,
   CalendarCheck,
+  MessageSquare,
 } from "lucide-react";
 import { Lead } from "@/lib/leads/types";
 import { useAvailableUsers } from "@/hooks/use-available-users";
@@ -24,6 +25,7 @@ import { FollowupModal } from "@/components/leads/modal-ui/followup-modal";
 import { AssignedModal } from "@/components/leads/modal-ui/assigned-modal";
 import { ToastContainer, useToast } from "@/components/common/use-toast";
 import type { LeadEmails } from "@prisma/client";
+import LeadCommModal from "../modal-ui/lead-comm-modal";
 
 interface TableViewProps {
   loading: boolean;
@@ -59,6 +61,7 @@ export default function TableView({
   const [emailLead, setEmailLead] = React.useState<Lead | null>(null);
   const [followupLead, setFollowupLead] = React.useState<Lead | null>(null);
   const [assignedLead, setAssignedLead] = React.useState<Lead | null>(null);
+  const [commLead, setCommLead] = React.useState<Lead | null>(null);
 
   /* ── Filter logic ── */
   const activeFilters = useMemo(() => {
@@ -257,6 +260,7 @@ export default function TableView({
                               </button>
                             )}
                             {lead.email && (
+                              <>
                               <button
                                 type="button"
                                 className="action-btn-icon"
@@ -269,6 +273,19 @@ export default function TableView({
                               >
                                 <Mail size={15} />
                               </button>
+                              <button
+                                type="button"
+                                className="action-btn-icon"
+                                title={`Send message to ${lead.name}`}
+                                aria-label={`Send message to ${lead.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCommLead(lead);
+                                }}
+                              >
+                                <MessageSquare size={15} />
+                              </button>
+                              </>
                             )}
                             {isTerminalStage(lead.stage) && (
                               <button
@@ -415,6 +432,15 @@ export default function TableView({
                     <button
                       type="button"
                       className="mobile-action-btn"
+                      onClick={() => setCommLead(lead)}
+                      aria-label={`Communicate with ${lead.name}`}                    
+                    >
+                      <MessageSquare size={15} />
+                      Text
+                    </button>
+                    <button
+                      type="button"
+                      className="mobile-action-btn"
                       onClick={() => redirectToScheduleMeeting(lead)}
                       aria-label={`Meeting Schedule for ${lead.name}`}
                     >
@@ -441,6 +467,14 @@ export default function TableView({
           onDeleteClick={(lead) => setLeadToDelete(lead)}
           showToast={showToast}
           availableUsers={availableUsers}
+        />
+      )}
+
+      {commLead && (
+        <LeadCommModal
+          lead={commLead}
+          isOpen={!!commLead}
+          onClose={() => setCommLead(null)}
           appendEmailToLead={appendEmailToLead}
         />
       )}
