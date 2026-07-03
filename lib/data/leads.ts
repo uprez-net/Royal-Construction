@@ -1047,28 +1047,37 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
       throw new Error("Lead not found");
     }
     const signedBody = `
-    Hi ${existingLead.name},
-    <br> 
+    Hi ${existingLead.name},<br><br>
+
     ${body}
-    <br><br>
-    ${user.name},
-    <br>
-    ${user.email},
-    Royal Constructions Team
-    `
+
+    <p>
+      ${user.name}<br>
+      ${user.email}<br>
+      Royal Constructions Team
+    </p>
+    `;
+
     await sendEmail({
       to,
       subject,
       body: signedBody,
     });
-    const checksum = await generateEmailChecksum(subject, signedBody, process.env.GRAPH_SENDER_UPN ?? to, to, dataTimeFormat.format(new Date()));
+    const strippedEmailBody = signedBody
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<[^>]*>/g, '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    const checksum = await generateEmailChecksum(subject, strippedEmailBody, process.env.BUSINESS_EMAIL ?? to, to, dataTimeFormat.format(new Date()));
     const emailRecord = await prisma.leadEmails.create({
       data: {
         leadId,
         subject,
-        body: signedBody,
+        body: strippedEmailBody,
         emailTo: to,
-        emailFrom: process.env.GRAPH_SENDER_UPN ?? 'info@royalconstructions.com.au',
+        emailFrom: process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au',
         checksum,
         sentAt: new Date(),
       },

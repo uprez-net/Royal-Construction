@@ -49,7 +49,7 @@ export default function TableView({
   activeMetric,
   onActiveMetricChange,
   user,
-  appendEmailToLead
+  appendEmailToLead,
 }: TableViewProps) {
   /* ── Shared hooks ── */
   const { toasts, showToast, dismissToast } = useToast();
@@ -61,7 +61,7 @@ export default function TableView({
   const [emailLead, setEmailLead] = React.useState<Lead | null>(null);
   const [followupLead, setFollowupLead] = React.useState<Lead | null>(null);
   const [assignedLead, setAssignedLead] = React.useState<Lead | null>(null);
-  const [commLead, setCommLead] = React.useState<Lead | null>(null);
+  const [commLead, setCommLead] = React.useState<string | null>(null);
 
   /* ── Filter logic ── */
   const activeFilters = useMemo(() => {
@@ -91,9 +91,9 @@ export default function TableView({
   };
 
   const redirectToScheduleMeeting = (lead: Lead) => {
-    const url = `/book-consultation?TeammateName=${user?.fullName ?? ''}&name=${lead.name}&email=${lead.email}&id=${lead.id}`;
+    const url = `/book-consultation?TeammateName=${user?.fullName ?? ""}&name=${lead.name}&email=${lead.email}&id=${lead.id}`;
     window.location.assign(url);
-  }
+  };
 
   /* ── Render ── */
   return (
@@ -261,30 +261,30 @@ export default function TableView({
                             )}
                             {lead.email && (
                               <>
-                              <button
-                                type="button"
-                                className="action-btn-icon"
-                                title={`Send follow-up email to ${lead.name}`}
-                                aria-label={`Send follow-up email to ${lead.name}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEmailLead(lead);
-                                }}
-                              >
-                                <Mail size={15} />
-                              </button>
-                              <button
-                                type="button"
-                                className="action-btn-icon"
-                                title={`Send message to ${lead.name}`}
-                                aria-label={`Send message to ${lead.name}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCommLead(lead);
-                                }}
-                              >
-                                <MessageSquare size={15} />
-                              </button>
+                                <button
+                                  type="button"
+                                  className="action-btn-icon"
+                                  title={`Send follow-up email to ${lead.name}`}
+                                  aria-label={`Send follow-up email to ${lead.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEmailLead(lead);
+                                  }}
+                                >
+                                  <Mail size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="action-btn-icon"
+                                  title={`Send message to ${lead.name}`}
+                                  aria-label={`Send message to ${lead.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCommLead(lead.id.toString());
+                                  }}
+                                >
+                                  <MessageSquare size={15} />
+                                </button>
                               </>
                             )}
                             {isTerminalStage(lead.stage) && (
@@ -360,7 +360,9 @@ export default function TableView({
                         )}
                         {lead.name}
                       </span>
-                      <span className={`stage-badge ${STAGE_STYLES[lead.stage]}`}>
+                      <span
+                        className={`stage-badge ${STAGE_STYLES[lead.stage]}`}
+                      >
                         {lead.stage}
                       </span>
                     </span>
@@ -387,7 +389,10 @@ export default function TableView({
                             className="mobile-link-action"
                             onClick={() => setFollowupLead(lead)}
                           >
-                            {formatFollowup(lead.followupDate, lead.followupTime)}
+                            {formatFollowup(
+                              lead.followupDate,
+                              lead.followupTime,
+                            )}
                           </button>
                         )}
                       </dd>
@@ -432,8 +437,8 @@ export default function TableView({
                     <button
                       type="button"
                       className="mobile-action-btn"
-                      onClick={() => setCommLead(lead)}
-                      aria-label={`Communicate with ${lead.name}`}                    
+                      onClick={() => setCommLead(lead.id.toString())}
+                      aria-label={`Communicate with ${lead.name}`}
                     >
                       <MessageSquare size={15} />
                       Text
@@ -472,7 +477,8 @@ export default function TableView({
 
       {commLead && (
         <LeadCommModal
-          lead={commLead}
+          key={leads.find((l) => l.id === Number(commLead))!.emails.length}
+          lead={leads.find((l) => l.id === Number(commLead))!}
           isOpen={!!commLead}
           onClose={() => setCommLead(null)}
           appendEmailToLead={appendEmailToLead}

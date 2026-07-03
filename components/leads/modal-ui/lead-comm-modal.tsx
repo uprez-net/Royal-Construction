@@ -25,7 +25,7 @@ export default function LeadCommModal({
     >
       {/* Emails */}
       <LeadEmailSection
-        key={`${lead.emails.length}-${lead.id}`} // Force re-render when emails change
+        key={lead.emails.length}
         emails={lead.emails}
         leadId={lead.id}
         leadEmail={lead.email}

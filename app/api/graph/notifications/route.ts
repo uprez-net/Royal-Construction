@@ -309,7 +309,7 @@ export async function POST(request: Request): Promise<Response> {
               console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
               await saveLeadEmailTrail({
                 from: message.from,
-                to: process.env.GRAPH_SENDER_UPN,
+                to: process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au',
                 subject: message.subject,
                 body: content,
                 sentAt: new Date(message.receivedDateTime),

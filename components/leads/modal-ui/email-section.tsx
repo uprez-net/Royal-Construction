@@ -47,7 +47,7 @@ export function LeadEmailSection({
   }, [orderedEmails.length]);
 
   return (
-    <Card className="gap-0 overflow-hidden py-0">
+    <Card className="gap-0 overflow-hidden py-0" key={`${emails.length}-${leadId}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b py-3">
         <div className="flex items-center gap-2">
           <Mail className="size-4 text-primary" />
@@ -73,7 +73,7 @@ export function LeadEmailSection({
             </p>
           </div>
         ) : (
-          <ScrollArea className="h-72 px-4">
+          <ScrollArea className="h-72 px-4" key={orderedEmails.length}>
             <div className="flex flex-col py-4">
               {orderedEmails.map((email, index) => {
                 const isSent = email.emailFrom.includes(ROYAL_DOMAIN);
