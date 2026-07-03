@@ -137,6 +137,7 @@ export async function createMilestone(projectId: string, data: MilestoneCreation
         order,
         projectId,
         parentId: data.parentId,
+        projectStage: data.projectStage,
       },
     });
   });
@@ -405,6 +406,7 @@ export async function createMilestonesFromTemplateForProject(
         parentId: milestone.parentId
           ? milestoneIdByOrder.get(milestone.parentId)
           : null,
+        projectStage: milestone.projectStage,
       })),
     });
 

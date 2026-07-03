@@ -12,7 +12,7 @@ const projectSpecsSchema = z.object({
     projectDescription: z.string().describe("A detailed description of the project, including its purpose, scope, and any relevant context. This should be inferred from the offer details."),
     projectType: z.string().describe("The type of the project, e.g., granny flat, extension, etc."),
     projectBudget: z.number().describe("The budget for the project should not be a range should be a specific amount. this should be the estimate of what it would cost to build this project infer this from the offer details, e.g., 50,000"),
-    projectRequirements: z.array(z.string()).describe("A list of specific requirements or features for the project infer this from the offer details, e.g., 2 bedrooms, 1 bathroom, open-plan kitchen."),
+    projectRequirements: z.array(z.string()).min(2).describe("A list of specific requirements or features for the project infer this from the offer details should have atleast 2 requirements, e.g., 2 bedrooms, 1 bathroom, open-plan kitchen."),
 });
 
 type ProjectSpecs = z.infer<typeof projectSpecsSchema>;

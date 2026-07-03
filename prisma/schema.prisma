@@ -119,6 +119,15 @@ enum TradieApprovalStatus {
   REJECTED
 }
 
+enum ProjectStage {
+  Deposit
+  Slab
+  Frame
+  Lockup
+  Interior_Fit_Out
+  Final
+}
+
 model Project {
   id               String   @id @default(uuid())
   leadId           Int      @unique
@@ -165,6 +174,7 @@ model Milestone {
   name            String
   order           Int
   description     String?
+  projectStage    ProjectStage
   targetDate      DateTime
   startDate       DateTime?
   actualDate      DateTime?

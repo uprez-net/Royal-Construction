@@ -1,23 +1,40 @@
-import { CalendarCheck2, Bell, Wrench, Plus } from "lucide-react";
+import {
+  CalendarCheck2,
+  Bell,
+  Wrench,
+  Plus,
+  DollarSign,
+  ChevronsUpDown,
+  ListChecks,
+  ChevronsDown,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DonutChartCard } from "@/components/charts/donut-chart-card";
 import type { ProjectMilestoneMix } from "@/types/ui";
-import type {
-  MilestoneWithFilesTradiesUpdates,
-  ProjectDetail,
-  TradieScheduleListItem,
-  TradieScheduleWithTradieAndMilestone,
-  UIMilestone,
+import {
+  PROJECT_STAGE_LABELS,
+  PROJECT_STAGE_PERCENTAGE,
+  type MilestoneWithFilesTradiesUpdates,
+  type ProjectDetail,
+  type TradieScheduleListItem,
+  type TradieScheduleWithTradieAndMilestone,
+  type UIMilestone,
 } from "@/types/project";
-import { dateFormat } from "@/utils/formatters";
+import { currency, dateFormat } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { toast } from "sonner";
-import { MilestoneStatus } from "@prisma/client";
+import { MilestoneStatus, ProjectStage } from "@prisma/client";
 import { useMemo } from "react";
 import { MilestoneCard } from "./milestone-tab/milestone-card";
 import { addWeeks, isWithinInterval } from "date-fns";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
 
 const convertToVisualMilestone = (
   milestones: MilestoneWithFilesTradiesUpdates[],
@@ -51,6 +68,17 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     () => convertToVisualMilestone(project.milestones),
     [project.milestones],
   );
+  const visualMilestonesGroupedByProjectStage = useMemo(() => {
+    return visualMilestones.reduce<Record<ProjectStage, UIMilestone[]>>(
+      (acc, milestone) => {
+        const stage = milestone.projectStage;
+        acc[stage] = acc[stage] ?? [];
+        acc[stage].push(milestone);
+        return acc;
+      },
+      {} as Record<ProjectStage, UIMilestone[]>,
+    );
+  }, [visualMilestones]);
 
   const tradieAlerts = useMemo(() => {
     const now = new Date();
@@ -205,23 +233,75 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-5">
-          {visualMilestones.map((milestone, index) => (
-            <MilestoneCard
-              key={`milestone-${milestone.id}-${index}-${milestone.status}`}
-              prevMilestone={visualMilestones
-                .flatMap((m) => [m, ...m.childrenMilestones])
-                .find((m) => m.order === milestone.order - 1)}
-              milestone={milestone}
-              project={project}
-              tradieAlertsByMilestone={tradieAlertsByMilestone}
-              onOpenAddUpdateModal={handleOpenAddUpdateModal}
-              onStatusUpdate={handleStatusUpdate}
-              onStartMilestone={handleStartMilestone}
-              onSendReminder={handleSendReminder}
-              onSendInvoice={handleSendInvoice}
-              onOpenViewPicture={handleOpenViewPicture}
-            />
-          ))}
+          {Object.entries(visualMilestonesGroupedByProjectStage).map(
+            ([stage, milestones]) => (
+              <Collapsible
+                key={stage}
+                defaultOpen={
+                  milestones
+                    .flatMap((m) => [m, ...m.childrenMilestones])
+                    .some((m) => m.status === "ACTIVE") || stage === "Deposit"
+                }
+                className="rounded-lg border bg-card"
+              >
+                <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-muted-foreground">
+                      {PROJECT_STAGE_LABELS[stage as ProjectStage]}
+                    </h3>
+
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <DollarSign className="size-3.5" />
+
+                      {currency.format(
+                        PROJECT_STAGE_PERCENTAGE[stage as ProjectStage] *
+                          Number(project.totalBudget),
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="secondary"
+                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+                    >
+                      <ListChecks className="size-3.5" />
+                      {milestones.length} Milestones
+                    </Badge>
+
+                    <ChevronsDown
+                      className="
+                      size-4 text-muted-foreground
+                      transition-transform duration-200
+                      group-data-[state=open]:rotate-180
+                    "
+                    />
+                  </div>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent>
+                  <div className="space-y-2 border-t p-3">
+                    {milestones.map((milestone, index) => (
+                      <MilestoneCard
+                        key={`milestone-${milestone.id}-${index}-${milestone.status}`}
+                        prevMilestone={visualMilestones
+                          .flatMap((m) => [m, ...m.childrenMilestones])
+                          .find((m) => m.order === milestone.order - 1)}
+                        milestone={milestone}
+                        project={project}
+                        tradieAlertsByMilestone={tradieAlertsByMilestone}
+                        onOpenAddUpdateModal={handleOpenAddUpdateModal}
+                        onStatusUpdate={handleStatusUpdate}
+                        onStartMilestone={handleStartMilestone}
+                        onSendReminder={handleSendReminder}
+                        onSendInvoice={handleSendInvoice}
+                        onOpenViewPicture={handleOpenViewPicture}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            ),
+          )}
         </CardContent>
       </Card>
 
