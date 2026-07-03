@@ -201,6 +201,19 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     );
   };
 
+  const handleMarkAsNotRequired = (milestoneId: string) => {
+    dispatch(
+      openModal({
+        type: "updateMilestoneStatus",
+        payload: {
+          milestoneId,
+          projectId: project.id,
+          newStatus: MilestoneStatus.NOT_REQUIRED,
+        },
+      }),
+    );
+  }
+
   return (
     <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
       <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
@@ -295,6 +308,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                         onSendReminder={handleSendReminder}
                         onSendInvoice={handleSendInvoice}
                         onOpenViewPicture={handleOpenViewPicture}
+                        onMarkasNotRequired={handleMarkAsNotRequired}
                       />
                     ))}
                   </div>

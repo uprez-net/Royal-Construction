@@ -226,9 +226,10 @@ export async function addPhotosToMilestone(projectId: string, milestoneId: strin
 }
 
 const MILESTONE_STATE_MACHINE: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: ["ACTIVE"],
+  PENDING: ["ACTIVE", "NOT_REQUIRED"],
   ACTIVE: ["DONE"],
   DONE: [],
+  NOT_REQUIRED: [],
 }
 
 /**
@@ -286,13 +287,25 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
 
   after(async () => {
     if (updated.parentId) {
-      if (updateData.status === "DONE") {
+      if (updateData.status === "DONE" || updateData.status === "NOT_REQUIRED") {
         const allChildrenMilestonesNotCompleted = await prisma.milestone.findMany({
           where: {
             parentId: updated.parentId,
-            status: { not: "DONE" },
+            status: { not: { in: ["DONE", "NOT_REQUIRED"] } },
           },
         });
+        const allChildrenMilestone = await prisma.milestone.findMany({
+          where: {
+            parentId: updated.parentId,
+          },
+        });
+        const allChildrenWereNotRequired = await prisma.milestone.findMany({
+          where: {
+            parentId: updated.parentId,
+            status: "NOT_REQUIRED",
+          },
+        });
+
         if (allChildrenMilestonesNotCompleted.length === 0) {
           const childrenSpent = await prisma.milestone.aggregate({
             where: { parentId: updated.parentId },
@@ -301,7 +314,7 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
           await prisma.milestone.update({
             where: { id: updated.parentId },
             data: {
-              status: "DONE",
+              status: allChildrenWereNotRequired.length === allChildrenMilestone.length ? "NOT_REQUIRED" : "DONE",
               spend: childrenSpent._sum.spend ?? undefined,
               actualDate: normalizedUpdateData.actualDate,
             },

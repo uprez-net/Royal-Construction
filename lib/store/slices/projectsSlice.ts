@@ -592,13 +592,20 @@ const projectsSlice = createSlice({
               const spent = Number(action.payload.spend) ?? 0;
               state.activeProject!.spent = (Number(state.activeProject!.spent) + spent).toString();
             }
-            if (parentId && action.payload.status === "DONE") {
-              const allChildrenMilestonesNotCompleted = state.activeProject!.milestones.filter((m) => m.parentId === parentId && m.status !== "DONE");
+            if (parentId && (action.payload.status === "DONE" || action.payload.status === "NOT_REQUIRED")) {
+              const allChildrenMilestonesNotCompleted = state.activeProject!.milestones.filter((m) => m.parentId === parentId && !["DONE", "NOT_REQUIRED"].includes(m.status));
+              const allChildrenWereNotRequired = state.activeProject!.milestones.filter((m) => m.parentId === parentId && m.status === "NOT_REQUIRED");
+              const allChildrenMilestone = state.activeProject!.milestones.filter((m) => m.parentId === parentId);
               if (allChildrenMilestonesNotCompleted.length === 0) {
                 const parentIndex = state.activeProject!.milestones.findIndex((m) => m.id === parentId);
                 const totalChildSpent = state.activeProject!.milestones.filter((m) => m.parentId === parentId).reduce((sum, m) => sum + (Number(m.spend) || 0), 0);
                 if (parentIndex !== -1) {
-                  state.activeProject!.milestones[parentIndex] = { ...state.activeProject!.milestones[parentIndex], status: "DONE", spend: totalChildSpent.toString(), actualDate: action.payload.actualDate };
+                  state.activeProject!.milestones[parentIndex] = {
+                    ...state.activeProject!.milestones[parentIndex],
+                    status: allChildrenWereNotRequired.length === allChildrenMilestone.length ? "NOT_REQUIRED" : "DONE",
+                    spend: totalChildSpent.toString(),
+                    actualDate: action.payload.actualDate
+                  };
                 }
               }
             }

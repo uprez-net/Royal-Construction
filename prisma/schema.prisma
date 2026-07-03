@@ -25,6 +25,7 @@ enum MilestoneStatus {
   PENDING
   ACTIVE
   DONE
+  NOT_REQUIRED
 }
 
 enum VariationStatus {

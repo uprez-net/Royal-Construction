@@ -18,6 +18,7 @@ import {
   Users,
   Wrench,
   ChevronDown,
+  BanIcon,
 } from "lucide-react";
 import {
   Collapsible,
@@ -39,6 +40,13 @@ function getMilestoneTone(status: string) {
     return {
       className: "border-amber-200/70 bg-amber-50/50",
       pill: "warning" as const,
+    };
+  }
+
+  if(status === "NOT_REQUIRED") {
+    return {
+      className: "border-slate-200/70 bg-slate-50/50",
+      pill: "secondary" as const,
     };
   }
 
@@ -71,6 +79,7 @@ export function MilestoneCard({
   tradieAlertsByMilestone,
   onOpenAddUpdateModal,
   onStatusUpdate,
+  onMarkasNotRequired,
   onStartMilestone,
   onSendReminder,
   onSendInvoice,
@@ -87,6 +96,7 @@ export function MilestoneCard({
   onOpenAddUpdateModal: (id: string) => void;
   onStatusUpdate: (id: string) => void;
   onStartMilestone: (id: string) => void;
+  onMarkasNotRequired: (id: string) => void;
   onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
   onSendInvoice: () => void;
   onOpenViewPicture: (imageUrl: string) => void;
@@ -109,6 +119,7 @@ export function MilestoneCard({
         tone.className,
         isCompact && "p-3",
         depth > 0 && "ml-4 border-l-[3px]",
+        milestone.status === "NOT_REQUIRED" && "opacity-70 line-through",
       )}
     >
       {depth > 0 ? (
@@ -128,6 +139,7 @@ export function MilestoneCard({
             </p>
 
             <StatusPill tone={tone.pill}>
+              {milestone.status === "NOT_REQUIRED" && <BanIcon className="mr-1 h-4 w-4" />}
               {formatStatus(milestone.status)}
             </StatusPill>
 
@@ -190,6 +202,7 @@ export function MilestoneCard({
           onStatusUpdate={onStatusUpdate}
           onStartMilestone={onStartMilestone}
           onSendInvoice={onSendInvoice}
+          onMarkasNotRequired={onMarkasNotRequired}
         />
       </div>
 
@@ -326,6 +339,7 @@ export function MilestoneCard({
                       onSendReminder={onSendReminder}
                       onSendInvoice={onSendInvoice}
                       onOpenViewPicture={onOpenViewPicture}
+                      onMarkasNotRequired={onMarkasNotRequired}
                     />
                   ))}
                 </div>
