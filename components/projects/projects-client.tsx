@@ -28,7 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { setProjects } from "@/lib/store/slices/projectsSlice";
+import { resetProjects, setProjects } from "@/lib/store/slices/projectsSlice";
 import { clearProjectFilters, openModal } from "@/lib/store/slices/uiSlice";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { compareAsc, isBefore } from "date-fns";
@@ -40,6 +40,7 @@ import {
   getAllProjectsForExport,
   PaginatedProjectsResult,
 } from "@/lib/data/projects";
+import { usePathname } from "next/navigation";
 
 const statusConfig: Record<
   string,
@@ -81,6 +82,7 @@ export function ProjectsClient({
   kpis: ProjectKPIs;
 }) {
   const dispatch = useAppDispatch();
+  const pathname = usePathname();
   const pageInfo = pagination;
   const { projects: projectsInStore, optimisticUpdates } = useAppSelector(
     (state) => state.projects,
@@ -128,6 +130,15 @@ export function ProjectsClient({
   useEffect(() => {
     dispatch(setProjects(projects));
   }, [projects, dispatch]);
+
+  useEffect(() => {
+    return () => {
+      if (!pathname.includes("projects")) {
+        dispatch(resetProjects());
+      }
+      dispatch(clearProjectFilters());
+    };
+  }, [dispatch, pathname]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -237,7 +248,6 @@ export function ProjectsClient({
       `Royal_Consturction_Projects_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };
-  
 
   return (
     <div className="grid gap-6">

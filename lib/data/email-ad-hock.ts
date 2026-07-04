@@ -368,8 +368,9 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
     };
 
   } catch (error) {
-    console.error("Failed to generate email template:", error);
-    throw new Error("AI failed to generate the email template.");
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to generate email template:", message, error);
+    throw new Error(`AI failed to generate the email template: ${message}`);
   }
 }
 

@@ -25,7 +25,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
   const {
     notifications,
     isLoading,
-    // fetchNotifications,
+    fetchNotifications,
     markNotificationAsRead,
     markAllAsRead,
     archiveNotification,
@@ -44,7 +44,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
   }, [notifications, activeTab]);
 
   async function handleRefresh() {
-    // await fetchNotifications();
+    await fetchNotifications();
   }
 
   async function handleMarkAll() {

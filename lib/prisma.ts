@@ -25,7 +25,7 @@ const pool =
     /**
      * CONNECTION POOLING
      */
-    max: process.env.NODE_ENV === "production" ? 10 : 5,
+    max: process.env.NODE_ENV === "production" ? 10 : 7,
     min: 1,
 
     /**
@@ -88,7 +88,7 @@ export const prisma =
         : ["error"],
     transactionOptions: {
       maxWait: 30_000,
-      timeout: 120_000,
+      timeout: 15_000,
     }
   });
 

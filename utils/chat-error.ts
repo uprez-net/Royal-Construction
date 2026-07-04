@@ -144,8 +144,25 @@ export async function fetchWithErrorHandlers(
     const response = await fetch(input, init);
 
     if (!response.ok) {
-      const { code, cause } = await response.json();
-      throw new ChatSDKError(code as ErrorCode, cause);
+      const contentType = response.headers.get("content-type");
+
+      if (contentType?.includes("application/json")) {
+        const body = await response.json();
+
+        throw new ChatSDKError(
+          body.code as ErrorCode,
+          body.cause,
+        );
+      }
+
+      const text = await response.text();
+
+      console.error("Non JSON response:");
+      console.error(text);
+
+      throw new Error(
+        `Expected JSON but received ${contentType}`
+      );
     }
 
     return response;

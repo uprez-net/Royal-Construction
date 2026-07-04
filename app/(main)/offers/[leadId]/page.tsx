@@ -15,15 +15,14 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { leadId } = await params;
   const parsedLeadId = Number(leadId);
-  const offerData = await getOfferByLeadIdCached(parsedLeadId);
-
   if (!Number.isInteger(parsedLeadId) || parsedLeadId <= 0) {
     return {
       title: "Invalid Lead ID",
       description: "The provided lead ID is invalid.",
     };
   }
-
+  
+  const offerData = await getOfferByLeadIdCached(parsedLeadId);
   if (offerData) {
     return {
       title: `Lead: #${leadId} Offer Details`,

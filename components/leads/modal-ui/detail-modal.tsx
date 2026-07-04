@@ -7,9 +7,8 @@ import {
   LEAD_SOURCE_OPTIONS,
   LEAD_STAGE_OPTIONS,
   BUDGET_OPTIONS,
-  createCalendarEventIfValid,
-  shouldCreateCalendarEvent,
-  buildCalendarHistoryEntry,
+  shouldSetFollowupStage,
+  buildFollowupHistoryEntry,
   isLostStage,
 } from "@/lib/leads/lead-helpers";
 import { ModalShell } from "@/components/common/modal-shell";
@@ -110,17 +109,18 @@ export function DetailModal({
       let stage = form.stage;
       const historyToSend: HistoryItem[] = [];
 
-      if (shouldCreateCalendarEvent(lead, form)) {
-        const success = await createCalendarEventIfValid(form, showToast);
-        if (!success) return;
+      if (shouldSetFollowupStage(lead, form)) {
+        // const success = await createCalendarEventIfValid(form, showToast);
+        // if (!success) return;
         stage = "In Follow-up";
         historyToSend.push(
-          buildCalendarHistoryEntry(form.followupDate, form.followupTime),
+          buildFollowupHistoryEntry(form.followupDate, form.followupTime),
         );
       }
 
-      const typeValue = (form.type.length > 0 ? form.type : ["Not Specified"])
-        .join(", ");
+      const typeValue = (
+        form.type.length > 0 ? form.type : ["Not Specified"]
+      ).join(", ");
 
       const updated = await updateLead(lead.id, {
         name: form.name,
@@ -181,9 +181,7 @@ export function DetailModal({
       });
       onLeadUpdate(updated, { keepOpen: true });
       showToast(
-        hasNewMentions
-          ? "Note saved and mentions emailed"
-          : "Note saved",
+        hasNewMentions ? "Note saved and mentions emailed" : "Note saved",
       );
     } catch (error) {
       console.error("Failed to save note", error);
@@ -218,9 +216,7 @@ export function DetailModal({
         )}
         {isLostStage(form.stage) && (
           <div className="status-banner status-banner-danger">
-            <span className="status-banner-title">
-              Status: {form.stage}
-            </span>
+            <span className="status-banner-title">Status: {form.stage}</span>
             <span className="status-banner-text">
               {form.lostReason
                 ? `Reason: ${form.lostReason}`
@@ -232,10 +228,7 @@ export function DetailModal({
         {/* Contact fields */}
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label
-              htmlFor={fieldId("name")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("name")} className={labelCls}>
               Name
             </label>
             <input
@@ -246,10 +239,7 @@ export function DetailModal({
             />
           </div>
           <div>
-            <label
-              htmlFor={fieldId("phone")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("phone")} className={labelCls}>
               Phone
             </label>
             <input
@@ -260,10 +250,7 @@ export function DetailModal({
             />
           </div>
           <div>
-            <label
-              htmlFor={fieldId("email")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("email")} className={labelCls}>
               Email
             </label>
             <input
@@ -274,10 +261,7 @@ export function DetailModal({
             />
           </div>
           <div>
-            <label
-              htmlFor={fieldId("location")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("location")} className={labelCls}>
               Location
             </label>
             <input
@@ -292,10 +276,7 @@ export function DetailModal({
         {/* Source + Stage */}
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label
-              htmlFor={fieldId("source-detail")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("source-detail")} className={labelCls}>
               Source Detail
             </label>
             <select
@@ -314,10 +295,7 @@ export function DetailModal({
             </select>
           </div>
           <div>
-            <label
-              htmlFor={fieldId("stage")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("stage")} className={labelCls}>
               Stage
             </label>
             <select
@@ -344,10 +322,7 @@ export function DetailModal({
         {/* Assigned + Budget */}
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label
-              htmlFor={fieldId("assigned-to")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("assigned-to")} className={labelCls}>
               Assigned To
             </label>
             <select
@@ -365,10 +340,7 @@ export function DetailModal({
             </select>
           </div>
           <div>
-            <label
-              htmlFor={fieldId("budget")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("budget")} className={labelCls}>
               Budget
             </label>
             <select
@@ -389,25 +361,22 @@ export function DetailModal({
         {/* Follow-up Date + Time */}
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label
-              htmlFor={fieldId("followup-date")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("followup-date")} className={labelCls}>
               Follow-up Date
             </label>
             <input
               id={fieldId("followup-date")}
               type="date"
               className={inputCls}
+              min={new Date().toLocaleDateString("en-CA", {
+                timeZone: "Australia/Sydney",
+              })}
               value={form.followupDate}
               onChange={(e) => patch({ followupDate: e.target.value })}
             />
           </div>
           <div>
-            <label
-              htmlFor={fieldId("followup-time")}
-              className={labelCls}
-            >
+            <label htmlFor={fieldId("followup-time")} className={labelCls}>
               Follow-up Time
             </label>
             <input
@@ -422,10 +391,7 @@ export function DetailModal({
 
         {/* Notes */}
         <div>
-          <span
-            id={notesLabelId}
-            className={labelCls}
-          >
+          <span id={notesLabelId} className={labelCls}>
             Notes
           </span>
           <LeadRichTextEditor
@@ -449,19 +415,14 @@ export function DetailModal({
             checked={form.urgent}
             onChange={(e) => patch({ urgent: e.target.checked })}
           />
-          <label
-            htmlFor={fieldId("urgent")}
-            className={labelCls}
-          >
+          <label htmlFor={fieldId("urgent")} className={labelCls}>
             Urgent
           </label>
         </div>
 
         {/* Activity */}
         <div>
-          <h5 className={labelCls}>
-            Activity
-          </h5>
+          <h5 className={labelCls}>Activity</h5>
           {lead.history.length === 0 ? (
             <div className="mt-2 text-xs text-muted-foreground/70">
               No activity recorded yet.
@@ -491,17 +452,16 @@ export function DetailModal({
 
         {/* Lost reason */}
         {isLostStage(form.stage) && (
-          <div className="col-span-1 rounded-[8px] border border-[color:var(--destructive)]/30 bg-[color:var(--destructive-light)] p-4 md:col-span-2">
+          <div className="col-span-1 rounded-[8px] border border-(--destructive)/30 bg-destructive-light p-4 md:col-span-2">
             <label
               htmlFor={fieldId("lost-reason")}
-              className="text-sm font-medium text-[color:var(--destructive)]"
+              className="text-sm font-medium text-destructive"
             >
-              Lost reason{" "}
-              <span className="text-[color:var(--destructive)]">*</span>
+              Lost reason <span className="text-destructive">*</span>
             </label>
             <input
               id={fieldId("lost-reason")}
-              className={`mt-1 w-full rounded-[4px] border ${!form.lostReason.trim() ? "border-[color:var(--destructive)] ring-1 ring-[color:var(--destructive)]/20" : "border-border"} bg-card px-3 py-2 text-sm text-foreground focus:border-[color:var(--destructive)] focus:outline-none focus:ring-2 focus:ring-[color:var(--destructive-light)]`}
+              className={`mt-1 w-full rounded-lg border ${!form.lostReason.trim() ? "border-destructive ring-1 ring-(--destructive)/20" : "border-border"} bg-card px-3 py-2 text-sm text-foreground focus:border-destructive focus:outline-none focus:ring-2 focus:ring-destructive-light`}
               placeholder="e.g. Went with another builder, budget too low"
               value={form.lostReason}
               onChange={(e) => patch({ lostReason: e.target.value })}
@@ -514,7 +474,7 @@ export function DetailModal({
             {!form.lostReason.trim() && (
               <p
                 id={lostReasonErrorId}
-                className="mt-1.5 text-xs font-medium text-[color:var(--destructive)]"
+                className="mt-1.5 text-xs font-medium text-destructive"
               >
                 Enter why this lead is {form.stage.toLowerCase()} before
                 updating.
@@ -527,7 +487,7 @@ export function DetailModal({
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-[color:var(--royal-gold)] px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-[color:var(--royal-gold-dark)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-royal-gold px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-royal-gold-dark disabled:cursor-not-allowed disabled:opacity-60"
             onClick={handleUpdate}
             disabled={!hasChanges || isUpdating}
           >
@@ -545,7 +505,7 @@ export function DetailModal({
             (isLostStage(form.stage) && lead.lostReason)) && (
             <button
               type="button"
-              className="inline-flex items-center justify-center rounded-full border border-[color:var(--destructive)]/30 bg-[color:var(--destructive-light)] px-4 py-2 text-xs font-medium text-[color:var(--destructive)] transition hover:border-[color:var(--destructive)]/50"
+              className="inline-flex items-center justify-center rounded-full border border-(--destructive)/30 bg-destructive-light px-4 py-2 text-xs font-medium text-destructive transition hover:border-(--destructive)/50"
               onClick={() => onDeleteClick(lead)}
             >
               Delete Lead
@@ -554,7 +514,7 @@ export function DetailModal({
 
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition hover:border-[color:var(--royal-gold)] hover:bg-muted"
+            className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition hover:border-royal-gold hover:bg-muted"
             onClick={onClose}
           >
             Close

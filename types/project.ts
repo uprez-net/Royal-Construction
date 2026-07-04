@@ -1,4 +1,4 @@
-import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material } from "@prisma/client";
+import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage } from "@prisma/client";
 
 export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize"> {
   totalBudget: string;
@@ -62,7 +62,6 @@ export interface ProjectWithStats extends SafeProject {
     status: Milestone["status"];
     tradies: {
       name: string;
-      company: string | null;
       tradeType: string;
     }[]
   }[];
@@ -123,9 +122,9 @@ export type TradieCoordinationQuery = {
 
 export type TradieScheduleListItem = {
   id: string;
+  abn: string;
   tradieId: string;
   tradieName: string;
-  company: string | null;
   tradeType: string;
   projectId: string;
   projectName: string;
@@ -135,10 +134,14 @@ export type TradieScheduleListItem = {
   scheduledDate: string;
   durationDays: number;
   status: TradieScheduleStatus;
+  isFavourite: boolean;
+  note: string | null;
   reminderSentAt?: string;
   updatedAt: string;
-  hourtlyRate?: string;
+  hourlyRate?: string;
   rating?: string;
+  requiresQuote: boolean;
+  quotedPrice?: string;
   contact: {
     email: string;
     phone: string;
@@ -197,6 +200,7 @@ export type TradieUrgentReminderItem = {
   id: string;
   tradieName: string;
   tradeType: string;
+  abn: string;
   projectName: string;
   milestoneName?: string;
   taskLabel: string;
@@ -204,12 +208,11 @@ export type TradieUrgentReminderItem = {
   daysLeft: number;
   status: TradieScheduleStatus;
   reminderSentAt?: string;
-  company: string | null;
   contact: {
     email: string;
     phone: string;
   };
-  hourtlyRate?: string;
+  hourlyRate?: string;
   rating?: string;
   siteManager: {
     name: string;
@@ -304,4 +307,22 @@ export type AddProjectUpdateRequest = {
 
 export interface UIMilestone extends MilestoneWithFilesTradiesUpdates {
   childrenMilestones: UIMilestone[];
+}
+
+export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
+  Deposit: "Deposit (5%)",
+  Slab: "Slab (15%)",
+  Frame: "Frame (25%)",
+  Lockup: "Lock Up (25%)",
+  Interior_Fit_Out: "Interior Fit-Out (20%)",
+  Final: "Final (10%)",
+}
+
+export const PROJECT_STAGE_PERCENTAGE: Record<ProjectStage, number> = {
+  Deposit: 0.05,
+  Slab: 0.15,
+  Frame: 0.25,
+  Lockup: 0.25,
+  Interior_Fit_Out: 0.20,
+  Final: 0.10,
 }

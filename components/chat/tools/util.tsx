@@ -34,7 +34,7 @@ function StructuredObjectView({ data }: { data: unknown }) {
   return (
     <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-3">
       {primitiveEntries.length ? (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
           {primitiveEntries.map(([key, value]) => (
             <DetailRow key={key} label={toLabel(key)} value={formatValue(value)} />
           ))}
@@ -147,7 +147,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   return (
     <div className="rounded-xl border border-border/70 bg-card px-3 py-2 shadow-sm">
       <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 break-words text-sm text-foreground">{value}</div>
+      <div className="mt-1 wrap-break-word text-sm text-foreground">{value}</div>
     </div>
   );
 }

@@ -15,7 +15,7 @@ Use all the new information to generate an accurate and up-to-date offer for the
 `;
 
 export function LineItemTable() {
-  const { lineItems, setLineItems, sendMessage } = useChatContext();
+  const { lineItems, updateLineItem, sendMessage } = useChatContext();
   const [modalOpen, setModalOpen] = useState(false);
   const [updateCount, setUpdateCount] = useState(0);
 
@@ -38,7 +38,7 @@ export function LineItemTable() {
                 id: uuidv4(),
                 parts: [{ type: "text", text: REGENERATION_MESSAGE }],
                 metadata: {
-                  createdAt: new Date(Date.now() - 10_000).toISOString(),
+                  createdAt: new Date().toISOString(),
                 },
               })
             }
@@ -76,7 +76,7 @@ export function LineItemTable() {
               currentValue={item.quantity}
               onValueChange={(value) => {
                 handleSave();
-                setLineItems(item.id, { quantity: value });
+                updateLineItem(item.id, { quantity: value });
               }}
             />,
             <EditableLineItemRow
@@ -85,7 +85,7 @@ export function LineItemTable() {
               currentValue={item.unitPrice}
               onValueChange={(value) => {
                 handleSave();
-                setLineItems(item.id, { unitPrice: value });
+                updateLineItem(item.id, { unitPrice: value });
               }}
               isCurrency={true}
             />,
@@ -95,7 +95,7 @@ export function LineItemTable() {
               currentValue={item.unit as unknown as LineItemUnit}
               onValueChange={(value) => {
                 handleSave();
-                setLineItems(item.id, { unit: value });
+                updateLineItem(item.id, { unit: value });
               }}
             />,
             currency.format(item.gstAmount),

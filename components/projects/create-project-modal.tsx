@@ -7,21 +7,26 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Calendar, Ruler, Search } from "lucide-react";
+import { Calendar, HardHat, Ruler, Search } from "lucide-react";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { LeadCardList } from "@/components/offers/lead-card-list";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus } from "lucide-react";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchJson } from "@/utils/fetch";
-import { SearchableSelect } from "@/components/common/searchable-select";
+import {
+  LookupOption,
+  SearchableSelect,
+} from "@/components/common/searchable-select";
 import type { AddressSuggestion } from "@/types/data";
 import { Label } from "../ui/label";
 import { toast } from "sonner";
 import { createProject } from "@/lib/store/slices/projectsSlice";
 import { useRouter } from "next/navigation";
+import { fetchSiteManagers } from "@/lib/store/slices/siteManagersSlice";
+import { addMonths, format } from "date-fns";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -32,11 +37,13 @@ interface CreateProjectModalProps {
 type FormState = {
   search: string;
   leadId: number | null;
+  projectName: string;
   location: string;
   selectedLocation: AddressSuggestion | null;
   lotSize: string;
   startDate: string;
   estimatedEndDate: string;
+  siteManagerId: string;
 };
 
 export function CreateProjectModal({
@@ -46,12 +53,15 @@ export function CreateProjectModal({
 }: CreateProjectModalProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const leadSearch = useLeadSearch("");
+  const siteManagers = useAppSelector((state) => state.siteManagers);
+  const leadSearch = useLeadSearch("", 1, true);
+  const [managerSearch, setManagerSearch] = useState("");
   const [isPending, startTransition] = useTransition();
   const [locationSuggestions, setLocationSuggestions] = useState<
     AddressSuggestion[]
   >([]);
   const [form, setForm] = useState<FormState>({
+    projectName: "",
     search: "",
     leadId: null,
     location: "",
@@ -59,6 +69,7 @@ export function CreateProjectModal({
     lotSize: "",
     startDate: "",
     estimatedEndDate: "",
+    siteManagerId: "",
   });
 
   const isValid = useMemo(
@@ -72,14 +83,40 @@ export function CreateProjectModal({
     [form],
   );
 
+  const selectedSiteManager = useMemo(() => {
+    return (
+      siteManagers.items.find((manager) => manager.id === form.siteManagerId) ??
+      null
+    );
+  }, [form.siteManagerId, siteManagers.items]);
+
   const updateForm = <K extends keyof FormState>(
     key: K,
     value: FormState[K],
   ) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setForm((prev) => {
+      const next = {
+        ...prev,
+        [key]: value,
+      };
+
+      if (key === "startDate") {
+        console.log("startDate changed:", value);
+        next.estimatedEndDate = format(
+          addMonths(new Date(value as string), 8),
+          "yyyy-MM-dd",
+        );
+      }
+
+      if (key === "selectedLocation") {
+        const location = value as AddressSuggestion | null;
+        if (location) {
+          next.projectName = `${location.label} Project`;
+        }
+      }
+
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -121,6 +158,26 @@ export function CreateProjectModal({
     };
   }, [form.location, open]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void dispatch(
+        fetchSiteManagers({
+          page: 1,
+          limit: 10,
+          query: managerSearch,
+        }),
+      );
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [dispatch, managerSearch, open]);
+
   const handleSubmit = async () => {
     if (!isValid) {
       toast.error("Please fill in all required fields.");
@@ -129,31 +186,32 @@ export function CreateProjectModal({
     try {
       const createdProject = await dispatch(
         createProject({
+          projectName: form.projectName,
           leadId: form.leadId!,
           lotSize: parseFloat(form.lotSize),
           startDate: form.startDate,
           estimatedEndDate: form.estimatedEndDate,
           address: form.selectedLocation!.label,
           council: form.selectedLocation!.council,
+          siteManagerId: form.siteManagerId,
         }),
       ).unwrap();
 
       toast.success(`Project created: ${createdProject.name}`);
+      onSuccess();
+      onOpenChange(false);
       router.push(`/projects/${createdProject.id}`);
     } catch (error) {
       console.error("Error creating project:", error);
       toast.error(
-        `Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `${error}`
       );
-    } finally {
-      onSuccess();
-      onOpenChange(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl max-h-[65vh] overflow-y-auto no-scrollbar">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
 
@@ -203,8 +261,20 @@ export function CreateProjectModal({
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
+            {/* Project Name */}
+            <div className="md:col-span-2 space-y-2">
+              <Label htmlFor="projectName">Project Name</Label>
+              <Input
+                id="projectName"
+                type="text"
+                placeholder="Enter project name..."
+                value={form.projectName}
+                onChange={(e) => updateForm("projectName", e.target.value)}
+              />
+            </div>
+
             {/* Location */}
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 space-y-2">
               <SearchableSelect
                 label="Site Location"
                 placeholder="Select address..."
@@ -215,11 +285,36 @@ export function CreateProjectModal({
                 onSelect={(item) => {
                   const suggestion = item as AddressSuggestion;
 
-                  setForm((prev) => ({
-                    ...prev,
-                    location: suggestion.label,
-                    selectedLocation: suggestion,
-                  }));
+                  updateForm("selectedLocation", suggestion);
+                  updateForm("location", suggestion.label);
+                }}
+              />
+            </div>
+
+            {/* Site Manager */}
+            <div className="md:col-span-2 space-y-2">
+              <SearchableSelect
+                label="Site Manager"
+                placeholder="Assign manager..."
+                searchValue={managerSearch}
+                selectedItem={selectedSiteManager}
+                items={siteManagers.items}
+                loading={siteManagers.loading}
+                hasMore={siteManagers.page < siteManagers.totalPages}
+                onQueryChange={setManagerSearch}
+                onSelect={(item) => {
+                  updateForm("siteManagerId", item.id);
+
+                  setManagerSearch((item as LookupOption).name);
+                }}
+                onLoadMore={() => {
+                  void dispatch(
+                    fetchSiteManagers({
+                      page: siteManagers.page + 1,
+                      limit: 10,
+                      query: managerSearch,
+                    }),
+                  );
                 }}
               />
             </div>
@@ -260,6 +355,23 @@ export function CreateProjectModal({
                   onChange={(e) => updateForm("startDate", e.target.value)}
                   className="pl-9"
                   max={form.estimatedEndDate || undefined}
+                />
+              </div>
+            </div>
+            {/* Council  */}
+            <div className="space-y-2">
+              <Label htmlFor="council">Council</Label>
+
+              <div className="relative">
+                <HardHat className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+
+                <Input
+                  id="council"
+                  type="text"
+                  value={form.selectedLocation?.council ?? ""}
+                  className="pl-9"
+                  disabled
+                  placeholder="Council will be auto-filled"
                 />
               </div>
             </div>

@@ -7,7 +7,7 @@ import { PaginatedLeadsResult } from "@/lib/data/leads";
 
 const DEFAULT_LIMIT = 10;
 
-export function useLeadSearch(initialQuery = "", initialPage = 1) {
+export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithoutProject = false) {
     const [query, setQuery] = useState(initialQuery);
     const [items, setItems] = useState<UiLead[]>([]);
     const [loading, setLoading] = useState(false);
@@ -34,6 +34,9 @@ export function useLeadSearch(initialQuery = "", initialPage = 1) {
             if (query.trim().length > 0) params.append('q', query.trim());
             params.append('page', pageInfo.page.toString());
             params.append('limit', DEFAULT_LIMIT.toString());
+            if (getLeadsWithoutProject) {
+                params.append('filterLeadsWithoutProject', 'true');
+            }
             try {
                 const { data } = await fetchJson<PaginatedLeadsResult>(
                     `/api/leads?${params.toString()}`,
@@ -68,7 +71,7 @@ export function useLeadSearch(initialQuery = "", initialPage = 1) {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [query, pageInfo.page, items.length]);
+    }, [query, pageInfo.page, items.length, getLeadsWithoutProject]);
 
     return { query, setQuery, items, loading, error, pageInfo, setPage, loadingMore } as const;
 }

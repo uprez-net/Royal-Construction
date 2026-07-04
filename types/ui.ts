@@ -124,7 +124,6 @@ export type SiteUpdateItem = {
 export type TradieItem = {
   id: string;
   trade: string;
-  company: string;
   contact: string;
   needed: string;
   scheduled: string;

@@ -126,7 +126,7 @@ export const generateSafeOfferHTMLClient = ({
             <div class="section-gold-rule"></div>
 
             <div class="welcome-body">
-            ${projectWelcomeMessage || '<span class="empty">No welcome message provided.</span>'}
+            ${projectWelcomeMessage?.replaceAll(/\\n/g, "<br>") || '<span class="empty">No welcome message provided.</span>'}
             </div>
 
             <div class="welcome-signature-name">${creatorName.split("—")[0].trim()}</div>
