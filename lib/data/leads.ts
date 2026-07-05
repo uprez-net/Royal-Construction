@@ -1046,6 +1046,7 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
     if (!existingLead) {
       throw new Error("Lead not found");
     }
+    
     const signedBody = `
     Hi ${existingLead.name},<br><br>
 

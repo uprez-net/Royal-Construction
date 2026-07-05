@@ -631,6 +631,7 @@ model EmailAdHock {
   name         String
   emailSubject String
   htmlUrl      String
+  attachmentsUrls String[] @default([])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

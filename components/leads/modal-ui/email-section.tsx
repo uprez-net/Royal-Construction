@@ -77,7 +77,10 @@ export function LeadEmailSection({
             <div className="flex flex-col py-4">
               {orderedEmails.map((email, index) => {
                 const isSent = email.emailFrom.includes(ROYAL_DOMAIN);
-
+                const plainBody = email.body
+                  .replace(/<br\s*\/?>/gi, "\n")
+                  .trim();
+                console.log("Email body (Plain):\n", plainBody);
                 return (
                   <div
                     key={`email-${index}-${email.id}`}
@@ -92,7 +95,7 @@ export function LeadEmailSection({
                       <button
                         type="button"
                         onClick={() => setReplyTarget(email)}
-                        aria-label={`Reply to ${email.body.slice(0, 30)}...`}
+                        aria-label={`Reply to ${plainBody.slice(0, 30)}...`}
                         className="mb-1 shrink-0 rounded-full p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
                       >
                         <Reply className="size-3.5" />
@@ -100,7 +103,7 @@ export function LeadEmailSection({
 
                       <div
                         className={cn(
-                          "max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-6",
+                          "max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-5",
                           isSent
                             ? "bg-royal-gold text-white rounded-br-sm"
                             : "bg-muted text-foreground rounded-bl-sm",
@@ -110,7 +113,7 @@ export function LeadEmailSection({
                           {email.subject}
                         </p>
                         <p className="whitespace-pre-wrap wrap-break-word">
-                          {email.body}
+                          {plainBody}
                         </p>
                         <p
                           className={cn(
@@ -137,7 +140,7 @@ export function LeadEmailSection({
           replyTo={replyTarget}
           onCancelReply={() => setReplyTarget(null)}
           appendEmailToLead={appendEmailToLead}
-          projectType={projectType} 
+          projectType={projectType}
           location={location}
         />
       </CardContent>

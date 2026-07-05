@@ -28,8 +28,8 @@ export async function POST(request: NextRequest) {
 
                 const email = email_addresses[0]?.email_address;
                 const phone = randomPhoneNumberGenerator();
-
-                const newUser = await createUser(`${first_name} ${last_name}`, email, id, phone);
+                const fullName = [first_name, last_name].filter(Boolean).join(" ");
+                const newUser = await createUser(fullName, email, id, phone);
                 await updateUserMetadata(id, {
                     publicMetadata: {
                         role: newUser.role,
