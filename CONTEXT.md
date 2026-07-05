@@ -41,12 +41,12 @@ During **Offer** creation the builder runs the **full internal cost schedule** (
 _Avoid_: Skipping internal costing until Tender, exposing margin or trade lines on the Offer document
 
 **Tender** (decided direction):
-The **final legal fixed-price document** issued after negotiation is settled. Full client metadata, inclusion tables with status, payment schedule, exclusions, terms and conditions, and **acceptance** signed by **builder and customer**. Maps to `Royal Constructions TENDER TEMPLATE v3 (NCC 2025).docx`. Distinct from the negotiation **Offer document**.
-_Avoid_: Offer document, quotation PDF
+The **final legal fixed-price document** issued after negotiation is settled. Full client metadata, inclusion tables with status, payment schedule, exclusions, terms and conditions, and **acceptance** signed by **builder and customer**. Maps to `Royal Constructions TENDER TEMPLATE v3 (NCC 2025).docx`. Distinct from the negotiation **Offer document**. Persisted as its **own record** (not a file version on the Offer) with its generated data and full **DocuSign envelope + signature history** (it may be re-generated and re-sent a small number of times); this is the legal system of record. See ADR 0002.
+_Avoid_: Offer document, quotation PDF, storing the Tender only as an Offer file version
 
 **Contract** (decided — supersedes off-system upload; see ADR 0001):
-The **legal building contract** generated **in-app** from the signed **Tender** data, then sent for e-signature via **DocuSign** (a DocuSign template pulls the app-supplied fields). Signed by **builder and customer** in DocuSign; the executed PDF returns to the Offer as system of record. Distinct from the signed **Tender**.
-_Avoid_: Off-system MBA portal as system of record, manual signed-PDF upload as the contract path, treating Tender sign as Contract sign
+The **legal building contract** generated **in-app** from the signed **Tender** data, then sent for e-signature via **DocuSign** (a DocuSign template pulls the app-supplied fields). Signed by **builder and customer** in DocuSign; the executed PDF returns as the system of record. Distinct from the signed **Tender**. Persisted as its **own record** (parallel in shape to the **Tender**) with its generated data and full **DocuSign envelope + signature history**. See ADR 0002.
+_Avoid_: Off-system MBA portal as system of record, manual signed-PDF upload as the contract path, treating Tender sign as Contract sign, storing the Contract only as an Offer file version
 
 **Contract upload** (superseded):
 Former off-system model (external MBA portal + manual signed-PDF upload). Replaced by in-app **Contract** generation + **DocuSign** e-signature — see **Contract** and ADR 0001.
@@ -92,7 +92,7 @@ _Avoid_: Offer status ending at "agreed" or "tender_signed" with no contract sta
 _Avoid_: Deposit or PDF-upload as a Project precondition, Project before contract_signed
 
 **Marking an Offer sent** (decided):
-**Download Offer document** while pending does not change status. **Send Offer document** emails the one-pager with a **tracked link** (open telemetry) and sets **sent**. The customer **replies by email**; staff **log the requested changes** and create a **new revision** (v1 has **no customer self-service portal**). Distinct from sending the final **Tender** via DocuSign.
+**Download Offer document** while pending does not change status. **Send Offer document** emails the one-pager with a **tracked link** (open telemetry) and sets **sent**. The Offer document may be **sent many times** across negotiation; each send is recorded (version + tracked link + open telemetry) for the audit trail. The customer **replies by email**; staff **log the requested changes** and create a **new revision** (v1 has **no customer self-service portal**). Distinct from sending the final **Tender** via DocuSign.
 _Avoid_: Auto-sent on PDF download, customer self-service portal in v1, sending Tender during negotiation
 
 **Offer agreed** (decided):
