@@ -7,14 +7,21 @@ import type {
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import {
   buildOfferPrintTemplateData,
+  formatArea,
   getPrintFooterText,
   PROPOSAL_TAGLINE,
 } from "@/lib/offer/workspace-print-template";
+import {
+  buildWelcomeParagraphs,
+  STANDARD_INCLUSIONS_SCHEDULE,
+  type OfferInclusionRow,
+} from "@/lib/offer/workspace-proposal-content";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import Image from "next/image";
+import type { ReactElement } from "react";
 import { formatCurrency, formatPercent } from "./offer-workspace-format";
 import {
   CoverRow,
+  ImageSlot,
   PrintBulletList,
   PrintPage,
   PrintSection,
@@ -34,44 +41,103 @@ type OfferWorkspacePrintTemplateProps = {
   readonly standardPriceIncGst: number | null;
 };
 
+const INCLUSIONS_ROWS_PER_PAGE = 12;
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const pages: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    pages.push(items.slice(i, i + size));
+  }
+  return pages;
+}
+
 export function OfferWorkspacePrintTemplate(
   props: OfferWorkspacePrintTemplateProps,
 ) {
   const data = buildOfferPrintTemplateData(props);
+  const inclusionPages = chunk(
+    STANDARD_INCLUSIONS_SCHEDULE,
+    INCLUSIONS_ROWS_PER_PAGE,
+  );
+
+  // Assemble the ordered page renderers, then number them automatically so the
+  // footer "Page N of M" stays correct as pages are added or removed.
+  const pages: Array<(n: number, total: number) => ReactElement> = [
+    (n, total) => (
+      <PrintCoverPage key="cover" data={data} job={props.job} footer={foot(data, n, total)} />
+    ),
+    (n, total) => (
+      <PrintWelcomePage key="welcome" job={props.job} footer={foot(data, n, total)} />
+    ),
+    (n, total) => (
+      <PrintGalleryPage key="gallery" footer={foot(data, n, total)} />
+    ),
+    (n, total) => (
+      <PrintSnapshotPage key="snapshot" data={data} job={props.job} footer={foot(data, n, total)} />
+    ),
+    (n, total) => (
+      <PrintInvestmentPage
+        key="investment"
+        data={data}
+        draft={props.draft}
+        props={props}
+        footer={foot(data, n, total)}
+      />
+    ),
+    ...inclusionPages.map(
+      (rows, i) =>
+        (n: number, total: number) =>
+          (
+            <PrintInclusionsPage
+              key={`inclusions-${i}`}
+              rows={rows}
+              continued={i > 0}
+              footer={foot(data, n, total)}
+            />
+          ),
+    ),
+    (n, total) => (
+      <PrintTermsPage key="terms" data={data} job={props.job} footer={foot(data, n, total)} last />
+    ),
+  ];
+
+  const total = pages.length;
 
   return (
     <div
       className="hidden bg-white text-foreground print:block"
       data-offer-print-template="true"
     >
-      <PrintCoverPage data={data} job={props.job} />
-      <PrintInvestmentPage data={data} draft={props.draft} props={props} />
-      <PrintScopePage data={data} />
-      <PrintTermsPage data={data} job={props.job} />
+      {pages.map((render, index) => render(index + 1, total))}
     </div>
   );
+}
+
+function foot(
+  data: ReturnType<typeof buildOfferPrintTemplateData>,
+  n: number,
+  total: number,
+): string {
+  return getPrintFooterText(data.footerBase, n, total);
 }
 
 function PrintCoverPage({
   data,
   job,
+  footer,
 }: {
   readonly data: ReturnType<typeof buildOfferPrintTemplateData>;
   readonly job: OfferWorkspaceJob;
+  readonly footer: string;
 }) {
   return (
-    <PrintPage footerText={getPrintFooterText(data.footerBase, 1)}>
+    <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <div className="mt-8 overflow-hidden border border-border">
-        <div className="flex h-[92mm] items-center justify-center bg-royal-gold-light/70 p-10">
-          <Image
-            alt="Royal Constructions"
-            className="max-h-full max-w-[78%] object-contain"
-            height={713}
-            src="/logo-1024x713.png"
-            width={1024}
-          />
-        </div>
+      <div className="mt-6">
+        <ImageSlot
+          label="Hero — completed home / render"
+          heightClass="h-[95mm]"
+        />
       </div>
       <div className="mt-5 text-center">
         <h1 className="font-sans text-4xl font-bold uppercase tracking-wide text-sidebar">
@@ -81,7 +147,7 @@ function PrintCoverPage({
           {job.buildType}
         </p>
       </div>
-      <div className="mt-8 border-t border-royal-gold pt-6">
+      <div className="mt-6 border-t border-royal-gold pt-5">
         <dl className="grid grid-cols-[50mm_minmax(0,1fr)] text-sm">
           <CoverRow label="Client" value={job.clientNames} />
           <CoverRow label="Site Address" value={job.siteAddress} />
@@ -103,108 +169,231 @@ function PrintCoverPage({
   );
 }
 
+function PrintWelcomePage({
+  job,
+  footer,
+}: {
+  readonly job: OfferWorkspaceJob;
+  readonly footer: string;
+}) {
+  const paragraphs = buildWelcomeParagraphs(job);
+  const greetingName = job.clientNames
+    .replace(/^(Mr|Ms|Mrs|Mr & Ms|Mr & Mrs)\s+/i, "")
+    .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
+  return (
+    <PrintPage footerText={footer}>
+      <ProposalMasthead />
+      <PrintSection eyebrow="A personal welcome" title={`Dear ${greetingName},`}>
+        <div className="max-w-[155mm] space-y-4 text-base leading-7">
+          {paragraphs.map((paragraph, index) => (
+            <p key={index}>{paragraph}</p>
+          ))}
+        </div>
+      </PrintSection>
+      <div className="mt-8">
+        <p className="font-semibold text-sidebar">{job.preparedBy}</p>
+        <p className="text-sm text-muted-foreground">
+          Lic. 383992C | MBA Accredited
+        </p>
+      </div>
+    </PrintPage>
+  );
+}
+
+function PrintGalleryPage({ footer }: { readonly footer: string }) {
+  return (
+    <PrintPage footerText={footer}>
+      <ProposalMasthead />
+      <PrintSection
+        eyebrow="Our work"
+        title="Your home will be finished to this standard"
+      >
+        <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+          The images below are from a recently completed double storey home —
+          built to a similar size and finish level. Full render to all
+          elevations, luxury shaker kitchen, 60mm stone benchtops, herringbone
+          flooring and floor-to-ceiling tiles.
+        </p>
+      </PrintSection>
+      <div className="mt-6 grid grid-cols-2 gap-4">
+        <ImageSlot label="Exterior — full render facade" caption="Completed facade" heightClass="h-[46mm]" />
+        <ImageSlot label="3D perspective — render" caption="Architect render" heightClass="h-[46mm]" />
+        <ImageSlot label="Kitchen & butler's pantry" caption="Shaker kitchen, stone island" heightClass="h-[46mm]" />
+        <ImageSlot label="Living & open plan" caption="Herringbone flooring" heightClass="h-[46mm]" />
+        <ImageSlot label="Master bedroom & ensuite" caption="Freestanding bath, FTC tiles" heightClass="h-[46mm]" />
+        <ImageSlot label="Second bathroom" caption="Stone vanity, arched mirrors" heightClass="h-[46mm]" />
+      </div>
+    </PrintPage>
+  );
+}
+
+function PrintSnapshotPage({
+  data,
+  job,
+  footer,
+}: {
+  readonly data: ReturnType<typeof buildOfferPrintTemplateData>;
+  readonly job: OfferWorkspaceJob;
+  readonly footer: string;
+}) {
+  const gfGarage = job.groundFloorSqm + job.garageSqm;
+  const alfrescoBalcony = job.alfrescoPorchSqm;
+  const totalArea =
+    gfGarage + job.firstFloorSqm + alfrescoBalcony + job.porchSqm + job.grannyFlatSqm;
+  const areaCells = [
+    { label: "Ground Floor + Garage", value: formatArea(gfGarage) },
+    { label: "First Floor", value: formatArea(job.firstFloorSqm) },
+    { label: "Alfresco + Balcony", value: formatArea(alfrescoBalcony) },
+    { label: "Porch", value: formatArea(job.porchSqm) },
+    { label: "Total Area", value: formatArea(totalArea), emphasis: true },
+  ];
+  return (
+    <PrintPage footerText={footer}>
+      <ProposalMasthead />
+      <PrintSection eyebrow="Project snapshot" title="Site and build scope">
+        <div className="grid grid-cols-2 gap-6">
+          <div className="border border-border p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Site
+            </p>
+            <p className="mt-2 font-semibold text-sidebar">{job.siteAddress}</p>
+            <p className="mt-3 text-sm text-muted-foreground">{job.dpNumber}</p>
+            <p className="text-sm text-muted-foreground">
+              Lot Area: {formatArea(job.lotAreaSqm)} | Zoning: {job.zoning}
+            </p>
+          </div>
+          <div className="border border-border p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Build scope
+            </p>
+            <p className="mt-2 font-semibold text-sidebar">{job.buildType}</p>
+            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+              {job.buildScope.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </PrintSection>
+      <div className="mt-8 grid grid-cols-5 border border-border text-center text-sm">
+        {areaCells.map((cell) => (
+          <div
+            key={cell.label}
+            className={
+              cell.emphasis
+                ? "bg-sidebar p-4 text-white"
+                : "border-r border-border p-4 last:border-r-0"
+            }
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
+              {cell.label}
+            </p>
+            <p className="mt-2 font-mono font-semibold">{cell.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-6 text-xs text-muted-foreground">
+        Total build area {data.areaLabel}.
+      </p>
+    </PrintPage>
+  );
+}
+
 function PrintInvestmentPage({
   data,
   draft,
   props,
+  footer,
 }: {
   readonly data: ReturnType<typeof buildOfferPrintTemplateData>;
   readonly draft: OfferDocumentDraft;
   readonly props: OfferWorkspacePrintTemplateProps;
+  readonly footer: string;
 }) {
   return (
-    <PrintPage footerText={getPrintFooterText(data.footerBase, 2)}>
+    <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <PrintSection eyebrow="Proposal" title={draft.headline}>
-        <p className="max-w-[150mm] text-base leading-7">{draft.introText}</p>
+      <PrintSection eyebrow="Investment summary" title={draft.headline}>
+        <p className="max-w-[155mm] text-base leading-7">{draft.introText}</p>
       </PrintSection>
-      <div className="mt-8 rounded-lg border border-border bg-royal-gold-light/60 p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="mt-8 rounded-lg border border-border bg-royal-gold-light/60 p-6 text-center">
+        {data.savingAmount !== null && data.savingAmount > 0 ? (
+          <p className="text-sm font-semibold text-royal-gold-dark">
+            Standard price {formatCurrency(props.standardPriceIncGst)} -{" "}
+            {props.priceAdjustmentLabel || "saving"}{" "}
+            {formatCurrency(data.savingAmount)}
+          </p>
+        ) : null}
+        <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Your fixed contract price
         </p>
-        <p className="mt-2 font-heading text-5xl font-semibold text-sidebar">
+        <p className="mt-1 font-heading text-5xl font-semibold text-sidebar">
           {formatCurrency(props.customerPrice.selectedContractValueIncGst)}
         </p>
         <p className="mt-2 font-mono text-sm text-muted-foreground">
           Including GST | MBA fixed price contract | Valid until{" "}
           {data.validUntilLabel}
         </p>
-        {data.savingAmount !== null && data.savingAmount > 0 ? (
-          <p className="mt-4 text-base font-semibold text-royal-gold-dark">
-            Standard price {formatCurrency(props.standardPriceIncGst)} -{" "}
-            {props.priceAdjustmentLabel || "saving"}{" "}
-            {formatCurrency(data.savingAmount)}
-          </p>
-        ) : null}
       </div>
       <div className="mt-8 grid grid-cols-2 gap-8">
-        <PrintBulletList
-          items={
-            data.offerTenderLineItems.length > 0
-              ? data.offerTenderLineItems
-              : draft.inclusionBullets
-          }
-          title="This price includes"
-        />
-        <PrintBulletList
-          items={data.exclusionBullets}
-          title="This price excludes"
-        />
+        <PrintBulletList items={draft.inclusionBullets} title="This price includes" />
+        <PrintBulletList items={data.exclusionBullets} title="This price excludes" />
       </div>
     </PrintPage>
   );
 }
 
-function PrintScopePage({
-  data,
+function PrintInclusionsPage({
+  rows,
+  continued,
+  footer,
 }: {
-  readonly data: ReturnType<typeof buildOfferPrintTemplateData>;
+  readonly rows: readonly OfferInclusionRow[];
+  readonly continued: boolean;
+  readonly footer: string;
 }) {
   return (
-    <PrintPage footerText={getPrintFooterText(data.footerBase, 3)}>
+    <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <PrintSection eyebrow="Scope" title="Allowances and customer selections">
-        <p className="max-w-[150mm] text-sm leading-6 text-muted-foreground">
-          Allowances below are included in the fixed Offer price unless the
-          client selects above the stated allowance or requests a written
-          variation.
-        </p>
+      <PrintSection
+        eyebrow="Inclusions"
+        title={continued ? "Full inclusions schedule (cont.)" : "Full inclusions schedule"}
+      >
+        {continued ? null : (
+          <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+            All items below are fixed within your contract price. Design provided
+            by owner/architect — all costs fixed as per approved plans, confirmed
+            at colour selection.
+          </p>
+        )}
       </PrintSection>
       <table className="mt-6 w-full border-collapse text-left text-sm">
         <thead>
           <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="py-3 pr-4 font-semibold">Allowance</th>
-            <th className="px-4 py-3 font-semibold">Amount</th>
-            <th className="px-4 py-3 font-semibold">Selection rule</th>
+            <th className="w-[45mm] py-3 pr-4 font-semibold">Category</th>
+            <th className="px-4 py-3 font-semibold">Specification</th>
           </tr>
         </thead>
         <tbody>
-          {data.scopeRows.map((item) => (
-            <tr key={item.id} className="border-b border-border">
-              <td className="py-4 pr-4 align-top">
-                <p className="font-semibold">{item.label}</p>
-                <p className="mt-1 text-muted-foreground">
-                  {item.description}
-                </p>
+          {rows.map((row, index) => (
+            <tr
+              key={`${row.category}-${index}`}
+              className={
+                row.highlight
+                  ? "border-b border-border bg-royal-gold-light/50"
+                  : "border-b border-border"
+              }
+            >
+              <td className="py-3 pr-4 align-top font-semibold text-sidebar">
+                {row.category}
               </td>
-              <td className="px-4 py-4 align-top font-mono">
-                {item.amountLabel}
-              </td>
-              <td className="px-4 py-4 align-top text-muted-foreground">
-                {item.variationRule}
+              <td className="px-4 py-3 align-top text-muted-foreground">
+                {row.specification}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="mt-8 rounded-lg border border-border bg-muted/50 p-5">
-        <h2 className="font-sans text-lg font-semibold">Offer boundary</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          This proposal is the customer-facing Offer document. A full Tender
-          package is issued only after scope and price are agreed by Royal
-          Constructions and the client.
-        </p>
-      </div>
     </PrintPage>
   );
 }
@@ -212,12 +401,16 @@ function PrintScopePage({
 function PrintTermsPage({
   data,
   job,
+  footer,
+  last,
 }: {
   readonly data: ReturnType<typeof buildOfferPrintTemplateData>;
   readonly job: OfferWorkspaceJob;
+  readonly footer: string;
+  readonly last?: boolean;
 }) {
   return (
-    <PrintPage breakAfter={false} footerText={getPrintFooterText(data.footerBase, 4)}>
+    <PrintPage breakAfter={!last} footerText={footer}>
       <ProposalMasthead />
       <PrintSection eyebrow="Next steps" title="Terms and payment schedule">
         <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
@@ -243,9 +436,7 @@ function PrintTermsPage({
                 {formatPercent(row.percentOfContract)} -{" "}
                 {formatCurrency(row.amount)}
               </td>
-              <td className="px-4 py-4 text-muted-foreground">
-                {row.trigger}
-              </td>
+              <td className="px-4 py-4 text-muted-foreground">{row.trigger}</td>
             </tr>
           ))}
         </tbody>

@@ -120,8 +120,9 @@ export function formatDateDisplay(value: Date | string): string {
 export function getPrintFooterText(
   footerBase: string,
   pageNumber: number,
+  totalPages: number,
 ): string {
-  return `${footerBase} | Page ${pageNumber} of 4`;
+  return `${footerBase} | Page ${pageNumber} of ${totalPages}`;
 }
 
 function getTotalAreaSqm(job: OfferWorkspaceJob): number {

@@ -64,6 +64,10 @@ const jobSchema = z.object({
   grannyFlatSqm: z.number(),
   validUntil: z.string(),
   preparedBy: z.string(),
+  lotAreaSqm: z.number().default(0),
+  dpNumber: z.string().default(""),
+  zoning: z.string().default(""),
+  buildScope: z.array(z.string()).default([]),
 });
 
 const costLineSchema = z.object({
@@ -157,7 +161,7 @@ export function serializeWorkspace(
 ): PersistedOfferWorkspaceState {
   return {
     schemaVersion: CURRENT_WORKSPACE_SCHEMA_VERSION,
-    job: snapshot.job,
+    job: { ...snapshot.job, buildScope: [...snapshot.job.buildScope] },
     costLines: snapshot.lines.map((line) => ({
       id: line.id,
       stageCode: line.stageCode,

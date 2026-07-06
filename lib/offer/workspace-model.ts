@@ -7,6 +7,10 @@ import {
   getOfferSequenceMappingByTask,
   type OfferSequenceMapping,
 } from "@/lib/offer/workspace-sequence-mapping";
+import {
+  OFFER_EXCLUDES_BULLETS,
+  OFFER_INCLUDES_BULLETS,
+} from "@/lib/offer/workspace-proposal-content";
 
 export const OFFER_STAGE_CATALOG = [
   { code: "A", name: "General Requirements" },
@@ -44,6 +48,11 @@ export type OfferWorkspaceJob = {
   readonly grannyFlatSqm: number;
   readonly validUntil: string;
   readonly preparedBy: string;
+  // Project snapshot (site particulars shown on the proposal snapshot page).
+  readonly lotAreaSqm: number;
+  readonly dpNumber: string;
+  readonly zoning: string;
+  readonly buildScope: readonly string[];
 };
 
 export type OfferWorkspaceCostLine = {
@@ -143,21 +152,32 @@ export const DEFAULT_LEGACY_PRICING_SETTINGS: LegacyWorkbookPricingSettings = {
 };
 
 export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
-  reference: "RC-Q-2026-001",
+  reference: "RC-Q-2026-019",
   revision: "R1",
   clientNames: "Mr Mahesh & Ms Anisha",
   clientEmail: "client@example.com",
-  clientPhone: "0400 000 000",
+  clientPhone: "0406 555 565",
   siteAddress: "13 Binalong Road, Pendle Hill NSW 2145",
   buildType: "Custom Double Storey Residence",
-  groundFloorSqm: 138,
-  firstFloorSqm: 126,
-  garageSqm: 36,
-  alfrescoPorchSqm: 24,
-  porchSqm: 8,
+  // GF + Garage grouped (202.20), FF 165.31, Alfresco + Balcony 31.85, Porch
+  // 8.35 -> total 407.71 m² per the approved plans.
+  groundFloorSqm: 202.2,
+  firstFloorSqm: 165.31,
+  garageSqm: 0,
+  alfrescoPorchSqm: 31.85,
+  porchSqm: 8.35,
   grannyFlatSqm: 0,
-  validUntil: "2026-07-30",
+  validUntil: "2026-07-10",
   preparedBy: "Gurpinder Uppal - Director, Royal Constructions",
+  lotAreaSqm: 689.2,
+  dpNumber: "LOT 3 DP 26294",
+  zoning: "R2",
+  buildScope: [
+    "4 Bedrooms + Office | Master WIR & Ensuite",
+    "2 Ensuites + Main Bath + Toilet | Rumpus",
+    "Double Garage | Butler's Pantry | Alfresco",
+    "Void | Feature Staircase | Balcony",
+  ],
 };
 
 const INITIAL_COST_BY_TASK = new Map<string, number>([
@@ -242,15 +262,11 @@ export const INITIAL_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = [
 ];
 
 export const INITIAL_OFFER_DRAFT: OfferDocumentDraft = {
-  headline: "Fixed price building offer",
+  headline: "Your fixed price building proposal",
   introText:
-    "Royal Constructions is pleased to provide this fixed price offer based on the current plans, selections and assumptions captured in the calculation workbook.",
-  inclusionBullets: [
-    "New custom dwelling construction based on the current drawing set",
-    "Standard approvals, engineering, HBCF, site preparation and core building works",
-    "Kitchen, bathroom and fixture allowances captured as prime cost items",
-  ],
-  exclusionBullets: [],
+    "This proposal forms the basis of a Master Builders Association (MBA) fixed price home building contract. Every item below is locked into your fixed contract price — a number you can take to your bank today.",
+  inclusionBullets: OFFER_INCLUDES_BULLETS,
+  exclusionBullets: OFFER_EXCLUDES_BULLETS,
   termsSummary:
     "Final Tender is issued only after scope and price are agreed by builder and client.",
 };
