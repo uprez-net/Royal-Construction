@@ -49,6 +49,7 @@ import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
 import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
+import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -410,12 +411,32 @@ export function ModalManager() {
         </QueryClientProvider>
       );
     case "approvalDetails":
-      const { approval } = modal.payload as {
+      const { approval, onApprove, onReject } = modal.payload as {
         approval: SafeTradieApproval;
+        onApprove: () => Promise<void>;
+        onReject: () => void;
       };
       return (
-        <ApprovalDetailModal open onClose={handleClose} approval={approval} />
+        <ApprovalDetailModal
+          open
+          onClose={handleClose}
+          approval={approval}
+          onApprove={onApprove}
+          onReject={onReject}
+        />
       );
+    case "rejectTradieApprovals": {
+      const { approvals } = modal.payload as {
+        approvals: SafeTradieApproval[];
+      };
+      return (
+        <TradieApprovalRejectionModal
+          open
+          onClose={handleClose}
+          approvals={approvals}
+        />
+      );
+    }
     default:
       return null;
   }

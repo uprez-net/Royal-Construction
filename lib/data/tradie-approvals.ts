@@ -125,6 +125,7 @@ export async function handleAdminApproval(input: ApprovalInput) {
                 where: { id: input.approvalId },
                 data: {
                     status: input.resolution === "approved" ? "APPROVED" : "REJECTED",
+                    rejectionReason: input.rejectReason ?? null,
                 },
             });
 
@@ -220,6 +221,7 @@ export async function handleAdminApproval(input: ApprovalInput) {
                         scheduleId: updatedSchedule.id,
                         updatedSchedule,
                         resolution: input.resolution,
+                        rejectReason: input.rejectReason ?? null,
                     };
                 }
 
