@@ -27,7 +27,8 @@ import {
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { sendEmail } from "../azureClient";
 import { generateEmailChecksum } from "@/utils/generator";
-import { dataTimeFormat } from "@/utils/formatters";
+import { generateEmailSubject } from "@/utils/generate-email-subject";
+import { normalizeEmailAddress } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
 
@@ -1032,7 +1033,7 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
  *
  * @throws {Error} If the lead does not exist or the email could not be sent.
  */
-export async function sendLeadEmail(leadId: number, subject: string, body: string, to: string) {
+export async function sendLeadEmail(leadId: number, location: string, body: string, to: string) {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -1046,22 +1047,23 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
     if (!existingLead) {
       throw new Error("Lead not found");
     }
-    
+
     const signedBody = `
-    Hi ${existingLead.name},<br><br>
+    Hi ${existingLead.name},<br>
 
     ${body}
 
     <p>
-      ${user.name}<br>
-      ${user.email}<br>
-      Royal Constructions Team
+      Thanks & Regards,
+      Royal Constructions team.
     </p>
     `;
 
+    // Generate a subject line using AI for the body
+    const aiSubject = await generateEmailSubject(signedBody);
     await sendEmail({
       to,
-      subject,
+      subject: `${aiSubject} - ${location}`,
       body: signedBody,
     });
     const strippedEmailBody = signedBody
@@ -1071,14 +1073,19 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
       .replace(/[ \t]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
-    const checksum = await generateEmailChecksum(subject, strippedEmailBody, process.env.BUSINESS_EMAIL ?? to, to, dataTimeFormat.format(new Date()));
+    const checksum = await generateEmailChecksum(
+      `${aiSubject} - ${location}`,
+      strippedEmailBody,
+      process.env.BUSINESS_EMAIL ?? to,
+      to
+    );
     const emailRecord = await prisma.leadEmails.create({
       data: {
         leadId,
-        subject,
+        subject: `${aiSubject} - ${location}`,
         body: strippedEmailBody,
-        emailTo: to,
-        emailFrom: process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au',
+        emailTo: normalizeEmailAddress(to),
+        emailFrom: normalizeEmailAddress(process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'),
         checksum,
         sentAt: new Date(),
       },
