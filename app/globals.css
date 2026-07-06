@@ -159,6 +159,7 @@
 
   html {
     @apply h-full font-sans;
+    zoom: 0.8;
   }
 
   body {
