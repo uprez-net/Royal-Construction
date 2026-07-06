@@ -24,8 +24,6 @@ import { approveRequests } from "@/lib/store/slices/tradieApprovalSlice";
 
 import {
   AlertTriangle,
-  CalendarDays,
-  CircleDollarSign,
   Hammer,
   Loader2,
   User,
