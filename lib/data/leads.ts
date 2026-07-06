@@ -26,7 +26,8 @@ import {
 } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { sendEmail } from "../azureClient";
-import { generateEmailChecksum, generateEmailSubject } from "@/utils/generator";
+import { generateEmailChecksum } from "@/utils/generator";
+import { generateEmailSubject } from "@/utils/generate-email-subject";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
