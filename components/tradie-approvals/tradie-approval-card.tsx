@@ -146,18 +146,20 @@ export function ApprovalCard({
       className={cn(
         "group cursor-pointer rounded-xl border bg-card p-4 transition-all hover:shadow-md",
         selected && "ring-2 ring-primary",
+        disabled || status !== TradieApprovalStatus.PENDING
+          ? "opacity-50"
+          : "cursor-pointer",
       )}
     >
       <div className="flex gap-4">
-        {onSelect && (
-          <input
-            type="checkbox"
-            checked={selected}
-            onClick={(e) => e.stopPropagation()}
-            onChange={onSelect}
-            className="mt-1"
-          />
-        )}
+        <input
+          type="checkbox"
+          checked={selected}
+          disabled={disabled || status !== TradieApprovalStatus.PENDING}
+          onClick={(e) => e.stopPropagation()}
+          onChange={onSelect}
+          className="mt-1"
+        />
 
         <div className="flex-1 space-y-4">
           {/* Header */}
@@ -248,23 +250,13 @@ export function ApprovalCard({
                 <Button
                   size="sm"
                   variant="destructive"
-                  disabled={disabled}
                   onClick={(e) => {
                     e.stopPropagation();
                     onReject();
                   }}
                 >
-                  {disabled ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Rejecting...
-                    </>
-                  ) : (
-                    <>
-                      <X className="mr-1 h-4 w-4" />
-                      Reject
-                    </>
-                  )}
+                  <X className="mr-1 h-4 w-4" />
+                  Reject
                 </Button>
               </div>
             )}

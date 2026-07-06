@@ -25,6 +25,7 @@ export type ModalType =
   | "priceChangeTradie"
   | "adminApproval"
   | "approvalDetails"
+  | "rejectTradieApprovals"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;
