@@ -526,8 +526,8 @@ export function stripHtml(html: string): string {
  * Extracts the visible user-written message from a raw email body.
  *
  * Cleans email content before displaying it in a chat/message interface by
- * removing transport metadata, quoted replies, forwarding blocks, signatures,
- * MIME artifacts, and common email client footers.
+ * removing transport metadata, quoted replies, forwarding blocks, greetings,
+ * signature blocks, MIME artifacts, and common email client footers.
  *
  * Handles:
  * - HTML tags and entities.
@@ -535,8 +535,12 @@ export function stripHtml(html: string): string {
  * - Outlook/Gmail reply headers.
  * - Forwarded message blocks.
  * - Previous conversation threads.
+ * - Leading greetings ("Hi Name,").
+ * - Trailing signature blocks: sign-off words ("Regards", "Thanks", ...),
+ *   and any trailing paragraph containing an email address, a name, a
+ *   job title, or a company/team name — even when no sign-off word is
+ *   present.
  * - Mobile signatures ("Sent from my iPhone", etc.).
- * - Common business email signatures.
  *
  * @param body - Raw email body received from the email provider.
  *
@@ -545,34 +549,44 @@ export function stripHtml(html: string): string {
  * @example
  * ```ts
  * stripEmailBody(`
- * Hi John,
+ * Hi Khushi Singh,
  *
- * Can you send the quote?
+ * Price Change Discussion Required
  *
- * Regards,
- * Alex
- *
- * From: someone@example.com
- * Sent: Monday...
+ * Khushi Singh
+ * khushisingh2104@gmail.com
+ * Royal Constructions Team
  * `)
+ * // "Price Change Discussion Required"
  *
- * // "Hi John,\n\nCan you send the quote?"
+ * stripEmailBody(`
+ * Hi Khushi
+ *
+ * I am ready for discussion please book an appointment with guri and let me know.
+ *
+ * Regards
+ * Khushi
+ * `)
+ * // "I am ready for discussion please book an appointment with guri and let me know."
  * ```
  */
 export function stripEmailBody(body: string): string {
   if (!body) return "";
-
   let cleaned = body;
 
-  // Convert common HTML formatting into text
+  // Normalize line endings early so line-anchored regexes behave consistently.
+  cleaned = cleaned.replace(/\r\n/g, "\n");
+
+  // Convert common HTML formatting into text. Block-level closing tags
+  // become a blank line (paragraph break) rather than a single newline, so
+  // downstream paragraph-based signature detection can tell paragraphs
+  // apart; <br> stays a single line break within a paragraph.
   cleaned = cleaned
     .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
-    .replace(/<\/div>/gi, "\n");
-
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n\n");
   // Remove HTML tags
   cleaned = cleaned.replace(/<[^>]+>/g, "");
-
   // Decode common HTML entities
   cleaned = cleaned
     .replace(/&nbsp;/gi, " ")
@@ -587,33 +601,20 @@ export function stripEmailBody(body: string): string {
     /^(content-type|content-transfer-encoding|mime-version|boundary|message-id):.*$/gim,
     ""
   );
-
-  // Remove MIME separators
-  cleaned = cleaned.replace(
-    /^--[a-z0-9=_\-]+.*$/gim,
-    ""
-  );
+  // Remove MIME separators (e.g. "--boundary123--"). Anchored so it only
+  // matches lines that ARE the separator, not marker lines that happen to
+  // start with dashes and contain other words (like a forwarded-message
+  // marker "---------- Forwarded message ----------").
+  cleaned = cleaned.replace(/^--[a-z0-9=_-]+--?\s*$/gim, "");
 
   // Remove forwarded emails
-  cleaned = cleaned.split(
-    /(-{2,}\s*forwarded message\s*-{2,})/i
-  )[0];
-
+  cleaned = cleaned.split(/-{2,}\s*forwarded message\s*-{2,}/i)[0];
   // Remove Outlook reply chains
-  cleaned = cleaned.split(
-    /\n\s*from:\s.*\n\s*(sent|date):\s/im
-  )[0];
-
+  cleaned = cleaned.split(/\n\s*from:\s.*\n\s*(sent|date):\s/im)[0];
   // Remove Gmail quoted replies
-  cleaned = cleaned.split(
-    /\n\s*on\s.+wrote:\s*$/im
-  )[0];
-
+  cleaned = cleaned.split(/\n\s*on\s.+wrote:\s*$/im)[0];
   // Remove common email headers
-  cleaned = cleaned.replace(
-    /^(from|to|cc|bcc|sent|date|subject):.*$/gim,
-    ""
-  );
+  cleaned = cleaned.replace(/^(from|to|cc|bcc|sent|date|subject):.*$/gim, "");
 
   // Remove mobile signatures
   cleaned = cleaned.replace(
@@ -621,14 +622,47 @@ export function stripEmailBody(body: string): string {
     ""
   );
 
-  // Remove common signatures
-  cleaned = cleaned.split(
-    /\n(--|thanks,|thank you,|regards,|best regards,|kind regards,|cheers,)\s*$/im
-  )[0];
+  // Remove a leading greeting line, e.g. "Hi Khushi Singh," / "Hello John" /
+  // plain "Hi," with no name.
+  cleaned = cleaned.replace(
+    /^\s*(hi|hello|hey|dear)(?:\s+[a-z][a-z .'-]{0,40})?,?\s*\n+/i,
+    ""
+  );
+
+  cleaned = cleaned.trim();
+
+  // Split into paragraphs (blocks separated by one or more blank lines) and
+  // strip trailing paragraphs that look like a signature block: a sign-off
+  // word ("Regards", "Thanks", ...), or a short block containing an email
+  // address / phone number, since real sentences don't look like that.
+  const SIGNOFF_WORD =
+    /^(regards|best regards|kind regards|warm regards|many thanks|thanks|thank you|cheers|sincerely|best|yours( truly| sincerely)?)\b/i;
+  const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+  const PHONE_RE = /(\+?\d[\d .-]{7,}\d)/;
+
+  const isSignatureParagraph = (p: string): boolean => {
+    const trimmed = p.trim();
+    if (!trimmed) return true;
+    if (SIGNOFF_WORD.test(trimmed)) return true;
+    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+    // Short block (<=4 lines) with no normal sentence punctuation, and
+    // containing contact info (email/phone) -> treat as a signature block
+    // (name, title, company, contact details).
+    const looksLikeContactBlock =
+      lines.length <= 4 &&
+      (EMAIL_RE.test(trimmed) || PHONE_RE.test(trimmed)) &&
+      !/[.?!]\s*$/.test(lines[lines.length - 1] || "");
+    return looksLikeContactBlock;
+  };
+
+  const paragraphs = cleaned.split(/\n\s*\n/).filter((p) => p.trim() !== "");
+  while (paragraphs.length > 1 && isSignatureParagraph(paragraphs[paragraphs.length - 1])) {
+    paragraphs.pop();
+  }
+  cleaned = paragraphs.join("\n\n");
 
   // Normalize whitespace
   cleaned = cleaned
-    .replace(/\r\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+/g, " ")
     .trim();

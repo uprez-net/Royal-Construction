@@ -16,11 +16,11 @@ interface LeadEmailSectionProps {
   leadEmail: string;
   projectType: string;
   location: string;
+  isFullScreen?: boolean;
   appendEmailToLead: (leadId: number, email: LeadEmails) => void;
 }
 
 const ROYAL_DOMAIN = "@royalconstructions.com.au";
-
 
 export function LeadEmailSection({
   emails,
@@ -28,6 +28,7 @@ export function LeadEmailSection({
   leadEmail,
   projectType,
   location,
+  isFullScreen = false,
   appendEmailToLead,
 }: LeadEmailSectionProps) {
   const [replyTarget, setReplyTarget] = useState<LeadEmails | null>(null);
@@ -47,7 +48,10 @@ export function LeadEmailSection({
   }, [orderedEmails.length]);
 
   return (
-    <Card className="gap-0 overflow-hidden py-0" key={`${emails.length}-${leadId}`}>
+    <Card
+      className="gap-0 h-full overflow-hidden py-0"
+      key={`${emails.length}-${leadId}`}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b py-3">
         <div className="flex items-center gap-2">
           <Mail className="size-4 text-primary" />
@@ -73,7 +77,10 @@ export function LeadEmailSection({
             </p>
           </div>
         ) : (
-          <ScrollArea className="h-72 px-4" key={orderedEmails.length}>
+          <ScrollArea
+            className={cn("px-4", isFullScreen ? "h-[65vh]" : "h-72")}
+            key={orderedEmails.length}
+          >
             <div className="flex flex-col py-4">
               {orderedEmails.map((email, index) => {
                 const isSent = email.emailFrom.includes(ROYAL_DOMAIN);
