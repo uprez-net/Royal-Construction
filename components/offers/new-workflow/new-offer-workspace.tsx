@@ -37,11 +37,20 @@ import {
   type RateCardProduct,
   type RateCardTier,
 } from "@/lib/offer/workspace-pricing";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { OfferStatus } from "@prisma/client";
+import {
+  loadActiveOfferWorkspace,
+  saveOfferWorkspace,
+  transitionOfferStatus,
+} from "@/lib/data/offer-workspace";
+import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
 import { OfferWorkspaceScreen } from "./offer-workspace-screen";
 
-export function NewOfferWorkspace() {
+// Embed with a leadId to persist to the DB (ADR 0002). The standalone
+// /offers/new-workflow demo route passes none and stays in-memory.
+export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [job, setJob] = useState<OfferWorkspaceJob>(INITIAL_OFFER_JOB);
   const [lines, setLines] =
     useState<readonly OfferWorkspaceCostLine[]>(INITIAL_COST_LINES);
@@ -218,6 +227,161 @@ export function NewOfferWorkspace() {
     setLines((current) => current.filter((line) => line.id !== lineId));
   }
 
+  // ─── DB persistence (ADR 0002); no-op without a leadId ───
+  const snapshot = useMemo<OfferWorkspaceSnapshot>(
+    () => ({
+      job,
+      lines,
+      allowances,
+      exclusions,
+      draft,
+      areaCalculator,
+      workspacePricingSettings,
+      legacyPricingSettings,
+      paymentSchedule,
+      rateCardProduct,
+      rateCardTier,
+      overrideReason,
+      selectedPriceInput,
+      standardPriceInput,
+      priceAdjustmentLabel,
+    }),
+    [
+      job,
+      lines,
+      allowances,
+      exclusions,
+      draft,
+      areaCalculator,
+      workspacePricingSettings,
+      legacyPricingSettings,
+      paymentSchedule,
+      rateCardProduct,
+      rateCardTier,
+      overrideReason,
+      selectedPriceInput,
+      standardPriceInput,
+      priceAdjustmentLabel,
+    ],
+  );
+
+  const offerIdRef = useRef<string | null>(null);
+  const stateVersionRef = useRef(0);
+  const lastSavedRef = useRef<string | null>(null);
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+
+  const hydrateSnapshot = useCallback((s: OfferWorkspaceSnapshot) => {
+    setJob(s.job);
+    setLines(s.lines);
+    setAllowances(s.allowances);
+    setExclusions(s.exclusions);
+    setDraft(s.draft);
+    setAreaCalculator(s.areaCalculator);
+    setWorkspacePricingSettings(s.workspacePricingSettings);
+    setLegacyPricingSettings(s.legacyPricingSettings);
+    setPaymentSchedule(s.paymentSchedule);
+    setRateCardProduct(s.rateCardProduct);
+    setRateCardTier(s.rateCardTier);
+    setOverrideReason(s.overrideReason);
+    setSelectedPriceInput(s.selectedPriceInput);
+    setStandardPriceInput(s.standardPriceInput);
+    setPriceAdjustmentLabel(s.priceAdjustmentLabel);
+  }, []);
+
+  // Load the active offer for the lead on mount.
+  useEffect(() => {
+    if (leadId === undefined) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const loaded = await loadActiveOfferWorkspace(leadId);
+      if (cancelled) {
+        return;
+      }
+      offerIdRef.current = loaded.offerId;
+      stateVersionRef.current = loaded.stateVersion;
+      setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+      if (loaded.snapshot) {
+        hydrateSnapshot(loaded.snapshot);
+        lastSavedRef.current = JSON.stringify(loaded.snapshot);
+      } else {
+        lastSavedRef.current = JSON.stringify(snapshotRef.current);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId, hydrateSnapshot]);
+
+  // Debounced autosave with optimistic concurrency, while the offer is editable.
+  useEffect(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null) {
+      return;
+    }
+    if (status !== "pending" && status !== "sent") {
+      return; // frozen once agreed
+    }
+    const currentJson = JSON.stringify(snapshot);
+    if (currentJson === lastSavedRef.current) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      void (async () => {
+        const result = await saveOfferWorkspace({
+          offerId,
+          expectedStateVersion: stateVersionRef.current,
+          snapshot,
+        });
+        if (result.ok) {
+          stateVersionRef.current = result.stateVersion;
+          lastSavedRef.current = currentJson;
+        } else if (result.reason === "stale") {
+          const loaded = await loadActiveOfferWorkspace(leadId);
+          offerIdRef.current = loaded.offerId;
+          stateVersionRef.current = loaded.stateVersion;
+          if (loaded.snapshot) {
+            hydrateSnapshot(loaded.snapshot);
+            lastSavedRef.current = JSON.stringify(loaded.snapshot);
+          }
+        }
+      })();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [snapshot, status, leadId, hydrateSnapshot]);
+
+  // Persist a lifecycle transition (flushing the latest state first so AGREED
+  // freezes the correct snapshot), then update the UI.
+  const transition = useCallback(
+    (next: OfferWorkspaceStatus) => {
+      const offerId = offerIdRef.current;
+      if (leadId !== undefined && offerId !== null) {
+        void (async () => {
+          const currentJson = JSON.stringify(snapshotRef.current);
+          if (currentJson !== lastSavedRef.current) {
+            const saved = await saveOfferWorkspace({
+              offerId,
+              expectedStateVersion: stateVersionRef.current,
+              snapshot: snapshotRef.current,
+            });
+            if (saved.ok) {
+              stateVersionRef.current = saved.stateVersion;
+              lastSavedRef.current = currentJson;
+            }
+          }
+          await transitionOfferStatus({
+            offerId,
+            toStatus: next.toUpperCase() as OfferStatus,
+          });
+        })();
+      }
+      setStatus(next);
+    },
+    [leadId],
+  );
+
   return (
     <>
       <OfferWorkspaceScreen
@@ -252,18 +416,18 @@ export function NewOfferWorkspace() {
         onJobChange={updateJob}
         onLegacyPricingSettingsChange={updateLegacyPricingSettings}
         onLineChange={updateLine}
-        onMarkSent={() => setStatus("sent")}
-        onMarkAgreed={() => setStatus("agreed")}
-        onMarkRejected={() => setStatus("rejected")}
-        onGenerateTender={() => setStatus("tender_draft")}
-        onSendTender={() => setStatus("tender_sent")}
-        onRecallTender={() => setStatus("tender_draft")}
-        onMarkTenderSigned={() => setStatus("tender_signed")}
-        onGenerateContract={() => setStatus("contract_draft")}
-        onSendContract={() => setStatus("contract_sent")}
-        onRecallContract={() => setStatus("contract_draft")}
-        onMarkContractSigned={() => setStatus("contract_signed")}
-        onCreateProject={() => setStatus("project")}
+        onMarkSent={() => transition("sent")}
+        onMarkAgreed={() => transition("agreed")}
+        onMarkRejected={() => transition("rejected")}
+        onGenerateTender={() => transition("tender_draft")}
+        onSendTender={() => transition("tender_sent")}
+        onRecallTender={() => transition("tender_draft")}
+        onMarkTenderSigned={() => transition("tender_signed")}
+        onGenerateContract={() => transition("contract_draft")}
+        onSendContract={() => transition("contract_sent")}
+        onRecallContract={() => transition("contract_draft")}
+        onMarkContractSigned={() => transition("contract_signed")}
+        onCreateProject={() => transition("project")}
         onOverrideReasonChange={setOverrideReason}
         onPaymentScheduleChange={setPaymentSchedule}
         onPriceAdjustmentLabelChange={setPriceAdjustmentLabel}
