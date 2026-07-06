@@ -25,8 +25,10 @@ const fetchAdditionalOfferInfoTool = tool({
     }),
     execute: async ({ leadId }) => {
         try {
-            const offerData = await prisma.offer.findUnique({
-                where: { leadId },
+            // A Lead can now have many offer revisions; use the active one.
+            const offerData = await prisma.offer.findFirst({
+                where: { leadId, isActive: true },
+                orderBy: { createdAt: "desc" },
                 include: {
                     offerItems: true,
                     offerFiles: true,

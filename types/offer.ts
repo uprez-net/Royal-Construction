@@ -51,5 +51,14 @@ export const OfferStatusLabels: Record<OfferStatus, string> = {
     PENDING: "Pending",
     ACCEPTED: "Approved",
     REJECTED: "Rejected",
-    SENT: "Sent"
+    SENT: "Sent",
+    AGREED: "Agreed",
+    TENDER_DRAFT: "Tender draft",
+    TENDER_SENT: "Tender sent",
+    TENDER_SIGNED: "Tender signed",
+    CONTRACT_DRAFT: "Contract draft",
+    CONTRACT_SENT: "Contract sent",
+    CONTRACT_SIGNED: "Contract signed",
+    PROJECT: "Project",
+    SUPERSEDED: "Superseded",
 };

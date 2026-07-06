@@ -81,8 +81,10 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
 
 export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFiles | null> {
     try {
-        const offerData = await prisma.offer.findUnique({
-            where: { leadId: id },
+        // A Lead can now have many offer revisions; fetch the active one.
+        const offerData = await prisma.offer.findFirst({
+            where: { leadId: id, isActive: true },
+            orderBy: { createdAt: "desc" },
             include: {
                 lead: true,
                 offerItems: true,
@@ -344,13 +346,34 @@ const OFFER_TO_LEAD_STATUS_UPDATE_MAP: Record<OfferStatus, LeadStage> = {
     SENT: "NEGOTIATING",
     ACCEPTED: "WON",
     REJECTED: "LOST",
+    // Once scope + price are agreed the deal is effectively won.
+    AGREED: "WON",
+    TENDER_DRAFT: "WON",
+    TENDER_SENT: "WON",
+    TENDER_SIGNED: "WON",
+    CONTRACT_DRAFT: "WON",
+    CONTRACT_SENT: "WON",
+    CONTRACT_SIGNED: "WON",
+    PROJECT: "WON",
+    SUPERSEDED: "NEGOTIATING",
 }
 
+// Legacy server-side transitions; the new lifecycle states progress via the
+// offer workspace's own actions, so they are terminal here.
 const OFFER_STATE_MACHINE: Record<OfferStatus, OfferStatus[]> = {
   PENDING: ["SENT"],
   SENT: ["ACCEPTED", "REJECTED"],
   ACCEPTED: [],
   REJECTED: ["PENDING"],
+  AGREED: [],
+  TENDER_DRAFT: [],
+  TENDER_SENT: [],
+  TENDER_SIGNED: [],
+  CONTRACT_DRAFT: [],
+  CONTRACT_SENT: [],
+  CONTRACT_SIGNED: [],
+  PROJECT: [],
+  SUPERSEDED: [],
 };
 /**
  * Updates the status of an offer and transitions the associated lead stage accordingly

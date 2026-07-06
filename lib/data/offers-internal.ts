@@ -42,23 +42,28 @@ export const createOrUpdateOfferInternal = async ({
         const version = await tx.offerFile.count({
             where: { offer: { leadId } },
         }) + 1;
-        const newOffer = await tx.offer.upsert({
-            where: { leadId },
-            update: {
-                amount: new Prisma.Decimal(amount),
-                gstAmount: new Prisma.Decimal(gstAmount),
-                totalAmount: new Prisma.Decimal(totalAmount),
-            },
-            create: {
-                leadId,
-                amount: new Prisma.Decimal(amount),
-                gstAmount: new Prisma.Decimal(gstAmount),
-                totalAmount: new Prisma.Decimal(totalAmount),
-            },
-            include: {
-                lead: true,
-            }
+        // A Lead can now have many offer revisions; update the active one or
+        // create the first. (Replaces upsert-by-leadId, which required a
+        // unique leadId that no longer exists.)
+        const existingOffer = await tx.offer.findFirst({
+            where: { leadId, isActive: true },
+            orderBy: { createdAt: "desc" },
         });
+        const offerAmounts = {
+            amount: new Prisma.Decimal(amount),
+            gstAmount: new Prisma.Decimal(gstAmount),
+            totalAmount: new Prisma.Decimal(totalAmount),
+        };
+        const newOffer = existingOffer
+            ? await tx.offer.update({
+                where: { id: existingOffer.id },
+                data: offerAmounts,
+                include: { lead: true },
+            })
+            : await tx.offer.create({
+                data: { leadId, ...offerAmounts },
+                include: { lead: true },
+            });
 
         const newOfferFile = await tx.offerFile.create({
             data: {

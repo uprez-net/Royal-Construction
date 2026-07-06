@@ -26,15 +26,32 @@ import {
 import { cn } from "@/lib/utils";
 import { OfferStatusLabels } from "@/types/offer";
 
+const YELLOW =
+  "border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200 hover:shadow-yellow-300/50";
+const BLUE =
+  "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200 hover:shadow-blue-300/50";
+const GREEN =
+  "border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200 hover:shadow-green-300/50";
+const RED =
+  "border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200 hover:shadow-red-300/50";
+const GRAY =
+  "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 hover:shadow-slate-300/50";
+
 const statusStyle: Record<OfferStatus, string> = {
-  PENDING:
-    "border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200 hover:shadow-yellow-300/50",
-  SENT:
-    "border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200 hover:shadow-blue-300/50",
-  ACCEPTED:
-    "border-green-300 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200 hover:shadow-green-300/50",
-  REJECTED:
-    "border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200 hover:shadow-red-300/50",
+  PENDING: YELLOW,
+  SENT: BLUE,
+  ACCEPTED: GREEN,
+  REJECTED: RED,
+  // New lifecycle states (driven by the offer workspace, not this badge)
+  AGREED: GREEN,
+  TENDER_DRAFT: YELLOW,
+  TENDER_SENT: BLUE,
+  TENDER_SIGNED: GREEN,
+  CONTRACT_DRAFT: YELLOW,
+  CONTRACT_SENT: BLUE,
+  CONTRACT_SIGNED: GREEN,
+  PROJECT: GREEN,
+  SUPERSEDED: GRAY,
 };
 
 const StatusIcon: Record<OfferStatus, LucideIcon> = {
@@ -42,13 +59,33 @@ const StatusIcon: Record<OfferStatus, LucideIcon> = {
   SENT: Send,
   ACCEPTED: CheckCircle,
   REJECTED: XCircle,
+  AGREED: CheckCircle,
+  TENDER_DRAFT: Hourglass,
+  TENDER_SENT: Send,
+  TENDER_SIGNED: CheckCircle,
+  CONTRACT_DRAFT: Hourglass,
+  CONTRACT_SENT: Send,
+  CONTRACT_SIGNED: CheckCircle,
+  PROJECT: CheckCircle,
+  SUPERSEDED: XCircle,
 };
 
+// This legacy leads badge does not drive the new lifecycle; those states are
+// terminal here and progress via the offer workspace instead.
 const OFFER_STATE_MACHINE: Record<OfferStatus, OfferStatus[]> = {
   PENDING: ["SENT"],
   SENT: ["ACCEPTED", "REJECTED"],
   ACCEPTED: [],
   REJECTED: ["PENDING"],
+  AGREED: [],
+  TENDER_DRAFT: [],
+  TENDER_SENT: [],
+  TENDER_SIGNED: [],
+  CONTRACT_DRAFT: [],
+  CONTRACT_SENT: [],
+  CONTRACT_SIGNED: [],
+  PROJECT: [],
+  SUPERSEDED: [],
 };
 
 interface OfferStatusBadgeProps {
