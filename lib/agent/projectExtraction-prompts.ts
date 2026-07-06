@@ -37,10 +37,10 @@ Contract document:
 - File: ${documents.contract.fileName}
 - URL: ${documents.contract.url}
 
-Tender OCR summary:
+Tender OCR Result:
 ${tenderSummary}
 
-Contract OCR summary:
+Contract OCR Result:
 ${contractSummary}
 
 Fill every field you can verify. Use null for unknown numeric values and empty strings for unknown text values.
