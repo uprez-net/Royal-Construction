@@ -62,35 +62,24 @@ function parseDateOnlyInput(value: string): Date | null {
 
 const nullableDateInput = z.preprocess((value) => {
   if (value === null) return null;
-  if (value instanceof Date) return value;
+  if (value instanceof Date) return value.toISOString();
   if (typeof value !== "string") return value;
 
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
 
   const dateOnly = parseDateOnlyInput(trimmed);
-  if (dateOnly) return dateOnly;
+  if (dateOnly) return dateOnly.toISOString();
 
   if (!isoDateTimeInput.safeParse(trimmed).success) {
     return value;
   }
 
-  return new Date(trimmed);
-}, z.date().nullable());
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return value;
 
-// const dateInputSchema = z.preprocess((value) => {
-//   if (typeof value !== "string" || value.trim() === "") {
-//     return null;
-//   }
-
-//   const parsed = new Date(value);
-
-//   if (Number.isNaN(parsed.getTime())) {
-//     return null;
-//   }
-
-//   return parsed;
-// }, z.date().nullable());
+  return parsed.toISOString();
+}, z.iso.datetime().nullable());
 
 const typeSchema = z.preprocess((value) => {
   if (Array.isArray(value)) {
@@ -171,7 +160,7 @@ export const historySchema = z.object({
     .enum(["system", "call", "email", "referral"])
     .optional()
     .default("system"),
-  actionDate: z.iso.datetime().describe("Action date").optional(),
+  actionDate: z.iso.datetime().nullable().describe("Action date").optional(),
 });
 
 export const updateLeadSchema = z.object({
@@ -272,6 +261,7 @@ export const leadLookupParamSchema = z.object({
   q: z.string().trim().default(""),
   status: z.string().optional(),
   filterTiming: z.string().optional(),
+  filterLeadsWithoutProject: z.string().optional(),
 })
 
 export const leadStatusSchema = z.enum(leadStages);
