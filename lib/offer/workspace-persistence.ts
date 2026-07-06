@@ -13,6 +13,7 @@ import type {
   RateCardTier,
 } from "./workspace-pricing";
 import type { OfferPaymentScheduleRow } from "./workspace-payment-schedule";
+import type { OfferImageMap } from "./workspace-images";
 
 // The bundle of workspace state we persist (everything except transient status
 // and the ephemeral import result). Mirrors the container's useState set.
@@ -32,6 +33,7 @@ export type OfferWorkspaceSnapshot = {
   readonly selectedPriceInput: string;
   readonly standardPriceInput: string;
   readonly priceAdjustmentLabel: string;
+  readonly images: OfferImageMap;
 };
 
 export const CURRENT_WORKSPACE_SCHEMA_VERSION = 1 as const;
@@ -132,6 +134,7 @@ const workspaceStateV1Schema = z.object({
   priceAdjustmentLabel: z.string(),
   selectedPriceCents: moneyCents,
   standardPriceCents: moneyCents,
+  images: z.record(z.string(), z.string()).default({}),
 });
 
 export type PersistedOfferWorkspaceState = z.infer<
@@ -204,6 +207,7 @@ export function serializeWorkspace(
     standardPriceCents: dollarsToCents(
       parseDollarInput(snapshot.standardPriceInput),
     ),
+    images: { ...snapshot.images },
   };
 }
 
@@ -259,6 +263,7 @@ export function deserializeWorkspace(
     selectedPriceInput: String(centsToDollars(persisted.selectedPriceCents)),
     standardPriceInput: String(centsToDollars(persisted.standardPriceCents)),
     priceAdjustmentLabel: persisted.priceAdjustmentLabel,
+    images: persisted.images as OfferImageMap,
   };
 }
 

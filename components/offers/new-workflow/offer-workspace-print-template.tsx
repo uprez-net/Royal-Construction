@@ -17,6 +17,10 @@ import {
   type OfferInclusionRow,
 } from "@/lib/offer/workspace-proposal-content";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
+import {
+  OFFER_IMAGE_SLOTS,
+  type OfferImageMap,
+} from "@/lib/offer/workspace-images";
 import type { ReactElement } from "react";
 import { formatCurrency, formatPercent } from "./offer-workspace-format";
 import {
@@ -39,6 +43,7 @@ type OfferWorkspacePrintTemplateProps = {
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly priceAdjustmentLabel: string;
   readonly standardPriceIncGst: number | null;
+  readonly images: OfferImageMap;
 };
 
 const INCLUSIONS_ROWS_PER_PAGE = 12;
@@ -64,13 +69,19 @@ export function OfferWorkspacePrintTemplate(
   // footer "Page N of M" stays correct as pages are added or removed.
   const pages: Array<(n: number, total: number) => ReactElement> = [
     (n, total) => (
-      <PrintCoverPage key="cover" data={data} job={props.job} footer={foot(data, n, total)} />
+      <PrintCoverPage
+        key="cover"
+        data={data}
+        job={props.job}
+        heroSrc={props.images.hero}
+        footer={foot(data, n, total)}
+      />
     ),
     (n, total) => (
       <PrintWelcomePage key="welcome" job={props.job} footer={foot(data, n, total)} />
     ),
     (n, total) => (
-      <PrintGalleryPage key="gallery" footer={foot(data, n, total)} />
+      <PrintGalleryPage key="gallery" images={props.images} footer={foot(data, n, total)} />
     ),
     (n, total) => (
       <PrintSnapshotPage key="snapshot" data={data} job={props.job} footer={foot(data, n, total)} />
@@ -124,10 +135,12 @@ function foot(
 function PrintCoverPage({
   data,
   job,
+  heroSrc,
   footer,
 }: {
   readonly data: ReturnType<typeof buildOfferPrintTemplateData>;
   readonly job: OfferWorkspaceJob;
+  readonly heroSrc?: string;
   readonly footer: string;
 }) {
   return (
@@ -135,6 +148,7 @@ function PrintCoverPage({
       <ProposalMasthead />
       <div className="mt-6">
         <ImageSlot
+          src={heroSrc}
           label="Hero — completed home / render"
           heightClass="h-[95mm]"
         />
@@ -200,7 +214,14 @@ function PrintWelcomePage({
   );
 }
 
-function PrintGalleryPage({ footer }: { readonly footer: string }) {
+function PrintGalleryPage({
+  images,
+  footer,
+}: {
+  readonly images: OfferImageMap;
+  readonly footer: string;
+}) {
+  const gallerySlots = OFFER_IMAGE_SLOTS.filter((slot) => slot.key !== "hero");
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
@@ -216,12 +237,15 @@ function PrintGalleryPage({ footer }: { readonly footer: string }) {
         </p>
       </PrintSection>
       <div className="mt-6 grid grid-cols-2 gap-4">
-        <ImageSlot label="Exterior — full render facade" caption="Completed facade" heightClass="h-[46mm]" />
-        <ImageSlot label="3D perspective — render" caption="Architect render" heightClass="h-[46mm]" />
-        <ImageSlot label="Kitchen & butler's pantry" caption="Shaker kitchen, stone island" heightClass="h-[46mm]" />
-        <ImageSlot label="Living & open plan" caption="Herringbone flooring" heightClass="h-[46mm]" />
-        <ImageSlot label="Master bedroom & ensuite" caption="Freestanding bath, FTC tiles" heightClass="h-[46mm]" />
-        <ImageSlot label="Second bathroom" caption="Stone vanity, arched mirrors" heightClass="h-[46mm]" />
+        {gallerySlots.map((slot) => (
+          <ImageSlot
+            key={slot.key}
+            src={images[slot.key]}
+            label={slot.label}
+            caption={slot.caption}
+            heightClass="h-[46mm]"
+          />
+        ))}
       </div>
     </PrintPage>
   );

@@ -38,6 +38,11 @@ import {
 import { PricingDecisionPanel } from "./offer-workspace-pricing-decision";
 import { RateCardPanel } from "./offer-workspace-rate-card";
 import { ScopePanel } from "./offer-workspace-scope";
+import { OfferWorkspaceImages } from "./offer-workspace-images";
+import type {
+  OfferImageMap,
+  OfferImageSlotKey,
+} from "@/lib/offer/workspace-images";
 import { SendNegotiatePanel } from "./offer-workspace-send-negotiate";
 import {
   OfferPhaseGate,
@@ -52,8 +57,10 @@ type OfferWorkspaceScreenProps = {
   readonly directTotal: number;
   readonly draft: OfferDocumentDraft;
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
+  readonly images: OfferImageMap;
   readonly importResult: OfferWorkbookImportResult | null;
   readonly job: OfferWorkspaceJob;
+  readonly leadId?: number;
   readonly legacyPricingSettings: LegacyWorkbookPricingSettings;
   readonly lines: readonly OfferWorkspaceCostLine[];
   readonly overrideReason: string;
@@ -75,6 +82,10 @@ type OfferWorkspaceScreenProps = {
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
   readonly onDownloadOffer: () => void;
   readonly onDraftChange: (patch: Partial<OfferDocumentDraft>) => void;
+  readonly onImageChange: (
+    key: OfferImageSlotKey,
+    url: string | null,
+  ) => void;
   readonly onExclusionChange: (
     itemId: string,
     patch: Partial<OfferWorkspaceScopeItem>,
@@ -119,8 +130,10 @@ export function OfferWorkspaceScreen({
   directTotal,
   draft,
   exclusions,
+  images,
   importResult,
   job,
+  leadId,
   legacyPricingSettings,
   lines,
   overrideReason,
@@ -139,6 +152,7 @@ export function OfferWorkspaceScreen({
   onAreaChange,
   onDownloadOffer,
   onDraftChange,
+  onImageChange,
   onExclusionChange,
   onImported,
   onJobChange,
@@ -266,7 +280,14 @@ export function OfferWorkspaceScreen({
             phase="Offer"
             title="Offer document"
           >
-            <OfferDocumentEditor draft={draft} onDraftChange={onDraftChange} />
+            <div className="space-y-6">
+              <OfferDocumentEditor draft={draft} onDraftChange={onDraftChange} />
+              <OfferWorkspaceImages
+                images={images}
+                onImageChange={onImageChange}
+                leadId={leadId}
+              />
+            </div>
           </OfferStepSection>
 
           <OfferStepSection

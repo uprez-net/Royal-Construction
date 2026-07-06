@@ -45,6 +45,12 @@ import {
   transitionOfferStatus,
 } from "@/lib/data/offer-workspace";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
+import {
+  EMPTY_OFFER_IMAGES,
+  setOfferImage,
+  type OfferImageMap,
+  type OfferImageSlotKey,
+} from "@/lib/offer/workspace-images";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
 import { OfferWorkspaceScreen } from "./offer-workspace-screen";
 
@@ -81,7 +87,12 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [rateCardTier, setRateCardTier] = useState<RateCardTier>("MID");
   const [paymentSchedule, setPaymentSchedule] =
     useState<readonly OfferPaymentScheduleRow[]>(INITIAL_PAYMENT_SCHEDULE);
+  const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
   const manualLineCounterRef = useRef(0);
+
+  function updateImage(key: OfferImageSlotKey, url: string | null) {
+    setImages((current) => setOfferImage(current, key, url));
+  }
 
   const totalAreaSqm = useMemo(
     () => getAreaCalculatorTotalSqm(areaCalculator),
@@ -245,6 +256,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       selectedPriceInput,
       standardPriceInput,
       priceAdjustmentLabel,
+      images,
     }),
     [
       job,
@@ -262,6 +274,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       selectedPriceInput,
       standardPriceInput,
       priceAdjustmentLabel,
+      images,
     ],
   );
 
@@ -287,6 +300,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setSelectedPriceInput(s.selectedPriceInput);
     setStandardPriceInput(s.standardPriceInput);
     setPriceAdjustmentLabel(s.priceAdjustmentLabel);
+    setImages(s.images);
   }, []);
 
   // Load the active offer for the lead on mount.
@@ -391,8 +405,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         directTotal={directTotal}
         draft={draft}
         exclusions={exclusions}
+        images={images}
         importResult={importResult}
         job={job}
+        leadId={leadId}
         legacyPricingSettings={legacyPricingSettings}
         lines={lines}
         overrideReason={overrideReason}
@@ -412,6 +428,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         onDownloadOffer={() => window.print()}
         onDraftChange={updateDraft}
         onExclusionChange={updateExclusion}
+        onImageChange={updateImage}
         onImported={importWorkbook}
         onJobChange={updateJob}
         onLegacyPricingSettingsChange={updateLegacyPricingSettings}
@@ -442,6 +459,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         customerPrice={customerPrice}
         draft={draft}
         exclusions={exclusions}
+        images={images}
         job={job}
         lines={lines}
         paymentSchedule={paymentSchedule}
