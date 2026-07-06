@@ -1046,7 +1046,7 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
     if (!existingLead) {
       throw new Error("Lead not found");
     }
-    
+
     const signedBody = `
     Hi ${existingLead.name},<br><br>
 
@@ -1065,8 +1065,11 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
       body: signedBody,
     });
     const strippedEmailBody = signedBody
+      .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, (_, content) =>
+        content.replace(/<br\s*\/?>/gi, '')
+      )
       .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<\/p>/gi, '\n')
       .replace(/<[^>]*>/g, '')
       .replace(/[ \t]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
