@@ -521,3 +521,173 @@ export function stripHtml(html: string): string {
     .replace(/\s{2,}/g, ' ') // Collapse multiple spaces/newlines into one space
     .trim();
 }
+
+/**
+ * Extracts the visible user-written message from a raw email body.
+ *
+ * Cleans email content before displaying it in a chat/message interface by
+ * removing transport metadata, quoted replies, forwarding blocks, signatures,
+ * MIME artifacts, and common email client footers.
+ *
+ * Handles:
+ * - HTML tags and entities.
+ * - MIME boundaries and content headers.
+ * - Outlook/Gmail reply headers.
+ * - Forwarded message blocks.
+ * - Previous conversation threads.
+ * - Mobile signatures ("Sent from my iPhone", etc.).
+ * - Common business email signatures.
+ *
+ * @param body - Raw email body received from the email provider.
+ *
+ * @returns A cleaned plain-text email message suitable for UI display.
+ *
+ * @example
+ * ```ts
+ * stripEmailBody(`
+ * Hi John,
+ *
+ * Can you send the quote?
+ *
+ * Regards,
+ * Alex
+ *
+ * From: someone@example.com
+ * Sent: Monday...
+ * `)
+ *
+ * // "Hi John,\n\nCan you send the quote?"
+ * ```
+ */
+export function stripEmailBody(body: string): string {
+  if (!body) return "";
+
+  let cleaned = body;
+
+  // Convert common HTML formatting into text
+  cleaned = cleaned
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n");
+
+  // Remove HTML tags
+  cleaned = cleaned.replace(/<[^>]+>/g, "");
+
+  // Decode common HTML entities
+  cleaned = cleaned
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'");
+
+  // Remove MIME headers/artifacts
+  cleaned = cleaned.replace(
+    /^(content-type|content-transfer-encoding|mime-version|boundary|message-id):.*$/gim,
+    ""
+  );
+
+  // Remove MIME separators
+  cleaned = cleaned.replace(
+    /^--[a-z0-9=_\-]+.*$/gim,
+    ""
+  );
+
+  // Remove forwarded emails
+  cleaned = cleaned.split(
+    /(-{2,}\s*forwarded message\s*-{2,})/i
+  )[0];
+
+  // Remove Outlook reply chains
+  cleaned = cleaned.split(
+    /\n\s*from:\s.*\n\s*(sent|date):\s/im
+  )[0];
+
+  // Remove Gmail quoted replies
+  cleaned = cleaned.split(
+    /\n\s*on\s.+wrote:\s*$/im
+  )[0];
+
+  // Remove common email headers
+  cleaned = cleaned.replace(
+    /^(from|to|cc|bcc|sent|date|subject):.*$/gim,
+    ""
+  );
+
+  // Remove mobile signatures
+  cleaned = cleaned.replace(
+    /sent from my (iphone|ipad|android|mobile).*$/gim,
+    ""
+  );
+
+  // Remove common signatures
+  cleaned = cleaned.split(
+    /\n(--|thanks,|thank you,|regards,|best regards,|kind regards,|cheers,)\s*$/im
+  )[0];
+
+  // Normalize whitespace
+  cleaned = cleaned
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  return cleaned;
+}
+
+/**
+ * Normalizes email address strings into a canonical format.
+ *
+ * Converts email values from different clients/providers into a consistent
+ * lowercase email address suitable for comparison, hashing, and storage.
+ *
+ * Handles:
+ * - Outlook mailto wrappers.
+ * - Angle bracket formatted emails.
+ * - Display name formats.
+ * - Duplicate embedded email addresses.
+ * - Extra whitespace.
+ * - Casing differences.
+ *
+ * Supported examples:
+ * ```
+ * "John Doe <john@example.com>"
+ * -> "john@example.com"
+ *
+ * "<John@example.com<mailto:John@example.com>>"
+ * -> "john@example.com"
+ *
+ * "john@example.com<mailto:john@example.com>"
+ * -> "john@example.com"
+ * ```
+ *
+ * @param email - Raw email string from an email provider.
+ *
+ * @returns A normalized lowercase email address, or an empty string
+ * if no valid email address is found.
+ */
+export function normalizeEmailAddress(email: string): string {
+  if (!email) return "";
+
+  const normalized = email
+    .trim()
+    .toLowerCase()
+
+    // Remove mailto:
+    .replace(/mailto:/gi, "")
+
+    // Decode common html entities
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+
+    // Remove whitespace
+    .replace(/\s+/g, "");
+
+  // Extract first valid email occurrence
+  const match = normalized.match(
+    /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i
+  );
+
+  return match?.[0] ?? "";
+}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LeadEmails } from "@prisma/client";
-import { dataTimeFormat } from "@/utils/formatters";
+import { dataTimeFormat, stripEmailBody } from "@/utils/formatters";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -77,9 +77,7 @@ export function LeadEmailSection({
             <div className="flex flex-col py-4">
               {orderedEmails.map((email, index) => {
                 const isSent = email.emailFrom.includes(ROYAL_DOMAIN);
-                const plainBody = email.body
-                  .replace(/<br\s*\/?>/gi, "\n")
-                  .trim();
+                const plainBody = stripEmailBody(email.body);
                 console.log("Email body (Plain):\n", plainBody);
                 return (
                   <div
