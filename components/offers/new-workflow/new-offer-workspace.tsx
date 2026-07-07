@@ -48,6 +48,7 @@ import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import {
   EMPTY_OFFER_IMAGES,
   setOfferImage,
+  type OfferImage,
   type OfferImageMap,
   type OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
@@ -90,8 +91,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
   const manualLineCounterRef = useRef(0);
 
-  function updateImage(key: OfferImageSlotKey, url: string | null) {
-    setImages((current) => setOfferImage(current, key, url));
+  function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
+    setImages((current) => setOfferImage(current, key, image));
   }
 
   const totalAreaSqm = useMemo(

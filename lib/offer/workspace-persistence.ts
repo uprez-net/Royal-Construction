@@ -134,8 +134,34 @@ const workspaceStateV1Schema = z.object({
   priceAdjustmentLabel: z.string(),
   selectedPriceCents: moneyCents,
   standardPriceCents: moneyCents,
-  images: z.record(z.string(), z.string()).default({}),
+  images: z.preprocess(
+    coerceImages,
+    z.record(
+      z.string(),
+      z.object({
+        url: z.string(),
+        source: z.enum(["upload", "dropbox", "ai"]).default("upload"),
+      }),
+    ),
+  ),
 });
+
+// Coerce persisted image values to the {url, source} shape. Older offers stored
+// a bare URL string per slot; upgrade those to source "upload" on read.
+function coerceImages(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry === "string") {
+      out[key] = { url: entry, source: "upload" };
+    } else if (entry && typeof entry === "object" && "url" in entry) {
+      out[key] = entry;
+    }
+  }
+  return out;
+}
 
 export type PersistedOfferWorkspaceState = z.infer<
   typeof workspaceStateV1Schema

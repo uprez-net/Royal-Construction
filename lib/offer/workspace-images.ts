@@ -11,7 +11,16 @@ export type OfferImageSlotKey =
   | "bedroom"
   | "bathroom";
 
-export type OfferImageMap = Partial<Record<OfferImageSlotKey, string>>;
+// How an image was obtained. Drives honest captioning: "ai" images are never
+// presented as real completed work — they carry an indicative-concept label.
+export type OfferImageSource = "upload" | "dropbox" | "ai";
+
+export type OfferImage = {
+  readonly url: string;
+  readonly source: OfferImageSource;
+};
+
+export type OfferImageMap = Partial<Record<OfferImageSlotKey, OfferImage>>;
 
 export type OfferImageSlot = {
   readonly key: OfferImageSlotKey;
@@ -34,13 +43,18 @@ export const EMPTY_OFFER_IMAGES: OfferImageMap = {};
 export function setOfferImage(
   images: OfferImageMap,
   key: OfferImageSlotKey,
-  url: string | null,
+  image: OfferImage | null,
 ): OfferImageMap {
   const next = { ...images };
-  if (url) {
-    next[key] = url;
+  if (image) {
+    next[key] = image;
   } else {
     delete next[key];
   }
   return next;
+}
+
+// Human-readable caption suffix for a slot, honest about AI-generated concepts.
+export function offerImageCaption(base: string, source?: OfferImageSource): string {
+  return source === "ai" ? `${base} — AI concept, indicative only` : base;
 }

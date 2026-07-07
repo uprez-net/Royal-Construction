@@ -19,6 +19,7 @@ import {
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import {
   OFFER_IMAGE_SLOTS,
+  offerImageCaption,
   type OfferImageMap,
 } from "@/lib/offer/workspace-images";
 import type { ReactElement } from "react";
@@ -73,7 +74,12 @@ export function OfferWorkspacePrintTemplate(
         key="cover"
         data={data}
         job={props.job}
-        heroSrc={props.images.hero}
+        heroSrc={props.images.hero?.url}
+        heroCaption={
+          props.images.hero?.source === "ai"
+            ? "AI concept, indicative only"
+            : undefined
+        }
         footer={foot(data, n, total)}
       />
     ),
@@ -136,11 +142,13 @@ function PrintCoverPage({
   data,
   job,
   heroSrc,
+  heroCaption,
   footer,
 }: {
   readonly data: ReturnType<typeof buildOfferPrintTemplateData>;
   readonly job: OfferWorkspaceJob;
   readonly heroSrc?: string;
+  readonly heroCaption?: string;
   readonly footer: string;
 }) {
   return (
@@ -149,6 +157,7 @@ function PrintCoverPage({
       <div className="mt-6">
         <ImageSlot
           src={heroSrc}
+          caption={heroCaption}
           label="Hero — completed home / render"
           heightClass="h-[95mm]"
         />
@@ -240,9 +249,9 @@ function PrintGalleryPage({
         {gallerySlots.map((slot) => (
           <ImageSlot
             key={slot.key}
-            src={images[slot.key]}
+            src={images[slot.key]?.url}
             label={slot.label}
-            caption={slot.caption}
+            caption={offerImageCaption(slot.caption, images[slot.key]?.source)}
             heightClass="h-[46mm]"
           />
         ))}

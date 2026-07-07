@@ -7,8 +7,10 @@ import { v4 as uuidv4 } from "uuid";
 import { buildBlobPath } from "@/utils/formatters";
 import type { ClientPayload } from "@/utils/validators/files";
 import { importDropboxImage } from "@/lib/data/offer-image-import";
+import { generateOfferInspirationImage } from "@/lib/data/offer-image-ai";
 import {
   OFFER_IMAGE_SLOTS,
+  type OfferImage,
   type OfferImageMap,
   type OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
@@ -16,22 +18,48 @@ import { useDropboxChooser } from "./use-dropbox-chooser";
 
 type OfferWorkspaceImagesProps = {
   readonly images: OfferImageMap;
-  readonly onImageChange: (key: OfferImageSlotKey, url: string | null) => void;
+  readonly onImageChange: (
+    key: OfferImageSlotKey,
+    image: OfferImage | null,
+  ) => void;
   readonly leadId?: number;
+  readonly buildType: string;
 };
 
 export function OfferWorkspaceImages({
   images,
   onImageChange,
   leadId,
+  buildType,
 }: OfferWorkspaceImagesProps) {
   const [uploading, setUploading] = useState<
     Partial<Record<OfferImageSlotKey, boolean>>
   >({});
   const [error, setError] = useState<string | null>(null);
   const [dropboxBusy, setDropboxBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState<
+    Partial<Record<OfferImageSlotKey, boolean>>
+  >({});
   const { configured: dropboxConfigured, ready: dropboxReady, choose } =
     useDropboxChooser();
+
+  async function handleGenerate(key: OfferImageSlotKey) {
+    setError(null);
+    setAiBusy((current) => ({ ...current, [key]: true }));
+    try {
+      const result = await generateOfferInspirationImage({
+        slotKey: key,
+        buildType,
+      });
+      if (result.ok) {
+        onImageChange(key, { url: result.url, source: "ai" });
+      } else {
+        setError(result.error);
+      }
+    } finally {
+      setAiBusy((current) => ({ ...current, [key]: false }));
+    }
+  }
 
   async function handleDropbox() {
     setError(null);
@@ -50,7 +78,10 @@ export function OfferWorkspaceImages({
           fileName: files[index].name,
         });
         if (result.ok) {
-          onImageChange(emptySlots[index].key, result.url);
+          onImageChange(emptySlots[index].key, {
+            url: result.url,
+            source: "dropbox",
+          });
         } else {
           setError(result.error);
         }
@@ -88,7 +119,7 @@ export function OfferWorkspaceImages({
           } satisfies ClientPayload),
         },
       );
-      onImageChange(key, result.url);
+      onImageChange(key, { url: result.url, source: "upload" });
     } catch (uploadError) {
       setError((uploadError as Error).message || "Upload failed");
     } finally {
@@ -125,8 +156,11 @@ export function OfferWorkspaceImages({
       ) : null}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         {OFFER_IMAGE_SLOTS.map((slot) => {
-          const url = images[slot.key];
+          const image = images[slot.key];
+          const url = image?.url;
+          const isAi = image?.source === "ai";
           const busy = uploading[slot.key] ?? false;
+          const aiPending = aiBusy[slot.key] ?? false;
           return (
             <div
               key={slot.key}
@@ -143,14 +177,19 @@ export function OfferWorkspaceImages({
                   />
                 ) : (
                   <span className="absolute inset-0 flex items-center justify-center px-2 text-center font-mono text-[10px] uppercase tracking-wide text-royal-gold-dark">
-                    {busy ? "Uploading…" : "No image"}
+                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image"}
                   </span>
                 )}
+                {isAi ? (
+                  <span className="absolute left-1 top-1 rounded bg-sidebar/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                    AI concept
+                  </span>
+                ) : null}
               </div>
               <p className="text-xs font-semibold text-foreground">
                 {slot.label}
               </p>
-              <div className="mt-auto flex items-center gap-2">
+              <div className="mt-auto flex flex-wrap items-center gap-2">
                 <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-dark">
                   {url ? "Replace" : "Upload"}
                   <input
@@ -167,6 +206,15 @@ export function OfferWorkspaceImages({
                     type="file"
                   />
                 </label>
+                <button
+                  className="rounded-md border border-royal-gold px-2 py-1 text-xs font-medium text-royal-gold-dark hover:bg-royal-gold-light/40 disabled:opacity-50"
+                  disabled={aiPending}
+                  onClick={() => void handleGenerate(slot.key)}
+                  type="button"
+                  title="Generate an AI concept image (indicative only)"
+                >
+                  {aiPending ? "…" : "AI"}
+                </button>
                 {url ? (
                   <button
                     className="text-xs font-medium text-muted-foreground hover:text-destructive"

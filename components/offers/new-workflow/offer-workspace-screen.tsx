@@ -40,6 +40,7 @@ import { RateCardPanel } from "./offer-workspace-rate-card";
 import { ScopePanel } from "./offer-workspace-scope";
 import { OfferWorkspaceImages } from "./offer-workspace-images";
 import type {
+  OfferImage,
   OfferImageMap,
   OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
@@ -84,7 +85,7 @@ type OfferWorkspaceScreenProps = {
   readonly onDraftChange: (patch: Partial<OfferDocumentDraft>) => void;
   readonly onImageChange: (
     key: OfferImageSlotKey,
-    url: string | null,
+    image: OfferImage | null,
   ) => void;
   readonly onExclusionChange: (
     itemId: string,
@@ -286,6 +287,7 @@ export function OfferWorkspaceScreen({
                 images={images}
                 onImageChange={onImageChange}
                 leadId={leadId}
+                buildType={job.buildType}
               />
             </div>
           </OfferStepSection>
