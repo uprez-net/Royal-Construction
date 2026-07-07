@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ProjectDetail } from "@/types/project";
+import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,28 +13,77 @@ import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-type RequirementsData = Record<string, unknown> & {
-  projectName?: string;
-  projectType?: string;
-  legalAdministration?: Record<string, unknown>;
-  commercialsAndClaims?: Record<string, unknown>;
-  subStructureAndGround?: Record<string, unknown>;
-  shellAndExternal?: Record<string, unknown>;
-  mechanicalDetails?: Record<string, unknown>;
-  internalFitOutAndFinishes?: Record<string, unknown>;
-  exclusionsAndRisks?: Record<string, unknown>;
-  utilityInfrastructure?: Record<string, unknown>;
-  wetAreaCompliance?: Record<string, unknown>;
-  safetyAndSiteLogistics?: Record<string, unknown>;
-  validations?: { id: string; message: string; severity: "info" | "warning" | "fail"; ownerResponsibility?: boolean; variationRequired?: boolean }[];
-};
+type RequirementsData = Partial<ProjectRequirementsPayload>;
+
+const NUMERIC_FIELDS = new Set([
+  "totalContractSum",
+  "tenderTotalPrice",
+  "contractPrice",
+  "gstAmount",
+  "depositValue",
+  "claimStageSlabPercentage",
+  "claimStageSlabDollarValue",
+  "variationAdminFee",
+  "latePenaltyRate",
+  "concreteStrengthMpa",
+  "brickAllowance",
+  "brickCount",
+  "selectedBrickPrice",
+  "floorAreaM2",
+  "acRequiredCapacityKw",
+  "acInstalledCapacityKw",
+  "lightingCount",
+  "tenderLightingCount",
+  "powerPointCount",
+  "tileAllowance",
+  "selectedTilePrice",
+  "wetAreaSizeM2",
+  "tiledNicheCount",
+  "showerCount",
+]);
+
+const BOOLEAN_FIELDS = new Set(["gstIncluded"]);
+const STRING_LIST_FIELDS = new Set(["ownerResponsibility", "variationRequired"]);
 
 function formatValue(value: unknown) {
-  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "—";
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "—";
+    if (value.every((entry) => typeof entry === "string")) return value.join(", ");
+    return JSON.stringify(value, null, 2);
+  }
+  if (value && typeof value === "object") return JSON.stringify(value, null, 2);
   if (typeof value === "number") return String(value);
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (value === null || value === undefined || value === "") return "—";
   return String(value);
+}
+
+function coerceFieldValue(field: string, rawValue: string) {
+  if (STRING_LIST_FIELDS.has(field)) {
+    return rawValue
+      .split(/\n|,/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  if (BOOLEAN_FIELDS.has(field)) {
+    if (rawValue === "") {
+      return null;
+    }
+
+    return rawValue === "true";
+  }
+
+  if (NUMERIC_FIELDS.has(field)) {
+    if (rawValue.trim() === "") {
+      return null;
+    }
+
+    const parsed = Number(rawValue);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return rawValue;
 }
 
 function SectionFields({ data }: { data: Record<string, unknown> }) {
@@ -70,7 +120,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
     [],
   );
 
-  const updateField = (section: keyof RequirementsData, field: string, value: string) => {
+  const updateField = (section: keyof RequirementsData, field: string, value: unknown) => {
     setDraft((current) => ({
       ...current,
       [section]: {
@@ -120,8 +170,8 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
         <CardContent className="pt-5">
           <Accordion type="multiple" className="space-y-2">
             {sections.map(([key, label]) => {
-              const sectionData = (draft[key] as Record<string, unknown>) ?? {};
-              const sectionValidations = (draft.validations ?? []).filter((entry) => entry.id === key);
+              const sectionData = (draft[key] as unknown as Record<string, unknown>) ?? {};
+              const sectionValidations = (draft.validations ?? []).filter((entry) => entry.section === key);
 
               return (
                 <AccordionItem key={key} value={key} className="rounded-xl border border-border/70 bg-slate-50/50 px-4">
@@ -144,10 +194,33 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                         {Object.entries(sectionData).map(([field, value]) => (
                           <div key={field} className="space-y-1">
                             <label className="text-xs font-semibold text-muted-foreground">{field.replace(/([A-Z])/g, " $1")}</label>
-                            {typeof value === "string" && value.length > 80 ? (
+                            {BOOLEAN_FIELDS.has(field) ? (
+                              <select
+                                value={typeof value === "boolean" ? String(value) : ""}
+                                onChange={(event) => updateField(key, field, coerceFieldValue(field, event.target.value))}
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                              >
+                                <option value="">Unknown</option>
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                              </select>
+                            ) : STRING_LIST_FIELDS.has(field) ? (
+                              <Textarea
+                                value={Array.isArray(value) ? value.join("\n") : ""}
+                                onChange={(event) => updateField(key, field, coerceFieldValue(field, event.target.value))}
+                                className="min-h-24"
+                              />
+                            ) : (Array.isArray(value) && !value.every((entry) => typeof entry === "string")) ||
+                              (value !== null && typeof value === "object") ? (
+                              <Textarea value={formatValue(value)} readOnly className="min-h-24 font-mono text-xs" />
+                            ) : typeof value === "string" && value.length > 80 ? (
                               <Textarea value={value} onChange={(event) => updateField(key, field, event.target.value)} className="min-h-24" />
                             ) : (
-                              <Input value={String(value ?? "")} onChange={(event) => updateField(key, field, event.target.value)} />
+                              <Input
+                                type={NUMERIC_FIELDS.has(field) ? "number" : "text"}
+                                value={value === null || value === undefined ? "" : String(value)}
+                                onChange={(event) => updateField(key, field, coerceFieldValue(field, event.target.value))}
+                              />
                             )}
                           </div>
                         ))}

@@ -2,18 +2,63 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-import { getCachedProjectById } from "@/lib/data/projects";
-import { getProjectById } from "@/lib/data/projects";
+import { getCachedProjectById, getProjectById } from "@/lib/data/projects";
+import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validators";
+import { CACHE_PROFILES } from "@/types/cache";
+import { Role } from "@prisma/client";
+import { revalidateTag } from "next/cache";
 import {
   projectParamSchema,
   parseRouteParamsWithResponse,
   parseBodyWithResponse,
   successResponse,
   unauthorizedResponse,
+  forbiddenResponse,
   notFoundResponse,
   errorResponse
 } from "@/utils/validators";
 import { z } from "zod";
+
+const projectFlowSectionSchema = z.enum([
+  "legalAdministration",
+  "commercialsAndClaims",
+  "subStructureAndGround",
+  "shellAndExternal",
+  "mechanicalDetails",
+  "internalFitOutAndFinishes",
+  "exclusionsAndRisks",
+  "utilityInfrastructure",
+  "wetAreaCompliance",
+  "safetyAndSiteLogistics",
+  "general",
+]);
+
+const sourceDocumentSchema = z.object({
+  fileId: z.string().min(1),
+  fileName: z.string().min(1),
+  url: z.string().url(),
+  kind: z.enum(["tender", "contract"]),
+});
+
+const projectValidationSchema = z.object({
+  id: z.string().min(1),
+  section: projectFlowSectionSchema,
+  fieldPath: z.string().min(1),
+  severity: z.enum(["info", "warning", "fail"]),
+  message: z.string().min(1),
+  ownerResponsibility: z.boolean().optional(),
+  variationRequired: z.boolean().optional(),
+  resolvedValue: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+});
+
+const projectRequirementsPayloadSchema = projectExtractionSchema.extend({
+  version: z.literal(1).optional(),
+  sourceDocuments: z.object({
+    tender: sourceDocumentSchema,
+    contract: sourceDocumentSchema,
+  }).optional(),
+  validations: z.array(projectValidationSchema).optional(),
+});
 
 const updateProjectBodySchema = z.object({
   name: z.string().trim().min(1).optional(),
@@ -23,7 +68,7 @@ const updateProjectBodySchema = z.object({
   startDate: z.string().optional(),
   estimatedEndDate: z.string().optional(),
   totalBudget: z.number().optional(),
-  requirements: z.unknown().optional(),
+  requirements: projectRequirementsPayloadSchema.optional(),
 });
 
 export async function PATCH(
@@ -48,6 +93,34 @@ export async function PATCH(
   if (!body.success) return body.response;
 
   try {
+    const existingProject = await prisma.project.findUnique({
+      where: { id: routeParams.data.projectId },
+      select: {
+        id: true,
+        customerId: true,
+        siteManagerId: true,
+        Lead: {
+          select: {
+            assignedId: true,
+          },
+        },
+      },
+    });
+
+    if (!existingProject) {
+      return notFoundResponse("Project");
+    }
+
+    const canEditProject =
+      user.role === Role.ADMIN ||
+      existingProject.siteManagerId === user.id ||
+      existingProject.Lead.assignedId === user.id ||
+      (user.role === Role.CUSTOMER && user.customerId === existingProject.customerId);
+
+    if (!canEditProject) {
+      return forbiddenResponse("You do not have access to update this project.");
+    }
+
     const project = await prisma.project.update({
       where: { id: routeParams.data.projectId },
       data: {
@@ -66,6 +139,9 @@ export async function PATCH(
     if (!updatedProject) {
       return notFoundResponse("Project");
     }
+
+    revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+    revalidateTag(`project-${updatedProject.id}`, CACHE_PROFILES.MEDIUM);
 
     return successResponse(updatedProject);
   } catch (error) {

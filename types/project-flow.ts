@@ -58,11 +58,11 @@ export interface ProjectPaymentStage {
 }
 
 export interface ProjectLegalAdministrationSection {
-  siteAddress: string;
+  siteAddress: string | null;
   ownerContacts: ProjectOwnerContactDetails;
-  commencementTrigger: string;
-  signedDate: string;
-  pcaInspector: string;
+  commencementTrigger: string | null;
+  signedDate: string | null;
+  pcaInspector: string | null;
 }
 
 export interface ProjectCommercialSection {
@@ -80,80 +80,80 @@ export interface ProjectCommercialSection {
 }
 
 export interface ProjectSubStructureSection {
-  concreteSlabClass: string;
+  concreteSlabClass: string | null;
   concreteStrengthMpa: number | null;
-  vapourBarrier: string;
-  termiteSystem: string;
-  sewerConnection: string;
+  vapourBarrier: string | null;
+  termiteSystem: string | null;
+  sewerConnection: string | null;
 }
 
 export interface ProjectShellAndExternalSection {
-  ceilingHeightGroundFloor: string;
-  ceilingHeightFirstFloor: string;
-  roofingMaterial: string;
+  ceilingHeightGroundFloor: string | null;
+  ceilingHeightFirstFloor: string | null;
+  roofingMaterial: string | null;
   brickAllowance: number | null;
   brickCount: number | null;
   selectedBrickPrice: number | null;
-  windowProvider: string;
+  windowProvider: string | null;
   floorAreaM2: number | null;
 }
 
 export interface ProjectMechanicalSection {
-  acSystemZones: string;
+  acSystemZones: string | null;
   acRequiredCapacityKw: number | null;
   acInstalledCapacityKw: number | null;
   lightingCount: number | null;
   tenderLightingCount: number | null;
   powerPointCount: number | null;
-  externalPower: string;
-  jointSealants: string;
+  externalPower: string | null;
+  jointSealants: string | null;
 }
 
 export interface ProjectFinishesSection {
-  internalDoorHeight: string;
-  skirtingSize: string;
-  stoneThickness: string;
-  waterfallEnds: string;
-  tapwareFinish: string;
-  tilesProvisionRate: string;
+  internalDoorHeight: string | null;
+  skirtingSize: string | null;
+  stoneThickness: string | null;
+  waterfallEnds: string | null;
+  tapwareFinish: string | null;
+  tilesProvisionRate: string | null;
   tileAllowance: number | null;
   selectedTilePrice: number | null;
   wetAreaSizeM2: number | null;
 }
 
 export interface ProjectExclusionsSection {
-  retainingWalls: string;
-  fencing: string;
-  blinds: string;
-  solarProvisions: string;
-  rockExcavation: string;
+  retainingWalls: string | null;
+  fencing: string | null;
+  blinds: string | null;
+  solarProvisions: string | null;
+  rockExcavation: string | null;
   ownerResponsibility: string[];
   variationRequired: string[];
 }
 
 export interface ProjectUtilityInfrastructureSection {
-  electricalPhase: string;
-  communicationConduit: string;
-  gasConnection: string;
-  fridgeWaterPoint: string;
-  smartLockBrand: string;
+  electricalPhase: string | null;
+  communicationConduit: string | null;
+  gasConnection: string | null;
+  fridgeWaterPoint: string | null;
+  smartLockBrand: string | null;
 }
 
 export interface ProjectWetAreaSection {
-  waterproofingStandard: string;
-  showerScreenType: string;
+  waterproofingStandard: string | null;
+  showerScreenType: string | null;
   tiledNicheCount: number | null;
   showerCount: number | null;
-  floorToCeilingTiles: string;
-  floorWasteType: string;
+  floorToCeilingTiles: string | null;
+  floorWasteType: string | null;
 }
 
 export interface ProjectSafetySection {
-  roofGuardrails: string;
-  sedimentControl: string;
-  scaffoldingSafety: string;
-  tradeWaste: string;
-  finalCleanStatus: string;
+  roofGuardrails: string | null;
+  sedimentControl: string | null;
+  scaffoldingSafety: string | null;
+  tradeWaste: string | null;
+  finalCleanStatus: string | null;
 }
 
 export interface ProjectExtractionDraft {

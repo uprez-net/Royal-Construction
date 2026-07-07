@@ -71,6 +71,49 @@ type RequirementsDraft = ProjectExtractionDraft & {
   validations?: ProjectRequirementsPayload["validations"];
 };
 
+const SECTION_KEYS = [
+  "legalAdministration",
+  "commercialsAndClaims",
+  "subStructureAndGround",
+  "shellAndExternal",
+  "mechanicalDetails",
+  "internalFitOutAndFinishes",
+  "exclusionsAndRisks",
+  "utilityInfrastructure",
+  "wetAreaCompliance",
+  "safetyAndSiteLogistics",
+] as const;
+
+const NUMERIC_FIELDS = new Set([
+  "totalContractSum",
+  "tenderTotalPrice",
+  "contractPrice",
+  "gstAmount",
+  "depositValue",
+  "claimStageSlabPercentage",
+  "claimStageSlabDollarValue",
+  "variationAdminFee",
+  "latePenaltyRate",
+  "concreteStrengthMpa",
+  "brickAllowance",
+  "brickCount",
+  "selectedBrickPrice",
+  "floorAreaM2",
+  "acRequiredCapacityKw",
+  "acInstalledCapacityKw",
+  "lightingCount",
+  "tenderLightingCount",
+  "powerPointCount",
+  "tileAllowance",
+  "selectedTilePrice",
+  "wetAreaSizeM2",
+  "tiledNicheCount",
+  "showerCount",
+]);
+
+const BOOLEAN_FIELDS = new Set(["gstIncluded"]);
+const STRING_LIST_FIELDS = new Set(["ownerResponsibility", "variationRequired"]);
+
 const EXTRACTION_PROGRESS = [
   "Uploading Documents",
   "Reading Tender PDF",
@@ -197,6 +240,65 @@ function updateSection<
   };
 }
 
+function formatStructuredValue(value: unknown) {
+  if (Array.isArray(value)) {
+    if (value.every((entry) => typeof entry === "string")) {
+      return value.join("\n");
+    }
+
+    return JSON.stringify(value, null, 2);
+  }
+
+  if (value && typeof value === "object") {
+    return JSON.stringify(value, null, 2);
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  return String(value ?? "");
+}
+
+function coerceFieldValue(field: string, rawValue: string) {
+  if (STRING_LIST_FIELDS.has(field)) {
+    return rawValue
+      .split(/\n|,/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  if (BOOLEAN_FIELDS.has(field)) {
+    if (rawValue === "") {
+      return null;
+    }
+
+    return rawValue === "true";
+  }
+
+  if (NUMERIC_FIELDS.has(field)) {
+    if (rawValue.trim() === "") {
+      return null;
+    }
+
+    const parsed = Number(rawValue);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return rawValue;
+}
+
+function deriveValidationSection(fieldPath: string): NonNullable<ProjectRequirementsPayload["validations"]>[number]["section"] {
+  const [section] = fieldPath.split(".");
+  return SECTION_KEYS.includes(section as (typeof SECTION_KEYS)[number])
+    ? (section as (typeof SECTION_KEYS)[number])
+    : "general";
+}
+
 function SectionGrid({
   title,
   data,
@@ -204,7 +306,7 @@ function SectionGrid({
 }: {
   title: string;
   data: Record<string, unknown>;
-  onChange: (field: string, value: string) => void;
+  onChange: (field: string, value: unknown) => void;
 }) {
   return (
     <div className="space-y-3 rounded-2xl border border-border/70 bg-slate-50/60 p-4">
@@ -215,7 +317,26 @@ function SectionGrid({
             <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
               {field.replace(/([A-Z])/g, " $1")}
             </Label>
-            {typeof value === "string" && value.length > 90 ? (
+            {BOOLEAN_FIELDS.has(field) ? (
+              <select
+                value={typeof value === "boolean" ? String(value) : ""}
+                onChange={(event) => onChange(field, coerceFieldValue(field, event.target.value))}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+              >
+                <option value="">Unknown</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            ) : STRING_LIST_FIELDS.has(field) ? (
+              <Textarea
+                value={Array.isArray(value) ? value.join("\n") : ""}
+                onChange={(event) => onChange(field, coerceFieldValue(field, event.target.value))}
+                className="min-h-24"
+              />
+            ) : (Array.isArray(value) && !value.every((entry) => typeof entry === "string")) ||
+              (value !== null && typeof value === "object") ? (
+              <Textarea value={formatStructuredValue(value)} readOnly className="min-h-24 font-mono text-xs" />
+            ) : typeof value === "string" && value.length > 90 ? (
               <Textarea
                 value={value}
                 onChange={(event) => onChange(field, event.target.value)}
@@ -223,8 +344,9 @@ function SectionGrid({
               />
             ) : (
               <Input
-                value={String(value ?? "")}
-                onChange={(event) => onChange(field, event.target.value)}
+                type={NUMERIC_FIELDS.has(field) ? "number" : "text"}
+                value={formatStructuredValue(value)}
+                onChange={(event) => onChange(field, coerceFieldValue(field, event.target.value))}
               />
             )}
           </div>
@@ -432,7 +554,7 @@ export function CreateProjectModal({
         sourceDocuments: { tender: tenderDocument, contract: contractDocument },
         validations: extracted.conflicts.map((conflict, index) => ({
           id: `conflict-${index}`,
-          section: "general",
+          section: deriveValidationSection(conflict.fieldPath),
           fieldPath: conflict.fieldPath,
           severity: "warning",
           message: conflict.note || "Document conflict detected.",
@@ -734,7 +856,7 @@ export function CreateProjectModal({
                       current,
                       "legalAdministration",
                       field as keyof typeof draft.legalAdministration,
-                      value,
+                      value as never,
                     ),
                   )
                 }
@@ -753,7 +875,7 @@ export function CreateProjectModal({
                       current,
                       "commercialsAndClaims",
                       field as keyof typeof draft.commercialsAndClaims,
-                      value as unknown as (typeof draft.commercialsAndClaims)[keyof typeof draft.commercialsAndClaims],
+                      value as (typeof draft.commercialsAndClaims)[keyof typeof draft.commercialsAndClaims],
                     ),
                   )
                 }
@@ -772,7 +894,7 @@ export function CreateProjectModal({
                       current,
                       "subStructureAndGround",
                       field as keyof typeof draft.subStructureAndGround,
-                      value,
+                      value as never,
                     ),
                   )
                 }
@@ -788,7 +910,7 @@ export function CreateProjectModal({
                       current,
                       "shellAndExternal",
                       field as keyof typeof draft.shellAndExternal,
-                      value,
+                      value as never,
                     ),
                   )
                 }
@@ -804,7 +926,7 @@ export function CreateProjectModal({
                       current,
                       "mechanicalDetails",
                       field as keyof typeof draft.mechanicalDetails,
-                      value,
+                      value as never,
                     ),
                   )
                 }
@@ -823,7 +945,7 @@ export function CreateProjectModal({
                       current,
                       "internalFitOutAndFinishes",
                       field as keyof typeof draft.internalFitOutAndFinishes,
-                      value,
+                      value as never,
                     ),
                   )
                 }
@@ -839,7 +961,7 @@ export function CreateProjectModal({
                       current,
                       "exclusionsAndRisks",
                       field as keyof typeof draft.exclusionsAndRisks,
-                      value,
+                      value as never,
                     ),
                   )
                 }
@@ -858,7 +980,7 @@ export function CreateProjectModal({
                       current,
                       "utilityInfrastructure",
                       field as keyof typeof draft.utilityInfrastructure,
-                      value,
+                      value as never,
                     ),
                   )
                 }
@@ -874,7 +996,7 @@ export function CreateProjectModal({
                       current,
                       "wetAreaCompliance",
                       field as keyof typeof draft.wetAreaCompliance,
-                      value,
+                      value as never,
                     ),
                   )
                 }
@@ -893,7 +1015,7 @@ export function CreateProjectModal({
                       current,
                       "safetyAndSiteLogistics",
                       field as keyof typeof draft.safetyAndSiteLogistics,
-                      value,
+                      value as never,
                     ),
                   )
                 }
