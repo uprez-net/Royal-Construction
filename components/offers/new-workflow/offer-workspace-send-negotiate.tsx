@@ -9,12 +9,18 @@ import { OfferCardHeading } from "./offer-workspace-card-heading";
 
 type SendNegotiatePanelProps = {
   readonly status: OfferWorkspaceStatus;
+  readonly canRevise: boolean;
+  readonly revising: boolean;
+  readonly onCreateRevision: () => void;
   readonly onMarkAgreed: () => void;
   readonly onMarkRejected: () => void;
 };
 
 export function SendNegotiatePanel({
   status,
+  canRevise,
+  revising,
+  onCreateRevision,
   onMarkAgreed,
   onMarkRejected,
 }: SendNegotiatePanelProps) {
@@ -45,14 +51,19 @@ export function SendNegotiatePanel({
 
         <div className="flex flex-wrap gap-2">
           <Button
-            disabled
+            disabled={!canRevise || revising}
             size="sm"
-            title="Revision forking arrives with the negotiation build."
+            title={
+              canRevise
+                ? "Fork a new revision from this offer and supersede the current one."
+                : "Available once the offer is saved against a lead."
+            }
             type="button"
             variant="outline"
+            onClick={onCreateRevision}
           >
             <GitBranch className="size-4" aria-hidden="true" />
-            Create revision
+            {revising ? "Creating…" : "Create revision"}
           </Button>
           <Button
             className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"

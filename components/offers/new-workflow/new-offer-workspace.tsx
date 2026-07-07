@@ -43,6 +43,7 @@ import {
   loadActiveOfferWorkspace,
   saveOfferWorkspace,
   transitionOfferStatus,
+  createOfferRevision,
 } from "@/lib/data/offer-workspace";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import {
@@ -89,6 +90,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [paymentSchedule, setPaymentSchedule] =
     useState<readonly OfferPaymentScheduleRow[]>(INITIAL_PAYMENT_SCHEDULE);
   const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
+  const [revising, setRevising] = useState(false);
   const manualLineCounterRef = useRef(0);
 
   function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
@@ -397,6 +399,35 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     [leadId],
   );
 
+  // Fork a new active revision (supersedes the current one), then reload the
+  // fresh revision into the workspace.
+  const createRevision = useCallback(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null) {
+      return;
+    }
+    setRevising(true);
+    void (async () => {
+      try {
+        const result = await createOfferRevision({ offerId });
+        if (result.ok) {
+          const loaded = await loadActiveOfferWorkspace(leadId);
+          offerIdRef.current = loaded.offerId;
+          stateVersionRef.current = loaded.stateVersion;
+          setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+          if (loaded.snapshot) {
+            hydrateSnapshot(loaded.snapshot);
+            lastSavedRef.current = JSON.stringify(loaded.snapshot);
+          } else {
+            lastSavedRef.current = JSON.stringify(snapshotRef.current);
+          }
+        }
+      } finally {
+        setRevising(false);
+      }
+    })();
+  }, [leadId, hydrateSnapshot]);
+
   return (
     <>
       <OfferWorkspaceScreen
@@ -437,6 +468,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         onMarkSent={() => transition("sent")}
         onMarkAgreed={() => transition("agreed")}
         onMarkRejected={() => transition("rejected")}
+        onCreateRevision={createRevision}
+        canRevise={leadId !== undefined}
+        revising={revising}
         onGenerateTender={() => transition("tender_draft")}
         onSendTender={() => transition("tender_sent")}
         onRecallTender={() => transition("tender_draft")}

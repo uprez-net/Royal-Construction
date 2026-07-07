@@ -104,6 +104,9 @@ type OfferWorkspaceScreenProps = {
   readonly onMarkSent: () => void;
   readonly onMarkAgreed: () => void;
   readonly onMarkRejected: () => void;
+  readonly onCreateRevision: () => void;
+  readonly canRevise: boolean;
+  readonly revising: boolean;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
   readonly onRecallTender: () => void;
@@ -163,6 +166,9 @@ export function OfferWorkspaceScreen({
   onMarkSent,
   onMarkAgreed,
   onMarkRejected,
+  onCreateRevision,
+  canRevise,
+  revising,
   onGenerateTender,
   onSendTender,
   onRecallTender,
@@ -300,6 +306,9 @@ export function OfferWorkspaceScreen({
           >
             <SendNegotiatePanel
               status={status}
+              canRevise={canRevise}
+              revising={revising}
+              onCreateRevision={onCreateRevision}
               onMarkAgreed={onMarkAgreed}
               onMarkRejected={onMarkRejected}
             />
