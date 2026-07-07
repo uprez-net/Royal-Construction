@@ -6,11 +6,13 @@ import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { buildBlobPath } from "@/utils/formatters";
 import type { ClientPayload } from "@/utils/validators/files";
+import { importDropboxImage } from "@/lib/data/offer-image-import";
 import {
   OFFER_IMAGE_SLOTS,
   type OfferImageMap,
   type OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
+import { useDropboxChooser } from "./use-dropbox-chooser";
 
 type OfferWorkspaceImagesProps = {
   readonly images: OfferImageMap;
@@ -27,6 +29,43 @@ export function OfferWorkspaceImages({
     Partial<Record<OfferImageSlotKey, boolean>>
   >({});
   const [error, setError] = useState<string | null>(null);
+  const [dropboxBusy, setDropboxBusy] = useState(false);
+  const { configured: dropboxConfigured, ready: dropboxReady, choose } =
+    useDropboxChooser();
+
+  async function handleDropbox() {
+    setError(null);
+    const files = await choose();
+    if (files.length === 0) {
+      return;
+    }
+    setDropboxBusy(true);
+    try {
+      // Fill the currently-empty slots in order (hero first, then gallery).
+      const emptySlots = OFFER_IMAGE_SLOTS.filter((slot) => !images[slot.key]);
+      const count = Math.min(files.length, emptySlots.length);
+      for (let index = 0; index < count; index += 1) {
+        const result = await importDropboxImage({
+          url: files[index].link,
+          fileName: files[index].name,
+        });
+        if (result.ok) {
+          onImageChange(emptySlots[index].key, result.url);
+        } else {
+          setError(result.error);
+        }
+      }
+      if (files.length > emptySlots.length) {
+        setError(
+          `Added ${count} photo(s) to empty slots; ${
+            files.length - emptySlots.length
+          } extra skipped — remove a photo to add more.`,
+        );
+      }
+    } finally {
+      setDropboxBusy(false);
+    }
+  }
 
   async function handleFile(key: OfferImageSlotKey, file: File) {
     setError(null);
@@ -59,14 +98,27 @@ export function OfferWorkspaceImages({
 
   return (
     <section className="space-y-4">
-      <div>
-        <h3 className="font-heading text-lg font-semibold text-foreground">
-          Proposal photos
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Attach the hero image, architect render and finished-home gallery.
-          Each appears on the generated proposal; empty slots show a placeholder.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-heading text-lg font-semibold text-foreground">
+            Proposal photos
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Attach the hero image, architect render and finished-home gallery.
+            Each appears on the generated proposal; empty slots show a
+            placeholder.
+          </p>
+        </div>
+        {dropboxConfigured ? (
+          <button
+            className="inline-flex shrink-0 items-center rounded-md border border-royal-gold bg-white px-3 py-1.5 text-xs font-semibold text-royal-gold-dark hover:bg-royal-gold-light/40 disabled:opacity-50"
+            disabled={!dropboxReady || dropboxBusy}
+            onClick={() => void handleDropbox()}
+            type="button"
+          >
+            {dropboxBusy ? "Importing…" : "Add from Dropbox"}
+          </button>
+        ) : null}
       </div>
       {error ? (
         <p className="text-sm font-medium text-destructive">{error}</p>
