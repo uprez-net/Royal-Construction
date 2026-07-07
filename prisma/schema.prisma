@@ -746,6 +746,10 @@ model OfferDocumentSend {
   trackedLinkToken String    @unique
   sentAt           DateTime  @default(now())
   openedAt         DateTime?
+  // Reply tracking: the subject carries [RCOFR-…] so inbound replies correlate
+  // back to this send (see lib/graph/offer-reply-tracker).
+  repliedAt        DateTime?
+  lastReplyAt      DateTime?
 
   @@index([offerId])
 }
