@@ -17,6 +17,7 @@ const tradieScheduleInclude = {
 } as const;
 import { CACHE_PROFILES } from "@/types/cache";
 import { getTradieCoordinationDashboard } from "./tradie-dashboard";
+import { ProjectRequirementsPayload } from "@/types/project-flow";
 
 
 function toSafeTradie(tradie: Awaited<ReturnType<typeof prisma.tradie.findMany>>[number]): SafeTradie {
@@ -76,6 +77,7 @@ export async function getTradieSchedules(filters?: {
       },
       project: {
         ...schedule.project,
+        requirements: schedule.project.requirements as unknown as ProjectRequirementsPayload,
         lotSize: schedule.project.lotSize?.toString() ?? undefined,
         totalBudget: schedule.project.totalBudget.toString(),
         spent: schedule.project.spent.toString(),

@@ -16,6 +16,8 @@ import { createLeadProjectInferencePrompt } from "../agent/project-prompt";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
 import { Prisma } from "@prisma/client";
+import type { ProjectRequirementsPayload } from "@/types/project-flow";
+import { buildProjectRequirementsPayload, resolveProjectBudget } from "@/lib/data/projectFlow";
 
 /**
  * Creates a new project from manually entered project data.
@@ -125,6 +127,7 @@ export interface CreateProjectWithLeadInput {
   address: string;
   council: string;
   siteManagerId: string;
+  extraction?: ProjectRequirementsPayload | null;
 }
 
 /**
@@ -175,7 +178,7 @@ export interface CreateProjectWithLeadInput {
  * Re-throws any database, AI inference, milestone generation, notification,
  * or transaction errors encountered during execution.
  */
-export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName, extraction }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
@@ -192,12 +195,138 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       throw new Error("PROJECT_ALREADY_EXISTS_FOR_LEAD");
     }
 
-    const {
-      projectDescription,
-      projectType,
-      projectBudget,
-      projectRequirements
-    } = await handleProjectSpecsGeneration(createLeadProjectInferencePrompt(lead));
+    const inferredSpecs = extraction
+      ? null
+      : await handleProjectSpecsGeneration(createLeadProjectInferencePrompt(lead));
+
+    const projectDescription = extraction?.summary ?? inferredSpecs?.projectDescription ?? "";
+    const projectType = extraction?.projectType ?? inferredSpecs?.projectType ?? "Unknown";
+    const projectBudget = extraction
+      ? resolveProjectBudget(extraction)
+      : inferredSpecs?.projectBudget ?? 0;
+    const projectRequirements = extraction
+      ? extraction
+      : buildProjectRequirementsPayload(
+          {
+            projectName,
+            projectType: inferredSpecs?.projectType ?? "",
+            summary: inferredSpecs?.projectDescription ?? "",
+            legalAdministration: {
+              siteAddress: address,
+              ownerContacts: {
+                names: [lead.name],
+                emails: lead.email ? [lead.email] : [],
+                phones: lead.phone ? [lead.phone] : [],
+              },
+              commencementTrigger: "",
+              signedDate: "",
+              pcaInspector: "",
+            },
+            commercialsAndClaims: {
+              totalContractSum: inferredSpecs?.projectBudget ?? 0,
+              tenderTotalPrice: inferredSpecs?.projectBudget ?? 0,
+              contractPrice: inferredSpecs?.projectBudget ?? 0,
+              gstIncluded: null,
+              gstAmount: null,
+              depositValue: null,
+              claimStageSlabPercentage: null,
+              claimStageSlabDollarValue: null,
+              variationAdminFee: null,
+              latePenaltyRate: null,
+              paymentStages: [],
+            },
+            subStructureAndGround: {
+              concreteSlabClass: "",
+              concreteStrengthMpa: null,
+              vapourBarrier: "",
+              termiteSystem: "",
+              sewerConnection: "",
+            },
+            shellAndExternal: {
+              ceilingHeightGroundFloor: "",
+              ceilingHeightFirstFloor: "",
+              roofingMaterial: "",
+              brickAllowance: null,
+              brickCount: null,
+              selectedBrickPrice: null,
+              windowProvider: "",
+              floorAreaM2: lotSize,
+            },
+            mechanicalDetails: {
+              acSystemZones: "",
+              acRequiredCapacityKw: null,
+              acInstalledCapacityKw: null,
+              lightingCount: null,
+              tenderLightingCount: null,
+              powerPointCount: null,
+              externalPower: "",
+              jointSealants: "",
+            },
+            internalFitOutAndFinishes: {
+              internalDoorHeight: "",
+              skirtingSize: "",
+              stoneThickness: "",
+              waterfallEnds: "",
+              tapwareFinish: "",
+              tilesProvisionRate: "",
+              tileAllowance: null,
+              selectedTilePrice: null,
+              wetAreaSizeM2: null,
+            },
+            exclusionsAndRisks: {
+              retainingWalls: "",
+              fencing: "",
+              blinds: "",
+              solarProvisions: "",
+              rockExcavation: "",
+              ownerResponsibility: [],
+              variationRequired: [],
+            },
+            utilityInfrastructure: {
+              electricalPhase: "",
+              communicationConduit: "",
+              gasConnection: "",
+              fridgeWaterPoint: "",
+              smartLockBrand: "",
+            },
+            wetAreaCompliance: {
+              waterproofingStandard: "",
+              showerScreenType: "",
+              tiledNicheCount: null,
+              showerCount: null,
+              floorToCeilingTiles: "",
+              floorWasteType: "",
+            },
+            safetyAndSiteLogistics: {
+              roofGuardrails: "",
+              sedimentControl: "",
+              scaffoldingSafety: "",
+              tradeWaste: "",
+              finalCleanStatus: "",
+            },
+            conflicts: [],
+            automationTriggers: {
+              orderReminders: true,
+              rainDelayCalculations: true,
+              noticeCountdowns: true,
+            },
+          },
+          {
+            tender: {
+              fileId: "",
+              fileName: "",
+              url: "",
+              kind: "tender",
+            },
+            contract: {
+              fileId: "",
+              fileName: "",
+              url: "",
+              kind: "contract",
+            },
+          },
+          [],
+        );
     const newProjectId = await prisma.$transaction(async (tx) => {
       // Create customer first, then reference by customerId to satisfy Prisma types
       const customer = await createCustomerForProject({
@@ -219,7 +348,7 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
           startDate: new Date(startDate),
           estimatedEndDate: new Date(estimatedEndDate),
           siteManagerId: siteManagerId,
-          requirements: projectRequirements,
+          requirements: projectRequirements as unknown as Prisma.InputJsonValue,
           customerId: customer.id,
         }
       });
