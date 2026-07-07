@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { activeOfferPhase } from "@/lib/offer/workflow";
@@ -11,6 +12,12 @@ type SendNegotiatePanelProps = {
   readonly status: OfferWorkspaceStatus;
   readonly canRevise: boolean;
   readonly revising: boolean;
+  readonly clientEmail: string;
+  readonly canSend: boolean;
+  readonly sending: boolean;
+  readonly sendError: string | null;
+  readonly sentInfo: string | null;
+  readonly onSendOffer: (email: string) => void;
   readonly onCreateRevision: () => void;
   readonly onMarkAgreed: () => void;
   readonly onMarkRejected: () => void;
@@ -20,10 +27,17 @@ export function SendNegotiatePanel({
   status,
   canRevise,
   revising,
+  clientEmail,
+  canSend,
+  sending,
+  sendError,
+  sentInfo,
+  onSendOffer,
   onCreateRevision,
   onMarkAgreed,
   onMarkRejected,
 }: SendNegotiatePanelProps) {
+  const [email, setEmail] = useState(clientEmail);
   const isPending = status === "pending";
   const isSent = status === "sent";
   const isRejected = status === "rejected";
@@ -48,6 +62,53 @@ export function SendNegotiatePanel({
           isSent={isSent}
           isSuperseded={isSuperseded}
         />
+
+        {isPending || isSent ? (
+          <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+            <label
+              className="text-xs font-medium text-foreground"
+              htmlFor="offer-recipient"
+            >
+              Email the proposal PDF to the client
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <input
+                className="min-w-0 flex-1 rounded-md border border-border bg-white px-3 py-1.5 text-sm"
+                id="offer-recipient"
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="client@email.com"
+                type="email"
+                value={email}
+              />
+              <Button
+                className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+                disabled={!canSend || sending || email.trim().length === 0}
+                onClick={() => onSendOffer(email)}
+                size="sm"
+                title={
+                  canSend
+                    ? "Generate the proposal PDF and email it to the client."
+                    : "Available once the offer is saved against a lead."
+                }
+                type="button"
+              >
+                <Send className="size-4" aria-hidden="true" />
+                {sending ? "Sending…" : isSent ? "Resend" : "Send offer"}
+              </Button>
+            </div>
+            {sendError ? (
+              <p className="text-xs font-medium text-destructive">{sendError}</p>
+            ) : null}
+            {sentInfo ? (
+              <p className="text-xs font-medium text-success">{sentInfo}</p>
+            ) : null}
+            {!canSend ? (
+              <p className="text-xs text-muted-foreground">
+                Saving the offer against a lead enables sending.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-2">
           <Button

@@ -45,6 +45,7 @@ import {
   transitionOfferStatus,
   createOfferRevision,
 } from "@/lib/data/offer-workspace";
+import { sendOfferDocument } from "@/lib/data/offer-send";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import {
   EMPTY_OFFER_IMAGES,
@@ -91,6 +92,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     useState<readonly OfferPaymentScheduleRow[]>(INITIAL_PAYMENT_SCHEDULE);
   const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
   const [revising, setRevising] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sentInfo, setSentInfo] = useState<string | null>(null);
   const manualLineCounterRef = useRef(0);
 
   function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
@@ -428,6 +432,47 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     })();
   }, [leadId, hydrateSnapshot]);
 
+  // Email the proposal PDF to the client. Flushes the latest edits first so the
+  // generated PDF matches the workspace, then routes through sendOfferDocument.
+  const sendOffer = useCallback(
+    (recipientEmail: string) => {
+      const offerId = offerIdRef.current;
+      if (leadId === undefined || offerId === null) {
+        setSendError("Save the offer against a lead before sending.");
+        return;
+      }
+      setSending(true);
+      setSendError(null);
+      setSentInfo(null);
+      void (async () => {
+        try {
+          const currentJson = JSON.stringify(snapshotRef.current);
+          if (currentJson !== lastSavedRef.current) {
+            const saved = await saveOfferWorkspace({
+              offerId,
+              expectedStateVersion: stateVersionRef.current,
+              snapshot: snapshotRef.current,
+            });
+            if (saved.ok) {
+              stateVersionRef.current = saved.stateVersion;
+              lastSavedRef.current = currentJson;
+            }
+          }
+          const result = await sendOfferDocument({ offerId, recipientEmail });
+          if (result.ok) {
+            setStatus("sent");
+            setSentInfo(`Sent ${result.reference} to ${recipientEmail}.`);
+          } else {
+            setSendError(result.error);
+          }
+        } finally {
+          setSending(false);
+        }
+      })();
+    },
+    [leadId],
+  );
+
   return (
     <>
       <OfferWorkspaceScreen
@@ -471,6 +516,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         onCreateRevision={createRevision}
         canRevise={leadId !== undefined}
         revising={revising}
+        onSendOffer={sendOffer}
+        canSend={leadId !== undefined}
+        sending={sending}
+        sendError={sendError}
+        sentInfo={sentInfo}
         onGenerateTender={() => transition("tender_draft")}
         onSendTender={() => transition("tender_sent")}
         onRecallTender={() => transition("tender_draft")}

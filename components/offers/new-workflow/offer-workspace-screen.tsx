@@ -107,6 +107,11 @@ type OfferWorkspaceScreenProps = {
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
   readonly revising: boolean;
+  readonly onSendOffer: (email: string) => void;
+  readonly canSend: boolean;
+  readonly sending: boolean;
+  readonly sendError: string | null;
+  readonly sentInfo: string | null;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
   readonly onRecallTender: () => void;
@@ -169,6 +174,11 @@ export function OfferWorkspaceScreen({
   onCreateRevision,
   canRevise,
   revising,
+  onSendOffer,
+  canSend,
+  sending,
+  sendError,
+  sentInfo,
   onGenerateTender,
   onSendTender,
   onRecallTender,
@@ -308,6 +318,12 @@ export function OfferWorkspaceScreen({
               status={status}
               canRevise={canRevise}
               revising={revising}
+              clientEmail={job.clientEmail}
+              canSend={canSend}
+              sending={sending}
+              sendError={sendError}
+              sentInfo={sentInfo}
+              onSendOffer={onSendOffer}
               onCreateRevision={onCreateRevision}
               onMarkAgreed={onMarkAgreed}
               onMarkRejected={onMarkRejected}
