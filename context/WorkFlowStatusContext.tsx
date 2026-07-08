@@ -1,6 +1,7 @@
 "use client";
 
 import { OfferCreationStatus } from "@/lib/workflow/offer";
+import { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
 import React, {
   createContext,
   useCallback,
@@ -24,6 +25,7 @@ type WorkflowStreamState = {
   error: string | null;
 
   creatingOffer: OfferCreationStatus;
+  extractingTender: TenderExtractionWorkflowStreamEvent;
 
   startListening: (runId: string) => void;
   stopListening: () => void;
@@ -47,6 +49,13 @@ const defaultCreatingOffer: OfferCreationStatus = {
       details: "Starting offer creation workflow",
     },
   ],
+};
+
+const defaultExtractingTender: TenderExtractionWorkflowStreamEvent = {
+  type: "stage",
+  stage: "Uploading documents",
+  index: 0,
+  total: 0,
 };
 
 /**
@@ -74,6 +83,7 @@ export function WorkflowStreamProvider({
 
   const [creatingOffer, setCreatingOffer] =
     useState<OfferCreationStatus | null>(null);
+  const [extractingTender, setExtractingTender] = useState<TenderExtractionWorkflowStreamEvent | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const startIndexRef = useRef(0);
@@ -125,7 +135,7 @@ export function WorkflowStreamProvider({
     setLoading(true);
     setError(null);
     setCreatingOffer(defaultCreatingOffer);
-
+    setExtractingTender(defaultExtractingTender);
     try {
       const res = await fetch(
         `/api/resume-stream/${id}?startIndex=${startIndexRef.current}`,
@@ -152,7 +162,6 @@ export function WorkflowStreamProvider({
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        console.log("Got chunk:", buffer);
 
         /**
          * assumes each chunk is newline-delimited json
@@ -167,8 +176,12 @@ export function WorkflowStreamProvider({
 
           try {
             const payload = JSON.parse(line);
-            console.log(payload);
-            setCreatingOffer(payload);
+            if( payload.type === "stage" || payload.type === "result" || payload.type === "error") {
+              setExtractingTender(payload);
+            }
+            else if (payload.status) {
+              setCreatingOffer(payload);
+            }
           } catch {
             console.error("Invalid stream payload:", line);
           }
@@ -241,6 +254,7 @@ export function WorkflowStreamProvider({
       loading,
       error,
       creatingOffer: creatingOffer ?? defaultCreatingOffer,
+      extractingTender: extractingTender ?? defaultExtractingTender,
       startListening,
       stopListening,
       reset,
@@ -251,6 +265,7 @@ export function WorkflowStreamProvider({
       loading,
       error,
       creatingOffer,
+      extractingTender,
       startListening,
       stopListening,
       reset,

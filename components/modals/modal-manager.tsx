@@ -50,6 +50,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
 import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
 import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
+import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -146,13 +147,15 @@ export function ModalManager() {
       );
     case "createProject":
       return (
-        <CreateProjectModal
-          open
-          onOpenChange={(open) => {
-            if (!open) handleClose();
-          }}
-          onSuccess={handleSuccess}
-        />
+        <WorkflowStreamProvider initialRunId={""}>
+          <CreateProjectModal
+            open
+            onOpenChange={(open) => {
+              if (!open) handleClose();
+            }}
+            onSuccess={handleSuccess}
+          />
+        </WorkflowStreamProvider>
       );
     case "scheduleTradie":
       const project = projectPayload

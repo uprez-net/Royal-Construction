@@ -16,8 +16,9 @@ import { createLeadProjectInferencePrompt } from "../agent/project-prompt";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
 import { Prisma } from "@prisma/client";
-import type { ProjectRequirementsPayload } from "@/types/project-flow";
+import type { ProjectRequirementsPayload, ProjectSourceDocumentReference } from "@/types/project-flow";
 import { buildProjectRequirementsPayload, resolveProjectBudget } from "@/lib/data/projectFlow";
+import type { ProjectExtractionData } from "@/types/project-extraction";
 
 /**
  * Creates a new project from manually entered project data.
@@ -127,9 +128,153 @@ export interface CreateProjectWithLeadInput {
   address: string;
   council: string;
   siteManagerId: string;
-  extraction?: ProjectRequirementsPayload | null;
+  extraction?: ProjectRequirementsPayload | ProjectExtractionData | null;
+  sourceDocuments: {
+    tender: ProjectSourceDocumentReference;
+    contract: ProjectSourceDocumentReference;
+  };
 }
 
+function isFlatExtraction(extraction: ProjectRequirementsPayload | ProjectExtractionData): extraction is ProjectExtractionData {
+  return "legalAdministrationSiteAddress" in extraction || "commercialsAndClaimsContractPrice" in extraction;
+}
+
+function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExtractionData,
+  sourceDocuments: {
+    tender: ProjectSourceDocumentReference;
+    contract: ProjectSourceDocumentReference;
+  }
+): ProjectRequirementsPayload {
+  if (!isFlatExtraction(extraction)) {
+    return extraction;
+  }
+
+  return buildProjectRequirementsPayload(
+    {
+      projectName: extraction.projectName,
+      projectType: extraction.projectType,
+      summary: extraction.summary,
+      legalAdministration: {
+        siteAddress: extraction.legalAdministrationSiteAddress,
+        ownerContacts: {
+          names: extraction.legalAdministrationOwnerNames,
+          emails: extraction.legalAdministrationOwnerEmails,
+          phones: extraction.legalAdministrationOwnerPhones,
+        },
+        commencementTrigger: extraction.legalAdministrationCommencementTrigger,
+        signedDate: extraction.legalAdministrationSignedDate,
+        pcaInspector: extraction.legalAdministrationPcaInspector,
+      },
+      commercialsAndClaims: {
+        totalContractSum: extraction.commercialsAndClaimsTotalContractSum,
+        tenderTotalPrice: extraction.commercialsAndClaimsTenderTotalPrice,
+        contractPrice: extraction.commercialsAndClaimsContractPrice,
+        gstIncluded: extraction.commercialsAndClaimsGstIncluded,
+        gstAmount: extraction.commercialsAndClaimsGstAmount,
+        depositValue: extraction.commercialsAndClaimsDepositValue,
+        claimStageSlabPercentage: extraction.commercialsAndClaimsClaimStageSlabPercentage,
+        claimStageSlabDollarValue: extraction.commercialsAndClaimsClaimStageSlabDollarValue,
+        variationAdminFee: extraction.commercialsAndClaimsVariationAdminFee,
+        latePenaltyRate: extraction.commercialsAndClaimsLatePenaltyRate,
+        paymentStages: extraction.commercialsAndClaimsPaymentStages.map((label) => ({
+          label,
+          percentage: null,
+          amount: null,
+        })),
+      },
+      subStructureAndGround: {
+        concreteSlabClass: extraction.subStructureAndGroundConcreteSlabClass,
+        concreteStrengthMpa: extraction.subStructureAndGroundConcreteStrengthMpa,
+        vapourBarrier: extraction.subStructureAndGroundVapourBarrier,
+        termiteSystem: extraction.subStructureAndGroundTermiteSystem,
+        sewerConnection: extraction.subStructureAndGroundSewerConnection,
+      },
+      shellAndExternal: {
+        ceilingHeightGroundFloor: extraction.shellAndExternalCeilingHeightGroundFloor,
+        ceilingHeightFirstFloor: extraction.shellAndExternalCeilingHeightFirstFloor,
+        roofingMaterial: extraction.shellAndExternalRoofingMaterial,
+        brickAllowance: extraction.shellAndExternalBrickAllowance,
+        brickCount: extraction.shellAndExternalBrickCount,
+        selectedBrickPrice: extraction.shellAndExternalSelectedBrickPrice,
+        windowProvider: extraction.shellAndExternalWindowProvider,
+        floorAreaM2: extraction.shellAndExternalFloorAreaM2,
+      },
+      mechanicalDetails: {
+        acSystemZones: extraction.mechanicalDetailsAcSystemZones,
+        acRequiredCapacityKw: extraction.mechanicalDetailsAcRequiredCapacityKw,
+        acInstalledCapacityKw: extraction.mechanicalDetailsAcInstalledCapacityKw,
+        lightingCount: extraction.mechanicalDetailsLightingCount,
+        tenderLightingCount: extraction.mechanicalDetailsTenderLightingCount,
+        powerPointCount: extraction.mechanicalDetailsPowerPointCount,
+        externalPower: extraction.mechanicalDetailsExternalPower,
+        jointSealants: extraction.mechanicalDetailsJointSealants,
+      },
+      internalFitOutAndFinishes: {
+        internalDoorHeight: extraction.internalFitOutAndFinishesInternalDoorHeight,
+        skirtingSize: extraction.internalFitOutAndFinishesSkirtingSize,
+        stoneThickness: extraction.internalFitOutAndFinishesStoneThickness,
+        waterfallEnds: extraction.internalFitOutAndFinishesWaterfallEnds,
+        tapwareFinish: extraction.internalFitOutAndFinishesTapwareFinish,
+        tilesProvisionRate: extraction.internalFitOutAndFinishesTilesProvisionRate,
+        tileAllowance: extraction.internalFitOutAndFinishesTileAllowance,
+        selectedTilePrice: extraction.internalFitOutAndFinishesSelectedTilePrice,
+        wetAreaSizeM2: extraction.internalFitOutAndFinishesWetAreaSizeM2,
+      },
+      exclusionsAndRisks: {
+        retainingWalls: extraction.exclusionsAndRisksRetainingWalls,
+        fencing: extraction.exclusionsAndRisksFencing,
+        blinds: extraction.exclusionsAndRisksBlinds,
+        solarProvisions: extraction.exclusionsAndRisksSolarProvisions,
+        rockExcavation: extraction.exclusionsAndRisksRockExcavation,
+        ownerResponsibility: extraction.exclusionsAndRisksOwnerResponsibility,
+        variationRequired: extraction.exclusionsAndRisksVariationRequired,
+      },
+      utilityInfrastructure: {
+        electricalPhase: extraction.utilityInfrastructureElectricalPhase,
+        communicationConduit: extraction.utilityInfrastructureCommunicationConduit,
+        gasConnection: extraction.utilityInfrastructureGasConnection,
+        fridgeWaterPoint: extraction.utilityInfrastructureFridgeWaterPoint,
+        smartLockBrand: extraction.utilityInfrastructureSmartLockBrand,
+      },
+      wetAreaCompliance: {
+        waterproofingStandard: extraction.wetAreaComplianceWaterproofingStandard,
+        showerScreenType: extraction.wetAreaComplianceShowerScreenType,
+        tiledNicheCount: extraction.wetAreaComplianceTiledNicheCount,
+        showerCount: extraction.wetAreaComplianceShowerCount,
+        floorToCeilingTiles: extraction.wetAreaComplianceFloorToCeilingTiles,
+        floorWasteType: extraction.wetAreaComplianceFloorWasteType,
+      },
+      safetyAndSiteLogistics: {
+        roofGuardrails: extraction.safetyAndSiteLogisticsRoofGuardrails,
+        sedimentControl: extraction.safetyAndSiteLogisticsSedimentControl,
+        scaffoldingSafety: extraction.safetyAndSiteLogisticsScaffoldingSafety,
+        tradeWaste: extraction.safetyAndSiteLogisticsTradeWaste,
+        finalCleanStatus: extraction.safetyAndSiteLogisticsFinalCleanStatus,
+      },
+      conflicts: [],
+      automationTriggers: {
+        orderReminders: true,
+        rainDelayCalculations: true,
+        noticeCountdowns: true,
+      },
+    },
+    {
+      tender: {
+        fileId: sourceDocuments.tender.fileId,
+        fileName: sourceDocuments.tender.fileName,
+        url: sourceDocuments.tender.url,
+        kind: "tender",
+      },
+      contract: {
+        fileId: sourceDocuments.contract.fileId,
+        fileName: sourceDocuments.contract.fileName,
+        url: sourceDocuments.contract.url,
+        kind: "contract",
+      },
+    },
+    [],
+  );
+}
 /**
  * Creates a new project from an existing lead.
  *
@@ -178,7 +323,7 @@ export interface CreateProjectWithLeadInput {
  * Re-throws any database, AI inference, milestone generation, notification,
  * or transaction errors encountered during execution.
  */
-export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName, extraction }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName, extraction, sourceDocuments }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
@@ -199,134 +344,143 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       ? null
       : await handleProjectSpecsGeneration(createLeadProjectInferencePrompt(lead));
 
-    const projectDescription = extraction?.summary ?? inferredSpecs?.projectDescription ?? "";
-    const projectType = extraction?.projectType ?? inferredSpecs?.projectType ?? "Unknown";
+    const extractedSummary = extraction && typeof extraction === "object"
+      ? (extraction as { summary?: string }).summary ?? ""
+      : "";
+    const extractedProjectType = extraction && typeof extraction === "object"
+      ? (extraction as { projectType?: string }).projectType ?? "Unknown"
+      : "Unknown";
+    const projectDescription = extractedSummary || inferredSpecs?.projectDescription || "";
+    const projectType = extractedProjectType || (inferredSpecs?.projectType ?? "Unknown");
+    const normalizedExtraction = extraction ? normalizeExtraction(extraction, sourceDocuments) : null;
     const projectBudget = extraction
-      ? resolveProjectBudget(extraction)
+      ? (isFlatExtraction(extraction)
+        ? extraction.commercialsAndClaimsContractPrice ?? extraction.commercialsAndClaimsTotalContractSum ?? extraction.commercialsAndClaimsTenderTotalPrice ?? 0
+        : resolveProjectBudget(extraction))
       : inferredSpecs?.projectBudget ?? 0;
-    const projectRequirements = extraction
-      ? extraction
+    const projectRequirements = normalizedExtraction
+      ? normalizedExtraction
       : buildProjectRequirementsPayload(
-          {
-            projectName,
-            projectType: inferredSpecs?.projectType ?? "",
-            summary: inferredSpecs?.projectDescription ?? "",
-            legalAdministration: {
-              siteAddress: address,
-              ownerContacts: {
-                names: [lead.name],
-                emails: lead.email ? [lead.email] : [],
-                phones: lead.phone ? [lead.phone] : [],
-              },
-              commencementTrigger: "",
-              signedDate: "",
-              pcaInspector: "",
+        {
+          projectName,
+          projectType: inferredSpecs?.projectType ?? "",
+          summary: inferredSpecs?.projectDescription ?? "",
+          legalAdministration: {
+            siteAddress: address,
+            ownerContacts: {
+              names: [lead.name],
+              emails: lead.email ? [lead.email] : [],
+              phones: lead.phone ? [lead.phone] : [],
             },
-            commercialsAndClaims: {
-              totalContractSum: inferredSpecs?.projectBudget ?? 0,
-              tenderTotalPrice: inferredSpecs?.projectBudget ?? 0,
-              contractPrice: inferredSpecs?.projectBudget ?? 0,
-              gstIncluded: null,
-              gstAmount: null,
-              depositValue: null,
-              claimStageSlabPercentage: null,
-              claimStageSlabDollarValue: null,
-              variationAdminFee: null,
-              latePenaltyRate: null,
-              paymentStages: [],
-            },
-            subStructureAndGround: {
-              concreteSlabClass: "",
-              concreteStrengthMpa: null,
-              vapourBarrier: "",
-              termiteSystem: "",
-              sewerConnection: "",
-            },
-            shellAndExternal: {
-              ceilingHeightGroundFloor: "",
-              ceilingHeightFirstFloor: "",
-              roofingMaterial: "",
-              brickAllowance: null,
-              brickCount: null,
-              selectedBrickPrice: null,
-              windowProvider: "",
-              floorAreaM2: lotSize,
-            },
-            mechanicalDetails: {
-              acSystemZones: "",
-              acRequiredCapacityKw: null,
-              acInstalledCapacityKw: null,
-              lightingCount: null,
-              tenderLightingCount: null,
-              powerPointCount: null,
-              externalPower: "",
-              jointSealants: "",
-            },
-            internalFitOutAndFinishes: {
-              internalDoorHeight: "",
-              skirtingSize: "",
-              stoneThickness: "",
-              waterfallEnds: "",
-              tapwareFinish: "",
-              tilesProvisionRate: "",
-              tileAllowance: null,
-              selectedTilePrice: null,
-              wetAreaSizeM2: null,
-            },
-            exclusionsAndRisks: {
-              retainingWalls: "",
-              fencing: "",
-              blinds: "",
-              solarProvisions: "",
-              rockExcavation: "",
-              ownerResponsibility: [],
-              variationRequired: [],
-            },
-            utilityInfrastructure: {
-              electricalPhase: "",
-              communicationConduit: "",
-              gasConnection: "",
-              fridgeWaterPoint: "",
-              smartLockBrand: "",
-            },
-            wetAreaCompliance: {
-              waterproofingStandard: "",
-              showerScreenType: "",
-              tiledNicheCount: null,
-              showerCount: null,
-              floorToCeilingTiles: "",
-              floorWasteType: "",
-            },
-            safetyAndSiteLogistics: {
-              roofGuardrails: "",
-              sedimentControl: "",
-              scaffoldingSafety: "",
-              tradeWaste: "",
-              finalCleanStatus: "",
-            },
-            conflicts: [],
-            automationTriggers: {
-              orderReminders: true,
-              rainDelayCalculations: true,
-              noticeCountdowns: true,
-            },
+            commencementTrigger: "",
+            signedDate: "",
+            pcaInspector: "",
           },
-          {
-            tender: {
-              fileId: "",
-              fileName: "",
-              url: "",
-              kind: "tender",
-            },
-            contract: {
-              fileId: "",
-              fileName: "",
-              url: "",
-              kind: "contract",
-            },
+          commercialsAndClaims: {
+            totalContractSum: inferredSpecs?.projectBudget ?? 0,
+            tenderTotalPrice: inferredSpecs?.projectBudget ?? 0,
+            contractPrice: inferredSpecs?.projectBudget ?? 0,
+            gstIncluded: null,
+            gstAmount: null,
+            depositValue: null,
+            claimStageSlabPercentage: null,
+            claimStageSlabDollarValue: null,
+            variationAdminFee: null,
+            latePenaltyRate: null,
+            paymentStages: [],
           },
-          [],
-        );
+          subStructureAndGround: {
+            concreteSlabClass: "",
+            concreteStrengthMpa: null,
+            vapourBarrier: "",
+            termiteSystem: "",
+            sewerConnection: "",
+          },
+          shellAndExternal: {
+            ceilingHeightGroundFloor: "",
+            ceilingHeightFirstFloor: "",
+            roofingMaterial: "",
+            brickAllowance: null,
+            brickCount: null,
+            selectedBrickPrice: null,
+            windowProvider: "",
+            floorAreaM2: lotSize,
+          },
+          mechanicalDetails: {
+            acSystemZones: "",
+            acRequiredCapacityKw: null,
+            acInstalledCapacityKw: null,
+            lightingCount: null,
+            tenderLightingCount: null,
+            powerPointCount: null,
+            externalPower: "",
+            jointSealants: "",
+          },
+          internalFitOutAndFinishes: {
+            internalDoorHeight: "",
+            skirtingSize: "",
+            stoneThickness: "",
+            waterfallEnds: "",
+            tapwareFinish: "",
+            tilesProvisionRate: "",
+            tileAllowance: null,
+            selectedTilePrice: null,
+            wetAreaSizeM2: null,
+          },
+          exclusionsAndRisks: {
+            retainingWalls: "",
+            fencing: "",
+            blinds: "",
+            solarProvisions: "",
+            rockExcavation: "",
+            ownerResponsibility: [],
+            variationRequired: [],
+          },
+          utilityInfrastructure: {
+            electricalPhase: "",
+            communicationConduit: "",
+            gasConnection: "",
+            fridgeWaterPoint: "",
+            smartLockBrand: "",
+          },
+          wetAreaCompliance: {
+            waterproofingStandard: "",
+            showerScreenType: "",
+            tiledNicheCount: null,
+            showerCount: null,
+            floorToCeilingTiles: "",
+            floorWasteType: "",
+          },
+          safetyAndSiteLogistics: {
+            roofGuardrails: "",
+            sedimentControl: "",
+            scaffoldingSafety: "",
+            tradeWaste: "",
+            finalCleanStatus: "",
+          },
+          conflicts: [],
+          automationTriggers: {
+            orderReminders: true,
+            rainDelayCalculations: true,
+            noticeCountdowns: true,
+          },
+        },
+        {
+          tender: {
+            fileId: "",
+            fileName: "",
+            url: "",
+            kind: "tender",
+          },
+          contract: {
+            fileId: "",
+            fileName: "",
+            url: "",
+            kind: "contract",
+          },
+        },
+        [],
+      );
     const newProjectId = await prisma.$transaction(async (tx) => {
       // Create customer first, then reference by customerId to satisfy Prisma types
       const customer = await createCustomerForProject({
