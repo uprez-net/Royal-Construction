@@ -106,7 +106,7 @@ function createMentionToken(index: number) {
   return `{{MENTION_${index}}}`;
 }
 
-function cloneMentionNode(node: MentionElementNode): MentionElementNode {
+export function cloneMentionNode(node: MentionElementNode): MentionElementNode {
   return {
     children: [{ text: "" }],
     key: node.key,
@@ -115,7 +115,7 @@ function cloneMentionNode(node: MentionElementNode): MentionElementNode {
   };
 }
 
-function serializeNodeForAi(
+export function serializeNodeForAi(
   node: LeadRichTextNode,
   preservedMentions: PreservedMention[],
 ): string {
@@ -137,7 +137,7 @@ function serializeNodeForAi(
     .join("");
 }
 
-function serializeDocumentForAi(document: LeadRichTextDocument) {
+export function serializeDocumentForAi(document: LeadRichTextDocument) {
   const preservedMentions: PreservedMention[] = [];
   const text = document.value
     .map((node) => serializeNodeForAi(node, preservedMentions).trim())
@@ -150,7 +150,7 @@ function serializeDocumentForAi(document: LeadRichTextDocument) {
   };
 }
 
-function textWithMentionsToNodes(
+export function textWithMentionsToNodes(
   text: string,
   preservedMentions: PreservedMention[],
 ): LeadRichTextNode[] {
@@ -161,7 +161,9 @@ function textWithMentionsToNodes(
     mention.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
   );
   const tokenPattern =
-    escapedTokens.length > 0 ? new RegExp(`(${escapedTokens.join("|")})`, "g") : null;
+    escapedTokens.length > 0
+      ? new RegExp(`(${escapedTokens.join("|")})`, "g")
+      : null;
   let restoredText = text.trim();
 
   for (const mention of preservedMentions) {
@@ -198,7 +200,7 @@ function textWithMentionsToNodes(
   });
 }
 
-function MentionElement(props: PlateElementProps) {
+export function MentionElement(props: PlateElementProps) {
   const element = props.element as MentionElementNode;
 
   return (
@@ -214,7 +216,7 @@ function MentionElement(props: PlateElementProps) {
   );
 }
 
-function LinkElement(props: PlateElementProps) {
+export function LinkElement(props: PlateElementProps) {
   const element = props.element as LinkElementNode;
   const href = typeof element.url === "string" ? element.url : undefined;
 
@@ -236,14 +238,15 @@ function LinkElement(props: PlateElementProps) {
   );
 }
 
-function MentionInputElement(props: PlateElementProps) {
+export function MentionInputElement(props: PlateElementProps) {
   const editor = useEditorRef();
   const availableUsers = useContext(MentionUsersContext);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLSpanElement>(null);
   const [search, setSearch] = useState("");
-  const [menuPosition, setMenuPosition] =
-    useState<FloatingMenuPosition | null>(null);
+  const [menuPosition, setMenuPosition] = useState<FloatingMenuPosition | null>(
+    null,
+  );
   const cursorState = useHTMLInputCursorState(inputRef);
   const { props: inputProps } = useComboboxInput({
     autoFocus: true,
@@ -382,7 +385,7 @@ function MentionInputElement(props: PlateElementProps) {
   );
 }
 
-function ToolbarButton({
+export function ToolbarButton({
   children,
   disabled,
   isActive,
@@ -415,7 +418,7 @@ function ToolbarButton({
   );
 }
 
-function AiActionButton({
+export function AiActionButton({
   disabled,
   isWorking,
   onClick,
@@ -445,10 +448,11 @@ function AiActionButton({
   );
 }
 
-function EditorToolbar({
+export function EditorToolbar({
   editor,
   onReplaceNoteText,
   value,
+  hideMentionInfo = false,
 }: {
   editor: NonNullable<ReturnType<typeof usePlateEditor>>;
   onReplaceNoteText: (
@@ -456,6 +460,7 @@ function EditorToolbar({
     preservedMentions: PreservedMention[],
   ) => void;
   value: LeadRichTextDocument | null | undefined;
+  hideMentionInfo?: boolean;
 }) {
   const [aiAction, setAiAction] = useState<AiNoteAction>("improve");
   const [isAiWorking, setIsAiWorking] = useState(false);
@@ -598,16 +603,18 @@ function EditorToolbar({
           disabled={isAiWorking}
         />
       </div>
-      <div className="ml-auto flex items-center gap-1 rounded-[6px] border border-[#ccfbf1] bg-white px-2 py-1 text-xs text-[#0f766e]">
-        <AtSign className="size-3.5" />
-        <span>Type @ to mention</span>
-        {mentionedUserIds.length > 0 && (
-          <span className="ml-1 border-l border-[#ccfbf1] pl-2">
-            {mentionedUserIds.length} mention
-            {mentionedUserIds.length === 1 ? "" : "s"}
-          </span>
-        )}
-      </div>
+      {!hideMentionInfo && (
+        <div className="ml-auto flex items-center gap-1 rounded-[6px] border border-[#ccfbf1] bg-white px-2 py-1 text-xs text-[#0f766e]">
+          <AtSign className="size-3.5" />
+          <span>Type @ to mention</span>
+          {mentionedUserIds.length > 0 && (
+            <span className="ml-1 border-l border-[#ccfbf1] pl-2">
+              {mentionedUserIds.length} mention
+              {mentionedUserIds.length === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

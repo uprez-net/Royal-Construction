@@ -30,9 +30,65 @@ import { generateEmailChecksum } from "@/utils/generator";
 import { dataTimeFormat } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
+import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
+
+function normalizeEmailBody(value: string) {
+  return value.replace(/\r\n/g, "\n").trim();
+}
+
+function hasHtmlMarkup(value: string) {
+  return /<[a-z][\s\S]*>/i.test(value);
+}
+
+function markdownToHtml(value: string) {
+  const paragraphs = normalizeEmailBody(value).split(/\n\s*\n/).filter(Boolean);
+
+  if (paragraphs.length === 0) {
+    return "";
+  }
+
+  return paragraphs
+    .map((paragraph) => {
+      const formattedParagraph = paragraph
+        .split("\n")
+        .map((line) => escapeEmailHtml(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"))
+        .join("<br>");
+
+      return `<p>${formattedParagraph}</p>`;
+    })
+    .join("");
+}
+
+function buildLeadEmailHtml(body: string) {
+  const normalizedBody = normalizeEmailBody(body);
+  const bodyHtml = hasHtmlMarkup(normalizedBody)
+    ? sanitizeLeadNotesHtml(normalizedBody)
+    : markdownToHtml(normalizedBody);
+
+  return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards,<br>Royal Constructions team.</p>`;
+}
+
+function htmlToPlainText(value: string) {
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
 
 /**
  * Escapes HTML-sensitive characters to prevent HTML injection when embedding
@@ -1047,15 +1103,8 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
       throw new Error("Lead not found");
     }
     const signedBody = `
-    Hi ${existingLead.name},<br><br>
-
-    ${body}
-
-    <p>
-      ${user.name}<br>
-      ${user.email}<br>
-      Royal Constructions Team
-    </p>
+    <p>Hi ${escapeEmailHtml(existingLead.name)},</p>
+    ${buildLeadEmailHtml(body)}
     `;
 
     await sendEmail({
@@ -1063,13 +1112,7 @@ export async function sendLeadEmail(leadId: number, subject: string, body: strin
       subject,
       body: signedBody,
     });
-    const strippedEmailBody = signedBody
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n\n')
-      .replace(/<[^>]*>/g, '')
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+    const strippedEmailBody = htmlToPlainText(signedBody);
     const checksum = await generateEmailChecksum(subject, strippedEmailBody, process.env.BUSINESS_EMAIL ?? to, to, dataTimeFormat.format(new Date()));
     const emailRecord = await prisma.leadEmails.create({
       data: {
