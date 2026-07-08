@@ -100,7 +100,7 @@ export function UploadDropzone({
 
   return (
     <div className={cn("space-y-1.5", className)}>
-      <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </label>
 
@@ -153,7 +153,7 @@ export function UploadDropzone({
         </div>
 
         {isLoading ? (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-sm">
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
             <Loader2 className="size-3.5 animate-spin text-teal-600" />
             Uploading...
           </div>
@@ -202,7 +202,7 @@ export function UploadDropzone({
                       </p>
                     </div>
 
-                    <div className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                    <div className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                       {file.status === "uploading" ? (
                         <Loader2 className="size-3.5 animate-spin text-teal-600" />
                       ) : null}

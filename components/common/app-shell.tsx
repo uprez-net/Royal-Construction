@@ -72,7 +72,7 @@ export function AppShell({
   );
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#F7F6F2] text-slate-900">
+    <div className="relative min-h-screen bg-[#F7F6F2] text-slate-900">
       {/* Clean Light Background matching Email Theme */}
       <div className="flex min-h-screen">
         

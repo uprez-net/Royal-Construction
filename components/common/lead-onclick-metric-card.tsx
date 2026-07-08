@@ -41,7 +41,7 @@ export function LeadMetricCard({
   active?: boolean
 }) {
   const content = (
-    <div className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3">
+    <div className="grid min-h-[4.5rem] grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3">
       {Icon ? (
         <div className={cn("grid size-9 place-items-center rounded-lg", toneMap[tone])}>
           <Icon className="size-4" />
@@ -56,7 +56,7 @@ export function LeadMetricCard({
             {label}
           </p>
         </div>
-        <p className="mt-1 truncate text-[11px] text-muted-foreground">
+        <p className="mt-1 truncate text-xs text-muted-foreground">
           {note}
         </p>
       </div>

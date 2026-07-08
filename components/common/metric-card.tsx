@@ -46,7 +46,7 @@ export function MetricCard({
 
   return (
     <Card className="overflow-hidden rounded-lg border-border/70 bg-white/95 shadow-sm">
-      <CardContent className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
+      <CardContent className="grid min-h-[4.5rem] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3">
         <div
           className={cn(
             "grid size-9 place-items-center rounded-lg text-white",
@@ -59,7 +59,7 @@ export function MetricCard({
           <p className="font-heading text-2xl font-semibold leading-none tracking-tight text-foreground">
             {displayValue}
           </p>
-          <p className="mt-1 truncate text-[11px] text-muted-foreground">
+          <p className="mt-1 truncate text-xs text-muted-foreground">
             {title}
           </p>
         </div>

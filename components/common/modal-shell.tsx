@@ -16,7 +16,7 @@ export function ModalShell({
   onClose,
   title,
   subtitle,
-  maxWidthClass = "max-w-[520px]",
+  maxWidthClass = "max-w-[32.5rem]",
   titleClassName,
   children,
 }: ModalShellProps) {

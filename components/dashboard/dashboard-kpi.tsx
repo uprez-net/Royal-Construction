@@ -97,7 +97,7 @@ export function DashboardKPI({
       {allKPIs.map((kpi) => (
         <div
           key={kpi.title}
-          className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
+          className="grid min-h-[4.5rem] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
         >
           <div
             className={cn(

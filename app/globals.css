@@ -157,7 +157,16 @@
     @apply border-border outline-ring/50;
   }
 
+  /*
+   * Global UI scale: 80% equivalent zoom.
+   * Reduces root font-size from 16px → 12.8px so all rem-based utilities
+   * (Tailwind spacing, typography, sizing, breakpoints) cascade proportionally.
+   * Breakpoints shift with this change (mirroring browser zoom-out behavior)
+   * and are intentionally left shifted — do NOT pin them to fixed px unless
+   * verification reveals undesirable shifts.
+   */
   html {
+    font-size: 80%;
     @apply h-full font-sans;
   }
 
