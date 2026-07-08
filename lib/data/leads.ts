@@ -7,7 +7,7 @@ import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
-import { Prisma } from "@prisma/client";
+import { Prisma, LeadEmails } from "@prisma/client";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
 import {
@@ -31,9 +31,48 @@ import { generateEmailSubject } from "@/utils/generate-email-subject";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
+import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
+import { getAllEmailThreads } from "@/utils/email-parser";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
+
+function normalizeEmailBody(value: string) {
+  return value.replace(/\r\n/g, "\n").trim();
+}
+
+function hasHtmlMarkup(value: string) {
+  return /<[a-z][\s\S]*>/i.test(value);
+}
+
+function markdownToHtml(value: string) {
+  const paragraphs = normalizeEmailBody(value).split(/\n\s*\n/).filter(Boolean);
+
+  if (paragraphs.length === 0) {
+    return "";
+  }
+
+  return paragraphs
+    .map((paragraph) => {
+      const formattedParagraph = paragraph
+        .split("\n")
+        .map((line) => escapeEmailHtml(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"))
+        .join("<br>");
+
+      return `<p>${formattedParagraph}</p>`;
+    })
+    .join("");
+}
+
+function buildLeadEmailHtml(body: string) {
+  const normalizedBody = normalizeEmailBody(body);
+  const bodyHtml = hasHtmlMarkup(normalizedBody)
+    ? sanitizeLeadNotesHtml(normalizedBody)
+    : markdownToHtml(normalizedBody);
+
+  return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards,<br>Royal Constructions team.</p>`;
+}
+
 
 /**
  * Escapes HTML-sensitive characters to prevent HTML injection when embedding
@@ -1049,14 +1088,8 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
     }
 
     const signedBody = `
-    Hi ${existingLead.name},<br>
-
-    ${body}
-
-    <p>
-      Thanks & Regards,
-      Royal Constructions team.
-    </p>
+    <p>Hi ${escapeEmailHtml(existingLead.name)},</p>
+    ${buildLeadEmailHtml(body)}
     `;
 
     // Generate a subject line using AI for the body
@@ -1066,36 +1099,40 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
       subject: `${aiSubject} - ${location}`,
       body: signedBody,
     });
-    const strippedEmailBody = signedBody
-      .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, (_, content) =>
-        content.replace(/<br\s*\/?>/gi, '')
-      )
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<[^>]*>/g, '')
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    const checksum = await generateEmailChecksum(
-      `${aiSubject} - ${location}`,
-      strippedEmailBody,
-      process.env.BUSINESS_EMAIL ?? to,
-      to
-    );
-    const emailRecord = await prisma.leadEmails.create({
-      data: {
-        leadId,
-        subject: `${aiSubject} - ${location}`,
-        body: strippedEmailBody,
-        emailTo: normalizeEmailAddress(to),
-        emailFrom: normalizeEmailAddress(process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'),
-        checksum,
-        sentAt: new Date(),
-      },
+    const strippedEmailBody = getAllEmailThreads(signedBody, {
+      from: normalizeEmailAddress(process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'),
+      to: normalizeEmailAddress(to),
+      subject: `${aiSubject} - ${location}`,
+      sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
     });
-    console.log(`[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`);
+    let recordedEmail: LeadEmails | null = null;
+    for(const thread of strippedEmailBody) {
+      const checksum = await generateEmailChecksum(
+        thread.subject,
+        thread.body,
+        normalizeEmailAddress(thread.from),
+        normalizeEmailAddress(thread.to),
+      );
+      const emailRecord = await prisma.leadEmails.create({
+        data: {
+          leadId,
+          subject: `${aiSubject} - ${location}`,
+          body: thread.body,
+          emailTo: normalizeEmailAddress(thread.to),
+          emailFrom: normalizeEmailAddress(thread.from),
+          checksum,
+          sentAt: new Date(),
+        },
+      });
+      console.log(`[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`);
+      recordedEmail = emailRecord;
+    }
 
-    return emailRecord;
+    if(!recordedEmail) {
+      throw new Error("Failed to record email");
+    }
+
+    return recordedEmail;
   } catch (error) {
     console.error(`[Lead ${leadId}] Failed to send email:`, error);
     throw new Error("Failed to send email");
