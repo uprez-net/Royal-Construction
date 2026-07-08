@@ -162,6 +162,18 @@
     zoom: 0.8;
   }
 
+  @media (min-width: 1024px) {
+    html {
+      zoom: 0.9;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    html {
+      zoom: 1;
+    }
+  }
+
   body {
     @apply min-h-full bg-background text-foreground antialiased;
     background-image:
@@ -265,6 +277,7 @@
 .toaster .cn-toast[data-type="loading"] [data-description] {
   color: color-mix(in oklab, var(--muted-foreground) 28%, var(--card-foreground)) !important;
 }
+
 /* ----------------------------------------------
    LEADS COMPONENT STYLES — Royal Constructions Theme
    ---------------------------------------------- */
@@ -415,7 +428,7 @@
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   position: relative;
-  transition: color 0.2s cubic-bezier(.4,0,.2,1);
+  transition: color 0.2s cubic-bezier(.4, 0, .2, 1);
   font-family: inherit;
   display: flex;
   align-items: center;
@@ -474,9 +487,11 @@
   0% {
     transform: translateX(-100%);
   }
+
   50% {
     transform: translateX(150%);
   }
+
   100% {
     transform: translateX(300%);
   }
@@ -583,10 +598,12 @@
 }
 
 @keyframes pulse {
+
   0%,
   100% {
     box-shadow: 0 0 0 0 color-mix(in oklab, var(--destructive) 40%, transparent);
   }
+
   50% {
     box-shadow: 0 0 0 6px color-mix(in oklab, var(--destructive) 0%, transparent);
   }
@@ -889,14 +906,37 @@
 }
 
 /* Column widths — aligned header & body */
-.leads-table .col-lead     { width: 17%; }
-.leads-table .col-phone    { width: 12%; }
-.leads-table .col-location { width: 13%; }
-.leads-table .col-source   { width: 12%; }
-.leads-table .col-stage    { width: 10%; }
-.leads-table .col-followup { width: 15%; }
-.leads-table .col-assigned { width: 12%; }
-.leads-table .col-actions  { width: 9%; }
+.leads-table .col-lead {
+  width: 17%;
+}
+
+.leads-table .col-phone {
+  width: 12%;
+}
+
+.leads-table .col-location {
+  width: 13%;
+}
+
+.leads-table .col-source {
+  width: 12%;
+}
+
+.leads-table .col-stage {
+  width: 10%;
+}
+
+.leads-table .col-followup {
+  width: 15%;
+}
+
+.leads-table .col-assigned {
+  width: 12%;
+}
+
+.leads-table .col-actions {
+  width: 9%;
+}
 
 .leads-table thead th {
   font-size: 11px;
@@ -1249,8 +1289,15 @@
 }
 
 @keyframes fu-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ── Followup list ─────────────────── */
@@ -1282,7 +1329,7 @@
   background: oklch(0.968 0.007 247.9 / 0.6);
 }
 
-.fu-item + .fu-item {
+.fu-item+.fu-item {
   border-top: 1px solid var(--border-light);
 }
 
@@ -1673,7 +1720,7 @@
   gap: 10px;
 }
 
-.analytics-summary > div {
+.analytics-summary>div {
   border: 1px solid var(--border-color);
   border-radius: 10px;
   background: var(--bg-card);
@@ -2119,8 +2166,13 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-content-custom {
@@ -2135,8 +2187,15 @@
 }
 
 @keyframes modalIn {
-  from { opacity: 0; transform: scale(0.96) translateY(10px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .modal-header-custom {
@@ -2524,9 +2583,10 @@
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--royal-gold) 35%, transparent);
 }
 
-.email-html-preview p{
+.email-html-preview p {
   margin: 10px 2px !important;
 }
+
 /* ──────────────────────────────────── */
 /* TOAST NOTIFICATIONS */
 /* ──────────────────────────────────── */
@@ -2555,8 +2615,15 @@
 }
 
 @keyframes toastIn {
-  from { opacity: 0; transform: translateX(40px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .toast-icon-wrapper {
