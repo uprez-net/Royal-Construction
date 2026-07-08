@@ -1067,8 +1067,11 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
       body: signedBody,
     });
     const strippedEmailBody = signedBody
+      .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, (_, content) =>
+        content.replace(/<br\s*\/?>/gi, '')
+      )
       .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<\/p>/gi, '\n')
       .replace(/<[^>]*>/g, '')
       .replace(/[ \t]+/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
