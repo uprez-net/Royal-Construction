@@ -63,6 +63,7 @@ import {
 } from "@/types/project-extraction";
 import { useWorkflowStream } from "@/context/WorkFlowStatusContext";
 import type { TenderExtractionResult } from "@/lib/workflow/project";
+import { emptyExtractionState, ExtractionSectionCard, normalizeString, sectionFields, updateExtractionField } from "./form/extracted-components";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -87,227 +88,7 @@ const EXTRACTION_PROGRESS = [
   "Preparing review",
 ] as const;
 
-const BOOLEAN_FIELDS = new Set(["commercialsAndClaimsGstIncluded"]);
 
-const NUMERIC_FIELDS = new Set([
-  "commercialsAndClaimsTotalContractSum",
-  "commercialsAndClaimsTenderTotalPrice",
-  "commercialsAndClaimsContractPrice",
-  "commercialsAndClaimsGstAmount",
-  "commercialsAndClaimsDepositValue",
-  "commercialsAndClaimsClaimStageSlabPercentage",
-  "commercialsAndClaimsClaimStageSlabDollarValue",
-  "commercialsAndClaimsVariationAdminFee",
-  "commercialsAndClaimsLatePenaltyRate",
-  "subStructureAndGroundConcreteStrengthMpa",
-  "shellAndExternalBrickAllowance",
-  "shellAndExternalBrickCount",
-  "shellAndExternalSelectedBrickPrice",
-  "shellAndExternalFloorAreaM2",
-  "mechanicalDetailsAcRequiredCapacityKw",
-  "mechanicalDetailsAcInstalledCapacityKw",
-  "mechanicalDetailsLightingCount",
-  "mechanicalDetailsTenderLightingCount",
-  "mechanicalDetailsPowerPointCount",
-  "internalFitOutAndFinishesTileAllowance",
-  "internalFitOutAndFinishesSelectedTilePrice",
-  "internalFitOutAndFinishesWetAreaSizeM2",
-  "wetAreaComplianceTiledNicheCount",
-  "wetAreaComplianceShowerCount",
-]);
-
-const ARRAY_FIELDS = new Set([
-  "legalAdministrationOwnerNames",
-  "legalAdministrationOwnerEmails",
-  "legalAdministrationOwnerPhones",
-  "commercialsAndClaimsPaymentStages",
-  "exclusionsAndRisksOwnerResponsibility",
-  "exclusionsAndRisksVariationRequired",
-]);
-
-const LARGE_TEXT_FIELDS = new Set([
-  "summary",
-  "commercialsAndClaimsPaymentStages",
-  "exclusionsAndRisksOwnerResponsibility",
-  "exclusionsAndRisksVariationRequired",
-]);
-
-function fieldLabel(field: string) {
-  return field
-    .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (character) => character.toUpperCase())
-    .trim();
-}
-
-function normalizeString(value: unknown) {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  return "";
-}
-
-function normalizeDisplayValue(value: unknown) {
-  if (Array.isArray(value)) {
-    if (value.every((entry) => typeof entry === "string")) {
-      return value.join("\n");
-    }
-
-    return "";
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? String(value) : "";
-  }
-
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
-
-  return "";
-}
-
-function coerceFieldValue(field: string, rawValue: string) {
-  if (ARRAY_FIELDS.has(field)) {
-    return rawValue
-      .split(/\n|,/)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-
-  if (BOOLEAN_FIELDS.has(field)) {
-    if (!rawValue.trim()) {
-      return null;
-    }
-
-    return rawValue === "true";
-  }
-
-  if (NUMERIC_FIELDS.has(field)) {
-    if (!rawValue.trim()) {
-      return null;
-    }
-
-    const parsed = Number(rawValue);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return rawValue;
-}
-
-function emptyExtractionState(): ProjectExtractionData {
-  return createEmptyProjectExtractionData();
-}
-
-function sectionFields(
-  sectionKey: (typeof projectExtractionSections)[number]["key"],
-) {
-  return (
-    projectExtractionSections.find((section) => section.key === sectionKey)
-      ?.fields ?? []
-  );
-}
-
-function ExtractionField({
-  field,
-  value,
-  onChange,
-}: {
-  field: string;
-  value: unknown;
-  onChange: (field: string, value: unknown) => void;
-}) {
-  const inputValue = normalizeDisplayValue(value);
-
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-        {fieldLabel(field)}
-      </Label>
-      {BOOLEAN_FIELDS.has(field) ? (
-        <select
-          value={typeof value === "boolean" ? String(value) : ""}
-          onChange={(event) =>
-            onChange(field, coerceFieldValue(field, event.target.value))
-          }
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-        >
-          <option value="">Unknown</option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      ) : ARRAY_FIELDS.has(field) || LARGE_TEXT_FIELDS.has(field) ? (
-        <Textarea
-          value={inputValue}
-          onChange={(event) =>
-            onChange(field, coerceFieldValue(field, event.target.value))
-          }
-          className="min-h-24"
-        />
-      ) : (
-        <Input
-          type={NUMERIC_FIELDS.has(field) ? "number" : "text"}
-          value={inputValue}
-          onChange={(event) =>
-            onChange(field, coerceFieldValue(field, event.target.value))
-          }
-        />
-      )}
-    </div>
-  );
-}
-
-function ExtractionSectionCard({
-  title,
-  description,
-  fields,
-  values,
-  onChange,
-}: {
-  title: string;
-  description: string;
-  fields: readonly string[];
-  values: ProjectExtractionData;
-  onChange: (field: string, value: unknown) => void;
-}) {
-  return (
-    <div className="rounded-2xl border border-border/70 bg-white/95 p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
-      <div className="mb-4 space-y-1">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="text-xs leading-5 text-muted-foreground">{description}</p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {fields.map((field) => (
-          <ExtractionField
-            key={field}
-            field={field}
-            value={values[field as keyof ProjectExtractionData]}
-            onChange={onChange}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function updateExtractionField(
-  current: ProjectExtractionData,
-  field: keyof ProjectExtractionData,
-  value: unknown,
-): ProjectExtractionData {
-  return projectExtractionSchema.parse({
-    ...current,
-    [field]: value,
-  } as never);
-}
 
 export function CreateProjectModal({
   open,
@@ -628,6 +409,16 @@ export function CreateProjectModal({
       return;
     }
 
+    if(!selectedLocation) {
+      toast.error("Select a site location before creating the project.");
+      return;
+    }
+
+    if(!selectedSiteManager) {
+      toast.error("Select a site manager before creating the project.");
+      return;
+    }
+
     setIsSubmitting(true);
     setStage("submitting");
 
@@ -674,10 +465,10 @@ export function CreateProjectModal({
               normalizedExtraction.legalAdministrationSiteAddress,
             ) ||
             siteAddress ||
-            selectedLocation?.label ||
+            selectedLocation.label ||
             "",
-          council: selectedLocation?.council ?? "",
-          siteManagerId: selectedSiteManager?.id ?? "",
+          council: selectedLocation.council,
+          siteManagerId: selectedSiteManager.id,
           extraction: normalizedExtraction,
           sourceDocuments,
         }),
@@ -849,7 +640,7 @@ export function CreateProjectModal({
                   </div>
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border border-border/70 bg-white p-3">
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
                     <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                       Project name
                     </Label>
@@ -867,7 +658,7 @@ export function CreateProjectModal({
                       }
                     />
                   </div>
-                  <div className="rounded-xl border border-border/70 bg-white p-3">
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
                     <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                       Site location
                     </Label>
@@ -892,7 +683,7 @@ export function CreateProjectModal({
                       }}
                     />
                   </div>
-                  <div className="rounded-xl border border-border/70 bg-white p-3">
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
                     <SearchableSelect
                       label="Site manager"
                       placeholder="Assign manager..."
@@ -974,6 +765,7 @@ export function CreateProjectModal({
             </div>
 
             <ExtractionSectionCard
+              sectionKey={currentSection.key}
               title={currentSection.title}
               description={`Edit the fields for ${currentSection.title.toLowerCase()}. Leave unknown values blank.`}
               fields={currentFields}
