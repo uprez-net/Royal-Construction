@@ -2,9 +2,10 @@ import { OfferCreationStatus } from "@/lib/workflow/offer";
 import { getRun } from "workflow/api";
 import { NextRequest, connection } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import prisma from "@/lib/prisma";
+// import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
+// import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
+import { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
 
 export async function GET(
     request: NextRequest,
@@ -25,25 +26,25 @@ export async function GET(
         return Response.json({ error: "Invalid runId" }, { status: 400 });
     }
 
-    const lead = await prisma.lead.findFirst({
-        where: { runId },
-        select: { id: true },
-    });
-    if (!lead) {
-        return Response.json({ error: "Workflow run not found" }, { status: 404 });
-    }
+    // const lead = await prisma.lead.findFirst({
+    //     where: { runId },
+    //     select: { id: true },
+    // });
+    // if (!lead) {
+    //     return Response.json({ error: "Workflow run not found" }, { status: 404 });
+    // }
 
-    try {
-        await assertCanAccessLead(user, lead.id);
-    } catch (error) {
-        if (error instanceof LeadAccessError) {
-            return Response.json(
-                { error: error.status === 404 ? "Workflow run not found" : error.message },
-                { status: error.status },
-            );
-        }
-        throw error;
-    }
+    // try {
+    //     await assertCanAccessLead(user, lead.id);
+    // } catch (error) {
+    //     if (error instanceof LeadAccessError) {
+    //         return Response.json(
+    //             { error: error.status === 404 ? "Workflow run not found" : error.message },
+    //             { status: error.status },
+    //         );
+    //     }
+    //     throw error;
+    // }
 
     const { searchParams } = new URL(request.url);
     const startIndexParam = searchParams.get("startIndex");
@@ -63,10 +64,10 @@ export async function GET(
         await connection(); // Ensure the connection is established before proceeding
         const run = getRun(runId);
         console.log(`Resuming stream for run ${runId} from index ${startIndex}`);
-        const stream = run.getReadable<OfferCreationStatus>({ startIndex });
+        const stream = run.getReadable<OfferCreationStatus | TenderExtractionWorkflowStreamEvent>({ startIndex });
         // Encode typed chunks as NDJSON for easy client parsing
         const encoder = new TextEncoder();
-        const ndjsonStream = new TransformStream<OfferCreationStatus, Uint8Array>({
+        const ndjsonStream = new TransformStream<OfferCreationStatus | TenderExtractionWorkflowStreamEvent, Uint8Array>({
             transform(chunk, controller) {
                 controller.enqueue(encoder.encode(JSON.stringify(chunk) + "\n"));
             },

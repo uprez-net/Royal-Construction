@@ -10,7 +10,6 @@ import type { ProjectDocumentBundle, ProjectExtractionDraft } from "@/types/proj
 const MODEL_NAME = "google/gemini-2.5-flash" as const;
 const OCR_TIMEOUT_MS = 45_000;
 const MODEL_TIMEOUT_MS = 45_000;
-const OCR_SUMMARY_CHAR_LIMIT = 18_000;
 
 export type ProjectDocumentExtractionInput = {
   documents: ProjectDocumentBundle;
@@ -36,6 +35,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 }
 
 function buildOcrSummary(pages: unknown, label: string) {
+  console.log(`Building OCR summary for ${label} with pages:`, pages);
   const normalized = Array.isArray(pages)
     ? pages.map((page, index) => {
         if (page && typeof page === "object") {
@@ -66,11 +66,8 @@ function buildOcrSummary(pages: unknown, label: string) {
     : [{ pageNumber: 1, markdown: String(pages ?? "") }];
 
   const serialized = JSON.stringify(normalized, null, 2);
-  if (serialized.length <= OCR_SUMMARY_CHAR_LIMIT) {
-    return serialized;
-  }
-
-  return `${serialized.slice(0, OCR_SUMMARY_CHAR_LIMIT)}\n... [${label} OCR truncated to ${OCR_SUMMARY_CHAR_LIMIT} chars]`;
+  
+  return serialized
 }
 
 export async function extractProjectDocuments({ documents }: ProjectDocumentExtractionInput): Promise<ProjectExtractionDraft> {

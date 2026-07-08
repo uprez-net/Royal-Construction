@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { addMonths, format } from "date-fns";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import {
   Calendar,
   CheckCircle2,
-  FileUp,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   Search,
   ShieldCheck,
@@ -29,6 +30,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { UploadDropzone } from "@/components/common/upload-dropzone";
 import { LeadCardList } from "@/components/offers/lead-card-list";
+import {
+  SearchableSelect,
+  type LookupOption,
+} from "@/components/common/searchable-select";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
 import {
   useUploadQueue,
@@ -42,21 +47,23 @@ import {
   registerProjectUpload,
   updateProjectUploadProgress,
 } from "@/lib/store/slices/projectsSlice";
+import {
+  fetchSiteManagers,
+  clearSiteManagers,
+} from "@/lib/store/slices/siteManagersSlice";
 import { fetchJson } from "@/utils/fetch";
 import { buildBlobPath } from "@/utils/formatters";
 import type { AddressSuggestion } from "@/types/data";
-import type {
-  ProjectDocumentBundle,
-  ProjectExtractionDraft,
-  ProjectRequirementsPayload,
-} from "@/types/project-flow";
-import { extractProjectDocuments } from "@/lib/agent/projectExtractionAgent";
-import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validators";
-import { LookupOption, SearchableSelect } from "../common/searchable-select";
+import type { ProjectDocumentBundle } from "@/types/project-flow";
 import {
-  clearSiteManagers,
-  fetchSiteManagers,
-} from "@/lib/store/slices/siteManagersSlice";
+  createEmptyProjectExtractionData,
+  projectExtractionSchema,
+  projectExtractionSections,
+  type ProjectExtractionData,
+} from "@/types/project-extraction";
+import { useWorkflowStream } from "@/context/WorkFlowStatusContext";
+import type { TenderExtractionResult } from "@/lib/workflow/project";
+import { emptyExtractionState, ExtractionSectionCard, normalizeString, sectionFields, updateExtractionField } from "./form/extracted-components";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -64,297 +71,24 @@ interface CreateProjectModalProps {
   onSuccess: () => void;
 }
 
-type WizardStage = "selection" | "extracting" | "review" | "submitting";
+type WizardStage =
+  | "selection"
+  | "extracting"
+  | "review"
+  | "submitting"
+  | "error";
 
-type RequirementsDraft = ProjectExtractionDraft & {
-  sourceDocuments?: ProjectDocumentBundle;
-  validations?: ProjectRequirementsPayload["validations"];
-};
-
-const SECTION_KEYS = [
-  "legalAdministration",
-  "commercialsAndClaims",
-  "subStructureAndGround",
-  "shellAndExternal",
-  "mechanicalDetails",
-  "internalFitOutAndFinishes",
-  "exclusionsAndRisks",
-  "utilityInfrastructure",
-  "wetAreaCompliance",
-  "safetyAndSiteLogistics",
-] as const;
-
-const NUMERIC_FIELDS = new Set([
-  "totalContractSum",
-  "tenderTotalPrice",
-  "contractPrice",
-  "gstAmount",
-  "depositValue",
-  "claimStageSlabPercentage",
-  "claimStageSlabDollarValue",
-  "variationAdminFee",
-  "latePenaltyRate",
-  "concreteStrengthMpa",
-  "brickAllowance",
-  "brickCount",
-  "selectedBrickPrice",
-  "floorAreaM2",
-  "acRequiredCapacityKw",
-  "acInstalledCapacityKw",
-  "lightingCount",
-  "tenderLightingCount",
-  "powerPointCount",
-  "tileAllowance",
-  "selectedTilePrice",
-  "wetAreaSizeM2",
-  "tiledNicheCount",
-  "showerCount",
-]);
-
-const BOOLEAN_FIELDS = new Set(["gstIncluded"]);
-const STRING_LIST_FIELDS = new Set(["ownerResponsibility", "variationRequired"]);
+type UploadKind = "tender" | "contract";
 
 const EXTRACTION_PROGRESS = [
-  "Uploading Documents",
-  "Reading Tender PDF",
-  "Reading Contract PDF",
-  "Extracting Key Data",
-  "Running Validation Rules",
-  "Extraction Complete",
+  "Uploading documents",
+  "Reading tender PDF",
+  "Reading contract PDF",
+  "Running structured extraction",
+  "Preparing review",
 ] as const;
 
-function createEmptyDraft(): RequirementsDraft {
-  return projectExtractionSchema.parse({
-    projectName: "",
-    projectType: "",
-    summary: "",
-    legalAdministration: {
-      siteAddress: "",
-      ownerContacts: { names: [], emails: [], phones: [] },
-      commencementTrigger: "",
-      signedDate: "",
-      pcaInspector: "",
-    },
-    commercialsAndClaims: {
-      totalContractSum: null,
-      tenderTotalPrice: null,
-      contractPrice: null,
-      gstIncluded: null,
-      gstAmount: null,
-      depositValue: null,
-      claimStageSlabPercentage: null,
-      claimStageSlabDollarValue: null,
-      variationAdminFee: null,
-      latePenaltyRate: null,
-      paymentStages: [],
-    },
-    subStructureAndGround: {
-      concreteSlabClass: "",
-      concreteStrengthMpa: null,
-      vapourBarrier: "",
-      termiteSystem: "",
-      sewerConnection: "",
-    },
-    shellAndExternal: {
-      ceilingHeightGroundFloor: "",
-      ceilingHeightFirstFloor: "",
-      roofingMaterial: "",
-      brickAllowance: null,
-      brickCount: null,
-      selectedBrickPrice: null,
-      windowProvider: "",
-      floorAreaM2: null,
-    },
-    mechanicalDetails: {
-      acSystemZones: "",
-      acRequiredCapacityKw: null,
-      acInstalledCapacityKw: null,
-      lightingCount: null,
-      tenderLightingCount: null,
-      powerPointCount: null,
-      externalPower: "",
-      jointSealants: "",
-    },
-    internalFitOutAndFinishes: {
-      internalDoorHeight: "",
-      skirtingSize: "",
-      stoneThickness: "",
-      waterfallEnds: "",
-      tapwareFinish: "",
-      tilesProvisionRate: "",
-      tileAllowance: null,
-      selectedTilePrice: null,
-      wetAreaSizeM2: null,
-    },
-    exclusionsAndRisks: {
-      retainingWalls: "",
-      fencing: "",
-      blinds: "",
-      solarProvisions: "",
-      rockExcavation: "",
-      ownerResponsibility: [],
-      variationRequired: [],
-    },
-    utilityInfrastructure: {
-      electricalPhase: "",
-      communicationConduit: "",
-      gasConnection: "",
-      fridgeWaterPoint: "",
-      smartLockBrand: "",
-    },
-    wetAreaCompliance: {
-      waterproofingStandard: "",
-      showerScreenType: "",
-      tiledNicheCount: null,
-      showerCount: null,
-      floorToCeilingTiles: "",
-      floorWasteType: "",
-    },
-    safetyAndSiteLogistics: {
-      roofGuardrails: "",
-      sedimentControl: "",
-      scaffoldingSafety: "",
-      tradeWaste: "",
-      finalCleanStatus: "",
-    },
-    conflicts: [],
-    automationTriggers: {
-      orderReminders: true,
-      rainDelayCalculations: true,
-      noticeCountdowns: true,
-    },
-  });
-}
 
-function updateSection<
-  T extends object,
-  K extends keyof T,
-  F extends keyof T[K],
->(current: T, section: K, field: F, value: T[K][F]): T {
-  return {
-    ...current,
-    [section]: {
-      ...current[section],
-      [field]: value,
-    },
-  };
-}
-
-function formatStructuredValue(value: unknown) {
-  if (Array.isArray(value)) {
-    if (value.every((entry) => typeof entry === "string")) {
-      return value.join("\n");
-    }
-
-    return JSON.stringify(value, null, 2);
-  }
-
-  if (value && typeof value === "object") {
-    return JSON.stringify(value, null, 2);
-  }
-
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
-
-  if (typeof value === "number") {
-    return String(value);
-  }
-
-  return String(value ?? "");
-}
-
-function coerceFieldValue(field: string, rawValue: string) {
-  if (STRING_LIST_FIELDS.has(field)) {
-    return rawValue
-      .split(/\n|,/)
-      .map((value) => value.trim())
-      .filter(Boolean);
-  }
-
-  if (BOOLEAN_FIELDS.has(field)) {
-    if (rawValue === "") {
-      return null;
-    }
-
-    return rawValue === "true";
-  }
-
-  if (NUMERIC_FIELDS.has(field)) {
-    if (rawValue.trim() === "") {
-      return null;
-    }
-
-    const parsed = Number(rawValue);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return rawValue;
-}
-
-function deriveValidationSection(fieldPath: string): NonNullable<ProjectRequirementsPayload["validations"]>[number]["section"] {
-  const [section] = fieldPath.split(".");
-  return SECTION_KEYS.includes(section as (typeof SECTION_KEYS)[number])
-    ? (section as (typeof SECTION_KEYS)[number])
-    : "general";
-}
-
-function SectionGrid({
-  title,
-  data,
-  onChange,
-}: {
-  title: string;
-  data: Record<string, unknown>;
-  onChange: (field: string, value: unknown) => void;
-}) {
-  return (
-    <div className="space-y-3 rounded-2xl border border-border/70 bg-slate-50/60 p-4">
-      <p className="text-sm font-semibold text-foreground">{title}</p>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {Object.entries(data).map(([field, value]) => (
-          <div key={field} className="space-y-1">
-            <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-              {field.replace(/([A-Z])/g, " $1")}
-            </Label>
-            {BOOLEAN_FIELDS.has(field) ? (
-              <select
-                value={typeof value === "boolean" ? String(value) : ""}
-                onChange={(event) => onChange(field, coerceFieldValue(field, event.target.value))}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-              >
-                <option value="">Unknown</option>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            ) : STRING_LIST_FIELDS.has(field) ? (
-              <Textarea
-                value={Array.isArray(value) ? value.join("\n") : ""}
-                onChange={(event) => onChange(field, coerceFieldValue(field, event.target.value))}
-                className="min-h-24"
-              />
-            ) : (Array.isArray(value) && !value.every((entry) => typeof entry === "string")) ||
-              (value !== null && typeof value === "object") ? (
-              <Textarea value={formatStructuredValue(value)} readOnly className="min-h-24 font-mono text-xs" />
-            ) : typeof value === "string" && value.length > 90 ? (
-              <Textarea
-                value={value}
-                onChange={(event) => onChange(field, event.target.value)}
-                className="min-h-24"
-              />
-            ) : (
-              <Input
-                type={NUMERIC_FIELDS.has(field) ? "number" : "text"}
-                value={formatStructuredValue(value)}
-                onChange={(event) => onChange(field, coerceFieldValue(field, event.target.value))}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export function CreateProjectModal({
   open,
@@ -363,15 +97,20 @@ export function CreateProjectModal({
 }: CreateProjectModalProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const siteManagers = useAppSelector((state) => state.siteManagers);
   const leadSearch = useLeadSearch("", 1, true);
+  const siteManagers = useAppSelector((state) => state.siteManagers);
   const [search, setSearch] = useState("");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [stage, setStage] = useState<WizardStage>("selection");
   const [progressStep, setProgressStep] = useState(0);
-  const [draft, setDraft] = useState<RequirementsDraft>(() =>
-    createEmptyDraft(),
+  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
+  const [extraction, setExtraction] = useState<ProjectExtractionData>(() =>
+    emptyExtractionState(),
   );
+  const [extractionMessage, setExtractionMessage] = useState("");
+  const [extractionError, setExtractionError] = useState("");
+  const [autoFilledCount, setAutoFilledCount] = useState(0);
+  const [totalFields, setTotalFields] = useState(0);
   const [siteAddress, setSiteAddress] = useState("");
   const [startDate, setStartDate] = useState("");
   const [locationSuggestions, setLocationSuggestions] = useState<
@@ -379,11 +118,11 @@ export function CreateProjectModal({
   >([]);
   const [selectedLocation, setSelectedLocation] =
     useState<AddressSuggestion | null>(null);
-  const [isPending, startTransition] = useTransition();
   const [managerSearch, setManagerSearch] = useState("");
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(
     null,
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
 
   const tenderQueue = useUploadQueue({ maxFiles: 1 });
@@ -395,6 +134,30 @@ export function CreateProjectModal({
       null
     );
   }, [selectedManagerId, siteManagers.items]);
+  const { runId, extractingTender, startListening } = useWorkflowStream();
+
+  // Pulled out so both the stream handler and any retry/manual path can reuse it.
+  function applyExtractionResult(result: TenderExtractionResult) {
+    setProgressStep(EXTRACTION_PROGRESS.length - 1);
+    setExtraction(result.extracted);
+    setExtractionMessage(result.message);
+    setAutoFilledCount(result.autoFilledCount);
+    setTotalFields(result.totalFields);
+
+    if (result.status === "error") {
+      setExtractionError(result.error ?? result.message);
+      setStage("error");
+      return;
+    }
+
+    setSiteAddress((current) =>
+      current.trim()
+        ? current
+        : (result.extracted.legalAdministrationSiteAddress ?? current),
+    );
+    setStage("review");
+    setActiveSectionIndex(0);
+  }
 
   useEffect(() => {
     leadSearch.setQuery(search);
@@ -415,13 +178,14 @@ export function CreateProjectModal({
       );
     }, 300);
 
-    return () => {
-      window.clearTimeout(timer);
-    };
+    return () => window.clearTimeout(timer);
   }, [dispatch, managerSearch, open]);
 
   useEffect(() => {
-    if (!open || siteAddress.length < 3) return;
+    if (!open || siteAddress.length < 3) {
+      return;
+    }
+
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
@@ -431,6 +195,7 @@ export function CreateProjectModal({
           "Error fetching location suggestions",
           controller.signal,
         );
+
         setLocationSuggestions(response.data.suggestions);
       } catch (error) {
         if (error instanceof Error && error.name !== "AbortError") {
@@ -438,17 +203,81 @@ export function CreateProjectModal({
         }
       }
     }, 300);
+
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
   }, [open, siteAddress]);
 
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      const event = extractingTender;
+
+      switch (event.type) {
+        case "stage": {
+          const index = EXTRACTION_PROGRESS.indexOf(event.stage);
+
+          console.log(`Extraction stage: ${event.stage} (index ${index})`);
+
+          setProgressStep((prev) => (index < prev ? index : prev + 1));
+          break;
+        }
+
+        case "result":
+          applyExtractionResult(event.result);
+          break;
+
+        case "error":
+          setExtractionError(event.message);
+          setStage("error");
+          break;
+      }
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [extractingTender]);
+
+  useEffect(() => {
+    if (!runId?.trim()) return;
+
+    const timer = setTimeout(
+      () => {
+        startListening(runId);
+      },
+      2 * 60 * 1000,
+    ); // 2 minutes
+
+    return () => clearTimeout(timer);
+  }, [runId, startListening]);
+
+  const resetWizard = () => {
+    setStage("selection");
+    setProgressStep(0);
+    setActiveSectionIndex(0);
+    setExtraction(emptyExtractionState());
+    setExtractionMessage("");
+    setExtractionError("");
+    setAutoFilledCount(0);
+    setTotalFields(0);
+    setSiteAddress("");
+    setStartDate("");
+    setLocationSuggestions([]);
+    setSelectedLocation(null);
+    setSelectedManagerId(null);
+    setManagerSearch("");
+    tenderQueue.resetQueue();
+    contractQueue.resetQueue();
+  };
+
   const uploadDocument = async (
     queuedFile: QueuedUploadFile,
-    kind: "tender" | "contract",
+    kind: UploadKind,
   ) => {
-    if (!selectedLeadId) throw new Error("Select a lead first.");
+    if (!selectedLeadId) {
+      throw new Error("Select a lead first.");
+    }
+
     const controller = new AbortController();
     uploadControllersRef.current[queuedFile.id] = controller;
 
@@ -498,6 +327,7 @@ export function CreateProjectModal({
           url: blob.url,
         }),
       );
+
       return {
         fileId: queuedFile.id,
         fileName: queuedFile.file.name,
@@ -521,53 +351,55 @@ export function CreateProjectModal({
     }
   };
 
-  const handleNext = async () => {
+  const handleExtract = async () => {
     if (!selectedLeadId) {
       toast.error("Select a lead before continuing.");
       return;
     }
+
     if (tenderQueue.files.length !== 1 || contractQueue.files.length !== 1) {
       toast.error("Upload both the tender and contract PDFs.");
       return;
     }
 
     setStage("extracting");
+    setExtractionError("");
+    setExtractionMessage("");
     setProgressStep(0);
-    const progressTimer = window.setInterval(() => {
-      setProgressStep((current) =>
-        Math.min(current + 1, EXTRACTION_PROGRESS.length - 1),
-      );
-    }, 900);
 
     try {
       const [tenderDocument, contractDocument] = await Promise.all([
         uploadDocument(tenderQueue.files[0], "tender"),
         uploadDocument(contractQueue.files[0], "contract"),
       ]);
+      setProgressStep(1);
 
-      const extracted = await extractProjectDocuments({
-        documents: { tender: tenderDocument, contract: contractDocument },
-      });
-      setProgressStep(EXTRACTION_PROGRESS.length - 1);
-      setDraft({
-        ...extracted,
-        sourceDocuments: { tender: tenderDocument, contract: contractDocument },
-        validations: extracted.conflicts.map((conflict, index) => ({
-          id: `conflict-${index}`,
-          section: deriveValidationSection(conflict.fieldPath),
-          fieldPath: conflict.fieldPath,
-          severity: "warning",
-          message: conflict.note || "Document conflict detected.",
-          resolvedValue: conflict.resolvedValue,
-        })),
-      });
-      setSiteAddress(extracted.legalAdministration.siteAddress || siteAddress);
-      setStage("review");
+      const extractionResult = await fetchJson<{
+        runId: string;
+        message: string;
+      }>(
+        `/api/extract-project-data`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tenderUrl: tenderDocument.url,
+            contractUrl: contractDocument.url,
+            tenderFileName: tenderDocument.fileName,
+            contractFileName: contractDocument.fileName,
+          }),
+        },
+        "Failed to start extraction workflow",
+      );
+
+      startListening(extractionResult.data.runId);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Extraction failed");
-      setStage("selection");
-    } finally {
-      window.clearInterval(progressTimer);
+      setExtractionError(
+        error instanceof Error ? error.message : "Extraction trigger failed",
+      );
+      setStage("error");
     }
   };
 
@@ -577,45 +409,69 @@ export function CreateProjectModal({
       return;
     }
 
+    if(!selectedLocation) {
+      toast.error("Select a site location before creating the project.");
+      return;
+    }
+
+    if(!selectedSiteManager) {
+      toast.error("Select a site manager before creating the project.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStage("submitting");
+
     try {
-      setStage("submitting");
-      const finalDraft: RequirementsDraft = {
-        ...draft,
-        legalAdministration: {
-          ...draft.legalAdministration,
-          siteAddress: siteAddress || draft.legalAdministration.siteAddress,
+      const normalizedExtraction = projectExtractionSchema.parse(extraction);
+      const sourceDocuments: ProjectDocumentBundle = {
+        tender: {
+          fileId: tenderQueue.files[0]?.id ?? "",
+          fileName: tenderQueue.files[0]?.file.name ?? "Tender PDF",
+          url: tenderQueue.files[0]?.url ?? "",
+          kind: "tender",
+        },
+        contract: {
+          fileId: contractQueue.files[0]?.id ?? "",
+          fileName: contractQueue.files[0]?.file.name ?? "Contract PDF",
+          url: contractQueue.files[0]?.url ?? "",
+          kind: "contract",
         },
       };
 
       const createdProject = await dispatch(
         createProject({
           projectName:
-            finalDraft.projectName ||
-            finalDraft.legalAdministration.siteAddress ||
+            normalizeString(normalizedExtraction.projectName) ||
+            normalizeString(normalizedExtraction.summary) ||
+            siteAddress ||
             "New Project",
           leadId: selectedLeadId,
-          lotSize: Number(finalDraft.shellAndExternal.floorAreaM2 ?? 0),
+          lotSize: Number(
+            normalizedExtraction.shellAndExternalFloorAreaM2 ?? 0,
+          ),
           startDate:
             startDate ||
-            finalDraft.legalAdministration.signedDate ||
+            normalizeString(
+              normalizedExtraction.legalAdministrationSignedDate,
+            ) ||
             new Date().toISOString().slice(0, 10),
           estimatedEndDate: format(
             addMonths(new Date(startDate || new Date()), 8),
             "yyyy-MM-dd",
           ),
           address:
-            finalDraft.legalAdministration.siteAddress ??
-            selectedLocation?.label ??
+            normalizeString(
+              normalizedExtraction.legalAdministrationSiteAddress,
+            ) ||
+            siteAddress ||
+            selectedLocation.label ||
             "",
-          council: selectedLocation?.council ?? "",
-          siteManagerId: selectedSiteManager?.id ?? null,
-          extraction: {
-            ...finalDraft,
-            sourceDocuments: draft.sourceDocuments!,
-            validations: draft.validations ?? [],
-            version: 1,
-          },
-        } as never),
+          council: selectedLocation.council,
+          siteManagerId: selectedSiteManager.id,
+          extraction: normalizedExtraction,
+          sourceDocuments,
+        }),
       ).unwrap();
 
       toast.success(`Project created: ${createdProject.name}`);
@@ -627,35 +483,30 @@ export function CreateProjectModal({
         error instanceof Error ? error.message : "Unable to create project",
       );
       setStage("review");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleClose = (nextOpen: boolean) => {
     if (!nextOpen) {
-      setStage("selection");
-      setSelectedLeadId(null);
-      setDraft(createEmptyDraft());
-      setSiteAddress("");
-      setStartDate("");
-      setLocationSuggestions([]);
-      setSelectedLocation(null);
-      setSelectedManagerId(null);
-      setManagerSearch("");
-      tenderQueue.resetQueue();
-      contractQueue.resetQueue();
+      resetWizard();
       onOpenChange(false);
       dispatch(clearSiteManagers());
     }
   };
 
+  const currentSection = projectExtractionSections[activeSectionIndex];
+  const currentFields = sectionFields(currentSection.key);
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-h-[88vh] w-full max-w-[calc(100%-1rem)] overflow-y-auto sm:max-w-5xl">
+      <DialogContent className="max-h-[88vh] w-full max-w-[calc(100%-1rem)] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle>Create Project</DialogTitle>
           <DialogDescription>
-            Upload the tender and contract, extract structured project data,
-            then review the 10-section wizard.
+            Upload the tender and contract PDFs, extract structured project
+            data, then review the 10-step handoff flow.
           </DialogDescription>
         </DialogHeader>
 
@@ -722,7 +573,7 @@ export function CreateProjectModal({
                   Extracting project data
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Structured extraction in progress
+                  OCR + structured field extraction in progress
                 </p>
               </div>
             </div>
@@ -748,338 +599,253 @@ export function CreateProjectModal({
           </div>
         ) : null}
 
+        {stage === "error" ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="size-5" />
+              <div>
+                <p className="text-sm font-semibold">Extraction failed</p>
+                <p className="text-sm text-red-800">
+                  {extractionError ||
+                    "The OCR/extraction pipeline could not read one or both PDFs."}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <Button variant="outline" onClick={() => setStage("selection")}>
+                Back to upload
+              </Button>
+              <Button onClick={handleExtract}>Retry extraction</Button>
+            </div>
+          </div>
+        ) : null}
+
         {stage === "review" ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-                <Label className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                  Project Name
-                </Label>
-                <Input
-                  className="mt-2"
-                  value={draft.projectName}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      projectName: event.target.value,
-                    }))
-                  }
-                />
+          <div className="space-y-5">
+            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-2xl border border-border/70 bg-slate-50/80 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Review progress
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {autoFilledCount} of {totalFields} fields auto-filled from
+                      the PDFs
+                    </p>
+                  </div>
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Step {activeSectionIndex + 1} of{" "}
+                    {projectExtractionSections.length}
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                    <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      Project name
+                    </Label>
+                    <Input
+                      className="mt-2"
+                      value={normalizeString(extraction.projectName)}
+                      onChange={(event) =>
+                        setExtraction((current) =>
+                          updateExtractionField(
+                            current,
+                            "projectName",
+                            event.target.value,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                    <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      Site location
+                    </Label>
+                    <SearchableSelect
+                      label=""
+                      placeholder="Select address..."
+                      searchValue={siteAddress}
+                      selectedItem={selectedLocation}
+                      items={locationSuggestions}
+                      onQueryChange={(query) => setSiteAddress(query)}
+                      onSelect={(item) => {
+                        const suggestion = item as AddressSuggestion;
+                        setSelectedLocation(suggestion);
+                        setSiteAddress(suggestion.label);
+                        setExtraction((current) =>
+                          updateExtractionField(
+                            current,
+                            "legalAdministrationSiteAddress",
+                            suggestion.label,
+                          ),
+                        );
+                      }}
+                    />
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                    <SearchableSelect
+                      label="Site manager"
+                      placeholder="Assign manager..."
+                      searchValue={managerSearch}
+                      selectedItem={selectedSiteManager}
+                      items={siteManagers.items}
+                      loading={siteManagers.loading}
+                      hasMore={siteManagers.page < siteManagers.totalPages}
+                      onQueryChange={setManagerSearch}
+                      onSelect={(item) => {
+                        setSelectedManagerId(item.id);
+                        setManagerSearch((item as LookupOption).name);
+                      }}
+                      onLoadMore={() => {
+                        void dispatch(
+                          fetchSiteManagers({
+                            page: siteManagers.page + 1,
+                            limit: 10,
+                            query: managerSearch,
+                          }),
+                        );
+                      }}
+                    />
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                    <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      Start date
+                    </Label>
+                    <div className="relative mt-2">
+                      <Calendar className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        className="pl-9"
+                        type="date"
+                        value={startDate}
+                        onChange={(event) => setStartDate(event.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-xl border border-border/70 bg-white p-4">
+                  <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                    Extraction notes
+                  </Label>
+                  <p className="mt-2 text-sm text-foreground">
+                    {extractionMessage ||
+                      "Extraction completed. Review any blank fields before submitting."}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-                <SearchableSelect
-                  label="Site Location"
-                  placeholder="Select address..."
-                  searchValue={siteAddress}
-                  selectedItem={selectedLocation}
-                  items={locationSuggestions}
-                  onQueryChange={(query) => setSiteAddress(query)}
-                  onSelect={(item) => {
-                    const suggestion = item as AddressSuggestion;
 
-                    setSelectedLocation(suggestion);
-                    setSiteAddress(suggestion.label);
-                  }}
-                />
-              </div>
-              {/* Site Manager */}
-              <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-                <SearchableSelect
-                  label="Site Manager"
-                  placeholder="Assign manager..."
-                  searchValue={managerSearch}
-                  selectedItem={selectedSiteManager}
-                  items={siteManagers.items}
-                  loading={siteManagers.loading}
-                  hasMore={siteManagers.page < siteManagers.totalPages}
-                  onQueryChange={setManagerSearch}
-                  onSelect={(item) => {
-                    setSelectedManagerId(item.id);
-                    setManagerSearch((item as LookupOption).name);
-                  }}
-                  onLoadMore={() => {
-                    void dispatch(
-                      fetchSiteManagers({
-                        page: siteManagers.page + 1,
-                        limit: 10,
-                        query: managerSearch,
-                      }),
-                    );
-                  }}
-                />
-              </div>
-
-              <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-                <Label className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                  Start Date
-                </Label>
-                <div className="relative mt-2">
-                  <Calendar className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    className="pl-9"
-                    type="date"
-                    value={startDate}
-                    onChange={(event) => setStartDate(event.target.value)}
-                  />
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+                <p className="text-sm font-semibold text-emerald-950">
+                  Review summary
+                </p>
+                <p className="mt-1 text-xs text-emerald-900/80">
+                  Blank fields stay blank. Any unexpected non-primitive values
+                  are rendered as empty strings.
+                </p>
+                <div className="mt-4 space-y-2">
+                  {projectExtractionSections.map((section, index) => (
+                    <button
+                      key={section.key}
+                      type="button"
+                      onClick={() => setActiveSectionIndex(index)}
+                      className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition ${index === activeSectionIndex ? "border-emerald-400 bg-white text-emerald-950" : "border-emerald-200 bg-emerald-50 text-emerald-900/80 hover:bg-white/80"}`}
+                    >
+                      <span>
+                        {index + 1}. {section.title}
+                      </span>
+                      {index === activeSectionIndex ? (
+                        <CheckCircle2 className="size-4" />
+                      ) : (
+                        <ChevronRight className="size-4" />
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border/70 bg-white p-4">
-              <Label className="text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                Summary
-              </Label>
-              <Textarea
-                value={draft.summary}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    summary: event.target.value,
-                  }))
-                }
-                className="mt-2 min-h-28"
-              />
-            </div>
+            <ExtractionSectionCard
+              sectionKey={currentSection.key}
+              title={currentSection.title}
+              description={`Edit the fields for ${currentSection.title.toLowerCase()}. Leave unknown values blank.`}
+              fields={currentFields}
+              values={extraction}
+              onChange={(field, value) => {
+                setExtraction((current) =>
+                  updateExtractionField(
+                    current,
+                    field as keyof ProjectExtractionData,
+                    value,
+                  ),
+                );
+              }}
+            />
 
-            <div className="space-y-3">
-              <SectionGrid
-                title="Legal and Administration"
-                data={
-                  draft.legalAdministration as unknown as Record<
-                    string,
-                    unknown
-                  >
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-slate-50/80 p-4">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setActiveSectionIndex((current) => Math.max(current - 1, 0))
                 }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "legalAdministration",
-                      field as keyof typeof draft.legalAdministration,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Commercials and Claims"
-                data={
-                  draft.commercialsAndClaims as unknown as Record<
-                    string,
-                    unknown
-                  >
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "commercialsAndClaims",
-                      field as keyof typeof draft.commercialsAndClaims,
-                      value as (typeof draft.commercialsAndClaims)[keyof typeof draft.commercialsAndClaims],
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Sub Structure and Ground"
-                data={
-                  draft.subStructureAndGround as unknown as Record<
-                    string,
-                    unknown
-                  >
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "subStructureAndGround",
-                      field as keyof typeof draft.subStructureAndGround,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Shell and External"
-                data={
-                  draft.shellAndExternal as unknown as Record<string, unknown>
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "shellAndExternal",
-                      field as keyof typeof draft.shellAndExternal,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Mechanical Details"
-                data={
-                  draft.mechanicalDetails as unknown as Record<string, unknown>
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "mechanicalDetails",
-                      field as keyof typeof draft.mechanicalDetails,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Internal Fit Out and Finishes"
-                data={
-                  draft.internalFitOutAndFinishes as unknown as Record<
-                    string,
-                    unknown
-                  >
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "internalFitOutAndFinishes",
-                      field as keyof typeof draft.internalFitOutAndFinishes,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Exclusions and Risks"
-                data={
-                  draft.exclusionsAndRisks as unknown as Record<string, unknown>
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "exclusionsAndRisks",
-                      field as keyof typeof draft.exclusionsAndRisks,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Utility Infrastructure"
-                data={
-                  draft.utilityInfrastructure as unknown as Record<
-                    string,
-                    unknown
-                  >
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "utilityInfrastructure",
-                      field as keyof typeof draft.utilityInfrastructure,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Wet Area Compliance"
-                data={
-                  draft.wetAreaCompliance as unknown as Record<string, unknown>
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "wetAreaCompliance",
-                      field as keyof typeof draft.wetAreaCompliance,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-              <SectionGrid
-                title="Safety and Site Logistics"
-                data={
-                  draft.safetyAndSiteLogistics as unknown as Record<
-                    string,
-                    unknown
-                  >
-                }
-                onChange={(field, value) =>
-                  setDraft((current) =>
-                    updateSection(
-                      current,
-                      "safetyAndSiteLogistics",
-                      field as keyof typeof draft.safetyAndSiteLogistics,
-                      value as never,
-                    ),
-                  )
-                }
-              />
-            </div>
-
-            <div className="space-y-2 rounded-2xl border border-border/70 bg-slate-50/80 p-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <FileUp className="size-4 text-teal-600" /> Tender uploaded
+                disabled={activeSectionIndex === 0}
+              >
+                <ChevronLeft className="mr-2 size-4" />
+                Previous
+              </Button>
+              <div className="text-xs text-muted-foreground">
+                {currentSection.title}
               </div>
-              <div className="flex items-center gap-2">
-                <FileUp className="size-4 text-teal-600" /> Contract uploaded
-              </div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="size-4 text-[#E8730C]" /> Validation
-                warnings preserved
-              </div>
+              <Button
+                onClick={() => {
+                  if (
+                    activeSectionIndex >=
+                    projectExtractionSections.length - 1
+                  ) {
+                    void handleSubmit();
+                    return;
+                  }
+                  setActiveSectionIndex((current) =>
+                    Math.min(current + 1, projectExtractionSections.length - 1),
+                  );
+                }}
+              >
+                {activeSectionIndex >= projectExtractionSections.length - 1
+                  ? "Create Project"
+                  : "Next"}
+                <ChevronRight className="ml-2 size-4" />
+              </Button>
             </div>
           </div>
         ) : null}
 
         {stage === "submitting" ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-slate-50/80 p-5">
-            <Loader2 className="size-5 animate-spin text-teal-600" />
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                Creating project
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Persisting structured data and document references
-              </p>
+          <div className="rounded-2xl border border-border/70 bg-slate-50/80 p-5">
+            <div className="flex items-center gap-3">
+              <Loader2 className="size-5 animate-spin text-teal-600" />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Creating project
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Persisting the reviewed fields and handoff data
+                </p>
+              </div>
             </div>
           </div>
         ) : null}
 
-        <DialogFooter className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => handleClose(false)}
-            className="h-10 rounded-[10px] px-4 text-[12.5px] font-medium"
-          >
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleClose(false)}>
             Cancel
           </Button>
           {stage === "selection" ? (
-            <Button
-              type="button"
-              onClick={() => void handleNext()}
-              className="h-10 rounded-[10px] bg-teal-600 px-4 text-[12.5px] font-semibold text-white hover:bg-teal-700"
-            >
-              <UploadCloud className="mr-1.5 size-4" />
-              Next
+            <Button onClick={handleExtract}>
+              <UploadCloud className="mr-2 size-4" />
+              Extract project data
             </Button>
           ) : null}
           {stage === "review" ? (
-            <Button
-              type="button"
-              onClick={() => startTransition(() => void handleSubmit())}
-              disabled={isPending}
-              className="h-10 rounded-[10px] bg-teal-600 px-4 text-[12.5px] font-semibold text-white hover:bg-teal-700"
-            >
-              {isPending ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
-              ) : null}
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
               Create Project
             </Button>
           ) : null}
