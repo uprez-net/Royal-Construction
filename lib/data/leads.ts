@@ -7,7 +7,7 @@ import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
-import { Prisma } from "@prisma/client";
+import { Prisma, LeadEmails } from "@prisma/client";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
 import {
@@ -32,6 +32,7 @@ import { normalizeEmailAddress } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
+import { getAllEmailThreads } from "@/utils/email-parser";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
@@ -72,24 +73,6 @@ function buildLeadEmailHtml(body: string) {
   return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards,<br>Royal Constructions team.</p>`;
 }
 
-function htmlToPlainText(value: string) {
-  return value
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<\/div>/gi, "\n")
-    .replace(/<\/li>/gi, "\n")
-    .replace(/<li[^>]*>/gi, "- ")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#039;/gi, "'")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .trim();
-}
 
 /**
  * Escapes HTML-sensitive characters to prevent HTML injection when embedding
@@ -1116,27 +1099,40 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
       subject: `${aiSubject} - ${location}`,
       body: signedBody,
     });
-    const strippedEmailBody = htmlToPlainText(signedBody);
-    const checksum = await generateEmailChecksum(
-      `${aiSubject} - ${location}`,
-      strippedEmailBody,
-      process.env.BUSINESS_EMAIL ?? to,
-      to
-    );
-    const emailRecord = await prisma.leadEmails.create({
-      data: {
-        leadId,
-        subject: `${aiSubject} - ${location}`,
-        body: strippedEmailBody,
-        emailTo: normalizeEmailAddress(to),
-        emailFrom: normalizeEmailAddress(process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'),
-        checksum,
-        sentAt: new Date(),
-      },
+    const strippedEmailBody = getAllEmailThreads(signedBody, {
+      from: normalizeEmailAddress(process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'),
+      to: normalizeEmailAddress(to),
+      subject: `${aiSubject} - ${location}`,
+      sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
     });
-    console.log(`[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`);
+    let recordedEmail: LeadEmails | null = null;
+    for(const thread of strippedEmailBody) {
+      const checksum = await generateEmailChecksum(
+        thread.subject,
+        thread.body,
+        normalizeEmailAddress(thread.from),
+        normalizeEmailAddress(thread.to),
+      );
+      const emailRecord = await prisma.leadEmails.create({
+        data: {
+          leadId,
+          subject: `${aiSubject} - ${location}`,
+          body: thread.body,
+          emailTo: normalizeEmailAddress(thread.to),
+          emailFrom: normalizeEmailAddress(thread.from),
+          checksum,
+          sentAt: new Date(),
+        },
+      });
+      console.log(`[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`);
+      recordedEmail = emailRecord;
+    }
 
-    return emailRecord;
+    if(!recordedEmail) {
+      throw new Error("Failed to record email");
+    }
+
+    return recordedEmail;
   } catch (error) {
     console.error(`[Lead ${leadId}] Failed to send email:`, error);
     throw new Error("Failed to send email");

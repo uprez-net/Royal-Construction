@@ -32,7 +32,7 @@ export function ModalShell({
     if (!open) {
       onToggleFullScreen?.(true);
     }
-  }, [open]);
+  }, [open, onToggleFullScreen]);
 
   if (!open) return null;
 
