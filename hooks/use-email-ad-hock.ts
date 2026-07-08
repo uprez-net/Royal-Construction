@@ -352,7 +352,7 @@ export function useEmailAdHock() {
                               }
                         );
 
-                        const saved = await CreateEmailAdHock(templateName, emailSubject, blob.url);
+                        const saved = await CreateEmailAdHock(templateName, emailSubject, blob.url,attachments.map(a => a.url));
                         if (saved.success && saved.data) {
                               setEmailTemplateId(saved.data?.id || null);
                               setSavedTemplates(prev => [...prev, saved.data]); // Update local state instantly

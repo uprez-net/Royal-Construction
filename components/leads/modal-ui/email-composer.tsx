@@ -5,7 +5,6 @@ import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { sendLeadEmail } from "@/lib/data/leads";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import type { LeadEmails } from "@prisma/client";
 import { ReplyBanner } from "./reply-email";
 import { createLeadNotesDocument } from "@/lib/rich-text/lead-notes";
@@ -23,10 +22,9 @@ import {
   Plate,
   PlateElement,
   type PlateElementProps,
-  useEditorRef,
   usePlateEditor,
 } from "platejs/react";
-import { KEYS, type Value } from "platejs";
+import { type Value } from "platejs";
 import { EditorToolbar } from "@/components/rich-text/lead-rich-text-editor";
 import { Editor, EditorContainer } from "@/components/rich-text/plate-editor";
 
@@ -140,12 +138,6 @@ interface EmailComposerProps {
   appendEmailToLead: (leadId: number, email: LeadEmails) => void;
 }
 
-/** Deterministically derives the "Re: ..." subject for a reply, avoiding "Re: Re: ..." stacking. */
-function buildReplySubject(subject: string) {
-  const stripped = subject.replace(/^(re:\s*)+/i, "").trim();
-  return `Re: ${stripped}`;
-}
-
 /** Replies go to whichever side of the thread isn't Royal Constructions. */
 function getReplyRecipient(email: LeadEmails) {
   return email.emailFrom.includes(ROYAL_DOMAIN)
@@ -212,15 +204,6 @@ export function EmailComposer({
   }, [replyTo]);
 
   async function handleSend() {
-    const finalSubject = replyTo
-      ? buildReplySubject(replyTo.subject)
-      : `Follow Up on your request - ${projectType} (${location})`;
-
-    if (!isReply && !finalSubject) {
-      toast.error("Please enter a subject.");
-      return;
-    }
-
     if (body === undefined) {
       toast.error("Please enter a message.");
       return;
@@ -234,7 +217,7 @@ export function EmailComposer({
     try {
       const email = await sendLeadEmail(
         leadId,
-        finalSubject,
+        `${projectType} - ${location}`,
         body.html.trim(),
         recipient,
       );

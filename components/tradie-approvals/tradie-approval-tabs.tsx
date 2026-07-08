@@ -26,6 +26,7 @@ import { Button } from "../ui/button";
 import { useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import { ApprovalInput, SafeTradieApproval } from "@/types/tradie";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 const handlePayload = (approval: SafeTradieApproval, resolution: string) => {
   switch (approval.actionType) {
@@ -143,15 +144,14 @@ export function TradieApprovalTabs() {
         throw new Error("No selected approvals found");
       }
 
-      const approvalInputs = approvalsToReject.map((approval) => ({
-        approvalId: approval.id,
-        resolution: "rejected",
-        type: approval.actionType,
-        payload: handlePayload(approval, "rejected"),
-      })) satisfies ApprovalInput[];
-
-      await dispatch(approveRequests(approvalInputs)).unwrap();
-      toast.success("Approval request rejected successfully");
+      dispatch(
+        openModal({
+          type: "rejectTradieApprovals",
+          payload: {
+            approvals: approvalsToReject,
+          },
+        }),
+      );
     } catch (error) {
       console.error("Error creating approval input:", error);
       toast.error(

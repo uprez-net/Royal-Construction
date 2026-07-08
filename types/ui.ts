@@ -4,6 +4,7 @@ export type NavItem = {
   slug: string;
   label: string;
   icon: ReactNode;
+  checkAdmin?: boolean;
 };
 
 export type ProjectDetailKpi = {

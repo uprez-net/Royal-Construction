@@ -1,0 +1,28 @@
+import type {
+  ProjectDocumentBundle,
+  ProjectExtractionDraft,
+  ProjectRequirementsPayload,
+  ProjectValidationResult,
+} from "@/types/project-flow";
+
+export function resolveProjectBudget(draft: ProjectExtractionDraft) {
+  return (
+    draft.commercialsAndClaims.contractPrice ??
+    draft.commercialsAndClaims.totalContractSum ??
+    draft.commercialsAndClaims.tenderTotalPrice ??
+    0
+  );
+}
+
+export function buildProjectRequirementsPayload(
+  draft: ProjectExtractionDraft,
+  documents: ProjectDocumentBundle,
+  validations: ProjectValidationResult[],
+): ProjectRequirementsPayload {
+  return {
+    version: 1,
+    sourceDocuments: documents,
+    validations,
+    ...draft,
+  };
+}

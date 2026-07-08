@@ -68,10 +68,11 @@ const handlePayload = (approval: SafeTradieApproval, resolution: string) => {
 
 export function TradieApprovalList() {
   const dispatch = useAppDispatch();
-  const [processingRequestIds, setProcessingRequestIds] = useState<Set<string>>(new Set());
-  const { approvals, activeTab, selectedApprovalIds, loading, error } = useAppSelector(
-    (state) => state.tradieApproval,
+  const [processingRequestIds, setProcessingRequestIds] = useState<Set<string>>(
+    new Set(),
   );
+  const { approvals, activeTab, selectedApprovalIds, loading, error } =
+    useAppSelector((state) => state.tradieApproval);
 
   const handleSelectApproval = (approvalId: string) => {
     dispatch(selectApproval(approvalId));
@@ -107,32 +108,25 @@ export function TradieApprovalList() {
     }
   };
 
-  const handleReject = async (approvalId: string) => {
-    setProcessingRequestIds((prev) => new Set(prev).add(approvalId));
+  const handleReject = (approvalId: string) => {
     try {
       const approval = approvals.find((a) => a.id === approvalId);
       if (!approval) {
         throw new Error(`Approval with ID ${approvalId} not found`);
       }
-      const approvalInput = {
-        approvalId: approval.id,
-        resolution: "rejected",
-        type: approval.actionType,
-        payload: handlePayload(approval, "rejected"),
-      } satisfies ApprovalInput;
-      await dispatch(approveRequests([approvalInput])).unwrap();
-      toast.success("Approval request rejected successfully");
+      dispatch(
+        openModal({
+          type: "rejectTradieApprovals",
+          payload: {
+            approvals: [approval],
+          },
+        }),
+      );
     } catch (error) {
       console.error("Error creating approval input:", error);
       toast.error(
         error instanceof Error ? error.message : "An unexpected error occurred",
       );
-    } finally {
-      setProcessingRequestIds((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(approvalId);
-        return newSet;
-      });
     }
   };
 
@@ -142,7 +136,16 @@ export function TradieApprovalList() {
       toast.error(`Approval with ID ${approvalId} not found`);
       return;
     }
-    dispatch(openModal({ type: "approvalDetails", payload: { approval } }));
+    dispatch(
+      openModal({
+        type: "approvalDetails",
+        payload: {
+          approval,
+          onApprove: async () => await handleApprove(approval.id),
+          onReject: () => handleReject(approval.id),
+        },
+      }),
+    );
   };
 
   if (loading) {

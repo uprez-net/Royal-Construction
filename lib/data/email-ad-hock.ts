@@ -374,13 +374,14 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
   }
 }
 
-export async function CreateEmailAdHock(templateName: string, emailSubject: string, blobUrl: string) {
+export async function CreateEmailAdHock(templateName: string, emailSubject: string, blobUrl: string, attachmentsUrls: string[]) {
   try {
     const result = await prisma.emailAdHock.create({
       data: {
         name: templateName,
         emailSubject: emailSubject,
         htmlUrl: blobUrl,
+        attachmentsUrls: attachmentsUrls,
       },
     });
     return { success: true, data: result };
@@ -424,10 +425,16 @@ export async function DeleteEmailAdHock(id: string) {
 
     const existing = await prisma.emailAdHock.findUnique({ where: { id } });
     if (!existing) {
-      return { success: false, error: "Email template not found." };
+      return {
+        success: false,
+        error: "Email template not found.",
+      };
     }
 
-    await del(existing.htmlUrl)
+    await del([
+      existing.htmlUrl,
+      ...existing.attachmentsUrls,
+    ]);
 
     const result = await prisma.emailAdHock.delete({
       where: { id: existing.id },
@@ -459,7 +466,7 @@ function buildCampaignWhereClause({
       where.stage = prismaStage;
     }
   }
-    console.log("Generated Prisma where clause:", where); // Debug log to verify the generated where clause
+  console.log("Generated Prisma where clause:", where); // Debug log to verify the generated where clause
   // 2. Filter by Search Query (Name, Email, or Location)
   if (search && search.trim() !== "") {
     const searchTerm = search.trim();

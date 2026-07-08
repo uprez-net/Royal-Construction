@@ -5,6 +5,7 @@ import { cacheTag, cacheLife } from "next/cache";
 import prisma from "@/lib/prisma";
 import { ProjectDetail, ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { CACHE_PROFILES } from "@/types/cache";
+import { ProjectRequirementsPayload } from "@/types/project-flow";
 
 export type ProjectListSortBy = "name" | "progress" | "budget" | "startDate" | "spent";
 
@@ -238,6 +239,7 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
 
     return {
       ...project,
+      requirements: project.requirements as unknown as ProjectRequirementsPayload,
       milestones: project.milestones.map((milestone) => ({
         ...milestone,
         tradies: milestone.tradies.map((tradie) => ({
@@ -386,6 +388,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
 
     return {
       ...project,
+      requirements: project.requirements as unknown as ProjectRequirementsPayload,
       materials: project.materials.map((material) => ({
         ...material,
         unitCost: material.unitCost.toString(),
@@ -471,6 +474,7 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
 
       return {
         ...project,
+        requirements: project.requirements as unknown as ProjectRequirementsPayload,
         milestones: project.milestones.map((milestone) => ({
           ...milestone,
           tradies: milestone.tradies.map((tradie) => ({

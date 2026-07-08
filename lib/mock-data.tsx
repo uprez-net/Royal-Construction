@@ -97,6 +97,7 @@ export const navigationItems: NavItem[] = [
     slug: "admin-approvals",
     label: "Approvals",
     icon: <CheckSquare className="size-4" />,
+    checkAdmin: true,
   }
 ];
 
