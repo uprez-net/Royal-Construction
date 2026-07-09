@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { AddressSuggestion } from "@/types/data";
-import {
-    successResponse,
-    errorResponse,
-} from "@/utils/validators";
+import { successResponse, errorResponse } from "@/utils/validators";
 
 /**
  * ENV
@@ -24,8 +21,7 @@ import {
 const GOOGLE_AUTOCOMPLETE_URL =
     "https://places.googleapis.com/v1/places:autocomplete";
 
-const GOOGLE_PLACE_DETAILS_URL =
-    "https://places.googleapis.com/v1/places";
+const GOOGLE_PLACE_DETAILS_URL = "https://places.googleapis.com/v1/places";
 
 const GEOSCAPE_BOUNDARY_URL =
     "https://api.psma.com.au/v1/administrativeBoundaries/findByPoint";
@@ -90,45 +86,28 @@ function getComponent(
     components: GooglePlaceDetailsResponse["addressComponents"] = [],
     type: string,
 ) {
-    return components.find((item) =>
-        item.types.includes(type),
-    );
+    return components.find((item) => item.types.includes(type));
 }
 
 function roundCoord(value: number) {
     return value.toFixed(2);
 }
 
-function getCacheKey(
-    lat: number,
-    lng: number,
-) {
+function getCacheKey(lat: number, lng: number) {
     return `${roundCoord(lat)}:${roundCoord(lng)}`;
 }
 
-function getCachedCouncil(
-    lat: number,
-    lng: number,
-): CouncilLookup | null {
-    const key = getCacheKey(
-        lat,
-        lng,
-    );
+function getCachedCouncil(lat: number, lng: number): CouncilLookup | null {
+    const key = getCacheKey(lat, lng);
 
-    const cached =
-        councilCache.get(key);
+    const cached = councilCache.get(key);
 
     if (!cached) {
         return null;
     }
 
-    if (
-        Date.now() >
-        cached.expiresAt
-    ) {
-        councilCache.delete(
-            key,
-        );
+    if (Date.now() > cached.expiresAt) {
+        councilCache.delete(key);
 
         return null;
     }
@@ -136,43 +115,21 @@ function getCachedCouncil(
     return cached.value;
 }
 
-function setCachedCouncil(
-    data: CouncilLookup,
-) {
-    const key = getCacheKey(
-        data.lat,
-        data.lng,
-    );
+function setCachedCouncil(data: CouncilLookup) {
+    const key = getCacheKey(data.lat, data.lng);
 
-    councilCache.set(
-        key,
-        {
-            expiresAt:
-                Date.now() +
-                CACHE_TTL_MS,
-            value: data,
-        },
-    );
+    councilCache.set(key, {
+        expiresAt: Date.now() + CACHE_TTL_MS,
+        value: data,
+    });
 }
 
-function distanceKm(
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number,
-) {
-    const dx =
-        lat1 - lat2;
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const dx = lat1 - lat2;
 
-    const dy =
-        lng1 - lng2;
+    const dy = lng1 - lng2;
 
-    return (
-        Math.sqrt(
-            dx * dx +
-            dy * dy,
-        ) * 111
-    );
+    return Math.sqrt(dx * dx + dy * dy) * 111;
 }
 
 function isNearby(
@@ -180,17 +137,9 @@ function isNearby(
     lng1: number,
     lat2: number,
     lng2: number,
-    radiusKm =
-        CLUSTER_RADIUS_KM,
+    radiusKm = CLUSTER_RADIUS_KM,
 ) {
-    return (
-        distanceKm(
-            lat1,
-            lng1,
-            lat2,
-            lng2,
-        ) <= radiusKm
-    );
+    return distanceKm(lat1, lng1, lat2, lng2) <= radiusKm;
 }
 
 async function fetchCouncilFromGeoscape(
@@ -198,85 +147,47 @@ async function fetchCouncilFromGeoscape(
     lng: number,
     apiKey: string,
 ): Promise<CouncilLookup | null> {
-    const cached =
-        getCachedCouncil(
-            lat,
-            lng,
-        );
+    const cached = getCachedCouncil(lat, lng);
 
     if (cached) {
         return cached;
     }
 
     try {
-        const url = new URL(
-            GEOSCAPE_BOUNDARY_URL,
-        );
+        const url = new URL(GEOSCAPE_BOUNDARY_URL);
 
-        url.searchParams.set(
-            "latitude",
-            String(lat),
-        );
+        url.searchParams.set("latitude", String(lat));
 
-        url.searchParams.set(
-            "longitude",
-            String(lng),
-        );
+        url.searchParams.set("longitude", String(lng));
 
-        url.searchParams.set(
-            "layers",
-            "localGovernmentAreas",
-        );
+        url.searchParams.set("layers", "localGovernmentAreas");
 
-        url.searchParams.set(
-            "excludeGeometry",
-            "true",
-        );
+        url.searchParams.set("excludeGeometry", "true");
 
-        const response =
-            await fetch(
-                url.toString(),
-                {
-                    headers: {
-                        Authorization:
-                            apiKey,
-                        Accept:
-                            "application/json",
-                    },
-                    cache:
-                        "no-store",
-                },
-            );
+        const response = await fetch(url.toString(), {
+            headers: {
+                Authorization: apiKey,
+                Accept: "application/json",
+            },
+            cache: "no-store",
+        });
 
         if (!response.ok) {
             return null;
         }
 
-        const data =
-            (await response.json()) as GeoscapeBoundaryResponse;
+        const data = (await response.json()) as GeoscapeBoundaryResponse;
 
-        const feature =
-            data.features?.[0];
+        const feature = data.features?.[0];
 
-        const result: CouncilLookup =
-        {
+        const result: CouncilLookup = {
             lat,
             lng,
-            council:
-                feature
-                    ?.properties
-                    ?.lgaName ??
-                "Unknown council",
-            state:
-                feature
-                    ?.properties
-                    ?.state ??
-                "",
+            council: feature?.properties?.lgaName ?? "Unknown council",
+            state: feature?.properties?.state ?? "",
         };
 
-        setCachedCouncil(
-            result,
-        );
+        setCachedCouncil(result);
 
         return result;
     } catch {
@@ -284,44 +195,26 @@ async function fetchCouncilFromGeoscape(
     }
 }
 
-async function fetchPlaceDetails(
-    placeId: string,
-    apiKey: string,
-) {
-    const response =
-        await fetch(
-            `${GOOGLE_PLACE_DETAILS_URL}/${placeId}`,
-            {
-                headers: {
-                    "X-Goog-Api-Key":
-                        apiKey,
-                    "X-Goog-FieldMask":
-                        "formattedAddress,location,addressComponents",
-                },
-                cache:
-                    "no-store",
-            },
-        );
+async function fetchPlaceDetails(placeId: string, apiKey: string) {
+    const response = await fetch(`${GOOGLE_PLACE_DETAILS_URL}/${placeId}`, {
+        headers: {
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": "formattedAddress,location,addressComponents",
+        },
+        cache: "no-store",
+    });
 
     if (!response.ok) {
         return null;
     }
 
-    const details =
-        (await response.json()) as GooglePlaceDetailsResponse;
+    const details = (await response.json()) as GooglePlaceDetailsResponse;
 
-    const lat =
-        details.location
-            ?.latitude;
+    const lat = details.location?.latitude;
 
-    const lng =
-        details.location
-            ?.longitude;
+    const lng = details.location?.longitude;
 
-    if (
-        lat == null ||
-        lng == null
-    ) {
+    if (lat == null || lng == null) {
         return null;
     }
 
@@ -333,9 +226,7 @@ async function fetchPlaceDetails(
     };
 }
 
-export async function GET(
-    request: Request,
-) {
+export async function GET(request: Request) {
     try {
         const url = new URL(request.url);
         const query = url.searchParams.get("query")?.trim() ?? "";
@@ -354,13 +245,13 @@ export async function GET(
                 {
                     error: "Search query is too long (max 255 characters)",
                 },
-                { status: 400 }
+                { status: 400 },
             );
         }
 
         const limit = Math.min(
             limitParam ? Math.max(1, parseInt(limitParam, 10)) : 8,
-            20
+            20,
         );
 
         const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -368,14 +259,10 @@ export async function GET(
 
         // The rest of the function continues with the 'query' variable from above
 
-        if (
-            !googleApiKey ||
-            !geoscapeApiKey
-        ) {
+        if (!googleApiKey || !geoscapeApiKey) {
             return NextResponse.json(
                 {
-                    message:
-                        "Missing API keys.",
+                    message: "Missing API keys.",
                 },
                 {
                     status: 500,
@@ -386,215 +273,122 @@ export async function GET(
         /**
          * Google autocomplete
          */
-        const autoResponse =
-            await fetch(
-                GOOGLE_AUTOCOMPLETE_URL,
-                {
-                    method:
-                        "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                        "X-Goog-Api-Key":
-                            googleApiKey,
-                        "X-Goog-FieldMask":
-                            "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text",
-                    },
-                    body: JSON.stringify(
-                        {
-                            input:
-                                query,
-                            includedRegionCodes:
-                                [
-                                    "AU",
-                                ],
-                        },
-                    ),
-                    cache:
-                        "no-store",
-                },
-            );
+        const autoResponse = await fetch(GOOGLE_AUTOCOMPLETE_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": googleApiKey,
+                "X-Goog-FieldMask":
+                    "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text",
+            },
+            body: JSON.stringify({
+                input: query,
+                includedRegionCodes: ["AU"],
+            }),
+            cache: "no-store",
+        });
 
-        if (
-            !autoResponse.ok
-        ) {
+        if (!autoResponse.ok) {
+            console.error("Google autocomplete error:", await autoResponse.text());
             return NextResponse.json(
                 {
-                    message:
-                        "Autocomplete failed.",
+                    message: "Autocomplete failed.",
                 },
                 {
-                    status:
-                        autoResponse.status,
+                    status: autoResponse.status,
                 },
             );
         }
 
-        const autoData =
-            (await autoResponse.json()) as GoogleAutocompleteResponse;
+        const autoData = (await autoResponse.json()) as GoogleAutocompleteResponse;
 
         const predictions =
             autoData.suggestions
-                ?.map(
-                    (
-                        item,
-                    ) =>
-                        item.placePrediction,
-                )
-                .filter(
-                    Boolean,
-                )
-                .slice(
-                    0,
-                    MAX_GOOGLE_RESULTS,
-                ) ?? [];
+                ?.map((item) => item.placePrediction)
+                .filter(Boolean)
+                .slice(0, MAX_GOOGLE_RESULTS) ?? [];
 
         /**
          * Fetch all details in parallel
          */
-        const detailResults =
-            await Promise.all(
-                predictions.map(
-                    (
-                        prediction,
-                    ) =>
-                        fetchPlaceDetails(
-                            prediction!
-                                .placeId,
-                            googleApiKey,
-                        ),
-                ),
-            );
+        const detailResults = await Promise.all(
+            predictions.map((prediction) =>
+                fetchPlaceDetails(prediction!.placeId, googleApiKey),
+            ),
+        );
 
-        const validPlaces =
-            detailResults.filter(
-                Boolean,
-            ) as Awaited<
-                ReturnType<
-                    typeof fetchPlaceDetails
-                >
-            >[];
+        const validPlaces = detailResults.filter(Boolean) as Awaited<
+            ReturnType<typeof fetchPlaceDetails>
+        >[];
 
         /**
          * Geoscape smart clustering
          */
-        const councilGroups: CouncilLookup[] =
-            [];
+        const councilGroups: CouncilLookup[] = [];
 
         let geoscapeCalls = 0;
 
-        const suggestions =
-            [];
+        const suggestions = [];
 
         for (const place of validPlaces) {
             if (!place) continue;
-            let matched =
-                councilGroups.find(
-                    (
-                        group,
-                    ) =>
-                        isNearby(
-                            place.lat,
-                            place.lng,
-                            group.lat,
-                            group.lng,
-                        ),
+            let matched = councilGroups.find((group) =>
+                isNearby(place.lat, place.lng, group.lat, group.lng),
+            );
+
+            if (!matched && geoscapeCalls < MAX_GEOSCAPE_CALLS) {
+                const geo = await fetchCouncilFromGeoscape(
+                    place.lat,
+                    place.lng,
+                    geoscapeApiKey,
                 );
 
-            if (
-                !matched &&
-                geoscapeCalls <
-                MAX_GEOSCAPE_CALLS
-            ) {
-                const geo =
-                    await fetchCouncilFromGeoscape(
-                        place.lat,
-                        place.lng,
-                        geoscapeApiKey,
-                    );
-
                 if (geo) {
-                    matched =
-                        geo;
+                    matched = geo;
 
-                    councilGroups.push(
-                        geo,
-                    );
+                    councilGroups.push(geo);
 
                     geoscapeCalls++;
                 }
             }
 
-            if (
-                !matched &&
-                councilGroups.length >
-                0
-            ) {
-                matched =
-                    councilGroups[0];
+            if (!matched && councilGroups.length > 0) {
+                matched = councilGroups[0];
             }
 
-            const postcode =
-                getComponent(
-                    place.details
-                        .addressComponents,
-                    "postal_code",
-                )
-                    ?.longText;
+            const postcode = getComponent(
+                place.details.addressComponents,
+                "postal_code",
+            )?.longText;
 
             const fallbackState =
                 getComponent(
-                    place.details
-                        .addressComponents,
+                    place.details.addressComponents,
                     "administrative_area_level_1",
-                )
-                    ?.shortText ??
-                "";
+                )?.shortText ?? "";
 
-            suggestions.push(
-                {
-                    id: place.placeId,
-                    label:
-                        place
-                            .details
-                            .formattedAddress ??
-                        "",
-                    address:
-                        place
-                            .details
-                            .formattedAddress ??
-                        "",
-                    council:
-                        matched?.council ??
-                        "Unknown council",
-                    state:
-                        matched?.state ??
-                        fallbackState,
-                    postcode,
-                    countryCode:
-                        AU_COUNTRY_CODE,
-                    lat: place.lat,
-                    lng: place.lng,
-                },
-            );
+            suggestions.push({
+                id: place.placeId,
+                label: place.details.formattedAddress ?? "",
+                address: place.details.formattedAddress ?? "",
+                council: matched?.council ?? "Unknown council",
+                state: matched?.state ?? fallbackState,
+                postcode,
+                countryCode: AU_COUNTRY_CODE,
+                lat: place.lat,
+                lng: place.lng,
+            });
         }
         return successResponse({
-            suggestions: suggestions.slice(
-                0,
-                limit,
-            ),
+            suggestions: suggestions.slice(0, limit),
             count: suggestions.length,
         });
-    } catch (
-    error
-    ) {
-        return errorResponse(
-        "Lookup failed.",
-        {
+    } catch (error) {
+        console.error("Address lookup error:", error);
+        return errorResponse("Lookup failed.", {
             status: 500,
             code: "INTERNAL_ERROR",
             issues: error instanceof Error ? { message: error.message } : undefined,
-        },
-    );
+        });
     }
 }

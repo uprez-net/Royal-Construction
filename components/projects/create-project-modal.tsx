@@ -844,10 +844,12 @@ export function CreateProjectModal({
               Extract project data
             </Button>
           ) : null}
+
           {stage === "review" ? (
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
-              Create Project
-            </Button>
+            null
+            // <Button onClick={handleSubmit} disabled={isSubmitting}>
+            //   Create Project
+            // </Button>
           ) : null}
         </DialogFooter>
       </DialogContent>

@@ -8,7 +8,7 @@ import {
     projectExtractionSchema,
     type ProjectExtractionData,
 } from "@/types/project-extraction";
-import { getWritable } from "workflow";
+import { getWritable, sleep } from "workflow";
 
 const OCR_TIMEOUT_MS = 75_000;
 const MODEL_CHUNK_CHAR_LIMIT = 40_000;
@@ -238,6 +238,7 @@ export const extractTenderAndContractDocuments = async (
                 totalFields: Object.keys(projectExtractionSchema.parse({})).length,
             };
             await writeToStream({ type: "result", result });
+            await sleep(2000);
             await closeWorkflowStream();
             return result;
         }
@@ -284,6 +285,7 @@ export const extractTenderAndContractDocuments = async (
         };
 
         await writeToStream({ type: "result", result });
+        await sleep(2000);
         await closeWorkflowStream();
         return result;
     } catch (error) {

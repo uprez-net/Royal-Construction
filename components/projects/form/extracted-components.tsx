@@ -148,6 +148,30 @@ function fieldLabel(field: string) {
     .replace(/\bM2\b/g, "m²");
 }
 
+const removeTitleFromFieldName = (title: string, fieldName: string) => {
+  const titlePrefix = title
+    .replace(/\s+and\s+/gi, " ") // handles "Legal and Administration" -> legalAdministration
+    .split(" ")
+    .map((word, index) =>
+      index === 0
+        ? word.toLowerCase()
+        : word.charAt(0).toUpperCase() + word.slice(1)
+    )
+    .join("");
+
+  const titlePrefixWithAnd = title
+    .split(" ")
+    .map((word, index) =>
+      index === 0
+        ? word.toLowerCase()
+        : word.charAt(0).toUpperCase() + word.slice(1)
+    )
+    .join("");
+
+  return fieldName
+    .replace(new RegExp(`^(${titlePrefix}|${titlePrefixWithAnd})`), "");
+};
+
 // ---------------------------------------------------------------------------
 // Value coercion helpers
 // ---------------------------------------------------------------------------
@@ -369,12 +393,14 @@ export function ExtractionField({
 // ---------------------------------------------------------------------------
 
 function FieldGroupPanel({
+  title,
   heading,
   caption,
   fields,
   values,
   onChange,
 }: {
+  title: string;
   heading: string;
   caption: string;
   fields: string[];
@@ -389,7 +415,7 @@ function FieldGroupPanel({
       </div>
       <div className={cn("grid gap-4", fields.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2")}>
         {fields.map((field) => (
-          <ExtractionField key={field} field={field} value={values[field as keyof ProjectExtractionData]} onChange={onChange} />
+          <ExtractionField key={field} field={removeTitleFromFieldName(title, field)} value={values[field as keyof ProjectExtractionData]} onChange={onChange} />
         ))}
       </div>
     </div>
@@ -437,6 +463,9 @@ export function ExtractionSectionCard({
   const groupedFieldsInSection = new Set(activeGroups.flatMap((group) => group.fields));
   const standaloneFields = fields.filter((field) => !groupedFieldsInSection.has(field));
 
+  console.log("Standalone fields:", standaloneFields);
+  console.log("Active groups:", activeGroups);
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -463,7 +492,7 @@ export function ExtractionSectionCard({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {standaloneFields.map((field) => (
           <div key={field} className={SPAN_TWO_FIELDS.has(field) ? "md:col-span-2 xl:col-span-2" : undefined}>
-            <ExtractionField field={field} value={values[field as keyof ProjectExtractionData]} onChange={onChange} />
+            <ExtractionField field={removeTitleFromFieldName(title, field)} value={values[field as keyof ProjectExtractionData]} onChange={onChange} />
           </div>
         ))}
       </div>
@@ -473,6 +502,7 @@ export function ExtractionSectionCard({
           {activeGroups.map((group) => (
             <FieldGroupPanel
               key={group.id}
+              title={title}
               heading={group.heading}
               caption={group.caption}
               fields={group.fields}
