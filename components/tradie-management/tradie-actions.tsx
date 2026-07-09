@@ -1,7 +1,9 @@
 import {
   AlertTriangle,
   Eye,
+  Loader2,
   MoreVertical,
+  Pencil,
   Star,
   Tag,
   Trash2,
@@ -23,6 +25,7 @@ import { TradieRow } from "@/types/tradie";
 import { MouseEvent, useTransition } from "react";
 import { toast } from "sonner";
 import { toggleTradieFavouriteThunk } from "@/lib/store/slices/tradieManagementSlice";
+import { getTradieByIdCached } from "@/lib/data/tradie-management";
 
 interface TradieActionsDropdownProps {
   tradieRow: TradieRow;
@@ -33,6 +36,7 @@ export function TradieActionsDropdown({
 }: TradieActionsDropdownProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isEditDetailsPending, startFetchingDetails] = useTransition();
   const dispatch = useAppDispatch();
   const onViewDetails = () => {
     router.push(`/tradie-management/${tradieRow.id}`);
@@ -95,6 +99,16 @@ export function TradieActionsDropdown({
     }
   };
 
+  const onEditDetails = async (
+    e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>,
+  ) => {
+    e.stopPropagation();
+    const tradieDetails = await getTradieByIdCached(tradieRow.id);
+    dispatch(
+      openModal({ type: "editTradie", payload: { tradie: tradieDetails } }),
+    );
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -115,6 +129,22 @@ export function TradieActionsDropdown({
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          onClick={(e) => startFetchingDetails(() => onEditDetails(e))}
+        >
+          {isEditDetailsPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading Details...
+            </>
+          ) : (
+            <>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit Details
+            </>
+          )}
+        </DropdownMenuItem>
 
         <DropdownMenuItem onClick={onPriceChange}>
           <Tag className="mr-2 h-4 w-4" />

@@ -6,6 +6,7 @@ import {
     rateTradie,
     reportTradieIncident,
     toggleTradieFavourite,
+    updateTradie,
     updateTradiePrice,
 } from "@/lib/data/tradie-management";
 import {
@@ -20,7 +21,7 @@ import {
     UpdatePriceInput,
 } from "@/types/tradie";
 import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
-import { TradieIncident } from "@prisma/client";
+import { TradieIncident, Tradie } from "@prisma/client";
 import {
     createAsyncThunk,
     createSlice,
@@ -98,6 +99,19 @@ export const addTradie = createAsyncThunk<TradieRow, CreateTradieInput>(
         }
     },
 );
+
+export const updateTradieThunk = createAsyncThunk<TradieDetails, { tradieId: string; data: Partial<Pick<Tradie, 'email' | 'phone' | 'location' | 'note'>> }>(
+    "tradieManagement/updateTradie",
+    async ({ tradieId, data }, thunkAPI) => {
+        try {
+            const updatedTradie = await updateTradie(tradieId, data);
+            return updatedTradie;
+        } catch (error) {
+            return thunkAPI.rejectWithValue(
+                error instanceof Error ? error.message : "Failed to update tradie",
+            );
+        }
+    });
 
 export const updateTradiePriceThunk = createAsyncThunk<void, UpdatePriceInput>(
     "tradieManagement/updateTradiePrice",
@@ -305,6 +319,33 @@ const tradieManagementSlice = createSlice({
                 }
             })
             .addCase(toggleTradieFavouriteThunk.rejected, (state, action) => {
+                state.error = action.payload as string;
+            })
+            .addCase(updateTradieThunk.pending, (state) => {
+                state.error = null;
+            })
+            .addCase(updateTradieThunk.fulfilled, (state, action) => {
+                const updatedTradie = action.payload;
+                const normalizedTradieForDetails = {
+                    ...updatedTradie,
+                    hourlyRate: updatedTradie.hourlyRate ?? undefined,
+                    rating: updatedTradie.rating ?? undefined,
+                };
+                const tradieIndex = state.tradies.findIndex((t) => t.id === updatedTradie.id);
+                if (tradieIndex !== -1) {
+                    state.tradies[tradieIndex] = {
+                        ...state.tradies[tradieIndex],
+                        ...updatedTradie,
+                    };
+                }
+                if (state.selectedTradieId === updatedTradie.id && state.selectedTradieDetails !== null) {
+                    state.selectedTradieDetails = {
+                        ...state.selectedTradieDetails!,
+                        ...normalizedTradieForDetails,
+                    };
+                }
+            })
+            .addCase(updateTradieThunk.rejected, (state, action) => {
                 state.error = action.payload as string;
             });
     },

@@ -39,7 +39,7 @@ import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
 import { CreateOfferFileModal } from "../offers/create-offer-modal";
 import { AddLeadModal } from "../leads/modal-ui/add-lead-modal";
 import AddTradieModal from "../tradie-management/modal/add-tradie-modal";
-import { SafeTradieApproval, TradieRow } from "@/types/tradie";
+import { SafeTradieApproval, TradieDetails, TradieRow } from "@/types/tradie";
 import DeleteTradieModal from "../tradie-management/modal/delete-tradie-modal";
 import ReportTradieModal from "../tradie-management/modal/report-tradie-modal";
 import PriceChangeTradieModal from "../tradie-management/modal/price-change-tradie-modal";
@@ -51,6 +51,7 @@ import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-m
 import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
 import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
 import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
+import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -437,6 +438,18 @@ export function ModalManager() {
           open
           onClose={handleClose}
           approvals={approvals}
+        />
+      );
+    }
+    case "editTradie": {
+      const { tradie } = modal.payload as {
+        tradie: TradieDetails;
+      };
+      return (
+        <EditTradieModal
+          open
+          onClose={handleClose}
+          tradie={tradie}
         />
       );
     }

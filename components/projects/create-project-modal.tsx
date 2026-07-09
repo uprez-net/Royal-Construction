@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+// import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { UploadDropzone } from "@/components/common/upload-dropzone";
 import { LeadCardList } from "@/components/offers/lead-card-list";
@@ -56,14 +56,20 @@ import { buildBlobPath } from "@/utils/formatters";
 import type { AddressSuggestion } from "@/types/data";
 import type { ProjectDocumentBundle } from "@/types/project-flow";
 import {
-  createEmptyProjectExtractionData,
+  // createEmptyProjectExtractionData,
   projectExtractionSchema,
   projectExtractionSections,
   type ProjectExtractionData,
 } from "@/types/project-extraction";
 import { useWorkflowStream } from "@/context/WorkFlowStatusContext";
 import type { TenderExtractionResult } from "@/lib/workflow/project";
-import { emptyExtractionState, ExtractionSectionCard, normalizeString, sectionFields, updateExtractionField } from "./form/extracted-components";
+import {
+  emptyExtractionState,
+  ExtractionSectionCard,
+  normalizeString,
+  sectionFields,
+  updateExtractionField,
+} from "./form/extracted-components";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -87,8 +93,6 @@ const EXTRACTION_PROGRESS = [
   "Running structured extraction",
   "Preparing review",
 ] as const;
-
-
 
 export function CreateProjectModal({
   open,
@@ -409,12 +413,12 @@ export function CreateProjectModal({
       return;
     }
 
-    if(!selectedLocation) {
+    if (!selectedLocation) {
       toast.error("Select a site location before creating the project.");
       return;
     }
 
-    if(!selectedSiteManager) {
+    if (!selectedSiteManager) {
       toast.error("Select a site manager before creating the project.");
       return;
     }
@@ -787,7 +791,7 @@ export function CreateProjectModal({
                 onClick={() =>
                   setActiveSectionIndex((current) => Math.max(current - 1, 0))
                 }
-                disabled={activeSectionIndex === 0}
+                disabled={activeSectionIndex === 0 || isSubmitting}
               >
                 <ChevronLeft className="mr-2 size-4" />
                 Previous
@@ -796,6 +800,7 @@ export function CreateProjectModal({
                 {currentSection.title}
               </div>
               <Button
+                disabled={isSubmitting}
                 onClick={() => {
                   if (
                     activeSectionIndex >=
@@ -804,15 +809,26 @@ export function CreateProjectModal({
                     void handleSubmit();
                     return;
                   }
+
                   setActiveSectionIndex((current) =>
                     Math.min(current + 1, projectExtractionSections.length - 1),
                   );
                 }}
               >
-                {activeSectionIndex >= projectExtractionSections.length - 1
-                  ? "Create Project"
-                  : "Next"}
-                <ChevronRight className="ml-2 size-4" />
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Creating Project...
+                  </>
+                ) : (
+                  <>
+                    {activeSectionIndex >= projectExtractionSections.length - 1
+                      ? "Create Project"
+                      : "Next"}
+
+                    <ChevronRight className="ml-2 size-4" />
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -835,7 +851,7 @@ export function CreateProjectModal({
         ) : null}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleClose(false)}>
+          <Button variant="outline" disabled={isSubmitting} onClick={() => handleClose(false)}>
             Cancel
           </Button>
           {stage === "selection" ? (
@@ -845,12 +861,12 @@ export function CreateProjectModal({
             </Button>
           ) : null}
 
-          {stage === "review" ? (
-            null
-            // <Button onClick={handleSubmit} disabled={isSubmitting}>
-            //   Create Project
-            // </Button>
-          ) : null}
+          {stage === "review"
+            ? null
+            : // <Button onClick={handleSubmit} disabled={isSubmitting}>
+              //   Create Project
+              // </Button>
+              null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

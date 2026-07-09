@@ -228,6 +228,7 @@ model Tradie {
   abn         String   @unique
   phone       String   @unique
   email       String   @unique
+  location    String?
   isFavourite Boolean  @default(false)
   hourlyRate  Decimal? @db.Decimal(8, 2)
   rating      Decimal? @db.Decimal(2, 1)

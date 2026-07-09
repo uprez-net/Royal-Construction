@@ -44,6 +44,7 @@ export interface CreateTradieInput {
     abn: string;
     phone: string;
     email: string;
+    location: string;
     note?: string;
 }
 

@@ -19,6 +19,7 @@ export type ModalType =
   | "createOfferFile"
   | "createLead"
   | "addTradie"
+  | "editTradie"
   | "deleteTradie"
   | "rateTradie"
   | "reportTradie"

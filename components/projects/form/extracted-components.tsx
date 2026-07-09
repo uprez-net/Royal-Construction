@@ -130,7 +130,7 @@ const FIELD_GROUPS: { id: string; heading: string; caption: string; fields: stri
   },
 ];
 
-const GROUPED_FIELD_SET = new Set(FIELD_GROUPS.flatMap((group) => group.fields));
+// const GROUPED_FIELD_SET = new Set(FIELD_GROUPS.flatMap((group) => group.fields));
 
 // ---------------------------------------------------------------------------
 // Label formatting
