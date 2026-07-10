@@ -80,6 +80,7 @@ export default function ReportTradieModal({
     markUploading,
     updateProgress,
     markUploaded,
+    removeFile,
   } = useUploadQueue({ maxFiles });
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
   const [formData, setFormData] = useState<
@@ -323,6 +324,7 @@ export default function ReportTradieModal({
               disabled={isPending}
               isLoading={isPending}
               onFilesSelected={addFiles}
+              removeFile={removeFile}
             />
           </div>
 

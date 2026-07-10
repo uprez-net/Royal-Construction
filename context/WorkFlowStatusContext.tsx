@@ -241,8 +241,8 @@ export function WorkflowStreamProvider({
         console.log("Refreshing SSE connection...");
         void connectToRun(runId);
       },
-      2 * 60 * 1000,
-    ); // 2 minutes
+      15 * 60 * 1000,
+    ); // 15 minutes
 
     return () => clearInterval(interval);
   }, [runId, connected, connectToRun]);

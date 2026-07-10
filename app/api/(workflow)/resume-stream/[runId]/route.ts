@@ -7,6 +7,8 @@ import { getUserByClerkIdCached } from "@/lib/data/user";
 // import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
 import { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
 
+export const maxDuration = 900; // 15 minutes
+
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ runId: string }> }
@@ -74,7 +76,11 @@ export async function GET(
         });
 
         return new Response(stream.pipeThrough(ndjsonStream), {
-            headers: { "Content-Type": "application/x-ndjson" },
+            headers: {
+                "Content-Type": "application/x-ndjson",
+                "Cache-Control": "no-cache, no-transform",
+                Connection: "keep-alive",
+            },
         });
     } catch (error) {
         console.error("Failed to resume workflow stream", { runId, startIndex, error });

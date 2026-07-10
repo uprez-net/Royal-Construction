@@ -9,6 +9,11 @@ import {
     type ProjectExtractionData,
 } from "@/types/project-extraction";
 import { getWritable, sleep } from "workflow";
+import { findLeadById } from "@/lib/data/leads";
+import { ObjectToMarkdown } from "@/utils/converter";
+import pLimit from "p-limit";
+
+const limit = pLimit(4);
 
 const OCR_TIMEOUT_MS = 75_000;
 const MODEL_CHUNK_CHAR_LIMIT = 40_000;
@@ -35,6 +40,7 @@ export type TenderExtractionInput = {
     contractUrl: string;
     tenderFileName: string;
     contractFileName: string;
+    leadId: number;
 };
 
 export type TenderExtractionResult = {
@@ -206,6 +212,15 @@ async function emitStage(stage: ExtractionStage) {
     });
 }
 
+async function getLeadInfo(leadId: number) {
+    "use step";
+    const lead = await findLeadById(leadId);
+    if (!lead) {
+        throw new Error(`Lead with ID ${leadId} not found.`);
+    }
+    return ObjectToMarkdown(lead as unknown as Record<string, unknown>);
+}
+
 // ---------------------------------------------------------------------------
 // Workflow
 // ---------------------------------------------------------------------------
@@ -245,24 +260,39 @@ export const extractTenderAndContractDocuments = async (
 
         await emitStage("Running structured extraction");
 
+        const leadInfo = await getLeadInfo(input.leadId);
         const tenderChunks = chunkMarkdown(tenderMarkdown, MODEL_CHUNK_CHAR_LIMIT);
         const contractChunks = chunkMarkdown(contractMarkdown, MODEL_CHUNK_CHAR_LIMIT);
         const chunkCount = Math.max(tenderChunks.length, contractChunks.length);
+        // Decide once, explicitly, what happens when one doc runs out of chunks
+        // before another. Empty string is usually the safe default — resending
+        // the full original document on every extra iteration risks re-extraction
+        // and blowing the char limit.
+        const atChunk = (chunks: string[], index: number, whole: string) =>
+            chunks.length <= 1 ? whole : (chunks[index] ?? "");
+
+        const chunkResults = await Promise.all(
+            Array.from({ length: chunkCount }, (_, index) =>
+                limit(() =>
+                    runChunkedExtraction({
+                        tenderMarkdown: atChunk(tenderChunks, index, tenderMarkdown),
+                        contractMarkdown: contractChunks[index] ?? contractMarkdown,
+                        tenderFileName: input.tenderFileName,
+                        contractFileName: input.contractFileName,
+                        leadInfo: index === 0 ? leadInfo : undefined, // only send lead info on the first chunk
+                    })
+                )
+            )
+        );
 
         let merged = createEmptyProjectExtractionData();
         const messages: string[] = [];
         let hadPartial = false;
 
-        for (let index = 0; index < chunkCount; index += 1) {
-            const chunkResult = await runChunkedExtraction({
-                tenderMarkdown: tenderChunks[index] ?? "",
-                contractMarkdown: contractChunks[index] ?? contractMarkdown,
-                tenderFileName: input.tenderFileName,
-                contractFileName: input.contractFileName,
-            });
+        for (const chunkResult of chunkResults) {
             merged = mergeExtraction(merged, chunkResult.extraction);
             messages.push(chunkResult.message);
-            hadPartial = hadPartial || !chunkResult.ok;
+            hadPartial ||= !chunkResult.ok;
         }
 
         await emitStage("Preparing review");

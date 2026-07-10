@@ -127,6 +127,7 @@ export function CreateProjectModal({
     null,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sourceDocuments, setSourceDocuments] = useState<ProjectDocumentBundle | null>(null);
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
 
   const tenderQueue = useUploadQueue({ maxFiles: 1 });
@@ -138,7 +139,7 @@ export function CreateProjectModal({
       null
     );
   }, [selectedManagerId, siteManagers.items]);
-  const { runId, extractingTender, startListening } = useWorkflowStream();
+  const { extractingTender, startListening, stopListening } = useWorkflowStream();
 
   // Pulled out so both the stream handler and any retry/manual path can reuse it.
   function applyExtractionResult(result: TenderExtractionResult) {
@@ -221,10 +222,8 @@ export function CreateProjectModal({
       switch (event.type) {
         case "stage": {
           const index = EXTRACTION_PROGRESS.indexOf(event.stage);
-
           console.log(`Extraction stage: ${event.stage} (index ${index})`);
-
-          setProgressStep((prev) => (index < prev ? index : prev + 1));
+          setProgressStep((prev) => Math.max(prev, index));
           break;
         }
 
@@ -242,19 +241,6 @@ export function CreateProjectModal({
     return () => clearTimeout(timeoutId);
   }, [extractingTender]);
 
-  useEffect(() => {
-    if (!runId?.trim()) return;
-
-    const timer = setTimeout(
-      () => {
-        startListening(runId);
-      },
-      2 * 60 * 1000,
-    ); // 2 minutes
-
-    return () => clearTimeout(timer);
-  }, [runId, startListening]);
-
   const resetWizard = () => {
     setStage("selection");
     setProgressStep(0);
@@ -270,6 +256,8 @@ export function CreateProjectModal({
     setSelectedLocation(null);
     setSelectedManagerId(null);
     setManagerSearch("");
+    setSourceDocuments(null);
+    stopListening();
     tenderQueue.resetQueue();
     contractQueue.resetQueue();
   };
@@ -376,6 +364,7 @@ export function CreateProjectModal({
         uploadDocument(tenderQueue.files[0], "tender"),
         uploadDocument(contractQueue.files[0], "contract"),
       ]);
+      setSourceDocuments({ tender: tenderDocument, contract: contractDocument });
       setProgressStep(1);
 
       const extractionResult = await fetchJson<{
@@ -393,6 +382,7 @@ export function CreateProjectModal({
             contractUrl: contractDocument.url,
             tenderFileName: tenderDocument.fileName,
             contractFileName: contractDocument.fileName,
+            leadId: selectedLeadId,
           }),
         },
         "Failed to start extraction workflow",
@@ -423,31 +413,21 @@ export function CreateProjectModal({
       return;
     }
 
+    if(!sourceDocuments) {
+      toast.error("Source documents are missing. Please retry the extraction process.");
+      return;
+    }
+
     setIsSubmitting(true);
     setStage("submitting");
 
     try {
       const normalizedExtraction = projectExtractionSchema.parse(extraction);
-      const sourceDocuments: ProjectDocumentBundle = {
-        tender: {
-          fileId: tenderQueue.files[0]?.id ?? "",
-          fileName: tenderQueue.files[0]?.file.name ?? "Tender PDF",
-          url: tenderQueue.files[0]?.url ?? "",
-          kind: "tender",
-        },
-        contract: {
-          fileId: contractQueue.files[0]?.id ?? "",
-          fileName: contractQueue.files[0]?.file.name ?? "Contract PDF",
-          url: contractQueue.files[0]?.url ?? "",
-          kind: "contract",
-        },
-      };
 
       const createdProject = await dispatch(
         createProject({
           projectName:
             normalizeString(normalizedExtraction.projectName) ||
-            normalizeString(normalizedExtraction.summary) ||
             siteAddress ||
             "New Project",
           leadId: selectedLeadId,
@@ -548,6 +528,7 @@ export function CreateProjectModal({
                 helperText="PDF only"
                 files={tenderQueue.files}
                 onFilesSelected={tenderQueue.addFiles}
+                removeFile={tenderQueue.removeFile}
                 accept="application/pdf"
                 maxFiles={1}
               />
@@ -561,6 +542,7 @@ export function CreateProjectModal({
                 helperText="PDF only"
                 files={contractQueue.files}
                 onFilesSelected={contractQueue.addFiles}
+                removeFile={contractQueue.removeFile}
                 accept="application/pdf"
                 maxFiles={1}
               />

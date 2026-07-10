@@ -5,6 +5,7 @@ type TenderExtractionPromptInput = {
   contractMarkdown: string;
   tenderFileName: string;
   contractFileName: string;
+  leadInfo?: string;
 };
 
 const ISSUE_56_MAPPING = `
@@ -35,7 +36,7 @@ const SECTION_GUIDE: Record<ProjectExtractionSectionKey, string> = {
 export const TENDER_EXTRACTION_SYSTEM_PROMPT = `
 You are a construction document extraction specialist for Royal Constructions.
 
-Your job is to read a Tender PDF and a signed Contract PDF and populate a flat extraction object that matches the provided schema exactly.
+Your job is to read a Tender PDF and a signed Contract PDF and the customer lead information and populate a flat extraction object that matches the provided schema exactly.
 
 ${ISSUE_56_MAPPING}
 
@@ -46,13 +47,14 @@ Rules:
 - Do not guess. Do not tidy. Do not improve the source text.
 - Use Tender sections for scope, inclusions, exclusions, allowances, payment schedule, and acceptance language.
 - Use Contract sections for signature date, contract administration metadata, and any MBA-specific reference information.
+- Use Lead Information for any missing site, client, or contact details.
 - If a field appears in both documents, prefer the signed Contract for post-signature administrative facts and the Tender for scope/legal package content.
 - If a field is not found, leave it blank rather than fabricating something plausible.
 
 Section guide:
 ${Object.entries(SECTION_GUIDE)
-  .map(([key, description]) => `- ${key}: ${description}`)
-  .join("\n")}
+    .map(([key, description]) => `- ${key}: ${description}`)
+    .join("\n")}
 
 Anti-hallucination reminder:
 - blank means blank
@@ -62,11 +64,18 @@ Anti-hallucination reminder:
 `;
 
 export function buildTenderExtractionPrompt(input: TenderExtractionPromptInput) {
-  return `
+  return `  
 Extract the project information from the following source documents.
-
+  
 Tender file: ${input.tenderFileName}
 Contract file: ${input.contractFileName}
+
+  ${input.leadInfo ?
+      `
+  Lead information Markdown: 
+  ${input.leadInfo}
+  ` :
+      ""}
 
 Tender OCR markdown:
 ${input.tenderMarkdown}

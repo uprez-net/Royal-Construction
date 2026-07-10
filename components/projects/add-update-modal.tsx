@@ -69,6 +69,7 @@ export function AddUpdateModal({
     files: queuedFiles,
     completedCount: completedUploadCount,
     addFiles,
+    removeFile,
     resetQueue,
     markUploading,
     updateProgress,
@@ -328,6 +329,7 @@ export function AddUpdateModal({
               disabled={isSubmitting}
               isLoading={isSubmitting}
               onFilesSelected={addFiles}
+              removeFile={removeFile}
             />
           </div>
 

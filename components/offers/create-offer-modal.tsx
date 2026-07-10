@@ -57,6 +57,7 @@ export function CreateOfferFileModal({
     files: queuedFiles,
     completedCount: completedUploadCount,
     addFiles,
+    removeFile,
     resetQueue,
     markUploading,
     updateProgress,
@@ -287,6 +288,7 @@ export function CreateOfferFileModal({
                 disabled={isPending}
                 isLoading={isPending}
                 onFilesSelected={addFiles}
+                removeFile={removeFile}
               />
             </div>
           )}

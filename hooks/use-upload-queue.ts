@@ -72,6 +72,16 @@ export function useUploadQueue({ maxFiles = Number.POSITIVE_INFINITY }: UseUploa
     [maxFiles],
   );
 
+  const removeFile = useCallback((fileId: string) => {
+    setFiles((current) => {
+      const fileToRemove = current.find((file) => file.id === fileId);
+      if (fileToRemove) {
+        URL.revokeObjectURL(fileToRemove.previewUrl);
+      }
+      return current.filter((file) => file.id !== fileId);
+    });
+  }, []);
+
   const resetQueue = useCallback(() => {
     revokeQueuedFiles(filesRef.current);
     filesRef.current = [];
@@ -145,6 +155,7 @@ export function useUploadQueue({ maxFiles = Number.POSITIVE_INFINITY }: UseUploa
     filesRef,
     completedCount,
     addFiles,
+    removeFile,
     resetQueue,
     markUploading,
     updateProgress,

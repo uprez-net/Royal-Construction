@@ -15,6 +15,7 @@ const tenderExtractionSchema = z.object({
     contractUrl: z.url(),
     tenderFileName: z.string().min(1),
     contractFileName: z.string().min(1),
+    leadId: z.number().int().positive(),
 });
 
 export async function POST(request: Request) {

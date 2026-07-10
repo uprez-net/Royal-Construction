@@ -139,6 +139,39 @@ function isFlatExtraction(extraction: ProjectRequirementsPayload | ProjectExtrac
   return "legalAdministrationSiteAddress" in extraction || "commercialsAndClaimsContractPrice" in extraction;
 }
 
+const LABEL_PERCENTAGE_RECORD: Record<string, number> = {
+  deposit: 5,
+  slab: 15,
+  frame: 25,
+  "lock up": 25,
+  "interior fit out": 20,
+  final: 10,
+};
+
+const calculatePercentageAmount = (
+  label: string,
+  totalContractSum: number | null,
+) => {
+  const percentageMatch = label.match(/(\d+(?:\.\d+)?)\s*%/);
+
+  const normalizedLabel = label.toLowerCase();
+
+  const percentage = percentageMatch
+    ? Number(percentageMatch[1])
+    : Object.entries(LABEL_PERCENTAGE_RECORD).find(([key]) =>
+      new RegExp(`\\b${key}\\b`).test(normalizedLabel),
+    )?.[1] ?? null;
+
+  return {
+    label,
+    percentage,
+    amount:
+      percentage !== null && totalContractSum !== null
+        ? (totalContractSum * percentage) / 100
+        : null,
+  };
+};
+
 function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExtractionData,
   sourceDocuments: {
     tender: ProjectSourceDocumentReference;
@@ -176,11 +209,7 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
         claimStageSlabDollarValue: extraction.commercialsAndClaimsClaimStageSlabDollarValue,
         variationAdminFee: extraction.commercialsAndClaimsVariationAdminFee,
         latePenaltyRate: extraction.commercialsAndClaimsLatePenaltyRate,
-        paymentStages: extraction.commercialsAndClaimsPaymentStages.map((label) => ({
-          label,
-          percentage: null,
-          amount: null,
-        })),
+        paymentStages: extraction.commercialsAndClaimsPaymentStages.map((label) => calculatePercentageAmount(label, extraction.commercialsAndClaimsTotalContractSum)),
       },
       subStructureAndGround: {
         concreteSlabClass: extraction.subStructureAndGroundConcreteSlabClass,
