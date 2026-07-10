@@ -279,6 +279,11 @@ const projectsSlice = createSlice({
     syncProjectFromDetail(state, action: PayloadAction<ProjectDetail>) {
       syncProjectState(state, action.payload);
     },
+    appendFileToProject(state, action: PayloadAction<{ projectId: string; file: ProjectFiles }>) {
+      if (state.activeProject?.id === action.payload.projectId) {
+        state.activeProject.files.push(action.payload.file);
+      }
+    },
     registerProjectUpload(
       state,
       action: PayloadAction<{
@@ -664,6 +669,7 @@ export const {
   setProjectDetailChartRange,
   resetProjectDetailUiState,
   resetProjects,
+  appendFileToProject,
 } = projectsSlice.actions;
 
 export const selectProjectsState = (state: RootState) => state.projects;

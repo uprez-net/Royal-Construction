@@ -47,19 +47,19 @@ export function ProjectCommunicationTabs({}: ProjectCommunicationTabsProps) {
           </CardTitle>
 
           <div className="flex gap-2">
-            <div className="relative w-full sm:w-[220px] transition-all focus-within:w-[280px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-[13px] -translate-y-1/2 text-muted-foreground" />
+            <div className="relative w-full sm:w-55 transition-all focus-within:w-70">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.25 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search Messages..."
-                className="pl-[32px] h-9 text-[12.5px] rounded-lg bg-white"
+                className="pl-8 h-9 text-[12.5px] rounded-lg bg-white"
                 aria-label="Search messages"
               />
             </div>
             <Button
               size="sm"
-              className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
+              className="h-9 rounded-lg bg-teal-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-teal-700"
             >
               <Plus className="mr-1 size-4" />
               Send Message
