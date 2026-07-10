@@ -279,7 +279,7 @@ export const extractTenderAndContractDocuments = async (
                         contractMarkdown: contractChunks[index] ?? contractMarkdown,
                         tenderFileName: input.tenderFileName,
                         contractFileName: input.contractFileName,
-                        leadInfo: index === 0 ? leadInfo : undefined, // only send lead info on the first chunk
+                        leadInfo: index === chunkCount - 1 ? leadInfo : undefined, // only send lead info on the last chunk
                     })
                 )
             )
