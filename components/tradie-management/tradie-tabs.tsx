@@ -180,7 +180,10 @@ export function TradieTabs() {
         variant="outline"
         size="sm"
         onClick={() => setFavouriteTab(!query.favourite)}
-        className="hover:bg-amber-100 hover:text-amber-700 hover:border-amber-300"
+        className={cn(
+          "hover:bg-amber-100 hover:text-amber-700 hover:border-amber-300",
+          query.favourite && "bg-amber-100 text-amber-700 border-amber-300",
+        )}
       >
         <Star className="mr-2 size-4" />
         Favourite

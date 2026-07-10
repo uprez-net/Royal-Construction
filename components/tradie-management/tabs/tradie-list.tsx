@@ -15,7 +15,11 @@ import { currency } from "@/utils/formatters";
 import { randomColourHexGenerator } from "@/utils/generator";
 import { useRouter } from "next/navigation";
 import { TradieActionsDropdown } from "../tradie-actions";
-import { convertCategoryToTradieType, type TradieType } from "@/utils/normalize-tradie-type";
+import {
+  convertCategoryToTradieType,
+  type TradieType,
+} from "@/utils/normalize-tradie-type";
+import Link from "next/link";
 
 export function TradieList({
   filteredTradies,
@@ -52,7 +56,9 @@ export function TradieList({
           <TradieCategoryAccordion
             key={category.category}
             icon={<Icon className="h-5 w-5" />}
-            color={randomColourHexGenerator(TRADIE_TYPES[category.category as TradieType])}
+            color={randomColourHexGenerator(
+              TRADIE_TYPES[category.category as TradieType],
+            )}
             name={TRADIE_TYPES[category.category as TradieType]}
             tradieCount={category.tradies.length}
             tradies={category.tradies}
@@ -79,25 +85,27 @@ function TradieCategoryAccordion({
   tradies,
 }: CategoryCardProps) {
   return (
-    <AccordionItem value={name} className="rounded-xl border px-4">
-      <AccordionTrigger className="hover:no-underline">
-        <div className="flex w-full items-center gap-3">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-lg"
-            style={{
-              color,
-              backgroundColor: `${color}15`,
-            }}
-          >
-            {icon}
-          </div>
-          <span className="font-semibold">{name}</span>
+    <AccordionItem value={name} className="rounded-xl border px-4" id={name}>
+      <Link href={`#${name}`}>
+        <AccordionTrigger className="hover:no-underline">
+          <div className="flex w-full items-center gap-3">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-lg"
+              style={{
+                color,
+                backgroundColor: `${color}15`,
+              }}
+            >
+              {icon}
+            </div>
+            <span className="font-semibold">{name}</span>
 
-          <Badge variant="secondary" className="ml-auto mr-4">
-            {tradieCount} tradies
-          </Badge>
-        </div>
-      </AccordionTrigger>
+            <Badge variant="secondary" className="ml-auto mr-4">
+              {tradieCount} tradies
+            </Badge>
+          </div>
+        </AccordionTrigger>
+      </Link>
 
       <AccordionContent>
         <div className="space-y-2 pb-2">
