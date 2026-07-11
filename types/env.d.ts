@@ -31,6 +31,7 @@ namespace NodeJS {
         GRAPH_ADMIN_TOKEN: string;
         NEXT_PUBLIC_GRAPH_ADMIN_TOKEN: string;
         GRAPH_SENDER_UPN: string;
+        MAIL_ID_CC: string;
 
         // Demo Mail Config
         DEMO_RECIPIENT: string;

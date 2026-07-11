@@ -35,12 +35,19 @@ export async function sendEmail(email: EmailInput) {
   if (toList.length === 0) {
     throw new Error("Email 'to' field must contain at least one non-empty recipient.");
   }
+  const ccList = (Array.isArray(email.cc) ? email.cc : email.cc ? [email.cc] : []).filter((addr) => addr?.trim());
+  const bccList = (Array.isArray(email.bcc) ? email.bcc : email.bcc ? [email.bcc] : []).filter((addr) => addr?.trim());
+
+  // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
+  const ccEmail = process.env.MAIL_ID_CC ?? "admin@royalconstructions.com.au";
+  // Add RC to the CC list if there are multiple recipients in the 'to' field
+  ccList.push(ccEmail);
 
   await graphClient.sendMail({
     subject: email.subject,
     body: email.body,
     to: toList,
-    cc: email.cc,
-    bcc: email.bcc,
+    cc: ccList,
+    bcc: bccList,
   });
 }
