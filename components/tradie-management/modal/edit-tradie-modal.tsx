@@ -272,6 +272,9 @@ export default function EditTradieModal({
               <p className="text-right text-xs text-muted-foreground">
                 {formData.note?.length ?? 0}/500
               </p>
+              {errors.note && (
+                <p className="text-xs text-destructive">{errors.note}</p>
+              )}
             </div>
           </div>
 
