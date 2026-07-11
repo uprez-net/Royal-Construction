@@ -1068,11 +1068,12 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
  * @param subject - Email subject.
  * @param body - Email body.
  * @param to - Recipient email address.
+ * @param replyingToEmail - The email being replied to, if any.
  * @returns The persisted email record.
  *
  * @throws {Error} If the lead does not exist or the email could not be sent.
  */
-export async function sendLeadEmail(leadId: number, location: string, body: string, to: string) {
+export async function sendLeadEmail(leadId: number, location: string, body: string, to: string, replyingToEmail?: LeadEmails): Promise<LeadEmails> {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -1093,10 +1094,10 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
     `;
 
     // Generate a subject line using AI for the body
-    const aiSubject = await generateEmailSubject(signedBody);
+    const aiSubject = replyingToEmail ? `Re: ${replyingToEmail.subject}` : await generateEmailSubject(signedBody);
     await sendEmail({
       to,
-      subject: `${aiSubject} - ${location}`,
+      subject: replyingToEmail ? aiSubject :`${aiSubject} - ${location}`,
       body: signedBody,
     });
     const strippedEmailBody = getAllEmailThreads(signedBody, {
