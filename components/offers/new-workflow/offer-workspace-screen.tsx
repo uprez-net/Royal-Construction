@@ -114,6 +114,8 @@ type OfferWorkspaceScreenProps = {
   readonly sentInfo: string | null;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
+  readonly tenderSending?: boolean;
+  readonly tenderSendError?: string | null;
   readonly onRecallTender: () => void;
   readonly onMarkTenderSigned: () => void;
   readonly onGenerateContract: () => void;
@@ -181,6 +183,8 @@ export function OfferWorkspaceScreen({
   sentInfo,
   onGenerateTender,
   onSendTender,
+  tenderSending,
+  tenderSendError,
   onRecallTender,
   onMarkTenderSigned,
   onGenerateContract,
@@ -350,6 +354,8 @@ export function OfferWorkspaceScreen({
               onPaymentScheduleChange={onPaymentScheduleChange}
               onRecallTender={onRecallTender}
               onSendTender={onSendTender}
+              tenderSending={tenderSending}
+              tenderSendError={tenderSendError}
             />
           </OfferPhaseGate>
 

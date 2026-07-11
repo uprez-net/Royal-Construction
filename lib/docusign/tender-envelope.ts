@@ -1,0 +1,156 @@
+import docusign from "docusign-esign";
+import type { DocusignConfig } from "./config";
+import type { DocusignContext } from "./client";
+
+// No DocuSign templates: the Tender PDF is generated at runtime and the
+// signature tabs AutoPlace onto the anchor strings the HTML already embeds
+// (\sigBuilder\, \dateBuilder\, \sigOwnerN\, \dateOwnerN\, \initOwnerN\ —
+// see lib/offer/offer-tender-html.ts).
+export interface EnvelopeSignerInput {
+  readonly name: string;
+  readonly email: string;
+}
+
+export interface EnvelopeRecipientRecord {
+  readonly role: "BUILDER" | "CUSTOMER";
+  readonly name: string;
+  readonly email: string;
+  readonly routingOrder: number;
+  readonly recipientId: string;
+}
+
+export interface CreateEnvelopeResult {
+  readonly envelopeId: string;
+  readonly recipients: readonly EnvelopeRecipientRecord[];
+}
+
+// Anchor tabs match the literal anchor text wherever it occurs in the PDF, so
+// initials (rendered on the execution page note) land exactly where written.
+function anchorTab(tag: string): docusign.SignHere {
+  return {
+    anchorString: `\\${tag}\\`,
+    anchorUnits: "pixels",
+    anchorXOffset: "0",
+    anchorYOffset: "0",
+    anchorIgnoreIfNotPresent: "true",
+  } as docusign.SignHere;
+}
+
+export async function createTenderEnvelope(args: {
+  readonly context: DocusignContext;
+  readonly config: DocusignConfig;
+  readonly pdfBase64: string;
+  readonly documentName: string;
+  readonly emailSubject: string;
+  readonly builder: EnvelopeSignerInput;
+  readonly owners: readonly EnvelopeSignerInput[];
+}): Promise<CreateEnvelopeResult> {
+  const { context, config, pdfBase64, documentName, emailSubject } = args;
+
+  const document: docusign.Document = {
+    documentBase64: pdfBase64,
+    name: documentName,
+    fileExtension: "pdf",
+    documentId: "1",
+  };
+
+  // Builder signs first (routing 1); every owner signs after (routing 2).
+  const builderSigner: docusign.Signer = {
+    name: args.builder.name,
+    email: args.builder.email,
+    recipientId: "1",
+    routingOrder: "1",
+    tabs: {
+      signHereTabs: [anchorTab("sigBuilder")],
+      dateSignedTabs: [anchorTab("dateBuilder")],
+    },
+  };
+
+  const ownerSigners: docusign.Signer[] = args.owners.map((owner, index) => ({
+    name: owner.name,
+    email: owner.email,
+    recipientId: String(index + 2),
+    routingOrder: "2",
+    tabs: {
+      signHereTabs: [anchorTab(`sigOwner${index + 1}`)],
+      dateSignedTabs: [anchorTab(`dateOwner${index + 1}`)],
+      initialHereTabs: [anchorTab(`initOwner${index + 1}`)],
+    },
+  }));
+
+  const envelopeDefinition: docusign.EnvelopeDefinition = {
+    emailSubject: emailSubject.slice(0, 100),
+    documents: [document],
+    recipients: { signers: [builderSigner, ...ownerSigners] },
+    status: "sent",
+  };
+
+  // Envelope-level Connect: status events land on our webhook without any
+  // account-level Connect configuration.
+  if (config.connectWebhookUrl) {
+    envelopeDefinition.eventNotification = {
+      url: config.connectWebhookUrl,
+      loggingEnabled: "true",
+      requireAcknowledgment: "true",
+      deliveryMode: "SIM",
+      events: [
+        "envelope-sent",
+        "envelope-delivered",
+        "envelope-completed",
+        "envelope-declined",
+        "envelope-voided",
+        "recipient-completed",
+        "recipient-declined",
+      ],
+      eventData: {
+        version: "restv2.1",
+        format: "json",
+        includeData: ["recipients"],
+      },
+    } as docusign.EventNotification;
+  }
+
+  const envelopesApi = new docusign.EnvelopesApi(context.apiClient);
+  const result = await envelopesApi.createEnvelope(context.accountId, {
+    envelopeDefinition,
+  });
+  if (!result.envelopeId) {
+    throw new Error("DocuSign did not return an envelope id.");
+  }
+
+  return {
+    envelopeId: result.envelopeId,
+    recipients: [
+      {
+        role: "BUILDER",
+        name: args.builder.name,
+        email: args.builder.email,
+        routingOrder: 1,
+        recipientId: "1",
+      },
+      ...args.owners.map<EnvelopeRecipientRecord>((owner, index) => ({
+        role: "CUSTOMER",
+        name: owner.name,
+        email: owner.email,
+        routingOrder: 2,
+        recipientId: String(index + 2),
+      })),
+    ],
+  };
+}
+
+// Download the fully executed (combined) PDF for archival once the envelope
+// completes.
+export async function downloadCombinedDocument(
+  context: DocusignContext,
+  envelopeId: string,
+): Promise<Buffer> {
+  const envelopesApi = new docusign.EnvelopesApi(context.apiClient);
+  const data = await envelopesApi.getDocument(
+    context.accountId,
+    envelopeId,
+    "combined",
+    {},
+  );
+  return Buffer.isBuffer(data) ? data : Buffer.from(data as string, "binary");
+}

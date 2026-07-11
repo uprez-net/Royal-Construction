@@ -46,6 +46,7 @@ import {
   createOfferRevision,
 } from "@/lib/data/offer-workspace";
 import { sendOfferDocument } from "@/lib/data/offer-send";
+import { sendTenderForSignature } from "@/lib/data/offer-tender-sign";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import {
   EMPTY_OFFER_IMAGES,
@@ -95,6 +96,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentInfo, setSentInfo] = useState<string | null>(null);
+  const [tenderSending, setTenderSending] = useState(false);
+  const [tenderSendError, setTenderSendError] = useState<string | null>(null);
   const manualLineCounterRef = useRef(0);
 
   function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
@@ -289,7 +292,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const stateVersionRef = useRef(0);
   const lastSavedRef = useRef<string | null>(null);
   const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
+  // Keep the "latest snapshot" ref for event handlers; refs must not be
+  // written during render, so sync it in an effect.
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
   const hydrateSnapshot = useCallback((s: OfferWorkspaceSnapshot) => {
     setJob(s.job);
@@ -473,6 +480,43 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     [leadId],
   );
 
+  // Send the Tender as a runtime DocuSign envelope (anchor-tab AutoPlace).
+  // Flushes edits first so the generated PDF matches the workspace. Without a
+  // leadId (in-memory demo) it just advances the local status.
+  const sendTender = useCallback(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null) {
+      transition("tender_sent");
+      return;
+    }
+    setTenderSending(true);
+    setTenderSendError(null);
+    void (async () => {
+      try {
+        const currentJson = JSON.stringify(snapshotRef.current);
+        if (currentJson !== lastSavedRef.current) {
+          const saved = await saveOfferWorkspace({
+            offerId,
+            expectedStateVersion: stateVersionRef.current,
+            snapshot: snapshotRef.current,
+          });
+          if (saved.ok) {
+            stateVersionRef.current = saved.stateVersion;
+            lastSavedRef.current = currentJson;
+          }
+        }
+        const result = await sendTenderForSignature({ offerId });
+        if (result.ok) {
+          setStatus("tender_sent");
+        } else {
+          setTenderSendError(result.error);
+        }
+      } finally {
+        setTenderSending(false);
+      }
+    })();
+  }, [leadId, transition]);
+
   return (
     <>
       <OfferWorkspaceScreen
@@ -522,7 +566,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         sendError={sendError}
         sentInfo={sentInfo}
         onGenerateTender={() => transition("tender_draft")}
-        onSendTender={() => transition("tender_sent")}
+        onSendTender={sendTender}
+        tenderSending={tenderSending}
+        tenderSendError={tenderSendError}
         onRecallTender={() => transition("tender_draft")}
         onMarkTenderSigned={() => transition("tender_signed")}
         onGenerateContract={() => transition("contract_draft")}

@@ -45,7 +45,8 @@ function money(value: number | null): string {
 }
 
 // Split "Mr Mahesh & Ms Anisha" into individual owners for separate signatures.
-function splitOwners(clientNames: string): string[] {
+// Exported so the DocuSign envelope builds the same signer list as the anchors.
+export function splitOwners(clientNames: string): string[] {
   const owners = clientNames
     .split(/\s*&\s*|\s+and\s+/i)
     .map((o) => o.trim())

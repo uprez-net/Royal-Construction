@@ -34,6 +34,8 @@ type TenderPanelProps = {
   ) => void;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
+  readonly tenderSending?: boolean;
+  readonly tenderSendError?: string | null;
   readonly onRecallTender: () => void;
   readonly onMarkTenderSigned: () => void;
 };
@@ -48,6 +50,8 @@ export function TenderPanel({
   onPaymentScheduleChange,
   onGenerateTender,
   onSendTender,
+  tenderSending = false,
+  tenderSendError = null,
   onRecallTender,
   onMarkTenderSigned,
 }: TenderPanelProps) {
@@ -104,6 +108,8 @@ export function TenderPanel({
             isDraft={isDraft}
             isSent={isSent}
             isSigned={isSigned}
+            sending={tenderSending}
+            sendError={tenderSendError}
             onGenerateTender={onGenerateTender}
             onMarkTenderSigned={onMarkTenderSigned}
             onRecallTender={onRecallTender}
@@ -164,6 +170,8 @@ function TenderActions({
   isDraft,
   isSent,
   isSigned,
+  sending,
+  sendError,
   onGenerateTender,
   onSendTender,
   onRecallTender,
@@ -173,6 +181,8 @@ function TenderActions({
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
+  readonly sending: boolean;
+  readonly sendError: string | null;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
   readonly onRecallTender: () => void;
@@ -189,9 +199,10 @@ function TenderActions({
       ) : (
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          DocuSign envelope creation and the completion webhook are stubbed here.
-          Wiring: a DocuSign template populated from this data, builder-then-
-          customer routing, and a Connect webhook to record signatures (ADR 0001).
+          Sending creates a DocuSign envelope from the generated Tender PDF —
+          signature tabs auto-place onto the document&apos;s anchor strings,
+          the builder signs first, then the customer. The Connect webhook
+          records each signature and files the executed PDF.
         </p>
       )}
 
@@ -211,12 +222,15 @@ function TenderActions({
         {isDraft ? (
           <Button
             className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+            disabled={sending}
             size="sm"
             type="button"
             onClick={onSendTender}
           >
             <Send className="size-4" aria-hidden="true" />
-            Send for signature via DocuSign
+            {sending
+              ? "Sending envelope…"
+              : "Send for signature via DocuSign"}
           </Button>
         ) : null}
 
@@ -243,6 +257,10 @@ function TenderActions({
           </>
         ) : null}
       </div>
+
+      {sendError ? (
+        <p className="text-xs font-medium text-destructive">{sendError}</p>
+      ) : null}
     </div>
   );
 }
