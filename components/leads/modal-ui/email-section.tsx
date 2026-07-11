@@ -101,7 +101,7 @@ export function LeadEmailSection({
                         type="button"
                         onClick={() => setReplyTarget(email)}
                         aria-label={`Reply to ${plainBody.slice(0, 30)}...`}
-                        className="mb-1 shrink-0 rounded-full p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                        className="mb-1 shrink-0 rounded-full p-1.5 bg-muted text-foreground opacity-100"
                       >
                         <Reply className="size-3.5" />
                       </button>

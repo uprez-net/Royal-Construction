@@ -215,10 +215,10 @@ function coerceFieldValue(field: string, rawValue: string) {
 // Field primitives
 // ---------------------------------------------------------------------------
 
-function FieldShell({ label, unit, children }: { label: string; unit?: string; children: React.ReactNode }) {
+function FieldShell({ label, unit, isEmpty, children }: { label: string; unit?: string; isEmpty: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <label className={cn("text-[11px] font-semibold uppercase tracking-wide text-slate-500", isEmpty && "text-red-500")}>
         {label}
         {unit ? <span className="ml-1 font-normal normal-case text-slate-400">({unit})</span> : null}
       </label>
@@ -229,7 +229,7 @@ function FieldShell({ label, unit, children }: { label: string; unit?: string; c
 
 function TextControl({ label, value, onChange, multiline }: { label: string; value: unknown; onChange: (v: string) => void; multiline?: boolean }) {
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} isEmpty={value === null || value === undefined || String(value).trim() === ""}>
       {multiline ? (
         <Textarea
           value={displayValue(value)}
@@ -251,7 +251,7 @@ function TextControl({ label, value, onChange, multiline }: { label: string; val
 
 function NumberControl({ label, value, onChange, unit }: { label: string; value: unknown; onChange: (v: string) => void; unit?: string }) {
   return (
-    <FieldShell label={label} unit={unit}>
+    <FieldShell label={label} unit={unit} isEmpty={value === null || value === undefined || String(value).trim() === ""}>
       <Input
         type="number"
         value={displayValue(value)}
@@ -265,7 +265,7 @@ function NumberControl({ label, value, onChange, unit }: { label: string; value:
 
 function CurrencyControl({ label, value, onChange }: { label: string; value: unknown; onChange: (v: string) => void }) {
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} isEmpty={value === null || value === undefined || String(value).trim() === ""}>
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
         <Input
@@ -282,7 +282,7 @@ function CurrencyControl({ label, value, onChange }: { label: string; value: unk
 
 function PercentControl({ label, value, onChange }: { label: string; value: unknown; onChange: (v: string) => void }) {
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} isEmpty={value === null || value === undefined || String(value).trim() === ""}>
       <div className="relative">
         <Input
           type="number"
@@ -300,7 +300,7 @@ function PercentControl({ label, value, onChange }: { label: string; value: unkn
 function BooleanControl({ label, value, onChange }: { label: string; value: unknown; onChange: (v: string) => void }) {
   const current = value === true ? "true" : value === false ? "false" : "";
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} isEmpty={value === null || value === undefined || String(value).trim() === ""}>
       <select
         value={current}
         onChange={(e) => onChange(e.target.value)}
@@ -316,7 +316,7 @@ function BooleanControl({ label, value, onChange }: { label: string; value: unkn
 
 function TagListControl({ label, values, onChange }: { label: string; values: string[]; onChange: (values: string[]) => void }) {
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} isEmpty={values.length === 0 || values.every((v) => v.trim() === "")}>
       <Textarea
         value={values.join("\n")}
         onChange={(e) =>

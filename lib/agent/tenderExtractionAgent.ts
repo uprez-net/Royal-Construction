@@ -24,7 +24,7 @@ export async function handleTenderExtractionGeneration(
   try {
     const { output } = await generateText({
       model: gateway("google/gemini-2.5-flash"),
-      temperature: 0.05,
+      temperature: 0.015,
       topK: 30,
       system: TENDER_EXTRACTION_SYSTEM_PROMPT,
       output: Output.object({ schema: projectExtractionSchema }),

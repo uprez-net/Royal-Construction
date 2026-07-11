@@ -263,7 +263,8 @@ export const extractTenderAndContractDocuments = async (
         const leadInfo = await getLeadInfo(input.leadId);
         const tenderChunks = chunkMarkdown(tenderMarkdown, MODEL_CHUNK_CHAR_LIMIT);
         const contractChunks = chunkMarkdown(contractMarkdown, MODEL_CHUNK_CHAR_LIMIT);
-        const chunkCount = Math.max(tenderChunks.length, contractChunks.length);
+        const leadChunks = chunkMarkdown(leadInfo, MODEL_CHUNK_CHAR_LIMIT);
+        const chunkCount = Math.max(tenderChunks.length, contractChunks.length, leadChunks.length);
         // Decide once, explicitly, what happens when one doc runs out of chunks
         // before another. Empty string is usually the safe default — resending
         // the full original document on every extra iteration risks re-extraction
@@ -276,10 +277,10 @@ export const extractTenderAndContractDocuments = async (
                 limit(() =>
                     runChunkedExtraction({
                         tenderMarkdown: atChunk(tenderChunks, index, tenderMarkdown),
-                        contractMarkdown: contractChunks[index] ?? contractMarkdown,
+                        contractMarkdown: atChunk(contractChunks, index, contractMarkdown),
                         tenderFileName: input.tenderFileName,
                         contractFileName: input.contractFileName,
-                        leadInfo: index === chunkCount - 1 ? leadInfo : undefined, // only send lead info on the last chunk
+                        leadInfo: atChunk(leadChunks, index, leadInfo)
                     })
                 )
             )
