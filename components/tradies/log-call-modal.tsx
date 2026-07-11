@@ -164,7 +164,7 @@ export function LogCallModal({
             </div>
 
             <div className="mt-0.5 text-[12px] text-muted-foreground">
-              {schedule.company || "Tradie"}
+              {schedule.abn}
             </div>
           </div>
 

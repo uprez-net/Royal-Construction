@@ -1,7 +1,7 @@
 import { tool, UIMessageStreamWriter } from "ai";
 import z from "zod";
 import { FacadeOptionWithImageUrl, offerFileContentSchema } from "../agent/offer-prompts";
-import { imageGenerationAgent } from "../agent/imageGenerationAgent";
+import { imageGeneration } from "../agent/imageGenerationAgent";
 import type { OfferFilePatchPayload } from "@/utils/chat";
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
@@ -20,7 +20,6 @@ const offerFileContentAppendSchema = offerFileContentSchema.extend({
 
     leadId: z
         .number()
-        .optional()
         .describe(
             "Lead identifier associated with this offer. Typically provided during offer creation and rarely changed afterwards."
         ),
@@ -88,15 +87,13 @@ export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data
             const Options: FacadeOptionWithImageUrl["options"] = [];
             if (customerOffer.facadeOptions) {
                 for (const option of customerOffer.facadeOptions.options) {
-                    const image = await imageGenerationAgent.generate({
-                        prompt: `
-                        Generate a facade design image based on the following description: ${option.description}. 
-                        The image should reflect the architectural style, materials, colors, and specific features mentioned in the description.
-                        `
-                    })
+                    const image = await imageGeneration(
+                        `Generate a facade design image based on the following description: ${option.description}. 
+                        The image should reflect the architectural style, materials, colors, and specific features mentioned in the description.`
+                    );
                     Options.push({
                         ...option,
-                        imageUrl: image.output.imageUrl,
+                        imageUrl: image.imageUrl,
                     })
                 }
             }
@@ -116,7 +113,7 @@ export const offerFileTool = (dataStream?: UIMessageStreamWriter, append?: (data
                 });
             }
 
-            if(append) {
+            if (append) {
                 append(resolvedOfferUpdate);
             }
 

@@ -27,6 +27,10 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Loader2, Plus } from "lucide-react";
+import { ProjectStage } from "@prisma/client";
+import { PROJECT_STAGE_LABELS } from "@/types/project";
+import { currency } from "@/utils/formatters";
+import { parseCurrency } from "@/utils/parser";
 
 interface AddMilestoneProps {
   projectId: string;
@@ -40,6 +44,7 @@ const initialFormState: MilestoneCreationData = {
   targetDate: "",
   budget: 0,
   parentId: undefined,
+  projectStage: "Deposit",
 };
 
 type MilestoneFormErrors = Partial<Record<keyof MilestoneCreationData, string>>;
@@ -104,7 +109,9 @@ export default function AddMilestoneModal({
       if (!validatedData.success) {
         const nextFieldErrors = validatedData.error.issues.reduce(
           (acc, issue) => {
-            const field = issue.path[0] as keyof MilestoneFormErrors | undefined;
+            const field = issue.path[0] as
+              | keyof MilestoneFormErrors
+              | undefined;
 
             if (field && !acc[field]) {
               acc[field] = issue.message;
@@ -123,6 +130,7 @@ export default function AddMilestoneModal({
       await dispatch(
         addProjectMilestone({
           ...validatedData.data,
+          // targetDate: new Date(validatedData.data.targetDate).toISOString(),
           projectId,
         }),
       ).unwrap();
@@ -148,7 +156,8 @@ export default function AddMilestoneModal({
             Add Milestone
           </DialogTitle>
           <DialogDescription className="text-[13px] text-slate-500">
-            Define the scope, budget, and parent milestone for a new project phase.
+            Define the scope, budget, and parent milestone for a new project
+            phase.
           </DialogDescription>
         </DialogHeader>
 
@@ -168,7 +177,10 @@ export default function AddMilestoneModal({
 
           <div className="grid gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <Label
+                htmlFor="name"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+              >
                 Milestone Name
               </Label>
               <Input
@@ -187,7 +199,10 @@ export default function AddMilestoneModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="description" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <Label
+                htmlFor="description"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+              >
                 Description
               </Label>
               <Textarea
@@ -210,7 +225,10 @@ export default function AddMilestoneModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="targetDate" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <Label
+                htmlFor="targetDate"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+              >
                 Target Date
               </Label>
               <Input
@@ -231,20 +249,29 @@ export default function AddMilestoneModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="budget" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <Label
+                htmlFor="budget"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+              >
                 Budget
               </Label>
               <Input
                 id="budget"
-                type="number"
+                type="text"
                 className={inputClassName}
                 placeholder="Enter milestone budget"
-                value={formState.budget}
+                value={
+                  formState.budget && formState.budget > 0
+                    ? currency.format(formState.budget)
+                    : ""
+                }
                 onChange={(e) =>
-                  handleFormChange("budget", Number(e.target.value))
+                  handleFormChange("budget", parseCurrency(e.target.value))
                 }
                 aria-invalid={Boolean(fieldErrors.budget)}
-                aria-describedby={fieldErrors.budget ? "budget-error" : undefined}
+                aria-describedby={
+                  fieldErrors.budget ? "budget-error" : undefined
+                }
               />
               {fieldErrors.budget ? (
                 <p id="budget-error" className="text-xs text-destructive">
@@ -253,7 +280,36 @@ export default function AddMilestoneModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="parentMilestone" className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <Label
+                htmlFor="parentMilestone"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+              >
+                Stage
+              </Label>
+              <Select
+                value={formState.projectStage}
+                onValueChange={(value) =>
+                  handleFormChange("projectStage", value)
+                }
+              >
+                <SelectTrigger className={selectTriggerClassName}>
+                  <SelectValue placeholder="Select Project Stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.values(ProjectStage).map((stage) => (
+                    <SelectItem key={stage} value={stage}>
+                      {PROJECT_STAGE_LABELS[stage as ProjectStage]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="parentMilestone"
+                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+              >
                 Parent Milestone
               </Label>
               <Select
@@ -270,11 +326,17 @@ export default function AddMilestoneModal({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">No parent milestone</SelectItem>
-                  {milestones.map((milestone) => (
-                    <SelectItem key={milestone.id} value={milestone.id}>
-                      {milestone.name}
-                    </SelectItem>
-                  ))}
+                  {milestones
+                    .filter(
+                      (milestone) =>
+                        milestone.status === "PENDING" &&
+                        milestone.projectStage === formState.projectStage,
+                    )
+                    .map((milestone) => (
+                      <SelectItem key={milestone.id} value={milestone.id}>
+                        {milestone.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-500">

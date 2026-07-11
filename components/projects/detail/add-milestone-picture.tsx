@@ -59,6 +59,7 @@ export default function AddMilestonePictureModal({
     files: queuedFiles,
     completedCount: completedUploadCount,
     addFiles,
+    removeFile,
     resetQueue,
     markUploading,
     updateProgress,
@@ -290,6 +291,7 @@ export default function AddMilestonePictureModal({
               disabled={isPending}
               isLoading={isPending}
               onFilesSelected={addFiles}
+              removeFile={removeFile}
             />
           </div>
 

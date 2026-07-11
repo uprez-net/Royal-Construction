@@ -40,6 +40,7 @@ import { useSearchParams } from "next/navigation";
 import TableView from "./views/table-view";
 import FollowupsView from "./views/followups-view";
 import AnalyticsView from "./views/analytics-view";
+import { useUser } from "@clerk/nextjs";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -47,6 +48,7 @@ export default function Leads() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("query");
   const initialStatus = searchParams.get("status");
+  const { user, isLoaded } = useUser();
 
   /* ── Hooks ── */
   const {
@@ -64,6 +66,7 @@ export default function Leads() {
     removeLeadFromList,
     prependLead,
     replaceLeads,
+    appendEmailToLead,
   } = useLeadsData();
 
   const { toasts, showToast, dismissToast } = useToast();
@@ -291,13 +294,21 @@ export default function Leads() {
     );
   }
 
+  if (isLoaded && !leads) {
+    return (
+      <div className="leads-loading-container">
+        <div className="leads-loading-message">Loading leads...</div>
+      </div>
+    );
+  }
+
   /* ── Render ── */
   return (
     <div className="leads-container space-y-6">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Header card */}
-      <Card className="overflow-hidden border-teal-100 bg-gradient-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
+      <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
         <CardContent className="relative p-6">
           <div className="absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-500/10" />
           <div className="absolute -bottom-14 right-20 h-32 w-32 rounded-full bg-teal-700/10" />
@@ -468,6 +479,11 @@ export default function Leads() {
                   onLeadDelete={removeLeadFromList}
                   activeMetric={activeMetric}
                   onActiveMetricChange={handleMetricClick}
+                  user={{
+                    clerkUserId: user?.id ?? null,
+                    fullName: user?.fullName ?? null,
+                  }}
+                  appendEmailToLead={appendEmailToLead}
                 />
               )}
               {activeTab === "followups" && (

@@ -40,6 +40,40 @@ export default function SendStep({
   const showSaveCheckbox = templateSection === 'ai-generated' && !emailTemplateId;
   return (
     <div className="space-y-6">
+
+      {/* Save to Wishlist & Footer Actions */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-6 border-t border-slate-200 gap-4">
+        <Button variant="outline" onClick={() => setCurrentStep(2)}>Back</Button>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto sm:justify-end">
+          {showSaveCheckbox && (
+            <label className="flex items-center gap-3 rounded-lg border border-[#E2E8F0] bg-white p-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={saveTemplate}
+                onChange={(e) => setSaveTemplate(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-[#C6923A] focus:ring-[#C6923A]"
+              />
+              <div className="text-left">
+                <span className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Bookmark className="size-4 text-[#C6923A]" /> Save to Wishlist
+                </span>
+                <p className="text-[11px] text-slate-500">Save this template for future use before sending.</p>
+              </div>
+            </label>
+          )}
+
+          <Button
+            className="bg-[#C6923A] text-white hover:bg-[#C6923A]/90 w-full sm:w-auto"
+            disabled={selectedLeads.size === 0}
+            onClick={() => setShowConfirmModal(true)}
+          >
+            <Mail className="mr-2 h-4 w-4" />
+            Send Email ({selectedLeads.size})
+          </Button>
+        </div>
+      </div>
+
       {/* Top Filters */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="relative md:col-span-2 flex items-center">
@@ -160,39 +194,6 @@ export default function SendStep({
         <Button variant="outline" size="sm" disabled={currentPage >= pageCount} className="hover:cursor-pointer hover:opacity-50" onClick={() => setCurrentPage(p => p + 1)}>
           Next <ChevronRightIcon className="h-4 w-4 ml-1" />
         </Button>
-      </div>
-
-      {/* Save to Wishlist & Footer Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-6 border-t border-slate-200 gap-4">
-        <Button variant="outline" onClick={() => setCurrentStep(2)}>Back</Button>
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto sm:justify-end">
-          {showSaveCheckbox && (
-            <label className="flex items-center gap-3 rounded-lg border border-[#E2E8F0] bg-white p-3 shadow-sm cursor-pointer hover:bg-slate-50 transition-colors">
-              <input
-                type="checkbox"
-                checked={saveTemplate}
-                onChange={(e) => setSaveTemplate(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-[#C6923A] focus:ring-[#C6923A]"
-              />
-              <div className="text-left">
-                <span className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
-                  <Bookmark className="size-4 text-[#C6923A]" /> Save to Wishlist
-                </span>
-                <p className="text-[11px] text-slate-500">Save this template for future use before sending.</p>
-              </div>
-            </label>
-          )}
-
-          <Button
-            className="bg-[#C6923A] text-white hover:bg-[#C6923A]/90 w-full sm:w-auto"
-            disabled={selectedLeads.size === 0}
-            onClick={() => setShowConfirmModal(true)}
-          >
-            <Mail className="mr-2 h-4 w-4" />
-            Send Email ({selectedLeads.size})
-          </Button>
-        </div>
       </div>
     </div>
   );

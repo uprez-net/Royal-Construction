@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CloudUpload,
   Loader2,
+  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ type UploadDropzoneProps = {
   helperText?: ReactNode;
   files: QueuedUploadFile[];
   onFilesSelected: (files: File[]) => void;
+  removeFile: (fileId: string) => void;
   errorMessage?: ReactNode;
   accept?: string;
   multiple?: boolean;
@@ -38,6 +40,7 @@ export function UploadDropzone({
   helperText,
   files,
   onFilesSelected,
+  removeFile,
   errorMessage,
   accept,
   multiple = true,
@@ -135,7 +138,8 @@ export function UploadDropzone({
         className={cn(
           "group cursor-pointer rounded-[16px] border-2 border-dashed border-border/80 bg-slate-50/50 p-6 text-center transition-all outline-none",
           "hover:border-teal-600 hover:bg-teal-50/40 focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10",
-          isDragging && "border-teal-600 bg-teal-50/60 shadow-[0_0_0_4px_rgba(13,148,136,0.08)]",
+          isDragging &&
+            "border-teal-600 bg-teal-50/60 shadow-[0_0_0_4px_rgba(13,148,136,0.08)]",
           isDisabled && "cursor-not-allowed opacity-70",
           dropzoneClassName,
         )}
@@ -202,17 +206,29 @@ export function UploadDropzone({
                       </p>
                     </div>
 
-                    <div className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                      {file.status === "uploading" ? (
-                        <Loader2 className="size-3.5 animate-spin text-teal-600" />
-                      ) : null}
-                      {file.status === "uploaded" ? (
-                        <CheckCircle2 className="size-3.5 text-emerald-600" />
-                      ) : null}
-                      {file.status === "failed" ? (
-                        <AlertCircle className="size-3.5 text-destructive" />
-                      ) : null}
-                      {file.status}
+                    <div className="flex items-center gap-2">
+                      <div className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        {file.status === "uploading" ? (
+                          <Loader2 className="size-3.5 animate-spin text-teal-600" />
+                        ) : null}
+                        {file.status === "uploaded" ? (
+                          <CheckCircle2 className="size-3.5 text-emerald-600" />
+                        ) : null}
+                        {file.status === "failed" ? (
+                          <AlertCircle className="size-3.5 text-destructive" />
+                        ) : null}
+                        {file.status}
+                      </div>
+                      {/* Remove Button */}
+                      {file.status === "queued" && (
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => removeFile(file.id)}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -227,7 +243,9 @@ export function UploadDropzone({
                   </div>
 
                   {file.error ? (
-                    <p className="mt-1 text-xs text-destructive">{file.error}</p>
+                    <p className="mt-1 text-xs text-destructive">
+                      {file.error}
+                    </p>
                   ) : null}
                 </div>
               </div>

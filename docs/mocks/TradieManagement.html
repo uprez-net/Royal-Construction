@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tradie Management — BuildPro</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#0D9488;--primary-dark:#0F766E;--primary-light:#CCFBF1;--primary-glow:rgba(13,148,136,.15);--accent:#E8730C;--accent-light:#FFF3E0;--success:#16A34A;--success-light:#DCFCE7;--danger:#DC2626;--danger-light:#FEE2E2;--warning:#F59E0B;--warning-light:#FEF9C3;--info:#2563EB;--info-light:#DBEAFE;--purple:#7C3AED;--purple-light:#EDE9FE;--bg-body:#F1F5F9;--bg-card:#FFFFFF;--bg-hover:#F8FAFC;--text-primary:#0F172A;--text-secondary:#475569;--text-tertiary:#94A3B8;--border-color:#E2E8F0;--border-light:#F1F5F9;--shadow-sm:0 1px 3px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.06);--shadow-lg:0 12px 40px rgba(0,0,0,.1);--sidebar-bg:#0F172A;--sidebar-width:64px;--transition:all .2s cubic-bezier(.4,0,.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}body{background:var(--bg-body);font-family:'Inter',sans-serif;font-size:14px;color:var(--text-primary);overflow-x:hidden;line-height:1.5}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#94A3B8}
+.wrapper{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-width);background:var(--sidebar-bg);display:flex;flex-direction:column;align-items:center;padding-top:16px;flex-shrink:0;z-index:1000;box-shadow:4px 0 24px rgba(0,0,0,.12)}
+.sidebar-icon{color:#64748B;font-size:19px;height:42px;width:42px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;cursor:pointer;border-radius:10px;transition:var(--transition);position:relative}
+.sidebar-icon:hover{color:#F1F5F9;background:rgba(255,255,255,.06)}
+.sidebar-icon.active{color:var(--primary);background:rgba(13,148,136,.15)}
+.sidebar-icon.active::before{content:'';position:absolute;left:-16px;height:20px;width:3px;background:var(--primary);border-radius:0 3px 3px 0}
+.sidebar-brand{color:var(--primary);font-size:22px;margin-bottom:20px}
+.sidebar-tooltip{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--sidebar-bg);color:#F1F5F9;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:500;white-space:nowrap;opacity:0;visibility:hidden;transition:var(--transition);z-index:1001;pointer-events:none;box-shadow:var(--shadow-lg)}
+.sidebar-tooltip::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--sidebar-bg)}
+.sidebar-icon:hover .sidebar-tooltip{opacity:1;visibility:visible;left:calc(100% + 14px)}
+@media(max-width:768px){.sidebar-tooltip{display:none}}
+.main-panel{flex-grow:1;display:flex;flex-direction:column;width:calc(100% - var(--sidebar-width));min-width:0}
+.top-header{height:54px;background:var(--sidebar-bg);display:flex;align-items:center;justify-content:space-between;padding:0 20px;color:white;flex-shrink:0}
+.header-menu a{color:rgba(255,255,255,.55);text-decoration:none;margin-right:20px;font-size:12.5px;font-weight:500;transition:var(--transition);position:relative;padding-bottom:16px;letter-spacing:.01em}
+.header-menu a:hover{color:rgba(255,255,255,.9)}.header-menu a.active{color:white}
+.header-menu a.active::after{content:'';position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+.sub-header{background:var(--bg-card);padding:10px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;font-size:12px;color:var(--text-secondary);flex-shrink:0}
+.content-container{padding:20px;max-width:1560px;margin:0 auto;width:100%}
+.card-custom{background:var(--bg-card);border-radius:12px;padding:20px;box-shadow:var(--shadow-sm);border:1px solid var(--border-color);margin-bottom:16px;transition:var(--transition)}
+.card-custom:hover{box-shadow:var(--shadow-md)}
+.section-heading{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;color:var(--text-secondary);display:flex;align-items:center;justify-content:space-between}
+.stat-value{font-size:26px;font-weight:800;line-height:1.2;color:var(--text-primary);margin-top:2px;letter-spacing:-.02em}
+.stat-desc{font-size:11.5px;color:var(--text-tertiary);margin-top:3px}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+@media(max-width:1400px){.stat-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:768px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-icon{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:white;font-size:20px;flex-shrink:0}
+.trend-badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px}
+.trend-up{color:var(--success);background:rgba(22,163,74,.08)}.trend-down{color:var(--danger);background:rgba(220,38,38,.08)}
+.status-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:600;line-height:1.5}
+.pill-success{background:rgba(22,163,74,.08);color:var(--success)}.pill-warning{background:rgba(245,158,11,.08);color:#D97706}.pill-danger{background:rgba(220,38,38,.08);color:var(--danger)}.pill-info{background:rgba(37,99,235,.08);color:var(--info)}.pill-gray{background:rgba(148,163,184,.1);color:var(--text-secondary)}.pill-purple{background:rgba(124,58,237,.08);color:var(--purple)}
+.btn-primary-custom{background:var(--primary);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn-primary-custom:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(13,148,136,.3);color:white}
+.btn-outline-custom{background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-color);padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:500;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn-outline-custom:hover{background:var(--bg-hover);border-color:var(--primary);color:var(--primary)}
+.btn-sm-custom{padding:5px 10px;font-size:11.5px;border-radius:6px}
+.btn-danger-custom{background:var(--danger);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn-danger-custom:hover{background:#B91C1C;transform:translateY(-1px);color:white}
+.btn-warning-custom{background:var(--warning);color:white;border:none;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;transition:var(--transition);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn-warning-custom:hover{background:#D97706;transform:translateY(-1px);color:white}
+.btn-icon{width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;transition:var(--transition);font-size:14px}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.table-custom{width:100%;border-collapse:separate;border-spacing:0}
+.table-custom thead th{font-size:11px;text-transform:uppercase;color:var(--text-tertiary);font-weight:600;letter-spacing:.04em;padding:10px 14px;border-bottom:1px solid var(--border-color);background:var(--bg-body);white-space:nowrap;cursor:pointer;user-select:none}
+.table-custom thead th:hover{color:var(--text-secondary)}
+.table-custom td{font-size:13px;vertical-align:middle;padding:12px 14px;border-bottom:1px solid var(--border-light)}
+.table-custom tr:last-child td{border-bottom:none}
+.table-custom tbody tr{transition:background .15s;cursor:pointer}
+.table-custom tbody tr:hover td{background:var(--bg-hover)}
+.modal-backdrop-custom{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:2000;display:none;align-items:center;justify-content:center;animation:fadeIn .2s}
+.modal-backdrop-custom.show{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-content-custom{background:var(--bg-card);border-radius:14px;width:90%;max-width:680px;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modalIn .25s ease;border:1px solid var(--border-color)}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header-custom{padding:20px 24px 16px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center}
+.modal-body-custom{padding:20px 24px}
+.modal-footer-custom{padding:16px 24px;border-top:1px solid var(--border-color);display:flex;justify-content:flex-end;gap:8px}
+.modal-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);transition:var(--transition);font-size:16px}
+.modal-close:hover{background:var(--danger-light);color:var(--danger);border-color:transparent}
+.search-box{position:relative}
+.search-box input{width:220px;padding:6px 12px 6px 32px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);transition:var(--transition);font-family:inherit;outline:none}
+.search-box input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow);width:280px}
+.search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:13px}
+.filter-select{padding:6px 30px 6px 10px;border:1px solid var(--border-color);border-radius:8px;font-size:12.5px;background:var(--bg-card);color:var(--text-primary);font-family:inherit;outline:none;cursor:pointer;transition:var(--transition);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.filter-select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.form-label-custom{font-size:11.5px;font-weight:600;color:var(--text-secondary);margin-bottom:5px;display:block}
+.form-input-custom{width:100%;padding:8px 12px;border:1px solid var(--border-color);border-radius:8px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:var(--transition);background:var(--bg-card)}
+.form-input-custom:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+textarea.form-input-custom{resize:vertical;min-height:70px}
+.live-clock{font-size:12px;color:rgba(255,255,255,.6);font-weight:500;font-variant-numeric:tabular-nums}
+.live-clock span{color:rgba(255,255,255,.9);font-weight:600}
+.up{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;background:rgba(255,255,255,.07);cursor:pointer;transition:var(--transition)}
+.up:hover{background:rgba(255,255,255,.12)}
+.ua{width:30px;height:30px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:11px}
+.ui span{font-size:12.5px;font-weight:600;display:block;color:white;line-height:1.2}
+.toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:14px 18px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px;min-width:320px;max-width:420px;animation:toastIn .3s ease;position:relative}
+.toast-item.removing{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(40px)}}
+.toast-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.toast-msg{flex:1;font-size:13px;font-weight:500;line-height:1.45}
+.toast-close{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;padding:0;line-height:1;flex-shrink:0}
+.toast-close:hover{color:var(--text-primary)}
+.toast-bar{position:absolute;bottom:0;left:0;height:2px;border-radius:0 0 10px 10px;animation:shrinkBar 4.5s linear forwards}
+@keyframes shrinkBar{from{width:100%}to{width:0%}}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}
+.detail-value{font-size:13px;font-weight:600}
+.star-rate{display:flex;gap:6px}.star-rate .sr-star{font-size:28px;color:#E2E8F0;cursor:pointer;transition:var(--transition)}.star-rate .sr-star.active{color:var(--warning)}.star-rate .sr-star:hover{transform:scale(1.15)}
+.qa-btn{width:30px;height:30px;border-radius:7px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:var(--transition);font-size:13px;color:var(--text-tertiary)}
+.qa-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-glow)}
+.qa-btn.qa-fav.active{color:var(--warning);border-color:var(--warning);background:var(--warning-light)}
+.qa-btn.qa-danger:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-light)}
+.fav-toggle{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:99px;border:1px solid var(--border-color);background:var(--bg-card);font-size:12px;font-weight:600;color:var(--text-tertiary);cursor:pointer;transition:var(--transition)}
+.fav-toggle:hover{border-color:var(--warning);color:var(--warning)}
+.fav-toggle.active{border-color:var(--warning);background:var(--warning-light);color:#D97706}
+.avatar-circle{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;flex-shrink:0;letter-spacing:.5px}
+.incident-type-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.it-safety{background:var(--danger-light);color:var(--danger)}.it-quality{background:var(--warning-light);color:#D97706}.it-behaviour{background:var(--purple-light);color:var(--purple)}.it-attendance{background:var(--info-light);color:var(--info)}.it-damage{background:#FEF3C7;color:#92400E}.it-other{background:var(--bg-body);color:var(--text-secondary)}
+.severity-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.sev-low{background:var(--success)}.sev-medium{background:var(--warning)}.sev-high{background:var(--danger)}.sev-critical{background:#7F1D1D;box-shadow:0 0 0 2px var(--danger-light)}
+.tab-nav{display:flex;border-bottom:2px solid var(--border-color);margin-bottom:16px;gap:0}
+.tab-btn{padding:10px 18px;background:none;border:none;font-size:12.5px;font-weight:600;color:var(--text-tertiary);cursor:pointer;position:relative;transition:var(--transition);font-family:inherit}
+.tab-btn:hover{color:var(--text-secondary)}
+.tab-btn.active{color:var(--primary)}
+.tab-btn.active::after{content:'';position:absolute;bottom:-2px;left:0;width:100%;height:2px;background:var(--primary);border-radius:2px 2px 0 0}
+.tab-btn .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:99px;font-size:10px;font-weight:700;margin-left:5px;padding:0 5px}
+.tab-btn.active .tab-count{background:var(--primary);color:white}
+.tab-btn:not(.active) .tab-count{background:var(--bg-body);color:var(--text-tertiary)}
+.info-box{background:var(--bg-body);border:1px solid var(--border-color);border-radius:10px;padding:14px 16px}
+.info-box.ib-accent{border-color:rgba(13,148,136,.2);background:var(--primary-glow)}
+.info-box.ib-danger{border-color:rgba(220,38,38,.2);background:var(--danger-light)}
+.info-box .ib-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-tertiary);font-weight:600;margin-bottom:2px}
+.info-box .ib-val{font-size:13px;font-weight:600}
+.price-tag{font-weight:800;color:var(--primary);font-size:15px;font-variant-numeric:tabular-nums}
+.rating-display{display:flex;align-items:center;gap:6px}
+.rating-number{font-size:14px;font-weight:800;color:var(--text-primary)}
+.incident-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-light)}
+.incident-row:last-child{border-bottom:none}
+.empty-state{text-align:center;padding:48px 20px;color:var(--text-tertiary)}
+.empty-state i{font-size:40px;display:block;margin-bottom:12px;opacity:.4}
+.empty-state h5{font-size:15px;font-weight:700;color:var(--text-secondary);margin-bottom:4px}
+.empty-state p{font-size:12px}
+.back-btn{display:inline-flex;align-items:center;gap:6px;color:var(--text-tertiary);font-size:12.5px;font-weight:600;cursor:pointer;transition:var(--transition);margin-bottom:16px;background:none;border:none;font-family:inherit;padding:4px 0}
+.back-btn:hover{color:var(--primary)}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.cat-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:24px 16px 20px;text-align:center;cursor:pointer;transition:var(--transition);position:relative;overflow:hidden}
+.cat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--cat-color,var(--primary));opacity:0;transition:var(--transition)}
+.cat-card:hover{border-color:var(--primary);box-shadow:var(--shadow-md);transform:translateY(-3px)}
+.cat-card:hover::before{opacity:1}
+.cat-icon-wrap{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:22px;transition:var(--transition)}
+.cat-card:hover .cat-icon-wrap{transform:scale(1.08)}
+.cat-card h4{font-size:14.5px;font-weight:700;margin:0 0 3px}
+.cat-card .cat-sub{font-size:11.5px;color:var(--text-tertiary)}
+.cat-count{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--bg-body);color:var(--text-secondary);border:1px solid var(--border-color)}
+.cat-stats{display:flex;justify-content:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.cat-stat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.cat-stat-text{font-size:10px;color:var(--text-tertiary);line-height:1.3}
+.acc-item{border:1px solid var(--border-color);border-radius:12px;margin-bottom:10px;overflow:hidden;transition:var(--transition);background:var(--bg-card)}
+.acc-item.open{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary-glow)}
+.acc-head{padding:14px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:background .15s;user-select:none}
+.acc-head:hover{background:var(--bg-hover)}
+.acc-head .acc-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.acc-head h4{font-size:14px;font-weight:700;flex:1}
+.acc-head .acc-badge{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--bg-body);color:var(--text-secondary);border:1px solid var(--border-color)}
+.acc-head .acc-chevron{color:var(--text-tertiary);font-size:12px;transition:transform .25s}
+.acc-item.open .acc-chevron{transform:rotate(180deg)}
+.acc-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+.acc-item.open .acc-body{max-height:3000px}
+.acc-inner{padding:4px 16px 16px}
+.view-toggle{display:inline-flex;border:1px solid var(--border-color);border-radius:8px;overflow:hidden}
+.view-toggle button{padding:6px 14px;background:var(--bg-card);border:none;font-size:12px;font-weight:600;color:var(--text-tertiary);cursor:pointer;transition:var(--transition);font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.view-toggle button:hover{color:var(--text-secondary);background:var(--bg-hover)}
+.view-toggle button.active{background:var(--primary);color:white}
+.details-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-card);font-size:11.5px;font-weight:600;color:var(--primary);cursor:pointer;transition:var(--transition);font-family:inherit;white-space:nowrap}
+.details-btn:hover{background:var(--primary-glow);border-color:var(--primary);transform:translateY(-1px)}
+.details-btn i{font-size:12px}
+.incident-timeline-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .15s}
+.incident-timeline-item:hover{background:var(--bg-hover);margin:0 -12px;padding-left:12px;padding-right:12px;border-radius:8px}
+.incident-timeline-item:last-child{border-bottom:none}
+@media(max-width:992px){.detail-grid{grid-template-columns:1fr}}
+@media(max-width:576px){.stat-grid{grid-template-columns:1fr}.content-container{padding:12px}.search-box input{width:160px}.search-box input:focus{width:200px}.cat-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* ── Approval Workflow Styles ── */
+.notif-bell{position:relative;cursor:pointer;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.6);transition:var(--transition);font-size:18px}
+.notif-bell:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.9)}
+.notif-badge{position:absolute;top:2px;right:2px;min-width:17px;height:17px;border-radius:99px;background:var(--danger);color:white;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--sidebar-bg);animation:badgePulse 2s ease infinite}
+@keyframes badgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.approval-panel{position:absolute;top:calc(100% + 8px);right:0;width:420px;max-height:520px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;box-shadow:var(--shadow-lg);z-index:3000;display:none;overflow:hidden;animation:panelIn .2s ease}
+.approval-panel.show{display:flex;flex-direction:column}
+@keyframes panelIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.ap-header{padding:16px 18px 12px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between}
+.ap-header h5{font-size:13px;font-weight:700;margin:0}
+.ap-list{overflow-y:auto;flex:1;max-height:400px}
+.ap-item{padding:14px 18px;border-bottom:1px solid var(--border-light);transition:background .15s}
+.ap-item:hover{background:var(--bg-hover)}
+.ap-item:last-child{border-bottom:none}
+.ap-type-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.apb-price{background:var(--info-light);color:var(--info)}.apb-incident{background:var(--danger-light);color:var(--danger)}.apb-delete{background:var(--warning-light);color:#D97706}
+.ap-detail{font-size:12px;color:var(--text-secondary);margin-top:6px;line-height:1.5}
+.ap-detail strong{color:var(--text-primary);font-weight:600}
+.ap-time{font-size:10px;color:var(--text-tertiary);margin-top:6px}
+.ap-actions{display:flex;gap:6px;margin-top:10px}
+.ap-actions button{padding:5px 14px;border-radius:6px;font-size:11px;font-weight:600;border:none;cursor:pointer;font-family:inherit;transition:var(--transition);display:inline-flex;align-items:center;gap:4px}
+.ap-approve{background:var(--success);color:white}.ap-approve:hover{background:#15803D}
+.ap-reject{background:var(--bg-body);color:var(--text-secondary);border:1px solid var(--border-color) !important}.ap-reject:hover{background:var(--danger-light);color:var(--danger);border-color:transparent !important}
+.ap-empty{text-align:center;padding:40px 20px;color:var(--text-tertiary)}
+.ap-empty i{font-size:32px;display:block;margin-bottom:8px;opacity:.35}
+.ap-empty p{font-size:12px;margin:0}
+.dropdown-menu-custom{position:absolute;right:0;top:calc(100% + 4px);background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:var(--shadow-lg);z-index:1500;min-width:200px;padding:6px;display:none;animation:panelIn .15s ease}
+.dropdown-menu-custom.show{display:block}
+.ddm-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;font-size:12.5px;font-weight:500;color:var(--text-primary);cursor:pointer;transition:background .12s;border:none;background:none;width:100%;text-align:left;font-family:inherit}
+.ddm-item:hover{background:var(--bg-hover)}
+.ddm-item i{font-size:14px;width:18px;text-align:center;color:var(--text-tertiary)}
+.ddm-item.ddm-danger{color:var(--danger)}.ddm-item.ddm-danger i{color:var(--danger)}
+.ddm-item.ddm-danger:hover{background:var(--danger-light)}
+.ddm-divider{height:1px;background:var(--border-light);margin:4px 8px}
+.file-upload-zone{border:2px dashed var(--border-color);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:var(--transition)}
+.file-upload-zone:hover{border-color:var(--primary);background:var(--primary-glow)}
+.file-upload-zone i{font-size:24px;color:var(--text-tertiary);display:block;margin-bottom:6px}
+.file-upload-zone span{font-size:12px;color:var(--text-tertiary)}
+.file-upload-zone.has-file{border-color:var(--success);background:var(--success-light)}
+.file-upload-zone.has-file i{color:var(--success)}
+.pending-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;background:var(--warning-light);color:#D97706;animation:pendingPulse 2s ease infinite}
+@keyframes pendingPulse{0%,100%{opacity:1}50%{opacity:.6}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<aside class="sidebar">
+  <div class="sidebar-brand"><i class="bi bi-hammer"></i></div>
+  <div class="sidebar-icon" onclick="location.href='index.html'"><i class="bi bi-speedometer2"></i><span class="sidebar-tooltip">Dashboard</span></div>
+  <div class="sidebar-icon" onclick="location.href='leads.html'"><i class="bi bi-megaphone"></i><span class="sidebar-tooltip">Leads & Marketing</span></div>
+  <div class="sidebar-icon" onclick="location.href='quotations.html'"><i class="bi bi-file-earmark-text"></i><span class="sidebar-tooltip">Quotations</span></div>
+  <div class="sidebar-icon" onclick="location.href='catalogue.html'"><i class="bi bi-box-seam"></i><span class="sidebar-tooltip">Catalogue</span></div>
+  <div class="sidebar-icon" onclick="location.href='projects.html'"><i class="bi bi-building"></i><span class="sidebar-tooltip">Active Projects</span></div>
+  <div class="sidebar-icon" onclick="location.href='milestones.html'"><i class="bi bi-calendar-check"></i><span class="sidebar-tooltip">Milestones</span></div>
+  <div class="sidebar-icon" onclick="location.href='sitemanager.html'"><i class="bi bi-person-badge"></i><span class="sidebar-tooltip">Site Managers</span></div>
+  <div class="sidebar-icon" onclick="location.href='architect.html'"><i class="bi bi-pencil-square"></i><span class="sidebar-tooltip">Architect</span></div>
+  <div class="sidebar-icon" onclick="location.href='government.html'"><i class="bi bi-bank"></i><span class="sidebar-tooltip">Govt & Certifiers</span></div>
+  <div class="sidebar-icon active"><i class="bi bi-tools"></i><span class="sidebar-tooltip">Tradie Management</span></div>
+  <div class="sidebar-icon" onclick="location.href='financials.html'"><i class="bi bi-cash-stack"></i><span class="sidebar-tooltip">Financials</span></div>
+  <div class="sidebar-icon" onclick="location.href='chatbot.html'"><i class="bi bi-robot"></i><span class="sidebar-tooltip">Customer Chatbot</span></div>
+  <div class="sidebar-icon" style="margin-top:auto;margin-bottom:16px"><i class="bi bi-box-arrow-right"></i><span class="sidebar-tooltip">Logout</span></div>
+</aside>
+<div class="main-panel">
+  <header class="top-header">
+    <div class="d-flex align-items-center gap-3">
+      <svg height="28" viewBox="0 0 120 32"><text x="0" y="26" fill="#0D9488" font-family="Inter,sans-serif" font-size="22" font-weight="800">BuildPro</text></svg>
+      <nav class="header-menu d-none d-lg-block">
+        <a href="index.html">Dashboard</a><a href="leads.html">Leads</a><a href="quotations.html">Quotes</a><a href="projects.html">Projects</a><a href="milestones.html">Milestones</a><a href="financials.html">Financials</a>
+      </nav>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <div class="live-clock d-none d-md-flex" id="liveClock"><span>--:--</span> AEST</div>
+      <!-- Approval Bell -->
+      <div style="position:relative;" id="bellWrapper">
+        <div class="notif-bell" onclick="toggleApprovalPanel(event)">
+          <i class="bi bi-bell"></i>
+          <span class="notif-badge" id="notifBadge" style="display:none;">0</span>
+        </div>
+        <div class="approval-panel" id="approvalPanel"></div>
+      </div>
+      <div class="up"><div class="ua">GS</div><div class="ui"><span>Guri Singh</span><small style="font-size:10px;color:rgba(255,255,255,.5)">Owner | NSW</small></div></div>
+    </div>
+  </header>
+  <div class="sub-header" id="breadcrumb">
+    <i class="bi bi-house me-1" style="font-size:11px;cursor:pointer;" onclick="goHome()"></i><span>Home</span>
+    <span class="mx-2" style="color:var(--border-color);">/</span>
+    <span style="font-weight:600;color:var(--text-primary);">Tradie Management</span>
+    <span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);">Updated just now</span>
+  </div>
+  <div class="content-container" id="app"></div>
+</div>
+</div>
+<div class="toast-container" id="toastContainer"></div>
+<div id="modalRoot"></div>
+
+<script>
+/* ═══════ CLOCK ═══════ */
+function updateClock(){var n=new Date(),h=String(n.getHours()).padStart(2,'0'),m=String(n.getMinutes()).padStart(2,'0'),s=String(n.getSeconds()).padStart(2,'0');document.getElementById('liveClock').innerHTML='<span>'+h+':'+m+':'+s+'</span> AEST';}
+setInterval(updateClock,1000);updateClock();
+
+/* ═══════ HELPERS ═══════ */
+function fmtDate(s){if(!s)return '—';var dt=new Date(s+'T00:00:00');return dt.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});}
+function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ═══════ TRADE DEFINITIONS ═══════ */
+var TRADES=[
+  {name:"Plumbing",icon:"bi-droplet-half",color:"#2563EB",bg:"var(--info-light)"},
+  {name:"Roofing",icon:"bi-house-roof",color:"#DC2626",bg:"var(--danger-light)"},
+  {name:"Electrical",icon:"bi-plug",color:"#D97706",bg:"var(--warning-light)"},
+  {name:"Carpentry",icon:"bi-hammer",color:"#E8730C",bg:"var(--accent-light)"},
+  {name:"Painting",icon:"bi-palette",color:"#7C3AED",bg:"var(--purple-light)"},
+  {name:"Tiling",icon:"bi-grid-3x3",color:"#0D9488",bg:"var(--primary-light)"},
+  {name:"Bricklaying",icon:"bi-bricks",color:"#92400E",bg:"#FEF3C7"},
+  {name:"Plastering",icon:"bi-layers",color:"#6D28D9",bg:"var(--purple-light)"},
+  {name:"Glazing",icon:"bi-window",color:"#0891B2",bg:"#CFFAFE"},
+  {name:"HVAC",icon:"bi-fan",color:"#059669",bg:"var(--success-light)"},
+  {name:"Flooring",icon:"bi-square",color:"#8B5CF6",bg:"#EDE9FE"},
+  {name:"Landscaping",icon:"bi-tree",color:"#15803D",bg:"#DCFCE7"},
+  {name:"Kitchen Install",icon:"bi-cup-hot",color:"#0D9488",bg:"var(--primary-light)"},
+  {name:"Concreting",icon:"bi-building",color:"#475569",bg:"var(--bg-body)"}
+];
+function getTradeDef(name){return TRADES.find(function(t){return t.name===name;})||{name:name,icon:'bi-tools',color:'var(--primary)',bg:'var(--primary-light)'};}
+
+/* ═══════ DATA ═══════ */
+var tradies=[
+  {id:1,name:"Kulwinder Electric",company:"NSW Spark Solutions",trade:"Electrical",phone:"+61 412 345 111",email:"kulwinder@nswspark.com.au",abn:"12 345 678 901",rate:85,priority:"High",jobs:28,fav:true,active:true,joined:"2023-03-15",notes:"Reliable electrician, specializes in residential rough-in and fit-off."},
+  {id:2,name:"Flow Right Plumbing",company:"Flow Right Plumbing Pty Ltd",trade:"Plumbing",phone:"+61 403 222 444",email:"info@flowright.com.au",abn:"23 456 789 012",rate:80,priority:"Medium",jobs:22,fav:false,active:true,joined:"2023-06-20",notes:"First fix and second fix plumbing. Hot water specialist."},
+  {id:3,name:"Top Roof Co",company:"Top Roof Co NSW",trade:"Roofing",phone:"+61 455 678 333",email:"quotes@toproof.com.au",abn:"34 567 890 123",rate:95,priority:"High",jobs:35,fav:true,active:true,joined:"2022-11-10",notes:"Colorbond and tile roofing. Full roof replacement and repairs."},
+  {id:4,name:"Smooth Walls Plaster",company:"Smooth Walls Plastering",trade:"Plastering",phone:"+61 466 111 888",email:"steve@smoothwalls.com.au",abn:"45 678 901 234",rate:70,priority:"Medium",jobs:18,fav:false,active:true,joined:"2023-09-05",notes:"Internal plastering and cornice installation."},
+  {id:5,name:"Wagners Concrete",company:"Wagners Concrete NSW",trade:"Concreting",phone:"+61 488 999 222",email:"dispatch@wagners.com.au",abn:"56 789 012 345",rate:90,priority:"High",jobs:42,fav:false,active:true,joined:"2022-05-18",notes:"Slab pours, footings, driveways. Has own pump truck."},
+  {id:6,name:"Precision Tiling",company:"Precision Tiling NSW",trade:"Tiling",phone:"+61 411 555 777",email:"mark@precisiontiling.com.au",abn:"67 890 123 456",rate:75,priority:"Medium",jobs:15,fav:false,active:true,joined:"2024-01-15",notes:"Bathroom, kitchen, and floor tiling. Large format tile specialist."},
+  {id:7,name:"Colour Masters",company:"Colour Masters Painting",trade:"Painting",phone:"+61 422 333 555",email:"jobs@colourmasters.com.au",abn:"78 901 234 567",rate:65,priority:"Low",jobs:20,fav:false,active:true,joined:"2023-07-01",notes:"Interior and exterior painting. Dulux accredited."},
+  {id:8,name:"Raj Singh Bricklaying",company:"Raj Singh Bricklaying",trade:"Bricklaying",phone:"+61 477 444 666",email:"raj@rsbricklaying.com.au",abn:"89 012 345 678",rate:88,priority:"High",jobs:38,fav:true,active:true,joined:"2022-08-22",notes:"Excellent brickwork quality. Fast and clean. Highly recommended."},
+  {id:9,name:"Elite Kitchens NSW",company:"Elite Kitchens NSW Pty Ltd",trade:"Kitchen Install",phone:"+61 499 888 111",email:"install@elitekitchens.com.au",abn:"90 123 456 789",rate:110,priority:"High",jobs:12,fav:false,active:true,joined:"2024-02-10",notes:"Kitchen cabinetry, benchtops, and appliance installation."},
+  {id:10,name:"Mandeep Framing",company:"Mandeep Framing NSW",trade:"Carpentry",phone:"+61 433 777 222",email:"mandeep@mfps.com.au",abn:"11 234 567 890",rate:85,priority:"High",jobs:30,fav:false,active:true,joined:"2023-04-12",notes:"Timber and steel framing. Prefabricated wall panels available."},
+  {id:11,name:"Aussie Glass & Glazing",company:"Aussie Glass & Glazing",trade:"Glazing",phone:"+61 444 555 333",email:"sales@aussieglaz.com.au",abn:"22 345 678 901",rate:92,priority:"Medium",jobs:16,fav:false,active:true,joined:"2023-11-01",notes:"Window and door glazing. Shower screens and mirrors."},
+  {id:12,name:"Jinder's Landscaping",company:"Jinder's Landscaping NSW",trade:"Landscaping",phone:"+61 455 666 444",email:"jinder@jindersland.com.au",abn:"33 456 789 012",rate:70,priority:"Medium",jobs:14,fav:false,active:true,joined:"2024-03-20",notes:"Garden design, turf, reticulation, paving, and decking."},
+  {id:13,name:"Pro Floor Solutions",company:"Pro Floor Solutions",trade:"Flooring",phone:"+61 466 777 555",email:"info@profloor.com.au",abn:"44 567 890 123",rate:78,priority:"Low",jobs:10,fav:false,active:true,joined:"2024-05-10",notes:"Hardwood, laminate, and vinyl plank flooring installation."},
+  {id:14,name:"NSW Air Con Pro",company:"NSW Air Con Professionals",trade:"HVAC",phone:"+61 477 888 666",email:"bookings@nswaircon.com.au",abn:"55 678 901 234",rate:100,priority:"Medium",jobs:19,fav:false,active:true,joined:"2023-08-15",notes:"Ducted and split system AC installation and servicing."},
+  {id:15,name:"Gurpreet Electrical",company:"Gurpreet Electrical Services",trade:"Electrical",phone:"+61 488 999 777",email:"gurpreet@gelectrical.com.au",abn:"66 789 012 345",rate:82,priority:"High",jobs:24,fav:false,active:true,joined:"2023-05-20",notes:"Second electrician on call. Good with switchboard upgrades."},
+  {id:16,name:"Pete's Pipes Co",company:"Pete's Pipes Plumbing",trade:"Plumbing",phone:"+61 412 888 999",email:"pete@pipes.com.au",abn:"77 890 123 456",rate:90,priority:"High",jobs:41,fav:true,active:true,joined:"2022-07-10",notes:"Premium plumbing service. Specializes in complex drainage."},
+  {id:17,name:"Sky High Roofing",company:"Sky High Roofing NSW",trade:"Roofing",phone:"+61 499 333 111",email:"admin@skyhigh.com.au",abn:"88 901 234 567",rate:92,priority:"Medium",jobs:28,fav:false,active:true,joined:"2023-02-28",notes:"Tile and metal roofing. Storm damage repairs."},
+  {id:18,name:"Ironclad Roofs",company:"Ironclad Roofs Pty Ltd",trade:"Roofing",phone:"+61 422 777 555",email:"jobs@ironclad.com.au",abn:"99 012 345 678",rate:88,priority:"Medium",jobs:19,fav:false,active:false,joined:"2023-10-05",notes:"Colorbond specialist. Currently unavailable — overseas."}
+];
+var nextId=19;
+
+var incidents=[
+  {id:1,tradieId:4,type:"quality",severity:"medium",description:"Plaster finish had visible trowel marks on bedroom 2 ceiling. Required re-sanding.",date:"2024-11-22",reportedBy:"Amrit Singh",resolved:true,resolveDate:"2024-11-25",resolution:"Re-sanded and re-coated at no extra charge."},
+  {id:2,tradieId:7,type:"attendance",severity:"low",description:"Arrived 2 hours late on site without notifying site manager.",date:"2024-11-18",reportedBy:"Jasbir Kaur",resolved:true,resolveDate:"2024-11-18",resolution:"Verbal warning given. Tradie apologised."},
+  {id:3,tradieId:14,type:"safety",severity:"high",description:"Working on roof without harness. Safety breach observed by certifier during inspection.",date:"2024-11-10",reportedBy:"Gurpreet Mann",resolved:false,resolveDate:null,resolution:""},
+  {id:4,tradieId:13,type:"damage",severity:"medium",description:"Scratched newly laid timber floor while moving equipment. 3 boards need replacement.",date:"2024-11-05",reportedBy:"Amrit Singh",resolved:false,resolveDate:null,resolution:""},
+  {id:5,tradieId:5,type:"behaviour",severity:"low",description:"Minor disagreement with neighbour about site access. Resolved quickly on site.",date:"2024-10-28",reportedBy:"Jasbir Kaur",resolved:true,resolveDate:"2024-10-28",resolution:"Mediated on site. No further issues."}
+];
+var nextIncidentId=6;
+
+/* ═══════ APPROVAL QUEUE ═══════ */
+var pendingApprovals=[];
+var nextApprovalId=1;
+
+/* ═══════ STATE ═══════ */
+var currentView='grid';
+var currentTab='all';
+var searchTerm='';
+var tradeFilter='all';
+var priorityFilter='all';
+var showFavOnly=false;
+var sortField='name';
+var sortAsc=true;
+var detailView=null;
+var openAccTrade=null;
+var activeDropdown=null;
+var showApprovalPanel=false;
+
+/* ═══════ TOAST ═══════ */
+function toast(msg,type,dur){
+  type=type||'info';dur=dur||4500;
+  var c={success:{bg:'var(--success-light)',color:'var(--success)',icon:'bi-check-circle-fill',bar:'var(--success)'},danger:{bg:'var(--danger-light)',color:'var(--danger)',icon:'bi-exclamation-circle-fill',bar:'var(--danger)'},info:{bg:'var(--info-light)',color:'var(--info)',icon:'bi-info-circle-fill',bar:'var(--info)'},warning:{bg:'var(--warning-light)',color:'#D97706',icon:'bi-exclamation-triangle-fill',bar:'var(--warning)'}};
+  var s=c[type]||c.info;
+  var el=document.createElement('div');el.className='toast-item';
+  el.innerHTML='<div class="toast-icon" style="background:'+s.bg+';color:'+s.color+';"><i class="bi '+s.icon+'"></i></div><div class="toast-msg">'+msg+'</div><button class="toast-close" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button><div class="toast-bar" style="background:'+s.bar+';"></div>';
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(function(){if(el.parentElement){el.classList.add('removing');setTimeout(function(){el.remove();},250);}},dur);
+}
+
+function openModal(id){var m=document.getElementById(id);if(m)m.classList.add('show');}
+function closeModal(id){var m=document.getElementById(id);if(m)m.classList.remove('show');}
+
+/* ═══════ COMPUTED ═══════ */
+function getTradie(id){return tradies.find(function(t){return t.id===id;});}
+function getIncidents(id){return incidents.filter(function(i){return i.tradieId===id;});}
+function getUnresolvedIncidents(id){return incidents.filter(function(i){return i.tradieId===id&&!i.resolved;});}
+function getInitials(t){return t.name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();}
+function getTradiesForTrade(n){return tradies.filter(function(t){return t.trade===n;});}
+function getTradesWithTradies(){return TRADES.filter(function(td){return getTradiesForTrade(td.name).length>0;});}
+
+function priorityBadgeHTML(priority) {
+  var cls = 'pill-gray';
+  if (priority === 'High') cls = 'pill-danger';
+  else if (priority === 'Medium') cls = 'pill-warning';
+  else if (priority === 'Low') cls = 'pill-success';
+  return '<span class="status-pill ' + cls + '">' + priority + '</span>';
+}
+
+function getFilteredTradies(tradeName){
+  var list=tradeName?getTradiesForTrade(tradeName):tradies.slice();
+  if(searchTerm){var q=searchTerm.toLowerCase();list=list.filter(function(t){return t.name.toLowerCase().indexOf(q)>-1||t.company.toLowerCase().indexOf(q)>-1||t.phone.indexOf(q)>-1||t.email.toLowerCase().indexOf(q)>-1;});}
+  if(priorityFilter!=='all'){list=list.filter(function(t){return t.priority===priorityFilter;});}
+  if(showFavOnly)list=list.filter(function(t){return t.fav;});
+  if(currentTab==='flagged')list=list.filter(function(t){return getUnresolvedIncidents(t.id).length>0;});
+  list.sort(function(a,b){
+    var va,vb;
+    if(sortField==='name'){va=a.name.toLowerCase();vb=b.name.toLowerCase();}
+    else if(sortField==='trade'){va=a.trade;vb=b.trade;}
+    else if(sortField==='rate'){va=a.rate;vb=b.rate;}
+    else if(sortField==='priority'){
+      var prioOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
+      va = prioOrder[a.priority] || 0;
+      vb = prioOrder[b.priority] || 0;
+    }
+    else if(sortField==='jobs'){va=a.jobs;vb=b.jobs;}
+    else if(sortField==='incidents'){va=getIncidents(a.id).length;vb=getIncidents(b.id).length;}
+    else{va=a.name.toLowerCase();vb=b.name.toLowerCase();}
+    if(va<vb)return sortAsc?-1:1;if(va>vb)return sortAsc?1:-1;return 0;
+  });
+  return list;
+}
+
+/* ═══════ BREADCRUMB ═══════ */
+function updateBreadcrumb(parts){
+  var h='<i class="bi bi-house me-1" style="font-size:11px;cursor:pointer;" onclick="goHome()"></i><span>Home</span>';
+  parts.forEach(function(p,i){
+    h+='<span class="mx-2" style="color:var(--border-color);">/</span>';
+    if(i===parts.length-1)h+='<span style="font-weight:600;color:var(--text-primary);">'+p.label+'</span>';
+    else h+='<span style="cursor:pointer;color:var(--text-secondary);" onclick="'+(p.action||'')+'">'+p.label+'</span>';
+  });
+  h+='<span style="margin-left:auto;font-size:11px;color:var(--text-tertiary);">Updated just now</span>';
+  document.getElementById('breadcrumb').innerHTML=h;
+}
+
+/* ═══════ NAVIGATION ═══════ */
+function goHome(){currentView='grid';detailView=null;openAccTrade=null;currentTab='all';updateBreadcrumb([{label:'Tradie Management'}]);render();}
+function goGrid(){currentView='grid';detailView=null;openAccTrade=null;updateBreadcrumb([{label:'Tradie Management'}]);render();}
+function goListView(){currentView='list';detailView=null;updateBreadcrumb([{label:'Tradie Management'},{label:'Category List'}]);render();}
+function goTableView(){currentView='table';detailView=null;updateBreadcrumb([{label:'Tradie Management'},{label:'Table View'}]);render();}
+function openCategory(name){openAccTrade=name;currentView='list';updateBreadcrumb([{label:'Tradie Management'},{label:name}]);render();}
+
+/* ═══════ THREE-DOT DROPDOWN ═══════ */
+function toggleDropdown(e,tradieId){
+  e.stopPropagation();
+  if(activeDropdown===tradieId){activeDropdown=null;render();return;}
+  activeDropdown=tradieId;render();
+}
+function closeDropdowns(){if(activeDropdown!==null){activeDropdown=null;render();}}
+
+function renderDropdown(tradieId){
+  var t=getTradie(tradieId);if(!t)return '';
+  var h='<div class="dropdown-menu-custom'+(activeDropdown===tradieId?' show':'')+'" onclick="event.stopPropagation()">';
+  h+='<button class="ddm-item" onclick="closeDropdowns();openDetail('+tradieId+')"><i class="bi bi-eye"></i> View Details</button>';
+  h+='<div class="ddm-divider"></div>';
+  h+='<button class="ddm-item" onclick="closeDropdowns();openPriceChangeModal('+tradieId+')"><i class="bi bi-tag"></i> Price Change</button>';
+  h+='<button class="ddm-item" onclick="closeDropdowns();openReportIncidentModal('+tradieId+')"><i class="bi bi-exclamation-triangle"></i> Report Incident</button>';
+  h+='<button class="ddm-item" onclick="closeDropdowns();openPriorityModal('+tradieId+')"><i class="bi bi-shield-exclamation"></i> Set Priority</button>';
+  h+='<div class="ddm-divider"></div>';
+  h+='<button class="ddm-item" onclick="closeDropdowns();toggleFav('+tradieId+')"><i class="bi bi-star-fill" style="color:'+(t.fav?'var(--warning)':'')+'"></i> '+(t.fav?'Remove from Favorites':'Add to Favorites')+'</button>';
+  h+='<div class="ddm-divider"></div>';
+  h+='<button class="ddm-item ddm-danger" onclick="closeDropdowns();openDeleteTradieModal('+tradieId+')"><i class="bi bi-trash3"></i> Delete Tradie</button>';
+  h+='</div>';
+  return h;
+}
+
+/* ═══════ APPROVAL PANEL ═══════ */
+function toggleApprovalPanel(e){
+  e.stopPropagation();
+  showApprovalPanel=!showApprovalPanel;
+  renderApprovalPanel();
+}
+
+function renderApprovalPanel(){
+  var panel=document.getElementById('approvalPanel');
+  var badge=document.getElementById('notifBadge');
+  var count=pendingApprovals.length;
+  badge.style.display=count>0?'flex':'none';
+  badge.textContent=count;
+  if(!showApprovalPanel){panel.classList.remove('show');return;}
+  var h='<div class="ap-header"><h5><i class="bi bi-clock-history me-2" style="color:var(--primary);"></i>Pending Approvals ('+count+')</h5><button class="modal-close" style="width:26px;height:26px;font-size:13px;" onclick="showApprovalPanel=false;renderApprovalPanel()"><i class="bi bi-x"></i></button></div>';
+  h+='<div class="ap-list">';
+  if(count===0){
+    h+='<div class="ap-empty"><i class="bi bi-check-circle"></i><p>All clear — no pending approvals</p></div>';
+  } else {
+    pendingApprovals.forEach(function(a){
+      var tradie=getTradie(a.tradieId);
+      var tName=tradie?tradie.name:'(Deleted Tradie)';
+      var tTrade=tradie?tradie.trade:'';
+      if(a.type==='price_change'){
+        h+='<div class="ap-item">';
+        h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;"><span class="ap-type-badge apb-price"><i class="bi bi-tag"></i> Price Change</span><span class="ap-time">'+a.submittedAt+'</span></div>';
+        h+='<div class="ap-detail"><strong>'+escAttr(tName)+'</strong> ('+tTrade+')</div>';
+        h+='<div class="ap-detail">Current rate: <strong>$'+a.data.oldRate+'/hr</strong> &rarr; Proposed: <strong style="color:var(--primary);">$'+a.data.newRate+'/hr</strong></div>';
+        h+='<div class="ap-detail" style="font-style:italic;color:var(--text-tertiary);">"'+escAttr(a.data.reason)+'"</div>';
+        h+='<div class="ap-actions"><button class="ap-approve" onclick="approveRequest('+a.id+')"><i class="bi bi-check-lg"></i> Approve</button><button class="ap-reject" onclick="rejectRequest('+a.id+')"><i class="bi bi-x-lg"></i> Reject</button></div>';
+        h+='</div>';
+      } else if(a.type==='report_incident'){
+        h+='<div class="ap-item">';
+        h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;"><span class="ap-type-badge apb-incident"><i class="bi bi-exclamation-triangle"></i> Incident Report</span><span class="ap-time">'+a.submittedAt+'</span></div>';
+        h+='<div class="ap-detail"><strong>'+escAttr(tName)+'</strong> ('+tTrade+')</div>';
+        h+='<div class="ap-detail">Type: <strong>'+a.data.type+'</strong> &middot; Severity: <strong>'+a.data.severity+'</strong></div>';
+        h+='<div class="ap-detail">"'+escAttr(a.data.description)+'"</div>';
+        if(a.data.imageName)h+='<div class="ap-detail"><i class="bi bi-paperclip me-1"></i>'+escAttr(a.data.imageName)+'</div>';
+        h+='<div class="ap-actions"><button class="ap-approve" onclick="approveRequest('+a.id+')"><i class="bi bi-check-lg"></i> Log Incident</button><button class="ap-reject" onclick="rejectRequest('+a.id+')"><i class="bi bi-x-lg"></i> Dismiss</button></div>';
+        h+='</div>';
+      } else if(a.type==='delete_tradie'){
+        h+='<div class="ap-item">';
+        h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;"><span class="ap-type-badge apb-delete"><i class="bi bi-trash3"></i> Delete Tradie</span><span class="ap-time">'+a.submittedAt+'</span></div>';
+        h+='<div class="ap-detail"><strong>'+escAttr(tName)+'</strong> ('+tTrade+')</div>';
+        h+='<div class="ap-detail" style="font-style:italic;color:var(--text-tertiary);">"'+escAttr(a.data.reason)+'"</div>';
+        h+='<div class="ap-actions"><button class="ap-approve" style="background:var(--danger);" onclick="approveRequest('+a.id+')"><i class="bi bi-trash3"></i> Confirm Delete</button><button class="ap-reject" onclick="rejectRequest('+a.id+')"><i class="bi bi-x-lg"></i> Keep Tradie</button></div>';
+        h+='</div>';
+      }
+    });
+  }
+  h+='</div>';
+  panel.innerHTML=h;
+  panel.classList.add('show');
+}
+
+function getNowStr(){
+  var n=new Date();
+  return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+' '+n.toLocaleDateString('en-AU',{day:'numeric',month:'short'});
+}
+
+/* ═══════ APPROVE / REJECT ═══════ */
+function approveRequest(id){
+  var idx=pendingApprovals.findIndex(function(a){return a.id===id;});
+  if(idx===-1)return;
+  var a=pendingApprovals[idx];
+  if(a.type==='price_change'){
+    var t=getTradie(a.tradieId);
+    if(t){t.rate=a.data.newRate;toast('Price updated for '+t.name+' to $'+a.data.newRate+'/hr','success');}
+  } else if(a.type==='report_incident'){
+    var sevMap={low:'low',medium:'medium',high:'high',critical:'critical'};
+    var typeMap={'Safety':'safety','Quality':'quality','Behaviour':'behaviour','Attendance':'attendance','Damage':'damage','Other':'other'};
+    incidents.push({
+      id:nextIncidentId++,
+      tradieId:a.tradieId,
+      type:typeMap[a.data.type]||'other',
+      severity:sevMap[a.data.severity.toLowerCase()]||'medium',
+      description:a.data.description,
+      date:new Date().toISOString().split('T')[0],
+      reportedBy:a.requestedBy,
+      resolved:false,
+      resolveDate:null,
+      resolution:''
+    });
+    var t2=getTradie(a.tradieId);
+    toast('Incident logged for '+(t2?t2.name:'tradie'),'success');
+  } else if(a.type==='delete_tradie'){
+    var delIdx=tradies.findIndex(function(t){return t.id===a.tradieId;});
+    if(delIdx>-1){
+      var delName=tradies[delIdx].name;
+      tradies.splice(delIdx,1);
+      toast(delName+' has been deleted','danger');
+      if(detailView===a.tradieId){detailView=null;goHome();return;}
+    }
+  }
+  pendingApprovals.splice(idx,1);
+  renderApprovalPanel();
+  render();
+}
+
+function rejectRequest(id){
+  var idx=pendingApprovals.findIndex(function(a){return a.id===id;});
+  if(idx===-1)return;
+  var a=pendingApprovals[idx];
+  var typeLabel=a.type==='price_change'?'Price change request':a.type==='report_incident'?'Incident report':'Deletion request';
+  pendingApprovals.splice(idx,1);
+  toast(typeLabel+' has been rejected','warning');
+  renderApprovalPanel();
+  render();
+}
+
+/* ═══════ WORKFLOW MODALS ═══════ */
+
+/* ── Workflow B: Price Change ── */
+function openPriceChangeModal(tradieId){
+  var t=getTradie(tradieId);if(!t)return;
+  var h='<div class="modal-backdrop-custom show" id="priceChangeModal" onclick="if(event.target===this)closeModal(\'priceChangeModal\')">';
+  h+='<div class="modal-content-custom" style="max-width:480px;">';
+  h+='<div class="modal-header-custom"><div><h5 style="font-size:15px;font-weight:700;margin:0;"><i class="bi bi-tag me-2" style="color:var(--info);"></i>Request Price Change</h5><p style="font-size:12px;color:var(--text-tertiary);margin:4px 0 0;">'+escAttr(t.name)+' — '+t.trade+'</p></div><button class="modal-close" onclick="closeModal(\'priceChangeModal\')"><i class="bi bi-x"></i></button></div>';
+  h+='<div class="modal-body-custom">';
+  h+='<div class="info-box ib-accent mb-3"><div class="ib-label">Current Hourly Rate</div><div class="ib-val" style="font-size:22px;color:var(--primary);font-weight:800;">$'+t.rate+'<span style="font-size:13px;font-weight:500;color:var(--text-tertiary);">/hr</span></div></div>';
+  h+='<div style="margin-bottom:14px;"><label class="form-label-custom">Proposed New Rate ($/hr)</label><input type="number" class="form-input-custom" id="pcNewRate" min="0" step="1" placeholder="e.g. 90" value="'+t.rate+'"></div>';
+  h+='<div style="margin-bottom:14px;"><label class="form-label-custom">Reason for Change <span style="color:var(--danger);">*</span></label><textarea class="form-input-custom" id="pcReason" placeholder="Explain why this price change is needed..." rows="3"></textarea></div>';
+  h+='<div class="info-box" style="border-color:rgba(37,99,235,.15);background:var(--info-light);"><div style="display:flex;align-items:flex-start;gap:8px;"><i class="bi bi-info-circle" style="color:var(--info);font-size:15px;margin-top:2px;"></i><div style="font-size:11.5px;color:var(--text-secondary);line-height:1.5;">This request will be submitted to <strong>Guri Singh</strong> for approval. The price will only update once approved.</div></div></div>';
+  h+='</div>';
+  h+='<div class="modal-footer-custom"><button class="btn-outline-custom" onclick="closeModal(\'priceChangeModal\')">Cancel</button><button class="btn-primary-custom" onclick="submitPriceChange('+tradieId+')"><i class="bi bi-send"></i> Submit for Approval</button></div>';
+  h+='</div></div>';
+  document.getElementById('modalRoot').innerHTML=h;
+}
+
+function submitPriceChange(tradieId){
+  var newRate=parseInt(document.getElementById('pcNewRate').value);
+  var reason=document.getElementById('pcReason').value.trim();
+  if(!newRate||newRate<=0){toast('Please enter a valid rate','warning');return;}
+  if(!reason){toast('Please provide a reason for the price change','warning');return;}
+  var t=getTradie(tradieId);
+  pendingApprovals.push({
+    id:nextApprovalId++,
+    type:'price_change',
+    tradieId:tradieId,
+    requestedBy:'Guri Singh',
+    submittedAt:getNowStr(),
+    data:{oldRate:t.rate,newRate:newRate,reason:reason}
+  });
+  closeModal('priceChangeModal');
+  document.getElementById('modalRoot').innerHTML='';
+  toast('Price change request submitted for Guri\'s review','info');
+  renderApprovalPanel();
+}
+
+/* ── Workflow C: Report Incident ── */
+function openReportIncidentModal(tradieId){
+  var t=getTradie(tradieId);if(!t)return;
+  var h='<div class="modal-backdrop-custom show" id="incidentModal" onclick="if(event.target===this)closeModal(\'incidentModal\')">';
+  h+='<div class="modal-content-custom" style="max-width:540px;">';
+  h+='<div class="modal-header-custom"><div><h5 style="font-size:15px;font-weight:700;margin:0;"><i class="bi bi-exclamation-triangle me-2" style="color:var(--danger);"></i>Report Incident</h5><p style="font-size:12px;color:var(--text-tertiary);margin:4px 0 0;">'+escAttr(t.name)+' — '+t.trade+'</p></div><button class="modal-close" onclick="closeModal(\'incidentModal\')"><i class="bi bi-x"></i></button></div>';
+  h+='<div class="modal-body-custom">';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">';
+  h+='<div><label class="form-label-custom">Incident Type <span style="color:var(--danger);">*</span></label><select class="form-input-custom" id="incType"><option value="">Select type...</option><option>Safety</option><option>Quality</option><option>Behaviour</option><option>Attendance</option><option>Damage</option><option>Other</option></select></div>';
+  h+='<div><label class="form-label-custom">Severity <span style="color:var(--danger);">*</span></label><select class="form-input-custom" id="incSeverity"><option value="">Select severity...</option><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>';
+  h+='</div>';
+  h+='<div style="margin-bottom:14px;"><label class="form-label-custom">Description <span style="color:var(--danger);">*</span></label><textarea class="form-input-custom" id="incDesc" placeholder="Describe what happened in detail..." rows="4"></textarea></div>';
+  h+='<div style="margin-bottom:14px;"><label class="form-label-custom">Attach Image (optional)</label>';
+  h+='<div class="file-upload-zone" id="incFileZone" onclick="document.getElementById(\'incFileInput\').click()">';
+  h+='<i class="bi bi-cloud-arrow-up"></i><span id="incFileLabel">Click to upload an image</span>';
+  h+='</div><input type="file" id="incFileInput" accept="image/*" style="display:none;" onchange="handleIncidentFile(this)">';
+  h+='</div>';
+  h+='<div class="info-box" style="border-color:rgba(220,38,38,.15);background:var(--danger-light);"><div style="display:flex;align-items:flex-start;gap:8px;"><i class="bi bi-forward" style="color:var(--danger);font-size:15px;margin-top:2px;"></i><div style="font-size:11.5px;color:var(--text-secondary);line-height:1.5;">This report will be forwarded directly to <strong>Guri Singh</strong> for further action.</div></div></div>';
+  h+='</div>';
+  h+='<div class="modal-footer-custom"><button class="btn-outline-custom" onclick="closeModal(\'incidentModal\')">Cancel</button><button class="btn-danger-custom" onclick="submitIncident('+tradieId+')"><i class="bi bi-send"></i> Submit Report</button></div>';
+  h+='</div></div>';
+  document.getElementById('modalRoot').innerHTML=h;
+}
+
+var incidentFileName='';
+function handleIncidentFile(input){
+  var zone=document.getElementById('incFileZone');
+  var label=document.getElementById('incFileLabel');
+  if(input.files&&input.files[0]){
+    incidentFileName=input.files[0].name;
+    label.textContent=incidentFileName;
+    zone.classList.add('has-file');
+    zone.querySelector('i').className='bi bi-check-circle';
+  } else {
+    incidentFileName='';
+    label.textContent='Click to upload an image';
+    zone.classList.remove('has-file');
+    zone.querySelector('i').className='bi bi-cloud-arrow-up';
+  }
+}
+
+function submitIncident(tradieId){
+  var type=document.getElementById('incType').value;
+  var severity=document.getElementById('incSeverity').value;
+  var desc=document.getElementById('incDesc').value.trim();
+  if(!type){toast('Please select an incident type','warning');return;}
+  if(!severity){toast('Please select a severity level','warning');return;}
+  if(!desc){toast('Please provide a description of the incident','warning');return;}
+  pendingApprovals.push({
+    id:nextApprovalId++,
+    type:'report_incident',
+    tradieId:tradieId,
+    requestedBy:'Guri Singh',
+    submittedAt:getNowStr(),
+    data:{type:type,severity:severity,description:desc,imageName:incidentFileName}
+  });
+  incidentFileName='';
+  closeModal('incidentModal');
+  document.getElementById('modalRoot').innerHTML='';
+  toast('Incident report forwarded to Guri for further action','info');
+  renderApprovalPanel();
+}
+
+/* ── Workflow D: Set Priority (saves directly) ── */
+function openPriorityModal(tradieId){
+  var t=getTradie(tradieId);if(!t)return;
+  var h='<div class="modal-backdrop-custom show" id="priorityModal" onclick="if(event.target===this)closeModal(\'priorityModal\')">';
+  h+='<div class="modal-content-custom" style="max-width:460px;">';
+  h+='<div class="modal-header-custom"><div><h5 style="font-size:15px;font-weight:700;margin:0;"><i class="bi bi-shield-exclamation me-2" style="color:var(--warning);"></i>Set Tradie Priority</h5><p style="font-size:12px;color:var(--text-tertiary);margin:4px 0 0;">'+escAttr(t.name)+' — '+t.trade+'</p></div><button class="modal-close" onclick="closeModal(\'priorityModal\')"><i class="bi bi-x"></i></button></div>';
+  h+='<div class="modal-body-custom">';
+  h+='<div class="info-box ib-accent mb-3" style="text-align:center;padding:18px;"><div class="ib-label">Current Priority</div><div style="margin-top:6px;">'+priorityBadgeHTML(t.priority)+'</div></div>';
+  h+='<div style="margin-bottom:18px;"><label class="form-label-custom">Select Priority Level <span style="color:var(--danger);">*</span></label>';
+  h+='<select class="form-input-custom" id="prioLevelSelect">';
+  h+='<option value="Low"'+(t.priority==='Low'?' selected':'')+'>Low</option>';
+  h+='<option value="Medium"'+(t.priority==='Medium'?' selected':'')+'>Medium</option>';
+  h+='<option value="High"'+(t.priority==='High'?' selected':'')+'>High</option>';
+  h+='</select></div>';
+  h+='</div>';
+  h+='<div class="modal-footer-custom"><button class="btn-outline-custom" onclick="closeModal(\'priorityModal\')">Cancel</button><button class="btn-warning-custom" onclick="submitPriority('+tradieId+')"><i class="bi bi-check-lg"></i> Update Priority</button></div>';
+  h+='</div></div>';
+  document.getElementById('modalRoot').innerHTML=h;
+}
+
+function submitPriority(tradieId){
+  var val=document.getElementById('prioLevelSelect').value;
+  var t=getTradie(tradieId);
+  if(t){
+    t.priority=val;
+    toast('Priority updated for '+t.name+' to '+val,'success');
+  }
+  closeModal('priorityModal');
+  document.getElementById('modalRoot').innerHTML='';
+  render();
+}
+
+/* ── Workflow E: Delete Tradie ── */
+function openDeleteTradieModal(tradieId){
+  var t=getTradie(tradieId);if(!t)return;
+  var h='<div class="modal-backdrop-custom show" id="deleteModal" onclick="if(event.target===this)closeModal(\'deleteModal\')">';
+  h+='<div class="modal-content-custom" style="max-width:460px;">';
+  h+='<div class="modal-header-custom"><div><h5 style="font-size:15px;font-weight:700;margin:0;color:var(--danger);"><i class="bi bi-trash3 me-2"></i>Delete Tradie</h5><p style="font-size:12px;color:var(--text-tertiary);margin:4px 0 0;">'+escAttr(t.name)+' — '+t.trade+'</p></div><button class="modal-close" onclick="closeModal(\'deleteModal\')"><i class="bi bi-x"></i></button></div>';
+  h+='<div class="modal-body-custom">';
+  h+='<div class="info-box ib-danger mb-3"><div style="display:flex;align-items:flex-start;gap:10px;"><i class="bi bi-exclamation-octagon" style="color:var(--danger);font-size:20px;margin-top:2px;"></i><div><div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:4px;">This action requires approval</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">You are requesting to permanently delete this tradie\'s profile from the active list. This will be sent to Guri Singh for confirmation.</div></div></div></div>';
+  h+='<div style="margin-bottom:14px;"><label class="form-label-custom">Reason for Deletion <span style="color:var(--danger);">*</span></label><textarea class="form-input-custom" id="delReason" placeholder="Explain why this tradie should be removed..." rows="3"></textarea></div>';
+  h+='</div>';
+  h+='<div class="modal-footer-custom"><button class="btn-outline-custom" onclick="closeModal(\'deleteModal\')">Cancel</button><button class="btn-danger-custom" onclick="submitDeleteTradie('+tradieId+')"><i class="bi bi-send"></i> Submit for Approval</button></div>';
+  h+='</div></div>';
+  document.getElementById('modalRoot').innerHTML=h;
+}
+
+function submitDeleteTradie(tradieId){
+  var reason=document.getElementById('delReason').value.trim();
+  if(!reason){toast('Please provide a reason for deletion','warning');return;}
+  pendingApprovals.push({
+    id:nextApprovalId++,
+    type:'delete_tradie',
+    tradieId:tradieId,
+    requestedBy:'Guri Singh',
+    submittedAt:getNowStr(),
+    data:{reason:reason}
+  });
+  closeModal('deleteModal');
+  document.getElementById('modalRoot').innerHTML='';
+  toast('Deletion request sent to Guri for approval','info');
+  renderApprovalPanel();
+}
+
+/* ═══════ FAVORITE TOGGLE ═══════ */
+function toggleFav(id){
+  var t=getTradie(id);if(!t)return;
+  t.fav=!t.fav;
+  toast(t.name+(t.fav?' added to favorites':' removed from favorites'),'success');
+  render();
+}
+
+/* ═══════ RENDER ═══════ */
+function render(){
+  var app=document.getElementById('app');
+  if(detailView)return renderDetail(app);
+  var h='';
+  h+=renderBanner();
+  h+=renderKPIs();
+  h+=renderUnresolvedBanner();
+  h+='<div id="viewContent"></div>';
+  app.innerHTML=h;
+  var vc=document.getElementById('viewContent');
+  if(currentView==='grid')renderGridContent(vc);
+  else if(currentView==='list')renderListContent(vc);
+  else if(currentView==='table')renderTableContent(vc);
+  renderApprovalPanel();
+}
+
+/* ═══════ STATIC BANNER ═══════ */
+function renderBanner(){
+  var h='<div class="card-custom" style="background:linear-gradient(135deg,#F0FDFA 0%,#CCFBF1 50%,#D1FAE5 100%);border:1px solid rgba(13,148,136,.12);position:relative;overflow:hidden;">';
+  h+='<div style="position:absolute;right:-20px;top:-20px;width:160px;height:160px;border-radius:50%;background:rgba(13,148,136,.06);"></div>';
+  h+='<div style="position:absolute;right:60px;bottom:-30px;width:100px;height:100px;border-radius:50%;background:rgba(13,148,136,.04);"></div>';
+  h+='<div class="row align-items-center"><div class="col-md-7">';
+  h+='<h3 style="font-size:17px;font-weight:800;margin-bottom:4px;position:relative;"><i class="bi bi-tools me-2" style="color:var(--primary);"></i>Tradie Management</h3>';
+  h+='<p style="font-size:13px;color:var(--text-secondary);margin-bottom:0;position:relative;">Browse by trade category or switch views. Add, track incidents, update priority levels, and update pricing.</p>';
+  h+='</div><div class="col-md-5 text-md-end mt-2 mt-md-0 d-flex gap-2 justify-content-md-end flex-wrap">';
+  h+='<button class="btn-primary-custom" onclick="openAddTradie()"><i class="bi bi-plus-lg"></i> Add Tradie</button>';
+  h+='<button class="btn-outline-custom" onclick="exportCSV()"><i class="bi bi-download"></i> Export</button>';
+  h+='</div></div></div>';
+  return h;
+}
+
+/* ═══════ STATIC KPIs ═══════ */
+function renderKPIs(){
+  var total=tradies.length;
+  var totalInc=incidents.length;
+  var unresolvedInc=incidents.filter(function(i){return !i.resolved;}).length;
+  var favCount=tradies.filter(function(t){return t.fav;}).length;
+  var h='<div class="stat-grid">';
+  h+='<div class="card-custom"><div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--primary);"><i class="bi bi-people"></i></div><span class="trend-badge trend-up"><i class="bi bi-arrow-up-short"></i>3</span></div><div class="stat-value">'+total+'</div><div class="stat-desc">Registered Tradies</div></div>';
+  h+='<div class="card-custom"><div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:'+(unresolvedInc>0?'var(--danger)':'var(--info)')+';"><i class="bi bi-exclamation-triangle"></i></div>'+(unresolvedInc>0?'<span class="trend-badge trend-down"><i class="bi bi-arrow-up-short"></i>'+unresolvedInc+'</span>':'')+'</div><div class="stat-value">'+totalInc+'</div><div class="stat-desc">Incidents Logged</div></div>';
+  h+='<div class="card-custom"><div class="d-flex justify-content-between align-items-start mb-2"><div class="stat-icon" style="background:var(--accent);"><i class="bi bi-star-fill"></i></div></div><div class="stat-value">'+favCount+'</div><div class="stat-desc">Favorites</div></div>';
+  h+='</div>';
+  return h;
+}
+
+/* ═══════ UNRESOLVED BANNER ═══════ */
+function renderUnresolvedBanner(){
+  var unresolvedInc=incidents.filter(function(i){return !i.resolved;}).length;
+  if(unresolvedInc===0)return '';
+  var h='<div class="card-custom" style="background:var(--danger-light);border:1px solid rgba(220,38,38,.15);padding:14px 18px;display:flex;align-items:flex-start;gap:12px;cursor:pointer;" onclick="currentView=\'table\';currentTab=\'flagged\';updateBreadcrumb([{label:\'Tradie Management\'},{label:\'Flagged Tradies\'}]);render()">';
+  h+='<div style="width:36px;height:36px;border-radius:10px;background:var(--danger);color:white;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;"><i class="bi bi-exclamation-triangle"></i></div>';
+  h+='<div style="flex:1;"><div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:2px;">'+unresolvedInc+' Unresolved Incident'+(unresolvedInc>1?'s':'')+'</div>';
+  h+='<div style="font-size:12px;color:var(--text-secondary);">Click to view flagged tradies in table view</div></div>';
+  h+='<i class="bi bi-chevron-right" style="color:var(--danger);font-size:16px;margin-top:8px;"></i></div>';
+  return h;
+}
+
+/* ═══════ TOOLBAR ═══════ */
+function renderToolbar(showViewToggle,showTradeFilter){
+  var h='<div class="d-flex align-items-center gap-2 mb-4 flex-wrap">';
+  if(showViewToggle){
+    h+='<div class="view-toggle">';
+    h+='<button class="'+(currentView==='grid'?' active':'')+'" onclick="goGrid()"><i class="bi bi-grid-3x3-gap"></i> Categories</button>';
+    h+='<button class="'+(currentView==='list'?' active':'')+'" onclick="goListView()"><i class="bi bi-list-ul"></i> List</button>';
+    h+='<button class="'+(currentView==='table'?' active':'')+'" onclick="goTableView()"><i class="bi bi-table"></i> Table</button>';
+    h+='</div>';
+  }
+  h+='<div class="search-box"><i class="bi bi-search"></i><input type="text" placeholder="Search tradies..." value="'+escAttr(searchTerm)+'" oninput="searchTerm=this.value;render()"></div>';
+  if(showTradeFilter){
+    h+='<select class="filter-select" onchange="tradeFilter=this.value;render()"><option value="all">All Trades</option>';
+    TRADES.forEach(function(td){var c=getTradiesForTrade(td.name).length;if(c>0)h+='<option value="'+td.name+'"'+(tradeFilter===td.name?' selected':'')+'>'+td.name+' ('+c+')</option>';});
+    h+='</select>';
+    h+='<select class="filter-select" onchange="priorityFilter=this.value;render()"><option value="all">All Priorities</option><option value="High"'+(priorityFilter==='High'?' selected':'')+'>High Priority</option><option value="Medium"'+(priorityFilter==='Medium'?' selected':'')+'>Medium Priority</option><option value="Low"'+(priorityFilter==='Low'?' selected':'')+'>Low Priority</option></select>';
+  }
+  h+='<button class="fav-toggle'+(showFavOnly?' active':'')+'" onclick="showFavOnly=!showFavOnly;render()"><i class="bi bi-star-fill"></i> Favorites</button>';
+  if(currentView==='table'){
+    h+='<div class="tab-nav" style="margin-bottom:0;border-bottom:none;margin-left:4px;">';
+    var total=tradies.length;
+    var flaggedCount=tradies.filter(function(t){return getUnresolvedIncidents(t.id).length>0;}).length;
+    h+='<button class="tab-btn'+(currentTab==='all'?' active':'')+'" onclick="currentTab=\'all\';render()" style="padding:5px 10px;font-size:11px;">All <span class="tab-count">'+total+'</span></button>';
+    h+='<button class="tab-btn'+(currentTab==='flagged'?' active':'')+'" onclick="currentTab=\'flagged\';render()" style="padding:5px 10px;font-size:11px;">Flagged <span class="tab-count" style="background:'+(currentTab==='flagged'?'var(--danger)':'')+';color:white;">'+flaggedCount+'</span></button>';
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+/* ═══════ TRADIE ROW HELPER ═══════ */
+function tradieActionCell(t){
+  return '<div style="position:relative;display:inline-block;"><button class="btn-icon" onclick="toggleDropdown(event,'+t.id+')" title="Actions"><i class="bi bi-three-dots-vertical"></i></button>'+renderDropdown(t.id)+'</div>';
+}
+
+function tradieStatusPill(t){
+  if(!t.active)return '<span class="status-pill pill-gray">Inactive</span>';
+  var ur=getUnresolvedIncidents(t.id).length;
+  if(ur>0)return '<span class="status-pill pill-danger"><i class="bi bi-exclamation-circle-fill me-1"></i>'+ur+' Flagged</span>';
+  return '<span class="status-pill pill-success">Active</span>';
+}
+
+/* ═══════ GRID VIEW ═══════ */
+function renderGridContent(vc){
+  var h=renderToolbar(true,false);
+  h+='<div class="cat-grid">';
+  TRADES.forEach(function(td){
+    var list=getTradiesForTrade(td.name);
+    if(list.length===0)return;
+    h+='<div class="cat-card" style="--cat-color:'+td.color+';" onclick="openCategory(\''+td.name+'\')">';
+    h+='<span class="cat-count">'+list.length+'</span>';
+    h+='<div class="cat-icon-wrap" style="background:'+td.bg+';color:'+td.color+';"><i class="bi '+td.icon+'"></i></div>';
+    h+='<h4>'+td.name+'</h4>';
+    h+='<div class="cat-sub">'+list.reduce(function(s,t){return s+t.jobs;},0)+' total jobs</div>';
+    h+='</div>';
+  });
+  h+='</div>';
+  vc.innerHTML=h;
+}
+
+/* ═══════ LIST VIEW ═══════ */
+function renderListContent(vc){
+  var h=renderToolbar(true,true);
+  if(openAccTrade){
+    var td=getTradeDef(openAccTrade);
+    var list=getFilteredTradies(openAccTrade);
+    h+='<div class="acc-item open">';
+    h+='<div class="acc-head" onclick="openAccTrade=null;render()">';
+    h+='<div class="acc-icon" style="background:'+td.bg+';color:'+td.color+';"><i class="bi '+td.icon+'"></i></div>';
+    h+='<h4>'+td.name+'</h4>';
+    h+='<span class="acc-badge">'+list.length+' tradie'+(list.length!==1?'s':'')+'</span>';
+    h+='<i class="bi bi-chevron-up acc-chevron"></i>';
+    h+='</div><div class="acc-body"><div class="acc-inner">';
+    if(list.length===0){
+      h+='<div class="empty-state"><i class="bi bi-search"></i><h5>No matches found</h5><p>Try adjusting your search or filters</p></div>';
+    } else {
+      list.forEach(function(t){
+        h+='<div style="display:flex;align-items:center;gap:14px;padding:12px;border:1px solid var(--border-color);border-radius:10px;margin-bottom:8px;transition:var(--transition);cursor:pointer;" onmouseover="this.style.borderColor=\'var(--primary)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'" onclick="openDetail('+t.id+')">';
+        h+='<div class="avatar-circle" style="background:'+td.bg+';color:'+td.color+';">'+getInitials(t)+'</div>';
+        h+='<div style="flex:1;min-width:0;">';
+        h+='<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:13px;font-weight:700;">'+t.name+'</span>'+(t.fav?'<i class="bi bi-star-fill" style="color:var(--warning);font-size:11px;"></i>':'');
+        var ur=getUnresolvedIncidents(t.id).length;if(ur>0)h+='<span class="pending-badge"><i class="bi bi-exclamation-circle-fill"></i>'+ur+'</span>';
+        h+='</div>';
+        h+='<div style="font-size:11.5px;color:var(--text-tertiary);margin-top:1px;">'+t.company+'</div>';
+        h+='</div>';
+        h+='<div style="text-align:center;min-width:60px;"><div class="price-tag">$'+t.rate+'</div><div style="font-size:10px;color:var(--text-tertiary);">/hr</div></div>';
+        h+='<div style="text-align:center;min-width:100px;"><div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px;">Priority</div>'+priorityBadgeHTML(t.priority)+'</div>';
+        h+='<div style="text-align:center;min-width:40px;"><span style="font-size:13px;font-weight:700;">'+t.jobs+'</span><div style="font-size:10px;color:var(--text-tertiary);">jobs</div></div>';
+        h+=tradieActionCell(t);
+        h+='</div>';
+      });
+    }
+    h+='</div></div></div>';
+  }
+  /* Show other trades collapsed */
+  getTradesWithTradies().forEach(function(td){
+    if(td.name===openAccTrade)return;
+    var cnt=getTradiesForTrade(td.name).length;
+    h+='<div class="acc-item">';
+    h+='<div class="acc-head" onclick="openCategory(\''+td.name+'\')">';
+    h+='<div class="acc-icon" style="background:'+td.bg+';color:'+td.color+';"><i class="bi '+td.icon+'"></i></div>';
+    h+='<h4>'+td.name+'</h4>';
+    h+='<span class="acc-badge">'+cnt+'</span>';
+    h+='<i class="bi bi-chevron-down acc-chevron"></i>';
+    h+='</div><div class="acc-body"><div class="acc-inner"></div></div></div>';
+  });
+  vc.innerHTML=h;
+}
+
+/* ═══════ TABLE VIEW ═══════ */
+function renderTableContent(vc){
+  var h=renderToolbar(true,true);
+  var list=getFilteredTradies(null);
+  h+='<div class="card-custom" style="padding:0;overflow:hidden;"><div style="overflow-x:auto;">';
+  h+='<table class="table-custom"><thead><tr>';
+  h+='<th onclick="toggleSort(\'name\')" style="width:22%;">Tradie '+(sortField==='name'?(sortAsc?'<i class="bi bi-caret-up-fill"></i>':'<i class="bi bi-caret-down-fill"></i>'):'')+'</th>';
+  h+='<th onclick="toggleSort(\'trade\')" style="width:12%;">Trade '+(sortField==='trade'?(sortAsc?'<i class="bi bi-caret-up-fill"></i>':'<i class="bi bi-caret-down-fill"></i>'):'')+'</th>';
+  h+='<th onclick="toggleSort(\'rate\')" style="width:10%;">Rate '+(sortField==='rate'?(sortAsc?'<i class="bi bi-caret-up-fill"></i>':'<i class="bi bi-caret-down-fill"></i>'):'')+'</th>';
+  h+='<th onclick="toggleSort(\'priority\')" style="width:12%;">Priority '+(sortField==='priority'?(sortAsc?'<i class="bi bi-caret-up-fill"></i>':'<i class="bi bi-caret-down-fill"></i>'):'')+'</th>';
+  h+='<th onclick="toggleSort(\'jobs\')" style="width:8%;">Jobs '+(sortField==='jobs'?(sortAsc?'<i class="bi bi-caret-up-fill"></i>':'<i class="bi bi-caret-down-fill"></i>'):'')+'</th>';
+  h+='<th onclick="toggleSort(\'incidents\')" style="width:10%;">Incidents '+(sortField==='incidents'?(sortAsc?'<i class="bi bi-caret-up-fill"></i>':'<i class="bi bi-caret-down-fill"></i>'):'')+'</th>';
+  h+='<th style="width:10%;">Status</th>';
+  h+='<th style="width:60px;"></th>';
+  h+='</tr></thead><tbody>';
+  if(list.length===0){
+    h+='<tr><td colspan="8"><div class="empty-state"><i class="bi bi-search"></i><h5>No tradies found</h5><p>Try adjusting your search or filters</p></div></td></tr>';
+  }
+  list.forEach(function(t){
+    var inc=getIncidents(t.id);
+    var ur=getUnresolvedIncidents(t.id).length;
+    var td=getTradeDef(t.trade);
+    h+='<tr onclick="openDetail('+t.id+')">';
+    h+='<td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar-circle" style="background:'+td.bg+';color:'+td.color+';width:34px;height:34px;font-size:11px;">'+getInitials(t)+'</div><div>'+(t.fav?'<i class="bi bi-star-fill" style="color:var(--warning);font-size:10px;margin-right:3px;"></i>':'')+'<span style="font-weight:600;">'+t.name+'</span><div style="font-size:11px;color:var(--text-tertiary);">'+t.company+'</div></div></div></td>';
+    h+='<td><span class="incident-type-badge" style="background:'+td.bg+';color:'+td.color+';"><i class="bi '+td.icon+'"></i> '+t.trade+'</span></td>';
+    h+='<td><span class="price-tag">$'+t.rate+'</span><span style="font-size:10px;color:var(--text-tertiary);">/hr</span></td>';
+    h+='<td>'+priorityBadgeHTML(t.priority)+'</td>';
+    h+='<td><span style="font-weight:700;">'+t.jobs+'</span></td>';
+    h+='<td>'+(inc.length>0?'<span style="color:'+(ur>0?'var(--danger)':'var(--text-secondary)')+';font-weight:600;">'+inc.length+(ur>0?' ('+ur+' open)':'')+'</span>':'<span style="color:var(--text-tertiary);">—</span>')+'</td>';
+    h+='<td>'+tradieStatusPill(t)+'</td>';
+    h+='<td onclick="event.stopPropagation();">'+tradieActionCell(t)+'</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div></div>';
+  vc.innerHTML=h;
+}
+
+function toggleSort(f){if(sortField===f)sortAsc=!sortAsc;else{sortField=f;sortAsc=true;}render();}
+
+/* ═══════ DETAIL VIEW ═══════ */
+function openDetail(id){detailView=id;var t=getTradie(id);updateBreadcrumb([{label:'Tradie Management',action:'goGrid()'},{label:t?t.trade:'',action:'goGrid()'},{label:t?t.name:''}]);render();}
+
+function renderDetail(app){
+  var t=getTradie(detailView);
+  if(!t){goHome();return;}
+  var td=getTradeDef(t.trade);
+  var inc=getIncidents(t.id);
+  var h='<button class="back-btn" onclick="goGrid()"><i class="bi bi-arrow-left"></i> Back to Tradies</button>';
+  /* Header card */
+  h+='<div class="card-custom">';
+  h+='<div class="row align-items-center">';
+  h+='<div class="col-auto"><div class="avatar-circle" style="width:56px;height:56px;font-size:18px;border-radius:14px;background:'+td.bg+';color:'+td.color+';">'+getInitials(t)+'</div></div>';
+  h+='<div class="col" style="min-width:0;">';
+  h+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+  h+='<h3 style="font-size:18px;font-weight:800;margin:0;">'+t.name+'</h3>';
+  if(t.fav)h+='<i class="bi bi-star-fill" style="color:var(--warning);font-size:14px;"></i>';
+  h+=tradieStatusPill(t);
+  h+='</div>';
+  h+='<div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;">'+t.company+' &middot; <span class="incident-type-badge" style="background:'+td.bg+';color:'+td.color+';"><i class="bi '+td.icon+'"></i> '+t.trade+'</span></div>';
+  h+='</div>';
+  h+='<div class="col-auto d-flex gap-2 flex-wrap">';
+  h+='<button class="btn-outline-custom btn-sm-custom" onclick="openPriceChangeModal('+t.id+')"><i class="bi bi-tag"></i> Price Change</button>';
+  h+='<button class="btn-outline-custom btn-sm-custom" onclick="openReportIncidentModal('+t.id+')"><i class="bi bi-exclamation-triangle"></i> Report</button>';
+  h+='<button class="btn-warning-custom btn-sm-custom" onclick="openPriorityModal('+t.id+')"><i class="bi bi-shield-exclamation"></i> Set Priority</button>';
+  h+='<button class="btn-danger-custom btn-sm-custom" onclick="openDeleteTradieModal('+t.id+')"><i class="bi bi-trash3"></i> Delete</button>';
+  h+='</div></div></div>';
+
+  /* Info grid */
+  h+='<div class="row g-3 mb-3">';
+  h+='<div class="col-md-8"><div class="card-custom"><div class="section-heading">Contact & Business Details</div>';
+  h+='<div class="detail-grid">';
+  h+='<div><div class="detail-label">Phone</div><div class="detail-value">'+t.phone+'</div></div>';
+  h+='<div><div class="detail-label">Email</div><div class="detail-value" style="font-size:12px;">'+t.email+'</div></div>';
+  h+='<div><div class="detail-label">ABN</div><div class="detail-value">'+t.abn+'</div></div>';
+  h+='<div><div class="detail-label">Joined</div><div class="detail-value">'+fmtDate(t.joined)+'</div></div>';
+  h+='</div>';
+  h+='<div style="margin-top:14px;"><div class="detail-label">Notes</div><div class="detail-value" style="font-weight:400;font-size:12.5px;line-height:1.6;color:var(--text-secondary);">'+t.notes+'</div></div>';
+  h+='</div></div>';
+
+  h+='<div class="col-md-4">';
+  /* Priority card */
+  h+='<div class="card-custom" style="text-align:center;margin-bottom:0;">';
+  h+='<div style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;font-weight:600;letter-spacing:.05em;">Current Priority</div>';
+  h+='<div style="margin:12px 0;">'+priorityBadgeHTML(t.priority)+'</div>';
+  h+='<div style="display:flex;justify-content:center;gap:6px;margin-bottom:14px;"><div class="info-box" style="flex:1;"><div class="ib-label">Hourly Rate</div><div class="ib-val price-tag">$'+t.rate+'</div></div><div class="info-box" style="flex:1;"><div class="ib-label">Total Jobs</div><div class="ib-val">'+t.jobs+'</div></div></div>';
+  h+='<button class="btn-warning-custom" style="width:100%;" onclick="openPriorityModal('+t.id+')"><i class="bi bi-shield-exclamation"></i> Set Priority</button>';
+  h+='</div></div></div>';
+
+  /* Pending approvals for this tradie */
+  var tradiePending=pendingApprovals.filter(function(a){return a.tradieId===t.id;});
+  if(tradiePending.length>0){
+    h+='<div class="card-custom" style="border-color:rgba(245,158,11,.2);background:var(--warning-light);">';
+    h+='<div class="section-heading" style="color:#D97706;"><i class="bi bi-clock-history me-2"></i>Pending Actions ('+tradiePending.length+')</div>';
+    tradiePending.forEach(function(a){
+      var typeLabel=a.type==='price_change'?'Price Change':a.type==='report_incident'?'Incident Report':'Deletion Request';
+      var badgeClass=a.type==='price_change'?'apb-price':a.type==='report_incident'?'apb-incident':'apb-delete';
+      h+='<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(245,158,11,.15);">';
+      h+='<span class="ap-type-badge '+badgeClass+'">'+typeLabel+'</span>';
+      if(a.type==='price_change')h+='<span style="font-size:12px;color:var(--text-secondary);">$'+a.data.oldRate+' → $'+a.data.newRate+'/hr</span>';
+      if(a.type==='report_incident')h+='<span style="font-size:12px;color:var(--text-secondary);">'+a.data.type+' — '+a.data.severity+'</span>';
+      if(a.type==='delete_tradie')h+='<span style="font-size:12px;color:var(--text-secondary);font-style:italic;">"'+escAttr(a.data.reason)+'"</span>';
+      h+='<span class="pending-badge" style="margin-left:auto;"><i class="bi bi-hourglass-split"></i> Awaiting Guri</span>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  /* Incidents */
+  h+='<div class="card-custom"><div class="section-heading">Incidents ('+inc.length+')</div>';
+  if(inc.length===0){
+    h+='<div class="empty-state" style="padding:24px;"><i class="bi bi-shield-check"></i><p>No incidents reported</p></div>';
+  } else {
+    inc.forEach(function(inn){
+      var typeLabels={safety:'Safety',quality:'Quality',behaviour:'Behaviour',attendance:'Attendance',damage:'Damage',other:'Other'};
+      var sevClass={low:'sev-low',medium:'sev-medium',high:'sev-high',critical:'sev-critical'};
+      h+='<div class="incident-row">';
+      h+='<div style="flex:1;"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+      h+='<span class="incident-type-badge it-'+inn.type+'">'+(typeLabels[inn.type]||inn.type)+'</span>';
+      h+='<span class="severity-dot '+(sevClass[inn.severity]||'sev-medium')+'"></span>';
+      h+='<span style="font-size:11px;font-weight:600;text-transform:capitalize;">'+inn.severity+'</span>';
+      if(inn.resolved)h+='<span class="status-pill pill-success" style="font-size:9px;padding:1px 7px;">Resolved</span>';
+      else h+='<span class="status-pill pill-danger" style="font-size:9px;padding:1px 7px;">Open</span>';
+      h+='</div>';
+      h+='<div style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;">'+escAttr(inn.description)+'</div>';
+      h+='<div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px;">Reported by '+inn.reportedBy+' on '+fmtDate(inn.date)+'</div>';
+      if(inn.resolved&&inn.resolution)h+='<div style="font-size:11.5px;color:var(--success);margin-top:4px;"><i class="bi bi-check-circle me-1"></i>'+escAttr(inn.resolution)+'</div>';
+      h+='</div></div>';
+    });
+  }
+  h+='</div>';
+
+  app.innerHTML=h;
+  renderApprovalPanel();
+}
+
+/* ═══════ ADD TRADIE ═══════ */
+function openAddTradie(){
+  var h='<div class="modal-backdrop-custom show" id="addModal" onclick="if(event.target===this)closeModal(\'addModal\')">';
+  h+='<div class="modal-content-custom" style="max-width:560px;">';
+  h+='<div class="modal-header-custom"><h5 style="font-size:15px;font-weight:700;margin:0;"><i class="bi bi-plus-circle me-2" style="color:var(--primary);"></i>Add New Tradie</h5><button class="modal-close" onclick="closeModal(\'addModal\')"><i class="bi bi-x"></i></button></div>';
+  h+='<div class="modal-body-custom">';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+  h+='<div><label class="form-label-custom">Tradie Name <span style="color:var(--danger);">*</span></label><input class="form-input-custom" id="atName" placeholder="e.g. John Smith Electrical"></div>';
+  h+='<div><label class="form-label-custom">Trade <span style="color:var(--danger);">*</span></label><select class="form-input-custom" id="atTrade"><option value="">Select...</option>';
+  TRADES.forEach(function(td){h+='<option value="'+td.name+'">'+td.name+'</option>';});
+  h+='</select></div>';
+  h+='<div><label class="form-label-custom">Company Name</label><input class="form-input-custom" id="atCompany" placeholder="Pty Ltd name"></div>';
+  h+='<div><label class="form-label-custom">ABN</label><input class="form-input-custom" id="atAbn" placeholder="00 000 000 000"></div>';
+  h+='<div><label class="form-label-custom">Phone <span style="color:var(--danger);">*</span></label><input class="form-input-custom" id="atPhone" placeholder="+61 400 000 000"></div>';
+  h+='<div><label class="form-label-custom">Email</label><input class="form-input-custom" id="atEmail" placeholder="email@example.com"></div>';
+  h+='<div><label class="form-label-custom">Hourly Rate ($) <span style="color:var(--danger);">*</span></label><input type="number" class="form-input-custom" id="atRate" min="0" placeholder="e.g. 85"></div>';
+  h+='<div><label class="form-label-custom">Priority <span style="color:var(--danger);">*</span></label><select class="form-input-custom" id="atPriority"><option value="Low">Low</option><option value="Medium" selected>Medium</option><option value="High">High</option></select></div>';
+  h+='</div>';
+  h+='<div style="margin-top:12px;"><label class="form-label-custom">Notes</label><textarea class="form-input-custom" id="atNotes" placeholder="Any additional notes..." rows="2"></textarea></div>';
+  h+='</div>';
+  h+='<div class="modal-footer-custom"><button class="btn-outline-custom" onclick="closeModal(\'addModal\')">Cancel</button><button class="btn-primary-custom" onclick="submitAddTradie()"><i class="bi bi-plus-lg"></i> Add Tradie</button></div>';
+  h+='</div></div>';
+  document.getElementById('modalRoot').innerHTML=h;
+}
+
+function submitAddTradie(){
+  var name=document.getElementById('atName').value.trim();
+  var trade=document.getElementById('atTrade').value;
+  var phone=document.getElementById('atPhone').value.trim();
+  var rate=parseInt(document.getElementById('atRate').value);
+  var priority=document.getElementById('atPriority').value;
+  if(!name){toast('Please enter a tradie name','warning');return;}
+  if(!trade){toast('Please select a trade','warning');return;}
+  if(!phone){toast('Please enter a phone number','warning');return;}
+  if(!rate||rate<=0){toast('Please enter a valid hourly rate','warning');return;}
+  tradies.push({
+    id:nextId++,name:name,company:document.getElementById('atCompany').value.trim()||name,trade:trade,
+    phone:phone,email:document.getElementById('atEmail').value.trim(),abn:document.getElementById('atAbn').value.trim(),
+    rate:rate,priority:priority,jobs:0,fav:false,active:true,joined:new Date().toISOString().split('T')[0],
+    notes:document.getElementById('atNotes').value.trim()
+  });
+  closeModal('addModal');document.getElementById('modalRoot').innerHTML='';
+  toast(name+' added successfully','success');render();
+}
+
+/* ═══════ EXPORT CSV ═══════ */
+function exportCSV(){
+  var header='Name,Company,Trade,Phone,Email,ABN,Rate,Priority,Jobs,Favourite,Active,Joined\n';
+  var rows=tradies.map(function(t){return '"'+t.name+'","'+t.company+'","'+t.trade+'","'+t.phone+'","'+t.email+'","'+t.abn+'",'+t.rate+',"'+t.priority+'",'+t.jobs+','+(t.fav?'Yes':'No')+','+(t.active?'Yes':'No')+','+t.joined;});
+  var blob=new Blob([header+rows.join('\n')],{type:'text/csv'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tradies_export.csv';a.click();
+  toast('CSV exported successfully','success');
+}
+
+/* ═══════ GLOBAL CLICK HANDLER ═══════ */
+document.addEventListener('click',function(e){
+  /* Close dropdowns */
+  if(activeDropdown!==null&&!e.target.closest('.dropdown-menu-custom')&&!e.target.closest('.btn-icon')){
+    activeDropdown=null;render();
+  }
+  /* Close approval panel */
+  if(showApprovalPanel&&!e.target.closest('#bellWrapper')){
+    showApprovalPanel=false;renderApprovalPanel();
+  }
+});
+
+/* ═══════ INIT ═══════ */
+render();
+</script>
+</body>
+</html>

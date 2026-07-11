@@ -26,6 +26,25 @@ export default function PreviewStep({
 }: PreviewStepProps) {
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center pt-2">
+        <Button
+          variant="outline"
+          onClick={() => {
+            setEmailTemplateId(null);
+            setTemplateSection('ai-generated');
+            setCurrentStep(1);
+          }}
+          className="border-slate-300"
+        >
+          Back to Compose
+        </Button>
+        <Button className="bg-[#C6923A] text-white hover:bg-[#C6923A]/90" onClick={handleNextToSend} >
+          {/* {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} */}
+          {/* <Loader2 className="mr-2 h-4 w-4 animate-spin" /> */}
+          {/* {templateSection === 'default-react-email' ? 'Next & Proceed' : isSaving ? 'Saving...' : 'Next: Saved & Proceed'} */}
+          Next & Proceed for sending Campaign
+        </Button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {templateSection !== 'default-react-email' && (
           <div className="rounded-lg border border-[#E2E8F0] bg-white p-4 shadow-sm">
@@ -69,26 +88,6 @@ export default function PreviewStep({
             )}
           </div>
         </div>
-      </div>
-
-      <div className="flex justify-between items-center pt-2">
-        <Button
-          variant="outline"
-          onClick={() => {
-            setEmailTemplateId(null);
-            setTemplateSection('ai-generated');
-            setCurrentStep(1);
-          }}
-          className="border-slate-300"
-        >
-          Back to Compose
-        </Button>
-        <Button className="bg-[#C6923A] text-white hover:bg-[#C6923A]/90" onClick={handleNextToSend} >
-          {/* {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} */}
-          {/* <Loader2 className="mr-2 h-4 w-4 animate-spin" /> */}
-          {/* {templateSection === 'default-react-email' ? 'Next & Proceed' : isSaving ? 'Saving...' : 'Next: Saved & Proceed'} */}
-           Next & Proceed for sending Campaign
-        </Button>
       </div>
     </div>
   );

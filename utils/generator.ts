@@ -49,3 +49,59 @@ export const randomColourHexGenerator = (key: string): string => {
   const index = Math.abs(hash) % PIE_CHART_COLORS.length;
   return PIE_CHART_COLORS[index];
 }
+
+
+/**
+ * Generates a deterministic SHA-256 checksum for an email.
+ *
+ * The checksum is generated from a normalized representation of the
+ * email's subject, body, and sender to ensure semantically identical
+ * emails produce the same hash despite differences in casing or
+ * whitespace.
+ *
+ * @param subject - Email subject.
+ * @param body - Email body.
+ * @param from - Sender email address.
+ * @returns A hexadecimal SHA-256 checksum.
+ */
+export async function generateEmailChecksum(
+  subject: string,
+  body: string,
+  from: string,
+  to: string,
+): Promise<string> {
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      // Normalize line endings
+      .replace(/\r\n/g, "\n")
+      // Remove mailto duplicates:
+      // test@gmail.com<mailto:test@gmail.com>
+      .replace(
+        /([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})<mailto:\1>/gi,
+        "$1"
+      )
+      // Remove remaining html tags
+      .replace(/<[^>]*>/g, "")
+      // Remove invisible chars
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      // Collapse whitespace
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const payload = JSON.stringify({
+    to: normalize(to),
+    from: normalize(from),
+    subject: normalize(subject),
+    body: normalize(body),
+  });
+
+  const buffer = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(payload)
+  );
+
+  return [...new Uint8Array(buffer)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}

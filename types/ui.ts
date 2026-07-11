@@ -4,6 +4,7 @@ export type NavItem = {
   slug: string;
   label: string;
   icon: ReactNode;
+  checkAdmin?: boolean;
 };
 
 export type ProjectDetailKpi = {
@@ -124,7 +125,6 @@ export type SiteUpdateItem = {
 export type TradieItem = {
   id: string;
   trade: string;
-  company: string;
   contact: string;
   needed: string;
   scheduled: string;

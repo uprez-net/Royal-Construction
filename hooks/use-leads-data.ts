@@ -6,6 +6,7 @@ import {
   fetchLeadsStats,
   fetchLeadAnalyticsData,
 } from "@/lib/leads/leads-service";
+import type { LeadEmails } from "@prisma/client";
 
 interface PageInfo {
   page: number;
@@ -155,6 +156,22 @@ export function useLeadsData() {
     setLeads(next);
   }, []);
 
+  const appendEmailToLead = useCallback(
+    (leadId: number, newEmail: LeadEmails) => {
+      setLeads((prev) =>
+        prev.map((lead) =>
+          lead.id === leadId
+            ? {
+              ...lead,
+              emails: [newEmail, ...lead.emails]
+            }
+            : lead,
+        ),
+      );
+    },
+    [],
+  );
+
   return {
     leads,
     stats,
@@ -170,5 +187,6 @@ export function useLeadsData() {
     removeLeadFromList,
     prependLead,
     replaceLeads,
+    appendEmailToLead,
   };
 }

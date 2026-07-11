@@ -19,13 +19,15 @@ interface ProjectPaymentsTabProps {
 
 export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
   const newProject = project.milestones.length === 0;
-  const summary = newProject ? {
-    totalBilled: 0,
-    cleared: 0,
-    outstanding: 0,
-    remainingContract: 0,
-  } : projectPaymentsMock.summary;
-  const invoices = newProject ? [] : projectPaymentsMock.invoices;
+  const summary = newProject
+    ? projectPaymentsMock.summary
+    : {
+        totalBilled: 0,
+        cleared: 0,
+        outstanding: 0,
+        remainingContract: 0,
+      };
+  const invoices = newProject ? projectPaymentsMock.invoices : [];
 
   return (
     <section className="space-y-4">
@@ -49,7 +51,7 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
             <div className="flex gap-2">
               <Button
                 size="sm"
-                className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
+                className="h-9 rounded-lg bg-teal-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-teal-700"
               >
                 <Send className="mr-1 size-4" />
                 Send Invoice
@@ -57,7 +59,7 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-9 rounded-lg px-[14px] text-[12.5px] font-semibold"
+                className="h-9 rounded-lg px-3.5 text-[12.5px] font-semibold"
               >
                 <Download className="mr-1 size-4" />
                 Export

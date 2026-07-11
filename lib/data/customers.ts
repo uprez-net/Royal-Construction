@@ -125,14 +125,15 @@ export async function findCustomerById(customerId: string) {
  * @param phone 
  * @returns Customer
  */
-export async function findCustomerByContact(email?: string | null, phone?: string | null) {
+export async function findCustomerByContact(email?: string | null, phone?: string | null, tx?: Prisma.TransactionClient) {
+    const prismClient = tx ?? prisma;
     if (email) {
-        const customer = await prisma.customer.findUnique({ where: { email } });
+        const customer = await prismClient.customer.findUnique({ where: { email } });
         if (customer) return customer;
     }
 
     if (phone) {
-        const customer = await prisma.customer.findUnique({ where: { phone } });
+        const customer = await prismClient.customer.findUnique({ where: { phone } });
         if (customer) return customer;
     }
 
@@ -145,14 +146,15 @@ export async function findCustomerByContact(email?: string | null, phone?: strin
  * @throws Error if customer creation fails
  * Also triggers revalidation of the customers cache to ensure new customer appears in dropdowns.
  */
-export async function createCustomerForProject(input: { name: string; email: string; phone: string }) {
+export async function createCustomerForProject(input: { name: string; email: string; phone: string }, tx?: Prisma.TransactionClient) {
 
-    const existing = await findCustomerByContact(input.email, input.phone);
+    const prismClient = tx ?? prisma;
+    const existing = await findCustomerByContact(input.email, input.phone, tx);
     if (existing) {
         return existing;
     }
 
-    const customer = await prisma.customer.create({
+    const customer = await prismClient.customer.create({
         data: {
             name: input.name,
             email: input.email,

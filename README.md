@@ -1,4 +1,4 @@
-# Royal Construction
+# Royal Constructions
 
 Construction management portal for coordinating projects, tradies, site updates, and customer workflows. Built with Next.js App Router, Clerk authentication, Prisma on PostgreSQL, and a hybrid server/client architecture.
 

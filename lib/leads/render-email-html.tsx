@@ -39,7 +39,10 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
   const name = lead?.name ?? 'Homeowner';
   const type = Array.isArray(lead?.type) ? lead.type[0] ?? 'New Home Build' : lead?.type ?? 'New Home Build';
   const location = lead?.location ?? 'NSW';
-  const notes = lead?.notes ?? 'Discussed initial design preferences and project scope.';
+  const notes =
+    lead?.notes?.trim()
+      ? lead.notes
+      : 'Discussed initial design preferences and project scope.';
   const project = `${type} at ${location}`;
   const amount = (lead?.budget && lead.budget !== 'Not Discussed') ? lead.budget : 'TBD';
   const today = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -74,8 +77,8 @@ export async function renderEmailHtml(category: string, lead: LeadPreview | null
       component = <FollowUpEmail name={name} type={type} location={location} notes={notes} scheduleCallUrl={bookingUrl} leadContext={leadContext} />;
       break;
     case 'Welcome':
-        component = <WelcomeEmail name={name} bookingUrl={bookingUrl} leadContext={leadContext} />;
-        break;
+      component = <WelcomeEmail name={name} bookingUrl={bookingUrl} leadContext={leadContext} />;
+      break;
     case 'Quotation':
       component = <QuotationEmail clientName={name} projectName={project} location={location} totalAmount={amount} validityPeriod="6-8 months" leadContext={leadContext} />;
       break;

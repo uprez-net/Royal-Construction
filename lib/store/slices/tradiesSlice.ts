@@ -17,14 +17,7 @@ import type {
 } from "@/types/project";
 import { fetchJson } from "@/utils/fetch";
 import { ProjectLookupItem } from "@/lib/data/projects";
-
-export type CreateScheduleRequest = {
-  tradieId: string;
-  projectId: string;
-  milestoneId?: string;
-  scheduledDate: string;
-  durationDays?: number;
-};
+import { CreateTradieScheduleInput } from "@/utils/validators/tradies";
 
 type UpdateScheduleStatusRequest = {
   scheduleId: string;
@@ -226,7 +219,7 @@ export const fetchTradieProjectLookup = createAsyncThunk<
 
 export const createTradieSchedule = createAsyncThunk<
   TradieScheduleListItem,
-  CreateScheduleRequest
+  CreateTradieScheduleInput
 >("tradies/createSchedule", async (payload) => {
   const response = await fetchJson<TradieScheduleListItem>(
     "/api/tradie-schedules",

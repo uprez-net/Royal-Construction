@@ -3,11 +3,40 @@ import type { Notification } from "@novu/js";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
-import { Archive, Bell, CheckCheck } from "lucide-react";
+import { Archive, Bell, CheckCheck, SquareArrowOutUpRight } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 type NotificationItemExtended = Notification & { payload?: string };
+
+const isAdminApprovalNotification = (url: string): boolean => {
+  if (url.includes("admin-approvals")) {
+    return true;
+  }
+  return false;
+};
+
+const getApprovalIdAndTypeFromUrl = (
+  url: string,
+): { approvalId: string; approvalType: string } => {
+  const queryString = (url.startsWith("/") ? url.slice(1) : url).replaceAll(
+    "&amp;",
+    "&",
+  );
+
+  const params = new URLSearchParams(queryString);
+  return {
+    approvalId: params.get("approvalId")!,
+    approvalType: params.get("approvalType")!,
+  };
+};
+
+const cleanUrl = (url: string): string => {
+  const cleanedUrl = url.replaceAll("&amp;", "&");
+  return cleanedUrl;
+};
 
 export function NotificationItem({
   n,
@@ -22,6 +51,7 @@ export function NotificationItem({
   handleArchive: (id: string) => Promise<void>;
   close: () => void;
 }) {
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const title = n.subject ?? "No title";
   const body = n.body ?? "";
@@ -32,6 +62,22 @@ export function NotificationItem({
     >);
   const createdAt = n.createdAt ? new Date(n.createdAt) : null;
   const isBusy = busyId === n.id;
+  const isAdminApproval = url ? isAdminApprovalNotification(url) : false;
+
+  const handleAdminApprovalAction = () => {
+    if (isAdminApproval) {
+      const { approvalId, approvalType } = getApprovalIdAndTypeFromUrl(url);
+      dispatch(
+        openModal({
+          type: "adminApproval",
+          payload: {
+            approvalId,
+            approvalType,
+          },
+        }),
+      );
+    }
+  };
 
   return (
     <div
@@ -41,9 +87,9 @@ export function NotificationItem({
           if (!n.isRead) handleMarkOne(n.id);
           // If it's an internal link, use router.push for faster navigation
           if (target === "_self") {
-            router.push(url);
+            router.push(cleanUrl(url));
           } else {
-            window.open(url, target, "noopener,noreferrer");
+            window.open(cleanUrl(url), target, "noopener,noreferrer");
           }
           close();
         }
@@ -70,7 +116,7 @@ export function NotificationItem({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900">
+              <p className="text-sm font-semibold text-slate-900 wrap-break-word">
                 {title}
               </p>
               {createdAt && (
@@ -128,9 +174,10 @@ export function NotificationItem({
               </Tooltip>
             </div>
           </div>
-
           {body && (
-            <p className="mt-2 line-clamp-2 text-sm text-slate-600">{body}</p>
+            <p className="mt-2 text-sm text-slate-600 wrap-break-word">
+              {body}
+            </p>
           )}
 
           {(url || (n as NotificationItemExtended)?.payload) && (
@@ -144,6 +191,20 @@ export function NotificationItem({
                   <span className="rounded-full border border-[#E2E8F0] bg-[#FAF8F3] px-2 py-0.5 text-slate-500">
                     Read
                   </span>
+                )}
+                {isAdminApproval && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-sm border-[#C6923A] text-[#C6923A] hover:bg-[#F7F4EE] hover:text-[#8B6420] flex items-center gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent the click from propagating to the parent div
+                      handleAdminApprovalAction();
+                    }}
+                  >
+                    <SquareArrowOutUpRight />
+                    Details
+                  </Button>
                 )}
               </div>
             </div>

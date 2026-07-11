@@ -155,6 +155,7 @@ export function ScheduleTradieModal({
             milestoneId: milestoneId || undefined,
             scheduledDate,
             durationDays: Number(durationDays),
+            requiresQuote: false,
           }),
         )
           .unwrap()
@@ -176,6 +177,7 @@ export function ScheduleTradieModal({
             milestoneId: milestoneId || undefined,
             scheduledDate,
             durationDays: Number(durationDays),
+            requiresQuote: false,
           }),
         )
           .unwrap()
@@ -313,10 +315,21 @@ export function ScheduleTradieModal({
                 Duration in Days
               </label>
               <Input
-                type="number"
-                min="1"
+                type="text"
+                inputMode="numeric"
                 value={durationDays}
-                onChange={(event) => setDurationDays(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  // allow empty so backspace works
+                  if (value === "") {
+                    setDurationDays("");
+                    return;
+                  }
+                  // only positive whole numbers
+                  if (/^[1-9]\d*$/.test(value)) {
+                    setDurationDays(value);
+                  }
+                }}
                 required
               />
             </div>

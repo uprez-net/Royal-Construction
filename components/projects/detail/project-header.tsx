@@ -1,13 +1,23 @@
 import Link from "next/link";
-import { ArrowLeft, Mail, MapPin, Phone, Printer, UserRound, MessageCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, Mail, MapPin, Phone, Printer, ShieldCheck, UserRound, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ProjectDetail } from "@/types/project";
+
+type ProjectRequirementsHeader = {
+  legalAdministration?: {
+    siteAddress?: string;
+    signedDate?: string;
+    pcaInspector?: string;
+  };
+};
 
 export function ProjectHeader({
   project,
 }: {
   project: ProjectDetail;
 }) {
+  const requirements = (project.requirements ?? {}) as ProjectRequirementsHeader;
+
   return (
     <section className="relative overflow-hidden rounded-xl border border-teal-600/20 bg-gradient-to-br from-teal-600 via-teal-700 to-teal-900 p-6 px-7 text-white shadow-sm">
       <div className="pointer-events-none absolute -right-10 -top-10 size-[200px] rounded-full bg-white/5" />
@@ -22,15 +32,26 @@ export function ProjectHeader({
             <h2 className="text-[22px] font-extrabold leading-none tracking-tight">{project.name}</h2>
             <div className="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold text-white">
               <span className="mr-1 inline-block size-2.5 rounded-full bg-green-400" />
-              On Track
+              {project.status.replaceAll("_", " ")}
             </div>
           </div>
-          <p className="text-[13px] text-white/85 flex flex-wrap items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-3 pt-1 text-[13px] text-white/85">
             <span className="inline-flex items-center gap-1">
               <MapPin className="size-3.5" />
-              {project.location}
+              {requirements.legalAdministration?.siteAddress || project.location}
             </span>
             <span className="text-white/50">|</span>
+            <span className="inline-flex items-center gap-1">
+              <CalendarDays className="size-3.5" />
+              Signed {requirements.legalAdministration?.signedDate || "Not set"}
+            </span>
+            <span className="text-white/50">|</span>
+            <span className="inline-flex items-center gap-1">
+              <ShieldCheck className="size-3.5" />
+              PCA {requirements.legalAdministration?.pcaInspector || "Not set"}
+            </span>
+          </div>
+          <p className="text-[13px] text-white/85 flex flex-wrap items-center gap-2 pt-1">
             <span className="inline-flex items-center gap-1">
               <UserRound className="size-3.5" />
               {project.customer.name}

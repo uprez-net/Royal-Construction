@@ -1,9 +1,12 @@
-import { createGraphContext } from '@/lib/graph/client';
+import { createGraphContext, GraphMessage } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
 import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
 import { Prisma } from '@prisma/client';
+import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
+import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
+import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 import { evaluateEmail } from '@/utils/spam-detector';
 
 // export const runtime = 'nodejs';
@@ -46,25 +49,88 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
   }
 }
 
-async function CheckLeadPresentwithEmailPhone(Email: string, ContactNo: string): Promise<boolean> {
-  const orConditions: Prisma.LeadWhereInput[] = [];
-  if (Email && Email.trim() !== "") {
-    orConditions.push({ email: Email.trim() });
-  }
-  if (ContactNo && ContactNo.trim() !== "" && ContactNo.trim() !== "0") {
-    orConditions.push({ phone: ContactNo.trim() });
-  }
+async function isTradieMessage(fromEmail: string): Promise<boolean> {
   try {
-    const existingLead = await prisma.lead.findFirst({
+    const existingTradie = await prisma.tradie.findUnique({
       where: {
-        OR: orConditions,
-      },
+        email: fromEmail,
+      }
     });
-    return existingLead !== null;
+    return existingTradie !== null;
   } catch (error) {
-    console.error(`Error checking if lead with Email ${Email} or ContactNo ${ContactNo} is present:`, error);
+    console.error(`Error checking if fromEmail ${fromEmail} is a tradie message:`, error);
     return false;
   }
+}
+
+/**
+ * Checks whether a lead already exists by matching:
+ * - sender email
+ * - recipient emails
+ * - contact number
+ *
+ * Returns true if any matching lead exists.
+ *
+ * @param fromEmail - Email address of the sender
+ * @param toEmails - Recipient email addresses
+ * @param contactNo - Extracted contact number
+ */
+export async function checkLeadPresentWithEmailPhone(
+  fromEmail?: string,
+  toEmails: string[] = [],
+  contactNo?: string
+): Promise<boolean> {
+  const orConditions: Prisma.LeadWhereInput[] = [];
+
+  const normalizedFromEmail = fromEmail?.trim().toLowerCase();
+  const normalizedContactNo = contactNo?.trim();
+
+  const normalizedToEmails = toEmails
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (normalizedFromEmail) {
+    orConditions.push({
+      email: {
+        equals: normalizedFromEmail,
+        mode: "insensitive",
+      },
+    });
+  }
+
+  if (normalizedToEmails.length > 0) {
+    orConditions.push({
+      email: {
+        in: normalizedToEmails,
+        mode: "insensitive",
+      },
+    });
+  }
+
+  if (
+    normalizedContactNo &&
+    normalizedContactNo !== "0"
+  ) {
+    orConditions.push({
+      phone: normalizedContactNo,
+    });
+  }
+
+  // Nothing useful to search with
+  if (orConditions.length === 0) {
+    return false;
+  }
+
+  const existingLead = await prisma.lead.findFirst({
+    where: {
+      OR: orConditions,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return Boolean(existingLead);
 }
 
 function handleValidationToken(request: Request): Response | null {
@@ -142,7 +208,7 @@ export async function POST(request: Request): Promise<Response> {
       console.log(`  tenantId: ${notification.tenantId ?? 'unknown'}`);
 
       if (graphClient && notification.resource) {
-        let message = null;
+        let message: GraphMessage | null = null;
         let attempt = 0;
         const maxAttempts = 3;
 
@@ -177,20 +243,81 @@ export async function POST(request: Request): Promise<Response> {
               `  body(${contentType}): ${content || '[no body]'}`,
             );
 
-            const emailEvaluation = evaluateEmail(message.subject ?? '', content, { from: message.from });
-            if (!emailEvaluation.shouldEvaluate) {
-              console.log(`  Email evaluation scored ${emailEvaluation.score}. Language: ${emailEvaluation.language ?? 'unknown'}.`);
-              console.log(` Email evaluation signals: ${emailEvaluation.signals.map(signal => `${signal.code} (${signal.delta}): ${signal.reason}`).join('; ')}`);
-              console.log(`  Email evaluation indicates this message is likely spam. Reasons: ${emailEvaluation.reasons.join(', ')}`);
-              continue; // Skip processing this message
-            }
-
             // Check if this message was already processed before calling the LLM extraction
             if (message.id && await isMessageAlreadyProcessed(message.id)) {
               console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
               continue;
             }
 
+            // Check if the message is from a tradie and extract tradie schedule info
+            if (message.from && await isTradieMessage(message.from)) {
+              const tradie = await prisma.tradie.findUnique({
+                where: { email: message.from },
+              });
+              const tradieSchedules = await prisma.tradieSchedule.findMany({
+                where: {
+                  tradieId: tradie!.id,
+                  status: {
+                    not: {
+                      in: ['DECLINED', 'AWAITING_ADMIN_APPROVAL', 'CONFIRMED', 'QUOTE_RECEIVED']
+                    }
+                  } // Only consider non-declined schedules 
+                },
+              });
+              console.log(`  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`);
+              if (tradieSchedules.length === 0) {
+                console.log(`  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`);
+                continue;
+              }
+              console.log(`  Message from ${message.from} is identified as a tradie message. Skipping lead extraction.`);
+              const tradieInfo = await extractTradieScheduleInfoFromMessage(message.subject ?? '', content);
+              if (!tradieInfo) {
+                console.log('  No tradie schedule information could be extracted from the message.');
+                continue;
+              }
+              console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
+              const schedule = await prisma.tradieSchedule.findFirst({
+                where: {
+                  tradieId: tradie!.id,
+                  scheduledDate: new Date(tradieInfo.scheduleDate),
+                  project: {
+                    location: {
+                      contains: tradieInfo.projectLocation ?? "",
+                      mode: "insensitive",
+                    },
+                  },
+                },
+              });
+              if (!schedule) {
+                console.log(`  Tradie schedule already exists for tradieId: ${tradie!.id}, scheduleDate: ${tradieInfo.scheduleDate}, projectLocation: ${tradieInfo.projectLocation}. Skipping duplicate processing.`);
+                continue;
+              }
+              const status = tradieInfo.scheduleConfirmation
+                ? tradieInfo.scheduleQuote != null
+                  ? "QUOTE_RECEIVED"
+                  : "AWAITING_ADMIN_APPROVAL"
+                : "DECLINED";
+              await updateTradieSchedule(schedule.id, {
+                status,
+                quote: tradieInfo.scheduleQuote ?? undefined,
+              });
+              continue;
+            }
+
+            //Check if the message is part of a lead trail
+            if (await checkLeadPresentWithEmailPhone(message.from, message.to, "")) {
+              console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
+              await saveLeadEmailTrail({
+                from: message.from,
+                to: process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au',
+                subject: message.subject,
+                body: content,
+                sentAt: new Date(message.receivedDateTime),
+              });
+              continue;
+            }
+
+            // Check if the message subject matches any of the predefined lead subject lines
             const normalizedSubject = (message.subject ?? "")
               .trim()
               .toLowerCase()
@@ -201,6 +328,15 @@ export async function POST(request: Request): Promise<Response> {
                 `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
               );
               continue;
+            }
+
+            // Evaluate the email for spam likelihood before proceeding with lead extraction
+            const emailEvaluation = evaluateEmail(message.subject ?? '', content, message.headers);
+            if (!emailEvaluation.shouldEvaluate) {
+              console.log(`  Email evaluation scored ${emailEvaluation.score}. Language: ${emailEvaluation.language ?? 'unknown'}.`);
+              console.log(` Email evaluation signals: ${emailEvaluation.signals.map(signal => `${signal.code} (${signal.delta}): ${signal.reason}`).join('; ')}`);
+              console.log(`  Email evaluation indicates this message is likely spam. Reasons: ${emailEvaluation.reasons.join(', ')}`);
+              continue; // Skip processing this message
             }
 
             const extracted = await extractLeadFromMessage(
@@ -215,7 +351,8 @@ export async function POST(request: Request): Promise<Response> {
                 if (message.id && await isMessageAlreadyProcessed(message.id)) {
                   console.log(`  Lead with MicrosoftmessageId: ${message.id} was already processed while extracting. Aborting database save.`);
                   continue;
-                } else if (await CheckLeadPresentwithEmailPhone(extracted.Email, extracted.ContactNo == null ? "" : String(extracted.ContactNo))) {
+                }
+                else if (await checkLeadPresentWithEmailPhone(extracted.Email, [], extracted.ContactNo == null ? "" : String(extracted.ContactNo))) {
                   console.log(`  Lead with Email: ${extracted.Email} or ContactNo: ${extracted.ContactNo} already exists in database. Aborting database save.`);
                   continue;
                 }

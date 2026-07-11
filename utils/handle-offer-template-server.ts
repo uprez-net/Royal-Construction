@@ -100,7 +100,7 @@ export const generateSafeOfferHTMLServer = ({
     const safeContractAmount = safeText(contractAmount);
     const safeValidUntil = safeText(validUntil);
     const welcomeMarkup = projectWelcomeMessage
-        ? safeText(projectWelcomeMessage)
+        ? safeText(projectWelcomeMessage.replaceAll(/\\n/g, "<br>") )
         : '<span class="empty">No welcome message provided.</span>';
 
     const body = `
