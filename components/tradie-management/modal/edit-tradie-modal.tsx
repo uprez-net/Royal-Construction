@@ -50,7 +50,7 @@ const updateTradieSchema = z.object({
       (value) => AU_PHONE_REGEX.test(normalizePhone(value)),
       "Enter a valid Australian number, e.g. 04XX XXX XXX or 02 XXXX XXXX",
     ),
-  location: z.string().min(2, "Location is required"),
+  location: z.string().min(2, "Location is required").optional(),
   note: z.string().max(500, "Notes cannot exceed 500 characters").optional(),
 });
 
@@ -250,6 +250,9 @@ export default function EditTradieModal({
                   handleInputChange("location", suggestion.address);
                 }}
               />
+              {errors.location && (
+                <p className="text-xs text-destructive">{errors.location}</p>
+              )}
             </div>
 
             <div className="space-y-2 md:col-span-2">
