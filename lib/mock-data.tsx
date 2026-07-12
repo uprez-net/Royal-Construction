@@ -28,11 +28,11 @@ export const navigationItems: NavItem[] = [
     icon: <LayoutDashboard className="size-4" />,
   },
   { slug: "leads", label: "Leads", icon: <Megaphone className="size-4" /> },
-  {
-    slug: "email-ad-hock",
-    label: "Ad-hoc Email",
-    icon: <Mail className="size-4" />,
-  },
+  // {
+  //   slug: "email-ad-hock",
+  //   label: "Ad-hoc Email",
+  //   icon: <Mail className="size-4" />,
+  // },
   // {
   //   slug: "quotations",
   //   label: "Quotations",

@@ -3,7 +3,12 @@
 import { Sparkles } from "lucide-react";
 import { useState , useEffect} from "react";
 
-export function GeneratingModal() {
+interface GeneratingModalProps {
+  /** When true, renders inside a parent container instead of as a full-screen overlay */
+  contained?: boolean;
+}
+
+export function GeneratingModal({ contained = false }: GeneratingModalProps) {
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
 
@@ -17,7 +22,7 @@ export function GeneratingModal() {
 
   useEffect(() => {
     // Simulate a smooth progress bar over ~20 seconds
-    const duration = 20000; 
+    const duration = 2000; 
     const interval = 100;
     const step = 100 / (duration / interval);
 
@@ -41,16 +46,24 @@ export function GeneratingModal() {
   }, [messages.length]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md">
-      <div className="relative flex flex-col items-center gap-8 rounded-2xl border border-[#E2E8F0] bg-white px-12 py-10 shadow-2xl sm:max-w-md w-full mx-4 overflow-hidden">
+    <div className={
+      contained
+        ? "flex items-center justify-center py-10"
+        : "fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md"
+    }>
+      <div className={
+        contained
+          ? "relative flex flex-col items-center gap-8 w-full max-w-sm overflow-hidden px-6 py-8"
+          : "relative flex flex-col items-center gap-8 rounded-2xl border border-[#E2E8F0] bg-white px-12 py-10 shadow-2xl sm:max-w-md w-full mx-4 overflow-hidden"
+      }>
         
         {/* Decorative background glow */}
-        <div className="absolute -top-20 left-1/2 -translate-x-1/2 h-64 w-64 rounded-full bg-[#C6923A]/20 blur-3xl transition-all animate-pulse"></div>
+        <div className="absolute -top-20 left-1/2 -translate-x-1/2 h-64 w-64 rounded-full blur-3xl transition-all animate-pulse"></div>
 
         {/* Animated Icon Container */}
         <div className="relative flex h-24 w-24 items-center justify-center">
           {/* Rotating Ring */}
-          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#C6923A] border-r-[#C6923A]/50 animate-spin" style={{ animationDuration: '1.5s' }}></div>
+          <div className="absolute inset-0 rounded-full border-2 border-transparent animate-spin" style={{ animationDuration: '1.5s' }}></div>
           
           {/* Inner Pulsing Circle */}
           <div className="absolute inset-2 rounded-full bg-[#F7F6F2] border border-[#E2E8F0] animate-pulse"></div>

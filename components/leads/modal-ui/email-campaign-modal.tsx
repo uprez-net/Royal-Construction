@@ -8,12 +8,15 @@ import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
 import { sendEmailToLead, fetchAllLeads } from "@/lib/leads/leads-service";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import {
-  hydrateSubject,
+  hydrateVariable,
   previewTemplateText,
   getTemplateDescription,
 } from "@/lib/leads/lead-helpers";
 import { Button } from "@/components/ui/button";
 import { ReactEmailIframe } from "../render-email";
+import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
+import { CustomTemplateCreation } from "./custom-template-creation";
+import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
 
 interface EmailCampaignModalProps {
   leads: Lead[];
@@ -22,7 +25,7 @@ interface EmailCampaignModalProps {
   showToast: (msg: string, type?: "success" | "info" | "error") => void;
 }
 
-type Step = "select" | "compose";
+type Step = "select" | "compose" | "custom";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -46,6 +49,22 @@ export function EmailCampaignModal({
   const [emailTargetList, setEmailTargetList] = useState("");
   const [loadingTargets, setLoadingTargets] = useState(true);
   const [showRecipients, setShowRecipients] = useState(false);
+  const emailIframeRef = React.useRef<HTMLIFrameElement>(null);
+  const hook = useEmailAdHock();
+
+  // ─── Auto-transition to Compose when AI finishes ───
+  useEffect(() => {
+    if (hook.templateName && hook.generatedHtml && hook.emailSubject) {
+      setSubjectTemplate(hook.emailSubject);
+      // Create a dummy template object so the compose step recognizes it
+      setSelectedTemplate({
+        id: -1,
+        category: "custom",
+        subject: hook.emailSubject,
+      } as EmailTemplate);
+      setStep("compose");
+    }
+  }, [hook.templateName, hook.generatedHtml, hook.emailSubject]);
 
   const invalidTargets = useMemo(
     () => emailTargets.filter((email) => !EMAIL_PATTERN.test(email.trim())),
@@ -106,48 +125,67 @@ export function EmailCampaignModal({
         const batch = allLeads.slice(index, index + batchSize);
         const batchResults = await Promise.all(
           batch.map(async (lead) => {
-          if (!lead.email) return lead;
+            if (!lead.email) return lead;
+            let finalHtmlBody = "";
+            try {
+              const subject = hydrateVariable(subjectTemplate, lead);
+              const iframeDoc = emailIframeRef.current?.contentDocument;
+              if (iframeDoc) {
+                // Clean up DOM artifacts from interactive preview
+                iframeDoc.querySelectorAll('.rc-hover-toolbar').forEach(t => t.remove());
+                iframeDoc.querySelectorAll('a, button').forEach(el => {
+                  (el as HTMLElement).style.outline = '';
+                  (el as HTMLElement).style.outlineOffset = '';
+                });
+                iframeDoc.body.contentEditable = 'false';
 
-          try {
-            const subject = hydrateSubject(subjectTemplate, lead);
-            const finalHtml = await renderEmailHtml(
-              selectedTemplate.category,
-              lead,
-            );
+                let cleanHtml = iframeDoc.body.innerHTML;
+                cleanHtml = cleanHtml.replace(/\s*contenteditable="[^"]*"/gi, '');
+                cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, '');
+                cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, '');
+                cleanHtml = cleanHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
+                cleanHtml = cleanHtml.replace(/outline:\s*2px dashed #c6923a;?\s*/gi, '');
+                cleanHtml = cleanHtml.replace(/outline-offset:\s*2px;?\s*/gi, '');
+                cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, '');
+                // Capture the updated HTML
+                finalHtmlBody = iframeDoc.documentElement.outerHTML;
+                finalHtmlBody = hydrateVariable(finalHtmlBody, lead);
+              }
 
-            if (!finalHtml) {
-              console.error(
-                `Failed to generate email content for ${lead.email}`,
-              );
+
+              if (!finalHtmlBody) {
+                console.error(
+                  `Failed to generate email content for ${lead.email}`,
+                );
+                return lead;
+              }
+
+              const sent = await sendEmailToLead(lead.email, subject, finalHtmlBody);
+
+              if (sent) {
+                successCount++;
+                return {
+                  ...lead,
+                  history: [
+                    ...lead.history,
+                    {
+                      date: now.toISOString().slice(0, 10),
+                      time: now.toTimeString().slice(0, 5),
+                      action: "Email sent",
+                      detail: `Subject: ${subject}`,
+                      type: "email" as const,
+                    },
+                  ],
+                };
+              }
+
+              console.error(`Failed to send email to ${lead.email}`);
+              return lead;
+            } catch (error) {
+              console.error(`Error processing lead ${lead.email}:`, error);
               return lead;
             }
-
-            const sent = await sendEmailToLead(lead.email, subject, finalHtml);
-
-            if (sent) {
-              successCount++;
-              return {
-                ...lead,
-                history: [
-                  ...lead.history,
-                  {
-                    date: now.toISOString().slice(0, 10),
-                    time: now.toTimeString().slice(0, 5),
-                    action: "Email sent",
-                    detail: `Subject: ${subject}`,
-                    type: "email" as const,
-                  },
-                ],
-              };
-            }
-
-            console.error(`Failed to send email to ${lead.email}`);
-            return lead;
-          } catch (error) {
-            console.error(`Error processing lead ${lead.email}:`, error);
-            return lead;
-          }
-        }),
+          }),
         );
         updated.push(...batchResults);
       }
@@ -205,6 +243,35 @@ export function EmailCampaignModal({
           </div>
           <div className="max-h-[60vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setStep("custom")}
+                className="group flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-background p-6 shadow-sm transition hover:border-teal-600 hover:bg-teal-50/50 hover:shadow-md"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 bg-muted/50 transition group-hover:border-teal-600 group-hover:bg-teal-100/80">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-muted-foreground/60 transition group-hover:text-teal-600"
+                  >
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </div>
+                <div className="mt-3 text-sm font-semibold text-foreground transition group-hover:text-teal-700">
+                  Custom Template
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Create your own
+                </div>
+              </button>
               {EMAIL_TEMPLATES.map((template) => (
                 <button
                   key={template.id}
@@ -226,6 +293,23 @@ export function EmailCampaignModal({
             </div>
           </div>
         </div>
+      </ModalShell>
+    );
+  }
+
+  /* ════════════════════════════════════════════
+     Render: To Create your Own Custom Template
+     ════════════════════════════════════════════ */
+  if (step === "custom") {
+    return (
+      <ModalShell
+        open
+        onClose={onClose}
+        title="Email Campaign Templates"
+        subtitle="Select a template to send to the leads"
+        maxWidthClass="max-w-[720px]"
+      >
+        <CustomTemplateCreation hook={hook} backgroundColor="#26a6b5" borderColor="#26A7B5DA" />
       </ModalShell>
     );
   }
@@ -320,12 +404,29 @@ export function EmailCampaignModal({
             Preview shows data for the first lead. All emails will be
             personalized per lead.
           </p>
-          {selectedTemplate ? (
+          {selectedTemplate && selectedTemplate.id !== -1 && !hook.generatedHtml ? (
             <ReactEmailIframe
+              ref={emailIframeRef}
               category={selectedTemplate.category}
               lead={allLeads[0] ?? null}
               editable={false}
             />
+          ) : selectedTemplate && selectedTemplate.id === -1 && hook.generatedHtml ? (
+            <div className="mt-2">
+              <div
+                className="overflow-hidden rounded-lg"
+                style={{ height: 480 }}
+              >
+                <iframe
+                  ref={emailIframeRef}
+                  srcDoc={getEditablePreviewHtml(hook.generatedHtml)}
+                  className="w-full h-full"
+                  title="Email Preview"
+                  sandbox="allow-same-origin allow-scripts"
+                  style={{ border: "none" }}
+                />
+              </div>
+            </div>
           ) : (
             <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
               Select a template to preview
