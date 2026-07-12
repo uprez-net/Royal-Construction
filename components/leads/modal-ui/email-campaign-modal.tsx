@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { AlertTriangle, ChevronDown, Mail, Users } from "lucide-react";
 import { ModalShell } from "@/components/common/modal-shell";
 import { Lead, EmailTemplate } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
 import { sendEmailToLead, fetchAllLeads } from "@/lib/leads/leads-service";
-import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import {
   hydrateVariable,
   previewTemplateText,
@@ -53,18 +52,19 @@ export function EmailCampaignModal({
   const hook = useEmailAdHock();
 
   // ─── Auto-transition to Compose when AI finishes ───
-  useEffect(() => {
-    if (hook.templateName && hook.generatedHtml && hook.emailSubject) {
-      setSubjectTemplate(hook.emailSubject);
-      // Create a dummy template object so the compose step recognizes it
-      setSelectedTemplate({
-        id: -1,
-        category: "custom",
-        subject: hook.emailSubject,
-      } as EmailTemplate);
-      setStep("compose");
-    }
-  }, [hook.templateName, hook.generatedHtml, hook.emailSubject]);
+  // Render-time state adjustment per React docs (useState to track prev value)
+  const [prevGeneratedHtml, setPrevGeneratedHtml] = useState<string | null>(null);
+  const aiReady = !!(hook.templateName && hook.generatedHtml && hook.emailSubject);
+  if (aiReady && prevGeneratedHtml !== hook.generatedHtml) {
+    setPrevGeneratedHtml(hook.generatedHtml);
+    setSubjectTemplate(hook.emailSubject);
+    setSelectedTemplate({
+      id: -1,
+      category: "custom",
+      subject: hook.emailSubject,
+    } as EmailTemplate);
+    setStep("compose");
+  }
 
   const invalidTargets = useMemo(
     () => emailTargets.filter((email) => !EMAIL_PATTERN.test(email.trim())),
@@ -148,7 +148,7 @@ export function EmailCampaignModal({
                 cleanHtml = cleanHtml.replace(/outline-offset:\s*2px;?\s*/gi, '');
                 cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, '');
                 // Capture the updated HTML
-                finalHtmlBody = iframeDoc.documentElement.outerHTML;
+                finalHtmlBody = cleanHtml;
                 finalHtmlBody = hydrateVariable(finalHtmlBody, lead);
               }
 

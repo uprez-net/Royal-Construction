@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Link2, LinkIcon, Loader2, Mail, Paperclip, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import React, { useState } from "react";
+import { Mail } from "lucide-react";
 import { ModalShell } from "@/components/common/modal-shell";
 import { Lead, EmailTemplate } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
@@ -43,18 +43,19 @@ export function EmailFlowModal({
       const subjectHelperId = `${subjectId}-helper`;
 
       // ─── Auto-transition to Compose when AI finishes ───
-      useEffect(() => {
-            if (hook.templateName && hook.generatedHtml && hook.emailSubject) {
-                  setEmailSubject(hydrateVariable(hook.emailSubject, lead));
-                  // Create a dummy template object so the compose step recognizes it
-                  setSelectedTemplate({
-                        id: -1,
-                        category: "custom",
-                        subject: hook.emailSubject,
-                  } as EmailTemplate);
-                  setStep("compose");
-            }
-      }, [hook.templateName, hook.generatedHtml, hook.emailSubject]);
+      // Render-time state adjustment per React docs (useState to track prev value)
+      const [prevGeneratedHtml, setPrevGeneratedHtml] = useState<string | null>(null);
+      const aiReady = !!(hook.templateName && hook.generatedHtml && hook.emailSubject);
+      if (aiReady && prevGeneratedHtml !== hook.generatedHtml) {
+            setPrevGeneratedHtml(hook.generatedHtml);
+            setEmailSubject(hydrateVariable(hook.emailSubject, lead));
+            setSelectedTemplate({
+                  id: -1,
+                  category: "custom",
+                  subject: hook.emailSubject,
+            } as EmailTemplate);
+            setStep("compose");
+      }
 
       const handleTemplateSelect = (template: EmailTemplate) => {
             setSelectedTemplate(template);
@@ -88,7 +89,7 @@ export function EmailFlowModal({
                         cleanHtml = cleanHtml.replace(/outline-offset:\s*2px;?\s*/gi, '');
                         cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, '');
                         // Capture the updated HTML
-                        finalHtmlBody = iframeDoc.documentElement.outerHTML;
+                        finalHtmlBody = cleanHtml;
                         finalHtmlBody = hydrateVariable(finalHtmlBody, lead);
                   }
 

@@ -6,14 +6,14 @@ import { cn } from "@/lib/utils";
 import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
 import { Link2, LinkIcon, Loader2, Paperclip, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useRef } from "react";
-import { GeneratingModal } from "@/components/Email-adhock/generating-modal";
+import { GeneratingModal } from "@/components/leads/modal-ui/generating-modal";
 
 
 export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: { hook: ReturnType<typeof useEmailAdHock>, backgroundColor?: string, borderColor?: string }) {
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   if(hook.isGenerating) {
-    return <GeneratingModal contained />;
+    return <GeneratingModal backgroundColor={backgroundColor} borderColor={borderColor} />;
   }
 
   return (

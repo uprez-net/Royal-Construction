@@ -1,6 +1,5 @@
 import {
   // Banknote,
-  Mail,
   BarChart3,
   // CalendarDays,
   // CircleDot,
