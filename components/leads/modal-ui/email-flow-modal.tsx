@@ -7,10 +7,13 @@ import { sendEmailToLead, updateLead } from "@/lib/leads/leads-service";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { ReactEmailIframe } from "../render-email";
 import {
-      hydrateSubject,
+      hydrateVariable,
       previewTemplateText,
       getTemplateDescription,
 } from "@/lib/leads/lead-helpers";
+import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
+import { CustomTemplateCreation } from "./custom-template-creation";
+import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
 
 interface EmailFlowModalProps {
       lead: Lead;
@@ -19,7 +22,7 @@ interface EmailFlowModalProps {
       showToast: (msg: string, type?: "success" | "info" | "error") => void;
 }
 
-type Step = "select" | "compose";
+type Step = "select" | "compose" | "custom";
 
 export function EmailFlowModal({
       lead,
@@ -34,13 +37,29 @@ export function EmailFlowModal({
       const [sending, setSending] = useState(false);
       const emailIframeRef = React.useRef<HTMLIFrameElement>(null);
       const formId = React.useId();
+      const hook = useEmailAdHock();
       const toId = `${formId}-to`;
       const subjectId = `${formId}-subject`;
       const subjectHelperId = `${subjectId}-helper`;
 
+      // ─── Auto-transition to Compose when AI finishes ───
+      // Render-time state adjustment per React docs (useState to track prev value)
+      const [prevGeneratedHtml, setPrevGeneratedHtml] = useState<string | null>(null);
+      const aiReady = !!(hook.templateName && hook.generatedHtml && hook.emailSubject);
+      if (aiReady && prevGeneratedHtml !== hook.generatedHtml) {
+            setPrevGeneratedHtml(hook.generatedHtml);
+            setEmailSubject(hydrateVariable(hook.emailSubject, lead));
+            setSelectedTemplate({
+                  id: -1,
+                  category: "custom",
+                  subject: hook.emailSubject,
+            } as EmailTemplate);
+            setStep("compose");
+      }
+
       const handleTemplateSelect = (template: EmailTemplate) => {
             setSelectedTemplate(template);
-            setEmailSubject(hydrateSubject(template.subject, lead));
+            setEmailSubject(hydrateVariable(template.subject, lead));
             setStep("compose");
       };
 
@@ -53,34 +72,44 @@ export function EmailFlowModal({
                   // 1. Check if the iframe ref and document exist
                   const iframeDoc = emailIframeRef.current?.contentDocument;
                   if (iframeDoc) {
-                        const body = iframeDoc.body;
-                        if (body) {
-                              // Temporarily remove contenteditable so it is not sent to the customer
-                              body.removeAttribute("contenteditable");
-                              body.style.outline = "";
-                        }
-                        // Capture the updated HTML
-                        finalHtmlBody = iframeDoc.documentElement.outerHTML;
+                        // Clean up DOM artifacts from interactive preview
+                        iframeDoc.querySelectorAll('.rc-hover-toolbar').forEach(t => t.remove());
+                        iframeDoc.querySelectorAll('a, button').forEach(el => {
+                              (el as HTMLElement).style.outline = '';
+                              (el as HTMLElement).style.outlineOffset = '';
+                        });
+                        iframeDoc.body.contentEditable = 'false';
 
-                        // Restore contenteditable for local preview editing
-                        if (body) {
-                              body.setAttribute("contenteditable", "true");
-                              body.style.outline = "none";
-                        }
+                        let cleanHtml = iframeDoc.body.innerHTML;
+                        cleanHtml = cleanHtml.replace(/\s*contenteditable="[^"]*"/gi, '');
+                        cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, '');
+                        cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, '');
+                        cleanHtml = cleanHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
+                        cleanHtml = cleanHtml.replace(/outline:\s*2px dashed #c6923a;?\s*/gi, '');
+                        cleanHtml = cleanHtml.replace(/outline-offset:\s*2px;?\s*/gi, '');
+                        cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, '');
+                        // Capture the updated HTML
+                        finalHtmlBody = cleanHtml;
+                        finalHtmlBody = hydrateVariable(finalHtmlBody, lead);
                   }
 
                   // 2. Fallback if iframe document is not accessible (use "lead" instead of "emailLead")
                   if (!finalHtmlBody) {
-                        finalHtmlBody = await renderEmailHtml(
-                              selectedTemplate.category,
-                              lead,
-                        ) || "";
+                        if (selectedTemplate.id === -1 && hook.generatedHtml) {
+                              finalHtmlBody = hook.generatedHtml; // Use AI HTML for custom
+                        } else {
+                              finalHtmlBody = await renderEmailHtml(
+                                    selectedTemplate.category,
+                                    lead,
+                              ) || "";
+                        }
                   }
                   if (!finalHtmlBody) {
                         showToast("Failed to generate email content", "info");
                         setSending(false); // Used "setSending" instead of "setSendingEmail"
                         return;
                   }
+
                   // Send the email (use "lead.email" instead of "emailLead.email")
                   const sendCampaign = await sendEmailToLead(
                         lead.email,
@@ -132,7 +161,36 @@ export function EmailFlowModal({
                                     {lead.email || "No email"}
                               </div>
                               <div className="max-h-[60vh] overflow-y-auto pr-1">
-                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mt-2">
+                                          <button
+                                                type="button"
+                                                onClick={() => setStep("custom")}
+                                                className="group flex flex-col items-center justify-center rounded-[10px] border-2 border-dashed border-border bg-card p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[color:var(--royal-gold)] hover:bg-[color:var(--royal-gold)]/5"
+                                          >
+                                                <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/25 bg-muted/50 transition group-hover:border-[color:var(--royal-gold)] group-hover:bg-[color:var(--royal-gold)]/10">
+                                                      <svg
+                                                            xmlns="http://www.w3.org/2000/svg"
+                                                            width="22"
+                                                            height="22"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="2"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            className="text-muted-foreground/50 transition group-hover:text-[color:var(--royal-gold)]"
+                                                      >
+                                                            <path d="M12 5v14" />
+                                                            <path d="M5 12h14" />
+                                                      </svg>
+                                                </div>
+                                                <div className="mt-3 text-[15px] font-medium text-foreground transition group-hover:text-[color:var(--royal-gold)]">
+                                                      Custom Template
+                                                </div>
+                                                <div className="mt-1 text-xs text-muted-foreground">
+                                                      Create your own
+                                                </div>
+                                          </button>
                                           {EMAIL_TEMPLATES.map((template) => (
                                                 <button
                                                       key={template.id}
@@ -154,6 +212,22 @@ export function EmailFlowModal({
                                     </div>
                               </div>
                         </div>
+                  </ModalShell>
+            );
+      }
+
+
+      /* ── Step: To Create your Own Custom Template ── */
+      if (step === "custom") {
+            return (
+                  <ModalShell
+                        open
+                        onClose={onClose}
+                        title="Create Custom Email Template"
+                        subtitle="Design your own email template"
+                        maxWidthClass="max-w-[720px]"
+                  >
+                        <CustomTemplateCreation hook={hook} backgroundColor="#C6923A" borderColor="#C6923A" />
                   </ModalShell>
             );
       }
@@ -222,13 +296,29 @@ export function EmailFlowModal({
                               <p className="text-xs font-medium text-muted-foreground">
                                     Email Preview
                               </p>
-                              {selectedTemplate ? (
+                              {selectedTemplate && selectedTemplate.id !== -1 && selectedTemplate.category !== 'custom' && !hook.generatedHtml ? (
                                     <div className="mt-2">
                                           <ReactEmailIframe
                                                 ref={emailIframeRef}
                                                 category={selectedTemplate.category}
                                                 lead={lead}
                                           />
+                                    </div>
+                              ) : selectedTemplate && selectedTemplate.id === -1 && selectedTemplate.category === 'custom' && hook.generatedHtml ? (
+                                    <div className="mt-2">
+                                          <div
+                                                className="overflow-hidden rounded-lg"
+                                                style={{ height: 480 }}
+                                          >
+                                                <iframe
+                                                      ref={emailIframeRef}
+                                                      srcDoc={getEditablePreviewHtml(hook.generatedHtml)}
+                                                      className="w-full h-full"
+                                                      title="Email Preview"
+                                                      sandbox="allow-same-origin allow-scripts"
+                                                      style={{ border: "none" }}
+                                                />
+                                          </div>
                                     </div>
                               ) : (
                                     <div className="mt-2 flex h-32 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
@@ -270,6 +360,6 @@ export function EmailFlowModal({
                               </button>
                         </div>
                   </div>
-            </ModalShell>
+            </ModalShell >
       );
 }
