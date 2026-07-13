@@ -261,26 +261,22 @@ export const extractTenderAndContractDocuments = async (
         await emitStage("Running structured extraction");
 
         const leadInfo = await getLeadInfo(input.leadId);
-        const tenderChunks = chunkMarkdown(tenderMarkdown, MODEL_CHUNK_CHAR_LIMIT);
-        const contractChunks = chunkMarkdown(contractMarkdown, MODEL_CHUNK_CHAR_LIMIT);
-        const leadChunks = chunkMarkdown(leadInfo, MODEL_CHUNK_CHAR_LIMIT);
-        const chunkCount = Math.max(tenderChunks.length, contractChunks.length, leadChunks.length);
-        // Decide once, explicitly, what happens when one doc runs out of chunks
-        // before another. Empty string is usually the safe default — resending
-        // the full original document on every extra iteration risks re-extraction
-        // and blowing the char limit.
-        const atChunk = (chunks: string[], index: number, whole: string) =>
-            chunks.length <= 1 ? whole : (chunks[index] ?? "");
+        // const tenderChunks = chunkMarkdown(tenderMarkdown, MODEL_CHUNK_CHAR_LIMIT);
+        // const contractChunks = chunkMarkdown(contractMarkdown, MODEL_CHUNK_CHAR_LIMIT);
+        // const leadChunks = chunkMarkdown(leadInfo, MODEL_CHUNK_CHAR_LIMIT);
+        // const chunkCount = Math.max(tenderChunks.length, contractChunks.length, leadChunks.length);
+
+        const MULTI_RUN_COUNT = 3;
 
         const chunkResults = await Promise.all(
-            Array.from({ length: chunkCount }, (_, index) =>
+            Array.from({ length: MULTI_RUN_COUNT }, () =>
                 limit(() =>
                     runChunkedExtraction({
-                        tenderMarkdown: atChunk(tenderChunks, index, tenderMarkdown),
-                        contractMarkdown: atChunk(contractChunks, index, contractMarkdown),
+                        tenderMarkdown,
+                        contractMarkdown,
                         tenderFileName: input.tenderFileName,
                         contractFileName: input.contractFileName,
-                        leadInfo: atChunk(leadChunks, index, leadInfo)
+                        leadInfo
                     })
                 )
             )

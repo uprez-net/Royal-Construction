@@ -588,7 +588,7 @@ ${ISSUE_56_MAPPING}
   <rule>Return only structured output that matches the schema.</rule>
   <rule>Treat every field as independent. Do not bundle values into paragraphs, tables, arrays of objects, or nested JSON.</rule>
   <rule>Use empty string, null, or [] for any value that cannot be verified directly from the documents.</rule>
-  <rule>Do not guess. Do not tidy. Do not improve or normalize the source text beyond what is asked.</rule>
+
   <rule>Use Tender sections for scope, inclusions, exclusions, allowances, payment schedule, and acceptance language.</rule>
   <rule>Use Contract sections for signature date, contract administration metadata, and any MBA-specific reference information.</rule>
   <rule>Use Lead Information for any missing site, client, or contact details.</rule>
