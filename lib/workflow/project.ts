@@ -16,7 +16,7 @@ import pLimit from "p-limit";
 const limit = pLimit(4);
 
 const OCR_TIMEOUT_MS = 75_000;
-const MODEL_CHUNK_CHAR_LIMIT = 40_000;
+// const MODEL_CHUNK_CHAR_LIMIT = 40_000;
 
 const EXTRACTION_PROGRESS = [
     "Uploading documents",
@@ -84,25 +84,25 @@ function pageBlocksToMarkdown(pages: unknown) {
     return pageArray.map((page, index) => normalizePageMarkdown(page, index)).join("\n");
 }
 
-function chunkMarkdown(markdown: string, maxChars: number) {
-    if (markdown.length <= maxChars) {
-        return [markdown];
-    }
-    const chunks: string[] = [];
-    let start = 0;
-    while (start < markdown.length) {
-        let end = Math.min(start + maxChars, markdown.length);
-        if (end < markdown.length) {
-            const newline = markdown.lastIndexOf("\n", end);
-            if (newline > start + Math.floor(maxChars / 2)) {
-                end = newline;
-            }
-        }
-        chunks.push(markdown.slice(start, end).trim());
-        start = end;
-    }
-    return chunks.filter(Boolean);
-}
+// function chunkMarkdown(markdown: string, maxChars: number) {
+//     if (markdown.length <= maxChars) {
+//         return [markdown];
+//     }
+//     const chunks: string[] = [];
+//     let start = 0;
+//     while (start < markdown.length) {
+//         let end = Math.min(start + maxChars, markdown.length);
+//         if (end < markdown.length) {
+//             const newline = markdown.lastIndexOf("\n", end);
+//             if (newline > start + Math.floor(maxChars / 2)) {
+//                 end = newline;
+//             }
+//         }
+//         chunks.push(markdown.slice(start, end).trim());
+//         start = end;
+//     }
+//     return chunks.filter(Boolean);
+// }
 
 function mergeExtraction(base: ProjectExtractionData, next: Partial<ProjectExtractionData>) {
     const merged: ProjectExtractionData = { ...base };
