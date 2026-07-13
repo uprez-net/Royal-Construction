@@ -19,12 +19,14 @@ export type ModalType =
   | "createOfferFile"
   | "createLead"
   | "addTradie"
+  | "editTradie"
   | "deleteTradie"
   | "rateTradie"
   | "reportTradie"
   | "priceChangeTradie"
   | "adminApproval"
   | "approvalDetails"
+  | "rejectTradieApprovals"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;

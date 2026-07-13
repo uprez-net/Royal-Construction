@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus, Eye, Send, Download, Search, Files } from "lucide-react";
+import { Eye, Send, Download, Search, Files } from "lucide-react";
 import { StatusPill } from "@/components/common/status-pill";
 
 import {
@@ -12,12 +11,16 @@ import { ProjectDetail } from "@/types/project";
 import { DataTable } from "@/components/common/data-table";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { UploadButton } from "@/components/common/upload-button";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
 
 interface ProjectQuotesTabProps {
   project: ProjectDetail;
 }
 
 export function ProjectQuotesTab({ project }: ProjectQuotesTabProps) {
+  const dispatch = useAppDispatch();
   const files = project.files;
   const [query, setQuery] = useState("");
 
@@ -29,23 +32,30 @@ export function ProjectQuotesTab({ project }: ProjectQuotesTabProps) {
             Project Documents
           </CardTitle>
           <div className="flex gap-2">
-            <div className="relative w-full sm:w-[220px] transition-all focus-within:w-[280px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-[13px] -translate-y-1/2 text-muted-foreground" />
+            <div className="relative w-full sm:w-55 transition-all focus-within:w-70">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.25 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search documents..."
-                className="pl-[32px] h-9 text-[12.5px] rounded-lg bg-white"
+                className="pl-8 h-9 text-[12.5px] rounded-lg bg-white"
                 aria-label="Search documents"
               />
             </div>
-            <Button
-              size="sm"
-              className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
-            >
-              <Plus className="mr-1 size-4" />
-              Upload Document
-            </Button>
+            <UploadButton
+              projectId={project.id}
+              maxFiles={5}
+              onUpload={(uploadedFiles) => {
+                uploadedFiles.forEach((file) => {
+                  dispatch(
+                    appendFileToProject({
+                      projectId: project.id,
+                      file: file,
+                    }),
+                  );
+                });
+              }}
+            />
           </div>
         </div>
       </CardHeader>

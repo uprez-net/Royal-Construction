@@ -1,9 +1,11 @@
 import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage } from "@prisma/client";
+import { ProjectRequirementsPayload } from "./project-flow";
 
-export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize"> {
+export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize" | "requirements"> {
   totalBudget: string;
   spent: string;
   lotSize?: string;
+  requirements?: ProjectRequirementsPayload;
 }
 
 export interface SafeMaterial extends Omit<Material, "unitCost" | "totalCost"> {

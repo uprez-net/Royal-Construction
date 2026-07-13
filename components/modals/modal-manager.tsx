@@ -39,7 +39,7 @@ import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
 import { CreateOfferFileModal } from "../offers/create-offer-modal";
 import { AddLeadModal } from "../leads/modal-ui/add-lead-modal";
 import AddTradieModal from "../tradie-management/modal/add-tradie-modal";
-import { SafeTradieApproval, TradieRow } from "@/types/tradie";
+import { SafeTradieApproval, TradieDetails, TradieRow } from "@/types/tradie";
 import DeleteTradieModal from "../tradie-management/modal/delete-tradie-modal";
 import ReportTradieModal from "../tradie-management/modal/report-tradie-modal";
 import PriceChangeTradieModal from "../tradie-management/modal/price-change-tradie-modal";
@@ -49,6 +49,9 @@ import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
 import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
+import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
+import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
+import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -145,13 +148,15 @@ export function ModalManager() {
       );
     case "createProject":
       return (
-        <CreateProjectModal
-          open
-          onOpenChange={(open) => {
-            if (!open) handleClose();
-          }}
-          onSuccess={handleSuccess}
-        />
+        <WorkflowStreamProvider initialRunId={""}>
+          <CreateProjectModal
+            open
+            onOpenChange={(open) => {
+              if (!open) handleClose();
+            }}
+            onSuccess={handleSuccess}
+          />
+        </WorkflowStreamProvider>
       );
     case "scheduleTradie":
       const project = projectPayload
@@ -410,12 +415,44 @@ export function ModalManager() {
         </QueryClientProvider>
       );
     case "approvalDetails":
-      const { approval } = modal.payload as {
+      const { approval, onApprove, onReject } = modal.payload as {
         approval: SafeTradieApproval;
+        onApprove: () => Promise<void>;
+        onReject: () => void;
       };
       return (
-        <ApprovalDetailModal open onClose={handleClose} approval={approval} />
+        <ApprovalDetailModal
+          open
+          onClose={handleClose}
+          approval={approval}
+          onApprove={onApprove}
+          onReject={onReject}
+        />
       );
+    case "rejectTradieApprovals": {
+      const { approvals } = modal.payload as {
+        approvals: SafeTradieApproval[];
+      };
+      return (
+        <TradieApprovalRejectionModal
+          open
+          onClose={handleClose}
+          approvals={approvals}
+        />
+      );
+    }
+    case "editTradie": {
+      const { tradie } = modal.payload as {
+        tradie: TradieDetails;
+      };
+      return (
+        <EditTradieModal
+          open
+          onClose={handleClose}
+          tradie={tradie}
+        />
+      );
+    }
     default:
       return null;
   }

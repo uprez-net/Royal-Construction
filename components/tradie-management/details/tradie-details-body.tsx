@@ -1,4 +1,11 @@
-import { Building2, CalendarDays, Mail, Phone, Star } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  Mail,
+  MapPin,
+  Phone,
+  Star,
+} from "lucide-react";
 import { dateFormat } from "@/utils/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
@@ -24,6 +31,11 @@ export function TradieBusinessDetailsCard() {
       label: "Email",
       value: tradieDetails.email,
       icon: Mail,
+    },
+    {
+      label: "Location",
+      value: tradieDetails.location ?? "—",
+      icon: MapPin,
     },
     {
       label: "ABN",

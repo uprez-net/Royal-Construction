@@ -268,6 +268,7 @@ model Tradie {
   abn         String   @unique
   phone       String   @unique
   email       String   @unique
+  location    String?
   isFavourite Boolean  @default(false)
   hourlyRate  Decimal? @db.Decimal(8, 2)
   rating      Decimal? @db.Decimal(2, 1)
@@ -309,13 +310,14 @@ model TradieIncident {
 }
 
 model TradieApproval {
-  id           String                   @id @default(uuid())
-  tradieId     String
-  actionType   TradieApprovalActionType
-  status       TradieApprovalStatus     @default(PENDING)
-  reason       String                   @db.Text
-  updationData Json?
-  requestedBy  String
+  id              String                   @id @default(uuid())
+  tradieId        String
+  actionType      TradieApprovalActionType
+  status          TradieApprovalStatus     @default(PENDING)
+  reason          String                   @db.Text
+  updationData    Json?
+  rejectionReason String?                  @db.Text
+  requestedBy     String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -802,13 +804,13 @@ model ChatMessage {
 }
 
 model EmailAdHock {
-  id           String   @id @default(uuid())
-  name         String
-  emailSubject String
-  htmlUrl      String
+  id              String   @id @default(uuid())
+  name            String
+  emailSubject    String
+  htmlUrl         String
   attachmentsUrls String[] @default([])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@map("email_adhoc")
 }

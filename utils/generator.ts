@@ -69,21 +69,31 @@ export async function generateEmailChecksum(
   body: string,
   from: string,
   to: string,
-  sentAt: string
 ): Promise<string> {
   const normalize = (value: string) =>
     value
-      .trim()
       .toLowerCase()
+      // Normalize line endings
       .replace(/\r\n/g, "\n")
-      .replace(/\s+/g, " ");
+      // Remove mailto duplicates:
+      // test@gmail.com<mailto:test@gmail.com>
+      .replace(
+        /([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})<mailto:\1>/gi,
+        "$1"
+      )
+      // Remove remaining html tags
+      .replace(/<[^>]*>/g, "")
+      // Remove invisible chars
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      // Collapse whitespace
+      .replace(/\s+/g, " ")
+      .trim();
 
   const payload = JSON.stringify({
     to: normalize(to),
     from: normalize(from),
     subject: normalize(subject),
     body: normalize(body),
-    sentAt: normalize(sentAt),
   });
 
   const buffer = await crypto.subtle.digest(

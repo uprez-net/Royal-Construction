@@ -2,6 +2,7 @@
 
 import { Reply, X } from "lucide-react";
 import type { LeadEmails } from "@prisma/client";
+import { stripEmailBody } from "@/utils/formatters";
 
 interface ReplyBannerProps {
   email: LeadEmails;
@@ -14,6 +15,7 @@ interface ReplyBannerProps {
  * so it can be reused anywhere a reply context needs to be surfaced.
  */
 export function ReplyBanner({ email, onCancel }: ReplyBannerProps) {
+  const plainBody = stripEmailBody(email.body);
   return (
     <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2">
       <Reply className="size-3.5 shrink-0 text-primary" />
@@ -23,7 +25,7 @@ export function ReplyBanner({ email, onCancel }: ReplyBannerProps) {
           Replying to
         </p>
         <p className="truncate text-xs text-foreground">
-          {email.body.replace(/\s+/g, " ").trim()}
+          {plainBody}
         </p>
       </div>
 

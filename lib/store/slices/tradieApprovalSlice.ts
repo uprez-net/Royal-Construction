@@ -128,6 +128,7 @@ const tradieApprovalSlice = createSlice({
                     const index = state.approvals.findIndex(a => a.id === approval.approvalId);
                     if (index !== -1) {
                         state.approvals[index].status = approval.resolution === "approved" ? "APPROVED" : "REJECTED";
+                        state.approvals[index].rejectionReason = approval.rejectReason ?? null;
                         state.kpiData.resolvedCount[approval.resolution === "approved" ? "accepted" : "rejected"] += 1;
                         state.kpiData.pendingCount -= 1;
                         switch (approval.actionType) {

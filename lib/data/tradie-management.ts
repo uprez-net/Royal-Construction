@@ -15,7 +15,7 @@ import type {
 import prisma from "../prisma";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
-import { TradieApprovalActionType, TradieIncident, Prisma } from "@prisma/client";
+import { TradieApprovalActionType, TradieIncident, Prisma, Tradie } from "@prisma/client";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { after } from "next/server"
@@ -858,5 +858,82 @@ export async function exportTradies() {
     } catch (error) {
         console.error("Error exporting tradies:", error);
         throw new Error("Failed to export tradies");
+    }
+}
+
+/**
+ * Updates a tradie's editable contact information and returns the formatted tradie row data.
+ *
+ * Updates the specified tradie record with the provided fields, including email,
+ * phone, or location. The updated tradie is fetched with related ratings, incidents,
+ * and completed schedules to calculate additional display metrics.
+ *
+ * After a successful update, invalidates the tradie-specific cache and the
+ * tradie management cache to ensure fresh data is served.
+ *
+ * @param tradieId - The unique identifier of the tradie to update.
+ * @param data - Partial tradie data containing the fields to update.
+ * Supports updating email, phone, and location.
+ *
+ * @returns A promise resolving to a formatted `TradieRow` containing:
+ * - Updated tradie details.
+ * - Serialized decimal fields (`hourlyRate`, `rating`).
+ * - Number of completed jobs.
+ * - Incident counts grouped by status.
+ *
+ * @throws Throws an error if the tradie update operation fails.
+ */
+export async function updateTradie(tradieId: string, data: Partial<Pick<Tradie, 'email' | 'phone' | 'location' | 'note'>>): Promise<TradieDetails> {
+    try {
+        const updatedTradie = await prisma.tradie.update({
+            where: { id: tradieId },
+            data,
+            include: {
+                ratings: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
+                    }
+                },
+                incidents: true,
+                schedules: {
+                    select: {
+                        id: true,
+                        status: true
+                    },
+                    where: {
+                        status: "COMPLETED"
+                    }
+                }
+            }
+        });
+
+        after(() => {
+            revalidateTag(`tradie-${tradieId}`, CACHE_PROFILES.MEDIUM);
+            revalidateTag('tradie-management', CACHE_PROFILES.MEDIUM);
+        });
+
+        return {
+            ...updatedTradie,
+            hourlyRate: updatedTradie.hourlyRate?.toString(),
+            rating: updatedTradie.rating?.toString(),
+            jobsCompleted: updatedTradie.schedules.length,
+            reviews: updatedTradie.ratings.map(r => ({
+                ...r,
+                rating: r.rating.toString(),
+                user: {
+                    id: r.user.id,
+                    name: r.user.name
+                }
+            })),
+            incidents: updatedTradie.incidents
+        };
+    } catch (error) {
+        console.error("Error updating tradie:", error);
+        throw new Error("Failed to update tradie");
     }
 }

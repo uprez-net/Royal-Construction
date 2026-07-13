@@ -44,6 +44,7 @@ export interface CreateTradieInput {
     abn: string;
     phone: string;
     email: string;
+    location: string;
     note?: string;
 }
 
@@ -92,7 +93,8 @@ export interface ApprovalInput {
     approvalId: string;
     resolution: "approved" | "rejected";
     type: TradieApprovalActionType;
-    payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload
+    payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload;
+    rejectReason?: string;
 }
 
 export interface ScheduleApprovalJsonPayload {

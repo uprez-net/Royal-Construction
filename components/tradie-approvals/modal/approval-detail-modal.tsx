@@ -7,20 +7,35 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Phone, Mail, Building2, DollarSign } from "lucide-react";
+import {
+  Phone,
+  Mail,
+  Building2,
+  DollarSign,
+  Loader2,
+  Check,
+  X,
+} from "lucide-react";
 import { TradieBadge } from "@/components/tradie-management/trade-badge";
+import { Button } from "@/components/ui/button";
+import { useTransition } from "react";
 
 interface ApprovalDetailModalProps {
   open: boolean;
+  onApprove: () => Promise<void>;
+  onReject: () => void;
   onClose: () => void;
   approval: SafeTradieApproval;
 }
 
 export function ApprovalDetailModal({
   open,
+  onApprove,
+  onReject,
   onClose,
   approval,
 }: ApprovalDetailModalProps) {
+  const [isPending, startTransition] = useTransition();
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) onClose();
   };
@@ -38,20 +53,18 @@ export function ApprovalDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden">
+      <DialogContent className="max-w-3xl p-0">
         <DialogHeader className="border-b px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <DialogTitle className="text-lg font-semibold">
               Approval Request
             </DialogTitle>
 
-            <Badge className={getStatusVariant()}>
-              {approval.status}
-            </Badge>
+            <Badge className={getStatusVariant()}>{approval.status}</Badge>
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 p-6 max-h-120 overflow-y-auto no-scrollbar">
           {/* Approval Info */}
           <div>
             <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
@@ -64,10 +77,7 @@ export function ApprovalDetailModal({
                 value={approval.actionType.replaceAll("_", " ")}
               />
 
-              <InfoItem
-                label="Requested By"
-                value={approval.requestBy}
-              />
+              <InfoItem label="Requested By" value={approval.requestBy} />
 
               <InfoItem
                 label="Created"
@@ -152,9 +162,7 @@ export function ApprovalDetailModal({
             </h3>
 
             <div className="rounded-lg border bg-muted/20 p-4">
-              <p className="text-sm leading-relaxed">
-                {approval.reason}
-              </p>
+              <p className="text-sm leading-relaxed">{approval.reason}</p>
             </div>
           </div>
 
@@ -170,19 +178,57 @@ export function ApprovalDetailModal({
               </pre>
             </div>
           )}
+
+          {/* Rejection Reason */}
+          {approval.rejectionReason && (
+            <div>
+              <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
+                Rejection Reason
+              </h3>
+
+              <div className="rounded-lg border bg-muted/20 p-4">
+                <p className="text-sm leading-relaxed">
+                  {approval.rejectionReason}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex bg-muted rounded-b-lg items-center justify-end gap-2 border-t px-6 py-4">
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={onReject}
+            disabled={approval.status !== "PENDING"}
+          >
+            <X className="mr-1 h-4 w-4" />
+            Reject
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => startTransition(onApprove)}
+            disabled={isPending || approval.status !== "PENDING"}
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Approving...
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4" />
+                Approve
+              </>
+            )}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function InfoItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
@@ -202,14 +248,10 @@ function DetailRow({
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="mt-0.5 text-muted-foreground">
-        {icon}
-      </div>
+      <div className="mt-0.5 text-muted-foreground">{icon}</div>
 
       <div>
-        <p className="text-xs text-muted-foreground">
-          {label}
-        </p>
+        <p className="text-xs text-muted-foreground">{label}</p>
 
         <p className="font-medium">{value}</p>
       </div>

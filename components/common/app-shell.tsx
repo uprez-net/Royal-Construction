@@ -25,12 +25,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export function AppShell({
+  isAdmin,
   isSignedIn,
   // description,
   breadcrumbs,
   // actions,
   children,
 }: {
+  isAdmin: boolean;
   isSignedIn: boolean;
   description?: string;
   breadcrumbs?: string[];
@@ -94,7 +96,8 @@ export function AppShell({
                 href={`/${item.slug}`}
                 className={cn(
                   "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-slate-100 hover:text-slate-900",
-                  item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]"
+                  item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]",
+                  item.checkAdmin && !isAdmin && "hidden"
                 )}
                 aria-label={item.label}
               >

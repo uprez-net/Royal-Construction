@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   BadgeAlert,
+  Pencil,
   Star,
   Tag,
   Trash2,
@@ -66,6 +67,12 @@ export function TradieCard() {
     );
   };
 
+  const handleEditTradie = () => {
+    dispatch(
+      openModal({ type: "editTradie", payload: { tradie: tradieDetails } }),
+    );
+  };
+
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -95,6 +102,11 @@ export function TradieCard() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={handleEditTradie}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit Details
+          </Button>
+
           <Button variant="outline" size="sm" onClick={handlePriceChange}>
             <Tag className="mr-2 h-4 w-4" />
             Price Change

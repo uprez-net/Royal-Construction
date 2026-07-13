@@ -8,7 +8,11 @@ import {
   setSelectedCategory,
   setActiveTab,
 } from "@/lib/store/slices/tradieManagementSlice";
-import { convertCategoryToTradieType, type TradieType } from "@/utils/normalize-tradie-type";
+import {
+  convertCategoryToTradieType,
+  type TradieType,
+} from "@/utils/normalize-tradie-type";
+import Link from "next/link";
 
 interface CategoryCardProps {
   name: string;
@@ -44,8 +48,12 @@ export function TradieCategory({
             count={category.tradies.length}
             totalJobs={category.totalCategoryJobsCompleted}
             icon={<Icon className="h-5 w-5" />}
-            color={randomColourHexGenerator(TRADIE_TYPES[category.category as TradieType])}
-            onClick={() => handleActionClick(TRADIE_TYPES[category.category as TradieType])}
+            color={randomColourHexGenerator(
+              TRADIE_TYPES[category.category as TradieType],
+            )}
+            onClick={() =>
+              handleActionClick(TRADIE_TYPES[category.category as TradieType])
+            }
           />
         );
       })}
@@ -69,23 +77,25 @@ function CategoryCard({
         "hover:shadow-md hover:-translate-y-0.5",
       )}
     >
-      <span className="absolute right-3 top-3 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">
-        {count}
-      </span>
+      <Link href={`#${name}`}>
+        <span className="absolute right-3 top-3 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">
+          {count}
+        </span>
 
-      <div
-        className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg"
-        style={{
-          backgroundColor: `${color}15`,
-          color,
-        }}
-      >
-        {icon}
-      </div>
+        <div
+          className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg"
+          style={{
+            backgroundColor: `${color}15`,
+            color,
+          }}
+        >
+          {icon}
+        </div>
 
-      <h4 className="font-semibold">{name}</h4>
+        <h4 className="font-semibold">{name}</h4>
 
-      <p className="text-sm text-muted-foreground">{totalJobs} total jobs</p>
+        <p className="text-sm text-muted-foreground">{totalJobs} total jobs</p>
+      </Link>
     </button>
   );
 }

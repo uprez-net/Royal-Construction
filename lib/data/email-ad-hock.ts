@@ -2,11 +2,7 @@
 
 import { generateText } from 'ai';
 import { gateway } from '@/lib/model';
-import { prisma } from '../prisma';
 import { del } from '@vercel/blob';
-import { stageToPrismaMap } from '@/types/lead';
-import type { LeadStage } from '@/lib/leads/types';
-import { Prisma } from '@prisma/client';
 import { getGraphConfig } from '../graph/config';
 import { createGraphContext } from '../graph/client';
 
@@ -374,176 +370,176 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
   }
 }
 
-export async function CreateEmailAdHock(templateName: string, emailSubject: string, blobUrl: string, attachmentsUrls: string[]) {
-  try {
-    const result = await prisma.emailAdHock.create({
-      data: {
-        name: templateName,
-        emailSubject: emailSubject,
-        htmlUrl: blobUrl,
-        attachmentsUrls: attachmentsUrls,
-      },
-    });
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Failed to save email template to DB:", error);
-    return { success: false, error: "Failed to save to database." };
-  }
-}
-
-// export async function UpdateEmailAdHock(id: string, templateName: string, emailSubject: string, blobUrl: string) {
+// export async function CreateEmailAdHock(templateName: string, emailSubject: string, blobUrl: string, attachmentsUrls: string[]) {
 //   try {
-//     const result = await prisma.emailAdHock.update({
-//       where: { id },
+//     const result = await prisma.emailAdHock.create({
 //       data: {
 //         name: templateName,
 //         emailSubject: emailSubject,
 //         htmlUrl: blobUrl,
+//         attachmentsUrls: attachmentsUrls,
 //       },
 //     });
 //     return { success: true, data: result };
 //   } catch (error) {
-//     console.error("Failed to update email template in DB:", error);
-//     return { success: false, error: "Failed to update database record." };
+//     console.error("Failed to save email template to DB:", error);
+//     return { success: false, error: "Failed to save to database." };
 //   }
 // }
 
-export async function GetEmailAdHock() {
-  try {
-    const result = await prisma.emailAdHock.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Failed to fetch email templates from DB:", error);
-    return { success: false, error: "Failed to fetch from database." };
-  }
-}
+// // export async function UpdateEmailAdHock(id: string, templateName: string, emailSubject: string, blobUrl: string) {
+// //   try {
+// //     const result = await prisma.emailAdHock.update({
+// //       where: { id },
+// //       data: {
+// //         name: templateName,
+// //         emailSubject: emailSubject,
+// //         htmlUrl: blobUrl,
+// //       },
+// //     });
+// //     return { success: true, data: result };
+// //   } catch (error) {
+// //     console.error("Failed to update email template in DB:", error);
+// //     return { success: false, error: "Failed to update database record." };
+// //   }
+// // }
 
-export async function DeleteEmailAdHock(id: string) {
-  try {
+// export async function GetEmailAdHock() {
+//   try {
+//     const result = await prisma.emailAdHock.findMany({
+//       orderBy: { createdAt: 'desc' },
+//     });
+//     return { success: true, data: result };
+//   } catch (error) {
+//     console.error("Failed to fetch email templates from DB:", error);
+//     return { success: false, error: "Failed to fetch from database." };
+//   }
+// }
 
-    const existing = await prisma.emailAdHock.findUnique({ where: { id } });
-    if (!existing) {
-      return {
-        success: false,
-        error: "Email template not found.",
-      };
-    }
+// export async function DeleteEmailAdHock(id: string) {
+//   try {
 
-    await del([
-      existing.htmlUrl,
-      ...existing.attachmentsUrls,
-    ]);
+//     const existing = await prisma.emailAdHock.findUnique({ where: { id } });
+//     if (!existing) {
+//       return {
+//         success: false,
+//         error: "Email template not found.",
+//       };
+//     }
 
-    const result = await prisma.emailAdHock.delete({
-      where: { id: existing.id },
-    });
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Failed to delete email template from DB:", error);
-    return { success: false, error: "Failed to delete from database." };
-  }
-}
+//     await del([
+//       existing.htmlUrl,
+//       ...existing.attachmentsUrls,
+//     ]);
 
-function buildCampaignWhereClause({
-  search = "",
-  stage = "all",
-}: {
-  search?: string;
-  stage?: string;
-}) {
-  const where: Prisma.LeadWhereInput = {
-    // CRITICAL: Only include leads that actually have an email address
-    // email is a required String field (not nullable), so we only need to exclude empty strings
-    email: { not: "" },
-  };
+//     const result = await prisma.emailAdHock.delete({
+//       where: { id: existing.id },
+//     });
+//     return { success: true, data: result };
+//   } catch (error) {
+//     console.error("Failed to delete email template from DB:", error);
+//     return { success: false, error: "Failed to delete from database." };
+//   }
+// }
 
-  // 1. Filter by Stage (ignore if "all") — convert display name to Prisma enum
-  if (stage && stage !== "all") {
-    const prismaStage = stageToPrismaMap[stage as LeadStage];
-    if (prismaStage) {
-      where.stage = prismaStage;
-    }
-  }
-  console.log("Generated Prisma where clause:", where); // Debug log to verify the generated where clause
-  // 2. Filter by Search Query (Name, Email, or Location)
-  if (search && search.trim() !== "") {
-    const searchTerm = search.trim();
-    where.OR = [
-      { name: { contains: searchTerm, mode: "insensitive" } },
-      { email: { contains: searchTerm, mode: "insensitive" } },
-      { location: { contains: searchTerm, mode: "insensitive" } },
-    ];
-  }
+// function buildCampaignWhereClause({
+//   search = "",
+//   stage = "all",
+// }: {
+//   search?: string;
+//   stage?: string;
+// }) {
+//   const where: Prisma.LeadWhereInput = {
+//     // CRITICAL: Only include leads that actually have an email address
+//     // email is a required String field (not nullable), so we only need to exclude empty strings
+//     email: { not: "" },
+//   };
 
-  return where;
-}
+//   // 1. Filter by Stage (ignore if "all") — convert display name to Prisma enum
+//   if (stage && stage !== "all") {
+//     const prismaStage = stageToPrismaMap[stage as LeadStage];
+//     if (prismaStage) {
+//       where.stage = prismaStage;
+//     }
+//   }
+//   console.log("Generated Prisma where clause:", where); // Debug log to verify the generated where clause
+//   // 2. Filter by Search Query (Name, Email, or Location)
+//   if (search && search.trim() !== "") {
+//     const searchTerm = search.trim();
+//     where.OR = [
+//       { name: { contains: searchTerm, mode: "insensitive" } },
+//       { email: { contains: searchTerm, mode: "insensitive" } },
+//       { location: { contains: searchTerm, mode: "insensitive" } },
+//     ];
+//   }
 
-// ─── 1. Get Paginated Leads for UI List ─────────────────────────────────────
+//   return where;
+// }
 
-export async function getLeadsForCampaign({
-  page = 1,
-  limit = 15,
-  search = "",
-  stage = "all",
-}: {
-  page?: number;
-  limit?: number;
-  search?: string;
-  stage?: string;
-}) {
-  // Safety checks for pagination values (from your provided logic)
-  const defaultLookupPageSize = 15;
-  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-  const safeLimit =
-    Number.isFinite(limit) && limit > 0
-      ? Math.min(Math.floor(limit), 50)
-      : defaultLookupPageSize;
+// // ─── 1. Get Paginated Leads for UI List ─────────────────────────────────────
 
-  const where = buildCampaignWhereClause({ search, stage });
+// export async function getLeadsForCampaign({
+//   page = 1,
+//   limit = 15,
+//   search = "",
+//   stage = "all",
+// }: {
+//   page?: number;
+//   limit?: number;
+//   search?: string;
+//   stage?: string;
+// }) {
+//   // Safety checks for pagination values (from your provided logic)
+//   const defaultLookupPageSize = 15;
+//   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+//   const safeLimit =
+//     Number.isFinite(limit) && limit > 0
+//       ? Math.min(Math.floor(limit), 50)
+//       : defaultLookupPageSize;
 
-  const [leads, total] = await Promise.all([
-    prisma.lead.findMany({
-      where,
-      skip: (safePage - 1) * safeLimit, // Offset calculation
-      take: safeLimit,
-      orderBy: { createdAt: "desc" },
-      include: {
-        assignedUser: { select: { id: true, name: true, email: true } },
-      },
-    }),
-    prisma.lead.count({ where }),
-  ]);
+//   const where = buildCampaignWhereClause({ search, stage });
 
-  //console.log("Checking Leads fetched for campaign:", leads); // Debug log to verify fetched leads
+//   const [leads, total] = await Promise.all([
+//     prisma.lead.findMany({
+//       where,
+//       skip: (safePage - 1) * safeLimit, // Offset calculation
+//       take: safeLimit,
+//       orderBy: { createdAt: "desc" },
+//       include: {
+//         assignedUser: { select: { id: true, name: true, email: true } },
+//       },
+//     }),
+//     prisma.lead.count({ where }),
+//   ]);
 
-  return {
-    leads,
-    total,
-    pageCount: Math.ceil(total / safeLimit),
-  };
-}
+//   //console.log("Checking Leads fetched for campaign:", leads); // Debug log to verify fetched leads
 
-// ─── 2. Get All Matching Lead IDs (For "Select All" Functionality) ──────────
+//   return {
+//     leads,
+//     total,
+//     pageCount: Math.ceil(total / safeLimit),
+//   };
+// }
 
-export async function getAllLeadIdsForCampaign({
-  search = "",
-  stage = "all",
-}: {
-  search?: string;
-  stage?: string;
-}) {
-  const where = buildCampaignWhereClause({ search, stage });
+// // ─── 2. Get All Matching Lead IDs (For "Select All" Functionality) ──────────
 
-  // Fetch all fields needed for email personalization
-  return prisma.lead.findMany({
-    where,
-    include: {
-      assignedUser: { select: { id: true, name: true, email: true } },
-    },
-  });
-}
+// export async function getAllLeadIdsForCampaign({
+//   search = "",
+//   stage = "all",
+// }: {
+//   search?: string;
+//   stage?: string;
+// }) {
+//   const where = buildCampaignWhereClause({ search, stage });
+
+//   // Fetch all fields needed for email personalization
+//   return prisma.lead.findMany({
+//     where,
+//     include: {
+//       assignedUser: { select: { id: true, name: true, email: true } },
+//     },
+//   });
+// }
 
 export async function RemoveUrlFromBlob(blobUrl: string) {
   try {

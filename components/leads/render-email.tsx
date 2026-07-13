@@ -3,6 +3,7 @@ import React, { forwardRef } from "react";
 import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { Lead } from "@/lib/leads/types";
 import { useQuery } from "@tanstack/react-query";
+import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
 
 interface ReactEmailPreviewProps {
   category: string;
@@ -32,9 +33,9 @@ function addEditableBody(html: string) {
     .replace(/<body([^>]*)>/i, (_match, attrs: string) => {
       const attrsWithClass = /class=/.test(attrs)
         ? attrs.replace(
-            /class=(["'])(.*?)\1/,
-            'class="$2 editable-email-preview"',
-          )
+          /class=(["'])(.*?)\1/,
+          'class="$2 editable-email-preview"',
+        )
         : `${attrs} class="editable-email-preview"`;
 
       return `<body${attrsWithClass} contenteditable="true" tabindex="0">`;
@@ -53,16 +54,15 @@ export const ReactEmailIframe = forwardRef<HTMLIFrameElement, ReactEmailPreviewP
     }
 
     const previewHtml = editable && html ? addEditableBody(html) : (html ?? "");
-
     return (
       <div
-        className="overflow-hidden rounded-lg border border-border"
+        className="overflow-hidden rounded-lg"
         style={{ height: 480 }}
       >
         <iframe
           ref={ref}
           title={`${category} Email Preview`}
-          srcDoc={previewHtml}
+          srcDoc={getEditablePreviewHtml(previewHtml)}
           className="w-full h-full"
           sandbox="allow-same-origin allow-scripts"
           style={{ border: "none" }}

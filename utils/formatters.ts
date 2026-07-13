@@ -521,3 +521,207 @@ export function stripHtml(html: string): string {
     .replace(/\s{2,}/g, ' ') // Collapse multiple spaces/newlines into one space
     .trim();
 }
+
+/**
+ * Extracts the visible user-written message from a raw email body.
+ *
+ * Cleans email content before displaying it in a chat/message interface by
+ * removing transport metadata, quoted replies, forwarding blocks, greetings,
+ * signature blocks, MIME artifacts, and common email client footers.
+ *
+ * Handles:
+ * - HTML tags and entities.
+ * - MIME boundaries and content headers.
+ * - Outlook/Gmail reply headers.
+ * - Forwarded message blocks.
+ * - Previous conversation threads.
+ * - Leading greetings ("Hi Name,").
+ * - Trailing signature blocks: sign-off words ("Regards", "Thanks", ...),
+ *   and any trailing paragraph containing an email address, a name, a
+ *   job title, or a company/team name — even when no sign-off word is
+ *   present.
+ * - Mobile signatures ("Sent from my iPhone", etc.).
+ *
+ * @param body - Raw email body received from the email provider.
+ *
+ * @returns A cleaned plain-text email message suitable for UI display.
+ *
+ * @example
+ * ```ts
+ * stripEmailBody(`
+ * Hi Khushi Singh,
+ *
+ * Price Change Discussion Required
+ *
+ * Khushi Singh
+ * khushisingh2104@gmail.com
+ * Royal Constructions Team
+ * `)
+ * // "Price Change Discussion Required"
+ *
+ * stripEmailBody(`
+ * Hi Khushi
+ *
+ * I am ready for discussion please book an appointment with guri and let me know.
+ *
+ * Regards
+ * Khushi
+ * `)
+ * // "I am ready for discussion please book an appointment with guri and let me know."
+ * ```
+ */
+export function stripEmailBody(body: string): string {
+  if (!body) return "";
+  let cleaned = body;
+
+  // Normalize line endings early so line-anchored regexes behave consistently.
+  cleaned = cleaned.replace(/\r\n/g, "\n");
+
+  // Convert common HTML formatting into text. Block-level closing tags
+  // become a blank line (paragraph break) rather than a single newline, so
+  // downstream paragraph-based signature detection can tell paragraphs
+  // apart; <br> stays a single line break within a paragraph.
+  cleaned = cleaned
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n\n");
+  // Remove HTML tags
+  cleaned = cleaned.replace(/<[^>]+>/g, "");
+  // Decode common HTML entities
+  cleaned = cleaned
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'");
+
+  // Remove MIME headers/artifacts
+  cleaned = cleaned.replace(
+    /^(content-type|content-transfer-encoding|mime-version|boundary|message-id):.*$/gim,
+    ""
+  );
+  // Remove MIME separators (e.g. "--boundary123--"). Anchored so it only
+  // matches lines that ARE the separator, not marker lines that happen to
+  // start with dashes and contain other words (like a forwarded-message
+  // marker "---------- Forwarded message ----------").
+  cleaned = cleaned.replace(/^--[a-z0-9=_-]+--?\s*$/gim, "");
+
+  // Remove forwarded emails
+  cleaned = cleaned.split(/-{2,}\s*forwarded message\s*-{2,}/i)[0];
+  // Remove Outlook reply chains
+  cleaned = cleaned.split(/\n\s*from:\s.*\n\s*(sent|date):\s/im)[0];
+  // Remove Gmail quoted replies
+  cleaned = cleaned.split(/\n\s*on\s.+wrote:\s*$/im)[0];
+  // Remove common email headers
+  cleaned = cleaned.replace(/^(from|to|cc|bcc|sent|date|subject):.*$/gim, "");
+
+  // Remove mobile signatures
+  cleaned = cleaned.replace(
+    /sent from my (iphone|ipad|android|mobile).*$/gim,
+    ""
+  );
+
+  // Remove a leading greeting line, e.g. "Hi Khushi Singh," / "Hello John" /
+  // plain "Hi," with no name.
+  cleaned = cleaned.replace(
+    /^\s*(hi|hello|hey|dear)(?:\s+[a-z][a-z .'-]{0,40})?,?\s*\n+/i,
+    ""
+  );
+
+  cleaned = cleaned.trim();
+
+  // Split into paragraphs (blocks separated by one or more blank lines) and
+  // strip trailing paragraphs that look like a signature block: a sign-off
+  // word ("Regards", "Thanks", ...), or a short block containing an email
+  // address / phone number, since real sentences don't look like that.
+  const SIGNOFF_WORD =
+    /^(regards|best regards|kind regards|warm regards|many thanks|thanks|thank you|cheers|sincerely|best|yours( truly| sincerely)?)\b/i;
+  const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+  const PHONE_RE = /(\+?\d[\d .-]{7,}\d)/;
+
+  const isSignatureParagraph = (p: string): boolean => {
+    const trimmed = p.trim();
+    if (!trimmed) return true;
+    if (SIGNOFF_WORD.test(trimmed)) return true;
+    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+    // Short block (<=4 lines) with no normal sentence punctuation, and
+    // containing contact info (email/phone) -> treat as a signature block
+    // (name, title, company, contact details).
+    const looksLikeContactBlock =
+      lines.length <= 4 &&
+      (EMAIL_RE.test(trimmed) || PHONE_RE.test(trimmed)) &&
+      !/[.?!]\s*$/.test(lines[lines.length - 1] || "");
+    return looksLikeContactBlock;
+  };
+
+  const paragraphs = cleaned.split(/\n\s*\n/).filter((p) => p.trim() !== "");
+  while (paragraphs.length > 1 && isSignatureParagraph(paragraphs[paragraphs.length - 1])) {
+    paragraphs.pop();
+  }
+  cleaned = paragraphs.join("\n\n");
+
+  // Normalize whitespace
+  cleaned = cleaned
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  return cleaned;
+}
+
+/**
+ * Normalizes email address strings into a canonical format.
+ *
+ * Converts email values from different clients/providers into a consistent
+ * lowercase email address suitable for comparison, hashing, and storage.
+ *
+ * Handles:
+ * - Outlook mailto wrappers.
+ * - Angle bracket formatted emails.
+ * - Display name formats.
+ * - Duplicate embedded email addresses.
+ * - Extra whitespace.
+ * - Casing differences.
+ *
+ * Supported examples:
+ * ```
+ * "John Doe <john@example.com>"
+ * -> "john@example.com"
+ *
+ * "<John@example.com<mailto:John@example.com>>"
+ * -> "john@example.com"
+ *
+ * "john@example.com<mailto:john@example.com>"
+ * -> "john@example.com"
+ * ```
+ *
+ * @param email - Raw email string from an email provider.
+ *
+ * @returns A normalized lowercase email address, or an empty string
+ * if no valid email address is found.
+ */
+export function normalizeEmailAddress(email: string): string {
+  if (!email) return "";
+
+  const normalized = email
+    .trim()
+    .toLowerCase()
+
+    // Remove mailto:
+    .replace(/mailto:/gi, "")
+
+    // Decode common html entities
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+
+    // Remove whitespace
+    .replace(/\s+/g, "");
+
+  // Extract first valid email occurrence
+  const match = normalized.match(
+    /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i
+  );
+
+  return match?.[0] ?? "";
+}
