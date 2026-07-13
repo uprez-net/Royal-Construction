@@ -150,7 +150,7 @@ export function dialablePhone(phone: string) {
 
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
 
-export function hydrateSubject(text: string, lead: Lead): string {
+export function hydrateVariable(text: string, lead: Lead): string {
   const typeStr = Array.isArray(lead.type)
     ? (lead.type[0] ?? "New Home Build")
     : lead.type;

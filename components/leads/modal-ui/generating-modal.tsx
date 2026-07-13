@@ -3,7 +3,14 @@
 import { Sparkles } from "lucide-react";
 import { useState , useEffect} from "react";
 
-export function GeneratingModal() {
+interface GeneratingModalProps {
+  /** The accent/border color for the spinner, progress bar, and text */
+  borderColor?: string;
+  /** The background accent color */
+  backgroundColor?: string;
+}
+
+export function GeneratingModal({ borderColor = "#C6923A", backgroundColor = "#C6923A" }: GeneratingModalProps) {
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
 
@@ -17,7 +24,7 @@ export function GeneratingModal() {
 
   useEffect(() => {
     // Simulate a smooth progress bar over ~20 seconds
-    const duration = 20000; 
+    const duration = 2000; 
     const interval = 100;
     const step = 100 / (duration / interval);
 
@@ -41,23 +48,29 @@ export function GeneratingModal() {
   }, [messages.length]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md">
-      <div className="relative flex flex-col items-center gap-8 rounded-2xl border border-[#E2E8F0] bg-white px-12 py-10 shadow-2xl sm:max-w-md w-full mx-4 overflow-hidden">
+    <div className="flex items-center justify-center py-10 w-full">
+      <div className="relative flex flex-col items-center gap-8 w-full overflow-hidden px-4 py-8">
         
         {/* Decorative background glow */}
-        <div className="absolute -top-20 left-1/2 -translate-x-1/2 h-64 w-64 rounded-full bg-[#C6923A]/20 blur-3xl transition-all animate-pulse"></div>
+        <div
+          className="absolute -top-20 left-1/2 -translate-x-1/2 h-64 w-64 rounded-full blur-3xl transition-all animate-pulse"
+          style={{ backgroundColor: `${backgroundColor}20` }}
+        ></div>
 
         {/* Animated Icon Container */}
         <div className="relative flex h-24 w-24 items-center justify-center">
           {/* Rotating Ring */}
-          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#C6923A] border-r-[#C6923A]/50 animate-spin" style={{ animationDuration: '1.5s' }}></div>
+          <div
+            className="absolute inset-0 rounded-full border-2 border-transparent animate-spin"
+            style={{ borderTopColor: borderColor, borderRightColor: `${borderColor}80`, animationDuration: '1.5s' }}
+          ></div>
           
           {/* Inner Pulsing Circle */}
           <div className="absolute inset-2 rounded-full bg-[#F7F6F2] border border-[#E2E8F0] animate-pulse"></div>
 
           {/* Center Icon */}
           <div className="relative z-10 flex items-center justify-center">
-            <Sparkles className="h-8 w-8 text-[#C6923A]" />
+            <Sparkles className="h-8 w-8" style={{ color: borderColor }} />
           </div>
         </div>
 
@@ -71,7 +84,8 @@ export function GeneratingModal() {
           <div className="h-6 flex items-center justify-center">
             <p 
               key={messageIndex} 
-              className="text-sm font-medium text-[#C6923A] animate-fade-in-down"
+              className="text-sm font-medium animate-fade-in-down"
+              style={{ color: borderColor }}
             >
               {messages[messageIndex]}
             </p>
@@ -85,8 +99,8 @@ export function GeneratingModal() {
         {/* Progress Bar */}
         <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden z-10">
           <div 
-            className="bg-[#C6923A] h-2 rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${Math.min(progress, 100)}%` }}
+            className="h-2 rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${Math.min(progress, 100)}%`, backgroundColor: borderColor }}
           ></div>
         </div>
         
