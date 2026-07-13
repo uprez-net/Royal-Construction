@@ -9,6 +9,8 @@ const isDevelopment = process.env.NODE_ENV === "development"
 const isPublicRoute = createRouteMatcher([
   "/api/webhook/clerk(.*)",
   "/api/graph(.*)",
+  // DocuSign Connect webhook — authenticated via HMAC signature, not Clerk.
+  "/api/docusign(.*)",
   '/.well-known(.*)',
   '/api/mcp(.*)',
   '/api/sse(.*)',
