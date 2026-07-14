@@ -176,16 +176,11 @@ async function failWorkflow(message: string) {
     "use step";
     try {
         console.error(`Workflow failed: ${message}`);
-        const writable = getWritable<TenderExtractionWorkflowStreamEvent>();
-        const writer = writable.getWriter();
-        try {
-            await writer.write({ type: "error", message });
-        } finally {
-            writer.releaseLock();
-        }
+        await writeToStream({ type: "error", message });
     } catch (error) {
         console.error("Error in failWorkflow:", error);
     } finally {
+        await sleep(5000); // Give the client time to receive the error message
         await closeWorkflowStream();
     }
 }
