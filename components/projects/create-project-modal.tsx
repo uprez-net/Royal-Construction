@@ -66,6 +66,7 @@ import type { TenderExtractionResult } from "@/lib/workflow/project";
 import {
   emptyExtractionState,
   ExtractionSectionCard,
+  normalizeDateString,
   normalizeString,
   sectionFields,
   updateExtractionField,
@@ -127,7 +128,8 @@ export function CreateProjectModal({
     null,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sourceDocuments, setSourceDocuments] = useState<ProjectDocumentBundle | null>(null);
+  const [sourceDocuments, setSourceDocuments] =
+    useState<ProjectDocumentBundle | null>(null);
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
 
   const tenderQueue = useUploadQueue({ maxFiles: 1 });
@@ -139,7 +141,8 @@ export function CreateProjectModal({
       null
     );
   }, [selectedManagerId, siteManagers.items]);
-  const { extractingTender, startListening, stopListening } = useWorkflowStream();
+  const { extractingTender, startListening, stopListening } =
+    useWorkflowStream();
 
   // Pulled out so both the stream handler and any retry/manual path can reuse it.
   function applyExtractionResult(result: TenderExtractionResult) {
@@ -364,7 +367,10 @@ export function CreateProjectModal({
         uploadDocument(tenderQueue.files[0], "tender"),
         uploadDocument(contractQueue.files[0], "contract"),
       ]);
-      setSourceDocuments({ tender: tenderDocument, contract: contractDocument });
+      setSourceDocuments({
+        tender: tenderDocument,
+        contract: contractDocument,
+      });
       setProgressStep(1);
 
       const extractionResult = await fetchJson<{
@@ -413,8 +419,10 @@ export function CreateProjectModal({
       return;
     }
 
-    if(!sourceDocuments) {
-      toast.error("Source documents are missing. Please retry the extraction process.");
+    if (!sourceDocuments) {
+      toast.error(
+        "Source documents are missing. Please retry the extraction process.",
+      );
       return;
     }
 
@@ -423,6 +431,9 @@ export function CreateProjectModal({
 
     try {
       const normalizedExtraction = projectExtractionSchema.parse(extraction);
+      const normalizedSigingDate = normalizeDateString(
+        normalizedExtraction.legalAdministrationSignedDate,
+      );
 
       const createdProject = await dispatch(
         createProject({
@@ -432,16 +443,17 @@ export function CreateProjectModal({
             "New Project",
           leadId: selectedLeadId,
           lotSize: Number(
-            normalizedExtraction.shellAndExternalFloorAreaM2 ?? 0,
+            normalizedExtraction.shellAndExternalFloorAreaM2 || 0,
           ),
           startDate:
+            normalizedSigingDate ||
             startDate ||
-            normalizeString(
-              normalizedExtraction.legalAdministrationSignedDate,
-            ) ||
-            new Date().toISOString().slice(0, 10),
+            format(new Date(), "yyyy-MM-dd"),
           estimatedEndDate: format(
-            addMonths(new Date(startDate || new Date()), 8),
+            addMonths(
+              new Date(normalizedSigingDate || startDate || new Date()),
+              8,
+            ),
             "yyyy-MM-dd",
           ),
           address:
@@ -703,7 +715,11 @@ export function CreateProjectModal({
                       <Input
                         className="pl-9"
                         type="date"
-                        value={startDate}
+                        value={
+                          normalizeDateString(
+                            extraction.legalAdministrationSignedDate,
+                          ) || startDate
+                        }
                         onChange={(event) => setStartDate(event.target.value)}
                       />
                     </div>
@@ -833,7 +849,11 @@ export function CreateProjectModal({
         ) : null}
 
         <DialogFooter>
-          <Button variant="outline" disabled={isSubmitting} onClick={() => handleClose(false)}>
+          <Button
+            variant="outline"
+            disabled={isSubmitting}
+            onClick={() => handleClose(false)}
+          >
             Cancel
           </Button>
           {stage === "selection" ? (

@@ -518,6 +518,9 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
         phone: lead.phone,
       }, tx);
 
+      const normalisedStartDate = new Date(startDate);
+      const normalisedEstimatedEndDate = new Date(estimatedEndDate);
+
       const newProject = await tx.project.create({
         data: {
           leadId: lead.id,
@@ -528,15 +531,15 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
           council: council,
           totalBudget: new Prisma.Decimal(projectBudget),
           lotSize: String(lotSize),
-          startDate: new Date(startDate),
-          estimatedEndDate: new Date(estimatedEndDate),
+          startDate: normalisedStartDate,
+          estimatedEndDate: normalisedEstimatedEndDate,
           siteManagerId: siteManagerId,
           requirements: projectRequirements as unknown as Prisma.InputJsonValue,
           customerId: customer.id,
         }
       });
 
-      await createMilestonesFromTemplateForProject(newProject.id, new Date(startDate), tx);
+      await createMilestonesFromTemplateForProject(newProject.id, normalisedStartDate, tx);
 
       const activityLogEntry = createActivityLogEntry("projectCreated", {
         projectType: projectType,

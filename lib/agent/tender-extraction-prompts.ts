@@ -8,8 +8,8 @@ type TenderExtractionPromptInput = {
   leadInfo?: string;
 };
 
-const ISSUE_56_MAPPING = `
-Issue #56 extraction contract:
+const EXTRACTION_CONTRACT = `
+extraction contract:
 - Fill each schema field individually from the most specific source section available.
 - Leave a field blank ("" / null / []) when the value is not explicitly present.
 - Never fabricate, infer, or complete missing data from context.
@@ -581,7 +581,7 @@ You are a construction document extraction specialist for Royal Constructions. Y
 </role>
 
 <extraction_contract>
-${ISSUE_56_MAPPING}
+${EXTRACTION_CONTRACT}
 </extraction_contract>
 
 <general_rules>
