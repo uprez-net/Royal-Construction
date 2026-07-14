@@ -48,6 +48,10 @@ import {
 import { sendOfferDocument } from "@/lib/data/offer-send";
 import { sendTenderForSignature } from "@/lib/data/offer-tender-sign";
 import { sendContractForSignature } from "@/lib/data/offer-contract-sign";
+import {
+  createProjectFromOffer,
+  type ProjectHandoffResult,
+} from "@/lib/data/offer-project-handoff";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import {
   EMPTY_OFFER_IMAGES,
@@ -101,6 +105,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [tenderSendError, setTenderSendError] = useState<string | null>(null);
   const [contractSending, setContractSending] = useState(false);
   const [contractSendError, setContractSendError] = useState<string | null>(null);
+  const [projectCreating, setProjectCreating] = useState(false);
+  const [projectResult, setProjectResult] = useState<ProjectHandoffResult | null>(null);
   const manualLineCounterRef = useRef(0);
 
   function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
@@ -545,6 +551,30 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     })();
   }, [leadId, transition]);
 
+  // Create the Project from the signed Contract: maps the frozen snapshot,
+  // creates milestones + tradie bookings, attaches the executed PDFs, and
+  // closes the offer to PROJECT. Without a leadId it just flips local status.
+  const createProject = useCallback(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null) {
+      transition("project");
+      return;
+    }
+    setProjectCreating(true);
+    setProjectResult(null);
+    void (async () => {
+      try {
+        const result = await createProjectFromOffer({ offerId });
+        setProjectResult(result);
+        if (result.ok) {
+          setStatus("project");
+        }
+      } finally {
+        setProjectCreating(false);
+      }
+    })();
+  }, [leadId, transition]);
+
   return (
     <>
       <OfferWorkspaceScreen
@@ -605,7 +635,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         contractSendError={contractSendError}
         onRecallContract={() => transition("contract_draft")}
         onMarkContractSigned={() => transition("contract_signed")}
-        onCreateProject={() => transition("project")}
+        onCreateProject={createProject}
+        projectCreating={projectCreating}
+        projectResult={projectResult}
         onOverrideReasonChange={setOverrideReason}
         onPaymentScheduleChange={setPaymentSchedule}
         onPriceAdjustmentLabelChange={setPriceAdjustmentLabel}

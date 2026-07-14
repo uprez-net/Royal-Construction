@@ -125,6 +125,8 @@ type OfferWorkspaceScreenProps = {
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
   readonly onCreateProject: () => void;
+  readonly projectCreating?: boolean;
+  readonly projectResult?: import("@/lib/data/offer-project-handoff").ProjectHandoffResult | null;
   readonly onOverrideReasonChange: (value: string) => void;
   readonly onPaymentScheduleChange: (
     rows: readonly OfferPaymentScheduleRow[],
@@ -196,6 +198,8 @@ export function OfferWorkspaceScreen({
   onRecallContract,
   onMarkContractSigned,
   onCreateProject,
+  projectCreating,
+  projectResult,
   onOverrideReasonChange,
   onPaymentScheduleChange,
   onPriceAdjustmentLabelChange,
@@ -401,6 +405,8 @@ export function OfferWorkspaceScreen({
               paymentSchedule={paymentSchedule}
               status={status}
               onCreateProject={onCreateProject}
+              projectCreating={projectCreating}
+              projectResult={projectResult}
             />
           </OfferPhaseGate>
         </div>

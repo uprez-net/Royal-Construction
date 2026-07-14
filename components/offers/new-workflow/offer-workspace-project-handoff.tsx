@@ -9,7 +9,8 @@ import type {
   OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import { CheckCircle2, HardHat, Rocket } from "lucide-react";
+import type { ProjectHandoffResult } from "@/lib/data/offer-project-handoff";
+import { AlertTriangle, CheckCircle2, HardHat, Rocket } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency } from "./offer-workspace-format";
 
@@ -20,6 +21,8 @@ type ProjectHandoffPanelProps = {
   readonly lines: readonly OfferWorkspaceCostLine[];
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly onCreateProject: () => void;
+  readonly projectCreating?: boolean;
+  readonly projectResult?: ProjectHandoffResult | null;
 };
 
 export function ProjectHandoffPanel({
@@ -29,6 +32,8 @@ export function ProjectHandoffPanel({
   lines,
   paymentSchedule,
   onCreateProject,
+  projectCreating = false,
+  projectResult = null,
 }: ProjectHandoffPanelProps) {
   const isCreated = status === "project";
   const costLineCount = lines.filter((line) => line.includedInContract).length;
@@ -49,8 +54,9 @@ export function ProjectHandoffPanel({
           <Banner tone="success">
             <span className="flex items-center gap-2 font-medium">
               <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
-              Project created and handed off. The costing report is seeded and
-              ready for budget-vs-actual tracking.
+              {projectResult?.ok
+                ? `Project created: ${projectResult.projectName} — ${projectResult.milestoneCount} milestones, ${projectResult.schedulesCreated} trade bookings.`
+                : "Project created and handed off."}
             </span>
           </Banner>
         ) : (
@@ -87,21 +93,35 @@ export function ProjectHandoffPanel({
           ) : (
             <Button
               className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+              disabled={projectCreating}
               size="sm"
               type="button"
               onClick={onCreateProject}
             >
               <Rocket className="size-4" aria-hidden="true" />
-              Create Project
+              {projectCreating ? "Creating project…" : "Create Project"}
             </Button>
           )}
           {isCreated ? (
             <span className="text-xs text-muted-foreground">
-              Project routing + the seeded costing report land with the Project
-              module.
+              Open the Projects module to manage milestones and bookings.
             </span>
           ) : null}
         </div>
+
+        {projectResult && !projectResult.ok ? (
+          <p className="text-xs font-medium text-destructive">{projectResult.error}</p>
+        ) : null}
+        {projectResult?.ok && projectResult.warnings.length > 0 ? (
+          <div className="grid gap-1.5 rounded-lg border border-warning/40 bg-warning-light/40 p-3">
+            {projectResult.warnings.map((warning) => (
+              <p key={warning} className="flex items-start gap-2 text-xs text-foreground">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true" />
+                {warning}
+              </p>
+            ))}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
