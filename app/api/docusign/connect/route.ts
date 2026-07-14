@@ -5,12 +5,15 @@ import {
   EnvelopeDocType,
   EnvelopeStatus,
   OfferStatus,
+  Role,
   SignerStatus,
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { downloadCombinedDocument } from "@/lib/docusign/tender-envelope";
+import { createNotification } from "@/types/notification";
+import { triggerNotification } from "@/lib/notification/novu";
 
 // DocuSign Connect (JSON SIM) webhook: keeps Envelope + EnvelopeSignature in
 // step with signing progress, and on completion archives the executed PDF and
@@ -229,11 +232,26 @@ async function syncEnvelopeStatus(
   const signedStatus = isTender
     ? OfferStatus.TENDER_SIGNED
     : OfferStatus.CONTRACT_SIGNED;
+  // Forward-only: transition solely from the matching SENT state so a
+  // replayed completion event can't drag an offer that has already moved on
+  // (e.g. to PROJECT) back to the signed state.
+  const expectedFromStatus = isTender
+    ? OfferStatus.TENDER_SENT
+    : OfferStatus.CONTRACT_SENT;
   const offer = await prisma.offer.findUnique({
     where: { id: parent.offerId },
-    select: { id: true, offerStatus: true },
+    select: {
+      id: true,
+      offerStatus: true,
+      baseReference: true,
+      revisionNumber: true,
+      leadId: true,
+      agreedSnapshot: true,
+      workspaceState: true,
+      lead: { select: { name: true } },
+    },
   });
-  if (offer && offer.offerStatus !== signedStatus) {
+  if (offer && offer.offerStatus === expectedFromStatus) {
     await prisma.$transaction([
       prisma.offer.update({
         where: { id: offer.id },
@@ -248,5 +266,33 @@ async function syncEnvelopeStatus(
         },
       }),
     ]);
+
+    // Contract fully executed → nudge the admins to create the project.
+    // Project creation stays a deliberate click (kickoff dates, site manager,
+    // and booking warnings need a human), so the nudge is the automation.
+    if (!isTender) {
+      try {
+        const admins = await prisma.user.findMany({
+          where: { role: Role.ADMIN },
+          select: { id: true },
+        });
+        const snapshot = (offer.agreedSnapshot ?? offer.workspaceState) as {
+          job?: { siteAddress?: string; clientNames?: string };
+        } | null;
+        await triggerNotification(
+          admins.map((admin) => admin.id),
+          createNotification("contractSigned", {
+            leadId: String(offer.leadId),
+            offerReference: `${offer.baseReference}-R${offer.revisionNumber}`,
+            customerName: snapshot?.job?.clientNames || offer.lead?.name || "the client",
+            siteAddress: snapshot?.job?.siteAddress ?? "",
+          }),
+        );
+      } catch (error) {
+        // The nudge must never fail the webhook — DocuSign would retry the
+        // whole event and re-run the status transition path.
+        console.error("[docusign] contract-signed notification failed:", error);
+      }
+    }
   }
 }
