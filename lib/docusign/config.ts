@@ -12,6 +12,9 @@ export interface DocusignConfig {
   readonly builderSignerName: string;
   readonly builderSignerEmail: string;
   readonly connectWebhookUrl: string | null;
+  // MBA BC4 contract template (see lib/docusign/contract-template-spec.md);
+  // null until the template is created in the DocuSign account.
+  readonly contractTemplateId: string | null;
 }
 
 export function getDocusignConfig(): DocusignConfig {
@@ -52,6 +55,7 @@ export function getDocusignConfig(): DocusignConfig {
     builderSignerName: builderSignerName as string,
     builderSignerEmail: builderSignerEmail as string,
     connectWebhookUrl: process.env.DOCUSIGN_CONNECT_WEBHOOK_URL ?? null,
+    contractTemplateId: process.env.DOCUSIGN_CONTRACT_TEMPLATE_ID ?? null,
   };
 }
 

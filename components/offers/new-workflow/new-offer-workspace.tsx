@@ -47,6 +47,7 @@ import {
 } from "@/lib/data/offer-workspace";
 import { sendOfferDocument } from "@/lib/data/offer-send";
 import { sendTenderForSignature } from "@/lib/data/offer-tender-sign";
+import { sendContractForSignature } from "@/lib/data/offer-contract-sign";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import {
   EMPTY_OFFER_IMAGES,
@@ -98,6 +99,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [sentInfo, setSentInfo] = useState<string | null>(null);
   const [tenderSending, setTenderSending] = useState(false);
   const [tenderSendError, setTenderSendError] = useState<string | null>(null);
+  const [contractSending, setContractSending] = useState(false);
+  const [contractSendError, setContractSendError] = useState<string | null>(null);
   const manualLineCounterRef = useRef(0);
 
   function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
@@ -517,6 +520,31 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     })();
   }, [leadId, transition]);
 
+  // Send the MBA BC4 Contract from the DocuSign template, filled from the
+  // signed Tender's snapshot. Without a leadId (in-memory demo) it just
+  // advances the local status.
+  const sendContract = useCallback(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null) {
+      transition("contract_sent");
+      return;
+    }
+    setContractSending(true);
+    setContractSendError(null);
+    void (async () => {
+      try {
+        const result = await sendContractForSignature({ offerId });
+        if (result.ok) {
+          setStatus("contract_sent");
+        } else {
+          setContractSendError(result.error);
+        }
+      } finally {
+        setContractSending(false);
+      }
+    })();
+  }, [leadId, transition]);
+
   return (
     <>
       <OfferWorkspaceScreen
@@ -572,7 +600,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         onRecallTender={() => transition("tender_draft")}
         onMarkTenderSigned={() => transition("tender_signed")}
         onGenerateContract={() => transition("contract_draft")}
-        onSendContract={() => transition("contract_sent")}
+        onSendContract={sendContract}
+        contractSending={contractSending}
+        contractSendError={contractSendError}
         onRecallContract={() => transition("contract_draft")}
         onMarkContractSigned={() => transition("contract_signed")}
         onCreateProject={() => transition("project")}

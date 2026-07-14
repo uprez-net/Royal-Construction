@@ -27,7 +27,8 @@ const INCLUSIONS_ROWS_PER_PAGE = 12;
 
 type InclusionRow = (typeof STANDARD_INCLUSIONS_SCHEDULE)[number];
 
-function esc(value: string): string {
+// Shared by the Tender and Contract builders (see offer-contract-html.ts).
+export function esc(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -35,7 +36,7 @@ function esc(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function money(value: number | null): string {
+export function money(value: number | null): string {
   if (value === null) return "-";
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
@@ -55,11 +56,11 @@ export function splitOwners(clientNames: string): string[] {
 }
 
 // A DocuSign anchor rendered small and light — present for AutoPlace, unobtrusive.
-function anchor(tag: string): string {
+export function anchor(tag: string): string {
   return `<span style="color:#c8c8c8;font-size:7px;">\\${tag}\\</span>`;
 }
 
-function masthead(): string {
+export function masthead(): string {
   const parts = COMPANY_LINE.split(" | ");
   return `<div class="masthead"><span>${esc(parts[0])}</span><span>${esc(parts.slice(1).join("  |  "))}</span></div>`;
 }
@@ -101,6 +102,12 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     executionPage(job, reference, owners, foot()),
   ].join("");
 
+  return legalDocShell(body);
+}
+
+// Shared A4 page shell + stylesheet for the legal documents (Tender and
+// Contract) so both render with identical branding and print metrics.
+export function legalDocShell(body: string): string {
   return `<!doctype html><html><head><meta charset="utf-8" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }

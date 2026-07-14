@@ -28,6 +28,8 @@ type ContractPanelProps = {
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly onGenerateContract: () => void;
   readonly onSendContract: () => void;
+  readonly contractSending?: boolean;
+  readonly contractSendError?: string | null;
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
 };
@@ -40,6 +42,8 @@ export function ContractPanel({
   paymentSchedule,
   onGenerateContract,
   onSendContract,
+  contractSending = false,
+  contractSendError = null,
   onRecallContract,
   onMarkContractSigned,
 }: ContractPanelProps) {
@@ -83,6 +87,8 @@ export function ContractPanel({
           isSent={isSent}
           isSigned={isSigned}
           isTenderSigned={isTenderSigned}
+          sending={contractSending}
+          sendError={contractSendError}
           onGenerateContract={onGenerateContract}
           onMarkContractSigned={onMarkContractSigned}
           onRecallContract={onRecallContract}
@@ -142,6 +148,8 @@ function ContractActions({
   isDraft,
   isSent,
   isSigned,
+  sending,
+  sendError,
   onGenerateContract,
   onSendContract,
   onRecallContract,
@@ -151,6 +159,8 @@ function ContractActions({
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
+  readonly sending: boolean;
+  readonly sendError: string | null;
   readonly onGenerateContract: () => void;
   readonly onSendContract: () => void;
   readonly onRecallContract: () => void;
@@ -167,9 +177,10 @@ function ContractActions({
       ) : (
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          DocuSign envelope creation and the completion webhook are stubbed here.
-          Wiring: a Contract template populated from this data, builder-then-
-          customer routing, and a Connect webhook to record signatures (ADR 0001).
+          Sending creates a DocuSign envelope from the MBA BC4 contract
+          template, pre-filled from the signed Tender. The builder signs first
+          (completing any open particulars), then the customer. The Connect
+          webhook records signatures and files the executed contract.
         </p>
       )}
 
@@ -189,12 +200,13 @@ function ContractActions({
         {isDraft ? (
           <Button
             className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+            disabled={sending}
             size="sm"
             type="button"
             onClick={onSendContract}
           >
             <Send className="size-4" aria-hidden="true" />
-            Send for signature via DocuSign
+            {sending ? "Sending envelope…" : "Send for signature via DocuSign"}
           </Button>
         ) : null}
 
@@ -221,6 +233,10 @@ function ContractActions({
           </>
         ) : null}
       </div>
+
+      {sendError ? (
+        <p className="text-xs font-medium text-destructive">{sendError}</p>
+      ) : null}
     </div>
   );
 }
