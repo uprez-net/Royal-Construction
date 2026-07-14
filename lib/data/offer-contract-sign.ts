@@ -104,62 +104,41 @@ export async function sendContractForSignature(input: {
   const owners = splitOwners(job.clientNames);
   const primaryOwner = owners[0];
 
-  // ── Tab values (labels defined in contract-template-spec.md) ──
+  // ── Tab values (labels defined by scripts/docusign/create-bc4-template.ts;
+  // unlocked particulars live in the template and are completed by the
+  // builder while signing) ──
   const locked = (tabLabel: string, value: string): ContractTabValue => ({ tabLabel, value, locked: true });
-  const open = (tabLabel: string): ContractTabValue => ({ tabLabel, value: "", locked: false });
 
   const priceLabel = moneyWithCents(contractValue);
   const stageRows = snapshot.paymentSchedule.slice(0, 7);
-  const stageTabs: ContractTabValue[] = [];
-  for (let i = 0; i < 7; i += 1) {
-    const row = stageRows[i];
-    if (row) {
+  const paymentScheduleLine = stageRows
+    .map((row, index) => {
       const pct = (row.percentOfContract * 100).toFixed(0);
-      stageTabs.push(
-        locked(`paymentStage${i + 1}`, `(${i + 1}) ${row.stageName} ${pct}%`),
-        locked(`paymentAmount${i + 1}`, moneyWithCents(contractValue * row.percentOfContract)),
-      );
-    } else {
-      stageTabs.push(locked(`paymentStage${i + 1}`, ""), locked(`paymentAmount${i + 1}`, ""));
-    }
-  }
+      return `(${index + 1}) ${row.stageName} ${pct}% ${moneyWithCents(contractValue * row.percentOfContract)}`;
+    })
+    .join("  |  ");
   const depositRow =
     stageRows.find((r) => r.stageName.toLowerCase().includes("deposit")) ?? stageRows[0];
   const exclusions = snapshot.draft.exclusionBullets;
 
   const builderTextTabs: ContractTabValue[] = [
     locked("contractPrice", priceLabel),
+    locked("contractPriceTotal", priceLabel),
     locked("ownerNames", job.clientNames),
-    open("ownerAddress"),
-    open("ownerPhone"),
-    open("ownerMobile"),
     locked("ownerEmail", customerEmail),
     locked("siteAddress", job.siteAddress),
-    locked("contractPriceFinance", priceLabel),
-    open("hbcfCost"),
     locked("variationPercent", "10%"),
-    ...stageTabs,
-    locked("contractPriceSchedule", priceLabel),
+    locked("paymentSchedule", paymentScheduleLine),
     locked(
       "depositAmount",
       depositRow ? moneyWithCents(contractValue * depositRow.percentOfContract) : "",
     ),
-    open("paymentDays"),
-    open("interestRate"),
-    open("commencementDate"),
-    open("constructionDays"),
     locked("excludedDays", "Saturdays, Sundays and NSW Public Holidays"),
-    open("demolitionMaterials"),
     locked("defectsLiabilityWeeks", "12 Weeks"),
-    open("preContractCosts"),
     locked("workDescription", [job.buildType, ...job.buildScope].filter(Boolean).join(". ")),
     locked("exclusionsList", exclusions.join("\n")),
-    open("specialConditions"),
   ];
-  const ownerTextTabs: ContractTabValue[] = [
-    locked("ownerPrintName", primaryOwner),
-    open("ownerCapacity"),
-  ];
+  const ownerTextTabs: ContractTabValue[] = [locked("ownerPrintName", primaryOwner)];
 
   let envelope;
   try {

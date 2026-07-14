@@ -1,74 +1,71 @@
-# DocuSign Contract Template Spec — MBA BC4 (March 2025, NSW)
+# DocuSign Contract Template — MBA BC4 (March 2025, NSW)
 
 The building Contract is the MBA-copyrighted "Residential Building (BC4)"
-standard form, so it is NOT generated at runtime like the Tender. Instead a
-DocuSign **template** is created once from the blank BC4 PDF, and
+standard form, so it is NOT generated at runtime like the Tender. A DocuSign
+**template** holds the clean blank BC4 PDF plus all signature and data tabs;
 `sendContractForSignature` (lib/data/offer-contract-sign.ts) creates envelopes
-from it, injecting values from the signed Tender by **tab label**.
+from it and fills values from the signed Tender by **tab label**.
 
-Set the template's ID in `DOCUSIGN_CONTRACT_TEMPLATE_ID`.
+## The template is created by script, not by hand
 
-## How to create the template
+```
+pnpm exec tsx scripts/docusign/create-bc4-template.ts <path-to-blank-BC4.pdf>
+```
 
-1. DocuSign → Templates → New → upload the **blank** BC4 PDF.
-2. Add two recipient roles, in this signing order:
-   - Role name `Builder` — routing order 1 (signs first, acting as the final
-     review gate for any particulars left blank).
-   - Role name `Owner` — routing order 2 (the primary/authorised signatory;
-     the BC4 form carries a single owner signature block).
-3. Place the signature fields:
-   - Agreement page ("IT IS AGREED THAT"): Owner **Sign Here** + Builder
-     **Sign Here** on their respective lines; **Date Signed** next to the
-     day/month/year line for whichever role should stamp it.
-   - Schedule 1 owner acknowledgment page: Owner **Sign Here**, **Date
-     Signed**, plus the `ownerPrintName` / `ownerCapacity` text tabs below.
-4. Add **Text** fields with EXACTLY the tab labels below. Assign each one to
-   the **Builder** role (values render before the Owner signs). Leave
-   "required" off for the optional ones.
-5. Builder identity (name, address, licence 383992C, ABN, bank account) is
-   constant — type it into the template document itself, not as tabs.
-6. Schedule 1 checklist boxes: pre-tick the 17 "Yes" boxes in the template.
+The MBA webform export embeds its merge-field tokens as invisible text at
+every fill position (`contract_price_value`, `site_address_value`,
+`signed_by_owners_value`, …). Every tab AutoPlaces onto those anchors, so the
+template needs no manual field placement and is fully reproducible — edit the
+script and re-run it, then update `DOCUSIGN_CONTRACT_TEMPLATE_ID` in the env.
 
-The code fills known values as **locked** tabs; anything it cannot derive is
-sent **unlocked and empty** so the Builder completes it during their signing
-session.
+A token that appears in several places yields a tab at every occurrence
+(contract price on pages i + ii, bank details on pages iii + vi) — one label
+fills them all.
 
-## Tab labels
+## Roles
 
-| Tab label | Page | Filled from | Notes |
-|---|---|---|---|
-| `contractPrice` | i (price warning) | tender contract sum | "$1,367,500.00" format |
-| `ownerNames` | ii WHO | job.clientNames | |
-| `ownerAddress` | ii WHO | — (unlocked) | postal address not captured yet |
-| `ownerPhone` | ii WHO | — (unlocked) | |
-| `ownerMobile` | ii WHO | — (unlocked) | |
-| `ownerEmail` | ii WHO | job.clientEmail / send input | |
-| `siteAddress` | ii WHERE | job.siteAddress | |
-| `contractPriceFinance` | ii FINANCE | tender contract sum | same value as `contractPrice` |
-| `hbcfCost` | ii FINANCE | — (unlocked) | HBCF premium |
-| `variationPercent` | Sch 2 item 1 | constant "10%" | editable before send in code |
-| `paymentStage1`…`paymentStage7` | Sch 2 item 4(a) | payment schedule stage labels | e.g. "(2) Slab 15%" |
-| `paymentAmount1`…`paymentAmount7` | Sch 2 item 4(a) | stage % × contract sum | blank rows stay empty |
-| `contractPriceSchedule` | Sch 2 item 4(a) | tender contract sum | |
-| `depositAmount` | Sch 2 item 4(b) | deposit stage amount | |
-| `paymentDays` | Sch 2 item 4(d) | — (unlocked) | blank ⇒ 5 days per form |
-| `interestRate` | Sch 2 item 4(e) | — (unlocked) | blank ⇒ 15% p.a. per form |
-| `commencementDate` | Sch 2 item 5(a) | — (unlocked) | |
-| `constructionDays` | Sch 2 item 5(b) | — (unlocked) | |
-| `excludedDays` | Sch 2 item 5(c) | constant | "Saturdays, Sundays and NSW Public Holidays" |
-| `demolitionMaterials` | Sch 2 item 6 | — (unlocked) | |
-| `defectsLiabilityWeeks` | Sch 2 item 7 | constant "12 Weeks" | |
-| `preContractCosts` | Sch 2 item 9 | — (unlocked) | |
-| `workDescription` | Sch 3 (a) | job.buildType + buildScope | |
-| `exclusionsList` | Sch 3 (b) | tender exclusion bullets | multiline |
-| `specialConditions` | Sch 4 | — (unlocked) | |
-| `ownerPrintName` | Sch 1 ack (Owner role) | first owner name | assign to **Owner** role |
-| `ownerCapacity` | Sch 1 ack (Owner role) | — (unlocked) | e.g. "Director"; assign to **Owner** role |
+- `Builder` — routing 1. Signs first and acts as the review gate: derived
+  values arrive locked; particulars we don't capture (HBCF premium,
+  commencement date, construction days, hourly rates, …) are unlocked template
+  fields the builder completes during signing. Builder identity (name,
+  address, licence, ABN, bank account) is locked constants in the template.
+- `Owner` — routing 2. The primary/authorised signatory (the BC4 form carries
+  a single owner signature block): agreement signature, Schedule 1
+  acknowledgment signature + date + print name + capacity, and the agreement
+  date sentence (day / month / year).
 
-Checkbox tabs (assign to Builder role):
+Schedule 1's 17 statutory checklist "Yes" boxes are pre-ticked and locked in
+the template.
 
-| Tab label | Page | Filled from |
+## Labels the send action fills (locked at envelope time)
+
+| Tab label | Anchor token | Value |
 |---|---|---|
-| `gstInclusive` | ii FINANCE | checked (price is inc GST) |
-| `hbcfIncluded` | ii FINANCE | checked |
-| `exclusionsYes` | Sch 3 (b) | checked when exclusions exist |
+| `contractPrice` | `contract_price_value` (pages i + ii) | tender contract sum |
+| `contractPriceTotal` | `total_value` (Schedule 2) | tender contract sum |
+| `ownerNames` | `owners_0_owner_name_value` | job.clientNames |
+| `ownerEmail` | `owners_0_owner_email_value` | client email |
+| `siteAddress` | `site_address_value` | job.siteAddress |
+| `variationPercent` | `percentage_allowed_on_variations_value` | "10%" |
+| `paymentSchedule` | `installments_0_installment_item_value` | all stages, compact single field |
+| `depositAmount` | `deposit_value` | deposit stage amount |
+| `excludedDays` | `days_not_included_value` | "Saturdays, Sundays and NSW Public Holidays" |
+| `defectsLiabilityWeeks` | `defects_liability_period_value` | "12 Weeks" |
+| `workDescription` | `description_of_the_work_to_be_completed_value` | buildType + buildScope |
+| `exclusionsList` | `exclusions_value` | tender exclusion bullets |
+| `ownerPrintName` | `acknowledgement_of_owner_docusign_0_name_value` | first owner (Owner role) |
+
+Checkboxes set by the action: `gstInclusive`, `hbcfIncluded`, `exclusionsYes`.
+
+Unlocked template fields (builder completes while signing): `ownerAddress`,
+`ownerPhone`, `ownerMobile`, `lendingAuthority`, `fundingOwner`, `hbcfCost`,
+`paymentDays`, `interestRate`, `commencementDate`, `constructionDays`,
+`demolitionMaterials`, `preContractCosts`, `specialConditions`; owner-side:
+`signedDay`, `signedMonth`, `signedYear`, `ownerCapacity`, plus the two owner
+acknowledgment checkboxes.
+
+Note on Schedule 2 payments: the blank form prints a single stage row (the MBA
+webform reflows per-row), so all stages render in one compact field —
+"(1) Deposit 5% $47,250.00 | (2) Slab 15% …". If a fuller layout is ever
+needed, attach a generated payment-schedule annexure to the envelope (the form
+itself invites attached schedules).
