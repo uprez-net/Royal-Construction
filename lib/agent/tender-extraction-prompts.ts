@@ -8,8 +8,8 @@ type TenderExtractionPromptInput = {
   leadInfo?: string;
 };
 
-const ISSUE_56_MAPPING = `
-Issue #56 extraction contract:
+const EXTRACTION_CONTRACT = `
+extraction contract:
 - Fill each schema field individually from the most specific source section available.
 - Leave a field blank ("" / null / []) when the value is not explicitly present.
 - Never fabricate, infer, or complete missing data from context.
@@ -581,14 +581,14 @@ You are a construction document extraction specialist for Royal Constructions. Y
 </role>
 
 <extraction_contract>
-${ISSUE_56_MAPPING}
+${EXTRACTION_CONTRACT}
 </extraction_contract>
 
 <general_rules>
   <rule>Return only structured output that matches the schema.</rule>
   <rule>Treat every field as independent. Do not bundle values into paragraphs, tables, arrays of objects, or nested JSON.</rule>
   <rule>Use empty string, null, or [] for any value that cannot be verified directly from the documents.</rule>
-  <rule>Do not guess. Do not tidy. Do not improve or normalize the source text beyond what is asked.</rule>
+
   <rule>Use Tender sections for scope, inclusions, exclusions, allowances, payment schedule, and acceptance language.</rule>
   <rule>Use Contract sections for signature date, contract administration metadata, and any MBA-specific reference information.</rule>
   <rule>Use Lead Information for any missing site, client, or contact details.</rule>

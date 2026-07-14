@@ -12,6 +12,7 @@ import { getWritable, sleep } from "workflow";
 import { findLeadById } from "@/lib/data/leads";
 import { ObjectToMarkdown } from "@/utils/converter";
 import pLimit from "p-limit";
+import type { OCRPageObject } from "@mistralai/mistralai/models/components";
 
 const limit = pLimit(4);
 
@@ -57,29 +58,16 @@ export type TenderExtractionResult = {
 // workflow function body (no 'use step' needed).
 // ---------------------------------------------------------------------------
 
-function normalizePageMarkdown(page: unknown, index: number) {
-    if (page && typeof page === "object") {
-        const record = page as Record<string, unknown>;
-        const markdown =
-            typeof record.markdown === "string"
-                ? record.markdown
-                : typeof record.text === "string"
-                    ? record.text
-                    : typeof record.content === "string"
-                        ? record.content
-                        : "";
-        const pageNumber =
-            typeof record.pageNumber === "number"
-                ? record.pageNumber
-                : typeof record.index === "number"
-                    ? record.index + 1
-                    : index + 1;
-        return `\n\n--- PAGE ${pageNumber} ---\n\n${markdown}`;
-    }
-    return `\n\n--- PAGE ${index + 1} ---\n\n${String(page ?? "")}`;
+function normalizePageMarkdown(page: OCRPageObject, index: number) {
+    let pageInfo = `\n\n--- PAGE ${index + 1} ---\n\n${page.markdown.trim()}\n\n`;
+    //append table data and image anotations
+    pageInfo += page.tables?.map((table) => `\n\n--- TABLE ---\n\n${table.content.trim()}\n\n`).join("") ?? "";
+    pageInfo += page.images?.map((image) => `\n\n--- IMAGE ---\n\n${image.imageAnnotation ?? ""}\n\n`).join("") ?? "";
+
+    return pageInfo;
 }
 
-function pageBlocksToMarkdown(pages: unknown) {
+function pageBlocksToMarkdown(pages: OCRPageObject[]) {
     const pageArray = Array.isArray(pages) ? pages : pages ? [pages] : [];
     return pageArray.map((page, index) => normalizePageMarkdown(page, index)).join("\n");
 }
@@ -188,16 +176,11 @@ async function failWorkflow(message: string) {
     "use step";
     try {
         console.error(`Workflow failed: ${message}`);
-        const writable = getWritable<TenderExtractionWorkflowStreamEvent>();
-        const writer = writable.getWriter();
-        try {
-            await writer.write({ type: "error", message });
-        } finally {
-            writer.releaseLock();
-        }
+        await writeToStream({ type: "error", message });
     } catch (error) {
         console.error("Error in failWorkflow:", error);
     } finally {
+        await sleep(5000); // Give the client time to receive the error message
         await closeWorkflowStream();
     }
 }
@@ -265,22 +248,18 @@ export const extractTenderAndContractDocuments = async (
         const contractChunks = chunkMarkdown(contractMarkdown, MODEL_CHUNK_CHAR_LIMIT);
         const leadChunks = chunkMarkdown(leadInfo, MODEL_CHUNK_CHAR_LIMIT);
         const chunkCount = Math.max(tenderChunks.length, contractChunks.length, leadChunks.length);
-        // Decide once, explicitly, what happens when one doc runs out of chunks
-        // before another. Empty string is usually the safe default — resending
-        // the full original document on every extra iteration risks re-extraction
-        // and blowing the char limit.
-        const atChunk = (chunks: string[], index: number, whole: string) =>
-            chunks.length <= 1 ? whole : (chunks[index] ?? "");
+
+        const chunkAt = (arr: string[], index: number) => arr[index] ?? "";
 
         const chunkResults = await Promise.all(
-            Array.from({ length: chunkCount }, (_, index) =>
+            Array.from({ length: chunkCount }, (_, i) =>
                 limit(() =>
                     runChunkedExtraction({
-                        tenderMarkdown: atChunk(tenderChunks, index, tenderMarkdown),
-                        contractMarkdown: atChunk(contractChunks, index, contractMarkdown),
+                        tenderMarkdown: chunkAt(tenderChunks, i),
+                        contractMarkdown: chunkAt(contractChunks, i),
                         tenderFileName: input.tenderFileName,
                         contractFileName: input.contractFileName,
-                        leadInfo: atChunk(leadChunks, index, leadInfo)
+                        leadInfo: chunkAt(leadChunks, i),
                     })
                 )
             )
