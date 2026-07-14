@@ -438,20 +438,20 @@ export function CreateProjectModal({
       const createdProject = await dispatch(
         createProject({
           projectName:
-            normalizeString(normalizedExtraction.projectName) ??
-            siteAddress ??
+            normalizeString(normalizedExtraction.projectName) ||
+            siteAddress ||
             "New Project",
           leadId: selectedLeadId,
           lotSize: Number(
-            normalizedExtraction.shellAndExternalFloorAreaM2 ?? 0,
+            normalizedExtraction.shellAndExternalFloorAreaM2 || 0,
           ),
           startDate:
-            normalizedSigingDate ??
-            startDate ??
+            normalizedSigingDate ||
+            startDate ||
             format(new Date(), "yyyy-MM-dd"),
           estimatedEndDate: format(
             addMonths(
-              new Date(normalizedSigingDate ?? startDate ?? new Date()),
+              new Date(normalizedSigingDate || startDate || new Date()),
               8,
             ),
             "yyyy-MM-dd",
@@ -459,9 +459,9 @@ export function CreateProjectModal({
           address:
             normalizeString(
               normalizedExtraction.legalAdministrationSiteAddress,
-            ) ??
-            siteAddress ??
-            selectedLocation.label ??
+            ) ||
+            siteAddress ||
+            selectedLocation.label ||
             "",
           council: selectedLocation.council,
           siteManagerId: selectedSiteManager.id,
@@ -718,7 +718,7 @@ export function CreateProjectModal({
                         value={
                           normalizeDateString(
                             extraction.legalAdministrationSignedDate,
-                          ) ?? startDate
+                          ) || startDate
                         }
                         onChange={(event) => setStartDate(event.target.value)}
                       />
