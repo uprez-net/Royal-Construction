@@ -28,6 +28,7 @@ import { ReactEmailIframe } from "../render-email";
 import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
 import { CustomTemplateCreation } from "./custom-template-creation";
 import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
+import { cn } from "@/lib/utils";
 
 interface EmailCampaignModalProps {
   leads: Lead[];
@@ -297,9 +298,9 @@ export function EmailCampaignModal({
                 let cleanHtml = iframeDoc.body.innerHTML;
                 cleanHtml = cleanHtml.replace(/\s*contenteditable="[^"]*"/gi, "",);
                 cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, "",);
-                cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi,"",);
-                cleanHtml = cleanHtml.replace(/<script[\s\S]*?<\/script>/gi,"",);
-                cleanHtml = cleanHtml.replace(/outline:\s*2px dashed #c6923a;?\s*/gi,"",);
+                cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, "",);
+                cleanHtml = cleanHtml.replace(/<script[\s\S]*?<\/script>/gi, "",);
+                cleanHtml = cleanHtml.replace(/outline:\s*2px dashed #c6923a;?\s*/gi, "",);
                 cleanHtml = cleanHtml.replace(/outline-offset:\s*2px;?\s*/gi, "",);
                 cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, "",);
                 finalHtmlBody = cleanHtml;
@@ -576,20 +577,22 @@ export function EmailCampaignModal({
                         variant="ghost"
                         size="sm"
                         onClick={selectAllVisible}
-                        className="h-7 px-2 text-[11px]"
+                        className="group h-7 px-2 text-[11px] text-slate-600 transition-all duration-200 hover:cursor-pointer hover:bg-[color:var(--primary-color)]/10 hover:text-[var(--primary-color)]"
                       >
-                        <CheckSquare className="mr-1 size-3" />
-                        All
+                        <CheckSquare className="mr-1 size-3 transition-all duration-200 group-hover:scale-110 group-hover:text-[var(--primary-color)]" />
+                        <span className="transition-colors duration-200">
+                          All
+                        </span>
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={deselectAll}
-                        className="h-7 px-2 text-[11px]"
+                        className="group h-7 px-2 text-[11px] text-slate-600 transition-all duration-200 hover:cursor-pointer hover:bg-slate-100 hover:text-slate-800"
                       >
-                        <Square className="mr-1 size-3" />
-                        None
+                        <Square className="mr-1 size-3 transition-all duration-200 group-hover:scale-110 group-hover:text-slate-700" />
+                        <span className="transition-colors duration-200">None</span>
                       </Button>
                       {bulkSelected.size > 0 && (
                         <Button
@@ -597,10 +600,12 @@ export function EmailCampaignModal({
                           variant="destructive"
                           size="sm"
                           onClick={removeSelected}
-                          className="h-7 px-2 text-[11px]"
+                          className="group h-7 px-2 text-[11px] text-red-500 transition-all duration-200 hover:bg-red-50 hover:text-red-600 hover:shadow-sm"
                         >
-                          <UserMinus className="mr-1 size-3" />
-                          Remove ({bulkSelected.size})
+                          <UserMinus className="mr-1 size-3 transition-all duration-200 group-hover:scale-110" />
+                          <span className="transition-colors duration-200">
+                            Remove ({bulkSelected.size})
+                          </span>
                         </Button>
                       )}
                       <Button
@@ -611,9 +616,12 @@ export function EmailCampaignModal({
                           setBulkSelectMode(false);
                           setBulkSelected(new Set());
                         }}
-                        className="h-7 px-2 text-[11px]"
+                        className="group h-7 px-2 text-[11px] text-slate-500 transition-all duration-200 hover:cursor-pointer hover:bg-slate-100 hover:text-slate-700"
                       >
-                        Cancel
+                        <X className="mr-1 size-3 transition-all duration-200 group-hover:rotate-90 group-hover:scale-110" />
+                        <span className="transition-colors duration-200">
+                          Cancel
+                        </span>
                       </Button>
                     </>
                   ) : (
@@ -623,10 +631,12 @@ export function EmailCampaignModal({
                       size="sm"
                       onClick={() => setBulkSelectMode(true)}
                       disabled={activeRecipients.length === 0}
-                      className="h-7 px-2 text-[11px]"
+                      className="group h-7 px-2 text-[11px] text-slate-500 transition-all duration-200 hover:cursor-pointer hover:bg-slate-100 hover:text-slate-700"
                     >
-                      <CheckSquare className="mr-1 size-3" />
-                      Select
+                      <CheckSquare className="mr-1 size-3 transition-all duration-200 group-hover:scale-110" />
+                      <span className="transition-colors duration-200">
+                        Select
+                      </span>
                     </Button>
                   )}
                 </div>
@@ -662,7 +672,11 @@ export function EmailCampaignModal({
                     {filteredActive.map((recipient) => (
                       <div
                         key={recipient.email}
-                        className={`group flex items-center gap-2 px-3 py-1.5 transition-colors hover:bg-muted/50 ${bulkSelected.has(recipient.email) ? "bg-teal-50/60" : ""}`}
+                        className={cn(
+                          "group flex items-center gap-2 rounded-md px-3 py-1.5 transition-all duration-200 hover:bg-[color:var(--primary-color)]/5",
+                          bulkSelected.has(recipient.email) &&
+                          "bg-[color:var(--primary-color)]/10"
+                        )}
                       >
                         {/* Bulk select checkbox */}
                         {bulkSelectMode && (
@@ -671,12 +685,12 @@ export function EmailCampaignModal({
                             onClick={() =>
                               toggleBulkSelect(recipient.email)
                             }
-                            className="shrink-0 text-teal-600"
+                            className="shrink-0 rounded transition-all duration-200 hover:scale-110"
                           >
                             {bulkSelected.has(recipient.email) ? (
-                              <CheckSquare className="size-4" />
+                               <CheckSquare className="size-4 text-[var(--primary-color)] transition-all duration-200 group-hover:scale-110" />
                             ) : (
-                              <Square className="size-4 text-muted-foreground/40" />
+                               <Square className="size-4 text-muted-foreground/40 transition-all duration-200 group-hover:scale-110 group-hover:text-[var(--primary-color)]" />
                             )}
                           </button>
                         )}
@@ -693,10 +707,10 @@ export function EmailCampaignModal({
                         <button
                           type="button"
                           onClick={() => removeRecipient(recipient.email)}
-                          className="shrink-0 rounded-md p-1 text-muted-foreground/50 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                          className="shrink-0 rounded-md p-1 text-muted-foreground/40 opacity-0 transition-all duration-200 hover:scale-110 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                           title="Remove recipient"
                         >
-                          <X className="size-3.5" />
+                           <X className="size-3.5 transition-transform duration-200 group-hover:rotate-90" />
                         </button>
                       </div>
                     ))}
