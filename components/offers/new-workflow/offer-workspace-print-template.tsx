@@ -103,6 +103,7 @@ export function OfferWorkspacePrintTemplate(
     ),
     ...inclusionPages.map(
       (rows, i) =>
+        // eslint-disable-next-line react/display-name -- page factory, not a component
         (n: number, total: number) =>
           (
             <PrintInclusionsPage

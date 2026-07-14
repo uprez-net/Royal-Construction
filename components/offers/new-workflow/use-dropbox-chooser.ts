@@ -40,8 +40,9 @@ export function useDropboxChooser() {
       return;
     }
     if (window.Dropbox) {
-      setReady(true);
-      return;
+      // Deferred so the effect never sets state synchronously (react-hooks rule).
+      const timer = setTimeout(() => setReady(true), 0);
+      return () => clearTimeout(timer);
     }
     const existing = document.getElementById(SCRIPT_ID);
     if (existing) {
