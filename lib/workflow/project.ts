@@ -12,11 +12,12 @@ import { getWritable, sleep } from "workflow";
 import { findLeadById } from "@/lib/data/leads";
 import { ObjectToMarkdown } from "@/utils/converter";
 import pLimit from "p-limit";
+import type { OCRPageObject } from "@mistralai/mistralai/models/components";
 
 const limit = pLimit(4);
 
 const OCR_TIMEOUT_MS = 75_000;
-// const MODEL_CHUNK_CHAR_LIMIT = 40_000;
+const MODEL_CHUNK_CHAR_LIMIT = 40_000;
 
 const EXTRACTION_PROGRESS = [
     "Uploading documents",
@@ -57,52 +58,39 @@ export type TenderExtractionResult = {
 // workflow function body (no 'use step' needed).
 // ---------------------------------------------------------------------------
 
-function normalizePageMarkdown(page: unknown, index: number) {
-    if (page && typeof page === "object") {
-        const record = page as Record<string, unknown>;
-        const markdown =
-            typeof record.markdown === "string"
-                ? record.markdown
-                : typeof record.text === "string"
-                    ? record.text
-                    : typeof record.content === "string"
-                        ? record.content
-                        : "";
-        const pageNumber =
-            typeof record.pageNumber === "number"
-                ? record.pageNumber
-                : typeof record.index === "number"
-                    ? record.index + 1
-                    : index + 1;
-        return `\n\n--- PAGE ${pageNumber} ---\n\n${markdown}`;
-    }
-    return `\n\n--- PAGE ${index + 1} ---\n\n${String(page ?? "")}`;
+function normalizePageMarkdown(page: OCRPageObject, index: number) {
+    let pageInfo = `\n\n--- PAGE ${index + 1} ---\n\n${page.markdown.trim()}\n\n`;
+    //append table data and image anotations
+    pageInfo += page.tables?.map((table) => `\n\n--- TABLE ---\n\n${table.content.trim()}\n\n`).join("") ?? "";
+    pageInfo += page.images?.map((image) => `\n\n--- IMAGE ---\n\n${image.imageAnnotation ?? ""}\n\n`).join("") ?? "";
+
+    return pageInfo;
 }
 
-function pageBlocksToMarkdown(pages: unknown) {
+function pageBlocksToMarkdown(pages: OCRPageObject[]) {
     const pageArray = Array.isArray(pages) ? pages : pages ? [pages] : [];
     return pageArray.map((page, index) => normalizePageMarkdown(page, index)).join("\n");
 }
 
-// function chunkMarkdown(markdown: string, maxChars: number) {
-//     if (markdown.length <= maxChars) {
-//         return [markdown];
-//     }
-//     const chunks: string[] = [];
-//     let start = 0;
-//     while (start < markdown.length) {
-//         let end = Math.min(start + maxChars, markdown.length);
-//         if (end < markdown.length) {
-//             const newline = markdown.lastIndexOf("\n", end);
-//             if (newline > start + Math.floor(maxChars / 2)) {
-//                 end = newline;
-//             }
-//         }
-//         chunks.push(markdown.slice(start, end).trim());
-//         start = end;
-//     }
-//     return chunks.filter(Boolean);
-// }
+function chunkMarkdown(markdown: string, maxChars: number) {
+    if (markdown.length <= maxChars) {
+        return [markdown];
+    }
+    const chunks: string[] = [];
+    let start = 0;
+    while (start < markdown.length) {
+        let end = Math.min(start + maxChars, markdown.length);
+        if (end < markdown.length) {
+            const newline = markdown.lastIndexOf("\n", end);
+            if (newline > start + Math.floor(maxChars / 2)) {
+                end = newline;
+            }
+        }
+        chunks.push(markdown.slice(start, end).trim());
+        start = end;
+    }
+    return chunks.filter(Boolean);
+}
 
 function mergeExtraction(base: ProjectExtractionData, next: Partial<ProjectExtractionData>) {
     const merged: ProjectExtractionData = { ...base };
@@ -261,22 +249,22 @@ export const extractTenderAndContractDocuments = async (
         await emitStage("Running structured extraction");
 
         const leadInfo = await getLeadInfo(input.leadId);
-        // const tenderChunks = chunkMarkdown(tenderMarkdown, MODEL_CHUNK_CHAR_LIMIT);
-        // const contractChunks = chunkMarkdown(contractMarkdown, MODEL_CHUNK_CHAR_LIMIT);
-        // const leadChunks = chunkMarkdown(leadInfo, MODEL_CHUNK_CHAR_LIMIT);
-        // const chunkCount = Math.max(tenderChunks.length, contractChunks.length, leadChunks.length);
+        const tenderChunks = chunkMarkdown(tenderMarkdown, MODEL_CHUNK_CHAR_LIMIT);
+        const contractChunks = chunkMarkdown(contractMarkdown, MODEL_CHUNK_CHAR_LIMIT);
+        const leadChunks = chunkMarkdown(leadInfo, MODEL_CHUNK_CHAR_LIMIT);
+        const chunkCount = Math.max(tenderChunks.length, contractChunks.length, leadChunks.length);
 
-        const MULTI_RUN_COUNT = 3;
+        const chunkAt = (arr: string[], index: number) => arr[index] ?? "";
 
         const chunkResults = await Promise.all(
-            Array.from({ length: MULTI_RUN_COUNT }, () =>
+            Array.from({ length: chunkCount }, (_, i) =>
                 limit(() =>
                     runChunkedExtraction({
-                        tenderMarkdown,
-                        contractMarkdown,
+                        tenderMarkdown: chunkAt(tenderChunks, i),
+                        contractMarkdown: chunkAt(contractChunks, i),
                         tenderFileName: input.tenderFileName,
                         contractFileName: input.contractFileName,
-                        leadInfo
+                        leadInfo: chunkAt(leadChunks, i),
                     })
                 )
             )
