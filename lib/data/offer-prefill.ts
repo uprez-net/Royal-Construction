@@ -130,6 +130,8 @@ export async function generateOfferPrefillFromLead(input: {
   if (ai.ok) {
     const d = ai.draft;
     if (d.buildType.trim()) job.buildType = d.buildType.trim();
+    // The schema constrains facade to a valid option or "" (no guess).
+    if (d.facade) job.facade = d.facade;
     const scope = d.buildScope
       .map((bullet) => bullet.trim())
       .filter(Boolean);

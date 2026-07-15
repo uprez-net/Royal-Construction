@@ -7,6 +7,11 @@ import {
 } from "ai";
 import { z } from "zod";
 import { gateway } from "@/lib/model";
+import { FACADE_OPTIONS } from "@/lib/offer/workspace-model";
+
+const FACADE_VALUES = FACADE_OPTIONS.map((option) => option.value);
+// "" = no façade evidenced (the model must not guess one).
+const FACADE_ENUM = ["", ...FACADE_VALUES] as [string, ...string[]];
 
 // AI pre-fill for the offer workspace — Phase 1 (text-only). Reads a lead's
 // conversation/notes and drafts the FACTUAL, descriptive job fields the
@@ -26,6 +31,11 @@ export const offerPrefillSchema = z.object({
     .array(z.string())
     .describe(
       "Short customer-facing feature bullets describing the scope the client has discussed (e.g. '4 Bedrooms + Study', 'Double Garage', 'Alfresco', 'Butler's Pantry'). Only include features actually mentioned in the lead context. Empty array if none are evidenced.",
+    ),
+  facade: z
+    .enum(FACADE_ENUM)
+    .describe(
+      `The façade style/material ONLY if the lead clearly indicates one — must be exactly one of: ${FACADE_VALUES.join(", ")}. Empty string if the lead does not mention a façade style or material.`,
     ),
   introText: z
     .string()
@@ -51,6 +61,7 @@ const SYSTEM_PROMPT = `You are an assistant for Royal Constructions Pty Ltd, a N
 <what_to_produce>
 - buildType: a short descriptive label for the build.
 - buildScope: short customer-facing feature bullets for what the client wants built.
+- facade: the façade style/material, but ONLY when the lead clearly indicates one (e.g. mentions "Hamptons", "rendered", "face brick", "coastal", "contemporary") — pick the closest allowed option, otherwise leave it "".
 - introText: a brief, warm proposal introduction tailored to this client.
 - confidence + notesForEstimator: your self-assessment.
 </what_to_produce>
