@@ -151,16 +151,18 @@ export const DEFAULT_LEGACY_PRICING_SETTINGS: LegacyWorkbookPricingSettings = {
   otherAdjustmentFixed: 0,
 };
 
+// A fresh offer starts with blank client/site identity — it is synced from the
+// DB reference and pre-filled from the lead on load (see NewOfferWorkspace).
+// The floor-area / cost figures below remain a working seed the estimator
+// overwrites via the workbook import or manual entry.
 export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
-  reference: "RC-Q-2026-019",
+  reference: "",
   revision: "R1",
-  clientNames: "Mr Mahesh & Ms Anisha",
-  clientEmail: "client@example.com",
-  clientPhone: "0406 555 565",
-  siteAddress: "13 Binalong Road, Pendle Hill NSW 2145",
-  buildType: "Custom Double Storey Residence",
-  // GF + Garage grouped (202.20), FF 165.31, Alfresco + Balcony 31.85, Porch
-  // 8.35 -> total 407.71 m² per the approved plans.
+  clientNames: "",
+  clientEmail: "",
+  clientPhone: "",
+  siteAddress: "",
+  buildType: "",
   groundFloorSqm: 202.2,
   firstFloorSqm: 165.31,
   garageSqm: 0,
@@ -169,15 +171,10 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   grannyFlatSqm: 0,
   validUntil: "2026-07-10",
   preparedBy: "Gurpinder Uppal - Director, Royal Constructions",
-  lotAreaSqm: 689.2,
-  dpNumber: "LOT 3 DP 26294",
-  zoning: "R2",
-  buildScope: [
-    "4 Bedrooms + Office | Master WIR & Ensuite",
-    "2 Ensuites + Main Bath + Toilet | Rumpus",
-    "Double Garage | Butler's Pantry | Alfresco",
-    "Void | Feature Staircase | Balcony",
-  ],
+  lotAreaSqm: 0,
+  dpNumber: "",
+  zoning: "",
+  buildScope: [],
 };
 
 const INITIAL_COST_BY_TASK = new Map<string, number>([

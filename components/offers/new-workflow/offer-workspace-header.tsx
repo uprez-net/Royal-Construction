@@ -14,7 +14,7 @@ import {
   type OfferWorkflowPhase,
 } from "@/lib/offer/workflow";
 import { cn } from "@/lib/utils";
-import { Check, Download, Send } from "lucide-react";
+import { Check, Download } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
 
 // The workflow runs across three phases — Offer, Tender, Contract — then the
@@ -72,7 +72,6 @@ type OfferWorkspaceHeaderProps = {
   readonly customerPrice: OfferCustomerPrice;
   readonly job: OfferWorkspaceJob;
   readonly onDownloadPreview: () => void;
-  readonly onMarkSent: () => void;
   readonly status: OfferWorkspaceStatus;
 };
 
@@ -80,7 +79,6 @@ export function OfferWorkspaceHeader({
   customerPrice,
   job,
   onDownloadPreview,
-  onMarkSent,
   status,
 }: OfferWorkspaceHeaderProps) {
   return (
@@ -116,20 +114,6 @@ export function OfferWorkspaceHeader({
           <Button type="button" variant="outline" onClick={onDownloadPreview}>
             <Download className="size-4" aria-hidden="true" />
             Download offer
-          </Button>
-          <Button
-            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-            disabled={customerPrice.needsOverrideReason || status !== "pending"}
-            title={
-              customerPrice.needsOverrideReason
-                ? "Add an override reason before marking the Offer document sent."
-                : undefined
-            }
-            type="button"
-            onClick={onMarkSent}
-          >
-            <Send className="size-4" aria-hidden="true" />
-            Mark sent
           </Button>
         </div>
       </div>

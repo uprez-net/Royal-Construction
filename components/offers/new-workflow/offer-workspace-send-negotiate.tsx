@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { activeOfferPhase } from "@/lib/offer/workflow";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
-import { CheckCircle2, GitBranch, Send, XCircle } from "lucide-react";
+import { CheckCircle2, GitBranch, MailCheck, Send, XCircle } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 
 type SendNegotiatePanelProps = {
@@ -17,7 +17,9 @@ type SendNegotiatePanelProps = {
   readonly sending: boolean;
   readonly sendError: string | null;
   readonly sentInfo: string | null;
+  readonly canMarkSent: boolean;
   readonly onSendOffer: (email: string) => void;
+  readonly onMarkSent: () => void;
   readonly onCreateRevision: () => void;
   readonly onMarkAgreed: () => void;
   readonly onMarkRejected: () => void;
@@ -32,7 +34,9 @@ export function SendNegotiatePanel({
   sending,
   sendError,
   sentInfo,
+  canMarkSent,
   onSendOffer,
+  onMarkSent,
   onCreateRevision,
   onMarkAgreed,
   onMarkRejected,
@@ -95,6 +99,23 @@ export function SendNegotiatePanel({
                 <Send className="size-4" aria-hidden="true" />
                 {sending ? "Sending…" : isSent ? "Resend" : "Send offer"}
               </Button>
+              {isPending ? (
+                <Button
+                  disabled={!canMarkSent}
+                  size="sm"
+                  title={
+                    canMarkSent
+                      ? "Mark the offer as sent without emailing (e.g. sent to the client offline)."
+                      : "Add a price override reason before marking the offer sent."
+                  }
+                  type="button"
+                  variant="outline"
+                  onClick={onMarkSent}
+                >
+                  <MailCheck className="size-4" aria-hidden="true" />
+                  Mark sent
+                </Button>
+              ) : null}
             </div>
             {sendError ? (
               <p className="text-xs font-medium text-destructive">{sendError}</p>
@@ -198,8 +219,9 @@ function StatusBanner({
   if (isPending) {
     return (
       <Banner tone="muted">
-        Not sent yet. Use <strong className="font-medium">Mark sent</strong> in
-        the header to email the Offer document and begin negotiation.
+        Not sent yet. Email the Offer document to the client below, or use{" "}
+        <strong className="font-medium">Mark sent</strong> if you sent it
+        offline, to begin negotiation.
       </Banner>
     );
   }

@@ -106,6 +106,7 @@ type OfferWorkspaceScreenProps = {
   ) => void;
   readonly onRemoveLine: (lineId: string) => void;
   readonly onMarkSent: () => void;
+  readonly canMarkSent: boolean;
   readonly onMarkAgreed: () => void;
   readonly onMarkRejected: () => void;
   readonly onCreateRevision: () => void;
@@ -183,6 +184,7 @@ export function OfferWorkspaceScreen({
   onLineChange,
   onRemoveLine,
   onMarkSent,
+  canMarkSent,
   onMarkAgreed,
   onMarkRejected,
   onCreateRevision,
@@ -230,7 +232,6 @@ export function OfferWorkspaceScreen({
           job={job}
           status={status}
           onDownloadPreview={onDownloadOffer}
-          onMarkSent={onMarkSent}
         />
         <OfferWorkflowSteps status={status} />
       </div>
@@ -350,7 +351,9 @@ export function OfferWorkspaceScreen({
               sending={sending}
               sendError={sendError}
               sentInfo={sentInfo}
+              canMarkSent={canMarkSent}
               onSendOffer={onSendOffer}
+              onMarkSent={onMarkSent}
               onCreateRevision={onCreateRevision}
               onMarkAgreed={onMarkAgreed}
               onMarkRejected={onMarkRejected}

@@ -17,12 +17,11 @@ import {
 import { splitOwners } from "@/lib/offer/offer-tender-html";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
+import { resolveOfferCustomerEmail } from "@/lib/offer/offer-customer-email";
 import {
   createContractEnvelope,
   type ContractTabValue,
 } from "@/lib/docusign/contract-envelope";
-
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -59,6 +58,7 @@ export async function sendContractForSignature(input: {
       offerStatus: true,
       workspaceState: true,
       agreedSnapshot: true,
+      lead: { select: { email: true } },
     },
   });
   if (!offer) {
@@ -94,9 +94,17 @@ export async function sendContractForSignature(input: {
 
   const snapshot = deserializeWorkspace(parseWorkspaceState(state));
   const job = snapshot.job;
-  const customerEmail = (input.customerEmail ?? job.clientEmail).trim();
-  if (!EMAIL_RE.test(customerEmail)) {
-    return { ok: false, error: "Set a valid client email before sending the Contract." };
+  const customerEmail = resolveOfferCustomerEmail({
+    overrideEmail: input.customerEmail,
+    jobEmail: job.clientEmail,
+    leadEmail: offer.lead?.email,
+  });
+  if (!customerEmail) {
+    return {
+      ok: false,
+      error:
+        "No valid client email found on the offer or lead — set the client email in Job setup before sending the Contract.",
+    };
   }
 
   const contractValue = Number(snapshot.selectedPriceInput) || 0;

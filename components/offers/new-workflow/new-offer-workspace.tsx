@@ -346,11 +346,47 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
       offerIdRef.current = loaded.offerId;
       stateVersionRef.current = loaded.stateVersion;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+      // Show the real minted reference/revision, never the seed default.
+      const baseReference = loaded.reference.replace(/-R\d+$/, "");
+      const revisionLabel = `R${loaded.revisionNumber}`;
       if (loaded.snapshot) {
         hydrateSnapshot(loaded.snapshot);
+        setJob((current) => ({
+          ...current,
+          reference: baseReference,
+          revision: revisionLabel,
+        }));
         lastSavedRef.current = JSON.stringify(loaded.snapshot);
       } else {
+        // Brand-new offer: sync the reference, then auto pre-fill from the lead
+        // so Job setup is not blank/sample data (Phase 0 + Phase 1).
+        setJob((current) => ({
+          ...current,
+          reference: baseReference,
+          revision: revisionLabel,
+        }));
         lastSavedRef.current = JSON.stringify(snapshotRef.current);
+        setPrefilling(true);
+        setPrefillResult(null);
+        try {
+          const result = await generateOfferPrefillFromLead({ leadId });
+          if (cancelled) {
+            return;
+          }
+          setPrefillResult(result);
+          if (result.ok) {
+            if (Object.keys(result.job).length > 0) {
+              setJob((current) => ({ ...current, ...result.job }));
+            }
+            if (Object.keys(result.draft).length > 0) {
+              setDraft((current) => ({ ...current, ...result.draft }));
+            }
+          }
+        } finally {
+          if (!cancelled) {
+            setPrefilling(false);
+          }
+        }
       }
     })();
     return () => {
@@ -650,6 +686,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         onLegacyPricingSettingsChange={updateLegacyPricingSettings}
         onLineChange={updateLine}
         onMarkSent={() => transition("sent")}
+        canMarkSent={!customerPrice.needsOverrideReason}
         onMarkAgreed={() => transition("agreed")}
         onMarkRejected={() => transition("rejected")}
         onCreateRevision={createRevision}

@@ -13,6 +13,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { buildTenderHtml, splitOwners } from "@/lib/offer/offer-tender-html";
+import { resolveOfferCustomerEmail } from "@/lib/offer/offer-customer-email";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
@@ -20,8 +21,6 @@ import {
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { createTenderEnvelope } from "@/lib/docusign/tender-envelope";
-
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 type TenderSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -68,11 +67,15 @@ export async function sendTenderForSignature(input: {
   }
 
   const snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
-  const customerEmail = (offer.lead.email ?? snapshot.job.clientEmail).trim();
-  if (!EMAIL_RE.test(customerEmail)) {
+  const customerEmail = resolveOfferCustomerEmail({
+    jobEmail: snapshot.job.clientEmail,
+    leadEmail: offer.lead?.email,
+  });
+  if (!customerEmail) {
     return {
       ok: false,
-      error: "Set a valid client email on the job before sending the Tender.",
+      error:
+        "No valid client email found on the offer or lead — set the client email in Job setup before sending the Tender.",
     };
   }
 
