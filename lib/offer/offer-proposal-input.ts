@@ -4,7 +4,7 @@ import {
   calculateDirectTotal,
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
-  parseNonNegativeNumberInput,
+  resolveOptionalPriceInput,
 } from "./workspace-pricing";
 import {
   getAreaBasisTotalSqm,
@@ -26,13 +26,13 @@ export function buildProposalInput(
     totalAreaSqm,
     settings: snapshot.workspacePricingSettings,
   });
-  const selectedPrice = parseNonNegativeNumberInput(snapshot.selectedPriceInput);
+  const selectedPrice = resolveOptionalPriceInput(snapshot.selectedPriceInput);
   const customerPrice = calculateOfferCustomerPrice({
     computedContractValueIncGst: pricing.contractValueIncGst,
     selectedContractValueIncGst: selectedPrice,
     overrideReason: snapshot.overrideReason,
   });
-  const standardPriceIncGst = parseNonNegativeNumberInput(
+  const standardPriceIncGst = resolveOptionalPriceInput(
     snapshot.standardPriceInput,
   );
 

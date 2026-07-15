@@ -33,7 +33,7 @@ import {
   calculateRateCardComparison,
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
-  parseNonNegativeNumberInput,
+  resolveOptionalPriceInput,
   type OfferWorkspacePricingSettings,
   type RateCardProduct,
   type RateCardTier,
@@ -131,10 +131,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         }),
     [directTotal, totalAreaSqm, workspacePricingSettings],
   );
-  const selectedPrice =
-    selectedPriceInput.length === 0
-      ? null
-      : parseNonNegativeNumberInput(selectedPriceInput);
+  const selectedPrice = resolveOptionalPriceInput(selectedPriceInput);
   const customerPrice = useMemo(
     () =>
       calculateOfferCustomerPrice({
@@ -144,10 +141,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
       }),
     [overrideReason, pricing, selectedPrice],
   );
-  const standardPrice =
-    standardPriceInput.length === 0
-      ? null
-      : parseNonNegativeNumberInput(standardPriceInput);
+  const standardPrice = resolveOptionalPriceInput(standardPriceInput);
   const rateCardComparison = useMemo(
     () =>
       calculateRateCardComparison({

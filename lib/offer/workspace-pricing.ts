@@ -136,6 +136,20 @@ export function parseNonNegativeNumberInput(value: string): number | null {
   return parsedValue;
 }
 
+// Resolve an OPTIONAL price-override field (selected / standard price) to a
+// concrete dollar amount or `null` meaning "no override — fall back to the
+// computed price". Blank AND $0 both mean "no override": a real home-build
+// contract is never $0, and — critically — an un-entered price round-trips
+// through persistence as the string "0" (empty -> 0 cents -> "0"), so a plain
+// empty-string check is not enough. The live workspace and the server-side
+// proposal/Tender MUST both read these inputs through this one function, or the
+// on-screen price and the emitted PDF diverge (a blank override rendered $0 on
+// the customer-facing documents).
+export function resolveOptionalPriceInput(value: string): number | null {
+  const parsed = parseNonNegativeNumberInput(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+}
+
 function roundRate(value: number): number {
   return Math.round((value + Number.EPSILON) * 10000) / 10000;
 }
