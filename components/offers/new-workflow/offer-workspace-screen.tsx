@@ -18,7 +18,10 @@ import type {
   RateCardProduct,
   RateCardTier,
 } from "@/lib/offer/workspace-pricing";
-import { getAreaCalculatorTotalSqm } from "@/lib/offer/workspace-area";
+import {
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
+} from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
 import { useMemo } from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
@@ -226,6 +229,8 @@ export function OfferWorkspaceScreen({
     () => buildOfferImageContext({ job, lines, allowances }),
     [job, lines, allowances],
   );
+  // Floor areas come from Job setup; the helper and pricing read them here.
+  const areaBasis = useMemo(() => offerAreaBasisFromJob(job), [job]);
 
   return (
     <div
@@ -269,6 +274,7 @@ export function OfferWorkspaceScreen({
             title="Cost schedule"
           >
             <AreaCalculatorPanel
+              basis={areaBasis}
               area={areaCalculator}
               onAreaChange={onAreaChange}
             />
@@ -291,7 +297,7 @@ export function OfferWorkspaceScreen({
             <LegacyPricingPanel
               directTotal={directTotal}
               settings={legacyPricingSettings}
-              totalAreaSqm={getAreaCalculatorTotalSqm(areaCalculator)}
+              totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
               onSettingsChange={onLegacyPricingSettingsChange}
             />
             <PricingDecisionPanel

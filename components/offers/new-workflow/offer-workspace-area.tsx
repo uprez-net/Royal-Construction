@@ -2,54 +2,72 @@
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
-import { calculateOfferArea } from "@/lib/offer/workspace-area";
+import type {
+  OfferAreaBasis,
+  OfferAreaCalculator,
+} from "@/lib/offer/workspace-area";
+import {
+  calculateOfferArea,
+  getAreaBasisTotalSqm,
+} from "@/lib/offer/workspace-area";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
-import { Ruler } from "lucide-react";
+import { Layers } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency } from "./offer-workspace-format";
 
 type AreaCalculatorPanelProps = {
+  // Floor areas come from Job setup — the single source of truth — never
+  // re-entered here.
+  readonly basis: OfferAreaBasis;
   readonly area: OfferAreaCalculator;
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
 };
 
 export function AreaCalculatorPanel({
+  basis,
   area,
   onAreaChange,
 }: AreaCalculatorPanelProps) {
-  const calculation = calculateOfferArea(area);
-  const areaFields = [
-    ["Ground floor sqm", area.groundFloorSqm, "groundFloorSqm"],
-    ["First floor sqm", area.firstFloorSqm, "firstFloorSqm"],
-    ["Garage sqm", area.garageSqm, "garageSqm"],
-    ["Alfresco sqm", area.alfrescoSqm, "alfrescoSqm"],
-    ["Porch sqm", area.porchSqm, "porchSqm"],
-    ["Granny flat sqm", area.grannyFlatSqm, "grannyFlatSqm"],
-  ] satisfies readonly AreaFieldConfig[];
+  const calculation = calculateOfferArea(basis, area);
+  const basisFields = [
+    ["Ground floor", basis.groundFloorSqm],
+    ["First floor", basis.firstFloorSqm],
+    ["Garage", basis.garageSqm],
+    ["Alfresco", basis.alfrescoSqm],
+    ["Porch", basis.porchSqm],
+    ["Granny flat", basis.grannyFlatSqm],
+  ] as const;
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
-          description="Use workbook-style helper assumptions for slab, frame, brick and tile packages before they become cost rows."
-          icon={<Ruler className="size-4" aria-hidden="true" />}
+          description="Derived from the Job setup floor areas — set the rates and lineal measurements to build each slab, frame, brick and tile cost package."
+          icon={<Layers className="size-4" aria-hidden="true" />}
           singleLineDescription
-          title="Area helper calculations"
+          title="Slab, frame, brick & tile packages"
         />
       </CardHeader>
       <CardContent className="grid gap-5 pt-4">
-        <div className="grid gap-3 md:grid-cols-3">
-          {areaFields.map(([label, value, field]) => (
-            <NumberField
-              key={field}
-              label={label}
-              value={value}
-              onChange={(nextValue) => onAreaChange({ [field]: nextValue })}
-            />
-          ))}
-        </div>
+        <section className="grid gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Floor areas · from Job setup
+            </h3>
+            <span className="text-sm font-medium">
+              {getAreaBasisTotalSqm(basis)} sqm total
+            </span>
+          </div>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+            {basisFields.map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-2 text-sm">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="font-mono">{value} sqm</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
         <div className="grid gap-4 xl:grid-cols-3">
           <HelperSection title="Slab and drop edge">
             <NumberField
@@ -204,17 +222,3 @@ function ResultRows({
     </div>
   );
 }
-
-type AreaFieldConfig = readonly [
-  string,
-  number,
-  keyof Pick<
-    OfferAreaCalculator,
-    | "groundFloorSqm"
-    | "firstFloorSqm"
-    | "garageSqm"
-    | "alfrescoSqm"
-    | "porchSqm"
-    | "grannyFlatSqm"
-  >,
-];

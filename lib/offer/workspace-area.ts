@@ -1,12 +1,23 @@
 import { roundCurrency } from "@/lib/offer/pricing";
+import type { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
 
-export type OfferAreaCalculator = {
+// The floor-area geometry that feeds the package calculations. This is NOT
+// owned here — it is the single source of truth captured in Job setup and
+// derived from the job via offerAreaBasisFromJob(). The helper never lets the
+// estimator re-type these; that duplication is exactly what drifted before.
+export type OfferAreaBasis = {
   readonly groundFloorSqm: number;
   readonly firstFloorSqm: number;
+  readonly garageSqm: number;
   readonly alfrescoSqm: number;
   readonly porchSqm: number;
-  readonly garageSqm: number;
   readonly grannyFlatSqm: number;
+};
+
+// The estimator's rate/allowance config plus the secondary measurements the job
+// does not capture (lineal metres, tile area). Combined with an OfferAreaBasis
+// it produces the slab / frame / brick / tile cost packages.
+export type OfferAreaCalculator = {
   readonly slabRatePerSqm: number;
   readonly dropEdgeLinealMeters: number;
   readonly dropEdgeRate: number;
@@ -46,16 +57,19 @@ export type OfferAreaCalculation = {
   readonly tilePackageTotal: number;
 };
 
-// Fresh-offer defaults: all job-specific MEASUREMENTS are zero (no sample
-// geometry); the RATES and standard allowances remain as estimator config so
-// the helper produces real numbers once measurements are entered/imported.
-export const INITIAL_AREA_CALCULATOR: OfferAreaCalculator = {
+export const EMPTY_AREA_BASIS: OfferAreaBasis = {
   groundFloorSqm: 0,
   firstFloorSqm: 0,
+  garageSqm: 0,
   alfrescoSqm: 0,
   porchSqm: 0,
-  garageSqm: 0,
   grannyFlatSqm: 0,
+};
+
+// Fresh-offer defaults: the RATES and standard allowances remain as estimator
+// config so the helper produces real numbers once the job floor areas and the
+// secondary measurements are entered/imported.
+export const INITIAL_AREA_CALCULATOR: OfferAreaCalculator = {
   slabRatePerSqm: 220,
   dropEdgeLinealMeters: 0,
   dropEdgeRate: 280,
@@ -77,26 +91,50 @@ export const INITIAL_AREA_CALCULATOR: OfferAreaCalculator = {
   tileAnglesAllowance: 0,
 };
 
-export function getAreaCalculatorTotalSqm(area: OfferAreaCalculator): number {
+// Job setup owns the floor areas; the helper reads them through this adapter.
+// Note the job stores the alfresco figure under `alfrescoPorchSqm`.
+export function offerAreaBasisFromJob(
+  job: Pick<
+    OfferWorkspaceJob,
+    | "groundFloorSqm"
+    | "firstFloorSqm"
+    | "garageSqm"
+    | "alfrescoPorchSqm"
+    | "porchSqm"
+    | "grannyFlatSqm"
+  >,
+): OfferAreaBasis {
+  return {
+    groundFloorSqm: job.groundFloorSqm,
+    firstFloorSqm: job.firstFloorSqm,
+    garageSqm: job.garageSqm,
+    alfrescoSqm: job.alfrescoPorchSqm,
+    porchSqm: job.porchSqm,
+    grannyFlatSqm: job.grannyFlatSqm,
+  };
+}
+
+export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
   return roundCurrency(
-    area.groundFloorSqm +
-      area.firstFloorSqm +
-      area.alfrescoSqm +
-      area.porchSqm +
-      area.garageSqm +
-      area.grannyFlatSqm,
+    basis.groundFloorSqm +
+      basis.firstFloorSqm +
+      basis.alfrescoSqm +
+      basis.porchSqm +
+      basis.garageSqm +
+      basis.grannyFlatSqm,
   );
 }
 
 export function calculateOfferArea(
+  basis: OfferAreaBasis,
   area: OfferAreaCalculator,
 ): OfferAreaCalculation {
   const slabAreaSqm = roundCurrency(
-    area.groundFloorSqm +
-      area.alfrescoSqm +
-      area.porchSqm +
-      area.garageSqm +
-      area.grannyFlatSqm,
+    basis.groundFloorSqm +
+      basis.alfrescoSqm +
+      basis.porchSqm +
+      basis.garageSqm +
+      basis.grannyFlatSqm,
   );
   const slabCost = roundCurrency(slabAreaSqm * area.slabRatePerSqm);
   const dropEdgeBeamCost = roundCurrency(
@@ -109,7 +147,7 @@ export function calculateOfferArea(
     slabAreaSqm * area.frameGroundRatePerSqm,
   );
   const frameFirstFloorCost = roundCurrency(
-    area.firstFloorSqm * area.frameFirstRatePerSqm,
+    basis.firstFloorSqm * area.frameFirstRatePerSqm,
   );
   const framePackageTotal = roundCurrency(
     frameGroundFloorCost +

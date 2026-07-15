@@ -1,7 +1,13 @@
 import type { WorkBook, WorkSheet } from "xlsx";
 import { utils } from "xlsx";
-import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
-import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import type {
+  OfferAreaBasis,
+  OfferAreaCalculator,
+} from "@/lib/offer/workspace-area";
+import {
+  EMPTY_AREA_BASIS,
+  INITIAL_AREA_CALCULATOR,
+} from "@/lib/offer/workspace-area";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 import {
   DEFAULT_LEGACY_PRICING_SETTINGS,
@@ -18,11 +24,19 @@ import type {
 export type OfferWorkbookImportResult = {
   readonly sourceName: string;
   readonly costLines: readonly OfferWorkspaceCostLine[];
+  // Floor-area geometry (destined for Job setup) and the rate/measurement config
+  // are parsed separately so they land in their respective single sources.
+  readonly areaBasis: OfferAreaBasis;
   readonly areaCalculator: OfferAreaCalculator;
   readonly workspacePricingSettings: OfferWorkspacePricingSettings;
   readonly legacyPricingSettings: LegacyWorkbookPricingSettings;
   readonly validationMessages: readonly string[];
   readonly ignoredProjectFields: readonly string[];
+};
+
+type ParsedArea = {
+  readonly areaBasis: OfferAreaBasis;
+  readonly areaCalculator: OfferAreaCalculator;
 };
 
 const PROJECT_PHASE_HEADERS = [
@@ -51,7 +65,7 @@ export function parseRoyalQuoteWorkbook(
   const settingsRows = readRows(workbook.Sheets.SETTINGS, true);
   const costLines =
     quoteRows.length > 0 ? parseV2QuoteRows(quoteRows) : parseSampleQuoteRows(sampleRows);
-  const areaCalculator =
+  const { areaBasis, areaCalculator } =
     coverRows.length > 0 ? parseCoverArea(coverRows) : parseAreaCalculator(areaRows);
   const formulaErrors = [
     ...findFormulaErrors("SAMPLE QUOTE", sampleDisplayRows),
@@ -71,6 +85,7 @@ export function parseRoyalQuoteWorkbook(
   return {
     sourceName,
     costLines,
+    areaBasis,
     areaCalculator,
     workspacePricingSettings: parseWorkspacePricingSettings(settingsRows),
     legacyPricingSettings,
@@ -424,36 +439,39 @@ function parseWorkspacePricingSettings(
   };
 }
 
-function parseCoverArea(rows: readonly (readonly unknown[])[]): OfferAreaCalculator {
+function parseCoverArea(rows: readonly (readonly unknown[])[]): ParsedArea {
   return {
-    ...INITIAL_AREA_CALCULATOR,
-    groundFloorSqm: firstNumber(
-      [getCell(rows, 17, 1)],
-      INITIAL_AREA_CALCULATOR.groundFloorSqm,
-    ),
-    firstFloorSqm: firstNumber(
-      [getCell(rows, 18, 1)],
-      INITIAL_AREA_CALCULATOR.firstFloorSqm,
-    ),
-    garageSqm: firstNumber(
-      [getCell(rows, 19, 1)],
-      INITIAL_AREA_CALCULATOR.garageSqm,
-    ),
-    alfrescoSqm: firstNumber(
-      [getCell(rows, 20, 1)],
-      INITIAL_AREA_CALCULATOR.alfrescoSqm,
-    ),
-    porchSqm: firstNumber(
-      [getCell(rows, 21, 1)],
-      INITIAL_AREA_CALCULATOR.porchSqm,
-    ),
+    areaBasis: {
+      ...EMPTY_AREA_BASIS,
+      groundFloorSqm: firstNumber(
+        [getCell(rows, 17, 1)],
+        EMPTY_AREA_BASIS.groundFloorSqm,
+      ),
+      firstFloorSqm: firstNumber(
+        [getCell(rows, 18, 1)],
+        EMPTY_AREA_BASIS.firstFloorSqm,
+      ),
+      garageSqm: firstNumber(
+        [getCell(rows, 19, 1)],
+        EMPTY_AREA_BASIS.garageSqm,
+      ),
+      alfrescoSqm: firstNumber(
+        [getCell(rows, 20, 1)],
+        EMPTY_AREA_BASIS.alfrescoSqm,
+      ),
+      porchSqm: firstNumber(
+        [getCell(rows, 21, 1)],
+        EMPTY_AREA_BASIS.porchSqm,
+      ),
+    },
+    areaCalculator: INITIAL_AREA_CALCULATOR,
   };
 }
 
 function parseAreaCalculator(
   rows: readonly (readonly unknown[])[],
-): OfferAreaCalculator {
-  const slabArea = firstNumber([getCell(rows, 7, 2)], INITIAL_AREA_CALCULATOR.groundFloorSqm);
+): ParsedArea {
+  const slabArea = firstNumber([getCell(rows, 7, 2)], EMPTY_AREA_BASIS.groundFloorSqm);
   const slabCost = numberValue(getCell(rows, 9, 2));
   const dropEdgeCost = numberValue(getCell(rows, 10, 2));
   const dropEdgeRate = firstNumber([getCell(rows, 10, 1)], INITIAL_AREA_CALCULATOR.dropEdgeRate);
@@ -473,13 +491,16 @@ function parseAreaCalculator(
   );
 
   return {
+    areaBasis: {
+      groundFloorSqm: firstNumber([getCell(rows, 2, 2)], EMPTY_AREA_BASIS.groundFloorSqm),
+      firstFloorSqm: firstNumber([getCell(rows, 2, 5)], EMPTY_AREA_BASIS.firstFloorSqm),
+      alfrescoSqm: firstNumber([getCell(rows, 3, 2)], EMPTY_AREA_BASIS.alfrescoSqm),
+      porchSqm: firstNumber([getCell(rows, 4, 2)], EMPTY_AREA_BASIS.porchSqm),
+      garageSqm: firstNumber([getCell(rows, 5, 2)], EMPTY_AREA_BASIS.garageSqm),
+      grannyFlatSqm: firstNumber([getCell(rows, 6, 2)], EMPTY_AREA_BASIS.grannyFlatSqm),
+    },
+    areaCalculator: {
     ...INITIAL_AREA_CALCULATOR,
-    groundFloorSqm: firstNumber([getCell(rows, 2, 2)], INITIAL_AREA_CALCULATOR.groundFloorSqm),
-    firstFloorSqm: firstNumber([getCell(rows, 2, 5)], INITIAL_AREA_CALCULATOR.firstFloorSqm),
-    alfrescoSqm: firstNumber([getCell(rows, 3, 2)], INITIAL_AREA_CALCULATOR.alfrescoSqm),
-    porchSqm: firstNumber([getCell(rows, 4, 2)], INITIAL_AREA_CALCULATOR.porchSqm),
-    garageSqm: firstNumber([getCell(rows, 5, 2)], INITIAL_AREA_CALCULATOR.garageSqm),
-    grannyFlatSqm: firstNumber([getCell(rows, 6, 2)], INITIAL_AREA_CALCULATOR.grannyFlatSqm),
     slabRatePerSqm:
       slabCost !== null && slabArea > 0 ? slabCost / slabArea : INITIAL_AREA_CALCULATOR.slabRatePerSqm,
     dropEdgeRate,
@@ -518,5 +539,6 @@ function parseAreaCalculator(
       [getCell(rows, 37, 5), getCell(rows, 37, 6)],
       INITIAL_AREA_CALCULATOR.tileAnglesAllowance,
     ),
+    },
   };
 }

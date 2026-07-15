@@ -6,7 +6,10 @@ import {
   calculateOfferWorkspacePricing,
   parseNonNegativeNumberInput,
 } from "./workspace-pricing";
-import { getAreaCalculatorTotalSqm } from "./workspace-area";
+import {
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
+} from "./workspace-area";
 
 // Reconstruct the print-template input (prices, totals, etc.) from a persisted
 // workspace snapshot — the same derivations the live container computes, so a
@@ -15,7 +18,9 @@ export function buildProposalInput(
   snapshot: OfferWorkspaceSnapshot,
 ): OfferPrintTemplateInput {
   const directTotal = calculateDirectTotal(snapshot.lines);
-  const totalAreaSqm = getAreaCalculatorTotalSqm(snapshot.areaCalculator);
+  const totalAreaSqm = getAreaBasisTotalSqm(
+    offerAreaBasisFromJob(snapshot.job),
+  );
   const pricing = calculateOfferWorkspacePricing({
     directTotal,
     totalAreaSqm,

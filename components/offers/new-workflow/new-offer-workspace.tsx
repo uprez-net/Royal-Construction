@@ -22,7 +22,8 @@ import {
 } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_AREA_CALCULATOR,
-  getAreaCalculatorTotalSqm,
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
   type OfferAreaCalculator,
 } from "@/lib/offer/workspace-area";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
@@ -115,9 +116,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     setImages((current) => setOfferImage(current, key, image));
   }
 
+  // Floor areas live on the job (single source of truth); pricing keys off it.
   const totalAreaSqm = useMemo(
-    () => getAreaCalculatorTotalSqm(areaCalculator),
-    [areaCalculator],
+    () => getAreaBasisTotalSqm(offerAreaBasisFromJob(job)),
+    [job],
   );
   const directTotal = useMemo(() => calculateDirectTotal(lines), [lines]);
   const pricing = useMemo(
@@ -200,17 +202,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
   }
 
   function updateAreaCalculator(patch: Partial<OfferAreaCalculator>) {
-    const nextArea = { ...areaCalculator, ...patch };
-    setAreaCalculator(nextArea);
-    setJob((current) => ({
-      ...current,
-      groundFloorSqm: nextArea.groundFloorSqm,
-      firstFloorSqm: nextArea.firstFloorSqm,
-      garageSqm: nextArea.garageSqm,
-      alfrescoPorchSqm: nextArea.alfrescoSqm,
-      porchSqm: nextArea.porchSqm,
-      grannyFlatSqm: nextArea.grannyFlatSqm,
-    }));
+    // Rates/measurements only — floor areas are owned by Job setup.
+    setAreaCalculator((current) => ({ ...current, ...patch }));
   }
 
   function updateLegacyPricingSettings(
@@ -225,14 +218,15 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     setAreaCalculator(result.areaCalculator);
     setWorkspacePricingSettings(result.workspacePricingSettings);
     setLegacyPricingSettings(result.legacyPricingSettings);
+    // Imported floor areas land on the job — the single source of truth.
     setJob((current) => ({
       ...current,
-      groundFloorSqm: result.areaCalculator.groundFloorSqm,
-      firstFloorSqm: result.areaCalculator.firstFloorSqm,
-      garageSqm: result.areaCalculator.garageSqm,
-      alfrescoPorchSqm: result.areaCalculator.alfrescoSqm,
-      porchSqm: result.areaCalculator.porchSqm,
-      grannyFlatSqm: result.areaCalculator.grannyFlatSqm,
+      groundFloorSqm: result.areaBasis.groundFloorSqm,
+      firstFloorSqm: result.areaBasis.firstFloorSqm,
+      garageSqm: result.areaBasis.garageSqm,
+      alfrescoPorchSqm: result.areaBasis.alfrescoSqm,
+      porchSqm: result.areaBasis.porchSqm,
+      grannyFlatSqm: result.areaBasis.grannyFlatSqm,
     }));
   }
 

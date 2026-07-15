@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
-import { calculateOfferArea, getAreaCalculatorTotalSqm } from "../../lib/offer/workspace-area";
+import {
+  calculateOfferArea,
+  getAreaBasisTotalSqm,
+  type OfferAreaBasis,
+} from "../../lib/offer/workspace-area";
 
-const calculation = calculateOfferArea({
+const basis: OfferAreaBasis = {
   groundFloorSqm: 110,
   firstFloorSqm: 90,
   alfrescoSqm: 8,
   porchSqm: 3,
   garageSqm: 20,
   grannyFlatSqm: 0,
+};
+
+const calculation = calculateOfferArea(basis, {
   slabRatePerSqm: 220,
   dropEdgeLinealMeters: 10,
   dropEdgeRate: 280,
@@ -47,33 +54,4 @@ assert.deepEqual(calculation, {
   tilePackageTotal: 21230,
 });
 
-assert.equal(
-  getAreaCalculatorTotalSqm({
-    groundFloorSqm: 110,
-    firstFloorSqm: 90,
-    alfrescoSqm: 8,
-    porchSqm: 3,
-    garageSqm: 20,
-    grannyFlatSqm: 0,
-    slabRatePerSqm: 220,
-    dropEdgeLinealMeters: 10,
-    dropEdgeRate: 280,
-    frameGroundRatePerSqm: 125,
-    frameFirstRatePerSqm: 135,
-    steelAllowance: 10000,
-    frameInstallAllowance: 15000,
-    extraTruckCost: 0,
-    brickGroundLinealMeters: 76,
-    brickFirstLinealMeters: 36,
-    brickGroundHeight: 3,
-    brickFirstHeight: 3.3,
-    bricksPerSqm: 50,
-    sandRatePerThousandBricks: 100,
-    cementRatePerHundredBricks: 15,
-    tileAreaSqm: 212.3,
-    tileSupplyRatePerSqm: 30,
-    tilerRatePerSqm: 70,
-    tileAnglesAllowance: 0,
-  }),
-  231,
-);
+assert.equal(getAreaBasisTotalSqm(basis), 231);

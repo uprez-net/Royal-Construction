@@ -102,8 +102,8 @@ assert.deepEqual(result.legacyPricingSettings, {
   labourCostFixed: 8000,
   otherAdjustmentFixed: 40000,
 });
-assert.equal(result.areaCalculator.groundFloorSqm, 110);
-assert.equal(result.areaCalculator.firstFloorSqm, 90);
+assert.equal(result.areaBasis.groundFloorSqm, 110);
+assert.equal(result.areaBasis.firstFloorSqm, 90);
 assert.equal(result.areaCalculator.slabRatePerSqm, 220);
 assert.equal(result.areaCalculator.dropEdgeLinealMeters, 10);
 assert.ok(
@@ -210,10 +210,10 @@ assert.deepEqual(v2Result.workspacePricingSettings, {
   projectManagementCostFixed: 12000,
   contingencyPct: 0.03,
 });
-assert.equal(v2Result.areaCalculator.groundFloorSqm, 202.2);
-assert.equal(v2Result.areaCalculator.firstFloorSqm, 170.35);
-assert.equal(v2Result.areaCalculator.alfrescoSqm, 27.5);
-assert.equal(v2Result.areaCalculator.porchSqm, 8.5);
+assert.equal(v2Result.areaBasis.groundFloorSqm, 202.2);
+assert.equal(v2Result.areaBasis.firstFloorSqm, 170.35);
+assert.equal(v2Result.areaBasis.alfrescoSqm, 27.5);
+assert.equal(v2Result.areaBasis.porchSqm, 8.5);
 assert.deepEqual(v2Result.validationMessages, []);
 
 function makeRows(count: number): unknown[][] {
