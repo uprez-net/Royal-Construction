@@ -5,7 +5,6 @@ import { getUserByClerkId } from "./lib/data/user";
 
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
 
-const isDevelopment = process.env.NODE_ENV === "development"
 const isPublicRoute = createRouteMatcher([
   "/api/webhook/clerk(.*)",
   "/api/graph(.*)",
@@ -17,10 +16,8 @@ const isPublicRoute = createRouteMatcher([
   '/api/message(.*)',
   "/api/cron(.*)",
   "/book-consultation",
-  ...(isDevelopment ? ["/offers/new-workflow(.*)"] : []),
   "/api/upload(.*)",
   "/api/resume-stream(.*)",
-  "/api/chat(.*)",
 ])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])

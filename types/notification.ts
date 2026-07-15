@@ -169,7 +169,7 @@ export const notificationTemplates: NotificationTemplateFactory = {
   contractSigned: (data) => ({
     title: `Contract Signed: ${data.offerReference} — ${data.customerName}`,
     message: `The building contract for ${data.siteAddress || "the project site"} is fully executed. Open the offer workspace to create the project.`,
-    url: `/offers/${data.leadId}/new-workflow`,
+    url: `/offers/${data.leadId}`,
   }),
 
   milestoneStatusChanged: (data) => ({

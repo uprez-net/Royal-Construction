@@ -1,4 +1,4 @@
-import { OfferCreationStatus } from "@/lib/workflow/offer";
+import { OfferCreationStatus } from "@/types/offer";
 import { getRun } from "workflow/api";
 import { NextRequest, connection } from "next/server";
 import { auth } from "@clerk/nextjs/server";
