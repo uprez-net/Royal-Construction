@@ -14,7 +14,7 @@ const SLOT_PROMPTS: Record<OfferImageSlotKey, string> = {
   exterior:
     "Photorealistic full facade of a modern Australian {buildType}, rendered exterior, feature entry, double garage, no text, no logos.",
   render:
-    "Architectural 3D render perspective of a modern Australian double storey home facade, clean render style, no text, no logos.",
+    "Architectural 3D render perspective of a modern Australian {buildType} facade, clean render style, no text, no logos.",
   kitchen:
     "Photorealistic modern kitchen with white shaker cabinetry, stone island benchtop, herringbone timber floor, natural light, no text, no logos.",
   living:
@@ -38,16 +38,24 @@ type GenerateResult =
 export async function generateOfferInspirationImage(input: {
   slotKey: OfferImageSlotKey;
   buildType: string;
+  // Short visual descriptors of this build's façade/finishes for the slot,
+  // from buildOfferImageContext (lib/offer/offer-image-context). Optional —
+  // when empty the base prompt is used unchanged.
+  finishContext?: string;
 }): Promise<GenerateResult> {
   const { isAuthenticated } = await auth();
   if (!isAuthenticated) {
     return { ok: false, error: "Unauthorized" };
   }
 
-  const prompt = SLOT_PROMPTS[input.slotKey].replace(
+  const basePrompt = SLOT_PROMPTS[input.slotKey].replace(
     "{buildType}",
     input.buildType || "double storey home",
   );
+  const finish = input.finishContext?.trim();
+  const prompt = finish
+    ? `${basePrompt} Reflect these selected finishes where visible: ${finish}.`
+    : basePrompt;
 
   try {
     const { image } = await generateImage({

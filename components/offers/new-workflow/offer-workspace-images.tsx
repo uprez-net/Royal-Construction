@@ -24,6 +24,9 @@ type OfferWorkspaceImagesProps = {
   ) => void;
   readonly leadId?: number;
   readonly buildType: string;
+  // Per-slot visual descriptors of this build's façade/finishes; woven into
+  // the AI image prompt so concepts reflect the actual selections.
+  readonly finishContexts?: Partial<Record<OfferImageSlotKey, string>>;
 };
 
 export function OfferWorkspaceImages({
@@ -31,6 +34,7 @@ export function OfferWorkspaceImages({
   onImageChange,
   leadId,
   buildType,
+  finishContexts,
 }: OfferWorkspaceImagesProps) {
   const [uploading, setUploading] = useState<
     Partial<Record<OfferImageSlotKey, boolean>>
@@ -50,6 +54,7 @@ export function OfferWorkspaceImages({
       const result = await generateOfferInspirationImage({
         slotKey: key,
         buildType,
+        finishContext: finishContexts?.[key],
       });
       if (result.ok) {
         onImageChange(key, { url: result.url, source: "ai" });

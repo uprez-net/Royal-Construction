@@ -19,6 +19,8 @@ import type {
   RateCardTier,
 } from "@/lib/offer/workspace-pricing";
 import { getAreaCalculatorTotalSqm } from "@/lib/offer/workspace-area";
+import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
+import { useMemo } from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
 import { OfferDocumentEditor } from "./offer-workspace-document";
@@ -218,6 +220,13 @@ export function OfferWorkspaceScreen({
   onSelectedPriceInputChange,
   onStandardPriceInputChange,
 }: OfferWorkspaceScreenProps) {
+  // Visual finish/façade descriptors per image slot, derived from the offer's
+  // included selections — woven into the AI image prompts.
+  const imageFinishContexts = useMemo(
+    () => buildOfferImageContext({ job, lines, allowances }),
+    [job, lines, allowances],
+  );
+
   return (
     <div
       className="space-y-5 print:hidden"
@@ -332,6 +341,7 @@ export function OfferWorkspaceScreen({
                 onImageChange={onImageChange}
                 leadId={leadId}
                 buildType={job.buildType}
+                finishContexts={imageFinishContexts}
               />
             </div>
           </OfferStepSection>
