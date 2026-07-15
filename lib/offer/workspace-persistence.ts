@@ -58,6 +58,7 @@ const jobSchema = z.object({
   clientPhone: z.string(),
   siteAddress: z.string(),
   buildType: z.string(),
+  facade: z.string().default(""),
   groundFloorSqm: z.number(),
   firstFloorSqm: z.number(),
   garageSqm: z.number(),

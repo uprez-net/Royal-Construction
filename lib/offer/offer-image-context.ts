@@ -1,9 +1,13 @@
 import type { OfferImageSlotKey } from "./workspace-images";
-import type {
-  OfferWorkspaceCostLine,
-  OfferWorkspaceJob,
-  OfferWorkspaceScopeItem,
+import {
+  facadeImageHint,
+  type OfferWorkspaceCostLine,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceScopeItem,
 } from "./workspace-model";
+
+// The exterior/render slots lead with the selected façade descriptor.
+const FACADE_SLOTS = new Set<OfferImageSlotKey>(["hero", "exterior", "render"]);
 
 // Turn the offer's actual selections (included cost lines, allowances, build
 // scope) into short VISUAL descriptors per image slot, so the AI inspiration
@@ -89,9 +93,15 @@ export function buildOfferImageContext(input: {
   parts.push(...input.job.buildScope, input.job.buildType);
   const corpus = parts.filter(Boolean).join(" • ").toLowerCase();
 
+  const facadeHint = facadeImageHint(input.job.facade);
+
   const result = {} as Record<OfferImageSlotKey, string>;
   for (const slot of ALL_SLOTS) {
     const phrases: string[] = [];
+    // The chosen façade leads the exterior descriptors.
+    if (facadeHint && FACADE_SLOTS.has(slot)) {
+      phrases.push(facadeHint);
+    }
     for (const [test, phrase] of SLOT_SIGNALS[slot]) {
       if (!test.test(corpus)) {
         continue;

@@ -3,8 +3,18 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { OfferPrefillResult } from "@/lib/data/offer-prefill";
-import type { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
+import {
+  FACADE_OPTIONS,
+  type OfferWorkspaceJob,
+} from "@/lib/offer/workspace-model";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { ClipboardList, Info, Sparkles } from "lucide-react";
 import type { PropsWithChildren } from "react";
@@ -90,6 +100,26 @@ export function JobSetupPanel({
               value={job.buildType}
               onChange={(event) => onJobChange({ buildType: event.target.value })}
             />
+          </Field>
+          <Field label="Façade">
+            <Select
+              value={job.facade || "__none__"}
+              onValueChange={(value) =>
+                onJobChange({ facade: value === "__none__" ? "" : value })
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a façade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Not selected</SelectItem>
+                {FACADE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field className="md:col-span-2" label="Site address">
             <Input

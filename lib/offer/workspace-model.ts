@@ -40,6 +40,7 @@ export type OfferWorkspaceJob = {
   readonly clientPhone: string;
   readonly siteAddress: string;
   readonly buildType: string;
+  readonly facade: string;
   readonly groundFloorSqm: number;
   readonly firstFloorSqm: number;
   readonly garageSqm: number;
@@ -151,6 +152,53 @@ export const DEFAULT_LEGACY_PRICING_SETTINGS: LegacyWorkbookPricingSettings = {
   otherAdjustmentFixed: 0,
 };
 
+// Façade options the client picks in Job setup. `imageHint` is the visual
+// descriptor woven into the exterior AI image prompts (see offer-image-context).
+export const FACADE_OPTIONS: readonly {
+  readonly value: string;
+  readonly label: string;
+  readonly imageHint: string;
+}[] = [
+  {
+    value: "Modern rendered",
+    label: "Modern rendered",
+    imageHint:
+      "fully rendered contemporary facade, clean rectilinear lines, feature entry",
+  },
+  {
+    value: "Face brick",
+    label: "Face brick",
+    imageHint: "full face brick facade",
+  },
+  {
+    value: "Brick & render",
+    label: "Brick & render",
+    imageHint: "mixed face brick and rendered feature facade",
+  },
+  {
+    value: "Hamptons",
+    label: "Hamptons",
+    imageHint:
+      "Hamptons-style facade, weatherboard cladding, gabled roof, portico entry",
+  },
+  {
+    value: "Contemporary",
+    label: "Contemporary",
+    imageHint:
+      "contemporary facade, mixed materials with timber and stone accents",
+  },
+  {
+    value: "Coastal",
+    label: "Coastal",
+    imageHint: "coastal facade, light palette, timber batten accents, large windows",
+  },
+];
+
+// Visual descriptor for a selected façade, or "" when none/unknown.
+export function facadeImageHint(facade: string): string {
+  return FACADE_OPTIONS.find((option) => option.value === facade)?.imageHint ?? "";
+}
+
 // A fresh offer starts with blank client/site identity — it is synced from the
 // DB reference and pre-filled from the lead on load (see NewOfferWorkspace).
 // The floor-area / cost figures below remain a working seed the estimator
@@ -163,6 +211,7 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   clientPhone: "",
   siteAddress: "",
   buildType: "",
+  facade: "",
   groundFloorSqm: 0,
   firstFloorSqm: 0,
   garageSqm: 0,
