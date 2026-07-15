@@ -65,7 +65,7 @@ import { OfferWorkspaceScreen } from "./offer-workspace-screen";
 
 // Embed with a leadId to persist to the DB (ADR 0002). The standalone
 // /offers/new-workflow demo route passes none and stays in-memory.
-export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
+export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
   const [job, setJob] = useState<OfferWorkspaceJob>(INITIAL_OFFER_JOB);
   const [lines, setLines] =
     useState<readonly OfferWorkspaceCostLine[]>(INITIAL_COST_LINES);

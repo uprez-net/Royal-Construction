@@ -25,13 +25,8 @@ export function OfferHeader() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline">
-              <Link href="/offers/new-workflow">
-                Open new workflow
-              </Link>
-            </Button>
             <Button
-              onClick={() => dispatch(openModal({ type: "createOfferFile" }))}
+              onClick={() => dispatch(openModal({ type: "createOfferFile", payload: { isNewWorkflow: true } }))}
             >
               <Plus className="mr-2 size-4" />
               Create Offer-Document

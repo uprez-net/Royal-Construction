@@ -339,8 +339,10 @@ export function ModalManager() {
           onClose={handleClose}
         />
       );
-    case "createOfferFile":
-      return <CreateOfferFileModal open onClose={handleClose} />;
+    case "createOfferFile":{
+      const { isNewWorkflow } = modal.payload as { isNewWorkflow?: boolean };
+      return <CreateOfferFileModal open onClose={handleClose} isNewWorkflow={isNewWorkflow} />;
+    }
     case "createLead":
       return (
         <AddLeadModal

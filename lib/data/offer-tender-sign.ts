@@ -34,7 +34,6 @@ type TenderSendResult =
 // audit trail and moves the offer to TENDER_SENT.
 export async function sendTenderForSignature(input: {
   offerId: string;
-  customerEmail?: string;
 }): Promise<TenderSendResult> {
   const { isAuthenticated } = await auth();
   if (!isAuthenticated) {
@@ -49,6 +48,7 @@ export async function sendTenderForSignature(input: {
       revisionNumber: true,
       offerStatus: true,
       workspaceState: true,
+      lead: true,
     },
   });
   if (!offer) {
@@ -68,7 +68,7 @@ export async function sendTenderForSignature(input: {
   }
 
   const snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
-  const customerEmail = (input.customerEmail ?? snapshot.job.clientEmail).trim();
+  const customerEmail = (offer.lead.email ?? snapshot.job.clientEmail).trim();
   if (!EMAIL_RE.test(customerEmail)) {
     return {
       ok: false,

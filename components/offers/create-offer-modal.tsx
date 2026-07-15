@@ -38,6 +38,7 @@ import { Input } from "../ui/input";
 
 interface CreateOfferFileModalProps {
   open: boolean;
+  isNewWorkflow?: boolean;
   onClose: () => void;
 }
 
@@ -45,12 +46,13 @@ const maxFiles = 5;
 
 export function CreateOfferFileModal({
   open,
+  isNewWorkflow = false,
   onClose,
 }: CreateOfferFileModalProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const leadSearch = useLeadSearch("");
+  const leadSearch = useLeadSearch("", undefined, true);
   const [search, setSearch] = useState("");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const {
@@ -94,6 +96,12 @@ export function CreateOfferFileModal({
   const handleSubmit = async () => {
     if (!selectedLeadId) {
       toast.error("Please select a lead before creating an offer.");
+      return;
+    }
+    if(isNewWorkflow) {
+      handleOpenChange(false);
+      toast.info("Redirecting to new offer workflow...", { duration: 2000 });
+      router.push(`/offers/${selectedLeadId}/new-workflow`);
       return;
     }
     if (continuing) {
@@ -272,7 +280,7 @@ export function CreateOfferFileModal({
             />
           </div>
 
-          {!continuing && (
+          {!continuing && !isNewWorkflow && (
             <div className="space-y-1.5">
               <UploadDropzone
                 label="Attach Files"
