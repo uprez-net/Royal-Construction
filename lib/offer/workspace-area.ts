@@ -46,29 +46,32 @@ export type OfferAreaCalculation = {
   readonly tilePackageTotal: number;
 };
 
+// Fresh-offer defaults: all job-specific MEASUREMENTS are zero (no sample
+// geometry); the RATES and standard allowances remain as estimator config so
+// the helper produces real numbers once measurements are entered/imported.
 export const INITIAL_AREA_CALCULATOR: OfferAreaCalculator = {
-  groundFloorSqm: 138,
-  firstFloorSqm: 126,
-  alfrescoSqm: 16,
-  porchSqm: 8,
-  garageSqm: 36,
+  groundFloorSqm: 0,
+  firstFloorSqm: 0,
+  alfrescoSqm: 0,
+  porchSqm: 0,
+  garageSqm: 0,
   grannyFlatSqm: 0,
   slabRatePerSqm: 220,
-  dropEdgeLinealMeters: 10,
+  dropEdgeLinealMeters: 0,
   dropEdgeRate: 280,
   frameGroundRatePerSqm: 125,
   frameFirstRatePerSqm: 135,
   steelAllowance: 10000,
   frameInstallAllowance: 15000,
   extraTruckCost: 0,
-  brickGroundLinealMeters: 76,
-  brickFirstLinealMeters: 36,
+  brickGroundLinealMeters: 0,
+  brickFirstLinealMeters: 0,
   brickGroundHeight: 3,
   brickFirstHeight: 3.3,
   bricksPerSqm: 50,
   sandRatePerThousandBricks: 100,
   cementRatePerHundredBricks: 15,
-  tileAreaSqm: 212.3,
+  tileAreaSqm: 0,
   tileSupplyRatePerSqm: 30,
   tilerRatePerSqm: 70,
   tileAnglesAllowance: 0,

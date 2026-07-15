@@ -60,36 +60,14 @@ assert.equal(updatedAllowances[0]?.amount, 9500);
 assert.equal(INITIAL_ALLOWANCES[0]?.amount, 8500);
 assert.equal(updatedAllowances[1], INITIAL_ALLOWANCES[1]);
 
+// A fresh offer keeps the full cost-schedule structure but starts at $0 — no
+// sample figures (see INITIAL_COST_BY_TASK).
 assert.equal(INITIAL_COST_LINES.length, 74);
-assert.deepEqual(
-  INITIAL_COST_LINES.filter((line) => line.costExGst > 0).map((line) => ({
-    itemName: line.itemName,
-    costExGst: line.costExGst,
-    includedInContract: line.includedInContract,
-  })),
-  [
-    {
-      itemName: "GENERAL REQUIREMENTS",
-      costExGst: 28500,
-      includedInContract: true,
-    },
-    {
-      itemName: "SLAB",
-      costExGst: 84500,
-      includedInContract: true,
-    },
-    {
-      itemName: "FRAME",
-      costExGst: 132000,
-      includedInContract: true,
-    },
-    {
-      itemName: "KITCHEN",
-      costExGst: 76000,
-      includedInContract: true,
-    },
-  ],
+assert.equal(
+  INITIAL_COST_LINES.filter((line) => line.costExGst > 0).length,
+  0,
 );
+assert.ok(INITIAL_COST_LINES.every((line) => line.costExGst === 0));
 
 const slabLine = INITIAL_COST_LINES.find((line) => line.itemName === "SLAB");
 assert.ok(slabLine);
@@ -101,12 +79,9 @@ assert.deepEqual(slabLine.buildingSequenceTasks, [
 ]);
 assert.ok(slabLine.offerTenderLineItem.includes("H1-class structural slab"));
 
-assert.deepEqual(getIncludedOfferTenderLineItems(INITIAL_COST_LINES), [
-  "Comprehensive on-site project management, dedicated builder supervision, and HBCF home warranty insurance.",
-  "Excavation, structural piering, perimeter timber formwork, steel reinforcement mesh laying, concrete pump hire, and pouring of H1-class structural slab.",
-  "Prefabricated timber structural wall frames, floor joists system (double-story), structural roof trusses, cavity sliding frames, vanity timber wall framing support, and FC eaves linings.",
-  "Custom kitchen and Butler's pantry joinery, cabinetry design, measurement, and final cupboard installation.",
-]);
+// Cost-gated: a fresh $0 offer surfaces no priced line items (the preview
+// falls back to the standard inclusion bullets until costs are entered).
+assert.deepEqual(getIncludedOfferTenderLineItems(INITIAL_COST_LINES), []);
 
 const blankMappedLine = applyTaskMappingToCostLine(
   {

@@ -78,14 +78,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
   const [exclusions, setExclusions] =
     useState<readonly OfferWorkspaceScopeItem[]>(INITIAL_EXCLUSIONS);
   const [draft, setDraft] = useState<OfferDocumentDraft>(INITIAL_OFFER_DRAFT);
-  const [overrideReason, setOverrideReason] = useState(
-    "EOFY fixed price approved from proposal after workbook build-up review.",
-  );
-  const [selectedPriceInput, setSelectedPriceInput] = useState("945000");
-  const [standardPriceInput, setStandardPriceInput] = useState("975000");
-  const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState(
-    "EOFY fixed price",
-  );
+  const [overrideReason, setOverrideReason] = useState("");
+  const [selectedPriceInput, setSelectedPriceInput] = useState("");
+  const [standardPriceInput, setStandardPriceInput] = useState("");
+  const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState("");
   const [status, setStatus] = useState<OfferWorkspaceStatus>("pending");
   const [areaCalculator, setAreaCalculator] =
     useState<OfferAreaCalculator>(INITIAL_AREA_CALCULATOR);

@@ -121,51 +121,22 @@ export function OfferWorkspaceHeader({
   );
 }
 
-function getScrollableAncestor(node: HTMLElement): HTMLElement {
-  let el = node.parentElement;
-  while (el) {
-    const overflowY = getComputedStyle(el).overflowY;
-    if (
-      (overflowY === "auto" || overflowY === "scroll") &&
-      el.scrollHeight > el.clientHeight
-    ) {
-      return el;
-    }
-    el = el.parentElement;
-  }
-  return (document.scrollingElement as HTMLElement) ?? document.body;
-}
-
+// Jump to a step's section. Native scrollIntoView honours the section's
+// `scroll-mt-52`, which reserves space for the pinned header + stepper, so the
+// target always lands just below the sticky chrome — reliable across header
+// heights without manual offset math.
 function scrollToWorkflowStep(target: string) {
   const el = document.getElementById(target);
   if (!el) {
     return;
   }
-  const scroller = getScrollableAncestor(el);
-  const scrollerTop = scroller.getBoundingClientRect().top;
-
-  // Clear the sticky header + stepper that stay pinned at the scroller's top.
-  // Measure the chrome's bottom relative to the scroller so the offset stays
-  // correct across the scroller's own padding and responsive header heights.
-  const stickyHeader = document.querySelector<HTMLElement>(
-    "[data-offer-sticky-header]",
-  );
-  const chromeBottom = stickyHeader
-    ? stickyHeader.getBoundingClientRect().bottom - scrollerTop
-    : 128;
-  const offset = chromeBottom + 12;
-  const top =
-    el.getBoundingClientRect().top - scrollerTop + scroller.scrollTop - offset;
   const prefersReducedMotion = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
   ).matches;
-  const nextTop = Math.max(0, top);
-
-  if (prefersReducedMotion) {
-    scroller.scrollTop = nextTop;
-  } else {
-    scroller.scrollTo({ top: nextTop, behavior: "smooth" });
-  }
+  el.scrollIntoView({
+    behavior: prefersReducedMotion ? "auto" : "smooth",
+    block: "start",
+  });
 }
 
 export function OfferWorkflowSteps({

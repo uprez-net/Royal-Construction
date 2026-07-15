@@ -163,11 +163,11 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   clientPhone: "",
   siteAddress: "",
   buildType: "",
-  groundFloorSqm: 202.2,
-  firstFloorSqm: 165.31,
+  groundFloorSqm: 0,
+  firstFloorSqm: 0,
   garageSqm: 0,
-  alfrescoPorchSqm: 31.85,
-  porchSqm: 8.35,
+  alfrescoPorchSqm: 0,
+  porchSqm: 0,
   grannyFlatSqm: 0,
   validUntil: "2026-07-10",
   preparedBy: "Gurpinder Uppal - Director, Royal Constructions",
@@ -177,12 +177,10 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   buildScope: [],
 };
 
-const INITIAL_COST_BY_TASK = new Map<string, number>([
-  ["GENERAL REQUIREMENTS", 28500],
-  ["SLAB", 84500],
-  ["FRAME", 132000],
-  ["KITCHEN", 76000],
-]);
+// A fresh offer starts with zero costs — the cost-schedule rows are present
+// (from the sequence mappings) but priced at $0 until the estimator enters
+// costs or imports the workbook. No sample figures.
+const INITIAL_COST_BY_TASK = new Map<string, number>([]);
 
 export const INITIAL_COST_LINES: readonly OfferWorkspaceCostLine[] =
   OFFER_SEQUENCE_MAPPINGS.map((mapping, index) =>
