@@ -93,6 +93,10 @@ type OfferWorkspaceScreenProps = {
   ) => void;
   readonly onImported: (result: OfferWorkbookImportResult) => void;
   readonly onJobChange: (patch: Partial<OfferWorkspaceJob>) => void;
+  readonly onPrefillFromLead?: () => void;
+  readonly canPrefill?: boolean;
+  readonly prefilling?: boolean;
+  readonly prefillResult?: import("@/lib/data/offer-prefill").OfferPrefillResult | null;
   readonly onLegacyPricingSettingsChange: (
     patch: Partial<LegacyWorkbookPricingSettings>,
   ) => void;
@@ -171,6 +175,10 @@ export function OfferWorkspaceScreen({
   onExclusionChange,
   onImported,
   onJobChange,
+  onPrefillFromLead,
+  canPrefill,
+  prefilling,
+  prefillResult,
   onLegacyPricingSettingsChange,
   onLineChange,
   onRemoveLine,
@@ -234,7 +242,14 @@ export function OfferWorkspaceScreen({
             phase="Offer"
             title="Job setup"
           >
-            <JobSetupPanel job={job} onJobChange={onJobChange} />
+            <JobSetupPanel
+              job={job}
+              onJobChange={onJobChange}
+              onPrefillFromLead={onPrefillFromLead}
+              canPrefill={canPrefill}
+              prefilling={prefilling}
+              prefillResult={prefillResult}
+            />
           </OfferStepSection>
 
           <OfferStepSection

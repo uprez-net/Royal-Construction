@@ -52,6 +52,10 @@ import {
   createProjectFromOffer,
   type ProjectHandoffResult,
 } from "@/lib/data/offer-project-handoff";
+import {
+  generateOfferPrefillFromLead,
+  type OfferPrefillResult,
+} from "@/lib/data/offer-prefill";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import {
   EMPTY_OFFER_IMAGES,
@@ -107,6 +111,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
   const [contractSendError, setContractSendError] = useState<string | null>(null);
   const [projectCreating, setProjectCreating] = useState(false);
   const [projectResult, setProjectResult] = useState<ProjectHandoffResult | null>(null);
+  const [prefilling, setPrefilling] = useState(false);
+  const [prefillResult, setPrefillResult] = useState<OfferPrefillResult | null>(null);
   const manualLineCounterRef = useRef(0);
 
   function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
@@ -575,6 +581,33 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     })();
   }, [leadId, transition]);
 
+  // Pre-fill the job from the lead's contact + sales conversation (Phase 0
+  // deterministic + Phase 1 AI draft). Explicit user action, so the returned
+  // patch is applied over current state (the estimator reviews the result).
+  const prefillFromLead = useCallback(() => {
+    if (leadId === undefined) {
+      return;
+    }
+    setPrefilling(true);
+    setPrefillResult(null);
+    void (async () => {
+      try {
+        const result = await generateOfferPrefillFromLead({ leadId });
+        setPrefillResult(result);
+        if (result.ok) {
+          if (Object.keys(result.job).length > 0) {
+            setJob((current) => ({ ...current, ...result.job }));
+          }
+          if (Object.keys(result.draft).length > 0) {
+            setDraft((current) => ({ ...current, ...result.draft }));
+          }
+        }
+      } finally {
+        setPrefilling(false);
+      }
+    })();
+  }, [leadId]);
+
   return (
     <>
       <OfferWorkspaceScreen
@@ -610,6 +643,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         onImageChange={updateImage}
         onImported={importWorkbook}
         onJobChange={updateJob}
+        onPrefillFromLead={prefillFromLead}
+        canPrefill={leadId !== undefined}
+        prefilling={prefilling}
+        prefillResult={prefillResult}
         onLegacyPricingSettingsChange={updateLegacyPricingSettings}
         onLineChange={updateLine}
         onMarkSent={() => transition("sent")}

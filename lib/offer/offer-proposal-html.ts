@@ -229,6 +229,7 @@ function snapshotPage(
   const total =
     gfGarage + job.firstFloorSqm + job.alfrescoPorchSqm + job.porchSqm + job.grannyFlatSqm;
   const scope = job.buildScope
+    .filter((line) => line.trim())
     .map((line) => `<li style="font-size:13px;color:${MUTED};">${esc(line)}</li>`)
     .join("");
   const cell = (cap: string, num: string) =>

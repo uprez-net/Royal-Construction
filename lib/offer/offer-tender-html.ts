@@ -177,7 +177,7 @@ function coverPage(
         ${particular("Lot area", formatArea(job.lotAreaSqm))}
         ${particular("Build type", job.buildType)}
         ${particular("Total build area", formatArea(totalArea))}
-        ${particular("Build scope", job.buildScope.join("; "))}
+        ${particular("Build scope", job.buildScope.filter((s) => s.trim()).join("; "))}
         ${particular("Prepared by", job.preparedBy)}
       </tbody>
     </table>

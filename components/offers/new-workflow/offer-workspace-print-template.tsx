@@ -302,9 +302,11 @@ function PrintSnapshotPage({
             </p>
             <p className="mt-2 font-semibold text-sidebar">{job.buildType}</p>
             <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-              {job.buildScope.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
+              {job.buildScope
+                .filter((line) => line.trim())
+                .map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
             </ul>
           </div>
         </div>
