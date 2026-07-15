@@ -52,7 +52,7 @@ export function buildProposalHtml(
   images: OfferImageMap,
 ): string {
   const data = buildOfferPrintTemplateData(input);
-  const { job, draft, customerPrice } = input;
+  const { job } = input;
 
   const inclusionPages: (typeof STANDARD_INCLUSIONS_SCHEDULE)[number][][] = [];
   for (let i = 0; i < STANDARD_INCLUSIONS_SCHEDULE.length; i += INCLUSIONS_ROWS_PER_PAGE) {
