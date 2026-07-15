@@ -24,12 +24,13 @@ interface CreateOfferFileModalProps {
 // Lead picker that opens the offer workspace for the chosen lead. The workspace
 // (ADR 0002) self-provisions its Offer row on load, so there is no separate
 // "create offer" step — selecting a lead and navigating is the whole flow.
+// Only leads without a project are shown (a lead with a project is done).
 export function CreateOfferFileModal({
   open,
   onClose,
 }: CreateOfferFileModalProps) {
   const router = useRouter();
-  const leadSearch = useLeadSearch("");
+  const leadSearch = useLeadSearch("", undefined, true);
   const [search, setSearch] = useState("");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
 
