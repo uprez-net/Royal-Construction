@@ -14,6 +14,10 @@ import type {
 } from "./workspace-pricing";
 import type { OfferPaymentScheduleRow } from "./workspace-payment-schedule";
 import type { OfferImageMap } from "./workspace-images";
+import {
+  RATE_CARD_PRODUCTS,
+  RATE_CARD_TIERS,
+} from "./workspace-rate-card";
 
 // The bundle of workspace state we persist (everything except transient status
 // and the ephemeral import result). Mirrors the container's useState set.
@@ -118,6 +122,27 @@ const paymentRowSchema = z.object({
 // is the Offer.contractValueIncGst Decimal column.
 const numberRecord = z.record(z.string(), z.number());
 
+// Validate the persisted rate-card product/tier against the known catalogue and
+// coerce an unknown/corrupted value to the default entry (Double storey · Mid)
+// — the same fallback the rate calc uses — so the displayed product label and
+// the applied $/sqm rate can never diverge.
+const rateCardProductSchema = z
+  .enum(
+    RATE_CARD_PRODUCTS.map((entry) => entry.value) as [
+      RateCardProduct,
+      ...RateCardProduct[],
+    ],
+  )
+  .catch("DOUBLE_STOREY");
+const rateCardTierSchema = z
+  .enum(
+    RATE_CARD_TIERS.map((entry) => entry.value) as [
+      RateCardTier,
+      ...RateCardTier[],
+    ],
+  )
+  .catch("MID");
+
 const workspaceStateV1Schema = z.object({
   schemaVersion: z.literal(1),
   job: jobSchema,
@@ -129,8 +154,8 @@ const workspaceStateV1Schema = z.object({
   pricingSettings: numberRecord,
   legacyPricingSettings: numberRecord,
   paymentSchedule: z.array(paymentRowSchema),
-  rateCardProduct: z.string(),
-  rateCardTier: z.string(),
+  rateCardProduct: rateCardProductSchema,
+  rateCardTier: rateCardTierSchema,
   overrideReason: z.string(),
   priceAdjustmentLabel: z.string(),
   selectedPriceCents: moneyCents,
@@ -284,8 +309,8 @@ export function deserializeWorkspace(
       percentOfContract: row.percentBasisPoints / 10000,
       trigger: row.trigger,
     })),
-    rateCardProduct: persisted.rateCardProduct as RateCardProduct,
-    rateCardTier: persisted.rateCardTier as RateCardTier,
+    rateCardProduct: persisted.rateCardProduct,
+    rateCardTier: persisted.rateCardTier,
     overrideReason: persisted.overrideReason,
     selectedPriceInput: String(centsToDollars(persisted.selectedPriceCents)),
     standardPriceInput: String(centsToDollars(persisted.standardPriceCents)),

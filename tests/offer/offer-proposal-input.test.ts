@@ -135,3 +135,26 @@ test("resolveOptionalPriceInput treats blank and $0 as 'no override'", () => {
   assert.equal(resolveOptionalPriceInput("600000"), 600000);
   assert.equal(resolveOptionalPriceInput("19800"), 19800);
 });
+
+test("an unknown persisted rate-card product/tier coerces to the default entry", () => {
+  const persisted = serializeWorkspace(makeSnapshot());
+  const corrupted = JSON.parse(
+    JSON.stringify({
+      ...persisted,
+      rateCardProduct: "TOWNHOUSE",
+      rateCardTier: "DELUXE",
+    }),
+  );
+  const reloaded = deserializeWorkspace(parseWorkspaceState(corrupted));
+  // Coerced to the fallback entry (Double storey · Mid) so label and rate agree.
+  assert.equal(reloaded.rateCardProduct, "DOUBLE_STOREY");
+  assert.equal(reloaded.rateCardTier, "MID");
+});
+
+test("a valid persisted rate-card product/tier is preserved", () => {
+  const reloaded = roundTrip(
+    makeSnapshot({ rateCardProduct: "DUPLEX", rateCardTier: "PREMIUM" }),
+  );
+  assert.equal(reloaded.rateCardProduct, "DUPLEX");
+  assert.equal(reloaded.rateCardTier, "PREMIUM");
+});
