@@ -399,8 +399,18 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     if (leadId === undefined || offerId === null) {
       return;
     }
-    if (status !== "pending" && status !== "sent") {
-      return; // frozen once agreed
+    // Keep autosaving through the Tender-draft phase: the payment schedule is
+    // edited after AGREED and feeds the Tender, so freezing at AGREED would
+    // silently drop those edits on reload. The agreed basis is preserved
+    // separately in agreedSnapshot; workspaceState stays live until the Tender
+    // envelope is sent.
+    if (
+      status !== "pending" &&
+      status !== "sent" &&
+      status !== "agreed" &&
+      status !== "tender_draft"
+    ) {
+      return; // frozen once the Tender is sent
     }
     const currentJson = JSON.stringify(snapshot);
     if (currentJson === lastSavedRef.current) {
@@ -435,8 +445,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
   const transition = useCallback(
     (next: OfferWorkspaceStatus) => {
       const offerId = offerIdRef.current;
-      if (leadId !== undefined && offerId !== null) {
-        void (async () => {
+      if (leadId === undefined || offerId === null) {
+        return;
+      }
+      void (async () => {
+        try {
           const currentJson = JSON.stringify(snapshotRef.current);
           if (currentJson !== lastSavedRef.current) {
             const saved = await saveOfferWorkspace({
@@ -447,17 +460,46 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
             if (saved.ok) {
               stateVersionRef.current = saved.stateVersion;
               lastSavedRef.current = currentJson;
+            } else if (saved.reason === "stale") {
+              // A concurrent save moved on — reload and abort rather than
+              // freezing a stale snapshot at AGREED.
+              const loaded = await loadActiveOfferWorkspace(leadId);
+              offerIdRef.current = loaded.offerId;
+              stateVersionRef.current = loaded.stateVersion;
+              setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+              if (loaded.snapshot) {
+                hydrateSnapshot(loaded.snapshot);
+                lastSavedRef.current = JSON.stringify(loaded.snapshot);
+              }
+              return;
             }
           }
           await transitionOfferStatus({
             offerId,
             toStatus: next.toUpperCase() as OfferStatus,
           });
-        })();
-      }
-      setStatus(next);
+          // Only advance the UI once the server transition has committed.
+          setStatus(next);
+        } catch (error) {
+          console.error("[offer] status transition failed:", error);
+          // Resync the UI to the server's actual state instead of the
+          // optimistic target.
+          try {
+            const loaded = await loadActiveOfferWorkspace(leadId);
+            offerIdRef.current = loaded.offerId;
+            stateVersionRef.current = loaded.stateVersion;
+            setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+            if (loaded.snapshot) {
+              hydrateSnapshot(loaded.snapshot);
+              lastSavedRef.current = JSON.stringify(loaded.snapshot);
+            }
+          } catch {
+            // Reload failed too — leave the UI as-is.
+          }
+        }
+      })();
     },
-    [leadId],
+    [leadId, hydrateSnapshot],
   );
 
   // Fork a new active revision (supersedes the current one), then reload the

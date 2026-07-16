@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OfferDocumentDraft } from "@/lib/offer/workspace-model";
 import { FilePenLine } from "lucide-react";
+import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 
 type OfferDocumentEditorProps = {
@@ -27,6 +28,24 @@ export function OfferDocumentEditor({
   draft,
   onDraftChange,
 }: OfferDocumentEditorProps) {
+  // The inclusion editor keeps its own raw text so pressing Enter isn't undone
+  // by textToLines filtering the trailing empty line on every keystroke; the
+  // draft stores only clean bullets. Re-sync when the bullets change from
+  // OUTSIDE the editor (AI pre-fill, reload) using the store-previous-prop
+  // pattern (adjust state during render, no effect): compare the cleaned editor
+  // text to the incoming draft so the user's own in-progress newline isn't lost.
+  const [inclusionText, setInclusionText] = useState(() =>
+    linesToText(draft.inclusionBullets),
+  );
+  const [prevBullets, setPrevBullets] = useState(draft.inclusionBullets);
+  if (draft.inclusionBullets !== prevBullets) {
+    setPrevBullets(draft.inclusionBullets);
+    const incoming = linesToText(draft.inclusionBullets);
+    if (linesToText(textToLines(inclusionText)) !== incoming) {
+      setInclusionText(incoming);
+    }
+  }
+
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
@@ -60,10 +79,13 @@ export function OfferDocumentEditor({
             Inclusion bullets
           </span>
           <Textarea
-            value={linesToText(draft.inclusionBullets)}
-            onChange={(event) =>
-              onDraftChange({ inclusionBullets: textToLines(event.target.value) })
-            }
+            value={inclusionText}
+            onChange={(event) => {
+              setInclusionText(event.target.value);
+              onDraftChange({
+                inclusionBullets: textToLines(event.target.value),
+              });
+            }}
           />
         </label>
         <label>
