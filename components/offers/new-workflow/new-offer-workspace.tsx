@@ -693,7 +693,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         canRevise={leadId !== undefined}
         revising={revising}
         onSendOffer={sendOffer}
-        canSend={leadId !== undefined}
+        canSend={leadId !== undefined && !customerPrice.needsOverrideReason}
         sending={sending}
         sendError={sendError}
         sentInfo={sentInfo}

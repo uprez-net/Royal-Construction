@@ -130,7 +130,14 @@ function numberValue(value: unknown): number | null {
     return null;
   }
 
-  const parsed = Number(value.replace(/[$,]/g, ""));
+  // A blank/whitespace cell is "no value", not 0 — Number("") is 0, which would
+  // defeat the firstNumber() fallback defaults and rate-from-amount guards.
+  const cleaned = value.replace(/[$,]/g, "").trim();
+  if (cleaned === "") {
+    return null;
+  }
+
+  const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : null;
 }
 

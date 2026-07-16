@@ -30,6 +30,11 @@ type InclusionRow = (typeof STANDARD_INCLUSIONS_SCHEDULE)[number];
 // Shared by the Tender and Contract builders (see offer-contract-html.ts).
 export function esc(value: string): string {
   return value
+    // Strip backslashes so user-controlled text (client name, address, scope)
+    // cannot smuggle a DocuSign anchor token like \sigOwner1\ into the PDF and
+    // steal a signature/date/initial field via AutoPlace. Real anchors are
+    // emitted by anchor(), never through esc().
+    .replace(/\\/g, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

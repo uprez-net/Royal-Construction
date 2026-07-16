@@ -60,7 +60,17 @@ export async function sendOfferDocument(input: {
     const snapshot = deserializeWorkspace(
       parseWorkspaceState(offer.workspaceState),
     );
-    const html = buildProposalHtml(buildProposalInput(snapshot), snapshot.images);
+    const proposalInput = buildProposalInput(snapshot);
+    // A manual price override without a stated reason must not be emailed —
+    // mirror the client-side "Send offer"/"Mark sent" guard server-side.
+    if (proposalInput.customerPrice.needsOverrideReason) {
+      return {
+        ok: false,
+        error:
+          "Add a reason for the manual price override before sending the offer.",
+      };
+    }
+    const html = buildProposalHtml(proposalInput, snapshot.images);
     pdfBase64 = await generatePDF({ html });
   } catch (error) {
     return {
