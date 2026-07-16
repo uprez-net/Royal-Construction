@@ -2,7 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
+import {
+  getPaymentScheduleTotalPct,
+  type OfferPaymentScheduleRow,
+} from "@/lib/offer/workspace-payment-schedule";
 import type {
   OfferDocumentDraft,
   OfferWorkspaceJob,
@@ -58,6 +61,10 @@ export function TenderPanel({
   const isAgreed = status === "agreed";
   const isDraft = status === "tender_draft";
   const isSent = status === "tender_sent";
+  // A fixed-price Tender's progress payments must sum to exactly 100% of the
+  // contract; block sending (and warn) when the schedule is unbalanced.
+  const scheduleTotalPct = getPaymentScheduleTotalPct(paymentSchedule);
+  const scheduleBalanced = scheduleTotalPct === 1;
   // tender_signed and every later status means the Tender is executed.
   const isSigned =
     status === "tender_signed" ||
@@ -108,6 +115,8 @@ export function TenderPanel({
             isDraft={isDraft}
             isSent={isSent}
             isSigned={isSigned}
+            scheduleBalanced={scheduleBalanced}
+            scheduleTotalPct={scheduleTotalPct}
             sending={tenderSending}
             sendError={tenderSendError}
             onGenerateTender={onGenerateTender}
@@ -170,6 +179,8 @@ function TenderActions({
   isDraft,
   isSent,
   isSigned,
+  scheduleBalanced,
+  scheduleTotalPct,
   sending,
   sendError,
   onGenerateTender,
@@ -181,6 +192,8 @@ function TenderActions({
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
+  readonly scheduleBalanced: boolean;
+  readonly scheduleTotalPct: number;
   readonly sending: boolean;
   readonly sendError: string | null;
   readonly onGenerateTender: () => void;
@@ -222,7 +235,7 @@ function TenderActions({
         {isDraft ? (
           <Button
             className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-            disabled={sending}
+            disabled={sending || !scheduleBalanced}
             size="sm"
             type="button"
             onClick={onSendTender}
@@ -257,6 +270,13 @@ function TenderActions({
           </>
         ) : null}
       </div>
+
+      {isDraft && !scheduleBalanced ? (
+        <p className="text-xs font-medium text-destructive">
+          Payment schedule totals {Math.round(scheduleTotalPct * 100)}% — adjust
+          the stages above to total 100% before sending the Tender.
+        </p>
+      ) : null}
 
       {sendError ? (
         <p className="text-xs font-medium text-destructive">{sendError}</p>

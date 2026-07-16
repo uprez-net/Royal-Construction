@@ -115,9 +115,22 @@ export function PaymentSchedulePanel({
             </tbody>
           </table>
         </div>
-        <div className="flex flex-wrap justify-between gap-3 rounded-lg border border-border bg-background/70 p-3 text-sm">
-          <span className="text-muted-foreground">
+        <div
+          className={`flex flex-wrap justify-between gap-3 rounded-lg border p-3 text-sm ${
+            totalPct === 1
+              ? "border-border bg-background/70"
+              : "border-destructive/50 bg-destructive-light"
+          }`}
+        >
+          <span
+            className={
+              totalPct === 1
+                ? "text-muted-foreground"
+                : "font-medium text-destructive"
+            }
+          >
             Schedule total {formatPercent(totalPct)}
+            {totalPct === 1 ? "" : " — must total 100%"}
           </span>
           <span className="font-mono font-semibold">
             {formatCurrency(customerPrice.selectedContractValueIncGst)}

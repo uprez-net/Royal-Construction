@@ -13,6 +13,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { buildTenderHtml, splitOwners } from "@/lib/offer/offer-tender-html";
+import { getPaymentScheduleTotalPct } from "@/lib/offer/workspace-payment-schedule";
 import { resolveOfferCustomerEmail } from "@/lib/offer/offer-customer-email";
 import {
   deserializeWorkspace,
@@ -67,6 +68,20 @@ export async function sendTenderForSignature(input: {
   }
 
   const snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
+
+  // A Tender is a fixed-price contract: its progress-payment schedule must sum
+  // to exactly the contract value (100%), or the customer is asked to sign a
+  // schedule that over- or under-claims. Block sending an unbalanced schedule.
+  const scheduleTotalPct = getPaymentScheduleTotalPct(snapshot.paymentSchedule);
+  if (scheduleTotalPct !== 1) {
+    return {
+      ok: false,
+      error: `The Tender payment schedule must total 100% before sending (currently ${Math.round(
+        scheduleTotalPct * 100,
+      )}%).`,
+    };
+  }
+
   const customerEmail = resolveOfferCustomerEmail({
     jobEmail: snapshot.job.clientEmail,
     leadEmail: offer.lead?.email,
