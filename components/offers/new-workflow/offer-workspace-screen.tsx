@@ -11,6 +11,7 @@ import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-sche
 import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import type {
+  EffectiveMargin,
   LegacyWorkbookPricingSettings,
   OfferCustomerPrice,
   OfferWorkspacePricing,
@@ -73,6 +74,7 @@ type OfferWorkspaceScreenProps = {
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly priceAdjustmentLabel: string;
   readonly pricing: OfferWorkspacePricing;
+  readonly effectiveMargin: EffectiveMargin;
   readonly rateCardComparison: RateCardComparison;
   readonly rateCardProduct: RateCardProduct;
   readonly rateCardTier: RateCardTier;
@@ -160,6 +162,7 @@ export function OfferWorkspaceScreen({
   job,
   leadId,
   legacyPricingSettings,
+  effectiveMargin,
   lines,
   overrideReason,
   paymentSchedule,
@@ -445,7 +448,7 @@ export function OfferWorkspaceScreen({
           </OfferPhaseGate>
         </div>
         <aside className="min-w-0 space-y-5 xl:sticky xl:top-24 xl:self-start">
-          <PricingSummary pricing={pricing} />
+          <PricingSummary effectiveMargin={effectiveMargin} pricing={pricing} />
           <OfferDocumentPreview
             customerPrice={customerPrice}
             draft={draft}

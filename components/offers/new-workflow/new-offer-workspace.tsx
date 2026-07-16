@@ -30,6 +30,7 @@ import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import {
   type LegacyWorkbookPricingSettings,
   calculateDirectTotal,
+  calculateEffectiveMargin,
   calculateRateCardComparison,
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
@@ -142,6 +143,20 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     [overrideReason, pricing, selectedPrice],
   );
   const standardPrice = resolveOptionalPriceInput(standardPriceInput);
+  // Margin at the price actually being charged (honours a manual override),
+  // so the badge can warn when an override drops below the minimum markup.
+  const effectiveMargin = useMemo(
+    () =>
+      calculateEffectiveMargin({
+        costBase: pricing.costBase,
+        sellingContractValueIncGst:
+          customerPrice.selectedContractValueIncGst,
+        gstRate: workspacePricingSettings.gstRate,
+        targetMarkupPct: workspacePricingSettings.targetMarkupPct,
+        minimumMarkupPct: workspacePricingSettings.minimumMarkupPct,
+      }),
+    [customerPrice, pricing.costBase, workspacePricingSettings],
+  );
   const rateCardComparison = useMemo(
     () =>
       calculateRateCardComparison({
@@ -639,6 +654,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         exclusions={exclusions}
         images={images}
         importResult={importResult}
+        effectiveMargin={effectiveMargin}
         job={job}
         leadId={leadId}
         legacyPricingSettings={legacyPricingSettings}

@@ -11,6 +11,7 @@ import type {
 } from "@/lib/offer/workspace-model";
 import { getIncludedOfferTenderLineItems } from "@/lib/offer/workspace-model";
 import type {
+  EffectiveMargin,
   OfferCustomerPrice,
   MarginStatus,
   OfferWorkspacePricing,
@@ -25,6 +26,8 @@ import {
 
 type PricingSummaryProps = {
   readonly pricing: OfferWorkspacePricing;
+  // Margin at the actual (possibly overridden) selling price — drives the badge.
+  readonly effectiveMargin: EffectiveMargin;
 };
 
 type OfferDocumentPreviewProps = {
@@ -49,7 +52,10 @@ function getMarginBadgeClass(status: MarginStatus): string {
   }
 }
 
-export function PricingSummary({ pricing }: PricingSummaryProps) {
+export function PricingSummary({
+  pricing,
+  effectiveMargin,
+}: PricingSummaryProps) {
   const rows = [
     ["Direct total", formatCurrency(pricing.directTotal)],
     ["HBCF insurance", formatCurrency(pricing.hbcfInsurance)],
@@ -92,17 +98,17 @@ export function PricingSummary({ pricing }: PricingSummaryProps) {
         <Separator />
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">Applied markup</p>
+            <p className="text-sm font-medium">Margin at selling price</p>
             <p className="text-xs text-muted-foreground">
-              Target checked before sending
+              Reflects any manual price override
             </p>
           </div>
           <Badge
-            className={getMarginBadgeClass(pricing.marginStatus)}
+            className={getMarginBadgeClass(effectiveMargin.marginStatus)}
             variant="secondary"
           >
-            {getMarginStatusLabel(pricing.marginStatus)} ·{" "}
-            {formatPercent(pricing.appliedMarkupPct)}
+            {getMarginStatusLabel(effectiveMargin.marginStatus)} ·{" "}
+            {formatPercent(effectiveMargin.effectiveMarkupPct)}
           </Badge>
         </div>
       </CardContent>

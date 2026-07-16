@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   calculateRateCardComparison,
   calculateDirectTotal,
+  calculateEffectiveMargin,
   calculateStageSubtotals,
   calculateLegacyWorkbookPricing,
   calculateOfferCustomerPrice,
@@ -36,13 +37,44 @@ assert.deepEqual(pricing, {
   gstAmount: 64080,
   contractValueIncGst: 704880,
   perSqm: 3524.4,
-  appliedMarkupPct: 0.2,
-  marginStatus: "at_target",
 });
 
 assert.equal(getMarginStatus(0.21, 0.2, 0.15), "at_target");
 assert.equal(getMarginStatus(0.151, 0.2, 0.15), "acceptable_below_target");
 assert.equal(getMarginStatus(0.12, 0.2, 0.15), "below_minimum");
+
+// Effective margin reflects the ACTUAL selling price (incl. manual overrides).
+const marginSettings = {
+  costBase: 118800,
+  gstRate: 0.1,
+  targetMarkupPct: 0.2,
+  minimumMarkupPct: 0.15,
+};
+// No override: selling = computed contract value (costBase*1.2*1.1) → back to target.
+assert.deepEqual(
+  calculateEffectiveMargin({
+    ...marginSettings,
+    sellingContractValueIncGst: 156816,
+  }),
+  { effectiveMarkupPct: 0.2, marginStatus: "at_target" },
+);
+// Override BELOW cost → below_minimum (this is the case the old badge missed).
+assert.deepEqual(
+  calculateEffectiveMargin({
+    ...marginSettings,
+    sellingContractValueIncGst: 120000,
+  }),
+  { effectiveMarkupPct: -0.0817, marginStatus: "below_minimum" },
+);
+// Override between the minimum and target markup → acceptable_below_target.
+// selling = costBase*1.17*1.1 = 118800*1.17*1.1 = 152895.6 → markup 0.17.
+assert.deepEqual(
+  calculateEffectiveMargin({
+    ...marginSettings,
+    sellingContractValueIncGst: 152895.6,
+  }),
+  { effectiveMarkupPct: 0.17, marginStatus: "acceptable_below_target" },
+);
 
 assert.equal(
   calculateDirectTotal([
@@ -92,23 +124,6 @@ assert.equal(
     },
   }).perSqm,
   null,
-);
-
-assert.equal(
-  calculateOfferWorkspacePricing({
-    totalAreaSqm: 100,
-    directTotal: 100000,
-    settings: {
-      targetMarkupPct: 0.1,
-      minimumMarkupPct: 0.15,
-      gstRate: 0.1,
-      hbcfRate: 0,
-      adminCostFixed: 0,
-      projectManagementCostFixed: 0,
-      contingencyPct: 0,
-    },
-  }).marginStatus,
-  "below_minimum",
 );
 
 assert.equal(parseNonNegativeNumberInput("0"), 0);

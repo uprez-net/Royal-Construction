@@ -50,7 +50,14 @@ export type OfferWorkspacePricing = {
   readonly gstAmount: number;
   readonly contractValueIncGst: number;
   readonly perSqm: number | null;
-  readonly appliedMarkupPct: number;
+};
+
+// The margin the builder ACTUALLY earns at the price being charged. Kept
+// separate from the cost build-up above because the selling price may be a
+// manual override that the build-up (which just applied the target markup)
+// cannot see — see calculateEffectiveMargin.
+export type EffectiveMargin = {
+  readonly effectiveMarkupPct: number;
   readonly marginStatus: MarginStatus;
 };
 
@@ -194,8 +201,6 @@ export function calculateOfferWorkspacePricing({
   const contractValueIncGst = roundCurrency(subtotalExGst + gstAmount);
   const perSqm =
     totalAreaSqm > 0 ? roundCurrency(contractValueIncGst / totalAreaSqm) : null;
-  const appliedMarkupPct =
-    costBase > 0 ? roundRate(builderMargin / costBase) : 0;
 
   return {
     directTotal: roundCurrency(directTotal),
@@ -209,11 +214,38 @@ export function calculateOfferWorkspacePricing({
     gstAmount,
     contractValueIncGst,
     perSqm,
-    appliedMarkupPct,
+  };
+}
+
+// The margin actually earned at the (possibly overridden) selling price, for
+// the margin badge. This is what makes the below_minimum / acceptable_below_
+// target warnings reachable: the cost build-up alone always reports the target
+// markup, so an under-cost override would otherwise still read "at target".
+// With no override the selling price is the computed contract value, so this
+// reduces back to the target markup (badge stays green) — as expected.
+export function calculateEffectiveMargin({
+  costBase,
+  sellingContractValueIncGst,
+  gstRate,
+  targetMarkupPct,
+  minimumMarkupPct,
+}: {
+  readonly costBase: number;
+  readonly sellingContractValueIncGst: number;
+  readonly gstRate: number;
+  readonly targetMarkupPct: number;
+  readonly minimumMarkupPct: number;
+}): EffectiveMargin {
+  const sellingExGst = roundCurrency(sellingContractValueIncGst / (1 + gstRate));
+  const effectiveMarkupPct =
+    costBase > 0 ? roundRate((sellingExGst - costBase) / costBase) : 0;
+
+  return {
+    effectiveMarkupPct,
     marginStatus: getMarginStatus(
-      appliedMarkupPct,
-      settings.targetMarkupPct,
-      settings.minimumMarkupPct,
+      effectiveMarkupPct,
+      targetMarkupPct,
+      minimumMarkupPct,
     ),
   };
 }
