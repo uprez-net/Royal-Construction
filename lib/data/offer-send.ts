@@ -1,6 +1,5 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
 import { randomBytes } from "node:crypto";
 import { OfferStatus } from "@prisma/client";
@@ -15,6 +14,7 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { getGraphConfig } from "@/lib/graph/config";
 import { createGraphContext } from "@/lib/graph/client";
+import { authorizeOfferAccess } from "@/lib/data/offer-access";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -29,9 +29,9 @@ export async function sendOfferDocument(input: {
   offerId: string;
   recipientEmail: string;
 }): Promise<SendResult> {
-  const { isAuthenticated } = await auth();
-  if (!isAuthenticated) {
-    return { ok: false, error: "Unauthorized" };
+  const access = await authorizeOfferAccess(input.offerId);
+  if (!access.ok) {
+    return { ok: false, error: access.error };
   }
   const email = input.recipientEmail.trim();
   if (!EMAIL_RE.test(email)) {

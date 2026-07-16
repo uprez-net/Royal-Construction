@@ -5,11 +5,35 @@ import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
+  authorizeLeadAccess,
+  authorizeOfferAccess,
+} from "@/lib/data/offer-access";
+import {
   deserializeWorkspace,
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+
+// Allowed lifecycle transitions for the offer WORKSPACE (the legacy
+// OFFER_STATE_MACHINE in offers.ts treats these new states as terminal). The
+// early offer phase (pending/sent/agreed/rejected) moves flexibly; the
+// tender→contract→project progression must pass each gate in order. A
+// self-transition is always allowed so the UI's post-server-action status sync
+// (the dedicated send actions already advanced the row) is a harmless no-op.
+const OFFER_WORKFLOW_TRANSITIONS: Partial<Record<OfferStatus, OfferStatus[]>> = {
+  PENDING: [OfferStatus.SENT, OfferStatus.AGREED, OfferStatus.REJECTED],
+  SENT: [OfferStatus.AGREED, OfferStatus.REJECTED, OfferStatus.PENDING],
+  REJECTED: [OfferStatus.PENDING, OfferStatus.SENT, OfferStatus.AGREED],
+  AGREED: [OfferStatus.TENDER_DRAFT, OfferStatus.SENT, OfferStatus.PENDING],
+  TENDER_DRAFT: [OfferStatus.TENDER_SENT, OfferStatus.AGREED],
+  TENDER_SENT: [OfferStatus.TENDER_DRAFT, OfferStatus.TENDER_SIGNED],
+  TENDER_SIGNED: [OfferStatus.CONTRACT_DRAFT],
+  CONTRACT_DRAFT: [OfferStatus.CONTRACT_SENT, OfferStatus.TENDER_SIGNED],
+  CONTRACT_SENT: [OfferStatus.CONTRACT_DRAFT, OfferStatus.CONTRACT_SIGNED],
+  CONTRACT_SIGNED: [OfferStatus.PROJECT],
+  PROJECT: [],
+};
 
 // The active offer for a lead, ready to hydrate the workspace. `snapshot` is
 // null when the offer has no saved working-state yet (client uses defaults).
@@ -63,6 +87,11 @@ export async function loadActiveOfferWorkspace(
   leadId: number,
   actorId?: string,
 ): Promise<LoadedOfferWorkspace> {
+  const access = await authorizeLeadAccess(leadId);
+  if (!access.ok) {
+    throw new Error(access.error);
+  }
+
   const existing = await prisma.offer.findFirst({
     where: { leadId, isActive: true },
     orderBy: { createdAt: "desc" },
@@ -105,6 +134,11 @@ export async function saveOfferWorkspace(input: {
   expectedStateVersion: number;
   snapshot: OfferWorkspaceSnapshot;
 }): Promise<SaveResult> {
+  const access = await authorizeOfferAccess(input.offerId);
+  if (!access.ok) {
+    throw new Error(access.error);
+  }
+
   const persisted = serializeWorkspace(input.snapshot);
   const contractValue = new Prisma.Decimal(persisted.selectedPriceCents).div(
     100,
@@ -143,11 +177,27 @@ export async function transitionOfferStatus(input: {
   actorId?: string;
   note?: string;
 }): Promise<{ ok: true; status: OfferStatus }> {
+  const access = await authorizeOfferAccess(input.offerId);
+  if (!access.ok) {
+    throw new Error(access.error);
+  }
+
   await prisma.$transaction(async (tx) => {
     const offer = await tx.offer.findUniqueOrThrow({
       where: { id: input.offerId },
       select: { offerStatus: true, workspaceState: true },
     });
+
+    const allowed =
+      offer.offerStatus === input.toStatus ||
+      (OFFER_WORKFLOW_TRANSITIONS[offer.offerStatus] ?? []).includes(
+        input.toStatus,
+      );
+    if (!allowed) {
+      throw new Error(
+        `Invalid offer transition from ${offer.offerStatus} to ${input.toStatus}`,
+      );
+    }
 
     const freezeAgreed =
       input.toStatus === OfferStatus.AGREED && offer.workspaceState !== null;
@@ -187,6 +237,11 @@ export async function createOfferRevision(input: {
   offerId: string;
   actorId?: string;
 }): Promise<{ ok: true; offerId: string; leadId: number }> {
+  const access = await authorizeOfferAccess(input.offerId);
+  if (!access.ok) {
+    throw new Error(access.error);
+  }
+
   const created = await prisma.$transaction(async (tx) => {
     const current = await tx.offer.findUniqueOrThrow({
       where: { id: input.offerId },

@@ -1,7 +1,7 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
+import { authorizeOfferAccess } from "@/lib/data/offer-access";
 import {
   EnvelopeDocType,
   EnvelopeStatus,
@@ -35,9 +35,9 @@ type TenderSendResult =
 export async function sendTenderForSignature(input: {
   offerId: string;
 }): Promise<TenderSendResult> {
-  const { isAuthenticated } = await auth();
-  if (!isAuthenticated) {
-    return { ok: false, error: "Unauthorized" };
+  const access = await authorizeOfferAccess(input.offerId);
+  if (!access.ok) {
+    return { ok: false, error: access.error };
   }
 
   const offer = await prisma.offer.findUnique({
@@ -118,6 +118,23 @@ export async function sendTenderForSignature(input: {
     email: customerEmail,
   }));
 
+  // Atomically claim the send so two concurrent calls can't both create a
+  // DocuSign envelope (double-send). Only the caller that flips the status off
+  // TENDER_DRAFT/AGREED proceeds; the claim is released on envelope failure.
+  const claim = await prisma.offer.updateMany({
+    where: {
+      id: offer.id,
+      offerStatus: { in: [OfferStatus.TENDER_DRAFT, OfferStatus.AGREED] },
+    },
+    data: { offerStatus: OfferStatus.TENDER_SENT },
+  });
+  if (claim.count === 0) {
+    return {
+      ok: false,
+      error: "The Tender is already being sent or has been sent.",
+    };
+  }
+
   let envelope;
   try {
     const context = await createDocusignContext(config);
@@ -134,6 +151,11 @@ export async function sendTenderForSignature(input: {
       owners,
     });
   } catch (error) {
+    // Release the claim so the builder can retry.
+    await prisma.offer.updateMany({
+      where: { id: offer.id, offerStatus: OfferStatus.TENDER_SENT },
+      data: { offerStatus: offer.offerStatus },
+    });
     return {
       ok: false,
       error: `DocuSign envelope failed: ${describeDocusignError(error)}`,

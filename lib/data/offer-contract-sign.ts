@@ -1,6 +1,5 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
 import {
   EnvelopeDocType,
@@ -14,6 +13,8 @@ import {
   deserializeWorkspace,
   parseWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { authorizeOfferAccess } from "@/lib/data/offer-access";
 import { splitOwners } from "@/lib/offer/offer-tender-html";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
@@ -44,9 +45,9 @@ export async function sendContractForSignature(input: {
   offerId: string;
   customerEmail?: string;
 }): Promise<ContractSendResult> {
-  const { isAuthenticated } = await auth();
-  if (!isAuthenticated) {
-    return { ok: false, error: "Unauthorized" };
+  const access = await authorizeOfferAccess(input.offerId);
+  if (!access.ok) {
+    return { ok: false, error: access.error };
   }
 
   const offer = await prisma.offer.findUnique({
@@ -107,7 +108,12 @@ export async function sendContractForSignature(input: {
     };
   }
 
-  const contractValue = Number(snapshot.selectedPriceInput) || 0;
+  // Resolve the price through the same path the Tender used — a blank override
+  // round-trips to "0", so Number(...) would lock a $0.00 contract (the signed
+  // Tender showed the computed value). buildProposalInput runs
+  // resolveOptionalPriceInput + the computed-value fallback.
+  const contractValue =
+    buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
   const owners = splitOwners(job.clientNames);
   const primaryOwner = owners[0];
@@ -148,6 +154,24 @@ export async function sendContractForSignature(input: {
   ];
   const ownerTextTabs: ContractTabValue[] = [locked("ownerPrintName", primaryOwner)];
 
+  // Atomically claim the send so two concurrent calls can't both create a
+  // DocuSign envelope (double-send); the claim is released on envelope failure.
+  const claim = await prisma.offer.updateMany({
+    where: {
+      id: offer.id,
+      offerStatus: {
+        in: [OfferStatus.TENDER_SIGNED, OfferStatus.CONTRACT_DRAFT],
+      },
+    },
+    data: { offerStatus: OfferStatus.CONTRACT_SENT },
+  });
+  if (claim.count === 0) {
+    return {
+      ok: false,
+      error: "The Contract is already being sent or has been sent.",
+    };
+  }
+
   let envelope;
   try {
     const context = await createDocusignContext(config);
@@ -167,6 +191,11 @@ export async function sendContractForSignature(input: {
       ownerTextTabs,
     });
   } catch (error) {
+    // Release the claim so the builder can retry.
+    await prisma.offer.updateMany({
+      where: { id: offer.id, offerStatus: OfferStatus.CONTRACT_SENT },
+      data: { offerStatus: offer.offerStatus },
+    });
     return { ok: false, error: `DocuSign envelope failed: ${describeDocusignError(error)}` };
   }
 

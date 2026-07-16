@@ -6,7 +6,9 @@ import { OfferStatus, ProjectStage } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { getUserByClerkId } from "@/lib/data/user";
+import { assertCanAccessLead } from "@/lib/offer/access";
 import { createProjectWithLead } from "@/lib/data/projectsWrite";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
@@ -64,6 +66,11 @@ export async function createProjectFromOffer(input: {
   if (!offer || !offer.lead) {
     return { ok: false, error: "Offer or its lead not found." };
   }
+  try {
+    await assertCanAccessLead(actor, offer.leadId);
+  } catch {
+    return { ok: false, error: "You do not have access to this offer." };
+  }
   if (offer.offerStatus === OfferStatus.PROJECT) {
     return { ok: false, error: "A project has already been created from this offer." };
   }
@@ -87,7 +94,10 @@ export async function createProjectFromOffer(input: {
   const warnings: string[] = [];
   const snapshot = deserializeWorkspace(parseWorkspaceState(state));
   const job = snapshot.job;
-  const contractValue = Number(snapshot.selectedPriceInput) || 0;
+  // Resolve via the same path the Tender/Contract used — a blank override
+  // round-trips to "0", so Number(...) would record a $0 contract value.
+  const contractValue =
+    buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
 
   // The project's Customer is created from the lead, whose email is validated
@@ -168,8 +178,24 @@ export async function createProjectFromOffer(input: {
     "Start date defaulted to +14 days (9-month duration) and you are the site manager — adjust in the project settings.",
   );
 
-  const allocation = await allocateTradeSchedules(projectId, snapshot, start);
-  warnings.push(...allocation.warnings);
+  // Allocation runs AFTER the project exists; if it throws here it must not
+  // abort the handoff, or the offer stays CONTRACT_SIGNED with a project the
+  // lead-already-has-a-project guard then refuses to retry. Degrade to a
+  // warning and still advance the offer to PROJECT below.
+  let allocation: {
+    milestoneCount: number;
+    schedulesCreated: number;
+    warnings: string[];
+  };
+  try {
+    allocation = await allocateTradeSchedules(projectId, snapshot, start);
+    warnings.push(...allocation.warnings);
+  } catch (error) {
+    allocation = { milestoneCount: 0, schedulesCreated: 0, warnings: [] };
+    warnings.push(
+      `Trade schedules could not be allocated (${(error as Error).message}) — book them manually in the project.`,
+    );
+  }
 
   await prisma.$transaction([
     prisma.offer.update({
