@@ -28,6 +28,10 @@ const STATUS_COPY: Record<
   RateCardStatus,
   { readonly label: string; readonly className: string }
 > = {
+  no_area: {
+    label: "Enter floor area",
+    className: "bg-muted text-muted-foreground",
+  },
   at_or_above_target: {
     label: "At target",
     className: "bg-success-light text-foreground",

@@ -217,6 +217,18 @@ assert.equal(
   "at_or_above_target",
 );
 
+// Zero floor area must NOT read as a free "at target" pass — target/floor both
+// collapse to $0, so surface a distinct no-area state instead.
+assert.equal(
+  calculateRateCardComparison({
+    product: "DOUBLE_STOREY",
+    tier: "MID",
+    totalAreaSqm: 0,
+    selectedContractValueIncGst: 19800,
+  }).status,
+  "no_area",
+);
+
 assert.deepEqual(
   calculateOfferCustomerPrice({
     computedContractValueIncGst: 834614,

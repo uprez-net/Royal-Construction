@@ -18,6 +18,7 @@ export type RateCardProduct = (typeof RATE_CARD_PRODUCTS)[number]["value"];
 export type RateCardTier = (typeof RATE_CARD_TIERS)[number]["value"];
 
 export type RateCardStatus =
+  | "no_area"
   | "at_or_above_target"
   | "between_floor_and_target"
   | "below_floor";
@@ -109,11 +110,17 @@ export function calculateRateCardComparison({
     varianceToFloorIncGst: roundCurrency(
       selectedContractValueIncGst - floorContractValueIncGst,
     ),
-    status: getRateCardStatus(
-      selectedContractValueIncGst,
-      targetContractValueIncGst,
-      floorContractValueIncGst,
-    ),
+    // With no floor area the target/floor both collapse to $0, so every price
+    // would read "at or above target". That is a false pass, not a real
+    // benchmark — surface a distinct no-area state instead.
+    status:
+      totalAreaSqm > 0
+        ? getRateCardStatus(
+            selectedContractValueIncGst,
+            targetContractValueIncGst,
+            floorContractValueIncGst,
+          )
+        : "no_area",
   };
 }
 
