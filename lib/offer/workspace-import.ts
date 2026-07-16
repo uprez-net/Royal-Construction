@@ -13,9 +13,9 @@ import {
   DEFAULT_LEGACY_PRICING_SETTINGS,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   OFFER_STAGE_CATALOG,
-  applyTaskMappingToCostLine,
   type OfferStageCode,
 } from "@/lib/offer/workspace-model";
+import { getOfferSequenceMappingByTask } from "@/lib/offer/workspace-sequence-mapping";
 import type {
   LegacyWorkbookPricingSettings,
   OfferWorkspacePricingSettings,
@@ -145,6 +145,27 @@ function firstNumber(values: readonly unknown[], fallback: number): number {
   return fallback;
 }
 
+// Supplement an imported cost line with the fields the workbook cannot provide
+// — the building-sequence tasks and the offer/tender wording — from the task
+// mapping when the item name matches a known task. The workbook stays
+// authoritative for stage, trade/vendor, item name and notes: unlike
+// applyTaskMappingToCostLine (a live-UI auto-fill that overwrites the row from
+// the mapping), this NEVER discards the imported values.
+function enrichImportedCostLine(
+  line: OfferWorkspaceCostLine,
+): OfferWorkspaceCostLine {
+  const mapping = getOfferSequenceMappingByTask(line.itemName);
+  if (mapping === null) {
+    return line;
+  }
+
+  return {
+    ...line,
+    buildingSequenceTasks: mapping.buildingSequenceTasks,
+    offerTenderLineItem: mapping.offerTenderWording,
+  };
+}
+
 function parseSampleQuoteRows(
   rows: readonly (readonly unknown[])[],
 ): readonly OfferWorkspaceCostLine[] {
@@ -174,7 +195,7 @@ function parseSampleQuoteRows(
       sourceReference: `SAMPLE QUOTE!H${sourceRow}`,
     };
 
-    lines.push(applyTaskMappingToCostLine(line, itemName));
+    lines.push(enrichImportedCostLine(line));
   }
 
   return lines;
@@ -216,7 +237,7 @@ function parseV2QuoteRows(
       sourceReference: `QUOTE!E${sourceRow}`,
     };
 
-    lines.push(applyTaskMappingToCostLine(line, itemOrStage));
+    lines.push(enrichImportedCostLine(line));
   });
 
   return lines;
