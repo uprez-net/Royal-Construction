@@ -53,8 +53,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     where: { docusignId },
     include: {
       signatures: true,
-      tender: { select: { id: true, offerId: true } },
-      contract: { select: { id: true, offerId: true } },
+      tender: { select: { id: true, offerId: true, executedPdfUrl: true } },
+      contract: { select: { id: true, offerId: true, executedPdfUrl: true } },
     },
   });
   if (!envelope) {
@@ -158,31 +158,57 @@ const ENVELOPE_STATUS: Record<string, EnvelopeStatus> = {
   "envelope-voided": EnvelopeStatus.VOIDED,
 };
 
+// Monotonic rank for forward-only status: an out-of-order or replayed event
+// must never drag a terminal envelope (COMPLETED/DECLINED/VOIDED) backwards.
+function envelopeStatusRank(status: EnvelopeStatus): number {
+  switch (status) {
+    case EnvelopeStatus.SENT:
+      return 1;
+    case EnvelopeStatus.DELIVERED:
+      return 2;
+    case EnvelopeStatus.COMPLETED:
+    case EnvelopeStatus.DECLINED:
+    case EnvelopeStatus.VOIDED:
+      return 3;
+    default:
+      return 0;
+  }
+}
+
 async function syncEnvelopeStatus(
   envelope: {
     id: string;
     docusignId: string | null;
     docType: EnvelopeDocType;
     status: EnvelopeStatus;
-    tender: { id: string; offerId: string } | null;
-    contract: { id: string; offerId: string } | null;
+    tender: { id: string; offerId: string; executedPdfUrl: string | null } | null;
+    contract: {
+      id: string;
+      offerId: string;
+      executedPdfUrl: string | null;
+    } | null;
   },
   event: string,
 ): Promise<void> {
   const nextStatus = ENVELOPE_STATUS[event];
-  if (!nextStatus || nextStatus === envelope.status) {
+  if (!nextStatus) {
     return;
   }
 
-  const now = new Date();
-  await prisma.envelope.update({
-    where: { id: envelope.id },
-    data: {
-      status: nextStatus,
-      ...(nextStatus === EnvelopeStatus.COMPLETED ? { completedAt: now } : {}),
-      ...(nextStatus === EnvelopeStatus.VOIDED ? { voidedAt: now } : {}),
-    },
-  });
+  // Forward-only: advance the envelope status only on a strictly higher rank so
+  // a replayed/out-of-order event can't regress it (e.g. a late "sent" after
+  // "completed").
+  if (envelopeStatusRank(nextStatus) > envelopeStatusRank(envelope.status)) {
+    const now = new Date();
+    await prisma.envelope.update({
+      where: { id: envelope.id },
+      data: {
+        status: nextStatus,
+        ...(nextStatus === EnvelopeStatus.COMPLETED ? { completedAt: now } : {}),
+        ...(nextStatus === EnvelopeStatus.VOIDED ? { voidedAt: now } : {}),
+      },
+    });
+  }
 
   if (nextStatus !== EnvelopeStatus.COMPLETED) {
     return;
@@ -194,9 +220,12 @@ async function syncEnvelopeStatus(
     return;
   }
 
-  // Archive the executed PDF; a download failure must not block the status
-  // advance (DocuSign retains the document and this can be re-fetched).
-  if (envelope.docusignId) {
+  // The completion side-effects below run on EVERY completion event (not just
+  // the first), each guarded to be idempotent, so a retry after a mid-way
+  // failure still advances the offer instead of short-circuiting on the
+  // already-COMPLETED envelope. Archive only if not already archived — a
+  // download failure must not block the offer advance (DocuSign retains it).
+  if (envelope.docusignId && !parent.executedPdfUrl) {
     try {
       const context = await createDocusignContext(getDocusignConfig());
       const executed = await downloadCombinedDocument(
