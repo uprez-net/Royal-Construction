@@ -1,6 +1,6 @@
 "use server";
 
-import { OfferStatus, Prisma } from "@prisma/client";
+import { EnvelopeStatus, OfferStatus, Prisma } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -8,6 +8,9 @@ import {
   authorizeLeadAccess,
   authorizeOfferAccess,
 } from "@/lib/data/offer-access";
+import { getDocusignConfig } from "@/lib/docusign/config";
+import { createDocusignContext } from "@/lib/docusign/client";
+import { voidEnvelope } from "@/lib/docusign/void-envelope";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
@@ -246,48 +249,132 @@ export async function transitionOfferStatus(input: {
   return { ok: true, status: input.toStatus };
 }
 
+export type CreateOfferRevisionResult =
+  | {
+      ok: true;
+      offerId: string;
+      leadId: number;
+      // How many live DocuSign envelopes were pulled back, and any that could
+      // not be voided in DocuSign itself (marked recalled in our DB regardless).
+      voidedEnvelopes: number;
+      voidWarnings: readonly string[];
+    }
+  // An executed Contract can't be revised — a change there is a contract
+  // variation, a separate instrument, not a new offer revision.
+  | { ok: false; reason: "executed" };
+
 // Fork a new active revision from the current one, superseding it. The current
-// row is deactivated first so the one-active-per-lead partial index holds.
+// row is deactivated first so the one-active-per-lead partial index holds. Any
+// live Tender/Contract envelope out for signature is voided first, so nobody can
+// sign a document that a newer revision has replaced.
 export async function createOfferRevision(input: {
   offerId: string;
   actorId?: string;
-}): Promise<{ ok: true; offerId: string; leadId: number }> {
+}): Promise<CreateOfferRevisionResult> {
   const access = await authorizeOfferAccess(input.offerId);
   if (!access.ok) {
     throw new Error(access.error);
   }
 
+  const current = await prisma.offer.findUniqueOrThrow({
+    where: { id: input.offerId },
+    select: { offerStatus: true },
+  });
+
+  // An executed Contract (or a handed-off Project) is binding — revisions stop
+  // here; further changes are contract variations, handled separately.
+  if (
+    current.offerStatus === OfferStatus.CONTRACT_SIGNED ||
+    current.offerStatus === OfferStatus.PROJECT
+  ) {
+    return { ok: false, reason: "executed" };
+  }
+
+  // Pull back any envelope still out for signature so the customer can't sign a
+  // superseded Tender/Contract. DocuSign voiding is best-effort: if DocuSign is
+  // unreachable we still mark the envelope recalled in our system and surface a
+  // warning so it can be voided by hand.
+  const liveEnvelopes = await prisma.envelope.findMany({
+    where: {
+      status: EnvelopeStatus.SENT,
+      OR: [
+        { tender: { offerId: input.offerId } },
+        { contract: { offerId: input.offerId } },
+      ],
+    },
+    select: { id: true, docusignId: true },
+  });
+
+  const voidWarnings: string[] = [];
+  if (liveEnvelopes.length > 0) {
+    try {
+      const context = await createDocusignContext(getDocusignConfig());
+      for (const env of liveEnvelopes) {
+        if (!env.docusignId) {
+          continue;
+        }
+        try {
+          await voidEnvelope(
+            context,
+            env.docusignId,
+            "Superseded by a new revision of this offer.",
+          );
+        } catch {
+          voidWarnings.push(
+            `DocuSign envelope ${env.docusignId} could not be voided automatically — void it manually in DocuSign.`,
+          );
+        }
+      }
+    } catch {
+      voidWarnings.push(
+        "DocuSign was unreachable — the previous envelope was recalled in the system but may still be live in DocuSign; void it manually.",
+      );
+    }
+  }
+
   const created = await prisma.$transaction(async (tx) => {
-    const current = await tx.offer.findUniqueOrThrow({
+    const currentRow = await tx.offer.findUniqueOrThrow({
       where: { id: input.offerId },
     });
 
+    if (liveEnvelopes.length > 0) {
+      // Only void rows that are still SENT — if a webhook marked one completed
+      // between our read and here, don't clobber that terminal state.
+      await tx.envelope.updateMany({
+        where: {
+          id: { in: liveEnvelopes.map((env) => env.id) },
+          status: EnvelopeStatus.SENT,
+        },
+        data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
+      });
+    }
+
     await tx.offer.update({
-      where: { id: current.id },
+      where: { id: currentRow.id },
       data: { isActive: false, offerStatus: OfferStatus.SUPERSEDED },
     });
 
     const next = await tx.offer.create({
       data: {
-        leadId: current.leadId,
-        baseReference: current.baseReference,
-        revisionNumber: current.revisionNumber + 1,
+        leadId: currentRow.leadId,
+        baseReference: currentRow.baseReference,
+        revisionNumber: currentRow.revisionNumber + 1,
         isActive: true,
         createdById: input.actorId,
         offerStatus: OfferStatus.PENDING,
-        amount: current.amount,
-        gstAmount: current.gstAmount,
-        totalAmount: current.totalAmount,
-        contractValueIncGst: current.contractValueIncGst,
+        amount: currentRow.amount,
+        gstAmount: currentRow.gstAmount,
+        totalAmount: currentRow.totalAmount,
+        contractValueIncGst: currentRow.contractValueIncGst,
         workspaceState:
-          current.workspaceState === null
+          currentRow.workspaceState === null
             ? Prisma.JsonNull
-            : (current.workspaceState as Prisma.InputJsonValue),
+            : (currentRow.workspaceState as Prisma.InputJsonValue),
       },
     });
 
     await tx.offer.update({
-      where: { id: current.id },
+      where: { id: currentRow.id },
       data: { supersededById: next.id },
     });
 
@@ -295,5 +382,11 @@ export async function createOfferRevision(input: {
   });
 
   revalidateTag(`offer-lead-${created.leadId}`, CACHE_PROFILES.SHORT);
-  return { ok: true, offerId: created.id, leadId: created.leadId };
+  return {
+    ok: true,
+    offerId: created.id,
+    leadId: created.leadId,
+    voidedEnvelopes: liveEnvelopes.length,
+    voidWarnings,
+  };
 }

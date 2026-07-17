@@ -134,6 +134,8 @@ type OfferWorkspaceScreenProps = {
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
   readonly revising: boolean;
+  readonly revisionNotice: string | null;
+  readonly revisionExecuted: boolean;
   readonly onSendOffer: (email: string) => void;
   readonly canSend: boolean;
   readonly sending: boolean;
@@ -220,6 +222,8 @@ export function OfferWorkspaceScreen({
   onCreateRevision,
   canRevise,
   revising,
+  revisionNotice,
+  revisionExecuted,
   onSendOffer,
   canSend,
   sending,
@@ -308,6 +312,8 @@ export function OfferWorkspaceScreen({
             <OfferLockBanner
               canRevise={canRevise}
               revising={revising}
+              executed={revisionExecuted}
+              notice={revisionNotice}
               onCreateRevision={onCreateRevision}
             />
           ) : null}

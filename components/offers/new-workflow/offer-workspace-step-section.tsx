@@ -57,35 +57,50 @@ export function OfferLockBanner({
   onCreateRevision,
   canRevise,
   revising,
+  executed = false,
+  notice = null,
 }: {
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
   readonly revising: boolean;
+  // An executed contract can't be revised — its terms are binding; a change is
+  // a contract variation, not a new revision.
+  readonly executed?: boolean;
+  // Outcome message from the last revision attempt (e.g. an envelope-void
+  // warning, or the executed-contract explanation).
+  readonly notice?: string | null;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3">
-      <p className="flex items-start gap-2 text-sm text-foreground">
-        <Lock
-          className="mt-0.5 size-4 shrink-0 text-royal-gold-dark"
-          aria-hidden="true"
-        />
-        <span className="max-w-prose">
-          This offer has been issued, so job setup, cost schedule, pricing, scope
-          and the offer document are locked to preserve the issued record. To
-          change any of them, create a new revision.
-        </span>
-      </p>
-      <Button
-        className="shrink-0"
-        disabled={!canRevise || revising}
-        onClick={onCreateRevision}
-        size="sm"
-        type="button"
-        variant="outline"
-      >
-        <GitBranch className="size-4" aria-hidden="true" />
-        {revising ? "Creating…" : "Create revision"}
-      </Button>
+    <div className="grid gap-2 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="flex items-start gap-2 text-sm text-foreground">
+          <Lock
+            className="mt-0.5 size-4 shrink-0 text-royal-gold-dark"
+            aria-hidden="true"
+          />
+          <span className="max-w-prose">
+            {executed
+              ? "This offer's contract is executed. The terms are locked — a change now is a contract variation, a separate document, not a new revision."
+              : "This offer has been issued, so job setup, cost schedule, pricing, scope and the offer document are locked to preserve the issued record. To change any of them, create a new revision."}
+          </span>
+        </p>
+        {executed ? null : (
+          <Button
+            className="shrink-0"
+            disabled={!canRevise || revising}
+            onClick={onCreateRevision}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <GitBranch className="size-4" aria-hidden="true" />
+            {revising ? "Creating…" : "Create revision"}
+          </Button>
+        )}
+      </div>
+      {notice ? (
+        <p className="text-xs font-medium text-foreground/80">{notice}</p>
+      ) : null}
     </div>
   );
 }

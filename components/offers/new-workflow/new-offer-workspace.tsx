@@ -106,6 +106,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     useState<readonly OfferPaymentScheduleRow[]>(INITIAL_PAYMENT_SCHEDULE);
   const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
   const [revising, setRevising] = useState(false);
+  const [revisionNotice, setRevisionNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentInfo, setSentInfo] = useState<string | null>(null);
@@ -591,20 +592,33 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
       return;
     }
     setRevising(true);
+    setRevisionNotice(null);
     void (async () => {
       try {
         const result = await createOfferRevision({ offerId });
-        if (result.ok) {
-          const loaded = await loadActiveOfferWorkspace(leadId);
-          offerIdRef.current = loaded.offerId;
-          stateVersionRef.current = loaded.stateVersion;
-          setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
-          if (loaded.snapshot) {
-            hydrateSnapshot(loaded.snapshot);
-            lastSavedRef.current = JSON.stringify(loaded.snapshot);
-          } else {
-            lastSavedRef.current = JSON.stringify(snapshotRef.current);
-          }
+        if (!result.ok) {
+          // Only reason today is an executed contract.
+          setRevisionNotice(
+            "This contract is executed — changes need a contract variation, not a new offer revision.",
+          );
+          return;
+        }
+        const loaded = await loadActiveOfferWorkspace(leadId);
+        offerIdRef.current = loaded.offerId;
+        stateVersionRef.current = loaded.stateVersion;
+        setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+        if (loaded.snapshot) {
+          hydrateSnapshot(loaded.snapshot);
+          lastSavedRef.current = JSON.stringify(loaded.snapshot);
+        } else {
+          lastSavedRef.current = JSON.stringify(snapshotRef.current);
+        }
+        if (result.voidWarnings.length > 0) {
+          setRevisionNotice(result.voidWarnings.join(" "));
+        } else if (result.voidedEnvelopes > 0) {
+          setRevisionNotice(
+            "New revision created — the previous document was recalled from signature.",
+          );
         }
       } finally {
         setRevising(false);
@@ -820,8 +834,14 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         onMarkAgreed={() => transition("agreed")}
         onMarkRejected={() => transition("rejected")}
         onCreateRevision={createRevision}
-        canRevise={leadId !== undefined}
+        canRevise={
+          leadId !== undefined &&
+          status !== "contract_signed" &&
+          status !== "project"
+        }
         revising={revising}
+        revisionNotice={revisionNotice}
+        revisionExecuted={status === "contract_signed" || status === "project"}
         onSendOffer={sendOffer}
         canSend={leadId !== undefined && !customerPrice.needsOverrideReason}
         sending={sending}
