@@ -6,7 +6,6 @@ import {
   UserPlus,
   Search,
   RefreshCw,
-  Trash2,
   CalendarCheck,
   MessageSquare,
   Archive,
