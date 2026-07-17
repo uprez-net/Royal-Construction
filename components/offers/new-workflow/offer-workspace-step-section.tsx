@@ -1,7 +1,46 @@
-import type { ReactNode } from "react";
-import { GitBranch, Lock } from "lucide-react";
+"use client";
+
+import { useState, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
+  Lock,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+// Completeness / state badge shown on a step header.
+export type OfferStepStatus = {
+  readonly tone: "complete" | "incomplete" | "neutral";
+  readonly label: string;
+};
+
+function StepStatusBadge({ status }: { readonly status: OfferStepStatus }) {
+  const toneClass =
+    status.tone === "complete"
+      ? "bg-success-light text-foreground"
+      : status.tone === "incomplete"
+        ? "bg-warning-light text-foreground"
+        : "bg-muted text-muted-foreground";
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        toneClass,
+      )}
+    >
+      {status.tone === "complete" ? (
+        <CheckCircle2 className="size-3.5 text-success" aria-hidden="true" />
+      ) : status.tone === "incomplete" ? (
+        <AlertTriangle className="size-3.5 text-warning" aria-hidden="true" />
+      ) : null}
+      {status.label}
+    </span>
+  );
+}
 
 type StepHeaderProps = {
   readonly index: number;
@@ -9,11 +48,37 @@ type StepHeaderProps = {
   readonly title: string;
   readonly active: boolean;
   readonly locked?: boolean;
+  readonly status?: OfferStepStatus | null;
+  readonly open?: boolean;
+  readonly onToggle?: () => void;
 };
 
-function StepHeader({ index, phase, title, active, locked = false }: StepHeaderProps) {
-  return (
-    <div className="mb-3 flex items-center gap-2.5">
+function StepHeader({
+  index,
+  phase,
+  title,
+  active,
+  locked = false,
+  status = null,
+  open,
+  onToggle,
+}: StepHeaderProps) {
+  const collapsible = onToggle !== undefined;
+  const inner = (
+    <>
+      {collapsible ? (
+        open ? (
+          <ChevronDown
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+        ) : (
+          <ChevronRight
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+        )
+      ) : null}
       <span
         aria-hidden="true"
         className={cn(
@@ -25,7 +90,7 @@ function StepHeader({ index, phase, title, active, locked = false }: StepHeaderP
       >
         {index}
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p
           className={cn(
             "text-[10px] font-semibold uppercase tracking-[0.08em]",
@@ -46,8 +111,23 @@ function StepHeader({ index, phase, title, active, locked = false }: StepHeaderP
           ) : null}
         </div>
       </div>
-    </div>
+      {status ? <StepStatusBadge status={status} /> : null}
+    </>
   );
+
+  if (collapsible) {
+    return (
+      <button
+        aria-expanded={open}
+        className="mb-3 flex w-full items-center gap-2.5 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+        onClick={onToggle}
+        type="button"
+      >
+        {inner}
+      </button>
+    );
+  }
+  return <div className="mb-3 flex items-center gap-2.5">{inner}</div>;
 }
 
 // Explains why the Offer-build steps are frozen and offers the one sanctioned
@@ -105,14 +185,17 @@ export function OfferLockBanner({
   );
 }
 
-// A labeled, anchored group of cards for one Offer-phase step. The stepper's
-// node target points at this section's id.
+// A labeled, anchored, collapsible group of cards for one Offer-phase step. The
+// stepper's node target points at this section's id; the header carries the
+// step's completeness/state badge and toggles the body open/closed.
 export function OfferStepSection({
   id,
   index,
   phase,
   title,
   locked = false,
+  status = null,
+  defaultOpen = true,
   children,
 }: {
   readonly id: string;
@@ -120,12 +203,24 @@ export function OfferStepSection({
   readonly phase: string;
   readonly title: string;
   readonly locked?: boolean;
+  readonly status?: OfferStepStatus | null;
+  readonly defaultOpen?: boolean;
   readonly children: ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <section id={id} className="scroll-mt-[var(--offer-sticky-offset,13rem)]">
-      <StepHeader active index={index} phase={phase} title={title} locked={locked} />
-      {locked ? (
+      <StepHeader
+        active
+        index={index}
+        phase={phase}
+        title={title}
+        locked={locked}
+        status={status}
+        open={open}
+        onToggle={() => setOpen((current) => !current)}
+      />
+      {!open ? null : locked ? (
         // A disabled fieldset natively blocks every descendant control (inputs,
         // selects, textareas, buttons) so the issued record can be read but not
         // edited. Opacity is kept at 100% on fields (this is a record to review,

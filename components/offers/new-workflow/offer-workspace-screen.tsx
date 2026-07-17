@@ -52,12 +52,12 @@ import type {
   OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
 import { SendNegotiatePanel } from "./offer-workspace-send-negotiate";
-import { OfferReviewPanel } from "./offer-workspace-review";
 import { buildOfferReview } from "@/lib/offer/offer-review";
 import {
   OfferLockBanner,
   OfferPhaseGate,
   OfferStepSection,
+  type OfferStepStatus,
 } from "./offer-workspace-step-section";
 import { isOfferPhaseUnlocked } from "@/lib/offer/workflow";
 import type {
@@ -277,6 +277,33 @@ export function OfferWorkspaceScreen({
     [job, lines, allowances, exclusions, draft, customerPrice],
   );
 
+  // Per-step completeness badges, keyed by the step section id.
+  const stepStatusById = useMemo(() => {
+    const map = new Map<string, OfferStepStatus>();
+    for (const s of reviewSections) {
+      map.set(
+        s.stepId,
+        s.status === "complete"
+          ? { tone: "complete", label: "Complete" }
+          : { tone: "incomplete", label: "Incomplete" },
+      );
+    }
+    return map;
+  }, [reviewSections]);
+
+  // Send & negotiate is an action step, so its badge reflects the offer's state
+  // rather than data completeness.
+  const sendStatus: OfferStepStatus =
+    status === "pending"
+      ? { tone: "incomplete", label: "Not sent" }
+      : status === "sent"
+        ? { tone: "neutral", label: "Sent" }
+        : status === "rejected"
+          ? { tone: "neutral", label: "Rejected" }
+          : status === "superseded"
+            ? { tone: "neutral", label: "Superseded" }
+            : { tone: "complete", label: "Agreed" };
+
   // Once the offer has been issued (Sent or any later/terminal state), the
   // Offer-build steps are locked to preserve the issued record — changes go
   // through a new revision. `pending` is the only editable state.
@@ -340,6 +367,7 @@ export function OfferWorkspaceScreen({
             phase="Offer"
             title="Job setup"
             locked={isOfferLocked}
+            status={stepStatusById.get("offer-step-job-setup") ?? null}
           >
             <JobSetupPanel
               job={job}
@@ -357,6 +385,7 @@ export function OfferWorkspaceScreen({
             phase="Offer"
             title="Cost schedule"
             locked={isOfferLocked}
+            status={stepStatusById.get("offer-step-cost-schedule") ?? null}
           >
             <AreaCalculatorPanel
               basis={areaBasis}
@@ -379,6 +408,7 @@ export function OfferWorkspaceScreen({
             phase="Offer"
             title="Pricing"
             locked={isOfferLocked}
+            status={stepStatusById.get("offer-step-pricing") ?? null}
           >
             <LegacyPricingPanel
               directTotal={directTotal}
@@ -413,6 +443,7 @@ export function OfferWorkspaceScreen({
             phase="Offer"
             title="Scope"
             locked={isOfferLocked}
+            status={stepStatusById.get("offer-step-scope") ?? null}
           >
             <ScopePanel
               allowances={allowances}
@@ -432,6 +463,7 @@ export function OfferWorkspaceScreen({
             phase="Offer"
             title="Offer document"
             locked={isOfferLocked}
+            status={stepStatusById.get("offer-step-offer-document") ?? null}
           >
             <div className="space-y-6">
               <OfferDocumentEditor draft={draft} onDraftChange={onDraftChange} />
@@ -450,8 +482,8 @@ export function OfferWorkspaceScreen({
             index={6}
             phase="Offer"
             title="Send & negotiate"
+            status={sendStatus}
           >
-            <OfferReviewPanel sections={reviewSections} />
             <SendNegotiatePanel
               status={status}
               canRevise={canRevise}
