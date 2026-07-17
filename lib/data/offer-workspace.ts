@@ -249,6 +249,61 @@ export async function transitionOfferStatus(input: {
   return { ok: true, status: input.toStatus };
 }
 
+// One entry in the revision timeline for a lead's offer family.
+export type OfferRevisionSummary = {
+  readonly offerId: string;
+  readonly reference: string;
+  readonly revisionNumber: number;
+  readonly status: OfferStatus;
+  readonly contractValueIncGst: number | null;
+  readonly isActive: boolean;
+  readonly createdAt: string;
+  readonly tenderPdfUrl: string | null;
+  readonly contractPdfUrl: string | null;
+};
+
+// Every revision of the lead's offer (newest first) for the Versions timeline.
+export async function listOfferRevisions(
+  leadId: number,
+): Promise<readonly OfferRevisionSummary[]> {
+  const access = await authorizeLeadAccess(leadId);
+  if (!access.ok) {
+    throw new Error(access.error);
+  }
+  const offers = await prisma.offer.findMany({
+    where: { leadId },
+    orderBy: { revisionNumber: "desc" },
+    select: {
+      id: true,
+      baseReference: true,
+      revisionNumber: true,
+      offerStatus: true,
+      contractValueIncGst: true,
+      isActive: true,
+      createdAt: true,
+      tender: { select: { executedPdfUrl: true } },
+      contract: { select: { executedPdfUrl: true } },
+    },
+  });
+  return offers.map((offer) => ({
+    offerId: offer.id,
+    reference:
+      offer.baseReference.trim().length > 0
+        ? `${offer.baseReference}-R${offer.revisionNumber}`
+        : `R${offer.revisionNumber}`,
+    revisionNumber: offer.revisionNumber,
+    status: offer.offerStatus,
+    contractValueIncGst:
+      offer.contractValueIncGst === null
+        ? null
+        : Number(offer.contractValueIncGst),
+    isActive: offer.isActive,
+    createdAt: offer.createdAt.toISOString(),
+    tenderPdfUrl: offer.tender?.executedPdfUrl ?? null,
+    contractPdfUrl: offer.contract?.executedPdfUrl ?? null,
+  }));
+}
+
 export type CreateOfferRevisionResult =
   | {
       ok: true;

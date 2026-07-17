@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Check, Download, Loader2 } from "lucide-react";
 import { formatCurrency, formatOfferReference } from "./offer-workspace-format";
+import { OfferVersionsMenu } from "./offer-workspace-versions";
 import type { OfferExpiry } from "@/lib/offer/offer-readiness";
 
 type OfferSaveState = "idle" | "saving" | "saved" | "error";
@@ -74,6 +75,7 @@ function currentStepLabel(status: OfferWorkspaceStatus): string {
 type OfferWorkspaceHeaderProps = {
   readonly customerPrice: OfferCustomerPrice;
   readonly job: OfferWorkspaceJob;
+  readonly leadId?: number;
   readonly offerExpiry: OfferExpiry | null;
   readonly saveState: OfferSaveState;
   readonly onDownloadPreview: () => void;
@@ -83,11 +85,14 @@ type OfferWorkspaceHeaderProps = {
 export function OfferWorkspaceHeader({
   customerPrice,
   job,
+  leadId,
   offerExpiry,
   saveState,
   onDownloadPreview,
   status,
 }: OfferWorkspaceHeaderProps) {
+  const activeRevisionNumber =
+    Number.parseInt(job.revision.replace(/\D/g, ""), 10) || 1;
   return (
     <section className="rounded-lg border border-border/70 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -126,6 +131,12 @@ export function OfferWorkspaceHeader({
             <Download className="size-4" aria-hidden="true" />
             Download offer
           </Button>
+          {leadId !== undefined ? (
+            <OfferVersionsMenu
+              leadId={leadId}
+              activeRevisionNumber={activeRevisionNumber}
+            />
+          ) : null}
         </div>
       </div>
     </section>

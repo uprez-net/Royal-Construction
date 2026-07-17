@@ -299,6 +299,7 @@ export function OfferWorkspaceScreen({
         <OfferWorkspaceHeader
           customerPrice={customerPrice}
           job={job}
+          leadId={leadId}
           status={status}
           offerExpiry={offerExpiry}
           saveState={saveState}
