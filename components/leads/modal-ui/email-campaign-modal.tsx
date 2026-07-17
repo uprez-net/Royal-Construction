@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useMemo, useEffect, useState } from "react";
-import { AlertTriangle, ChevronDown, Mail, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  Mail,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { ModalShell } from "@/components/common/modal-shell";
 import { Lead, EmailTemplate } from "@/lib/leads/types";
 import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
@@ -16,6 +22,7 @@ import { ReactEmailIframe } from "../render-email";
 import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
 import { CustomTemplateCreation } from "./custom-template-creation";
 import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
+import { LeadEmailBadges } from "./lead-email-badges";
 
 interface EmailCampaignModalProps {
   leads: Lead[];
@@ -45,7 +52,6 @@ export function EmailCampaignModal({
 
   /* Email targets — fetched on open */
   const [emailTargets, setEmailTargets] = useState<string[]>([]);
-  const [emailTargetList, setEmailTargetList] = useState("");
   const [loadingTargets, setLoadingTargets] = useState(true);
   const [showRecipients, setShowRecipients] = useState(false);
   const emailIframeRef = React.useRef<HTMLIFrameElement>(null);
@@ -53,8 +59,14 @@ export function EmailCampaignModal({
 
   // ─── Auto-transition to Compose when AI finishes ───
   // Render-time state adjustment per React docs (useState to track prev value)
-  const [prevGeneratedHtml, setPrevGeneratedHtml] = useState<string | null>(null);
-  const aiReady = !!(hook.templateName && hook.generatedHtml && hook.emailSubject);
+  const [prevGeneratedHtml, setPrevGeneratedHtml] = useState<string | null>(
+    null,
+  );
+  const aiReady = !!(
+    hook.templateName &&
+    hook.generatedHtml &&
+    hook.emailSubject
+  );
   if (aiReady && prevGeneratedHtml !== hook.generatedHtml) {
     setPrevGeneratedHtml(hook.generatedHtml);
     setSubjectTemplate(hook.emailSubject);
@@ -83,9 +95,8 @@ export function EmailCampaignModal({
         setLoadingTargets(true);
         const data = await fetchAllLeads(); // Fetch all leads from the service
         setAllLeads(data);
-        const withEmail = data.filter((l) => l.email);
+        const withEmail = data.filter((l) => l.email && !l.isArchived);
         setEmailTargets(withEmail.map((l) => l.email!));
-        setEmailTargetList(withEmail.map((l) => l.email).join(", "));
         setLoadingTargets(false);
       } catch (error) {
         console.error("Failed to load campaign leads:", error);
@@ -93,7 +104,6 @@ export function EmailCampaignModal({
         setAllLeads(leads);
         const withEmail = leads.filter((l) => l.email);
         setEmailTargets(withEmail.map((l) => l.email!));
-        setEmailTargetList(withEmail.map((l) => l.email).join(", "));
         setLoadingTargets(false);
       } finally {
         setLoadingTargets(false);
@@ -101,7 +111,6 @@ export function EmailCampaignModal({
     };
     loadTargets();
   }, [leads]);
-
 
   /* ── Step: Select Template ── */
   const handleTemplateSelect = (template: EmailTemplate) => {
@@ -132,26 +141,39 @@ export function EmailCampaignModal({
               const iframeDoc = emailIframeRef.current?.contentDocument;
               if (iframeDoc) {
                 // Clean up DOM artifacts from interactive preview
-                iframeDoc.querySelectorAll('.rc-hover-toolbar').forEach(t => t.remove());
-                iframeDoc.querySelectorAll('a, button').forEach(el => {
-                  (el as HTMLElement).style.outline = '';
-                  (el as HTMLElement).style.outlineOffset = '';
+                iframeDoc
+                  .querySelectorAll(".rc-hover-toolbar")
+                  .forEach((t) => t.remove());
+                iframeDoc.querySelectorAll("a, button").forEach((el) => {
+                  (el as HTMLElement).style.outline = "";
+                  (el as HTMLElement).style.outlineOffset = "";
                 });
-                iframeDoc.body.contentEditable = 'false';
+                iframeDoc.body.contentEditable = "false";
 
                 let cleanHtml = iframeDoc.body.innerHTML;
-                cleanHtml = cleanHtml.replace(/\s*contenteditable="[^"]*"/gi, '');
-                cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, '');
-                cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, '');
-                cleanHtml = cleanHtml.replace(/<script[\s\S]*?<\/script>/gi, '');
-                cleanHtml = cleanHtml.replace(/outline:\s*2px dashed #c6923a;?\s*/gi, '');
-                cleanHtml = cleanHtml.replace(/outline-offset:\s*2px;?\s*/gi, '');
-                cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, '');
+                cleanHtml = cleanHtml.replace(
+                  /\s*contenteditable="[^"]*"/gi,
+                  "",
+                );
+                cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, "");
+                cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, "");
+                cleanHtml = cleanHtml.replace(
+                  /<script[\s\S]*?<\/script>/gi,
+                  "",
+                );
+                cleanHtml = cleanHtml.replace(
+                  /outline:\s*2px dashed #c6923a;?\s*/gi,
+                  "",
+                );
+                cleanHtml = cleanHtml.replace(
+                  /outline-offset:\s*2px;?\s*/gi,
+                  "",
+                );
+                cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, "");
                 // Capture the updated HTML
                 finalHtmlBody = cleanHtml;
                 finalHtmlBody = hydrateVariable(finalHtmlBody, lead);
               }
-
 
               if (!finalHtmlBody) {
                 console.error(
@@ -160,7 +182,11 @@ export function EmailCampaignModal({
                 return lead;
               }
 
-              const sent = await sendEmailToLead(lead.email, subject, finalHtmlBody);
+              const sent = await sendEmailToLead(
+                lead.email,
+                subject,
+                finalHtmlBody,
+              );
 
               if (sent) {
                 successCount++;
@@ -216,12 +242,13 @@ export function EmailCampaignModal({
       >
         <div className="flex h-64 flex-col items-center justify-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
-          <p className="text-sm font-medium text-slate-600">Loading campaign leads...</p>
+          <p className="text-sm font-medium text-slate-600">
+            Loading campaign leads...
+          </p>
         </div>
       </ModalShell>
     );
   }
-
 
   /* ════════════════════════════════════════════
      Render: Select Template
@@ -309,7 +336,11 @@ export function EmailCampaignModal({
         subtitle="Select a template to send to the leads"
         maxWidthClass="max-w-[720px]"
       >
-        <CustomTemplateCreation hook={hook} backgroundColor="#26a6b5" borderColor="#26A7B5DA" />
+        <CustomTemplateCreation
+          hook={hook}
+          backgroundColor="#26a6b5"
+          borderColor="#26A7B5DA"
+        />
       </ModalShell>
     );
   }
@@ -338,40 +369,69 @@ export function EmailCampaignModal({
                 </p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {recipientPreview || "No leads with email"}
-                  {emailTargets.length > 4 ? `, +${emailTargets.length - 4} more` : ""}
+                  {emailTargets.length > 4
+                    ? `, +${emailTargets.length - 4} more`
+                    : ""}
                 </p>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRecipients((open) => !open)}
-              className="shrink-0"
-            >
-              <ChevronDown
-                className={`mr-1.5 size-3.5 transition-transform ${showRecipients ? "rotate-180" : ""}`}
-              />
-              Review
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const archivedEmails = allLeads
+                    .filter((l) => l.isArchived && l.email)
+                    .map((l) => l.email);
+
+                  if (archivedEmails.length === 0) {
+                    showToast("No archived leads with email found", "info");
+                    return;
+                  }
+
+                  setEmailTargets((prev) => [
+                    ...new Set([...prev, ...archivedEmails]),
+                  ]);
+                }}
+                className="shrink-0"
+              >
+                <UserPlus className={`mr-1.5 size-3.5`} />
+                Add Archived Leads
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRecipients((open) => !open)}
+                className="shrink-0"
+              >
+                <ChevronDown
+                  className={`mr-1.5 size-3.5 transition-transform ${showRecipients ? "rotate-180" : ""}`}
+                />
+                Review
+              </Button>
+            </div>
           </div>
 
           {invalidTargets.length > 0 && (
             <div className="mt-3 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                {invalidTargets.length} recipient {invalidTargets.length === 1 ? "value" : "values"} may not be {invalidTargets.length === 1 ? "a " : ""}valid email{invalidTargets.length === 1 ? "" : "s"}. Review before sending.
+                {invalidTargets.length} recipient{" "}
+                {invalidTargets.length === 1 ? "value" : "values"} may not be{" "}
+                {invalidTargets.length === 1 ? "a " : ""}valid email
+                {invalidTargets.length === 1 ? "" : "s"}. Review before sending.
               </span>
             </div>
           )}
 
           {showRecipients && (
-            <textarea
-              className="mt-3 max-h-36 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground"
-              rows={5}
-              value={emailTargetList || "No leads with email"}
-              readOnly
-              aria-label="Campaign recipient email addresses"
+            <LeadEmailBadges
+              emails={emailTargets}
+              onRemoveEmail={(email) => {
+                setEmailTargets((prev) => prev.filter((e) => e !== email));
+              }}
             />
           )}
         </div>
@@ -404,14 +464,18 @@ export function EmailCampaignModal({
             Preview shows data for the first lead. All emails will be
             personalized per lead.
           </p>
-          {selectedTemplate && selectedTemplate.id !== -1 && !hook.generatedHtml ? (
+          {selectedTemplate &&
+          selectedTemplate.id !== -1 &&
+          !hook.generatedHtml ? (
             <ReactEmailIframe
               ref={emailIframeRef}
               category={selectedTemplate.category}
               lead={allLeads[0] ?? null}
               editable={false}
             />
-          ) : selectedTemplate && selectedTemplate.id === -1 && hook.generatedHtml ? (
+          ) : selectedTemplate &&
+            selectedTemplate.id === -1 &&
+            hook.generatedHtml ? (
             <div className="mt-2">
               <div
                 className="overflow-hidden rounded-lg"
