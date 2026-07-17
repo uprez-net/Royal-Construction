@@ -11,7 +11,11 @@ import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { CalendarClock, Lock } from "lucide-react";
 import type { ReactNode } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency, formatPercent } from "./offer-workspace-format";
+import {
+  formatCurrency,
+  formatPercent,
+  numberInputValue,
+} from "./offer-workspace-format";
 
 type PaymentSchedulePanelProps = {
   readonly customerPrice: OfferCustomerPrice;
@@ -93,9 +97,10 @@ export function PaymentSchedulePanel({
                       aria-label={`${row.stageName} payment percent`}
                       className="text-right font-mono"
                       min="0"
+                      placeholder="0"
                       step="0.5"
                       type="number"
-                      value={String(
+                      value={numberInputValue(
                         Math.round(row.percentOfContract * 1000) / 10,
                       )}
                       onChange={(event) => {

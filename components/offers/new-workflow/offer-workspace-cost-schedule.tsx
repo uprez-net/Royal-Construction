@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { Fragment, useState, type KeyboardEvent } from "react";
 import { OfferCardHeading, OfferSummaryBadge } from "./offer-workspace-card-heading";
+import { numberInputValue } from "./offer-workspace-format";
 import { WorkbookImportControl } from "./offer-workspace-import";
 
 type CostSchedulePanelProps = {
@@ -47,10 +48,6 @@ type CostSchedulePanelProps = {
 };
 
 const TASK_DATALIST_ID = "offer-calculation-task-options";
-
-function numberValue(value: number): string {
-  return String(value);
-}
 
 const gridCellControlClass =
   "h-9 rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-royal-gold/40 focus-visible:ring-inset";
@@ -366,8 +363,9 @@ export function CostSchedulePanel({
                         className={cn(gridCellControlClass, "text-right font-mono")}
                         data-cost-grid-cell=""
                         min="0"
+                        placeholder="0"
                         type="number"
-                        value={numberValue(line.costExGst)}
+                        value={numberInputValue(line.costExGst)}
                         onKeyDown={handleGridCellKeyDown}
                         onChange={(event) => {
                           const costExGst = parseNonNegativeNumberInput(

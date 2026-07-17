@@ -20,6 +20,7 @@ import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { ClipboardList, Info, Sparkles } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
+import { numberInputValue } from "./offer-workspace-format";
 
 type JobSetupPanelProps = {
   readonly job: OfferWorkspaceJob;
@@ -29,10 +30,6 @@ type JobSetupPanelProps = {
   readonly prefilling?: boolean;
   readonly prefillResult?: OfferPrefillResult | null;
 };
-
-function numberValue(value: number): string {
-  return String(value);
-}
 
 export function JobSetupPanel({
   job,
@@ -253,8 +250,9 @@ function AreaField({
     <Field label={label}>
       <Input
         min="0"
+        placeholder="0"
         type="number"
-        value={numberValue(value)}
+        value={numberInputValue(value)}
         onChange={(event) => {
           const parsedValue = parseNonNegativeNumberInput(event.target.value);
           if (parsedValue !== null) {

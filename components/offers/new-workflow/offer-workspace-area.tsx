@@ -14,7 +14,7 @@ import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Layers } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency } from "./offer-workspace-format";
+import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 
 type AreaCalculatorPanelProps = {
   // Floor areas come from Job setup — the single source of truth — never
@@ -193,8 +193,9 @@ function NumberField({
       </span>
       <Input
         min="0"
+        placeholder="0"
         type="number"
-        value={String(value)}
+        value={numberInputValue(value)}
         onChange={(event) => {
           const parsed = parseNonNegativeNumberInput(event.target.value);
           if (parsed !== null) {

@@ -46,6 +46,17 @@ export const CURRENT_WORKSPACE_SCHEMA_VERSION = 1 as const;
 export const dollarsToCents = (value: number): number =>
   Math.round(value * 100);
 export const centsToDollars = (cents: number): number => cents / 100;
+
+// An un-entered optional price (selected / standard) persists as 0 cents.
+// Rehydrate it as an EMPTY field rather than the literal "0": a zero sitting in
+// the box collides with typing — the caret lands beside it, so "400" becomes
+// "4000", and any value not ending in zero means deleting it first. Blank and 0
+// already mean the same thing to resolveOptionalPriceInput, so this is a display
+// concern only; normalising here (rather than in the component) also keeps the
+// hydrated state identical to the saved snapshot, so no phantom autosave fires.
+function optionalPriceInput(cents: number): string {
+  return cents === 0 ? "" : String(centsToDollars(cents));
+}
 const parseDollarInput = (input: string): number => {
   const parsed = Number(input.replace(/[^0-9.-]/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -312,8 +323,8 @@ export function deserializeWorkspace(
     rateCardProduct: persisted.rateCardProduct,
     rateCardTier: persisted.rateCardTier,
     overrideReason: persisted.overrideReason,
-    selectedPriceInput: String(centsToDollars(persisted.selectedPriceCents)),
-    standardPriceInput: String(centsToDollars(persisted.standardPriceCents)),
+    selectedPriceInput: optionalPriceInput(persisted.selectedPriceCents),
+    standardPriceInput: optionalPriceInput(persisted.standardPriceCents),
     priceAdjustmentLabel: persisted.priceAdjustmentLabel,
     images: persisted.images as OfferImageMap,
   };

@@ -9,7 +9,7 @@ import {
 } from "@/lib/offer/workspace-pricing";
 import { Calculator } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency } from "./offer-workspace-format";
+import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 
 type LegacyPricingPanelProps = {
   readonly directTotal: number;
@@ -133,9 +133,10 @@ function PercentField({
       </span>
       <Input
         min="0"
+        placeholder="0"
         step="0.1"
         type="number"
-        value={String(Math.round(value * 1000) / 10)}
+        value={numberInputValue(Math.round(value * 1000) / 10)}
         onChange={(event) => {
           const parsed = parseNonNegativeNumberInput(event.target.value);
           if (parsed !== null) {
@@ -163,8 +164,9 @@ function MoneyField({
       </span>
       <Input
         min="0"
+        placeholder="0"
         type="number"
-        value={String(value)}
+        value={numberInputValue(value)}
         onChange={(event) => {
           const parsed = parseNonNegativeNumberInput(event.target.value);
           if (parsed !== null) {

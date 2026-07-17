@@ -91,9 +91,11 @@ test("blank selected price → proposal shows the computed contract price, not $
 });
 
 test("REGRESSION: blank price survives serialize→load→proposal as computed price, never $0", () => {
-  // The un-entered override round-trips through cents to the string "0"...
+  // The un-entered override round-trips through cents back to a BLANK field. It
+  // used to come back as the string "0", which both sat in the input fighting
+  // the next keystroke and left this $0 trap one bad read away...
   const reloaded = roundTrip(makeSnapshot({ selectedPriceInput: "" }));
-  assert.equal(reloaded.selectedPriceInput, "0");
+  assert.equal(reloaded.selectedPriceInput, "");
   // ...but must still be read as "no override", so the customer-facing PDF /
   // Tender show the computed contract value — this is the $0-on-the-PDF bug.
   const input = buildProposalInput(reloaded);

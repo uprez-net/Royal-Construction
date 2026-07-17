@@ -15,6 +15,15 @@ export function formatCurrency(
   }).format(value);
 }
 
+// Value for a numeric <input>. A zero renders as an empty field (with a "0"
+// placeholder) rather than a literal "0": a "0" sitting in the box collides with
+// typing — the caret lands beside it and "400" becomes "4000", and any value not
+// ending in zero means deleting it first. Empty round-trips safely because
+// parseNonNegativeNumberInput("") === 0.
+export function numberInputValue(value: number): string {
+  return value === 0 ? "" : String(value);
+}
+
 // Combine the base reference and revision for display, without emitting a bare
 // leading dash if the base reference is ever missing (e.g. "R1", not "-R1").
 export function formatOfferReference(

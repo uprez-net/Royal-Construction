@@ -20,7 +20,7 @@ import type {
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { ListChecks, Plus, Trash2 } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency } from "./offer-workspace-format";
+import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 
 type ScopePanelProps = {
   readonly allowances: readonly OfferWorkspaceScopeItem[];
@@ -264,8 +264,9 @@ function AmountControl({
         aria-label={`${item.label} amount`}
         className="text-right font-mono"
         min="0"
+        placeholder="0"
         type="number"
-        value={String(item.amount)}
+        value={numberInputValue(item.amount)}
         onChange={(event) => {
           const amount = parseNonNegativeNumberInput(event.target.value);
           if (amount !== null) {
