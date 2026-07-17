@@ -35,13 +35,14 @@ export async function fetchAllLeads(): Promise<Lead[]> {
   return data;
 }
 
-export async function fetchLeads(params: { q?: string; limit?: number; page?: number; status?: LeadStage[] , filterTiming?: string }): Promise<PaginatedLeadsResult> {
+export async function fetchLeads(params: { q?: string; limit?: number; page?: number; status?: LeadStage[] , filterTiming?: string, isArchived?: boolean }): Promise<PaginatedLeadsResult> {
   const query = new URLSearchParams();
   if (params.q?.trim()) query.append('q', params.q.trim());
   if (params.limit) query.append('limit', params.limit.toString());
   if (params.page) query.append('page', params.page.toString());
   if (params.status) query.append('status', params.status.join(','));
   if(params.filterTiming) query.append('filterTiming', params.filterTiming);
+  if(params.isArchived !== undefined) query.append('isArchived', params.isArchived.toString());
   const data = await fetchJson<PaginatedLeadsResult>(
     `/api/leads?${query.toString()}`,
     { method: "GET", cache: 'no-store' },

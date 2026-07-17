@@ -64,11 +64,12 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
             WITH lead_stats AS (
                 SELECT
                     COUNT(*) FILTER (
-                        WHERE (
-                            ("assignedId" = ${userId}
-                            AND stage = 'IN_FOLLOW_UP')
-                            OR "followupDate" <= ${now}
-                        )
+                        WHERE
+                            "assignedId" = ${userId}
+                            AND (
+                                stage = 'IN_FOLLOW_UP'
+                                OR "followupDate" <= ${now}
+                            )
                     ) AS follow_ups_count,
 
                     COUNT(*) FILTER (
@@ -91,6 +92,7 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
                         AND "updatedAt" < ${currentMonthStart}
                     ) AS previous_month_converted_leads
                 FROM "Lead"
+                WHERE "isArchived" = false
             ),
 
             project_stats AS (
@@ -320,7 +322,7 @@ export async function getDashboardGraphData() {
                   COALESCE("lostReason", 'Unknown') AS name,
                   COUNT(*) AS value
                 FROM "Lead"
-                WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')
+                WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED') AND "isArchived" = false
                 GROUP BY COALESCE("lostReason", 'Unknown')
                 ORDER BY value DESC
               `,
@@ -346,7 +348,7 @@ export async function getDashboardGraphData() {
                         COUNT(*) AS leads,
                         COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS converted
                     FROM "Lead"
-                    WHERE "createdAt" >= DATE_TRUNC('month', NOW() - INTERVAL '11 months')
+                    WHERE "createdAt" >= DATE_TRUNC('month', NOW() - INTERVAL '11 months') AND "isArchived" = false
                     GROUP BY 1
                 ),
                 project_revenue AS (
@@ -398,7 +400,7 @@ export async function getDashboardGraphData() {
                 COUNT(*) AS value
 
             FROM "Lead"
-
+            WHERE "isArchived" = false
             GROUP BY 1
             `,
             prisma.$queryRaw<

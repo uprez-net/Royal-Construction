@@ -139,6 +139,7 @@ export function mapLead(
         runId: lead.runId,
         runStatus: lead.runStatus,
         emails: lead.emails,
+        isArchived: lead.isArchived,
     };
 }
 

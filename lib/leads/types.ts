@@ -109,6 +109,7 @@ export interface Lead {
   runId: string | null;
   runStatus: RunStatus | null;
   emails: LeadEmails[];
+  isArchived: boolean; // <-- NEW: Indicates if the lead is archived (soft-deleted)
 }
 
 export interface LeadsStats {

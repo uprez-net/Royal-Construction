@@ -61,6 +61,7 @@ export function useLeadsData() {
       query?: string;
       status?: string;
       filterTiming?: string;
+      isArchived?: boolean;
     }) => {
       try {
         setLoadingLeads(true);
@@ -70,6 +71,7 @@ export function useLeadsData() {
           q: params.query?.trim() || undefined,
           status: resolveStatusFilter(params.status),
           filterTiming: params.filterTiming,
+          isArchived: params.isArchived,
         });
         setLeads(leadsData.items);
         setPageInfo({

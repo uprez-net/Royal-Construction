@@ -262,7 +262,7 @@ export async function getAllLeads(): Promise<UiLead[]> {
  * @param filterLeadsWithoutProject - Optional flag to filter leads that do not have an associated project.
  * @returns Paginated lead collection.
  */
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string, filterLeadsWithoutProject?: boolean): Promise<PaginatedLeadsResult> {
+export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string, filterLeadsWithoutProject?: boolean, isArchived?: boolean): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
   const search = normalizeSearch(query);
@@ -337,19 +337,22 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     }
     : undefined;
   try {
+    const statusCleaned = status?.filter(s => undefined !== s && s !== null) ?? null;
+    const finalWhere: Prisma.LeadWhereInput = {
+      ...where,
+      ...(filterLeadsWithoutProject && {
+        project: {
+          is: null,
+        },
+      }),
+      ...timingFilter,
+      ...(statusCleaned && statusCleaned.length > 0
+        ? { stage: { in: statusCleaned } }
+        : {}),
+      isArchived: isArchived ?? false,
+    }
     const leads = await prisma.lead.findMany({
-      where: {
-        ...where,
-        ...(filterLeadsWithoutProject && {
-          project: {
-            is: null,
-          },
-        }),
-        ...timingFilter,
-        ...(status && status.length > 0
-          ? { stage: { in: status } }
-          : {}),
-      },
+      where: finalWhere,
       include: {
         history: { orderBy: { actionDate: "asc" } },
         chatSessions: true,
@@ -362,13 +365,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
       take: safeLimit,
     });
     const totalCount = await prisma.lead.count({
-      where: {
-        ...where,
-        ...timingFilter,
-        ...(status && status.length > 0
-          ? { stage: { in: status } }
-          : {}),
-      }
+      where: finalWhere,
     });
 
     const items = leads.map((lead) => mapLead(lead));
@@ -887,15 +884,15 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
 }
 
 /**
- * Permanently deletes a lead.
- *
- * Related entities configured with cascading deletes are automatically removed.
+ * Soft-deletes a lead by marking it as archived.
+ * 
+ * This allows for potential recovery or auditing of leads without permanently removing them from the database.
  *
  * @param id - Lead identifier.
  * @returns Success status.
  */
 export async function deleteLead(id: number) {
-  await prisma.lead.delete({ where: { id } });
+  await prisma.lead.update({ where: { id }, data: { isArchived: true } });
   return { success: true };
 }
 
@@ -930,6 +927,7 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
       COUNT(*) FILTER (WHERE stage = 'IN_FOLLOW_UP') AS "pendingFollowup"
     FROM "Lead"
+    WHERE "isArchived" = false
   `;
 
   return {
@@ -1097,7 +1095,7 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
     const aiSubject = replyingToEmail ? `Re: ${replyingToEmail.subject}` : await generateEmailSubject(signedBody);
     await sendEmail({
       to,
-      subject: replyingToEmail ? aiSubject :`${aiSubject} - ${location}`,
+      subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,
       body: signedBody,
     });
     const strippedEmailBody = getAllEmailThreads(signedBody, {
@@ -1107,7 +1105,7 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
       sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
     });
     let recordedEmail: LeadEmails | null = null;
-    for(const thread of strippedEmailBody) {
+    for (const thread of strippedEmailBody) {
       const checksum = await generateEmailChecksum(
         thread.subject,
         thread.body,
@@ -1129,7 +1127,7 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
       recordedEmail = emailRecord;
     }
 
-    if(!recordedEmail) {
+    if (!recordedEmail) {
       throw new Error("Failed to record email");
     }
 

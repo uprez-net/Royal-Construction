@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -87,7 +87,8 @@ export default function Leads() {
       ? ((stats.conversion / stats.total) * 100).toFixed(1)
       : "0.0";
 
-  const statusParam = activeMetric === "total" ? "total" : activeMetric ?? undefined;
+  const statusParam =
+    activeMetric === "total" ? "total" : (activeMetric ?? undefined);
 
   /* ── Search + filter effect ── */
   useEffect(() => {
@@ -97,8 +98,15 @@ export default function Leads() {
         page: 1,
         limit: 10,
         query: q || undefined,
-        status: statusParam,
+        status:
+          statusParam === "Archived"
+            ? undefined
+            : statusParam
+                ?.split(",")
+                .filter((s) => s && s !== "Archived")
+                .join(",") || undefined,
         filterTiming: activeFilterTiming,
+        isArchived: statusParam?.includes("Archived") ? true : undefined,
       });
     }
   }, [debouncedSearch, refreshLeadsData, statusParam, activeFilterTiming]);
@@ -120,7 +128,9 @@ export default function Leads() {
           validatedStatus = decodedStatus;
         } else {
           const parts = decodedStatus.split(",");
-          const allValid = parts.every(part => leadStatusSchema.safeParse(part.trim()).success);
+          const allValid = parts.every(
+            (part) => leadStatusSchema.safeParse(part.trim()).success,
+          );
           if (allValid) {
             validatedStatus = decodedStatus;
           }
@@ -174,12 +184,19 @@ export default function Leads() {
 
   const handleMetricClick = (metric: string | null) => {
     setActiveMetric(metric);
+    const cleanedMetric =
+      metric
+        ?.split(",")
+        .filter((s) => s && s !== "Archived")
+        .join(",") || undefined;
     refreshLeadsData({
       page: 1,
       limit: 10,
-      status: metric === "total" ? "total" : metric ?? undefined,
+      status:
+        metric === "total" || metric === "Archived" ? "total" : cleanedMetric,
       filterTiming: activeFilterTiming,
       query: debouncedSearch.trim() || undefined,
+      isArchived: metric?.includes("Archived") ? true : undefined,
     });
   };
 
@@ -204,7 +221,13 @@ export default function Leads() {
         filterTiming: activeFilterTiming,
       });
     },
-    [refreshLeadsData, statusParam, pageInfo.limit, searchTerm, activeFilterTiming],
+    [
+      refreshLeadsData,
+      statusParam,
+      pageInfo.limit,
+      searchTerm,
+      activeFilterTiming,
+    ],
   );
 
   const handleExport = async () => {
@@ -228,9 +251,7 @@ export default function Leads() {
       "urgent",
     ];
     const leadRows = allLeads.map((l) => {
-      const types = normalizeTypes(l.type).filter(
-        (t) => t !== "Not Specified",
-      );
+      const types = normalizeTypes(l.type).filter((t) => t !== "Not Specified");
       return [
         l.id,
         l.name,
@@ -249,13 +270,7 @@ export default function Leads() {
         l.urgent ? "true" : "false",
       ];
     });
-    const historyHeader = [
-      "leadId",
-      "action",
-      "detail",
-      "type",
-      "actionDate",
-    ];
+    const historyHeader = ["leadId", "action", "detail", "type", "actionDate"];
     const historyRows = allLeads.flatMap((l) =>
       (l.history ?? []).map((e) => [
         l.id,
@@ -365,7 +380,7 @@ export default function Leads() {
             icon={FileText}
             onClick={() => handleMetricClick("Quoted")}
             active={activeMetric === "Quoted"}
-          />  
+          />
           <LeadMetricCard
             label={`Converted (${conversionRate}%)`}
             value={String(stats.conversion)}
@@ -434,7 +449,7 @@ export default function Leads() {
                 value={activeFilterTiming}
                 onValueChange={handleFilterTimingChange}
               >
-                  <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
                   <SelectValue placeholder="Select timeframe" />
                 </SelectTrigger>
                 <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
@@ -492,7 +507,7 @@ export default function Leads() {
                   leads={leads}
                   onLeadUpdate={updateLeadInList}
                   onLeadDelete={removeLeadFromList}
-                  showToast={showToast} 
+                  showToast={showToast}
                 />
               )}
               {activeTab === "analytics" && (

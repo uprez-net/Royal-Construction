@@ -464,9 +464,10 @@ model Lead {
   source       String?
   sourceDetail String?
 
-  stage     LeadStage  @default(NEW)
-  runId     String?
-  runStatus RunStatus?
+  stage      LeadStage  @default(NEW)
+  isArchived Boolean    @default(false)
+  runId      String?
+  runStatus  RunStatus?
 
   assignedId String? // <-- THE NEW FOREIGN KEY
 
