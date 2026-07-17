@@ -15,6 +15,15 @@ export function formatCurrency(
   }).format(value);
 }
 
+// Combine the base reference and revision for display, without emitting a bare
+// leading dash if the base reference is ever missing (e.g. "R1", not "-R1").
+export function formatOfferReference(
+  reference: string,
+  revision: string,
+): string {
+  return reference.trim().length > 0 ? `${reference}-${revision}` : revision;
+}
+
 export function formatPercent(value: number): string {
   return new Intl.NumberFormat("en-AU", {
     style: "percent",

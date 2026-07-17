@@ -24,7 +24,8 @@ import {
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
-import { useMemo } from "react";
+import { formatOfferReference } from "./offer-workspace-format";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
 import { OfferDocumentEditor } from "./offer-workspace-document";
@@ -52,10 +53,17 @@ import type {
 } from "@/lib/offer/workspace-images";
 import { SendNegotiatePanel } from "./offer-workspace-send-negotiate";
 import {
+  OfferLockBanner,
   OfferPhaseGate,
   OfferStepSection,
 } from "./offer-workspace-step-section";
 import { isOfferPhaseUnlocked } from "@/lib/offer/workflow";
+import type {
+  OfferExpiry,
+  OfferSendBlocker,
+} from "@/lib/offer/offer-readiness";
+
+export type OfferSaveState = "idle" | "saving" | "saved" | "error";
 
 type OfferWorkspaceScreenProps = {
   readonly allowances: readonly OfferWorkspaceScopeItem[];
@@ -82,11 +90,18 @@ type OfferWorkspaceScreenProps = {
   readonly standardPrice: number | null;
   readonly standardPriceInput: string;
   readonly status: OfferWorkspaceStatus;
+  readonly offerExpiry: OfferExpiry | null;
+  readonly saveState: OfferSaveState;
+  readonly sendBlockers: readonly OfferSendBlocker[];
   readonly onAddLine: () => void;
   readonly onAllowanceChange: (
     itemId: string,
     patch: Partial<OfferWorkspaceScopeItem>,
   ) => void;
+  readonly onAddAllowance: () => void;
+  readonly onRemoveAllowance: (itemId: string) => void;
+  readonly onAddExclusion: () => void;
+  readonly onRemoveExclusion: (itemId: string) => void;
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
   readonly onDownloadOffer: () => void;
   readonly onDraftChange: (patch: Partial<OfferDocumentDraft>) => void;
@@ -175,8 +190,15 @@ export function OfferWorkspaceScreen({
   standardPrice,
   standardPriceInput,
   status,
+  offerExpiry,
+  saveState,
+  sendBlockers,
   onAddLine,
   onAllowanceChange,
+  onAddAllowance,
+  onRemoveAllowance,
+  onAddExclusion,
+  onRemoveExclusion,
   onAreaChange,
   onDownloadOffer,
   onDraftChange,
@@ -235,12 +257,38 @@ export function OfferWorkspaceScreen({
   // Floor areas come from Job setup; the helper and pricing read them here.
   const areaBasis = useMemo(() => offerAreaBasisFromJob(job), [job]);
 
+  // Once the offer has been issued (Sent or any later/terminal state), the
+  // Offer-build steps are locked to preserve the issued record — changes go
+  // through a new revision. `pending` is the only editable state.
+  const isOfferLocked = status !== "pending";
+
+  // The header + stepper are pinned (sticky top-0) and their height changes with
+  // viewport width as the title/badges/price reflow. Measure it live and expose
+  // it as `--offer-sticky-offset` so the sticky sidebar (its `top`) and every
+  // step section (its `scroll-margin-top`) clear the chrome exactly, instead of
+  // relying on hardcoded guesses that leave content tucked behind the header.
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const [stickyOffset, setStickyOffset] = useState(288);
+  useEffect(() => {
+    const el = stickyRef.current;
+    if (!el) {
+      return;
+    }
+    const measure = () => setStickyOffset(el.getBoundingClientRect().height + 12);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div
       className="space-y-5 print:hidden"
       aria-labelledby="new-offer-workspace-title"
+      style={{ "--offer-sticky-offset": `${stickyOffset}px` } as CSSProperties}
     >
       <div
+        ref={stickyRef}
         data-offer-sticky-header
         className="sticky top-0 z-30 space-y-5 bg-background pb-4 shadow-[0_-28px_0_0_var(--background)]"
       >
@@ -248,17 +296,27 @@ export function OfferWorkspaceScreen({
           customerPrice={customerPrice}
           job={job}
           status={status}
+          offerExpiry={offerExpiry}
+          saveState={saveState}
           onDownloadPreview={onDownloadOffer}
         />
         <OfferWorkflowSteps status={status} />
       </div>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-8">
+          {isOfferLocked ? (
+            <OfferLockBanner
+              canRevise={canRevise}
+              revising={revising}
+              onCreateRevision={onCreateRevision}
+            />
+          ) : null}
           <OfferStepSection
             id="offer-step-job-setup"
             index={1}
             phase="Offer"
             title="Job setup"
+            locked={isOfferLocked}
           >
             <JobSetupPanel
               job={job}
@@ -275,6 +333,7 @@ export function OfferWorkspaceScreen({
             index={2}
             phase="Offer"
             title="Cost schedule"
+            locked={isOfferLocked}
           >
             <AreaCalculatorPanel
               basis={areaBasis}
@@ -296,6 +355,7 @@ export function OfferWorkspaceScreen({
             index={3}
             phase="Offer"
             title="Pricing"
+            locked={isOfferLocked}
           >
             <LegacyPricingPanel
               directTotal={directTotal}
@@ -320,6 +380,7 @@ export function OfferWorkspaceScreen({
               tier={rateCardTier}
               onProductChange={onRateCardProductChange}
               onTierChange={onRateCardTierChange}
+              onSelectedPriceInputChange={onSelectedPriceInputChange}
             />
           </OfferStepSection>
 
@@ -328,12 +389,17 @@ export function OfferWorkspaceScreen({
             index={4}
             phase="Offer"
             title="Scope"
+            locked={isOfferLocked}
           >
             <ScopePanel
               allowances={allowances}
               exclusions={exclusions}
               onAllowanceChange={onAllowanceChange}
               onExclusionChange={onExclusionChange}
+              onAddAllowance={onAddAllowance}
+              onRemoveAllowance={onRemoveAllowance}
+              onAddExclusion={onAddExclusion}
+              onRemoveExclusion={onRemoveExclusion}
             />
           </OfferStepSection>
 
@@ -342,6 +408,7 @@ export function OfferWorkspaceScreen({
             index={5}
             phase="Offer"
             title="Offer document"
+            locked={isOfferLocked}
           >
             <div className="space-y-6">
               <OfferDocumentEditor draft={draft} onDraftChange={onDraftChange} />
@@ -366,6 +433,9 @@ export function OfferWorkspaceScreen({
               canRevise={canRevise}
               revising={revising}
               clientEmail={job.clientEmail}
+              contractValueIncGst={customerPrice.selectedContractValueIncGst}
+              offerReference={formatOfferReference(job.reference, job.revision)}
+              sendBlockers={sendBlockers}
               canSend={canSend}
               sending={sending}
               sendError={sendError}
@@ -447,7 +517,7 @@ export function OfferWorkspaceScreen({
             />
           </OfferPhaseGate>
         </div>
-        <aside className="min-w-0 space-y-5 xl:sticky xl:top-24 xl:self-start">
+        <aside className="min-w-0 space-y-5 xl:sticky xl:top-[var(--offer-sticky-offset,18rem)] xl:self-start">
           <PricingSummary effectiveMargin={effectiveMargin} pricing={pricing} />
           <OfferDocumentPreview
             customerPrice={customerPrice}

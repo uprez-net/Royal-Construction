@@ -9,6 +9,8 @@ import {
   INITIAL_OFFER_JOB,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   applyTaskMappingToCostLine,
+  createOfferScopeItem,
+  removeOfferScopeItem,
   updateOfferScopeItems,
   type OfferDocumentDraft,
   type OfferWorkspaceCostLine,
@@ -59,6 +61,10 @@ import {
   type OfferPrefillResult,
 } from "@/lib/data/offer-prefill";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
+import {
+  collectOfferSendBlockers,
+  describeOfferExpiry,
+} from "@/lib/offer/offer-readiness";
 import {
   EMPTY_OFFER_IMAGES,
   setOfferImage,
@@ -111,7 +117,21 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
   const [projectResult, setProjectResult] = useState<ProjectHandoffResult | null>(null);
   const [prefilling, setPrefilling] = useState(false);
   const [prefillResult, setPrefillResult] = useState<OfferPrefillResult | null>(null);
+  // Autosave chrome: makes the debounced persistence visible and surfaces a
+  // failure instead of swallowing it. "idle" until the first save is attempted.
+  const [saveState, setSaveState] =
+    useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Clock for offer-expiry rendering. Lazily seeded (same calendar day on the
+  // server pass and hydration, so the chip label matches), then ticked each
+  // minute so "expires in N days" stays honest without a reload.
+  const [now, setNow] = useState<Date>(() => new Date());
   const manualLineCounterRef = useRef(0);
+  const scopeItemCounterRef = useRef(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
     setImages((current) => setOfferImage(current, key, image));
@@ -169,6 +189,22 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     [customerPrice, rateCardProduct, rateCardTier, totalAreaSqm],
   );
 
+  // Offer validity vs. today, and the enumerated blockers standing between this
+  // draft and a send. Both feed the header chip and the Send & negotiate strip.
+  const offerExpiry = useMemo(
+    () => describeOfferExpiry(job.validUntil, now),
+    [job.validUntil, now],
+  );
+  const sendBlockers = useMemo(
+    () =>
+      collectOfferSendBlockers({
+        hasLead: leadId !== undefined,
+        needsOverrideReason: customerPrice.needsOverrideReason,
+        expiryState: offerExpiry?.state ?? "none",
+      }),
+    [leadId, customerPrice.needsOverrideReason, offerExpiry],
+  );
+
   function updateJob(patch: Partial<OfferWorkspaceJob>) {
     setJob((current) => ({ ...current, ...patch }));
   }
@@ -204,6 +240,36 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     patch: Partial<OfferWorkspaceScopeItem>,
   ) {
     setExclusions((current) => updateOfferScopeItems(current, itemId, patch));
+  }
+
+  function addAllowance() {
+    scopeItemCounterRef.current += 1;
+    setAllowances((current) => [
+      ...current,
+      createOfferScopeItem(
+        `allowance-manual-${scopeItemCounterRef.current}`,
+        "prime_cost",
+      ),
+    ]);
+  }
+
+  function removeAllowance(itemId: string) {
+    setAllowances((current) => removeOfferScopeItem(current, itemId));
+  }
+
+  function addExclusion() {
+    scopeItemCounterRef.current += 1;
+    setExclusions((current) => [
+      ...current,
+      createOfferScopeItem(
+        `exclusion-manual-${scopeItemCounterRef.current}`,
+        "exclusion",
+      ),
+    ]);
+  }
+
+  function removeExclusion(itemId: string) {
+    setExclusions((current) => removeOfferScopeItem(current, itemId));
   }
 
   function updateDraft(patch: Partial<OfferDocumentDraft>) {
@@ -418,22 +484,37 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     }
     const timer = setTimeout(() => {
       void (async () => {
-        const result = await saveOfferWorkspace({
-          offerId,
-          expectedStateVersion: stateVersionRef.current,
-          snapshot,
-        });
-        if (result.ok) {
-          stateVersionRef.current = result.stateVersion;
-          lastSavedRef.current = currentJson;
-        } else if (result.reason === "stale") {
-          const loaded = await loadActiveOfferWorkspace(leadId);
-          offerIdRef.current = loaded.offerId;
-          stateVersionRef.current = loaded.stateVersion;
-          if (loaded.snapshot) {
-            hydrateSnapshot(loaded.snapshot);
-            lastSavedRef.current = JSON.stringify(loaded.snapshot);
+        setSaveState("saving");
+        try {
+          const result = await saveOfferWorkspace({
+            offerId,
+            expectedStateVersion: stateVersionRef.current,
+            snapshot,
+          });
+          if (result.ok) {
+            stateVersionRef.current = result.stateVersion;
+            lastSavedRef.current = currentJson;
+            setSaveState("saved");
+          } else if (result.reason === "stale") {
+            // Another writer moved on — reload the server copy. Report it as an
+            // error state so the operator knows their unsaved edits were
+            // reconciled to the newer version (rather than silently clobbered).
+            const loaded = await loadActiveOfferWorkspace(leadId);
+            offerIdRef.current = loaded.offerId;
+            stateVersionRef.current = loaded.stateVersion;
+            if (loaded.snapshot) {
+              hydrateSnapshot(loaded.snapshot);
+              lastSavedRef.current = JSON.stringify(loaded.snapshot);
+            }
+            setSaveState("error");
+          } else {
+            setSaveState("error");
           }
+        } catch (error) {
+          // Network/server failure — previously swallowed. Surface it so the
+          // operator does not assume their work is saved.
+          console.error("[offer] autosave failed:", error);
+          setSaveState("error");
         }
       })();
     }, 800);
@@ -712,8 +793,15 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         standardPrice={standardPrice}
         standardPriceInput={standardPriceInput}
         status={status}
+        offerExpiry={offerExpiry}
+        saveState={saveState}
+        sendBlockers={sendBlockers}
         onAddLine={addLine}
         onAllowanceChange={updateAllowance}
+        onAddAllowance={addAllowance}
+        onRemoveAllowance={removeAllowance}
+        onAddExclusion={addExclusion}
+        onRemoveExclusion={removeExclusion}
         onAreaChange={updateAreaCalculator}
         onDownloadOffer={() => window.print()}
         onDraftChange={updateDraft}

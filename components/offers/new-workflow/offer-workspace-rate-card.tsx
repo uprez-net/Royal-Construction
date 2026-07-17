@@ -2,6 +2,13 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type {
   RateCardComparison,
   RateCardProduct,
@@ -22,6 +29,7 @@ type RateCardPanelProps = {
   readonly tier: RateCardTier;
   readonly onProductChange: (value: RateCardProduct) => void;
   readonly onTierChange: (value: RateCardTier) => void;
+  readonly onSelectedPriceInputChange: (value: string) => void;
 };
 
 const STATUS_COPY: Record<
@@ -52,8 +60,10 @@ export function RateCardPanel({
   tier,
   onProductChange,
   onTierChange,
+  onSelectedPriceInputChange,
 }: RateCardPanelProps) {
   const status = STATUS_COPY[comparison.status];
+  const hasArea = comparison.status !== "no_area";
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -71,43 +81,51 @@ export function RateCardPanel({
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Product
             </span>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            <Select
               value={product}
-              onChange={(event) => {
-                const nextProduct = parseRateCardProduct(event.target.value);
+              onValueChange={(value) => {
+                const nextProduct = parseRateCardProduct(value);
                 if (nextProduct !== null) {
                   onProductChange(nextProduct);
                 }
               }}
             >
-              {RATE_CARD_PRODUCTS.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Rate-card product" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RATE_CARD_PRODUCTS.map((entry) => (
+                  <SelectItem key={entry.value} value={entry.value}>
+                    {entry.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label>
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Tier
             </span>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            <Select
               value={tier}
-              onChange={(event) => {
-                const nextTier = parseRateCardTier(event.target.value);
+              onValueChange={(value) => {
+                const nextTier = parseRateCardTier(value);
                 if (nextTier !== null) {
                   onTierChange(nextTier);
                 }
               }}
             >
-              {RATE_CARD_TIERS.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Rate-card tier" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RATE_CARD_TIERS.map((entry) => (
+                  <SelectItem key={entry.value} value={entry.value}>
+                    {entry.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
         <div className="grid gap-3 rounded-lg border border-border bg-background/70 p-3 md:grid-cols-3">
@@ -140,8 +158,56 @@ export function RateCardPanel({
             {status.label}
           </Badge>
         </div>
+        {hasArea ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Set the Offer price to:
+            </span>
+            <PriceChip
+              label="Match target"
+              value={comparison.targetContractValueIncGst}
+              onApply={() =>
+                onSelectedPriceInputChange(
+                  String(comparison.targetContractValueIncGst),
+                )
+              }
+            />
+            <PriceChip
+              label="Snap to floor"
+              value={comparison.floorContractValueIncGst}
+              onApply={() =>
+                onSelectedPriceInputChange(
+                  String(comparison.floorContractValueIncGst),
+                )
+              }
+            />
+          </div>
+        ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+// One-tap fill: writes a rate-card anchor into the selected Offer price, turning
+// the variance readout into an action instead of a number to retype.
+function PriceChip({
+  label,
+  value,
+  onApply,
+}: {
+  readonly label: string;
+  readonly value: number;
+  readonly onApply: () => void;
+}) {
+  return (
+    <button
+      className="inline-flex items-center gap-1.5 rounded-full border border-royal-gold/40 bg-white px-2.5 py-1 text-xs font-medium text-royal-gold-dark transition-colors hover:bg-royal-gold-light/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+      onClick={onApply}
+      type="button"
+    >
+      {label}
+      <span className="font-mono text-foreground">{formatCurrency(value)}</span>
+    </button>
   );
 }
 

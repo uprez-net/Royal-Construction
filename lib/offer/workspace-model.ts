@@ -323,6 +323,33 @@ export function updateOfferScopeItems(
   return items.map((item) => (item.id === itemId ? { ...item, ...patch } : item));
 }
 
+// A blank scope item ready for the operator to fill in. Exclusions default to a
+// note (no dollar amount); allowances to a fixed amount. The `id` is supplied by
+// the caller so it stays stable and serializable in the snapshot.
+export function createOfferScopeItem(
+  id: string,
+  category: OfferScopeItemCategory,
+): OfferWorkspaceScopeItem {
+  return {
+    id,
+    category,
+    amountType: category === "exclusion" ? "included_note" : "fixed_amount",
+    label: "",
+    description: "",
+    amount: 0,
+    unit: "",
+    variationRule: "",
+    includedInOfferDocument: true,
+  };
+}
+
+export function removeOfferScopeItem(
+  items: readonly OfferWorkspaceScopeItem[],
+  itemId: string,
+): readonly OfferWorkspaceScopeItem[] {
+  return items.filter((item) => item.id !== itemId);
+}
+
 export function applyTaskMappingToCostLine(
   line: OfferWorkspaceCostLine,
   taskName: string,

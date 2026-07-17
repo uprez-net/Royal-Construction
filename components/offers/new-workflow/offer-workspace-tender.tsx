@@ -13,17 +13,16 @@ import type {
   OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import {
-  FileSignature,
-  FileText,
-  Info,
-  RotateCcw,
-  Send,
-  ShieldCheck,
-} from "lucide-react";
+import { FileText, Info, RotateCcw, Send, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency, formatPercent } from "./offer-workspace-format";
+import {
+  formatCurrency,
+  formatOfferReference,
+  formatPercent,
+} from "./offer-workspace-format";
 import { PaymentSchedulePanel } from "./offer-workspace-payment-schedule";
+import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 
 type TenderPanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -80,6 +79,7 @@ export function TenderPanel({
         customerPrice={customerPrice}
         rows={paymentSchedule}
         onRowsChange={onPaymentScheduleChange}
+        locked={isSent || isSigned}
       />
 
       <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -115,6 +115,9 @@ export function TenderPanel({
             isDraft={isDraft}
             isSent={isSent}
             isSigned={isSigned}
+            customerName={job.clientNames}
+            contractValueIncGst={customerPrice.selectedContractValueIncGst}
+            offerReference={formatOfferReference(job.reference, job.revision)}
             scheduleBalanced={scheduleBalanced}
             scheduleTotalPct={scheduleTotalPct}
             sending={tenderSending}
@@ -179,6 +182,9 @@ function TenderActions({
   isDraft,
   isSent,
   isSigned,
+  customerName,
+  contractValueIncGst,
+  offerReference,
   scheduleBalanced,
   scheduleTotalPct,
   sending,
@@ -192,6 +198,9 @@ function TenderActions({
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
+  readonly customerName: string;
+  readonly contractValueIncGst: number;
+  readonly offerReference: string;
   readonly scheduleBalanced: boolean;
   readonly scheduleTotalPct: number;
   readonly sending: boolean;
@@ -201,6 +210,8 @@ function TenderActions({
   readonly onRecallTender: () => void;
   readonly onMarkTenderSigned: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
+
   if (isSigned) {
     return null;
   }
@@ -208,7 +219,20 @@ function TenderActions({
   return (
     <div className="grid gap-3">
       {isSent ? (
-        <SigningTracker />
+        <SigningTracker
+          recipients={[
+            {
+              role: "Builder",
+              detail: "Royal Constructions",
+              state: "awaiting",
+            },
+            {
+              role: "Customer",
+              detail: customerName || "signs after the builder",
+              state: "waiting_for_prior",
+            },
+          ]}
+        />
       ) : (
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
@@ -235,10 +259,10 @@ function TenderActions({
         {isDraft ? (
           <Button
             className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-            disabled={sending || !scheduleBalanced}
+            disabled={sending || confirming || !scheduleBalanced}
             size="sm"
             type="button"
-            onClick={onSendTender}
+            onClick={() => setConfirming(true)}
           >
             <Send className="size-4" aria-hidden="true" />
             {sending
@@ -271,6 +295,22 @@ function TenderActions({
         ) : null}
       </div>
 
+      {isDraft && confirming ? (
+        <EnvelopeSendConfirm
+          documentName="Tender"
+          recipientName={customerName}
+          valueLabel="Contract value inc GST"
+          value={contractValueIncGst}
+          reference={offerReference}
+          sending={sending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            onSendTender();
+            setConfirming(false);
+          }}
+        />
+      ) : null}
+
       {isDraft && !scheduleBalanced ? (
         <p className="text-xs font-medium text-destructive">
           Payment schedule totals {Math.round(scheduleTotalPct * 100)}% — adjust
@@ -281,37 +321,6 @@ function TenderActions({
       {sendError ? (
         <p className="text-xs font-medium text-destructive">{sendError}</p>
       ) : null}
-    </div>
-  );
-}
-
-function SigningTracker() {
-  return (
-    <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        DocuSign envelope
-      </p>
-      {[
-        { role: "Builder", detail: "Royal Constructions" },
-        { role: "Customer", detail: "signs after the builder" },
-      ].map((recipient) => (
-        <div
-          key={recipient.role}
-          className="flex items-center justify-between gap-3"
-        >
-          <span className="flex items-center gap-2">
-            <FileSignature
-              className="size-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <span className="font-medium">{recipient.role}</span>
-            <span className="text-muted-foreground">— {recipient.detail}</span>
-          </span>
-          <span className="rounded-full bg-warning-light px-2 py-0.5 text-xs font-medium text-warning">
-            Awaiting signature
-          </span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -347,7 +356,7 @@ function TenderPreview({
       <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border/70 pb-3">
         <div>
           <p className="font-mono text-xs text-muted-foreground">
-            {job.reference}-{job.revision}
+            {formatOfferReference(job.reference, job.revision)}
           </p>
           <h3 className="font-heading text-lg font-semibold">
             Tender — fixed price building works

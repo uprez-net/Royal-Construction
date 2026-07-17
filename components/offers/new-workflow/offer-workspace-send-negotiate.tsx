@@ -5,14 +5,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { activeOfferPhase } from "@/lib/offer/workflow";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
-import { CheckCircle2, GitBranch, MailCheck, Send, XCircle } from "lucide-react";
+import type { OfferSendBlocker } from "@/lib/offer/offer-readiness";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  GitBranch,
+  MailCheck,
+  Send,
+  XCircle,
+} from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
+import { formatCurrency } from "./offer-workspace-format";
 
 type SendNegotiatePanelProps = {
   readonly status: OfferWorkspaceStatus;
   readonly canRevise: boolean;
   readonly revising: boolean;
   readonly clientEmail: string;
+  readonly contractValueIncGst: number;
+  readonly offerReference: string;
+  readonly sendBlockers: readonly OfferSendBlocker[];
   readonly canSend: boolean;
   readonly sending: boolean;
   readonly sendError: string | null;
@@ -25,11 +38,26 @@ type SendNegotiatePanelProps = {
   readonly onMarkRejected: () => void;
 };
 
+// Scroll a blocker's owning step into view so "fix it" is one click. Mirrors the
+// stepper's own scrollIntoView; the section's scroll-margin clears the sticky
+// header.
+function scrollToStep(stepId: string) {
+  const el = document.getElementById(stepId);
+  if (!el) {
+    return;
+  }
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}
+
 export function SendNegotiatePanel({
   status,
   canRevise,
   revising,
   clientEmail,
+  contractValueIncGst,
+  offerReference,
+  sendBlockers,
   canSend,
   sending,
   sendError,
@@ -42,6 +70,7 @@ export function SendNegotiatePanel({
   onMarkRejected,
 }: SendNegotiatePanelProps) {
   const [email, setEmail] = useState(clientEmail);
+  const [confirming, setConfirming] = useState(false);
   const isPending = status === "pending";
   const isSent = status === "sent";
   const isRejected = status === "rejected";
@@ -69,6 +98,7 @@ export function SendNegotiatePanel({
 
         {isPending || isSent ? (
           <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+            <ReadinessStrip blockers={sendBlockers} />
             <label
               className="text-xs font-medium text-foreground"
               htmlFor="offer-recipient"
@@ -79,20 +109,25 @@ export function SendNegotiatePanel({
               <input
                 className="min-w-0 flex-1 rounded-md border border-border bg-white px-3 py-1.5 text-sm"
                 id="offer-recipient"
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setConfirming(false);
+                }}
                 placeholder="client@email.com"
                 type="email"
                 value={email}
               />
               <Button
                 className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-                disabled={!canSend || sending || email.trim().length === 0}
-                onClick={() => onSendOffer(email)}
+                disabled={
+                  !canSend || sending || confirming || email.trim().length === 0
+                }
+                onClick={() => setConfirming(true)}
                 size="sm"
                 title={
                   canSend
-                    ? "Generate the proposal PDF and email it to the client."
-                    : "Available once the offer is saved against a lead."
+                    ? "Review the recipient and price, then confirm the send."
+                    : "Resolve the items above before sending."
                 }
                 type="button"
               >
@@ -117,16 +152,26 @@ export function SendNegotiatePanel({
                 </Button>
               ) : null}
             </div>
+
+            {confirming ? (
+              <SendConfirm
+                contractValueIncGst={contractValueIncGst}
+                offerReference={offerReference}
+                recipient={email}
+                sending={sending}
+                onCancel={() => setConfirming(false)}
+                onConfirm={() => {
+                  onSendOffer(email);
+                  setConfirming(false);
+                }}
+              />
+            ) : null}
+
             {sendError ? (
               <p className="text-xs font-medium text-destructive">{sendError}</p>
             ) : null}
             {sentInfo ? (
               <p className="text-xs font-medium text-success">{sentInfo}</p>
-            ) : null}
-            {!canSend ? (
-              <p className="text-xs text-muted-foreground">
-                Saving the offer against a lead enables sending.
-              </p>
             ) : null}
           </div>
         ) : null}
@@ -170,6 +215,125 @@ export function SendNegotiatePanel({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Enumerated send blockers, each a jump link to the step that resolves it —
+// replaces the single "one reason at a time" line with a scannable checklist.
+function ReadinessStrip({
+  blockers,
+}: {
+  readonly blockers: readonly OfferSendBlocker[];
+}) {
+  if (blockers.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="grid gap-1.5">
+      {blockers.map((blocker) => {
+        const toneClass =
+          blocker.severity === "block"
+            ? "border-destructive/30 bg-destructive-light text-foreground hover:bg-destructive/10"
+            : "border-warning/40 bg-warning-light text-foreground hover:bg-warning/10";
+        return (
+          <li key={blocker.id}>
+            <button
+              className={`flex w-full items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40 ${toneClass}`}
+              onClick={() => scrollToStep(blocker.stepId)}
+              type="button"
+            >
+              <AlertTriangle
+                className="mt-0.5 size-3.5 shrink-0"
+                aria-hidden="true"
+              />
+              <span className="flex-1">{blocker.label}</span>
+              <ArrowRight className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// Restates the frozen facts (recipient, price, reference) before the send leaves
+// the workspace — a deliberate beat on an outward-facing, hard-to-recall action.
+function SendConfirm({
+  contractValueIncGst,
+  offerReference,
+  recipient,
+  sending,
+  onCancel,
+  onConfirm,
+}: {
+  readonly contractValueIncGst: number;
+  readonly offerReference: string;
+  readonly recipient: string;
+  readonly sending: boolean;
+  readonly onCancel: () => void;
+  readonly onConfirm: () => void;
+}) {
+  return (
+    <div className="grid gap-2 rounded-lg border border-royal-gold/40 bg-royal-gold-light/40 p-3">
+      <p className="text-sm font-medium text-foreground">
+        Send this offer to the client?
+      </p>
+      <dl className="grid gap-1 text-xs">
+        <ConfirmRow label="Recipient" value={recipient} />
+        <ConfirmRow
+          label="Fixed price inc GST"
+          mono
+          value={formatCurrency(contractValueIncGst)}
+        />
+        <ConfirmRow label="Reference" mono value={offerReference} />
+      </dl>
+      <p className="text-xs text-muted-foreground">
+        This emails the proposal PDF and moves the offer to Sent. Check the price
+        and recipient — this leaves your workspace.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+          disabled={sending}
+          onClick={onConfirm}
+          size="sm"
+          type="button"
+        >
+          <Send className="size-4" aria-hidden="true" />
+          {sending ? "Sending…" : "Confirm & send"}
+        </Button>
+        <Button
+          disabled={sending}
+          onClick={onCancel}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmRow({
+  label,
+  value,
+  mono = false,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly mono?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd
+        className={`min-w-0 truncate font-medium text-foreground ${mono ? "font-mono" : ""}`}
+      >
+        {value || "—"}
+      </dd>
+    </div>
   );
 }
 

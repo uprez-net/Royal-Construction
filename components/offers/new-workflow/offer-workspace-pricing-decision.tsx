@@ -101,6 +101,21 @@ export function PricingDecisionPanel({
               }
             }}
           />
+          {selectedPriceInput.trim() !==
+          String(customerPrice.computedContractValueIncGst) ? (
+            <button
+              className="mt-1 text-xs font-medium text-royal-gold-dark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+              onClick={() =>
+                onSelectedPriceInputChange(
+                  String(customerPrice.computedContractValueIncGst),
+                )
+              }
+              type="button"
+            >
+              Use computed build-up ·{" "}
+              {formatCurrency(customerPrice.computedContractValueIncGst)}
+            </button>
+          ) : null}
         </label>
         <div className="rounded-lg border border-border bg-background/70 p-3">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

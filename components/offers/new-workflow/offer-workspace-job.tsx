@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { OfferPrefillResult } from "@/lib/data/offer-prefill";
 import {
   FACADE_OPTIONS,
@@ -144,8 +145,8 @@ export function JobSetupPanel({
             className="md:col-span-2 xl:col-span-4"
             label="Build scope (one feature per line — shown on the proposal snapshot)"
           >
-            <textarea
-              className="flex min-h-[76px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            <Textarea
+              className="min-h-[76px]"
               value={job.buildScope.join("\n")}
               placeholder="4 Bedrooms + Study&#10;Double Garage&#10;Alfresco"
               onChange={(event) =>

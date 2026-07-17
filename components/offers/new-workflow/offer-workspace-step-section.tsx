@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Lock } from "lucide-react";
+import { GitBranch, Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type StepHeaderProps = {
@@ -7,9 +8,10 @@ type StepHeaderProps = {
   readonly phase: string;
   readonly title: string;
   readonly active: boolean;
+  readonly locked?: boolean;
 };
 
-function StepHeader({ index, phase, title, active }: StepHeaderProps) {
+function StepHeader({ index, phase, title, active, locked = false }: StepHeaderProps) {
   return (
     <div className="mb-3 flex items-center gap-2.5">
       <span
@@ -32,10 +34,58 @@ function StepHeader({ index, phase, title, active }: StepHeaderProps) {
         >
           {phase} phase
         </p>
-        <h2 className="font-heading text-lg font-semibold leading-tight text-foreground">
-          {title}
-        </h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-heading text-lg font-semibold leading-tight text-foreground">
+            {title}
+          </h2>
+          {locked ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              <Lock className="size-3" aria-hidden="true" />
+              Issued
+            </span>
+          ) : null}
+        </div>
       </div>
+    </div>
+  );
+}
+
+// Explains why the Offer-build steps are frozen and offers the one sanctioned
+// way to change an issued offer: cut a new revision. Rendered above step 1 once
+// the offer leaves the editable (pending) state.
+export function OfferLockBanner({
+  onCreateRevision,
+  canRevise,
+  revising,
+}: {
+  readonly onCreateRevision: () => void;
+  readonly canRevise: boolean;
+  readonly revising: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3">
+      <p className="flex items-start gap-2 text-sm text-foreground">
+        <Lock
+          className="mt-0.5 size-4 shrink-0 text-royal-gold-dark"
+          aria-hidden="true"
+        />
+        <span className="max-w-prose">
+          This offer has been issued, so job setup, cost schedule, pricing, scope
+          and the offer document are locked to preserve the issued record. To
+          change any of them, create a new revision.
+        </span>
+      </p>
+      <Button
+        className="shrink-0"
+        disabled={!canRevise || revising}
+        onClick={onCreateRevision}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        <GitBranch className="size-4" aria-hidden="true" />
+        {revising ? "Creating…" : "Create revision"}
+      </Button>
     </div>
   );
 }
@@ -47,18 +97,33 @@ export function OfferStepSection({
   index,
   phase,
   title,
+  locked = false,
   children,
 }: {
   readonly id: string;
   readonly index: number;
   readonly phase: string;
   readonly title: string;
+  readonly locked?: boolean;
   readonly children: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-52">
-      <StepHeader active index={index} phase={phase} title={title} />
-      <div className="space-y-5">{children}</div>
+    <section id={id} className="scroll-mt-[var(--offer-sticky-offset,13rem)]">
+      <StepHeader active index={index} phase={phase} title={title} locked={locked} />
+      {locked ? (
+        // A disabled fieldset natively blocks every descendant control (inputs,
+        // selects, textareas, buttons) so the issued record can be read but not
+        // edited. Opacity is kept at 100% on fields (this is a record to review,
+        // not a temporarily-unavailable form); only action buttons dim.
+        <fieldset
+          disabled
+          className="m-0 min-w-0 space-y-5 border-0 p-0 [&_:disabled]:cursor-default [&_input:disabled]:opacity-100 [&_textarea:disabled]:opacity-100 [&_[data-slot=select-trigger]]:opacity-100 [&_[data-slot=checkbox]]:opacity-100 [&_button:disabled]:opacity-50"
+        >
+          {children}
+        </fieldset>
+      ) : (
+        <div className="space-y-5">{children}</div>
+      )}
     </section>
   );
 }

@@ -97,6 +97,21 @@ export async function loadActiveOfferWorkspace(
     orderBy: { createdAt: "desc" },
   });
   if (existing) {
+    // Heal legacy/seed rows that were created without a minted base reference
+    // (which render as a bare "-R1"). Mint one and persist it so the reference
+    // is correct from here on. Idempotent: only runs while the base is blank.
+    if (existing.baseReference.trim().length === 0) {
+      const healed = await prisma.$transaction(async (tx) => {
+        const year = new Date().getFullYear();
+        const baseReference = await mintOfferReference(tx, year);
+        return tx.offer.update({
+          where: { id: existing.id },
+          data: { baseReference },
+        });
+      });
+      revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
+      return toLoaded(healed);
+    }
     return toLoaded(existing);
   }
 

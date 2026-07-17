@@ -14,8 +14,11 @@ import {
   type OfferWorkflowPhase,
 } from "@/lib/offer/workflow";
 import { cn } from "@/lib/utils";
-import { Check, Download } from "lucide-react";
-import { formatCurrency } from "./offer-workspace-format";
+import { Check, Download, Loader2 } from "lucide-react";
+import { formatCurrency, formatOfferReference } from "./offer-workspace-format";
+import type { OfferExpiry } from "@/lib/offer/offer-readiness";
+
+type OfferSaveState = "idle" | "saving" | "saved" | "error";
 
 // The workflow runs across three phases — Offer, Tender, Contract — then the
 // signed Contract is handed off to Project. See CONTEXT.md and ADR 0001.
@@ -71,6 +74,8 @@ function currentStepLabel(status: OfferWorkspaceStatus): string {
 type OfferWorkspaceHeaderProps = {
   readonly customerPrice: OfferCustomerPrice;
   readonly job: OfferWorkspaceJob;
+  readonly offerExpiry: OfferExpiry | null;
+  readonly saveState: OfferSaveState;
   readonly onDownloadPreview: () => void;
   readonly status: OfferWorkspaceStatus;
 };
@@ -78,6 +83,8 @@ type OfferWorkspaceHeaderProps = {
 export function OfferWorkspaceHeader({
   customerPrice,
   job,
+  offerExpiry,
+  saveState,
   onDownloadPreview,
   status,
 }: OfferWorkspaceHeaderProps) {
@@ -87,10 +94,11 @@ export function OfferWorkspaceHeader({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge className="bg-royal-gold text-white">
-              {job.reference}-{job.revision}
+              {formatOfferReference(job.reference, job.revision)}
             </Badge>
             <Badge variant="secondary">{OFFER_STATUS_LABEL[status]}</Badge>
             <Badge variant="secondary">Working draft</Badge>
+            <ExpiryChip expiry={offerExpiry} />
           </div>
           <h1
             id="new-offer-workspace-title"
@@ -98,9 +106,12 @@ export function OfferWorkspaceHeader({
           >
             New Offer workspace
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {job.clientNames} · {job.siteAddress}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <p className="text-sm text-muted-foreground">
+              {job.clientNames} · {job.siteAddress}
+            </p>
+            <SaveIndicator state={saveState} />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="rounded-lg bg-background px-3 py-2 text-right">
@@ -118,6 +129,60 @@ export function OfferWorkspaceHeader({
         </div>
       </div>
     </section>
+  );
+}
+
+// Offer-validity chip. Silent until a date is set; escalates muted → warning →
+// destructive as the fixed price approaches and passes its validity date, so an
+// expired offer can never be emailed unnoticed.
+function ExpiryChip({ expiry }: { readonly expiry: OfferExpiry | null }) {
+  if (!expiry || expiry.state === "none") {
+    return null;
+  }
+  const toneClass =
+    expiry.state === "expired"
+      ? "border-destructive/30 bg-destructive-light text-destructive"
+      : expiry.state === "soon"
+        ? "border-warning/40 bg-warning-light text-foreground"
+        : "border-border bg-muted/40 text-muted-foreground";
+  return (
+    <span
+      className={cn(
+        "rounded-full border px-2 py-0.5 text-xs font-medium",
+        toneClass,
+      )}
+    >
+      {expiry.label}
+    </span>
+  );
+}
+
+// Autosave chrome: makes the debounced persistence legible and flags a failed
+// save instead of leaving the operator to assume their edits are safe.
+function SaveIndicator({ state }: { readonly state: OfferSaveState }) {
+  if (state === "idle") {
+    return null;
+  }
+  if (state === "saving") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+        Saving…
+      </span>
+    );
+  }
+  if (state === "saved") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Check className="size-3" aria-hidden="true" />
+        Saved
+      </span>
+    );
+  }
+  return (
+    <span className="text-xs font-medium text-destructive" role="status">
+      Save failed — your last edits may not be stored. Keep this tab open.
+    </span>
   );
 }
 

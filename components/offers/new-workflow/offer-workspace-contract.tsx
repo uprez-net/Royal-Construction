@@ -9,16 +9,15 @@ import type {
   OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import {
-  FileSignature,
-  Info,
-  RotateCcw,
-  ScrollText,
-  Send,
-  ShieldCheck,
-} from "lucide-react";
+import { Info, RotateCcw, ScrollText, Send, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency, formatPercent } from "./offer-workspace-format";
+import {
+  formatCurrency,
+  formatOfferReference,
+  formatPercent,
+} from "./offer-workspace-format";
+import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 
 type ContractPanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -87,6 +86,9 @@ export function ContractPanel({
           isSent={isSent}
           isSigned={isSigned}
           isTenderSigned={isTenderSigned}
+          customerName={job.clientNames}
+          contractValueIncGst={customerPrice.selectedContractValueIncGst}
+          offerReference={formatOfferReference(job.reference, job.revision)}
           sending={contractSending}
           sendError={contractSendError}
           onGenerateContract={onGenerateContract}
@@ -148,6 +150,9 @@ function ContractActions({
   isDraft,
   isSent,
   isSigned,
+  customerName,
+  contractValueIncGst,
+  offerReference,
   sending,
   sendError,
   onGenerateContract,
@@ -159,6 +164,9 @@ function ContractActions({
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
+  readonly customerName: string;
+  readonly contractValueIncGst: number;
+  readonly offerReference: string;
   readonly sending: boolean;
   readonly sendError: string | null;
   readonly onGenerateContract: () => void;
@@ -166,6 +174,8 @@ function ContractActions({
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
+
   if (isSigned) {
     return null;
   }
@@ -173,7 +183,20 @@ function ContractActions({
   return (
     <div className="grid gap-3">
       {isSent ? (
-        <SigningTracker />
+        <SigningTracker
+          recipients={[
+            {
+              role: "Builder",
+              detail: "Royal Constructions",
+              state: "awaiting",
+            },
+            {
+              role: "Customer",
+              detail: customerName || "signs after the builder",
+              state: "waiting_for_prior",
+            },
+          ]}
+        />
       ) : (
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
@@ -200,10 +223,10 @@ function ContractActions({
         {isDraft ? (
           <Button
             className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-            disabled={sending}
+            disabled={sending || confirming}
             size="sm"
             type="button"
-            onClick={onSendContract}
+            onClick={() => setConfirming(true)}
           >
             <Send className="size-4" aria-hidden="true" />
             {sending ? "Sending envelope…" : "Send for signature via DocuSign"}
@@ -234,40 +257,25 @@ function ContractActions({
         ) : null}
       </div>
 
+      {isDraft && confirming ? (
+        <EnvelopeSendConfirm
+          documentName="Contract"
+          recipientName={customerName}
+          valueLabel="Contract sum inc GST"
+          value={contractValueIncGst}
+          reference={offerReference}
+          sending={sending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            onSendContract();
+            setConfirming(false);
+          }}
+        />
+      ) : null}
+
       {sendError ? (
         <p className="text-xs font-medium text-destructive">{sendError}</p>
       ) : null}
-    </div>
-  );
-}
-
-function SigningTracker() {
-  return (
-    <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        DocuSign envelope
-      </p>
-      {[
-        { role: "Builder", detail: "Royal Constructions" },
-        { role: "Customer", detail: "signs after the builder" },
-      ].map((recipient) => (
-        <div
-          key={recipient.role}
-          className="flex items-center justify-between gap-3"
-        >
-          <span className="flex items-center gap-2">
-            <FileSignature
-              className="size-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <span className="font-medium">{recipient.role}</span>
-            <span className="text-muted-foreground">— {recipient.detail}</span>
-          </span>
-          <span className="rounded-full bg-warning-light px-2 py-0.5 text-xs font-medium text-warning">
-            Awaiting signature
-          </span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -298,7 +306,7 @@ function ContractPreview({
       <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border/70 pb-3">
         <div>
           <p className="font-mono text-xs text-muted-foreground">
-            {job.reference}-{job.revision}
+            {formatOfferReference(job.reference, job.revision)}
           </p>
           <h3 className="font-heading text-lg font-semibold">
             Building Contract
