@@ -52,6 +52,8 @@ import type {
   OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
 import { SendNegotiatePanel } from "./offer-workspace-send-negotiate";
+import { OfferReviewPanel } from "./offer-workspace-review";
+import { buildOfferReview } from "@/lib/offer/offer-review";
 import {
   OfferLockBanner,
   OfferPhaseGate,
@@ -261,6 +263,20 @@ export function OfferWorkspaceScreen({
   // Floor areas come from Job setup; the helper and pricing read them here.
   const areaBasis = useMemo(() => offerAreaBasisFromJob(job), [job]);
 
+  // Per-section completeness for the pre-send Review panel.
+  const reviewSections = useMemo(
+    () =>
+      buildOfferReview({
+        job,
+        lines,
+        allowances,
+        exclusions,
+        draft,
+        customerPrice,
+      }),
+    [job, lines, allowances, exclusions, draft, customerPrice],
+  );
+
   // Once the offer has been issued (Sent or any later/terminal state), the
   // Offer-build steps are locked to preserve the issued record — changes go
   // through a new revision. `pending` is the only editable state.
@@ -435,6 +451,7 @@ export function OfferWorkspaceScreen({
             phase="Offer"
             title="Send & negotiate"
           >
+            <OfferReviewPanel sections={reviewSections} />
             <SendNegotiatePanel
               status={status}
               canRevise={canRevise}
