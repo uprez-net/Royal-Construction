@@ -195,7 +195,7 @@ export function OfferStepSection({
   title,
   locked = false,
   status = null,
-  defaultOpen = true,
+  defaultOpen = false,
   children,
 }: {
   readonly id: string;
