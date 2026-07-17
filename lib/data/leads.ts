@@ -33,6 +33,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import { getAllEmailThreads } from "@/utils/email-parser";
+import { EMAIL_FOOTER_HTML, EMAIL_HEADER_HTML } from '@/constants/email-artifacts';
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
@@ -64,13 +65,13 @@ function markdownToHtml(value: string) {
     .join("");
 }
 
-function buildLeadEmailHtml(body: string) {
+function buildLeadEmailHtml(body: string, name: string) {
   const normalizedBody = normalizeEmailBody(body);
   const bodyHtml = hasHtmlMarkup(normalizedBody)
     ? sanitizeLeadNotesHtml(normalizedBody)
     : markdownToHtml(normalizedBody);
 
-  return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards,<br>Royal Constructions team.</p>`;
+  return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards, <br>${escapeEmailHtml(name)} <br>Royal Constructions.</p>`;
 }
 
 
@@ -1087,12 +1088,59 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
     }
 
     const signedBody = `
+    <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin: 0; padding: 0; outline: none; }
+    .rc-hover-toolbar {
+      position: absolute;
+      background: rgba(12,24,41,0.95);
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 9999;
+      display: none;
+      pointer-events: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      max-width: 90%;
+      align-items: center;
+      gap: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .rc-hover-toolbar span { font-weight: 600; white-space: nowrap; }
+    .rc-hover-toolbar input {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      font-size: 12px;
+      width: 300px;
+      max-width: 55vw;
+      padding: 3px 8px;
+      border-radius: 4px;
+      outline: none;
+      font-family: monospace;
+    }
+    .rc-hover-toolbar input:focus {
+      border-color: #c6923a;
+      background: rgba(255,255,255,0.15);
+    }
+  </style>
+</head>
+<body>
+  <div style="background-color:#f7f6f2;margin:0;padding:0">
+    ${EMAIL_HEADER_HTML}
     <p>Hi ${escapeEmailHtml(existingLead.name)},</p>
-    ${buildLeadEmailHtml(body)}
+    ${buildLeadEmailHtml(body, user.name)}
+    ${EMAIL_FOOTER_HTML}
+  </div>
+</body>
+</html>
     `;
 
     // Generate a subject line using AI for the body
-    const aiSubject = replyingToEmail ? `Re: ${replyingToEmail.subject}` : await generateEmailSubject(signedBody);
+    const aiSubject = replyingToEmail ? `Re: ${replyingToEmail.subject}` : await generateEmailSubject(escapeEmailHtml(signedBody));
     await sendEmail({
       to,
       subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,

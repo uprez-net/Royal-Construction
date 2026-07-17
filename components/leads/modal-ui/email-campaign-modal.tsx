@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ChevronDown,
   Mail,
+  Plus,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -276,21 +277,7 @@ export function EmailCampaignModal({
                 className="group flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-background p-6 shadow-sm transition hover:border-teal-600 hover:bg-teal-50/50 hover:shadow-md"
               >
                 <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 bg-muted/50 transition group-hover:border-teal-600 group-hover:bg-teal-100/80">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-muted-foreground/60 transition group-hover:text-teal-600"
-                  >
-                    <path d="M12 5v14" />
-                    <path d="M5 12h14" />
-                  </svg>
+                  <Plus className="size-5 text-muted-foreground transition group-hover:text-teal-700" />
                 </div>
                 <div className="mt-3 text-sm font-semibold text-foreground transition group-hover:text-teal-700">
                   Custom Template
