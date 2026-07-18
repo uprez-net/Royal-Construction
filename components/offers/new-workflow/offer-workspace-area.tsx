@@ -11,7 +11,7 @@ import {
   getAreaBasisTotalSqm,
 } from "@/lib/offer/workspace-area";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
-import { Layers } from "lucide-react";
+import { Info, Layers } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
@@ -42,14 +42,27 @@ export function AreaCalculatorPanel({
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
-        <OfferCardHeading
-          description="Derived from the Job setup floor areas — set the rates and lineal measurements to build each slab, frame, brick and tile cost package."
-          icon={<Layers className="size-4" aria-hidden="true" />}
-          singleLineDescription
-          title="Slab, frame, brick & tile packages"
-        />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <OfferCardHeading
+            description="A first-principles estimate from the Job setup floor areas — set the rates and lineal measurements to size each slab, frame, brick and tile package."
+            icon={<Layers className="size-4" aria-hidden="true" />}
+            singleLineDescription
+            title="Slab, frame, brick & tile packages"
+          />
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            <Info className="size-3" aria-hidden="true" />
+            Estimating aid — may not match the quote
+          </span>
+        </div>
       </CardHeader>
       <CardContent className="grid gap-5 pt-4">
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          For understanding only — these package figures help you sanity-check
+          size and cost. They are not added to the quote; the actual price comes
+          from the Cost schedule line items, which may or may not line up with
+          these estimates.
+        </p>
         <section className="grid gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
