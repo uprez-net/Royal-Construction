@@ -58,11 +58,13 @@ export function PricingSummary({
 }: PricingSummaryProps) {
   const rows = [
     ["Direct total", formatCurrency(pricing.directTotal)],
-    ["HBCF insurance", formatCurrency(pricing.hbcfInsurance)],
-    ["Admin", formatCurrency(pricing.adminCost)],
-    ["Project management", formatCurrency(pricing.projectManagementCost)],
-    ["Contingency", formatCurrency(pricing.contingency)],
-    ["Builder margin", formatCurrency(pricing.builderMargin)],
+    ["Fixed additions", formatCurrency(pricing.additionsTotal)],
+    ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
+    ["Royal Construction Fee", formatCurrency(pricing.royalConstructionFee)],
+    [
+      "Total inc construction",
+      formatCurrency(pricing.totalIncludingConstruction),
+    ],
     ["GST", formatCurrency(pricing.gstAmount)],
   ] as const;
 

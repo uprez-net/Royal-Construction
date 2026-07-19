@@ -12,12 +12,9 @@ import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import type {
   EffectiveMargin,
-  LegacyWorkbookPricingSettings,
   OfferCustomerPrice,
   OfferWorkspacePricing,
-  RateCardComparison,
-  RateCardProduct,
-  RateCardTier,
+  OfferWorkspacePricingSettings,
 } from "@/lib/offer/workspace-pricing";
 import {
   getAreaBasisTotalSqm,
@@ -34,7 +31,7 @@ import {
   OfferWorkspaceHeader,
 } from "./offer-workspace-header";
 import { JobSetupPanel } from "./offer-workspace-job";
-import { LegacyPricingPanel } from "./offer-workspace-legacy-pricing";
+import { PriceBuildupPanel } from "./offer-workspace-price-buildup";
 import { ContractPanel } from "./offer-workspace-contract";
 import { ProjectHandoffPanel } from "./offer-workspace-project-handoff";
 import { TenderPanel } from "./offer-workspace-tender";
@@ -43,7 +40,6 @@ import {
   PricingSummary,
 } from "./offer-workspace-preview";
 import { PricingDecisionPanel } from "./offer-workspace-pricing-decision";
-import { RateCardPanel } from "./offer-workspace-rate-card";
 import { ScopePanel } from "./offer-workspace-scope";
 import { OfferWorkspaceImages } from "./offer-workspace-images";
 import type {
@@ -78,16 +74,13 @@ type OfferWorkspaceScreenProps = {
   readonly importResult: OfferWorkbookImportResult | null;
   readonly job: OfferWorkspaceJob;
   readonly leadId?: number;
-  readonly legacyPricingSettings: LegacyWorkbookPricingSettings;
+  readonly workspacePricingSettings: OfferWorkspacePricingSettings;
   readonly lines: readonly OfferWorkspaceCostLine[];
   readonly overrideReason: string;
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly priceAdjustmentLabel: string;
   readonly pricing: OfferWorkspacePricing;
   readonly effectiveMargin: EffectiveMargin;
-  readonly rateCardComparison: RateCardComparison;
-  readonly rateCardProduct: RateCardProduct;
-  readonly rateCardTier: RateCardTier;
   readonly selectedPriceInput: string;
   readonly standardPrice: number | null;
   readonly standardPriceInput: string;
@@ -121,8 +114,8 @@ type OfferWorkspaceScreenProps = {
   readonly canPrefill?: boolean;
   readonly prefilling?: boolean;
   readonly prefillResult?: import("@/lib/data/offer-prefill").OfferPrefillResult | null;
-  readonly onLegacyPricingSettingsChange: (
-    patch: Partial<LegacyWorkbookPricingSettings>,
+  readonly onWorkspacePricingSettingsChange: (
+    patch: Partial<OfferWorkspacePricingSettings>,
   ) => void;
   readonly onLineChange: (
     lineId: string,
@@ -163,8 +156,6 @@ type OfferWorkspaceScreenProps = {
     rows: readonly OfferPaymentScheduleRow[],
   ) => void;
   readonly onPriceAdjustmentLabelChange: (value: string) => void;
-  readonly onRateCardProductChange: (value: RateCardProduct) => void;
-  readonly onRateCardTierChange: (value: RateCardTier) => void;
   readonly onSelectedPriceInputChange: (value: string) => void;
   readonly onStandardPriceInputChange: (value: string) => void;
 };
@@ -180,16 +171,13 @@ export function OfferWorkspaceScreen({
   importResult,
   job,
   leadId,
-  legacyPricingSettings,
+  workspacePricingSettings,
   effectiveMargin,
   lines,
   overrideReason,
   paymentSchedule,
   priceAdjustmentLabel,
   pricing,
-  rateCardComparison,
-  rateCardProduct,
-  rateCardTier,
   selectedPriceInput,
   standardPrice,
   standardPriceInput,
@@ -214,7 +202,7 @@ export function OfferWorkspaceScreen({
   canPrefill,
   prefilling,
   prefillResult,
-  onLegacyPricingSettingsChange,
+  onWorkspacePricingSettingsChange,
   onLineChange,
   onRemoveLine,
   onMarkSent,
@@ -249,8 +237,6 @@ export function OfferWorkspaceScreen({
   onOverrideReasonChange,
   onPaymentScheduleChange,
   onPriceAdjustmentLabelChange,
-  onRateCardProductChange,
-  onRateCardTierChange,
   onSelectedPriceInputChange,
   onStandardPriceInputChange,
 }: OfferWorkspaceScreenProps) {
@@ -410,11 +396,12 @@ export function OfferWorkspaceScreen({
             locked={isOfferLocked}
             status={stepStatusById.get("offer-step-pricing") ?? null}
           >
-            <LegacyPricingPanel
+            <PriceBuildupPanel
               directTotal={directTotal}
-              settings={legacyPricingSettings}
+              settings={workspacePricingSettings}
+              pricing={pricing}
               totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
-              onSettingsChange={onLegacyPricingSettingsChange}
+              onSettingsChange={onWorkspacePricingSettingsChange}
             />
             <PricingDecisionPanel
               customerPrice={customerPrice}
@@ -426,14 +413,6 @@ export function OfferWorkspaceScreen({
               onPriceAdjustmentLabelChange={onPriceAdjustmentLabelChange}
               onSelectedPriceInputChange={onSelectedPriceInputChange}
               onStandardPriceInputChange={onStandardPriceInputChange}
-            />
-            <RateCardPanel
-              comparison={rateCardComparison}
-              product={rateCardProduct}
-              tier={rateCardTier}
-              onProductChange={onRateCardProductChange}
-              onTierChange={onRateCardTierChange}
-              onSelectedPriceInputChange={onSelectedPriceInputChange}
             />
           </OfferStepSection>
 

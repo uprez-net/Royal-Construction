@@ -10,16 +10,12 @@ import {
 } from "@/lib/offer/workspace-area";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
 import {
-  DEFAULT_LEGACY_PRICING_SETTINGS,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   OFFER_STAGE_CATALOG,
   type OfferStageCode,
 } from "@/lib/offer/workspace-model";
 import { getOfferSequenceMappingByTask } from "@/lib/offer/workspace-sequence-mapping";
-import type {
-  LegacyWorkbookPricingSettings,
-  OfferWorkspacePricingSettings,
-} from "@/lib/offer/workspace-pricing";
+import type { OfferWorkspacePricingSettings } from "@/lib/offer/workspace-pricing";
 
 export type OfferWorkbookImportResult = {
   readonly sourceName: string;
@@ -29,7 +25,6 @@ export type OfferWorkbookImportResult = {
   readonly areaBasis: OfferAreaBasis;
   readonly areaCalculator: OfferAreaCalculator;
   readonly workspacePricingSettings: OfferWorkspacePricingSettings;
-  readonly legacyPricingSettings: LegacyWorkbookPricingSettings;
   readonly validationMessages: readonly string[];
   readonly ignoredProjectFields: readonly string[];
 };
@@ -74,11 +69,16 @@ export function parseRoyalQuoteWorkbook(
     ...findFormulaErrors("QUOTE", readRows(workbook.Sheets.QUOTE, false)),
     ...findFormulaErrors("COVER", readRows(workbook.Sheets.COVER, false)),
   ];
-  const legacyPricingSettings = parseLegacyPricingSettings(sampleRows);
+  // The real build-up (fee % + additions) lives on the SAMPLE QUOTE sheet; the
+  // SETTINGS sheet is a rarely-present fallback.
+  const workspacePricingSettings =
+    sampleRows.length > 0
+      ? parseWorkbookBuildup(sampleRows)
+      : parseWorkspacePricingSettings(settingsRows);
   const validationMessages = [
     ...formulaErrors,
     ...(sampleRows.length > 0
-      ? findLegacyPricingWarnings(sampleRows, legacyPricingSettings)
+      ? findBuildupWarnings(sampleRows, workspacePricingSettings)
       : []),
   ];
 
@@ -87,8 +87,7 @@ export function parseRoyalQuoteWorkbook(
     costLines,
     areaBasis,
     areaCalculator,
-    workspacePricingSettings: parseWorkspacePricingSettings(settingsRows),
-    legacyPricingSettings,
+    workspacePricingSettings,
     validationMessages,
     ignoredProjectFields: findIgnoredProjectFields(costingDisplayRows),
   };
@@ -370,24 +369,28 @@ function findIgnoredProjectFields(
   return [...found];
 }
 
-function parseLegacyPricingSettings(
+// Read the real build-up off the SAMPLE QUOTE sheet — the Royal Construction
+// Fee % and the fixed additions — into the workspace pricing settings. Overhead
+// (a rarely-used second markup line) is folded into the fee; "other adjustment"
+// lands in engineering so the additions total is preserved.
+function parseWorkbookBuildup(
   rows: readonly (readonly unknown[])[],
-): LegacyWorkbookPricingSettings {
+): OfferWorkspacePricingSettings {
   const directTotal = numberValue(getCell(rows, 79, 7)) ?? 0;
-  const overhead = numberValue(getCell(rows, 80, 7));
-  const royalConstructionFee = numberValue(getCell(rows, 81, 7));
+  const overhead = numberValue(getCell(rows, 80, 7)) ?? 0;
+  const royalConstructionFee = numberValue(getCell(rows, 81, 7)) ?? 0;
 
   return {
-    overheadPct: rateFromAmount(overhead, directTotal, DEFAULT_LEGACY_PRICING_SETTINGS.overheadPct),
+    ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
     royalConstructionFeePct: rateFromAmount(
-      royalConstructionFee,
+      overhead + royalConstructionFee,
       directTotal,
-      DEFAULT_LEGACY_PRICING_SETTINGS.royalConstructionFeePct,
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.royalConstructionFeePct,
     ),
-    hbcfInsuranceFixed: numberValue(getCell(rows, 82, 7)) ?? 0,
+    homeWarrantyHbcfFixed: numberValue(getCell(rows, 82, 7)) ?? 0,
     adminCostFixed: numberValue(getCell(rows, 84, 7)) ?? 0,
     labourCostFixed: numberValue(getCell(rows, 85, 7)) ?? 0,
-    otherAdjustmentFixed: numberValue(getCell(rows, 86, 7)) ?? 0,
+    engineeringFixed: numberValue(getCell(rows, 86, 7)) ?? 0,
   };
 }
 
@@ -399,9 +402,9 @@ function rateFromAmount(
   return amount !== null && base > 0 ? amount / base : fallback;
 }
 
-function findLegacyPricingWarnings(
+function findBuildupWarnings(
   rows: readonly (readonly unknown[])[],
-  settings: LegacyWorkbookPricingSettings,
+  settings: OfferWorkspacePricingSettings,
 ): readonly string[] {
   const feeLabel = textValue(getCell(rows, 81, 6));
   const labelPercent = parsePercentFromText(feeLabel);
@@ -436,34 +439,30 @@ function parseWorkspacePricingSettings(
   rows: readonly (readonly unknown[])[],
 ): OfferWorkspacePricingSettings {
   return {
-    targetMarkupPct: firstNumber(
+    royalConstructionFeePct: firstNumber(
       [getCell(rows, 3, 1)],
-      DEFAULT_WORKSPACE_PRICING_SETTINGS.targetMarkupPct,
-    ),
-    minimumMarkupPct: firstNumber(
-      [getCell(rows, 4, 1)],
-      DEFAULT_WORKSPACE_PRICING_SETTINGS.minimumMarkupPct,
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.royalConstructionFeePct,
     ),
     gstRate: firstNumber(
       [getCell(rows, 5, 1)],
       DEFAULT_WORKSPACE_PRICING_SETTINGS.gstRate,
     ),
-    hbcfRate: firstNumber(
+    homeWarrantyHbcfFixed: firstNumber(
       [getCell(rows, 6, 1)],
-      DEFAULT_WORKSPACE_PRICING_SETTINGS.hbcfRate,
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.homeWarrantyHbcfFixed,
     ),
     adminCostFixed: firstNumber(
       [getCell(rows, 7, 1)],
       DEFAULT_WORKSPACE_PRICING_SETTINGS.adminCostFixed,
     ),
-    projectManagementCostFixed: firstNumber(
+    engineeringFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.engineeringFixed,
+    legalFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.legalFixed,
+    impactFeeFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.impactFeeFixed,
+    labourCostFixed: firstNumber(
       [getCell(rows, 8, 1)],
-      DEFAULT_WORKSPACE_PRICING_SETTINGS.projectManagementCostFixed,
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.labourCostFixed,
     ),
-    contingencyPct: firstNumber(
-      [getCell(rows, 9, 1)],
-      DEFAULT_WORKSPACE_PRICING_SETTINGS.contingencyPct,
-    ),
+    licenceFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.licenceFixed,
   };
 }
 

@@ -13,23 +13,21 @@ export type MarginStatus =
   | "acceptable_below_target"
   | "below_minimum";
 
+// The Royal quote build-up, verified against 24 real project workbooks:
+//   contract = (direct trade total + fixed additions) × (1 + fee%) × (1 + GST)
+// The Royal Construction Fee % is the single margin lever (per-job; the
+// workbooks range 10–22%, default 20%). Additions are the fixed cost lines the
+// workbooks carry on top of the trades.
 export type OfferWorkspacePricingSettings = {
-  readonly targetMarkupPct: number;
-  readonly minimumMarkupPct: number;
-  readonly gstRate: number;
-  readonly hbcfRate: number;
-  readonly adminCostFixed: number;
-  readonly projectManagementCostFixed: number;
-  readonly contingencyPct: number;
-};
-
-export type LegacyWorkbookPricingSettings = {
-  readonly overheadPct: number;
   readonly royalConstructionFeePct: number;
-  readonly hbcfInsuranceFixed: number;
+  readonly gstRate: number;
+  readonly homeWarrantyHbcfFixed: number;
   readonly adminCostFixed: number;
+  readonly engineeringFixed: number;
+  readonly legalFixed: number;
+  readonly impactFeeFixed: number;
   readonly labourCostFixed: number;
-  readonly otherAdjustmentFixed: number;
+  readonly licenceFixed: number;
 };
 
 export type OfferWorkspacePricingInput = {
@@ -40,13 +38,10 @@ export type OfferWorkspacePricingInput = {
 
 export type OfferWorkspacePricing = {
   readonly directTotal: number;
-  readonly hbcfInsurance: number;
-  readonly adminCost: number;
-  readonly projectManagementCost: number;
-  readonly contingency: number;
-  readonly costBase: number;
-  readonly builderMargin: number;
-  readonly subtotalExGst: number;
+  readonly additionsTotal: number;
+  readonly costBeforeFee: number;
+  readonly royalConstructionFee: number;
+  readonly totalIncludingConstruction: number;
   readonly gstAmount: number;
   readonly contractValueIncGst: number;
   readonly perSqm: number | null;
@@ -59,18 +54,6 @@ export type OfferWorkspacePricing = {
 export type EffectiveMargin = {
   readonly effectiveMarkupPct: number;
   readonly marginStatus: MarginStatus;
-};
-
-export type LegacyWorkbookPricing = {
-  readonly directTotal: number;
-  readonly overhead: number;
-  readonly royalConstructionFee: number;
-  readonly hbcfInsurance: number;
-  readonly adminCost: number;
-  readonly labourCost: number;
-  readonly otherAdjustment: number;
-  readonly totalIncludingConstructionCost: number;
-  readonly perSqm: number | null;
 };
 
 export type OfferCustomerPriceInput = {
@@ -177,40 +160,47 @@ export function getMarginStatus(
   return "acceptable_below_target";
 }
 
+// Sum the fixed additions the workbooks carry on top of the trade lines.
+export function calculateAdditionsTotal(
+  settings: OfferWorkspacePricingSettings,
+): number {
+  return roundCurrency(
+    settings.homeWarrantyHbcfFixed +
+      settings.adminCostFixed +
+      settings.engineeringFixed +
+      settings.legalFixed +
+      settings.impactFeeFixed +
+      settings.labourCostFixed +
+      settings.licenceFixed,
+  );
+}
+
 export function calculateOfferWorkspacePricing({
   directTotal,
   totalAreaSqm,
   settings,
 }: OfferWorkspacePricingInput): OfferWorkspacePricing {
-  const hbcfInsurance = roundCurrency(directTotal * settings.hbcfRate);
-  const adminCost = roundCurrency(settings.adminCostFixed);
-  const projectManagementCost = roundCurrency(
-    settings.projectManagementCostFixed,
+  const additionsTotal = calculateAdditionsTotal(settings);
+  const costBeforeFee = roundCurrency(directTotal + additionsTotal);
+  const royalConstructionFee = roundCurrency(
+    costBeforeFee * settings.royalConstructionFeePct,
   );
-  const contingency = roundCurrency(directTotal * settings.contingencyPct);
-  const costBase = roundCurrency(
-    directTotal +
-      hbcfInsurance +
-      adminCost +
-      projectManagementCost +
-      contingency,
+  const totalIncludingConstruction = roundCurrency(
+    costBeforeFee + royalConstructionFee,
   );
-  const builderMargin = roundCurrency(costBase * settings.targetMarkupPct);
-  const subtotalExGst = roundCurrency(costBase + builderMargin);
-  const gstAmount = roundCurrency(subtotalExGst * settings.gstRate);
-  const contractValueIncGst = roundCurrency(subtotalExGst + gstAmount);
+  const gstAmount = roundCurrency(totalIncludingConstruction * settings.gstRate);
+  const contractValueIncGst = roundCurrency(
+    totalIncludingConstruction + gstAmount,
+  );
   const perSqm =
     totalAreaSqm > 0 ? roundCurrency(contractValueIncGst / totalAreaSqm) : null;
 
   return {
     directTotal: roundCurrency(directTotal),
-    hbcfInsurance,
-    adminCost,
-    projectManagementCost,
-    contingency,
-    costBase,
-    builderMargin,
-    subtotalExGst,
+    additionsTotal,
+    costBeforeFee,
+    royalConstructionFee,
+    totalIncludingConstruction,
     gstAmount,
     contractValueIncGst,
     perSqm,
@@ -224,72 +214,27 @@ export function calculateOfferWorkspacePricing({
 // With no override the selling price is the computed contract value, so this
 // reduces back to the target markup (badge stays green) — as expected.
 export function calculateEffectiveMargin({
-  costBase,
+  costBeforeFee,
   sellingContractValueIncGst,
   gstRate,
-  targetMarkupPct,
-  minimumMarkupPct,
+  targetFeePct,
 }: {
-  readonly costBase: number;
+  readonly costBeforeFee: number;
   readonly sellingContractValueIncGst: number;
   readonly gstRate: number;
-  readonly targetMarkupPct: number;
-  readonly minimumMarkupPct: number;
+  readonly targetFeePct: number;
 }): EffectiveMargin {
   const sellingExGst = roundCurrency(sellingContractValueIncGst / (1 + gstRate));
   const effectiveMarkupPct =
-    costBase > 0 ? roundRate((sellingExGst - costBase) / costBase) : 0;
+    costBeforeFee > 0
+      ? roundRate((sellingExGst - costBeforeFee) / costBeforeFee)
+      : 0;
 
+  // Green at/above the target fee, amber while still profitable below it, red
+  // once the selling price is at or below cost (floor 0 = a loss).
   return {
     effectiveMarkupPct,
-    marginStatus: getMarginStatus(
-      effectiveMarkupPct,
-      targetMarkupPct,
-      minimumMarkupPct,
-    ),
-  };
-}
-
-export function calculateLegacyWorkbookPricing({
-  directTotal,
-  settings,
-  totalAreaSqm,
-}: {
-  readonly directTotal: number;
-  readonly settings: LegacyWorkbookPricingSettings;
-  readonly totalAreaSqm: number;
-}): LegacyWorkbookPricing {
-  const overhead = roundCurrency(directTotal * settings.overheadPct);
-  const royalConstructionFee = roundCurrency(
-    directTotal * settings.royalConstructionFeePct,
-  );
-  const hbcfInsurance = roundCurrency(settings.hbcfInsuranceFixed);
-  const adminCost = roundCurrency(settings.adminCostFixed);
-  const labourCost = roundCurrency(settings.labourCostFixed);
-  const otherAdjustment = roundCurrency(settings.otherAdjustmentFixed);
-  const totalIncludingConstructionCost = roundCurrency(
-    directTotal +
-      overhead +
-      royalConstructionFee +
-      hbcfInsurance +
-      adminCost +
-      labourCost +
-      otherAdjustment,
-  );
-
-  return {
-    directTotal: roundCurrency(directTotal),
-    overhead,
-    royalConstructionFee,
-    hbcfInsurance,
-    adminCost,
-    labourCost,
-    otherAdjustment,
-    totalIncludingConstructionCost,
-    perSqm:
-      totalAreaSqm > 0
-        ? roundCurrency(totalIncludingConstructionCost / totalAreaSqm)
-        : null,
+    marginStatus: getMarginStatus(effectiveMarkupPct, targetFeePct, 0),
   };
 }
 

@@ -7,7 +7,6 @@ import {
   type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
 import {
-  DEFAULT_LEGACY_PRICING_SETTINGS,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
@@ -49,7 +48,6 @@ const snapshot: OfferWorkspaceSnapshot = {
   draft: INITIAL_OFFER_DRAFT,
   areaCalculator: INITIAL_AREA_CALCULATOR,
   workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
-  legacyPricingSettings: DEFAULT_LEGACY_PRICING_SETTINGS,
   paymentSchedule: INITIAL_PAYMENT_SCHEDULE,
   rateCardProduct: "SINGLE_STOREY",
   rateCardTier: "STANDARD",

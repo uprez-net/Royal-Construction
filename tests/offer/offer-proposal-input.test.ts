@@ -13,7 +13,6 @@ import {
   resolveOptionalPriceInput,
 } from "../../lib/offer/workspace-pricing";
 import {
-  DEFAULT_LEGACY_PRICING_SETTINGS,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
@@ -56,7 +55,6 @@ function makeSnapshot(
     draft: INITIAL_OFFER_DRAFT,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
-    legacyPricingSettings: DEFAULT_LEGACY_PRICING_SETTINGS,
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,
     rateCardProduct: "DOUBLE_STOREY",
     rateCardTier: "MID",
@@ -77,7 +75,8 @@ function roundTrip(snapshot: OfferWorkspaceSnapshot): OfferWorkspaceSnapshot {
 }
 
 // Sanity: the computed baseline is a real, positive number, not $0.
-assert.equal(COMPUTED_CONTRACT_INC_GST, 567864);
+// (direct 400,000 + additions 15,000) × 1.2 fee × 1.1 GST = 547,800.
+assert.equal(COMPUTED_CONTRACT_INC_GST, 547800);
 
 test("blank selected price → proposal shows the computed contract price, not $0", () => {
   const input = buildProposalInput(makeSnapshot({ selectedPriceInput: "" }));

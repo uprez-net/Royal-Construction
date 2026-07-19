@@ -2,65 +2,57 @@
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { LegacyWorkbookPricingSettings } from "@/lib/offer/workspace-pricing";
-import {
-  calculateLegacyWorkbookPricing,
-  parseNonNegativeNumberInput,
+import type {
+  OfferWorkspacePricing,
+  OfferWorkspacePricingSettings,
 } from "@/lib/offer/workspace-pricing";
+import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Calculator } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 
-type LegacyPricingPanelProps = {
+type PriceBuildupPanelProps = {
   readonly directTotal: number;
-  readonly settings: LegacyWorkbookPricingSettings;
+  readonly settings: OfferWorkspacePricingSettings;
+  readonly pricing: OfferWorkspacePricing;
   readonly totalAreaSqm: number;
   readonly onSettingsChange: (
-    patch: Partial<LegacyWorkbookPricingSettings>,
+    patch: Partial<OfferWorkspacePricingSettings>,
   ) => void;
 };
 
-export function LegacyPricingPanel({
-  directTotal,
+// The Royal quote build-up — the single source of the customer price. The Royal
+// Construction Fee % is the margin lever; the fixed additions are the standing
+// cost lines the workbooks carry on top of the trades.
+export function PriceBuildupPanel({
   settings,
-  totalAreaSqm,
+  pricing,
   onSettingsChange,
-}: LegacyPricingPanelProps) {
-  const pricing = calculateLegacyWorkbookPricing({
-    directTotal,
-    settings,
-    totalAreaSqm,
-  });
-
+}: PriceBuildupPanelProps) {
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
-          description="Mirror the familiar workbook build-up so imported quotes can be checked before the customer price is selected."
+          description="The Royal quote build-up: direct cost plus fixed additions, marked up by the Royal Construction Fee, then GST. This is the price shown to the client."
           icon={<Calculator className="size-4" aria-hidden="true" />}
           singleLineDescription
-          title="Pricing Fixes"
+          title="Price build-up"
         />
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <PercentField
-            label="Overhead"
-            value={settings.overheadPct}
-            onChange={(overheadPct) => onSettingsChange({ overheadPct })}
-          />
-          <PercentField
-            label="RC fee"
+            label="Royal Construction Fee"
             value={settings.royalConstructionFeePct}
             onChange={(royalConstructionFeePct) =>
               onSettingsChange({ royalConstructionFeePct })
             }
           />
           <MoneyField
-            label="HBCF/home warranty"
-            value={settings.hbcfInsuranceFixed}
-            onChange={(hbcfInsuranceFixed) =>
-              onSettingsChange({ hbcfInsuranceFixed })
+            label="Home warranty / HBCF"
+            value={settings.homeWarrantyHbcfFixed}
+            onChange={(homeWarrantyHbcfFixed) =>
+              onSettingsChange({ homeWarrantyHbcfFixed })
             }
           />
           <MoneyField
@@ -74,11 +66,26 @@ export function LegacyPricingPanel({
             onChange={(labourCostFixed) => onSettingsChange({ labourCostFixed })}
           />
           <MoneyField
-            label="Other adjustment"
-            value={settings.otherAdjustmentFixed}
-            onChange={(otherAdjustmentFixed) =>
-              onSettingsChange({ otherAdjustmentFixed })
+            label="Engineering"
+            value={settings.engineeringFixed}
+            onChange={(engineeringFixed) =>
+              onSettingsChange({ engineeringFixed })
             }
+          />
+          <MoneyField
+            label="Legal"
+            value={settings.legalFixed}
+            onChange={(legalFixed) => onSettingsChange({ legalFixed })}
+          />
+          <MoneyField
+            label="Impact fee"
+            value={settings.impactFeeFixed}
+            onChange={(impactFeeFixed) => onSettingsChange({ impactFeeFixed })}
+          />
+          <MoneyField
+            label="Master Builders licence"
+            value={settings.licenceFixed}
+            onChange={(licenceFixed) => onSettingsChange({ licenceFixed })}
           />
         </div>
         <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
@@ -88,28 +95,35 @@ export function LegacyPricingPanel({
               value={formatCurrency(pricing.directTotal)}
             />
             <SummaryRow
-              label="Overhead"
-              value={formatCurrency(pricing.overhead)}
+              label="Fixed additions"
+              value={formatCurrency(pricing.additionsTotal)}
             />
             <SummaryRow
-              label="Royal Construction fee"
+              label="Cost before fee"
+              value={formatCurrency(pricing.costBeforeFee)}
+            />
+            <SummaryRow
+              label={`Royal Construction Fee (${Math.round(
+                settings.royalConstructionFeePct * 100,
+              )}%)`}
               value={formatCurrency(pricing.royalConstructionFee)}
             />
             <SummaryRow
-              label="Fixed additions"
-              value={formatCurrency(
-                pricing.hbcfInsurance +
-                  pricing.adminCost +
-                  pricing.labourCost +
-                  pricing.otherAdjustment,
-              )}
-            />
-            <SummaryRow
               label="Total including construction cost"
-              value={formatCurrency(pricing.totalIncludingConstructionCost)}
+              value={formatCurrency(pricing.totalIncludingConstruction)}
+            />
+            <SummaryRow label="GST" value={formatCurrency(pricing.gstAmount)} />
+            <SummaryRow
+              label="Contract value inc GST"
+              value={formatCurrency(pricing.contractValueIncGst)}
               strong
             />
-            <SummaryRow label="Legacy per sqm" value={formatCurrency(pricing.perSqm)} />
+            <SummaryRow
+              label="Per sqm"
+              value={formatCurrency(pricing.perSqm, {
+                maximumFractionDigits: 2,
+              })}
+            />
           </div>
         </div>
       </CardContent>
@@ -129,12 +143,12 @@ function PercentField({
   return (
     <label>
       <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
+        {label} %
       </span>
       <Input
         min="0"
         placeholder="0"
-        step="0.1"
+        step="0.5"
         type="number"
         value={numberInputValue(Math.round(value * 1000) / 10)}
         onChange={(event) => {

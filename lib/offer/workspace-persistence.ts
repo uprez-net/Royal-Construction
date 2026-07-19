@@ -1,13 +1,13 @@
 import { z } from "zod";
-import type {
-  OfferWorkspaceCostLine,
-  OfferWorkspaceJob,
-  OfferWorkspaceScopeItem,
-  OfferDocumentDraft,
+import {
+  DEFAULT_WORKSPACE_PRICING_SETTINGS,
+  type OfferWorkspaceCostLine,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceScopeItem,
+  type OfferDocumentDraft,
 } from "./workspace-model";
 import type { OfferAreaCalculator } from "./workspace-area";
 import type {
-  LegacyWorkbookPricingSettings,
   OfferWorkspacePricingSettings,
   RateCardProduct,
   RateCardTier,
@@ -29,7 +29,6 @@ export type OfferWorkspaceSnapshot = {
   readonly draft: OfferDocumentDraft;
   readonly areaCalculator: OfferAreaCalculator;
   readonly workspacePricingSettings: OfferWorkspacePricingSettings;
-  readonly legacyPricingSettings: LegacyWorkbookPricingSettings;
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly rateCardProduct: RateCardProduct;
   readonly rateCardTier: RateCardTier;
@@ -56,6 +55,45 @@ export const centsToDollars = (cents: number): number => cents / 100;
 // hydrated state identical to the saved snapshot, so no phantom autosave fires.
 function optionalPriceInput(cents: number): string {
   return cents === 0 ? "" : String(centsToDollars(cents));
+}
+
+// Rebuild the pricing settings from a persisted number-map, tolerant of both the
+// current shape and the pre-rework shape. New-shape offers already carry the
+// right keys; older offers kept the fee and additions on the retired
+// legacyPricingSettings, so we migrate those forward. Unknown/stale keys are
+// ignored and any missing key falls back to the default.
+function hydratePricingSettings(
+  pricing: Record<string, number>,
+  legacy: Record<string, number> | undefined,
+): OfferWorkspacePricingSettings {
+  const num = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  const pick = (...vals: (number | undefined)[]) =>
+    vals.find((v) => v !== undefined);
+  const l = legacy ?? {};
+  const d = DEFAULT_WORKSPACE_PRICING_SETTINGS;
+
+  return {
+    royalConstructionFeePct:
+      pick(num(pricing.royalConstructionFeePct), num(l.royalConstructionFeePct)) ??
+      d.royalConstructionFeePct,
+    gstRate: pick(num(pricing.gstRate)) ?? d.gstRate,
+    homeWarrantyHbcfFixed:
+      pick(num(pricing.homeWarrantyHbcfFixed), num(l.hbcfInsuranceFixed)) ??
+      d.homeWarrantyHbcfFixed,
+    adminCostFixed:
+      pick(num(pricing.adminCostFixed), num(l.adminCostFixed)) ??
+      d.adminCostFixed,
+    engineeringFixed:
+      pick(num(pricing.engineeringFixed), num(l.otherAdjustmentFixed)) ??
+      d.engineeringFixed,
+    legalFixed: pick(num(pricing.legalFixed)) ?? d.legalFixed,
+    impactFeeFixed: pick(num(pricing.impactFeeFixed)) ?? d.impactFeeFixed,
+    labourCostFixed:
+      pick(num(pricing.labourCostFixed), num(l.labourCostFixed)) ??
+      d.labourCostFixed,
+    licenceFixed: pick(num(pricing.licenceFixed)) ?? d.licenceFixed,
+  };
 }
 const parseDollarInput = (input: string): number => {
   const parsed = Number(input.replace(/[^0-9.-]/g, ""));
@@ -163,7 +201,8 @@ const workspaceStateV1Schema = z.object({
   draft: draftSchema,
   areaCalculator: numberRecord,
   pricingSettings: numberRecord,
-  legacyPricingSettings: numberRecord,
+  // Retired but kept optional so older offers (which stored it) still parse.
+  legacyPricingSettings: numberRecord.optional().default({}),
   paymentSchedule: z.array(paymentRowSchema),
   rateCardProduct: rateCardProductSchema,
   rateCardTier: rateCardTierSchema,
@@ -253,7 +292,7 @@ export function serializeWorkspace(
     },
     areaCalculator: { ...snapshot.areaCalculator },
     pricingSettings: { ...snapshot.workspacePricingSettings },
-    legacyPricingSettings: { ...snapshot.legacyPricingSettings },
+    legacyPricingSettings: {},
     paymentSchedule: snapshot.paymentSchedule.map((row) => ({
       id: row.id,
       stageName: row.stageName,
@@ -310,10 +349,10 @@ export function deserializeWorkspace(
     exclusions: persisted.exclusions.map(deserializeScopeItem),
     draft: persisted.draft,
     areaCalculator: persisted.areaCalculator as unknown as OfferAreaCalculator,
-    workspacePricingSettings:
-      persisted.pricingSettings as unknown as OfferWorkspacePricingSettings,
-    legacyPricingSettings:
-      persisted.legacyPricingSettings as unknown as LegacyWorkbookPricingSettings,
+    workspacePricingSettings: hydratePricingSettings(
+      persisted.pricingSettings,
+      persisted.legacyPricingSettings,
+    ),
     paymentSchedule: persisted.paymentSchedule.map((row) => ({
       id: row.id,
       stageName: row.stageName,

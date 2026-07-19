@@ -4,53 +4,81 @@ import {
   calculateDirectTotal,
   calculateEffectiveMargin,
   calculateStageSubtotals,
-  calculateLegacyWorkbookPricing,
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
   getMarginStatus,
   parseNonNegativeNumberInput,
+  type OfferWorkspacePricingSettings,
 } from "../../lib/offer/workspace-pricing";
+
+// The Royal quote build-up: (direct + fixed additions) × (1 + fee) × (1 + GST).
+const SETTINGS: OfferWorkspacePricingSettings = {
+  royalConstructionFeePct: 0.2,
+  gstRate: 0.1,
+  homeWarrantyHbcfFixed: 0,
+  adminCostFixed: 5000,
+  engineeringFixed: 0,
+  legalFixed: 0,
+  impactFeeFixed: 0,
+  labourCostFixed: 10000,
+  licenceFixed: 0,
+};
 
 const pricing = calculateOfferWorkspacePricing({
   totalAreaSqm: 200,
   directTotal: 500000,
-  settings: {
-    targetMarkupPct: 0.2,
-    minimumMarkupPct: 0.15,
-    gstRate: 0.1,
-    hbcfRate: 0.013,
-    adminCostFixed: 5000,
-    projectManagementCostFixed: 10000,
-    contingencyPct: 0.025,
-  },
+  settings: SETTINGS,
 });
 
 assert.deepEqual(pricing, {
   directTotal: 500000,
-  hbcfInsurance: 6500,
-  adminCost: 5000,
-  projectManagementCost: 10000,
-  contingency: 12500,
-  costBase: 534000,
-  builderMargin: 106800,
-  subtotalExGst: 640800,
-  gstAmount: 64080,
-  contractValueIncGst: 704880,
-  perSqm: 3524.4,
+  additionsTotal: 15000, // admin 5000 + labour 10000
+  costBeforeFee: 515000,
+  royalConstructionFee: 103000, // 515000 × 20%
+  totalIncludingConstruction: 618000,
+  gstAmount: 61800,
+  contractValueIncGst: 679800,
+  perSqm: 3399,
 });
+
+// Verified against real Royal workbooks (the fee % is the margin lever, applied
+// to the whole cost). 17 Ewing Loop: direct 948,981 @ 20% → fee 189,796.20,
+// total inc construction 1,138,777.20 — matches the workbook's own totals.
+const ewing = calculateOfferWorkspacePricing({
+  totalAreaSqm: 0,
+  directTotal: 948981,
+  settings: { ...SETTINGS, adminCostFixed: 0, labourCostFixed: 0 },
+});
+assert.equal(ewing.royalConstructionFee, 189796.2);
+assert.equal(ewing.totalIncludingConstruction, 1138777.2);
+
+// 78 Cuttriss: direct 168.46sqm build-up cost 33,692 (slab) is a package, but
+// the fee chain holds for any direct — e.g. 557,950 @ 12% (13 Ferruccio).
+const ferruccio = calculateOfferWorkspacePricing({
+  totalAreaSqm: 0,
+  directTotal: 557950,
+  settings: {
+    ...SETTINGS,
+    royalConstructionFeePct: 0.12,
+    adminCostFixed: 0,
+    labourCostFixed: 0,
+  },
+});
+assert.equal(ferruccio.royalConstructionFee, 66954);
+assert.equal(ferruccio.totalIncludingConstruction, 624904);
 
 assert.equal(getMarginStatus(0.21, 0.2, 0.15), "at_target");
 assert.equal(getMarginStatus(0.151, 0.2, 0.15), "acceptable_below_target");
 assert.equal(getMarginStatus(0.12, 0.2, 0.15), "below_minimum");
 
-// Effective margin reflects the ACTUAL selling price (incl. manual overrides).
+// Effective margin reflects the ACTUAL selling price (incl. manual overrides),
+// measured against the cost before fee. Floor is 0 (a loss reads red).
 const marginSettings = {
-  costBase: 118800,
+  costBeforeFee: 118800,
   gstRate: 0.1,
-  targetMarkupPct: 0.2,
-  minimumMarkupPct: 0.15,
+  targetFeePct: 0.2,
 };
-// No override: selling = computed contract value (costBase*1.2*1.1) → back to target.
+// No override: selling = computed contract value (cost × 1.2 × 1.1) → at target.
 assert.deepEqual(
   calculateEffectiveMargin({
     ...marginSettings,
@@ -58,7 +86,7 @@ assert.deepEqual(
   }),
   { effectiveMarkupPct: 0.2, marginStatus: "at_target" },
 );
-// Override BELOW cost → below_minimum (this is the case the old badge missed).
+// Override BELOW cost → below_minimum (a loss; the case a flat badge misses).
 assert.deepEqual(
   calculateEffectiveMargin({
     ...marginSettings,
@@ -66,8 +94,8 @@ assert.deepEqual(
   }),
   { effectiveMarkupPct: -0.0817, marginStatus: "below_minimum" },
 );
-// Override between the minimum and target markup → acceptable_below_target.
-// selling = costBase*1.17*1.1 = 118800*1.17*1.1 = 152895.6 → markup 0.17.
+// Override between cost and the target fee → acceptable_below_target.
+// selling = cost × 1.17 × 1.1 = 118800 × 1.17 × 1.1 = 152895.6 → markup 0.17.
 assert.deepEqual(
   calculateEffectiveMargin({
     ...marginSettings,
@@ -114,13 +142,9 @@ assert.equal(
     totalAreaSqm: 0,
     directTotal: 100000,
     settings: {
-      targetMarkupPct: 0.1,
-      minimumMarkupPct: 0.15,
-      gstRate: 0.1,
-      hbcfRate: 0,
+      ...SETTINGS,
       adminCostFixed: 0,
-      projectManagementCostFixed: 0,
-      contingencyPct: 0,
+      labourCostFixed: 0,
     },
   }).perSqm,
   null,
@@ -133,31 +157,27 @@ assert.equal(parseNonNegativeNumberInput("-1"), null);
 assert.equal(parseNonNegativeNumberInput("not a number"), null);
 assert.equal(parseNonNegativeNumberInput("1e309"), null);
 
-assert.deepEqual(
-  calculateLegacyWorkbookPricing({
-    directTotal: 405560,
-    settings: {
-      overheadPct: 0,
-      royalConstructionFeePct: 0.16,
-      hbcfInsuranceFixed: 8500,
-      adminCostFixed: 5000,
-      labourCostFixed: 8000,
-      otherAdjustmentFixed: 40000,
-    },
-    totalAreaSqm: 232,
-  }),
-  {
-    directTotal: 405560,
-    overhead: 0,
-    royalConstructionFee: 64889.6,
-    hbcfInsurance: 8500,
-    adminCost: 5000,
-    labourCost: 8000,
-    otherAdjustment: 40000,
-    totalIncludingConstructionCost: 531949.6,
-    perSqm: 2292.89,
+// Fixed additions sit inside the cost base before the fee: e.g. direct 405,560
+// + additions (hbcf 8500 + admin 5000 + labour 8000 + engineering 40000 =
+// 61,500) = 467,060 cost before fee, × 16% fee = 74,729.60.
+const withAdditions = calculateOfferWorkspacePricing({
+  totalAreaSqm: 232,
+  directTotal: 405560,
+  settings: {
+    royalConstructionFeePct: 0.16,
+    gstRate: 0.1,
+    homeWarrantyHbcfFixed: 8500,
+    adminCostFixed: 5000,
+    engineeringFixed: 40000,
+    legalFixed: 0,
+    impactFeeFixed: 0,
+    labourCostFixed: 8000,
+    licenceFixed: 0,
   },
-);
+});
+assert.equal(withAdditions.additionsTotal, 61500);
+assert.equal(withAdditions.costBeforeFee, 467060);
+assert.equal(withAdditions.royalConstructionFee, 74729.6);
 
 assert.deepEqual(
   calculateOfferCustomerPrice({

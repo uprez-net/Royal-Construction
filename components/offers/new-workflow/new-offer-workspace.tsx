@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  DEFAULT_LEGACY_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
@@ -30,10 +29,8 @@ import {
 } from "@/lib/offer/workspace-area";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import {
-  type LegacyWorkbookPricingSettings,
   calculateDirectTotal,
   calculateEffectiveMargin,
-  calculateRateCardComparison,
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
   resolveOptionalPriceInput,
@@ -95,8 +92,6 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     useState<OfferAreaCalculator>(INITIAL_AREA_CALCULATOR);
   const [workspacePricingSettings, setWorkspacePricingSettings] =
     useState<OfferWorkspacePricingSettings>(DEFAULT_WORKSPACE_PRICING_SETTINGS);
-  const [legacyPricingSettings, setLegacyPricingSettings] =
-    useState<LegacyWorkbookPricingSettings>(DEFAULT_LEGACY_PRICING_SETTINGS);
   const [importResult, setImportResult] =
     useState<OfferWorkbookImportResult | null>(null);
   const [rateCardProduct, setRateCardProduct] =
@@ -169,25 +164,13 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
   const effectiveMargin = useMemo(
     () =>
       calculateEffectiveMargin({
-        costBase: pricing.costBase,
+        costBeforeFee: pricing.costBeforeFee,
         sellingContractValueIncGst:
           customerPrice.selectedContractValueIncGst,
         gstRate: workspacePricingSettings.gstRate,
-        targetMarkupPct: workspacePricingSettings.targetMarkupPct,
-        minimumMarkupPct: workspacePricingSettings.minimumMarkupPct,
+        targetFeePct: workspacePricingSettings.royalConstructionFeePct,
       }),
-    [customerPrice, pricing.costBase, workspacePricingSettings],
-  );
-  const rateCardComparison = useMemo(
-    () =>
-      calculateRateCardComparison({
-        product: rateCardProduct,
-        tier: rateCardTier,
-        totalAreaSqm,
-        selectedContractValueIncGst:
-          customerPrice.selectedContractValueIncGst,
-      }),
-    [customerPrice, rateCardProduct, rateCardTier, totalAreaSqm],
+    [customerPrice, pricing.costBeforeFee, workspacePricingSettings],
   );
 
   // Offer validity vs. today, and the enumerated blockers standing between this
@@ -282,10 +265,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     setAreaCalculator((current) => ({ ...current, ...patch }));
   }
 
-  function updateLegacyPricingSettings(
-    patch: Partial<LegacyWorkbookPricingSettings>,
+  function updateWorkspacePricingSettings(
+    patch: Partial<OfferWorkspacePricingSettings>,
   ) {
-    setLegacyPricingSettings((current) => ({ ...current, ...patch }));
+    setWorkspacePricingSettings((current) => ({ ...current, ...patch }));
   }
 
   function importWorkbook(result: OfferWorkbookImportResult) {
@@ -293,7 +276,6 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     setLines(result.costLines);
     setAreaCalculator(result.areaCalculator);
     setWorkspacePricingSettings(result.workspacePricingSettings);
-    setLegacyPricingSettings(result.legacyPricingSettings);
     // Imported floor areas land on the job — the single source of truth.
     setJob((current) => ({
       ...current,
@@ -339,7 +321,6 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
       draft,
       areaCalculator,
       workspacePricingSettings,
-      legacyPricingSettings,
       paymentSchedule,
       rateCardProduct,
       rateCardTier,
@@ -357,7 +338,6 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
       draft,
       areaCalculator,
       workspacePricingSettings,
-      legacyPricingSettings,
       paymentSchedule,
       rateCardProduct,
       rateCardTier,
@@ -387,7 +367,6 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
     setDraft(s.draft);
     setAreaCalculator(s.areaCalculator);
     setWorkspacePricingSettings(s.workspacePricingSettings);
-    setLegacyPricingSettings(s.legacyPricingSettings);
     setPaymentSchedule(s.paymentSchedule);
     setRateCardProduct(s.rateCardProduct);
     setRateCardTier(s.rateCardTier);
@@ -794,15 +773,12 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         effectiveMargin={effectiveMargin}
         job={job}
         leadId={leadId}
-        legacyPricingSettings={legacyPricingSettings}
+        workspacePricingSettings={workspacePricingSettings}
         lines={lines}
         overrideReason={overrideReason}
         paymentSchedule={paymentSchedule}
         priceAdjustmentLabel={priceAdjustmentLabel}
         pricing={pricing}
-        rateCardComparison={rateCardComparison}
-        rateCardProduct={rateCardProduct}
-        rateCardTier={rateCardTier}
         selectedPriceInput={selectedPriceInput}
         standardPrice={standardPrice}
         standardPriceInput={standardPriceInput}
@@ -827,7 +803,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         canPrefill={leadId !== undefined}
         prefilling={prefilling}
         prefillResult={prefillResult}
-        onLegacyPricingSettingsChange={updateLegacyPricingSettings}
+        onWorkspacePricingSettingsChange={updateWorkspacePricingSettings}
         onLineChange={updateLine}
         onMarkSent={() => transition("sent")}
         canMarkSent={!customerPrice.needsOverrideReason}
@@ -865,8 +841,6 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
         onOverrideReasonChange={setOverrideReason}
         onPaymentScheduleChange={setPaymentSchedule}
         onPriceAdjustmentLabelChange={setPriceAdjustmentLabel}
-        onRateCardProductChange={setRateCardProduct}
-        onRateCardTierChange={setRateCardTier}
         onSelectedPriceInputChange={setSelectedPriceInput}
         onStandardPriceInputChange={setStandardPriceInput}
         onRemoveLine={removeLine}
