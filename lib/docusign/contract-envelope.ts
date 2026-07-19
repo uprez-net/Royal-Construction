@@ -119,11 +119,14 @@ export async function createContractEnvelope(
   } catch {
     // Non-fatal: the webhook still matches recipients by email.
   }
-  if (recipients.length === 0) {
-    recipients.push(
-      { role: "BUILDER", name: args.builder.name, email: args.builder.email, routingOrder: 1, recipientId: "1" },
-      { role: "CUSTOMER", name: args.owner.name, email: args.owner.email, routingOrder: 2, recipientId: "2" },
-    );
+  // A partial listRecipients result (e.g. only one signer resolved, or the
+  // builder email didn't match) must still yield both roles, or the webhook has
+  // no record to match one party against. Restore each missing role's default.
+  if (!recipients.some((recipient) => recipient.role === "BUILDER")) {
+    recipients.push({ role: "BUILDER", name: args.builder.name, email: args.builder.email, routingOrder: 1, recipientId: "1" });
+  }
+  if (!recipients.some((recipient) => recipient.role === "CUSTOMER")) {
+    recipients.push({ role: "CUSTOMER", name: args.owner.name, email: args.owner.email, routingOrder: 2, recipientId: "2" });
   }
 
   return { envelopeId: result.envelopeId, recipients };

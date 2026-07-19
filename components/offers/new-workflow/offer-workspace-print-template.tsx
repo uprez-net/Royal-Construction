@@ -279,6 +279,11 @@ function PrintSnapshotPage({
     { label: "First Floor", value: formatArea(job.firstFloorSqm) },
     { label: "Alfresco + Balcony", value: formatArea(alfrescoBalcony) },
     { label: "Porch", value: formatArea(job.porchSqm) },
+    // Granny flat is part of Total Area; show it as its own cell when present so
+    // the breakdown reconciles with the emphasized total.
+    ...(job.grannyFlatSqm > 0
+      ? [{ label: "Granny Flat", value: formatArea(job.grannyFlatSqm) }]
+      : []),
     { label: "Total Area", value: formatArea(totalArea), emphasis: true },
   ];
   return (

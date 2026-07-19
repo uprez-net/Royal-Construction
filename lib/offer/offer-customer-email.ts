@@ -18,11 +18,11 @@ function isSendable(email: string | null | undefined): email is string {
   );
 }
 
-// Resolve the customer email for a tender/contract send. Prefers the workspace
-// job email (what the operator reviewed on screen), falls back to the lead
-// record, then any explicit override — and rejects blanks/placeholders so a
-// DocuSign envelope is never generated against an address that cannot receive
-// it. Returns null when no valid address is available.
+// Resolve the customer email for a tender/contract send. An explicit override
+// wins (a deliberate per-send choice), then the workspace job email (what the
+// operator reviewed on screen), then the lead record — and rejects
+// blanks/placeholders so a DocuSign envelope is never generated against an
+// address that cannot receive it. Returns null when no valid address exists.
 export function resolveOfferCustomerEmail(input: {
   jobEmail?: string | null;
   leadEmail?: string | null;

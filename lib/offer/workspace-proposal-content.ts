@@ -286,11 +286,14 @@ export function buildWelcomeParagraphs(
       job.porchSqm +
       job.grannyFlatSqm,
   );
+  // Only assert what we can derive from this job (client, site, area). Specific
+  // design features, "photos match your home", and finish guarantees were
+  // hard-coded and often wrong (e.g. "double storey" on a single-storey build),
+  // so they're omitted rather than promised.
   return [
     `Thank you for trusting Royal Constructions to build your forever home at ${shortLocation(job.siteAddress)}. We don't take that lightly.`,
-    `We have reviewed your plans carefully — all ${totalArea} square metres of them — and we're genuinely excited about what your home is going to look like. The double storey design, arched entry, butler's pantry, void and feature staircase — this is a proper custom build, and it deserves to be built properly.`,
-    "The photos in this proposal are from a recently completed home very similar in size, layout and finish level to yours. Same shaker door kitchen. Same stone benchtops. Same herringbone timber flooring. Same luxury bathrooms. That home is what your home will look like.",
-    "These finishes are not upgrades — they are your inclusions, locked into the fixed price below.",
+    `We have reviewed your plans carefully — all ${totalArea} square metres of them — and we're genuinely excited to build your home with the care a proper custom build deserves.`,
+    "Every finish described in this proposal is part of your inclusions, locked into the fixed price below.",
     "We are here every step of the way.",
   ];
 }
