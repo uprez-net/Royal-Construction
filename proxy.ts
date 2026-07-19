@@ -8,6 +8,8 @@ const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d
 const isPublicRoute = createRouteMatcher([
   "/api/webhook/clerk(.*)",
   "/api/graph(.*)",
+  // DocuSign Connect webhook — authenticated via HMAC signature, not Clerk.
+  "/api/docusign(.*)",
   '/.well-known(.*)',
   '/api/mcp(.*)',
   '/api/sse(.*)',
@@ -16,7 +18,6 @@ const isPublicRoute = createRouteMatcher([
   "/book-consultation",
   "/api/upload(.*)",
   "/api/resume-stream(.*)",
-  "/api/chat(.*)",
 ])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])

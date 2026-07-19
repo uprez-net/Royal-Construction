@@ -8,32 +8,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
-import { Loader2, Plus } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
-import { UploadDropzone } from "../common/upload-dropzone";
-import { QueuedUploadFile, useUploadQueue } from "@/hooks/use-upload-queue";
-import { Button } from "../ui/button";
+import { ArrowRight } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useAppDispatch } from "@/lib/store/hooks";
-import {
-  completeProjectUpload,
-  failProjectUpload,
-  registerProjectUpload,
-  updateProjectUploadProgress,
-} from "@/lib/store/slices/projectsSlice";
-import { upload } from "@vercel/blob/client";
-import { buildBlobPath } from "@/utils/formatters";
-import { ClientPayload } from "@/utils/validators/files";
 import { LeadCardList } from "./lead-card-list";
 import { useRouter } from "next/navigation";
-import { fetchJson } from "@/utils/fetch";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
 interface CreateOfferFileModalProps {
@@ -41,41 +21,18 @@ interface CreateOfferFileModalProps {
   onClose: () => void;
 }
 
-const maxFiles = 5;
-
+// Lead picker that opens the offer workspace for the chosen lead. The workspace
+// (ADR 0002) self-provisions its Offer row on load, so there is no separate
+// "create offer" step — selecting a lead and navigating is the whole flow.
+// Only leads without a project are shown (a lead with a project is done).
 export function CreateOfferFileModal({
   open,
   onClose,
 }: CreateOfferFileModalProps) {
-  const dispatch = useAppDispatch();
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const leadSearch = useLeadSearch("");
+  const leadSearch = useLeadSearch("", undefined, true);
   const [search, setSearch] = useState("");
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
-  const {
-    files: queuedFiles,
-    completedCount: completedUploadCount,
-    addFiles,
-    removeFile,
-    resetQueue,
-    markUploading,
-    updateProgress,
-    markUploaded,
-    markFailed,
-  } = useUploadQueue({ maxFiles });
-  const uploadControllersRef = useRef<Record<string, AbortController>>({});
-  const continuing: boolean = useMemo(() => {
-    const selectedLead = leadSearch.items.find(
-      (lead) => lead.id === selectedLeadId,
-    );
-    if (!selectedLead) return false;
-    return (
-      selectedLead.creatingOffer ||
-      selectedLead.runStatus === "RUNNING" ||
-      selectedLead.runStatus === "COMPLETED"
-    );
-  }, [leadSearch.items, selectedLeadId]);
 
   const resetSearch = useCallback(() => {
     setSearch("");
@@ -86,152 +43,17 @@ export function CreateOfferFileModal({
     if (!nextOpen) {
       setSelectedLeadId(null);
       resetSearch();
-      resetQueue();
       onClose();
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!selectedLeadId) {
-      toast.error("Please select a lead before creating an offer.");
+      toast.error("Please select a lead to open its offer workspace.");
       return;
     }
-    if (continuing) {
-      handleOpenChange(false);
-      toast.info("Redirecting to offer...", { duration: 2000 });
-      router.push(`/offers/${selectedLeadId}`);
-      return;
-    }
-    const loading = toast.loading("Creating offer...");
-    try {
-      if (queuedFiles.length !== 0) {
-        const uploads = await Promise.allSettled(
-          queuedFiles.map((queuedFile) => uploadQueuedFile(queuedFile)),
-        );
-        const files = uploads
-          .filter(
-            (
-              result,
-            ): result is PromiseFulfilledResult<{ url: string; id: string }> =>
-              result.status === "fulfilled",
-          )
-          .map((result) => result.value);
-
-        if (files.length === 0 && queuedFiles.length > 0) {
-          throw new Error("No files could be uploaded.");
-        }
-        toast.success(
-          `${files.length} of ${queuedFiles.length} files(s) uploaded successfully.`,
-        );
-      }
-
-      await fetchJson<{ runId: string; message: string }>(
-        `/api/offer-create`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ leadId: selectedLeadId }),
-        },
-        "Failed to trigger offer creation workflow",
-      );
-      handleOpenChange(false);
-      toast.success("Offer creation trigger started.", { id: loading });
-      toast.info("Redirecting to offer...");
-      router.push(`/offers/${selectedLeadId}`);
-    } catch (error) {
-      console.error("Error creating offer:", error);
-      toast.error("Failed to create offer. Please try again.", { id: loading });
-      return;
-    }
-  };
-
-  const uploadQueuedFile = async (queuedFile: QueuedUploadFile) => {
-    if (!selectedLeadId) {
-      throw new Error(
-        "No lead selected for offer. Please select a lead and try again.",
-      );
-    }
-    const controller = new AbortController();
-    uploadControllersRef.current[queuedFile.id] = controller;
-
-    dispatch(
-      registerProjectUpload({
-        projectId: `lead-${selectedLeadId}`,
-        fileId: queuedFile.id,
-        fileName: queuedFile.file.name,
-        fileSize: queuedFile.file.size,
-      }),
-    );
-
-    markUploading(queuedFile.id);
-
-    try {
-      const blob = await upload(
-        buildBlobPath({
-          fileId: queuedFile.id,
-          fileName: queuedFile.file.name,
-          projectId: `lead-${selectedLeadId}`,
-        }),
-        queuedFile.file,
-        {
-          access: "public",
-          handleUploadUrl: "/api/upload",
-          clientPayload: JSON.stringify({
-            leadId: selectedLeadId.toString(),
-            fileId: queuedFile.id,
-            fileName: queuedFile.file.name,
-            fileSize: queuedFile.file.size,
-            isOfferFile: false, // these are lead related files for offer creation
-          } satisfies ClientPayload),
-          abortSignal: controller.signal,
-          onUploadProgress: ({ percentage }) => {
-            dispatch(
-              updateProjectUploadProgress({
-                projectId: `lead-${selectedLeadId}`,
-                fileId: queuedFile.id,
-                progress: percentage,
-              }),
-            );
-
-            updateProgress(queuedFile.id, percentage);
-          },
-        },
-      );
-
-      dispatch(
-        completeProjectUpload({
-          projectId: `lead-${selectedLeadId}`,
-          fileId: queuedFile.id,
-          url: blob.url,
-        }),
-      );
-
-      markUploaded(queuedFile.id, blob.url);
-
-      return {
-        url: blob.url,
-        id: queuedFile.id,
-      };
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to upload photo.";
-
-      dispatch(
-        failProjectUpload({
-          projectId: `lead-${selectedLeadId}`,
-          fileId: queuedFile.id,
-          error: message,
-        }),
-      );
-
-      markFailed(queuedFile.id, message);
-
-      throw error instanceof Error ? error : new Error(message);
-    } finally {
-      delete uploadControllersRef.current[queuedFile.id];
-    }
+    handleOpenChange(false);
+    router.push(`/offers/${selectedLeadId}`);
   };
 
   useEffect(() => {
@@ -244,7 +66,7 @@ export function CreateOfferFileModal({
         <DialogHeader>
           <DialogTitle>Leads Directory</DialogTitle>
           <DialogDescription>
-            Read-only directory of all active leads in the database.
+            Select a lead to open its offer workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -261,8 +83,7 @@ export function CreateOfferFileModal({
               loading={leadSearch.loading}
               items={leadSearch.items}
               selectedLeadId={selectedLeadId}
-              setSelectedLeadId={(id, location) => {
-                console.log("Selected Lead ID:", id, "Location:", location);
+              setSelectedLeadId={(id) => {
                 setSelectedLeadId(id);
               }}
               setPage={leadSearch.setPage}
@@ -271,54 +92,23 @@ export function CreateOfferFileModal({
               loadingMore={leadSearch.loadingMore}
             />
           </div>
-
-          {!continuing && (
-            <div className="space-y-1.5">
-              <UploadDropzone
-                label="Attach Files"
-                summary={
-                  queuedFiles.length > 0
-                    ? `${queuedFiles.length} file${queuedFiles.length === 1 ? "" : "s"} selected · ${completedUploadCount} uploaded`
-                    : "Click to upload files (max 5)"
-                }
-                helperText="Choose additional files to help understand user requirements."
-                files={queuedFiles}
-                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
-                maxFiles={maxFiles}
-                disabled={isPending}
-                isLoading={isPending}
-                onFilesSelected={addFiles}
-                removeFile={removeFile}
-              />
-            </div>
-          )}
         </div>
         <DialogFooter className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
           <Button
             type="button"
             variant="outline"
-            onClick={() => {
-              handleOpenChange(false);
-            }}
-            className="h-10 rounded-[10px] px-4 text-[12.5px] font-medium transition-all hover:border-teal-600 hover:bg-slate-50 hover:text-teal-600"
+            onClick={() => handleOpenChange(false)}
+            className="h-10 rounded-[10px] px-4 text-[12.5px] font-medium"
           >
             Cancel
           </Button>
           <Button
-            onClick={() => {
-              startTransition(() => {
-                handleSubmit();
-              });
-            }}
-            disabled={isPending}
-            className="h-10 rounded-[10px] bg-[#0D9488] px-4 text-[12.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#0F766E] hover:shadow-[0_6px_14px_rgba(13,148,136,0.26)]"
+            onClick={handleSubmit}
+            disabled={!selectedLeadId}
+            className="h-10 rounded-[10px] bg-royal-gold px-4 text-[12.5px] font-semibold text-primary-foreground hover:bg-royal-gold-dark"
           >
-            {isPending ? (
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-            ) : (
-              <Plus className="mr-1.5 size-4" />
-            )}
-            {continuing ? "Continue Offer" : "Create Offer"}
+            Open Offer Workspace
+            <ArrowRight className="ml-1.5 size-4" />
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,13 +4,11 @@ import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
-import { OfferKPIs, OfferWithItemsAndFiles, PaginatedOfferResult, SafeOfferDBFile, SafeOfferItem } from "@/types/offer";
-import type { OfferFile } from "@/context/ChatContext";
+import { OfferKPIs, PaginatedOfferResult } from "@/types/offer";
 import { calculateTrend } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { assertCanAccessLead } from "@/lib/offer/access";
-import { createOrUpdateOfferInternal, type CreateOfferInput } from "@/lib/data/offers-internal";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -78,60 +76,6 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
         };
     }
 }
-
-export async function getOfferByLeadId(id: number): Promise<OfferWithItemsAndFiles | null> {
-    try {
-        const offerData = await prisma.offer.findUnique({
-            where: { leadId: id },
-            include: {
-                lead: true,
-                offerItems: true,
-                offerFiles: true,
-            },
-        });
-
-
-        if (!offerData) {
-            console.warn(`No offer found for lead ID: ${id}`);
-            return null;
-        }
-
-        const { offerItems, offerFiles, ...offer } = offerData;
-        const currentVersion = offerFiles.reduce((max, file) => Math.max(max, file.version), 0);
-        const offerItemsRecord: Record<number, SafeOfferItem[]> = {};
-        const filesRecord: Record<number, SafeOfferDBFile> = {};
-        offerItems.forEach(item => {
-            if (!offerItemsRecord[item.version]) {
-                offerItemsRecord[item.version] = [];
-            }
-            offerItemsRecord[item.version].push({
-                ...item,
-                unitPrice: item.unitPrice.toString(),
-                totalPrice: item.totalPrice.toString(),
-            });
-        });
-        offerFiles.forEach(file => {
-            filesRecord[file.version] = {
-                ...file,
-                offerContent: file.offerContent as OfferFile,
-            };
-        });
-
-        return {
-            ...offer,
-            amount: offer.amount.toString(),
-            gstAmount: offer.gstAmount.toString(),
-            totalAmount: offer.totalAmount.toString(),
-            version: currentVersion,
-            items: offerItemsRecord,
-            files: filesRecord,
-        };
-    } catch (error) {
-        console.error("Error fetching offer by ID:", error);
-        throw error;
-    }
-}
-
 
 type OfferKPIQueryResult = {
     all_offers: bigint;
@@ -287,14 +231,6 @@ export const getOffersCached = async (page?: number, limit?: number, q?: string)
     return getOffers(page, limit, q);
 }
 
-export const getOfferByLeadIdCached = async (id: number) => {
-    "use cache";
-    cacheTag(`offer-lead-${id}`);
-    cacheLife(CACHE_PROFILES.MEDIUM);
-
-    return getOfferByLeadId(id);
-}
-
 export const getOfferKPIsCached = async () => {
     "use cache";
     cacheTag("offers");
@@ -303,54 +239,40 @@ export const getOfferKPIsCached = async () => {
     return getOfferKPIs();
 }
 
-export const createOrUpdateOffer = async ({
-    leadId,
-    offerFileInput,
-    amount,
-    gstAmount,
-    totalAmount,
-    offerItems,
-}: CreateOfferInput) => {
-    try {
-        const { userId } = await auth();
-        if (!userId) {
-            throw new Error("Unauthorized");
-        }
-
-        const user = await getUserByClerkIdCached(userId);
-        if (!user) {
-            throw new Error("Unauthorized");
-        }
-
-        await assertCanAccessLead(user, leadId);
-
-        return createOrUpdateOfferInternal({
-            leadId,
-            offerFileInput,
-            amount,
-            gstAmount,
-            totalAmount,
-            offerItems,
-        });
-    } catch (error) {
-        console.error("Error creating offer:", error);
-        throw new Error("Failed to create offer");
-    }
-}
-
 // Map to determine how lead stage should be updated based on offer status changes
 const OFFER_TO_LEAD_STATUS_UPDATE_MAP: Record<OfferStatus, LeadStage> = {
     PENDING: "NEGOTIATING",
     SENT: "NEGOTIATING",
     ACCEPTED: "WON",
     REJECTED: "LOST",
+    // Once scope + price are agreed the deal is effectively won.
+    AGREED: "WON",
+    TENDER_DRAFT: "WON",
+    TENDER_SENT: "WON",
+    TENDER_SIGNED: "WON",
+    CONTRACT_DRAFT: "WON",
+    CONTRACT_SENT: "WON",
+    CONTRACT_SIGNED: "WON",
+    PROJECT: "WON",
+    SUPERSEDED: "NEGOTIATING",
 }
 
+// Legacy server-side transitions; the new lifecycle states progress via the
+// offer workspace's own actions, so they are terminal here.
 const OFFER_STATE_MACHINE: Record<OfferStatus, OfferStatus[]> = {
   PENDING: ["SENT"],
   SENT: ["ACCEPTED", "REJECTED"],
   ACCEPTED: [],
   REJECTED: ["PENDING"],
+  AGREED: [],
+  TENDER_DRAFT: [],
+  TENDER_SENT: [],
+  TENDER_SIGNED: [],
+  CONTRACT_DRAFT: [],
+  CONTRACT_SENT: [],
+  CONTRACT_SIGNED: [],
+  PROJECT: [],
+  SUPERSEDED: [],
 };
 /**
  * Updates the status of an offer and transitions the associated lead stage accordingly

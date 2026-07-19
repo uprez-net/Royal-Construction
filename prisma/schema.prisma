@@ -82,10 +82,50 @@ enum AnnotationStatus {
 }
 
 enum OfferStatus {
+  // Original values kept in place so the migration only ADDs new members.
+  // ACCEPTED is legacy — existing rows are migrated to AGREED; the value is
+  // retained to avoid an enum-value drop, remove it in a later migration.
   SENT
   PENDING
   ACCEPTED
   REJECTED
+  // New lifecycle members (ADR 0002)
+  AGREED
+  TENDER_DRAFT
+  TENDER_SENT
+  TENDER_SIGNED
+  CONTRACT_DRAFT
+  CONTRACT_SENT
+  CONTRACT_SIGNED
+  PROJECT
+  SUPERSEDED
+}
+
+enum EnvelopeDocType {
+  TENDER
+  CONTRACT
+}
+
+enum EnvelopeStatus {
+  CREATED
+  SENT
+  DELIVERED
+  COMPLETED
+  VOIDED
+  DECLINED
+}
+
+enum SignerRole {
+  BUILDER
+  CUSTOMER
+}
+
+enum SignerStatus {
+  CREATED
+  SENT
+  DELIVERED
+  SIGNED
+  DECLINED
 }
 
 enum RunStatus {
@@ -446,6 +486,7 @@ model User {
   assignedLeads       Lead[]           @relation("LeadAssignee")
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
+  createdOffers       Offer[]          @relation("OfferCreatedBy")
 
   @@index([email])
   @@index([phone])
@@ -548,9 +589,26 @@ model Offer {
   leadId      Int
   offerStatus OfferStatus @default(PENDING)
 
-  amount      Decimal @db.Decimal(12, 2)
-  gstAmount   Decimal @db.Decimal(12, 2)
-  totalAmount Decimal @db.Decimal(12, 2)
+  // Revision family — many offers per lead, one active. See ADR 0002.
+  baseReference  String  @default("")
+  revisionNumber Int     @default(1)
+  isActive       Boolean @default(true)
+  supersededById String?
+  supersededBy   Offer?  @relation("OfferRevisions", fields: [supersededById], references: [id], onDelete: SetNull)
+  revisions      Offer[] @relation("OfferRevisions")
+
+  createdById String?
+  createdBy   User?   @relation("OfferCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  amount              Decimal  @db.Decimal(12, 2)
+  gstAmount           Decimal  @db.Decimal(12, 2)
+  totalAmount         Decimal  @db.Decimal(12, 2)
+  contractValueIncGst Decimal? @db.Decimal(12, 2)
+
+  // Hybrid working-state: integer cents + schemaVersion; frozen at agreed.
+  stateVersion   Int   @default(0) // optimistic concurrency
+  workspaceState Json?
+  agreedSnapshot Json?
 
   sentAt     DateTime?
   acceptedAt DateTime?
@@ -558,12 +616,20 @@ model Offer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offerItems OfferItem[]
-  offerFiles OfferFile[]
-  lead       Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offerItems    OfferItem[]
+  offerFiles    OfferFile[]
+  tender        Tender?
+  contract      Contract?
+  documentSends OfferDocumentSend[]
+  statusEvents  OfferStatusEvent[]
+  lead          Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  @@unique([leadId])
+  // NOTE: one-active-per-lead is enforced via a partial unique index
+  // (CREATE UNIQUE INDEX ... WHERE "isActive") added in the migration, since
+  // Prisma cannot express a filtered unique in the schema.
   @@index([leadId])
+  @@index([isActive])
+  @@index([baseReference])
 }
 
 model OfferItem {
@@ -601,6 +667,115 @@ model OfferFile {
 
   @@unique([offerId, version])
   @@index([offerId])
+}
+
+// ─── Offer workflow: Tender / Contract / DocuSign envelopes (ADR 0002) ───
+
+model Tender {
+  id             String     @id @default(uuid())
+  offerId        String     @unique
+  offer          Offer      @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  version        Int        @default(1)
+  documentData   Json
+  executedPdfUrl String?
+  envelopes      Envelope[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([offerId])
+}
+
+model Contract {
+  id             String     @id @default(uuid())
+  offerId        String     @unique
+  offer          Offer      @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  version        Int        @default(1)
+  documentData   Json
+  executedPdfUrl String?
+  envelopes      Envelope[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([offerId])
+}
+
+// One row per DocuSign send; re-sends are retained for legal audit.
+model Envelope {
+  id              String              @id @default(uuid())
+  docType         EnvelopeDocType
+  tenderId        String?
+  tender          Tender?             @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  contractId      String?
+  contract        Contract?           @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  docusignId      String?             @unique
+  status          EnvelopeStatus      @default(CREATED)
+  documentVersion Int
+  sentAt          DateTime?
+  completedAt     DateTime?
+  voidedAt        DateTime?
+  signatures      EnvelopeSignature[]
+  createdAt       DateTime            @default(now())
+
+  @@index([tenderId])
+  @@index([contractId])
+  @@index([status])
+}
+
+model EnvelopeSignature {
+  id                  String       @id @default(uuid())
+  envelopeId          String
+  envelope            Envelope     @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  recipientRole       SignerRole
+  name                String
+  email               String
+  routingOrder        Int
+  status              SignerStatus @default(CREATED)
+  signedAt            DateTime?
+  lastReminderAt      DateTime?
+  reminderCount       Int          @default(0)
+  docusignRecipientId String?
+
+  @@index([envelopeId])
+  @@index([status])
+}
+
+// Each send of the negotiation Offer document, with tracked link + open telemetry.
+model OfferDocumentSend {
+  id               String    @id @default(uuid())
+  offerId          String
+  offer            Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offerFileVersion Int
+  recipientEmail   String
+  trackedLinkToken String    @unique
+  sentAt           DateTime  @default(now())
+  openedAt         DateTime?
+  // Reply tracking: the subject carries [RCOFR-…] so inbound replies correlate
+  // back to this send (see lib/graph/offer-reply-tracker).
+  repliedAt        DateTime?
+  lastReplyAt      DateTime?
+
+  @@index([offerId])
+}
+
+// One row per lifecycle transition, for accountability + legal trail.
+model OfferStatusEvent {
+  id         String       @id @default(uuid())
+  offerId    String
+  offer      Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  fromStatus OfferStatus?
+  toStatus   OfferStatus
+  actorId    String?
+  note       String?
+  at         DateTime     @default(now())
+
+  @@index([offerId])
+  @@index([at])
+}
+
+// Global per-year sequence for base offer references (RC-Q-YYYY-NNN).
+model OfferReferenceCounter {
+  year    Int @id
+  lastSeq Int @default(0)
 }
 
 model ChatSession {

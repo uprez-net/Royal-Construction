@@ -7,12 +7,19 @@ import {
 import { type GraphConfig } from './config';
 import { type EmailHeaders } from '@/utils/spam-detector';
 
+export interface EmailAttachment {
+  name: string;
+  contentType: string;
+  contentBytes: string; // base64
+}
+
 export interface EmailInput {
   to: string | string[];
   subject: string;
   body: string;
   cc?: string | string[];
   bcc?: string | string[];
+  attachments?: EmailAttachment[];
 }
 
 export interface GraphMessage {
@@ -314,7 +321,7 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       const message = await graphRequest<GraphApiMessage>('GET', url, token, undefined, headers);
       return mapMessage(message, includeBody);
     },
-    sendMail: async ({ to, subject, body, cc, bcc }) => {
+    sendMail: async ({ to, subject, body, cc, bcc, attachments }) => {
       const formatRecipients = (value?: string | string[]) =>
         value
           ? (Array.isArray(value) ? value : [value]).map(email => ({
@@ -343,6 +350,16 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
             toRecipients,
             ...(ccRecipients && { ccRecipients }),
             ...(bccRecipients && { bccRecipients }),
+            ...(attachments && attachments.length > 0
+              ? {
+                  attachments: attachments.map((attachment) => ({
+                    "@odata.type": "#microsoft.graph.fileAttachment",
+                    name: attachment.name,
+                    contentType: attachment.contentType,
+                    contentBytes: attachment.contentBytes,
+                  })),
+                }
+              : {}),
           },
           saveToSentItems: true,
         },

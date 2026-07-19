@@ -1,6 +1,6 @@
 "use client";
 
-import { OfferCreationStatus } from "@/lib/workflow/offer";
+import { OfferCreationStatus } from "@/types/offer";
 import { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
 import React, {
   createContext,

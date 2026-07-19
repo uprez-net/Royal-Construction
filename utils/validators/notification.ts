@@ -170,6 +170,13 @@ export const notificationSchemas = {
         trade: z.string(),
     }),
 
+    contractSigned: z.object({
+        leadId: z.string(),
+        offerReference: z.string(),
+        customerName: z.string(),
+        siteAddress: z.string(),
+    }),
+
     milestoneStatusChanged: z.object({
         projectId: z.string(),
         milestoneId: z.string(),
