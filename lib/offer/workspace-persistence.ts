@@ -73,10 +73,20 @@ function hydratePricingSettings(
   const l = legacy ?? {};
   const d = DEFAULT_WORKSPACE_PRICING_SETTINGS;
 
+  // Guard against a corrupt persisted fee (a legacy import once stored 2 = 200%,
+  // which would triple an un-overridden price). Anything outside 0–100% is
+  // clearly bad data — fall back to the default rather than propagate it.
+  const feeRaw = pick(
+    num(pricing.royalConstructionFeePct),
+    num(l.royalConstructionFeePct),
+  );
+  const royalConstructionFeePct =
+    feeRaw !== undefined && feeRaw >= 0 && feeRaw <= 1
+      ? feeRaw
+      : d.royalConstructionFeePct;
+
   return {
-    royalConstructionFeePct:
-      pick(num(pricing.royalConstructionFeePct), num(l.royalConstructionFeePct)) ??
-      d.royalConstructionFeePct,
+    royalConstructionFeePct,
     gstRate: pick(num(pricing.gstRate)) ?? d.gstRate,
     homeWarrantyHbcfFixed:
       pick(num(pricing.homeWarrantyHbcfFixed), num(l.hbcfInsuranceFixed)) ??

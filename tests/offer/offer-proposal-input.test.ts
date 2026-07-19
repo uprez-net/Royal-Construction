@@ -137,6 +137,23 @@ test("resolveOptionalPriceInput treats blank and $0 as 'no override'", () => {
   assert.equal(resolveOptionalPriceInput("19800"), 19800);
 });
 
+// A DB audit found an existing offer whose legacy fee persisted as 2 (200%),
+// which would triple an un-overridden price. Migration must clamp a corrupt
+// out-of-range fee to the default, but preserve a legitimate legacy fee.
+test("migration clamps a corrupt out-of-range persisted fee, keeps a valid one", () => {
+  const withLegacyFee = (fee: number) => {
+    const persisted = serializeWorkspace(makeSnapshot()) as Record<string, unknown>;
+    persisted.pricingSettings = { gstRate: 0.1 }; // old-shape: no new fee key
+    persisted.legacyPricingSettings = { royalConstructionFeePct: fee };
+    return deserializeWorkspace(
+      parseWorkspaceState(JSON.parse(JSON.stringify(persisted))),
+    ).workspacePricingSettings.royalConstructionFeePct;
+  };
+  assert.equal(withLegacyFee(2), 0.2); // 200% is corrupt → default 20%
+  assert.equal(withLegacyFee(-0.1), 0.2); // negative → default
+  assert.equal(withLegacyFee(0.16), 0.16); // legitimate legacy fee preserved
+});
+
 test("an unknown persisted rate-card product/tier coerces to the default entry", () => {
   const persisted = serializeWorkspace(makeSnapshot());
   const corrupted = JSON.parse(
