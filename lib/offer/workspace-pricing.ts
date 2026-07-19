@@ -231,10 +231,11 @@ export function calculateEffectiveMargin({
       : 0;
 
   // Green at/above the target fee, amber while still profitable below it, red
-  // once the selling price is at or below cost (floor 0 = a loss).
+  // once the selling price is at or below cost. The minimum is a strictly
+  // positive epsilon so a break-even (0%) markup is a loss (red), not amber.
   return {
     effectiveMarkupPct,
-    marginStatus: getMarginStatus(effectiveMarkupPct, targetFeePct, 0),
+    marginStatus: getMarginStatus(effectiveMarkupPct, targetFeePct, Number.EPSILON),
   };
 }
 

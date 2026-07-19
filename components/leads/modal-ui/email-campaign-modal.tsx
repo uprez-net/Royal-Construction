@@ -24,6 +24,7 @@ import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
 import { CustomTemplateCreation } from "./custom-template-creation";
 import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
 import { LeadEmailBadges } from "./lead-email-badges";
+import DOMPurify from "dompurify";
 
 interface EmailCampaignModalProps {
   leads: Lead[];
@@ -470,7 +471,12 @@ export function EmailCampaignModal({
               >
                 <iframe
                   ref={emailIframeRef}
-                  srcDoc={getEditablePreviewHtml(hook.generatedHtml)}
+                  // The editor reads this frame's contentDocument to extract the
+                  // edited HTML, so it must stay same-origin. Combined with
+                  // allow-scripts that would let AI-generated markup run script
+                  // in our origin — so sanitize the untrusted HTML first; the
+                  // only script left to run is our trusted preview toolbar.
+                  srcDoc={getEditablePreviewHtml(DOMPurify.sanitize(hook.generatedHtml))}
                   className="w-full h-full"
                   title="Email Preview"
                   sandbox="allow-same-origin allow-scripts"

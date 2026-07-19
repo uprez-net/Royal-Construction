@@ -13,6 +13,24 @@ export interface EmailAttachment {
   contentBytes: string; // base64
 }
 
+// Graph rejects a sendMail whose inline #fileAttachment payload exceeds ~3 MB;
+// anything larger must go through an upload session. We validate up-front so an
+// oversized attachment fails here rather than after the caller has already
+// marked the offer as SENT on a rejected request.
+const GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES = 3 * 1024 * 1024;
+
+function assertAttachmentsWithinInlineLimit(attachments: EmailAttachment[]): void {
+  for (const attachment of attachments) {
+    const byteLength = Buffer.from(attachment.contentBytes, "base64").byteLength;
+    if (byteLength > GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES) {
+      throw new Error(
+        `Attachment "${attachment.name}" is ${(byteLength / (1024 * 1024)).toFixed(1)} MB, ` +
+          `over the ${GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES / (1024 * 1024)} MB inline limit for a single Graph message.`,
+      );
+    }
+  }
+}
+
 export interface EmailInput {
   to: string | string[];
   subject: string;
@@ -334,6 +352,10 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       const toRecipients = formatRecipients(to);
       const ccRecipients = formatRecipients(cc);
       const bccRecipients = formatRecipients(bcc);
+
+      if (attachments && attachments.length > 0) {
+        assertAttachmentsWithinInlineLimit(attachments);
+      }
 
       const token = await getAccessToken();
       await graphRequest(

@@ -217,8 +217,13 @@ export async function transitionOfferStatus(input: {
       );
     }
 
+    // Freeze only on the first transition into AGREED. An AGREED → AGREED
+    // re-transition (permitted above) must not re-snapshot a since-mutated
+    // workspaceState over the frozen agreedSnapshot or reset acceptedAt.
     const freezeAgreed =
-      input.toStatus === OfferStatus.AGREED && offer.workspaceState !== null;
+      input.toStatus === OfferStatus.AGREED &&
+      offer.offerStatus !== OfferStatus.AGREED &&
+      offer.workspaceState !== null;
 
     await tx.offer.update({
       where: { id: input.offerId },
@@ -374,6 +379,15 @@ export async function createOfferRevision(input: {
             env.docusignId,
             "Superseded by a new revision of this offer.",
           );
+          // Voiding in DocuSign is irreversible, so commit the VOIDED status in
+          // its own write right away — if the revision transaction below rolls
+          // back, the DB must not keep this envelope SENT while it's dead in
+          // DocuSign. SENT-only guard avoids clobbering a webhook-set terminal
+          // state.
+          await prisma.envelope.updateMany({
+            where: { id: env.id, status: EnvelopeStatus.SENT },
+            data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
+          });
         } catch {
           voidWarnings.push(
             `DocuSign envelope ${env.docusignId} could not be voided automatically — void it manually in DocuSign.`,

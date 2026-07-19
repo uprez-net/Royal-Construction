@@ -7,6 +7,7 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
+  defaultOfferValidUntil,
   applyTaskMappingToCostLine,
   createOfferScopeItem,
   removeOfferScopeItem,
@@ -74,8 +75,13 @@ import { OfferWorkspaceScreen } from "./offer-workspace-screen";
 
 // Embed with a leadId to persist to the DB (ADR 0002). The standalone
 // /offers/new-workflow demo route passes none and stays in-memory.
-export function NewOfferWorkspace({ leadId }: { readonly leadId: number }) {
-  const [job, setJob] = useState<OfferWorkspaceJob>(INITIAL_OFFER_JOB);
+export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
+  // Lazy-seed validUntil to now + 30 days (same calendar day on the server pass
+  // and hydration, so it matches) so a brand-new offer is never born expired.
+  const [job, setJob] = useState<OfferWorkspaceJob>(() => ({
+    ...INITIAL_OFFER_JOB,
+    validUntil: defaultOfferValidUntil(),
+  }));
   const [lines, setLines] =
     useState<readonly OfferWorkspaceCostLine[]>(INITIAL_COST_LINES);
   const [allowances, setAllowances] =

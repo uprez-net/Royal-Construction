@@ -124,6 +124,15 @@ export async function sendContractForSignature(input: {
   const locked = (tabLabel: string, value: string): ContractTabValue => ({ tabLabel, value, locked: true });
 
   const priceLabel = moneyWithCents(contractValue);
+  // The BC4 template exposes exactly 7 payment-stage slots. Refuse rather than
+  // silently drop validated stages past the 7th, which would send a contract
+  // whose payment schedule doesn't sum to the contract value.
+  if (snapshot.paymentSchedule.length > 7) {
+    return {
+      ok: false,
+      error: `The contract template supports up to 7 payment stages, but this schedule has ${snapshot.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
+    };
+  }
   const stageRows = snapshot.paymentSchedule.slice(0, 7);
   const paymentScheduleLine = stageRows
     .map((row, index) => {

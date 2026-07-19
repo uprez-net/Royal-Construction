@@ -197,6 +197,17 @@ export function facadeImageHint(facade: string): string {
 // DB reference and pre-filled from the lead on load (see NewOfferWorkspace).
 // The floor-area / cost figures below remain a working seed the estimator
 // overwrites via the workbook import or manual entry.
+// A new offer is valid for 30 days from when it is opened. Derived at runtime
+// (not baked as a constant) so a freshly created offer is never already
+// expired. Returns a YYYY-MM-DD date-only string, matching validUntil's shape.
+export const OFFER_VALIDITY_DAYS = 30;
+
+export function defaultOfferValidUntil(from: Date = new Date()): string {
+  const until = new Date(from);
+  until.setDate(until.getDate() + OFFER_VALIDITY_DAYS);
+  return until.toISOString().slice(0, 10);
+}
+
 export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   reference: "",
   revision: "R1",
@@ -212,7 +223,9 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   alfrescoPorchSqm: 0,
   porchSqm: 0,
   grannyFlatSqm: 0,
-  validUntil: "2026-07-10",
+  // Seeded per-offer at runtime via defaultOfferValidUntil(); empty here so a
+  // stale constant can't ship an already-expired date.
+  validUntil: "",
   preparedBy: "Gurpinder Uppal - Director, Royal Constructions",
   lotAreaSqm: 0,
   dpNumber: "",
@@ -398,7 +411,7 @@ function inferOfferStageCode(taskName: string): OfferStageCode {
   const lowerName = taskName.toLowerCase();
 
   if (
-    /general|plan|basix|nathers|permit|survey|engineer|council|legal|service fee|water|warranty|licence|admin/.test(
+    /general|plan|basix|nathers|permit|survey|engineer|council|legal|service fee|sydney water|sewer|warranty|licence|admin/.test(
       lowerName,
     )
   ) {

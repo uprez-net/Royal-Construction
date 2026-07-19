@@ -12,6 +12,31 @@ const EXT_BY_CONTENT_TYPE: Record<string, string> = {
   "image/webp": "webp",
 };
 
+// The URL originates from a Dropbox picker, but it still reaches this server
+// action as arbitrary caller input. Restrict it to https Dropbox download hosts
+// so it can't be pointed at internal/metadata endpoints (SSRF) before we fetch.
+const ALLOWED_IMAGE_HOSTS = new Set([
+  "www.dropbox.com",
+  "dropbox.com",
+  "content.dropboxapi.com",
+]);
+
+function isAllowedImageUrl(rawUrl: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") {
+    return false;
+  }
+  const host = url.hostname.toLowerCase();
+  return (
+    ALLOWED_IMAGE_HOSTS.has(host) || host.endsWith(".dropboxusercontent.com")
+  );
+}
+
 type ImportResult =
   | { ok: true; url: string; deduped: boolean }
   | { ok: false; error: string };
@@ -26,6 +51,10 @@ export async function importDropboxImage(input: {
   const { isAuthenticated } = await auth();
   if (!isAuthenticated) {
     return { ok: false, error: "Unauthorized" };
+  }
+
+  if (!isAllowedImageUrl(input.url)) {
+    return { ok: false, error: "Image URL must be an https Dropbox link" };
   }
 
   try {

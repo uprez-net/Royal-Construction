@@ -91,6 +91,23 @@ export async function createProjectFromOffer(input: {
     return { ok: false, error: "No agreed offer snapshot found." };
   }
 
+  // Atomically claim the handoff: flip CONTRACT_SIGNED → PROJECT in one
+  // conditional write so two concurrent calls can't both pass the guards above
+  // and each create a project/files. Only the caller that wins the claim
+  // proceeds; any failure below rolls the status back so it can be retried.
+  const claim = await prisma.offer.updateMany({
+    where: { id: offer.id, offerStatus: OfferStatus.CONTRACT_SIGNED },
+    data: { offerStatus: OfferStatus.PROJECT },
+  });
+  if (claim.count !== 1) {
+    return { ok: false, error: "This offer is already being handed off to a project." };
+  }
+  const revertClaim = () =>
+    prisma.offer.updateMany({
+      where: { id: offer.id, offerStatus: OfferStatus.PROJECT },
+      data: { offerStatus: OfferStatus.CONTRACT_SIGNED },
+    });
+
   const warnings: string[] = [];
   const snapshot = deserializeWorkspace(parseWorkspaceState(state));
   const job = snapshot.job;
@@ -111,6 +128,7 @@ export async function createProjectFromOffer(input: {
       });
       warnings.push(`Lead email was blank — set to ${job.clientEmail} from the offer.`);
     } else {
+      await revertClaim();
       return {
         ok: false,
         error: "The lead has no valid email and the offer has no client email — set one before creating the project.",
@@ -169,6 +187,7 @@ export async function createProjectFromOffer(input: {
     });
     projectId = (project as { id: string }).id;
   } catch (error) {
+    await revertClaim();
     return {
       ok: false,
       error: `Project creation failed: ${(error as Error).message}`,
@@ -197,21 +216,17 @@ export async function createProjectFromOffer(input: {
     );
   }
 
-  await prisma.$transaction([
-    prisma.offer.update({
-      where: { id: offer.id },
-      data: { offerStatus: OfferStatus.PROJECT },
-    }),
-    prisma.offerStatusEvent.create({
-      data: {
-        offerId: offer.id,
-        fromStatus: offer.offerStatus,
-        toStatus: OfferStatus.PROJECT,
-        actorId: actor.id,
-        note: `Project ${projectId} created from executed contract`,
-      },
-    }),
-  ]);
+  // Status already flipped to PROJECT by the atomic claim above; just record
+  // the audit event now that the project exists.
+  await prisma.offerStatusEvent.create({
+    data: {
+      offerId: offer.id,
+      fromStatus: offer.offerStatus,
+      toStatus: OfferStatus.PROJECT,
+      actorId: actor.id,
+      note: `Project ${projectId} created from executed contract`,
+    },
+  });
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   revalidateTag("projects", CACHE_PROFILES.MEDIUM);
