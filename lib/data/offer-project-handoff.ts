@@ -2,7 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
-import { OfferStatus, ProjectStage } from "@prisma/client";
+import { OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { getUserByClerkId } from "@/lib/data/user";
@@ -15,7 +15,6 @@ import {
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
 import { splitOwners } from "@/lib/offer/offer-tender-html";
-import { getOfferSequenceMappingByTask } from "@/lib/offer/workspace-sequence-mapping";
 import type { ProjectRequirementsPayload, ProjectSourceDocumentReference } from "@/types/project-flow";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -172,6 +171,7 @@ export async function createProjectFromOffer(input: {
   end.setMonth(end.getMonth() + 9);
 
   let projectId: string;
+  let milestoneCount = 0;
   try {
     const project = await createProjectWithLead({
       projectName: extraction.projectName,
@@ -186,6 +186,7 @@ export async function createProjectFromOffer(input: {
       sourceDocuments,
     });
     projectId = (project as { id: string }).id;
+    milestoneCount = project.milestones.length
   } catch (error) {
     await revertClaim();
     return {
@@ -196,25 +197,6 @@ export async function createProjectFromOffer(input: {
   warnings.push(
     "Start date defaulted to +14 days (9-month duration) and you are the site manager — adjust in the project settings.",
   );
-
-  // Allocation runs AFTER the project exists; if it throws here it must not
-  // abort the handoff, or the offer stays CONTRACT_SIGNED with a project the
-  // lead-already-has-a-project guard then refuses to retry. Degrade to a
-  // warning and still advance the offer to PROJECT below.
-  let allocation: {
-    milestoneCount: number;
-    schedulesCreated: number;
-    warnings: string[];
-  };
-  try {
-    allocation = await allocateTradeSchedules(projectId, snapshot, start);
-    warnings.push(...allocation.warnings);
-  } catch (error) {
-    allocation = { milestoneCount: 0, schedulesCreated: 0, warnings: [] };
-    warnings.push(
-      `Trade schedules could not be allocated (${(error as Error).message}) — book them manually in the project.`,
-    );
-  }
 
   // Status already flipped to PROJECT by the atomic claim above; just record
   // the audit event now that the project exists.
@@ -236,8 +218,8 @@ export async function createProjectFromOffer(input: {
     ok: true,
     projectId,
     projectName: extraction.projectName,
-    milestoneCount: allocation.milestoneCount,
-    schedulesCreated: allocation.schedulesCreated,
+    milestoneCount: milestoneCount,
+    schedulesCreated: 0,
     warnings,
   };
 }
@@ -335,126 +317,4 @@ function buildExtractionPayload(
       noticeCountdowns: true,
     },
   };
-}
-
-// ─── Cost lines → TradieSchedule bookings ───
-
-// Mapping trade names don't always match Tradie.trade verbatim; normalise and
-// alias the known mismatches. Extend as the tradie book grows.
-const TRADE_ALIASES: Record<string, readonly string[]> = {
-  concretor: ["concreting", "concrete"],
-  frame: ["carpentry", "framing", "carpenter"],
-  "brick layer": ["bricklaying", "brickwork", "bricklayer"],
-  sparky: ["electrical", "electrician"],
-  electrician: ["electrical"],
-  plumber: ["plumbing"],
-  tiler: ["tiling"],
-  painter: ["painting"],
-  roofer: ["roofing"],
-  waterproofer: ["waterproofing"],
-};
-
-function normaliseTrade(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/\(.*?\)/g, "")
-    .replace(/booking \d+ of \d+/g, "")
-    .trim();
-}
-
-function stageForLabel(label: string): ProjectStage {
-  const l = label.toLowerCase();
-  if (l.includes("deposit")) return ProjectStage.Deposit;
-  if (l.includes("slab") || l.includes("base") || l.includes("foundation")) return ProjectStage.Slab;
-  if (l.includes("frame")) return ProjectStage.Frame;
-  if (l.includes("lock")) return ProjectStage.Lockup;
-  if (l.includes("fit") || l.includes("fix") || l.includes("interior")) return ProjectStage.Interior_Fit_Out;
-  return ProjectStage.Final;
-}
-
-async function allocateTradeSchedules(
-  projectId: string,
-  snapshot: OfferWorkspaceSnapshot,
-  scheduledDate: Date,
-): Promise<{ milestoneCount: number; schedulesCreated: number; warnings: string[] }> {
-  const warnings: string[] = [];
-  const milestones = await prisma.milestone.findMany({
-    where: { projectId },
-    orderBy: { order: "asc" },
-    select: { id: true, name: true, projectStage: true },
-  });
-  const milestoneByStage = new Map<ProjectStage, { id: string; name: string }>();
-  for (const milestone of milestones) {
-    if (!milestoneByStage.has(milestone.projectStage)) {
-      milestoneByStage.set(milestone.projectStage, milestone);
-    }
-  }
-
-  const tradies = await prisma.tradie.findMany({ select: { id: true, name: true, trade: true } });
-  const findTradie = (wanted: string) => {
-    const w = normaliseTrade(wanted);
-    const candidates = [w, ...(TRADE_ALIASES[w] ?? [])];
-    for (const candidate of candidates) {
-      const match = tradies.find((t) => {
-        const trade = t.trade.toLowerCase();
-        return trade === candidate || trade.includes(candidate) || candidate.includes(trade);
-      });
-      if (match) return match;
-    }
-    return null;
-  };
-
-  const planned = new Map<
-    string,
-    { tradieId: string; milestoneId: string | null }
-  >();
-  const unmatchedTrades = new Set<string>();
-  const unmappedLines: string[] = [];
-
-  for (const line of snapshot.lines) {
-    if (!line.includedInContract || !line.itemName) continue;
-    const mapping = getOfferSequenceMappingByTask(line.itemName);
-    if (!mapping) {
-      unmappedLines.push(line.itemName);
-      continue;
-    }
-    const stage = stageForLabel(mapping.milestoneStages[0] ?? "final");
-    const milestone = milestoneByStage.get(stage) ?? milestones[milestones.length - 1] ?? null;
-    for (const trade of mapping.tradesToBook) {
-      const tradie = findTradie(trade);
-      if (!tradie) {
-        unmatchedTrades.add(trade);
-        continue;
-      }
-      planned.set(`${tradie.id}:${milestone?.id ?? "none"}`, {
-        tradieId: tradie.id,
-        milestoneId: milestone?.id ?? null,
-      });
-    }
-  }
-
-  let created = 0;
-  for (const p of planned.values()) {
-    await prisma.tradieSchedule.create({
-      data: {
-        tradieId: p.tradieId,
-        projectId,
-        milestoneId: p.milestoneId,
-        scheduledDate,
-        durationDays: 5,
-        requiresQuote: true,
-        quotedPrice: null,
-      },
-    });
-    created += 1;
-  }
-
-  if (unmatchedTrades.size > 0) {
-    warnings.push(`No tradie found for: ${[...unmatchedTrades].join(", ")} — book these manually.`);
-  }
-  if (unmappedLines.length > 0) {
-    warnings.push(`Cost lines without a sequence mapping (no trades booked): ${unmappedLines.join(", ")}.`);
-  }
-
-  return { milestoneCount: milestones.length, schedulesCreated: created, warnings };
 }
