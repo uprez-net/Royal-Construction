@@ -28,8 +28,11 @@ namespace NodeJS {
         GRAPH_MODE: "delegated" | "app-only";
 
         BUSINESS_EMAIL: string;
+        // Server-only. There is deliberately no NEXT_PUBLIC_ counterpart:
+        // Next inlines NEXT_PUBLIC_* into the browser bundle wherever it is
+        // referenced, so declaring one here invites shipping this token to
+        // every visitor. The Graph admin routes are server-side only.
         GRAPH_ADMIN_TOKEN: string;
-        NEXT_PUBLIC_GRAPH_ADMIN_TOKEN: string;
         GRAPH_SENDER_UPN: string;
         MAIL_ID_CC: string;
 
