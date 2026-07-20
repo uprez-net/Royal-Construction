@@ -74,6 +74,7 @@ export async function createContractEnvelope(
       url: config.connectWebhookUrl,
       loggingEnabled: "true",
       requireAcknowledgment: "true",
+      includeHMAC: "true",
       deliveryMode: "SIM",
       events: [
         "envelope-sent",

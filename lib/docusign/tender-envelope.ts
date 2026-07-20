@@ -86,12 +86,15 @@ export async function createTenderEnvelope(args: {
   };
 
   // Envelope-level Connect: status events land on our webhook without any
-  // account-level Connect configuration.
+  // account-level Connect configuration. includeHMAC is what makes DocuSign
+  // send x-docusign-signature-1; without it the webhook route rejects every
+  // delivery as unsigned once DOCUSIGN_CONNECT_HMAC_KEY is set.
   if (config.connectWebhookUrl) {
     envelopeDefinition.eventNotification = {
       url: config.connectWebhookUrl,
       loggingEnabled: "true",
       requireAcknowledgment: "true",
+      includeHMAC: "true",
       deliveryMode: "SIM",
       events: [
         "envelope-sent",
