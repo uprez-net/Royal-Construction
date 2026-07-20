@@ -493,10 +493,15 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             stateVersionRef.current = result.stateVersion;
             lastSavedRef.current = currentJson;
             setSaveState("saved");
-          } else if (result.reason === "stale") {
+          } else if (
+            result.reason === "stale" ||
+            result.reason === "superseded"
+          ) {
             // Another writer moved on — reload the server copy. Report it as an
             // error state so the operator knows their unsaved edits were
             // reconciled to the newer version (rather than silently clobbered).
+            // "superseded" means this tab was editing a revision that another
+            // tab has since forked; the same reload lands us on the live one.
             const loaded = await loadActiveOfferWorkspace(leadId);
             offerIdRef.current = loaded.offerId;
             stateVersionRef.current = loaded.stateVersion;
@@ -539,9 +544,13 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             if (saved.ok) {
               stateVersionRef.current = saved.stateVersion;
               lastSavedRef.current = currentJson;
-            } else if (saved.reason === "stale") {
-              // A concurrent save moved on — reload and abort rather than
-              // freezing a stale snapshot at AGREED.
+            } else if (
+              saved.reason === "stale" ||
+              saved.reason === "superseded"
+            ) {
+              // A concurrent save moved on, or this revision was superseded by
+              // another tab — reload and abort rather than freezing a stale
+              // snapshot at AGREED or transitioning a revision that is history.
               const loaded = await loadActiveOfferWorkspace(leadId);
               offerIdRef.current = loaded.offerId;
               stateVersionRef.current = loaded.stateVersion;

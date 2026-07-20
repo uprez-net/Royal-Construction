@@ -18,6 +18,7 @@ import {
 } from "@/lib/offer/workspace-model";
 import { FileText, History, Loader2, ScrollText } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
+import { OfferRevisionViewerDialog } from "./offer-revision-viewer-dialog";
 
 // Revision timeline for the lead's offer family. Fetches on open (so it always
 // reflects a just-created revision) and lists each version's reference, status,
@@ -35,6 +36,10 @@ export function OfferVersionsMenu({
     readonly OfferRevisionSummary[] | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  // Held here rather than inside VersionRow so the dialog outlives the popover
+  // that launched it — the popover closes on select so the two don't fight over
+  // focus, which would unmount a dialog rendered inside its subtree.
+  const [viewingOfferId, setViewingOfferId] = useState<string | null>(null);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -54,7 +59,13 @@ export function OfferVersionsMenu({
     })();
   }
 
+  function handleSelect(offerId: string) {
+    setOpen(false);
+    setViewingOfferId(offerId);
+  }
+
   return (
+    <>
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button size="sm" type="button" variant="outline">
@@ -82,6 +93,7 @@ export function OfferVersionsMenu({
                 key={version.offerId}
                 version={version}
                 isActive={version.revisionNumber === activeRevisionNumber}
+                onSelect={() => handleSelect(version.offerId)}
               />
             ))}
           </ul>
@@ -92,15 +104,22 @@ export function OfferVersionsMenu({
         )}
       </PopoverContent>
     </Popover>
+    <OfferRevisionViewerDialog
+      offerId={viewingOfferId}
+      onClose={() => setViewingOfferId(null)}
+    />
+    </>
   );
 }
 
 function VersionRow({
   version,
   isActive,
+  onSelect,
 }: {
   readonly version: OfferRevisionSummary;
   readonly isActive: boolean;
+  readonly onSelect: () => void;
 }) {
   const statusLabel =
     OFFER_STATUS_LABEL[version.status.toLowerCase() as OfferWorkspaceStatus] ??
@@ -113,27 +132,38 @@ function VersionRow({
 
   return (
     <li className="grid gap-1 px-3 py-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-mono text-xs font-medium text-foreground">
-            {version.reference}
+      {/* Only the summary is the button. The PDF links stay outside it —
+          nesting an anchor inside a button is invalid and leaves the link
+          unreachable by keyboard. */}
+      <button
+        type="button"
+        className="grid w-full gap-1 rounded-sm text-left transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        onClick={onSelect}
+      >
+        <span className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-mono text-xs font-medium text-foreground">
+              {version.reference}
+            </span>
+            {isActive ? (
+              <Badge className="shrink-0 bg-royal-gold text-white">
+                Current
+              </Badge>
+            ) : null}
           </span>
-          {isActive ? (
-            <Badge className="shrink-0 bg-royal-gold text-white">Current</Badge>
-          ) : null}
+          <Badge className="shrink-0" variant="secondary">
+            {statusLabel}
+          </Badge>
         </span>
-        <Badge className="shrink-0" variant="secondary">
-          {statusLabel}
-        </Badge>
-      </div>
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{date}</span>
-        <span className="font-mono">
-          {version.contractValueIncGst !== null
-            ? formatCurrency(version.contractValueIncGst)
-            : "—"}
+        <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>{date}</span>
+          <span className="font-mono">
+            {version.contractValueIncGst !== null
+              ? formatCurrency(version.contractValueIncGst)
+              : "—"}
+          </span>
         </span>
-      </div>
+      </button>
       {version.tenderPdfUrl || version.contractPdfUrl ? (
         <div className="flex flex-wrap gap-2 pt-0.5">
           {version.tenderPdfUrl ? (

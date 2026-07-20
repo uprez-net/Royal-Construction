@@ -46,6 +46,13 @@ type OfferWorkspacePrintTemplateProps = {
   readonly priceAdjustmentLabel: string;
   readonly standardPriceIncGst: number | null;
   readonly images: OfferImageMap;
+  // See OfferPrintTemplateInput — the date the offer was drawn up.
+  readonly preparedDate?: Date;
+  // Render for the screen (inside the revision viewer) instead of for print.
+  // Both modes are mutually exclusive by design: globals.css unwraps and shows
+  // every [data-offer-print-template="true"] when printing, so a screen copy
+  // must NOT carry that attribute or it would print on top of the live offer.
+  readonly screen?: boolean;
 };
 
 const INCLUSIONS_ROWS_PER_PAGE = 12;
@@ -135,8 +142,12 @@ export function OfferWorkspacePrintTemplate(
 
   return (
     <div
-      className="hidden bg-white text-foreground print:block"
-      data-offer-print-template="true"
+      className={
+        props.screen
+          ? "bg-white text-foreground print:hidden"
+          : "hidden bg-white text-foreground print:block"
+      }
+      data-offer-print-template={props.screen ? "screen" : "true"}
     >
       {pages.map((render, index) => render(index + 1, total))}
     </div>
