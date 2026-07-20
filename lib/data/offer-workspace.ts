@@ -172,8 +172,16 @@ export async function saveOfferWorkspace(input: {
     100,
   );
 
+  // isActive is part of the predicate, not just the check above: forking a
+  // revision deactivates this row without touching its stateVersion, so a save
+  // that passed the check moments earlier would still satisfy an id+version
+  // predicate and land on the freshly archived revision.
   const result = await prisma.offer.updateMany({
-    where: { id: input.offerId, stateVersion: input.expectedStateVersion },
+    where: {
+      id: input.offerId,
+      isActive: true,
+      stateVersion: input.expectedStateVersion,
+    },
     data: {
       workspaceState: persisted as unknown as Prisma.InputJsonValue,
       contractValueIncGst: contractValue,
@@ -184,8 +192,14 @@ export async function saveOfferWorkspace(input: {
   if (result.count === 0) {
     const current = await prisma.offer.findUnique({
       where: { id: input.offerId },
-      select: { stateVersion: true },
+      select: { stateVersion: true, isActive: true },
     });
+    // Distinguish the two ways the predicate can miss — they need different
+    // recoveries: a stale version reconciles against the same revision, a
+    // superseded one has to move to whichever revision is now live.
+    if (current !== null && !current.isActive) {
+      return { ok: false, reason: "superseded" };
+    }
     return {
       ok: false,
       reason: "stale",

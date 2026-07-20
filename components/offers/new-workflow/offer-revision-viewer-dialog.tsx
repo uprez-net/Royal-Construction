@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -35,10 +35,15 @@ type ViewerState =
 export function OfferRevisionViewerDialog({
   offerId,
   onClose,
+  restoreFocusRef,
 }: {
   // Non-null means "open, showing this revision"; null means closed.
   readonly offerId: string | null;
   readonly onClose: () => void;
+  // Where to put focus on close. Radix restores to the dialog's trigger, but
+  // this dialog is opened from a row inside a popover that unmounts on select,
+  // so without this focus would land on <body>.
+  readonly restoreFocusRef?: RefObject<HTMLElement | null>;
 }) {
   return (
     <Dialog
@@ -53,7 +58,15 @@ export function OfferRevisionViewerDialog({
           area, and caps the height so a multi-page A4 document stays reachable
           (the base DialogContent sets no max-height). print:hidden keeps this
           copy out of the way if the user prints while it is open. */}
-      <DialogContent className="flex max-h-[90vh] w-full max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[860px] print:hidden">
+      <DialogContent
+        className="flex max-h-[90vh] w-full max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[860px] print:hidden"
+        onCloseAutoFocus={(event) => {
+          if (restoreFocusRef?.current) {
+            event.preventDefault();
+            restoreFocusRef.current.focus();
+          }
+        }}
+      >
         {/* Keyed on offerId so picking a different version remounts with a
             fresh loading state, rather than resetting state from inside an
             effect (which would cascade an extra render). */}

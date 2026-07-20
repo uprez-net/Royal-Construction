@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,11 @@ export function OfferVersionsMenu({
   // that launched it — the popover closes on select so the two don't fight over
   // focus, which would unmount a dialog rendered inside its subtree.
   const [viewingOfferId, setViewingOfferId] = useState<string | null>(null);
+  // The row that opened the dialog is inside the popover, which unmounts on
+  // select — so Radix has nothing to restore focus to on close. Hand it the
+  // Versions button instead, or focus falls to <body> and a keyboard user
+  // restarts from the top of the page.
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -68,7 +73,7 @@ export function OfferVersionsMenu({
     <>
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button size="sm" type="button" variant="outline">
+        <Button ref={triggerRef} size="sm" type="button" variant="outline">
           <History className="size-4" aria-hidden="true" />
           Versions
         </Button>
@@ -107,6 +112,7 @@ export function OfferVersionsMenu({
     <OfferRevisionViewerDialog
       offerId={viewingOfferId}
       onClose={() => setViewingOfferId(null)}
+      restoreFocusRef={triggerRef}
     />
     </>
   );
