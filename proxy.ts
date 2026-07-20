@@ -7,7 +7,16 @@ const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d
 
 const isPublicRoute = createRouteMatcher([
   "/api/webhook/clerk(.*)",
-  "/api/graph(.*)",
+  // Only the Graph routes that genuinely have no session are public. The
+  // blanket "/api/graph(.*)" that used to sit here also exposed the admin
+  // endpoints (subscribe, send, token, list), which are now behind Clerk as
+  // well as their admin-token guard.
+  //   notifications          — Microsoft Graph calls it; validates clientState.
+  //   book-consultant        — posted from the public /book-consultation page.
+  //   read-calender-dateTime — read by that same public page.
+  "/api/graph/notifications(.*)",
+  "/api/graph/book-consultant(.*)",
+  "/api/graph/read-calender-dateTime(.*)",
   // DocuSign Connect webhook — authenticated via HMAC signature, not Clerk.
   "/api/docusign(.*)",
   '/.well-known(.*)',

@@ -2,6 +2,7 @@
 
 import { revalidateTag } from "next/cache";
 import { randomBytes } from "node:crypto";
+import { resolveMx } from "node:dns/promises";
 import { OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -17,6 +18,60 @@ import { createGraphContext } from "@/lib/graph/client";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// A DNS answer that positively establishes the domain cannot receive mail, as
+// opposed to the resolver merely being unreachable.
+const UNDELIVERABLE_DNS_CODES = new Set(["ENOTFOUND", "NXDOMAIN", "ENODATA"]);
+
+// Bound the lookup: a stalled resolver must not hold up the send.
+const MX_LOOKUP_TIMEOUT_MS = 5_000;
+
+// Graph accepts any syntactically valid recipient and reports success without
+// checking that the domain exists — "gmail.coz" is queued exactly like
+// "gmail.com", and the failure only comes back minutes later as a bounce. By
+// then the offer is already committed as SENT and the Offer-build steps are
+// locked, so a typo'd domain both locks the offer and never reaches the client.
+// Confirm the domain can receive mail before we commit to sending.
+//
+// Fails OPEN on resolver trouble (timeout, SERVFAIL): blocking real sends
+// because our DNS blipped is worse than letting one bounce through. Only a
+// definitive "this domain does not accept mail" blocks the send.
+async function recipientDomainAcceptsMail(
+  email: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const domain = email.slice(email.lastIndexOf("@") + 1);
+  const undeliverable = {
+    ok: false as const,
+    error: `"${domain}" is not set up to receive email — check the address for a typo.`,
+  };
+
+  try {
+    const records = await Promise.race([
+      resolveMx(domain),
+      new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), MX_LOOKUP_TIMEOUT_MS),
+      ),
+    ]);
+    if (records === null) {
+      console.error(`[offer] MX lookup for "${domain}" timed out; allowing the send`);
+      return { ok: true };
+    }
+    // A domain with no usable MX host cannot take delivery.
+    return records.some((record) => record.exchange.trim().length > 0)
+      ? { ok: true }
+      : undeliverable;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code && UNDELIVERABLE_DNS_CODES.has(code)) {
+      return undeliverable;
+    }
+    console.error(
+      `[offer] MX lookup for "${domain}" failed (${code ?? "unknown"}); allowing the send`,
+      error,
+    );
+    return { ok: true };
+  }
+}
 
 type SendResult =
   | { ok: true; reference: string; token: string }
@@ -36,6 +91,12 @@ export async function sendOfferDocument(input: {
   const email = input.recipientEmail.trim();
   if (!EMAIL_RE.test(email)) {
     return { ok: false, error: "Enter a valid recipient email address." };
+  }
+
+  // Checked before the PDF is built so a typo costs a DNS lookup, not a render.
+  const deliverable = await recipientDomainAcceptsMail(email);
+  if (!deliverable.ok) {
+    return { ok: false, error: deliverable.error };
   }
 
   const offer = await prisma.offer.findUnique({
@@ -128,7 +189,15 @@ export async function sendOfferDocument(input: {
     }
   });
 
-  revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+  // The mail is away and the status is committed, so nothing past this point
+  // may reject: the caller would report the send as failed while the offer is
+  // durably SENT, and the workspace would keep an editable "pending" view until
+  // the next reload silently locked it. Cache invalidation is best-effort.
+  try {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+  } catch (error) {
+    console.error("[offer] revalidate after send failed:", error);
+  }
   return { ok: true, reference, token };
 }
 

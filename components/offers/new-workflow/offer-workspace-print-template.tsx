@@ -18,8 +18,9 @@ import {
 } from "@/lib/offer/workspace-proposal-content";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import {
-  OFFER_IMAGE_SLOTS,
+  getAttachedOfferImageSlots,
   offerImageCaption,
+  type AttachedOfferImageSlot,
   type OfferImageMap,
 } from "@/lib/offer/workspace-images";
 import type { ReactElement } from "react";
@@ -45,6 +46,13 @@ type OfferWorkspacePrintTemplateProps = {
   readonly priceAdjustmentLabel: string;
   readonly standardPriceIncGst: number | null;
   readonly images: OfferImageMap;
+  // See OfferPrintTemplateInput — the date the offer was drawn up.
+  readonly preparedDate?: Date;
+  // Render for the screen (inside the revision viewer) instead of for print.
+  // Both modes are mutually exclusive by design: globals.css unwraps and shows
+  // every [data-offer-print-template="true"] when printing, so a screen copy
+  // must NOT carry that attribute or it would print on top of the live offer.
+  readonly screen?: boolean;
 };
 
 const INCLUSIONS_ROWS_PER_PAGE = 12;
@@ -64,6 +72,9 @@ export function OfferWorkspacePrintTemplate(
   const inclusionPages = chunk(
     STANDARD_INCLUSIONS_SCHEDULE,
     INCLUSIONS_ROWS_PER_PAGE,
+  );
+  const galleryImages = getAttachedOfferImageSlots(props.images).filter(
+    (slot) => slot.key !== "hero",
   );
 
   // Assemble the ordered page renderers, then number them automatically so the
@@ -86,9 +97,17 @@ export function OfferWorkspacePrintTemplate(
     (n, total) => (
       <PrintWelcomePage key="welcome" job={props.job} footer={foot(data, n, total)} />
     ),
-    (n, total) => (
-      <PrintGalleryPage key="gallery" images={props.images} footer={foot(data, n, total)} />
-    ),
+    ...(galleryImages.length > 0
+      ? [
+          (n: number, total: number) => (
+            <PrintGalleryPage
+              key="gallery"
+              images={galleryImages}
+              footer={foot(data, n, total)}
+            />
+          ),
+        ]
+      : []),
     (n, total) => (
       <PrintSnapshotPage key="snapshot" data={data} job={props.job} footer={foot(data, n, total)} />
     ),
@@ -123,8 +142,12 @@ export function OfferWorkspacePrintTemplate(
 
   return (
     <div
-      className="hidden bg-white text-foreground print:block"
-      data-offer-print-template="true"
+      className={
+        props.screen
+          ? "bg-white text-foreground print:hidden"
+          : "hidden bg-white text-foreground print:block"
+      }
+      data-offer-print-template={props.screen ? "screen" : "true"}
     >
       {pages.map((render, index) => render(index + 1, total))}
     </div>
@@ -155,14 +178,16 @@ function PrintCoverPage({
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <div className="mt-6">
-        <ImageSlot
-          src={heroSrc}
-          caption={heroCaption}
-          label="Hero — completed home / render"
-          heightClass="h-[95mm]"
-        />
-      </div>
+      {heroSrc ? (
+        <div className="mt-6">
+          <ImageSlot
+            src={heroSrc}
+            caption={heroCaption}
+            label="Hero — completed home / render"
+            heightClass="h-[95mm]"
+          />
+        </div>
+      ) : null}
       <div className="mt-5 text-center">
         <h1 className="font-sans text-4xl font-bold uppercase tracking-wide text-sidebar">
           Building Proposal
@@ -228,10 +253,9 @@ function PrintGalleryPage({
   images,
   footer,
 }: {
-  readonly images: OfferImageMap;
+  readonly images: readonly AttachedOfferImageSlot[];
   readonly footer: string;
 }) {
-  const gallerySlots = OFFER_IMAGE_SLOTS.filter((slot) => slot.key !== "hero");
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
@@ -247,12 +271,12 @@ function PrintGalleryPage({
         </p>
       </PrintSection>
       <div className="mt-6 grid grid-cols-2 gap-4">
-        {gallerySlots.map((slot) => (
+        {images.map((slot) => (
           <ImageSlot
             key={slot.key}
-            src={images[slot.key]?.url}
+            src={slot.image.url}
             label={slot.label}
-            caption={offerImageCaption(slot.caption, images[slot.key]?.source)}
+            caption={offerImageCaption(slot.caption, slot.image.source)}
             heightClass="h-[46mm]"
           />
         ))}

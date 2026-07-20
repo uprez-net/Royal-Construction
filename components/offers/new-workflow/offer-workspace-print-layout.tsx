@@ -2,38 +2,32 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { COMPANY_LINE } from "@/lib/offer/workspace-print-template";
 
-// A proposal image. Renders the supplied image when present, otherwise a
-// labelled placeholder so the proposal is complete and on-layout before the
-// real photo/render is attached (upload / Dropbox is a later phase).
 export function ImageSlot({
   src,
   label,
   caption,
   heightClass = "h-[70mm]",
 }: {
-  readonly src?: string;
+  readonly src: string;
   readonly label: string;
   readonly caption?: string;
   readonly heightClass?: string;
 }) {
   return (
     <figure className="overflow-hidden">
-      {src ? (
-        <div className={`relative w-full ${heightClass} overflow-hidden border border-border`}>
-          <Image alt={caption ?? label} className="object-cover" fill src={src} />
-        </div>
-      ) : (
-        <div
-          className={`flex ${heightClass} w-full flex-col items-center justify-center gap-1 border border-dashed border-royal-gold/60 bg-royal-gold-light/30 text-center`}
-        >
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-wide text-royal-gold-dark">
-            {label}
-          </span>
-          <span className="text-[9px] text-muted-foreground">
-            Image to be attached
-          </span>
-        </div>
-      )}
+      <div className={`relative w-full ${heightClass} overflow-hidden border border-border`}>
+        {/* An A4 page is a fixed 210mm (~794px) wide, so the slot never scales
+            with the viewport. Without `sizes`, `fill` requests a 100vw asset
+            for every slot — wasteful now that the revision viewer renders
+            these on screen rather than only into a hidden print subtree. */}
+        <Image
+          alt={caption ?? label}
+          className="object-cover"
+          fill
+          sizes="794px"
+          src={src}
+        />
+      </div>
       {caption ? (
         <figcaption className="mt-1 text-center text-[10px] italic text-muted-foreground">
           {caption}

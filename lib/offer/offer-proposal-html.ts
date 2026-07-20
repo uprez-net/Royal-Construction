@@ -11,8 +11,9 @@ import {
   STANDARD_INCLUSIONS_SCHEDULE,
 } from "./workspace-proposal-content";
 import {
-  OFFER_IMAGE_SLOTS,
+  getAttachedOfferImageSlots,
   offerImageCaption,
+  type AttachedOfferImageSlot,
   type OfferImageMap,
 } from "./workspace-images";
 
@@ -53,6 +54,9 @@ export function buildProposalHtml(
 ): string {
   const data = buildOfferPrintTemplateData(input);
   const { job } = input;
+  const galleryImages = getAttachedOfferImageSlots(images).filter(
+    (slot) => slot.key !== "hero",
+  );
 
   const inclusionPages: (typeof STANDARD_INCLUSIONS_SCHEDULE)[number][][] = [];
   for (let i = 0; i < STANDARD_INCLUSIONS_SCHEDULE.length; i += INCLUSIONS_ROWS_PER_PAGE) {
@@ -61,7 +65,8 @@ export function buildProposalHtml(
     );
   }
 
-  const totalPages = 5 + inclusionPages.length + 1;
+  const totalPages =
+    5 + inclusionPages.length + (galleryImages.length > 0 ? 1 : 0);
   let pageNo = 0;
   const foot = () => {
     pageNo += 1;
@@ -71,7 +76,7 @@ export function buildProposalHtml(
   const pages: string[] = [
     coverPage(input, data, images, foot()),
     welcomePage(job, foot()),
-    galleryPage(images, foot()),
+    ...(galleryImages.length > 0 ? [galleryPage(galleryImages, foot())] : []),
     snapshotPage(input, data, foot()),
     investmentPage(input, data, foot()),
     ...inclusionPages.map((rows, index) => inclusionsPage(rows, index > 0, foot())),
@@ -93,7 +98,6 @@ export function buildProposalHtml(
   .hero, .slot { border: 1px dashed ${GOLD}; background: ${GOLD_LIGHT}; display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
   .hero img, .slot img { width: 100%; height: 100%; object-fit: cover; }
   .hero { height: 95mm; margin-top: 20px; }
-  .slotlabel { font-family: monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: ${GOLD_DARK}; }
   .caption { text-align: center; font-size: 10px; font-style: italic; color: ${MUTED}; margin-top: 4px; }
   .cover-title { text-align: center; margin-top: 18px; }
   .cover-title h1 { font-size: 34px; text-transform: uppercase; letter-spacing: 2px; color: ${NAVY}; }
@@ -148,12 +152,9 @@ function coverPage(
 ): string {
   const { job } = input;
   const hero = images.hero;
-  const heroInner = hero
-    ? `<img src="${esc(hero.url)}" alt="" />`
-    : `<span class="slotlabel">Hero — completed home / render</span>`;
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
-    <div class="hero">${heroInner}</div>
+    ${hero ? `<div class="hero"><img src="${esc(hero.url)}" alt="" /></div>` : ""}
     ${hero?.source === "ai" ? `<div class="caption">AI concept, indicative only</div>` : ""}
     <div class="cover-title"><h1>Building Proposal</h1><div class="sub">${esc(job.buildType)}</div></div>
     <table class="cover-table">
@@ -198,15 +199,14 @@ function welcomePage(
   </div>`;
 }
 
-function galleryPage(images: OfferImageMap, foot: string): string {
-  const slots = OFFER_IMAGE_SLOTS.filter((slot) => slot.key !== "hero")
+function galleryPage(
+  images: readonly AttachedOfferImageSlot[],
+  foot: string,
+): string {
+  const slots = images
     .map((slot) => {
-      const image = images[slot.key];
-      const inner = image
-        ? `<img src="${esc(image.url)}" alt="" />`
-        : `<span class="slotlabel">${esc(slot.label)}</span>`;
-      const caption = offerImageCaption(slot.caption, image?.source);
-      return `<div><div class="slot">${inner}</div><div class="caption">${esc(caption)}</div></div>`;
+      const caption = offerImageCaption(slot.caption, slot.image.source);
+      return `<div><div class="slot"><img src="${esc(slot.image.url)}" alt="" /></div><div class="caption">${esc(caption)}</div></div>`;
     })
     .join("");
   return `<div class="page">

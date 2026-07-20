@@ -390,7 +390,19 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     }
     let cancelled = false;
     void (async () => {
-      const loaded = await loadActiveOfferWorkspace(leadId);
+      let loaded: Awaited<ReturnType<typeof loadActiveOfferWorkspace>>;
+      try {
+        loaded = await loadActiveOfferWorkspace(leadId);
+      } catch (error) {
+        // Previously unguarded: a failed load left offerIdRef null, which
+        // silently disables autosave — the estimator keeps editing a workspace
+        // that can never persist, and only finds out when the tab is closed.
+        console.error("[offer] failed to load the workspace:", error);
+        if (!cancelled) {
+          setSaveState("error");
+        }
+        return;
+      }
       if (cancelled) {
         return;
       }
@@ -481,10 +493,15 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             stateVersionRef.current = result.stateVersion;
             lastSavedRef.current = currentJson;
             setSaveState("saved");
-          } else if (result.reason === "stale") {
+          } else if (
+            result.reason === "stale" ||
+            result.reason === "superseded"
+          ) {
             // Another writer moved on — reload the server copy. Report it as an
             // error state so the operator knows their unsaved edits were
             // reconciled to the newer version (rather than silently clobbered).
+            // "superseded" means this tab was editing a revision that another
+            // tab has since forked; the same reload lands us on the live one.
             const loaded = await loadActiveOfferWorkspace(leadId);
             offerIdRef.current = loaded.offerId;
             stateVersionRef.current = loaded.stateVersion;
@@ -527,9 +544,13 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             if (saved.ok) {
               stateVersionRef.current = saved.stateVersion;
               lastSavedRef.current = currentJson;
-            } else if (saved.reason === "stale") {
-              // A concurrent save moved on — reload and abort rather than
-              // freezing a stale snapshot at AGREED.
+            } else if (
+              saved.reason === "stale" ||
+              saved.reason === "superseded"
+            ) {
+              // A concurrent save moved on, or this revision was superseded by
+              // another tab — reload and abort rather than freezing a stale
+              // snapshot at AGREED or transitioning a revision that is history.
               const loaded = await loadActiveOfferWorkspace(leadId);
               offerIdRef.current = loaded.offerId;
               stateVersionRef.current = loaded.stateVersion;
@@ -605,6 +626,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             "New revision created — the previous document was recalled from signature.",
           );
         }
+      } catch (error) {
+        console.error("[offer] create revision failed:", error);
+        setRevisionNotice(
+          `Failed to create a new revision: ${(error as Error).message}`,
+        );
       } finally {
         setRevising(false);
       }
@@ -643,6 +669,24 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             setSentInfo(`Sent ${result.reference} to ${recipientEmail}.`);
           } else {
             setSendError(result.error);
+          }
+        } catch (error) {
+          // A throw (rather than a returned {ok:false}) used to surface nothing
+          // at all — no message, just an unhandled rejection — so report it.
+          // Then resync status from the server: the send can commit before it
+          // fails, and a stale "pending" would leave the Offer-build steps
+          // editable against an offer that is already SENT.
+          console.error("[offer] send failed:", error);
+          setSendError(
+            `Failed to send the offer: ${(error as Error).message}`,
+          );
+          try {
+            const loaded = await loadActiveOfferWorkspace(leadId);
+            offerIdRef.current = loaded.offerId;
+            stateVersionRef.current = loaded.stateVersion;
+            setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+          } catch {
+            // Reload failed too — leave the UI as-is.
           }
         } finally {
           setSending(false);
@@ -683,6 +727,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         } else {
           setTenderSendError(result.error);
         }
+      } catch (error) {
+        console.error("[offer] tender send failed:", error);
+        setTenderSendError(
+          `Failed to send the tender: ${(error as Error).message}`,
+        );
       } finally {
         setTenderSending(false);
       }
@@ -708,6 +757,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         } else {
           setContractSendError(result.error);
         }
+      } catch (error) {
+        console.error("[offer] contract send failed:", error);
+        setContractSendError(
+          `Failed to send the contract: ${(error as Error).message}`,
+        );
       } finally {
         setContractSending(false);
       }
@@ -732,6 +786,12 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         if (result.ok) {
           setStatus("project");
         }
+      } catch (error) {
+        console.error("[offer] project handoff failed:", error);
+        setProjectResult({
+          ok: false,
+          error: `Failed to create the project: ${(error as Error).message}`,
+        });
       } finally {
         setProjectCreating(false);
       }
@@ -759,6 +819,12 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             setDraft((current) => ({ ...current, ...result.draft }));
           }
         }
+      } catch (error) {
+        console.error("[offer] prefill from lead failed:", error);
+        setPrefillResult({
+          ok: false,
+          error: `Failed to pre-fill from the lead: ${(error as Error).message}`,
+        });
       } finally {
         setPrefilling(false);
       }

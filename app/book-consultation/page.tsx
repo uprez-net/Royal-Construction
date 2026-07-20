@@ -65,6 +65,9 @@ function BookingContent() {
   const [error, setError] = useState<string | null>(null);
   // const [joinLink, setJoinLink] = useState<string | null>(null);
   const [busySlotsMap, setBusySlotsMap] = useState<Record<string, string[]>>({});
+  // An unreadable calendar must block booking, not fall through to an empty
+  // busy map — that would render every slot, including taken ones, as free.
+  const [calendarError, setCalendarError] = useState<string | null>(null);
 
   const timeSlots = generateTimeSlots(selectedDate);
 
@@ -73,7 +76,7 @@ function BookingContent() {
       try {
         const res = await fetch('/api/graph/read-calender-dateTime?days=60');
         const data = await res.json();
-        if (data.success) {
+        if (res.ok && data.success) {
           const map: Record<string, string[]> = {};
           data.events.forEach((event: { start: unknown }) => {
             const dateTime = (event.start as { dateTime?: string })?.dateTime;
@@ -84,9 +87,13 @@ function BookingContent() {
             if (!map[datePart].includes(time)) map[datePart].push(time);
           });
           setBusySlotsMap(map);
+        } else {
+          console.error('Calendar unavailable', data?.error ?? res.status);
+          setCalendarError('We could not load current availability.');
         }
       } catch (err) {
         console.error('Failed to fetch calendar', err);
+        setCalendarError('We could not load current availability.');
       } finally {
         setLoading(false);
       }
@@ -252,6 +259,21 @@ function BookingContent() {
           <div style={{ textAlign: 'center', padding: '60px 0' }}>
             <Loader2 size={32} color={BRAND.gold} style={{ animation: 'spin 1s linear infinite' }} />
             <p style={{ color: BRAND.muted, marginTop: 16, fontSize: 14 }}>Loading availability...</p>
+          </div>
+        ) : calendarError ? (
+          /* Availability is unknown, so no slot can be offered honestly. Showing
+             the picker here would present taken slots as free. */
+          <div style={{ backgroundColor: BRAND.white, borderRadius: 6, border: `1px solid ${BRAND.border}`, padding: '40px 24px', textAlign: 'center', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: BRAND.text }}>{calendarError}</p>
+            <p style={{ margin: '10px 0 20px', fontSize: 13, color: BRAND.muted, lineHeight: 1.6 }}>
+              To avoid booking a time that is already taken, online booking is paused. Please try again, or contact us directly and we will arrange your consultation.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ backgroundColor: BRAND.gold, color: BRAND.white, border: 'none', padding: '12px 24px', borderRadius: 4, fontSize: 14, fontWeight: 500, cursor: 'pointer' }}
+            >
+              Try again
+            </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
