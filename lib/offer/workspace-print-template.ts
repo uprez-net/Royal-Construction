@@ -55,6 +55,11 @@ export type OfferPrintTemplateInput = {
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly priceAdjustmentLabel: string;
   readonly standardPriceIncGst: number | null;
+  // When the offer was drawn up. Omitted for a live draft (defaults to today);
+  // supplied when re-rendering a historical revision, so the document is not
+  // restamped with the date it happened to be viewed. Must be a Date —
+  // formatDateDisplay parses strings as date-only local values.
+  readonly preparedDate?: Date;
 };
 
 export function buildOfferPrintTemplateData({
@@ -67,6 +72,7 @@ export function buildOfferPrintTemplateData({
   paymentSchedule,
   priceAdjustmentLabel,
   standardPriceIncGst,
+  preparedDate,
 }: OfferPrintTemplateInput): OfferPrintTemplateData {
   const selectedPrice = customerPrice.selectedContractValueIncGst;
   const savingAmount =
@@ -80,7 +86,7 @@ export function buildOfferPrintTemplateData({
       ...row,
       amount: selectedPrice * row.percentOfContract,
     })),
-    preparedDateLabel: formatDateDisplay(new Date()),
+    preparedDateLabel: formatDateDisplay(preparedDate ?? new Date()),
     priceLine: getPriceLine(selectedPrice, standardPriceIncGst, priceAdjustmentLabel),
     savingAmount,
     scopeRows: allowances

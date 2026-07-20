@@ -214,7 +214,18 @@
     background: white !important;
   }
 
-  body:has([data-offer-print-template="true"]) :has([data-offer-print-template="true"]) {
+  /* These rules promote the live offer's hidden print template into THE printed
+     document. They are switched off while the read-only revision viewer is open
+     (it renders a second template marked "screen"): the viewer's copy is not
+     printable, so leaving them on would print the live offer while a different
+     revision is on screen — the operator would file the wrong document without
+     any sign of it. Printing a superseded revision is not supported; refusing
+     is the safe outcome. With no viewer open the :not() always holds, so the
+     live print path is unchanged. */
+  body:has([data-offer-print-template="true"]):not(
+      :has([data-offer-print-template="screen"])
+    )
+    :has([data-offer-print-template="true"]) {
     background: white !important;
     display: block !important;
     height: auto !important;
@@ -225,13 +236,18 @@
     padding: 0 !important;
   }
 
-  body:has([data-offer-print-template="true"])
+  body:has([data-offer-print-template="true"]):not(
+      :has([data-offer-print-template="screen"])
+    )
     :has([data-offer-print-template="true"])
     > :not(:has([data-offer-print-template="true"])):not([data-offer-print-template="true"]) {
     display: none !important;
   }
 
-  body:has([data-offer-print-template="true"]) [data-offer-print-template="true"] {
+  body:has([data-offer-print-template="true"]):not(
+      :has([data-offer-print-template="screen"])
+    )
+    [data-offer-print-template="true"] {
     display: block !important;
   }
 }

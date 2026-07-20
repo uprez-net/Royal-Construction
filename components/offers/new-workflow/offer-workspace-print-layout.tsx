@@ -16,7 +16,17 @@ export function ImageSlot({
   return (
     <figure className="overflow-hidden">
       <div className={`relative w-full ${heightClass} overflow-hidden border border-border`}>
-        <Image alt={caption ?? label} className="object-cover" fill src={src} />
+        {/* An A4 page is a fixed 210mm (~794px) wide, so the slot never scales
+            with the viewport. Without `sizes`, `fill` requests a 100vw asset
+            for every slot — wasteful now that the revision viewer renders
+            these on screen rather than only into a hidden print subtree. */}
+        <Image
+          alt={caption ?? label}
+          className="object-cover"
+          fill
+          sizes="794px"
+          src={src}
+        />
       </div>
       {caption ? (
         <figcaption className="mt-1 text-center text-[10px] italic text-muted-foreground">

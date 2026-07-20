@@ -142,7 +142,8 @@ export async function loadActiveOfferWorkspace(
 
 type SaveResult =
   | { ok: true; stateVersion: number }
-  | { ok: false; reason: "stale"; currentStateVersion: number | null };
+  | { ok: false; reason: "stale"; currentStateVersion: number | null }
+  | { ok: false; reason: "superseded" };
 
 // Debounced autosave with optimistic concurrency (ADR 0002): the write only
 // lands if the caller's stateVersion still matches; otherwise it is rejected so
@@ -152,9 +153,18 @@ export async function saveOfferWorkspace(input: {
   expectedStateVersion: number;
   snapshot: OfferWorkspaceSnapshot;
 }): Promise<SaveResult> {
-  const access = await authorizeOfferAccess(input.offerId);
+  // Resolved with allowInactive so a superseded revision comes back as a
+  // recoverable result rather than a throw: a second tab that was editing this
+  // offer when another tab forked a new revision should reload onto the live
+  // revision, not sit in a permanent error state.
+  const access = await authorizeOfferAccess(input.offerId, {
+    allowInactive: true,
+  });
   if (!access.ok) {
     throw new Error(access.error);
+  }
+  if (!access.isActive) {
+    return { ok: false, reason: "superseded" };
   }
 
   const persisted = serializeWorkspace(input.snapshot);
@@ -162,8 +172,16 @@ export async function saveOfferWorkspace(input: {
     100,
   );
 
+  // isActive is part of the predicate, not just the check above: forking a
+  // revision deactivates this row without touching its stateVersion, so a save
+  // that passed the check moments earlier would still satisfy an id+version
+  // predicate and land on the freshly archived revision.
   const result = await prisma.offer.updateMany({
-    where: { id: input.offerId, stateVersion: input.expectedStateVersion },
+    where: {
+      id: input.offerId,
+      isActive: true,
+      stateVersion: input.expectedStateVersion,
+    },
     data: {
       workspaceState: persisted as unknown as Prisma.InputJsonValue,
       contractValueIncGst: contractValue,
@@ -174,8 +192,14 @@ export async function saveOfferWorkspace(input: {
   if (result.count === 0) {
     const current = await prisma.offer.findUnique({
       where: { id: input.offerId },
-      select: { stateVersion: true },
+      select: { stateVersion: true, isActive: true },
     });
+    // Distinguish the two ways the predicate can miss — they need different
+    // recoveries: a stale version reconciles against the same revision, a
+    // superseded one has to move to whichever revision is now live.
+    if (current !== null && !current.isActive) {
+      return { ok: false, reason: "superseded" };
+    }
     return {
       ok: false,
       reason: "stale",
@@ -307,6 +331,79 @@ export async function listOfferRevisions(
     tenderPdfUrl: offer.tender?.executedPdfUrl ?? null,
     contractPdfUrl: offer.contract?.executedPdfUrl ?? null,
   }));
+}
+
+// A single revision's saved content, for read-only viewing. Distinct from
+// loadActiveOfferWorkspace, which only ever resolves the lead's live revision
+// and self-provisions one — this addresses an exact revision and never writes.
+export type LoadedOfferRevision =
+  | {
+      ok: true;
+      offerId: string;
+      reference: string;
+      revisionNumber: number;
+      status: OfferStatus;
+      isActive: boolean;
+      // Feeds the document's "prepared" date, so re-rendering an old revision
+      // reproduces the date it was drawn up rather than today's.
+      createdAt: string;
+      snapshot: OfferWorkspaceSnapshot;
+    }
+  // "empty": the revision was superseded before anything was saved onto it.
+  // "unreadable": persisted state that no longer satisfies the current schema.
+  | { ok: false; reason: "empty" | "unreadable" };
+
+export async function loadOfferRevisionSnapshot(
+  offerId: string,
+): Promise<LoadedOfferRevision> {
+  // The one read path allowed to resolve a superseded revision.
+  const access = await authorizeOfferAccess(offerId, { allowInactive: true });
+  if (!access.ok) {
+    throw new Error(access.error);
+  }
+
+  const offer = await prisma.offer.findUniqueOrThrow({
+    where: { id: offerId },
+    select: {
+      id: true,
+      baseReference: true,
+      revisionNumber: true,
+      offerStatus: true,
+      isActive: true,
+      createdAt: true,
+      workspaceState: true,
+    },
+  });
+
+  if (offer.workspaceState === null) {
+    return { ok: false, reason: "empty" };
+  }
+
+  let snapshot: OfferWorkspaceSnapshot;
+  try {
+    snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
+  } catch {
+    // parseWorkspaceState is a strict zod parse. Surface unreadable history as
+    // an empty state rather than taking the whole page down with it.
+    return { ok: false, reason: "unreadable" };
+  }
+
+  return {
+    ok: true,
+    offerId: offer.id,
+    // Built from the DB columns, never from snapshot.job — a forked revision
+    // inherits the parent's workspaceState verbatim, so the reference embedded
+    // in the snapshot still names the revision it was copied from.
+    reference:
+      offer.baseReference.trim().length > 0
+        ? `${offer.baseReference}-R${offer.revisionNumber}`
+        : `R${offer.revisionNumber}`,
+    revisionNumber: offer.revisionNumber,
+    status: offer.offerStatus,
+    isActive: offer.isActive,
+    createdAt: offer.createdAt.toISOString(),
+    snapshot,
+  };
 }
 
 export type CreateOfferRevisionResult =
