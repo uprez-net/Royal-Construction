@@ -73,7 +73,7 @@ export function masthead(): string {
 export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   const data = buildOfferPrintTemplateData(input);
   const { job } = input;
-  const owners = splitOwners(job.clientNames);
+  const owners = resolveTenderOwners(job);
   const reference = `${job.reference}-${job.revision}`;
   const totalArea =
     job.groundFloorSqm +
@@ -108,6 +108,30 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   ].join("");
 
   return legalDocShell(body);
+}
+
+// Owners rendered on the Tender execution page. Falls back to splitting the
+// combined `clientNames` ("Mr X & Ms Y"); when an explicit secondary client
+// is present and not already included in that split, append it as its own
+// signer so each co-owner receives a separate signature/date/initial block.
+// Exported so the DocuSign envelope builds the same signer list (and count)
+// as the AutoPlace anchors baked into the PDF — a mismatch would orphan an
+// anchor with no recipient to receive its signature tab.
+export function getTenderOwners(job: {
+  clientNames: string;
+  secondaryCustomerName?: string;
+}): string[] {
+  const fromNames = splitOwners(job.clientNames);
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  if (!secondary) return fromNames;
+  const alreadyPresent = fromNames.some(
+    (name) => name.trim().toLowerCase() === secondary.toLowerCase(),
+  );
+  return alreadyPresent ? fromNames : [...fromNames, secondary];
+}
+
+function resolveTenderOwners(job: OfferPrintTemplateInput["job"]): string[] {
+  return getTenderOwners(job);
 }
 
 // Shared A4 page shell + stylesheet for the legal documents (Tender and
@@ -162,6 +186,19 @@ function coverPage(
   foot: string,
 ): string {
   const { job, customerPrice } = input;
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  // Render the secondary client as a second line under the primary owner(s)
+  // only when it is not already part of job.clientNames. The Owners label
+  // pluralises when there is more than one named owner.
+  const secondaryAlreadyInNames = secondary
+    ? splitOwners(job.clientNames).some(
+        (name) => name.trim().toLowerCase() === secondary.toLowerCase(),
+      )
+    : true;
+  const ownerWho = secondary && !secondaryAlreadyInNames
+    ? `${esc(job.clientNames)}<br /><span style="font-size:11px;color:${MUTED};">and ${esc(secondary)}</span>`
+    : esc(job.clientNames);
+  const ownerLabel = owners.length > 1 ? "Owners" : "Owner";
   return `<div class="page">
     ${masthead()}
     <h1 class="doc">Fixed Price Building Tender</h1>
@@ -170,7 +207,7 @@ function coverPage(
     <h2>Parties</h2>
     <div class="parties">
       <div class="party"><div class="role">The Builder</div><div class="who">Royal Constructions Pty Ltd</div><div style="color:${MUTED};font-size:10px;margin-top:4px;">Licence No. 383992C · ABN 56 644 111 580 · MBA Accredited</div></div>
-      <div class="party"><div class="role">The Owner${owners.length > 1 ? "s" : ""}</div><div class="who">${esc(job.clientNames)}</div><div style="color:${MUTED};font-size:10px;margin-top:4px;">Site: ${esc(job.siteAddress)}</div></div>
+      <div class="party"><div class="role">The ${ownerLabel}</div><div class="who">${ownerWho}</div><div style="color:${MUTED};font-size:10px;margin-top:4px;">Site: ${esc(job.siteAddress)}</div></div>
     </div>
     <div class="sum"><div class="top">Contract Sum (including GST)</div><div class="amt">${money(customerPrice.selectedContractValueIncGst)}</div></div>
     <h2>Project Particulars</h2>
@@ -271,6 +308,12 @@ function executionPage(
   owners: string[],
   foot: string,
 ): string {
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  // Acceptance paragraph — names both clients when a secondary client is
+  // present ("...the parties — <primary> and <secondary> — accept...").
+  const acceptSubject = secondary
+    ? `${esc(job.clientNames)} and ${esc(secondary)}`
+    : "the parties";
   const ownerBlocks = owners
     .map(
       (owner, index) => `
@@ -287,7 +330,7 @@ function executionPage(
   return `<div class="page">
     ${masthead()}
     <h2 style="margin-top:20px;">Acceptance &amp; Execution</h2>
-    <p>By signing below, the parties accept this Fixed Price Building Tender (${esc(reference)}) and agree to enter into the MBA fixed-price home building contract for the Contract Sum and scope described herein.</p>
+    <p>By signing below, ${acceptSubject} accept this Fixed Price Building Tender (${esc(reference)}) and agree to enter into the MBA fixed-price home building contract for the Contract Sum and scope described herein.</p>
     <div class="sig">
       <div class="who">The Builder — Royal Constructions Pty Ltd</div>
       <div class="lines">

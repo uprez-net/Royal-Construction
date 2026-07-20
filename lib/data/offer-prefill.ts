@@ -64,7 +64,9 @@ export async function generateOfferPrefillFromLead(input: {
   // ── Phase 0: deterministic contact + site copy ──
   const job: WritableJobPatch = {};
   if (lead.name?.trim()) job.clientNames = lead.name.trim();
+  if (lead.secondaryName?.trim()) job.secondaryCustomerName = lead.secondaryName.trim();
   if (lead.email?.trim()) job.clientEmail = lead.email.trim();
+  if (lead.secondaryEmail?.trim()) job.secondaryCustomerEmail = lead.secondaryEmail.trim();
   if (lead.phone?.trim()) job.clientPhone = lead.phone.trim();
   // Lead.location is often a suburb, not a full street address — a starting
   // point the estimator refines, not a contract-grade address.
@@ -75,7 +77,7 @@ export async function generateOfferPrefillFromLead(input: {
   const contextParts: string[] = [];
 
   contextParts.push(
-    `# Lead\nName: ${lead.name}\nLocation/site: ${lead.location || "(not given)"}\nBuild type interest: ${lead.type || "(not given)"}\nBudget: ${lead.budget || "(not given)"}`,
+    `# Lead\nName: ${lead.name}${lead.secondaryName ? ` & ${lead.secondaryName}` : ""}\nLocation/site: ${lead.location || "(not given)"}\nBuild type interest: ${lead.type || "(not given)"}\nBudget: ${lead.budget || "(not given)"}`,
   );
 
   if (lead.notes?.trim()) {

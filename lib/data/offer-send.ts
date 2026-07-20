@@ -74,15 +74,22 @@ async function recipientDomainAcceptsMail(
 }
 
 type SendResult =
-  | { ok: true; reference: string; token: string }
+  | { ok: true; reference: string; token: string; secondaryToken?: string }
   | { ok: false; error: string };
 
-// Email the offer PDF to the client with a reference token embedded in the
-// subject (kept on replies as "Re: … [RCOFR-…]") so the inbound Graph webhook
-// can correlate the reply back to this OfferDocumentSend record.
+// Email the offer PDF to the client(s). When a secondary recipient is
+// provided, BOTH clients receive the proposal as separate emails — each carries
+// its own [RCOFR-…] tracking token, persisted as its own OfferDocumentSend
+// record, so the inbound Graph reply tracker can attribute each reply to the
+// correct sender (see recordOfferReply: the recipient guard already checks the
+// matching send's recipientEmail). This mirrors how the Tender/Contract DocuSign
+// envelopes fan out to each owner as a distinct recipient. A single client
+// receive a single email, byte-for-byte identical to the pre-secondary-client
+// behaviour.
 export async function sendOfferDocument(input: {
   offerId: string;
   recipientEmail: string;
+  secondaryRecipientEmail?: string | null;
 }): Promise<SendResult> {
   const access = await authorizeOfferAccess(input.offerId);
   if (!access.ok) {
@@ -92,11 +99,26 @@ export async function sendOfferDocument(input: {
   if (!EMAIL_RE.test(email)) {
     return { ok: false, error: "Enter a valid recipient email address." };
   }
+  const secondaryRaw = (input.secondaryRecipientEmail ?? "").trim();
+  const hasSecondary = secondaryRaw.length > 0 && secondaryRaw !== email;
+  const secondaryEmail = hasSecondary ? secondaryRaw : "";
+  if (hasSecondary && !EMAIL_RE.test(secondaryEmail)) {
+    return {
+      ok: false,
+      error: "Enter a valid secondary recipient email address.",
+    };
+  }
 
   // Checked before the PDF is built so a typo costs a DNS lookup, not a render.
   const deliverable = await recipientDomainAcceptsMail(email);
   if (!deliverable.ok) {
     return { ok: false, error: deliverable.error };
+  }
+  if (hasSecondary) {
+    const secondaryDeliverable = await recipientDomainAcceptsMail(secondaryEmail);
+    if (!secondaryDeliverable.ok) {
+      return { ok: false, error: secondaryDeliverable.error };
+    }
   }
 
   const offer = await prisma.offer.findUnique({
@@ -142,9 +164,13 @@ export async function sendOfferDocument(input: {
 
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
   const token = `RCOFR-${randomBytes(6).toString("hex").toUpperCase()}`;
+  const secondaryToken = hasSecondary
+    ? `RCOFR-${randomBytes(6).toString("hex").toUpperCase()}`
+    : undefined;
 
   try {
     const client = await createGraphContext(getGraphConfig());
+    // Primary recipient — always sent.
     await client.sendMail({
       to: email,
       subject: `Your Building Proposal — ${reference} [${token}]`,
@@ -157,6 +183,23 @@ export async function sendOfferDocument(input: {
         },
       ],
     });
+    // Secondary recipient — a separate email with its own tracking token so
+    // each client's replies correlate to their own send record. The same PDF
+    // body is reused; only the subject/body token differs.
+    if (hasSecondary && secondaryToken) {
+      await client.sendMail({
+        to: secondaryEmail,
+        subject: `Your Building Proposal — ${reference} [${secondaryToken}]`,
+        body: buildEmailBody(reference, secondaryToken),
+        attachments: [
+          {
+            name: `Building-Proposal-${reference}.pdf`,
+            contentType: "application/pdf",
+            contentBytes: pdfBase64,
+          },
+        ],
+      });
+    }
   } catch (error) {
     return {
       ok: false,
@@ -173,17 +216,30 @@ export async function sendOfferDocument(input: {
         trackedLinkToken: token,
       },
     });
+    if (hasSecondary && secondaryToken) {
+      await tx.offerDocumentSend.create({
+        data: {
+          offerId: offer.id,
+          offerFileVersion: offer.revisionNumber,
+          recipientEmail: secondaryEmail,
+          trackedLinkToken: secondaryToken,
+        },
+      });
+    }
     if (offer.offerStatus === OfferStatus.PENDING) {
       await tx.offer.update({
         where: { id: offer.id },
         data: { offerStatus: OfferStatus.SENT, sentAt: new Date() },
       });
+      const recipients = hasSecondary
+        ? `${email} and ${secondaryEmail}`
+        : email;
       await tx.offerStatusEvent.create({
         data: {
           offerId: offer.id,
           fromStatus: offer.offerStatus,
           toStatus: OfferStatus.SENT,
-          note: `Emailed to ${email}`,
+          note: `Emailed to ${recipients}`,
         },
       });
     }
@@ -198,7 +254,7 @@ export async function sendOfferDocument(input: {
   } catch (error) {
     console.error("[offer] revalidate after send failed:", error);
   }
-  return { ok: true, reference, token };
+  return { ok: true, reference, token, secondaryToken };
 }
 
 function buildEmailBody(reference: string, token: string): string {

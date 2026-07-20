@@ -93,6 +93,9 @@ export interface LeadDetailFormData {
   phone: string;
   email: string;
   location: string;
+  secondaryName: string;
+  secondaryEmail: string;
+  secondaryPhone: string;
   sourceDetail: LeadSource;
   stage: LeadStage;
   assignedId?: string | null;
@@ -228,6 +231,9 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
     phone: lead.phone,
     email: lead.email,
     location: lead.location,
+    secondaryName: lead.secondaryName ?? "",
+    secondaryEmail: lead.secondaryEmail ?? "",
+    secondaryPhone: lead.secondaryPhone ?? "",
     sourceDetail: (lead.sourceDetail || lead.source) as LeadSource,
     stage: lead.stage,
     assignedId: lead.assignedId || null,

@@ -131,7 +131,7 @@ type OfferWorkspaceScreenProps = {
   readonly revising: boolean;
   readonly revisionNotice: string | null;
   readonly revisionExecuted: boolean;
-  readonly onSendOffer: (email: string) => void;
+  readonly onSendOffer: (email: string, secondaryEmail?: string | null) => void;
   readonly canSend: boolean;
   readonly sending: boolean;
   readonly sendError: string | null;
@@ -468,6 +468,8 @@ export function OfferWorkspaceScreen({
               canRevise={canRevise}
               revising={revising}
               clientEmail={job.clientEmail}
+              secondaryClientEmail={job.secondaryCustomerEmail}
+              secondaryClientName={job.secondaryCustomerName}
               contractValueIncGst={customerPrice.selectedContractValueIncGst}
               offerReference={formatOfferReference(job.reference, job.revision)}
               sendBlockers={sendBlockers}

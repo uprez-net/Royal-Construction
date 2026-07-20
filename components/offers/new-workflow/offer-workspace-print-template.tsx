@@ -175,6 +175,7 @@ function PrintCoverPage({
   readonly heroCaption?: string;
   readonly footer: string;
 }) {
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
@@ -199,6 +200,9 @@ function PrintCoverPage({
       <div className="mt-6 border-t border-royal-gold pt-5">
         <dl className="grid grid-cols-[50mm_minmax(0,1fr)] text-sm">
           <CoverRow label="Client" value={job.clientNames} />
+          {secondary ? (
+            <CoverRow label="Co-owner" value={secondary} />
+          ) : null}
           <CoverRow label="Site Address" value={job.siteAddress} />
           <CoverRow label="Build Type" value={job.buildType} />
           <CoverRow label="Total Build Area" value={data.areaLabel} />
@@ -226,9 +230,15 @@ function PrintWelcomePage({
   readonly footer: string;
 }) {
   const paragraphs = buildWelcomeParagraphs(job);
-  const greetingName = job.clientNames
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  const primaryGreeting = job.clientNames
     .replace(/^(Mr|Ms|Mrs|Mr & Ms|Mr & Mrs)\s+/i, "")
     .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
+  // Welcome greeting — addresses both clients by name when a secondary is
+  // present ("Dear Jaswinder and Harpreet,").
+  const greetingName = secondary
+    ? `${primaryGreeting} and ${secondary}`
+    : primaryGreeting;
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
@@ -474,15 +484,23 @@ function PrintTermsPage({
   readonly footer: string;
   readonly last?: boolean;
 }) {
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  // Acceptance paragraph — names both clients when present
+  // ("I/We, <primary> and <secondary>, accept..."). `I/We` covers both.
+  const acceptanceNames = secondary
+    ? `${job.clientNames} and ${secondary}`
+    : job.clientNames;
+  const acceptanceLine = `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
   return (
     <PrintPage breakAfter={!last} footerText={footer}>
       <ProposalMasthead />
       <PrintSection eyebrow="Next steps" title="Terms and payment schedule">
         <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
-          This proposal forms the basis for a Master Builders Association fixed
-          price home building contract. Contract documents, HBCF registration,
-          signed Tender evidence and initial payment are handled before Project
-          creation.
+          {acceptanceLine}
+        </p>
+        <p className="mt-3 max-w-[155mm] text-sm leading-6 text-muted-foreground">
+          Contract documents, HBCF registration, signed Tender evidence and
+          initial payment are handled before Project creation.
         </p>
       </PrintSection>
       <table className="mt-6 w-full border-collapse text-left text-sm">
@@ -512,6 +530,9 @@ function PrintTermsPage({
           name={job.preparedBy}
         />
         <SignatureBlock label="Client acceptance" name={job.clientNames} />
+        {secondary ? (
+          <SignatureBlock label="Client acceptance — co-owner" name={secondary} />
+        ) : null}
       </div>
     </PrintPage>
   );

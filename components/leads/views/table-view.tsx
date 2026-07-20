@@ -176,6 +176,12 @@ export default function TableView({
                             <div className="cell-name-text">
                               <strong>{lead.name}</strong>
                               <small>{lead.email}</small>
+                              {lead.secondaryName ? (
+                                <small className="text-muted-foreground/80">
+                                  + {lead.secondaryName}
+                                  {lead.secondaryEmail ? ` · ${lead.secondaryEmail}` : ""}
+                                </small>
+                              ) : null}
                             </div>
                           </div>
                         </td>
@@ -383,6 +389,12 @@ export default function TableView({
                     <span className="mobile-lead-email">
                       {lead.email || lead.phone || "No contact saved"}
                     </span>
+                    {lead.secondaryName ? (
+                      <span className="mobile-lead-email text-muted-foreground/80">
+                        + {lead.secondaryName}
+                        {lead.secondaryEmail ? ` · ${lead.secondaryEmail}` : ""}
+                      </span>
+                    ) : null}
                   </button>
 
                   <dl className="mobile-lead-meta">

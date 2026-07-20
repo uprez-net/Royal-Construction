@@ -127,6 +127,9 @@ export function DetailModal({
         phone: form.phone,
         email: form.email,
         location: form.location,
+        secondaryName: form.secondaryName || null,
+        secondaryEmail: form.secondaryEmail || null,
+        secondaryPhone: form.secondaryPhone || null,
         source: form.sourceDetail,
         sourceDetail: form.sourceDetail,
         stage,
@@ -229,7 +232,7 @@ export function DetailModal({
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label htmlFor={fieldId("name")} className={labelCls}>
-              Name
+              Primary Client
             </label>
             <input
               id={fieldId("name")}
@@ -269,6 +272,43 @@ export function DetailModal({
               className={inputCls}
               value={form.location}
               onChange={(e) => patch({ location: e.target.value })}
+            />
+          </div>
+        </div>
+
+        {/* Secondary client (optional) */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label htmlFor={fieldId("secondary-name")} className={labelCls}>
+              Secondary Client
+            </label>
+            <input
+              id={fieldId("secondary-name")}
+              className={inputCls}
+              value={form.secondaryName}
+              onChange={(e) => patch({ secondaryName: e.target.value })}
+            />
+          </div>
+          <div>
+            <label htmlFor={fieldId("secondary-phone")} className={labelCls}>
+              Secondary Phone
+            </label>
+            <input
+              id={fieldId("secondary-phone")}
+              className={inputCls}
+              value={form.secondaryPhone}
+              onChange={(e) => patch({ secondaryPhone: e.target.value })}
+            />
+          </div>
+          <div>
+            <label htmlFor={fieldId("secondary-email")} className={labelCls}>
+              Secondary Email
+            </label>
+            <input
+              id={fieldId("secondary-email")}
+              className={inputCls}
+              value={form.secondaryEmail}
+              onChange={(e) => patch({ secondaryEmail: e.target.value })}
             />
           </div>
         </div>

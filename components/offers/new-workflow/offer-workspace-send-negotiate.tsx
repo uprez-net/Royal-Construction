@@ -23,6 +23,11 @@ type SendNegotiatePanelProps = {
   readonly canRevise: boolean;
   readonly revising: boolean;
   readonly clientEmail: string;
+  // Optional secondary recipient — when provided, the offer is emailed to BOTH
+  // clients (a separate email + tracking token each). Empty/undefined falls
+  // back to single-recipient sends (the pre-secondary-client behaviour).
+  readonly secondaryClientEmail?: string;
+  readonly secondaryClientName?: string;
   readonly contractValueIncGst: number;
   readonly offerReference: string;
   readonly sendBlockers: readonly OfferSendBlocker[];
@@ -31,7 +36,7 @@ type SendNegotiatePanelProps = {
   readonly sendError: string | null;
   readonly sentInfo: string | null;
   readonly canMarkSent: boolean;
-  readonly onSendOffer: (email: string) => void;
+  readonly onSendOffer: (email: string, secondaryEmail?: string | null) => void;
   readonly onMarkSent: () => void;
   readonly onCreateRevision: () => void;
   readonly onMarkAgreed: () => void;
@@ -55,6 +60,8 @@ export function SendNegotiatePanel({
   canRevise,
   revising,
   clientEmail,
+  secondaryClientEmail,
+  secondaryClientName,
   contractValueIncGst,
   offerReference,
   sendBlockers,
@@ -70,7 +77,11 @@ export function SendNegotiatePanel({
   onMarkRejected,
 }: SendNegotiatePanelProps) {
   const [email, setEmail] = useState(clientEmail);
+  const [secondaryEmail, setSecondaryEmail] = useState(
+    secondaryClientEmail ?? "",
+  );
   const [confirming, setConfirming] = useState(false);
+  const hasSecondaryRecipient = (secondaryClientName ?? "").trim().length > 0;
   const isPending = status === "pending";
   const isSent = status === "sent";
   const isRejected = status === "rejected";
@@ -120,7 +131,10 @@ export function SendNegotiatePanel({
               <Button
                 className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
                 disabled={
-                  !canSend || sending || confirming || email.trim().length === 0
+                  !canSend ||
+                  sending ||
+                  confirming ||
+                  email.trim().length === 0
                 }
                 onClick={() => setConfirming(true)}
                 size="sm"
@@ -153,15 +167,52 @@ export function SendNegotiatePanel({
               ) : null}
             </div>
 
+            {hasSecondaryRecipient ? (
+              <div className="grid gap-1">
+                <label
+                  className="text-xs font-medium text-foreground"
+                  htmlFor="offer-secondary-recipient"
+                >
+                  Secondary client ({secondaryClientName}) — email
+                </label>
+                <input
+                  className="min-w-0 flex-1 rounded-md border border-border bg-white px-3 py-1.5 text-sm"
+                  id="offer-secondary-recipient"
+                  onChange={(event) => {
+                    setSecondaryEmail(event.target.value);
+                    setConfirming(false);
+                  }}
+                  placeholder="secondary@email.com (leave blank to send only to the primary)"
+                  type="email"
+                  value={secondaryEmail}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  When this is filled in, the proposal is emailed to both
+                  clients (a separate email each). Leave blank to send only to
+                  the primary client.
+                </p>
+              </div>
+            ) : null}
+
             {confirming ? (
               <SendConfirm
                 contractValueIncGst={contractValueIncGst}
                 offerReference={offerReference}
                 recipient={email}
+                secondaryRecipient={
+                  hasSecondaryRecipient && secondaryEmail.trim().length > 0
+                    ? secondaryEmail.trim()
+                    : null
+                }
                 sending={sending}
                 onCancel={() => setConfirming(false)}
                 onConfirm={() => {
-                  onSendOffer(email);
+                  onSendOffer(
+                    email,
+                    hasSecondaryRecipient && secondaryEmail.trim().length > 0
+                      ? secondaryEmail.trim()
+                      : null,
+                  );
                   setConfirming(false);
                 }}
               />
@@ -262,6 +313,7 @@ function SendConfirm({
   contractValueIncGst,
   offerReference,
   recipient,
+  secondaryRecipient,
   sending,
   onCancel,
   onConfirm,
@@ -269,17 +321,28 @@ function SendConfirm({
   readonly contractValueIncGst: number;
   readonly offerReference: string;
   readonly recipient: string;
+  readonly secondaryRecipient?: string | null;
   readonly sending: boolean;
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }) {
+  const hasSecondary =
+    !!secondaryRecipient && secondaryRecipient.length > 0 && secondaryRecipient !== recipient;
   return (
     <div className="grid gap-2 rounded-lg border border-royal-gold/40 bg-royal-gold-light/40 p-3">
       <p className="text-sm font-medium text-foreground">
-        Send this offer to the client?
+        {hasSecondary
+          ? "Send this offer to both clients?"
+          : "Send this offer to the client?"}
       </p>
       <dl className="grid gap-1 text-xs">
         <ConfirmRow label="Recipient" value={recipient} />
+        {hasSecondary ? (
+          <ConfirmRow
+            label="Secondary recipient"
+            value={secondaryRecipient ?? ""}
+          />
+        ) : null}
         <ConfirmRow
           label="Fixed price inc GST"
           mono
@@ -288,8 +351,9 @@ function SendConfirm({
         <ConfirmRow label="Reference" mono value={offerReference} />
       </dl>
       <p className="text-xs text-muted-foreground">
-        This emails the proposal PDF and moves the offer to Sent. Check the price
-        and recipient — this leaves your workspace.
+        {hasSecondary
+          ? "This emails the proposal PDF to both recipients (a separate email each) and moves the offer to Sent. Check the price and recipients — this leaves your workspace."
+          : "This emails the proposal PDF and moves the offer to Sent. Check the price and recipient — this leaves your workspace."}
       </p>
       <div className="flex flex-wrap gap-2">
         <Button

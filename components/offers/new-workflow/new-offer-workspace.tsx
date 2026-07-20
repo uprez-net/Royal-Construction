@@ -640,7 +640,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   // Email the proposal PDF to the client. Flushes the latest edits first so the
   // generated PDF matches the workspace, then routes through sendOfferDocument.
   const sendOffer = useCallback(
-    (recipientEmail: string) => {
+    (recipientEmail: string, secondaryRecipientEmail?: string | null) => {
       const offerId = offerIdRef.current;
       if (leadId === undefined || offerId === null) {
         setSendError("Save the offer against a lead before sending.");
@@ -663,10 +663,17 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
               lastSavedRef.current = currentJson;
             }
           }
-          const result = await sendOfferDocument({ offerId, recipientEmail });
+          const result = await sendOfferDocument({
+            offerId,
+            recipientEmail,
+            secondaryRecipientEmail: secondaryRecipientEmail ?? null,
+          });
           if (result.ok) {
             setStatus("sent");
-            setSentInfo(`Sent ${result.reference} to ${recipientEmail}.`);
+            const recipientSummary = secondaryRecipientEmail
+              ? `${recipientEmail} and ${secondaryRecipientEmail}`
+              : recipientEmail;
+            setSentInfo(`Sent ${result.reference} to ${recipientSummary}.`);
           } else {
             setSendError(result.error);
           }

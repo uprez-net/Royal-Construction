@@ -33,7 +33,20 @@ export type OfferWorkspaceJob = {
   readonly reference: string;
   readonly revision: string;
   readonly clientNames: string;
+  // Secondary client sourced from the lead's secondaryName — rendered at the
+  // existing client insertion points in the Offer/Tender/Contract documents
+  // (cover row, greeting, signature block, acceptance paragraph). Empty string
+  // means no secondary client; blanks are skipped in the renderers so
+  // single-client offers stay unchanged.
+  readonly secondaryCustomerName: string;
   readonly clientEmail: string;
+  // Secondary client's own email. Used to address the offer/Tender/Contract
+  // send to BOTH clients (a separate email + tracking token per recipient, so
+  // the reply tracker attributes each reply to the right sender). Blank when
+  // there is no secondary client; in that case the secondary owner (if any)
+  // falls back to the primary clientEmail, matching the pre-existing DocuSign
+  // behaviour.
+  readonly secondaryCustomerEmail: string;
   readonly clientPhone: string;
   readonly siteAddress: string;
   readonly buildType: string;
@@ -212,7 +225,9 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   reference: "",
   revision: "R1",
   clientNames: "",
+  secondaryCustomerName: "",
   clientEmail: "",
+  secondaryCustomerEmail: "",
   clientPhone: "",
   siteAddress: "",
   buildType: "",

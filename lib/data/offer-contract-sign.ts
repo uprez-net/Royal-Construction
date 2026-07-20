@@ -107,6 +107,10 @@ export async function sendContractForSignature(input: {
         "No valid client email found on the offer or lead — set the client email in Job setup before sending the Contract.",
     };
   }
+  // The BC4 contract template exposes a single Customer signer role; the
+  // primary owner is the named signer. ownerNames (rendered on the cover) is
+  // populated with both clients when a secondary is present.
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
 
   // Resolve the price through the same path the Tender used — a blank override
   // round-trips to "0", so Number(...) would lock a $0.00 contract (the signed
@@ -117,6 +121,13 @@ export async function sendContractForSignature(input: {
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
   const owners = splitOwners(job.clientNames);
   const primaryOwner = owners[0];
+  // The BC4 contract template's ownerNames tab renders the named owners on the
+  // cover. When a secondary client is present, name both so the printed
+  // contract lists every co-owner (the template renders a single ownerNames
+  // string; it does not split into separate signer roles here).
+  const ownerNames = secondary
+    ? `${job.clientNames} and ${secondary}`
+    : job.clientNames;
 
   // ── Tab values (labels defined by scripts/docusign/create-bc4-template.ts;
   // unlocked particulars live in the template and are completed by the
@@ -147,7 +158,7 @@ export async function sendContractForSignature(input: {
   const builderTextTabs: ContractTabValue[] = [
     locked("contractPrice", priceLabel),
     locked("contractPriceTotal", priceLabel),
-    locked("ownerNames", job.clientNames),
+    locked("ownerNames", ownerNames),
     locked("ownerEmail", customerEmail),
     locked("siteAddress", job.siteAddress),
     locked("variationPercent", "10%"),

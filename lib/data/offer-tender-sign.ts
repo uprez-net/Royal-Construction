@@ -12,7 +12,7 @@ import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
-import { buildTenderHtml, splitOwners } from "@/lib/offer/offer-tender-html";
+import { buildTenderHtml, getTenderOwners } from "@/lib/offer/offer-tender-html";
 import { getPaymentScheduleTotalPct } from "@/lib/offer/workspace-payment-schedule";
 import { resolveOfferCustomerEmail } from "@/lib/offer/offer-customer-email";
 import {
@@ -93,6 +93,22 @@ export async function sendTenderForSignature(input: {
         "No valid client email found on the offer or lead — set the client email in Job setup before sending the Tender.",
     };
   }
+  // Secondary client receives their own copy of the envelope when they have a
+  // distinct, sendable email. Falls back to the primary client's email (the
+  // pre-secondary-client behaviour) when the secondary client has no email of
+  // their own — every named owner still receives a signature tab.
+  const secondaryRawEmail = (
+    snapshot.job.secondaryCustomerEmail ?? ""
+  ).trim();
+  const secondaryOwnerName = (snapshot.job.secondaryCustomerName ?? "").trim();
+  const hasSecondary = secondaryOwnerName.length > 0;
+  const secondaryEmail =
+    hasSecondary &&
+    secondaryRawEmail.length > 0 &&
+    secondaryRawEmail !== customerEmail &&
+    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(secondaryRawEmail)
+      ? secondaryRawEmail
+      : null;
 
   let config;
   try {
@@ -113,10 +129,21 @@ export async function sendTenderForSignature(input: {
   }
 
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
-  const owners = splitOwners(snapshot.job.clientNames).map((name) => ({
-    name,
-    email: customerEmail,
-  }));
+  // Build the DocuSign recipient list so each owner receives an envelope at
+  // their own email when one is available. The secondary owner gets the
+  // secondary email when present; otherwise both get the primary email (the
+  // pre-secondary-client behaviour — every named owner still receives a
+  // signature tab, just via the shared address).
+  const owners = getTenderOwners(snapshot.job).map((name) => {
+    const isSecondaryByName =
+      hasSecondary &&
+      name.trim().toLowerCase() === secondaryOwnerName.toLowerCase();
+    return {
+      name,
+      email:
+        isSecondaryByName && secondaryEmail ? secondaryEmail : customerEmail,
+    };
+  });
 
   // Atomically claim the send so two concurrent calls can't both create a
   // DocuSign envelope (double-send). Only the caller that flips the status off

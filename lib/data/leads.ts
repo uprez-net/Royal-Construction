@@ -334,6 +334,9 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
         { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
         { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
         { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { secondaryName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { secondaryEmail: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { secondaryPhone: { contains: search, mode: Prisma.QueryMode.insensitive } },
       ],
     }
     : undefined;
@@ -659,6 +662,9 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         phone: normalizedPhone,
         email: normalizedEmail,
         location: input.location ?? "",
+        secondaryName: input.secondaryName,
+        secondaryEmail: input.secondaryEmail,
+        secondaryPhone: input.secondaryPhone,
         source: input.source,
         sourceDetail: input.sourceDetail,
         stage: mappedStage,
@@ -773,6 +779,9 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
   if (input.email !== undefined) updateData.email = input.email ?? "";
   if (input.location !== undefined) updateData.location = input.location ?? "";
+  if (input.secondaryName !== undefined) updateData.secondaryName = input.secondaryName;
+  if (input.secondaryEmail !== undefined) updateData.secondaryEmail = input.secondaryEmail;
+  if (input.secondaryPhone !== undefined) updateData.secondaryPhone = input.secondaryPhone;
   if (input.source !== undefined) updateData.source = input.source;
   if (input.sourceDetail !== undefined) updateData.sourceDetail = input.sourceDetail;
   if (input.stage !== undefined) updateData.stage = mappedStage;

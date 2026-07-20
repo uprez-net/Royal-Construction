@@ -152,13 +152,19 @@ function coverPage(
 ): string {
   const { job } = input;
   const hero = images.hero;
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  // "Prepared For" cover row — secondary client rendered as a second line
+  // under the primary client when present; single-client offers unchanged.
+  const clientCell = secondary
+    ? `${esc(job.clientNames)}<br /><span style="font-size:11px;color:${MUTED};">and ${esc(secondary)}</span>`
+    : esc(job.clientNames);
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     ${hero ? `<div class="hero"><img src="${esc(hero.url)}" alt="" /></div>` : ""}
     ${hero?.source === "ai" ? `<div class="caption">AI concept, indicative only</div>` : ""}
     <div class="cover-title"><h1>Building Proposal</h1><div class="sub">${esc(job.buildType)}</div></div>
     <table class="cover-table">
-      ${coverRow("Client", job.clientNames)}
+      ${coverRowHtml("Client", clientCell)}
       ${coverRow("Site Address", job.siteAddress)}
       ${coverRow("Build Type", job.buildType)}
       ${coverRow("Total Build Area", data.areaLabel)}
@@ -176,13 +182,25 @@ function coverRow(label: string, value: string, hi = false): string {
   return `<tr><td class="lbl${hi ? " hi" : ""}">${esc(label)}</td><td class="val${hi ? " hi" : ""}">${esc(value)}</td></tr>`;
 }
 
+// Variant that injects already-escaped/pre-built HTML into the value cell
+// (used to render the secondary client as a sub-line under the primary).
+function coverRowHtml(label: string, valueHtml: string, hi = false): string {
+  return `<tr><td class="lbl${hi ? " hi" : ""}">${esc(label)}</td><td class="val${hi ? " hi" : ""}">${valueHtml}</td></tr>`;
+}
+
 function welcomePage(
   job: OfferPrintTemplateInput["job"],
   foot: string,
 ): string {
-  const greeting = job.clientNames
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  const primaryGreeting = job.clientNames
     .replace(/^(Mr|Ms|Mrs|Mr & Ms|Mr & Mrs)\s+/i, "")
     .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
+  // Welcome greeting — when a secondary client is present, address both by
+  // first name ("Dear Jaswinder and Harpreet,"). Falls back to the primary.
+  const greeting = secondary
+    ? `${primaryGreeting} and ${secondary}`
+    : primaryGreeting;
   const paragraphs = buildWelcomeParagraphs(job)
     .map((p) => `<p style="margin-bottom:14px;">${esc(p)}</p>`)
     .join("");
@@ -315,21 +333,34 @@ function termsPage(
   foot: string,
 ): string {
   const { job } = input;
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
   const rows = data.paymentRows
     .map(
       (row) =>
         `<tr><td class="stage">${esc(row.stageName)}</td><td class="amt">${(row.percentOfContract * 100).toFixed(0)}% - ${money(row.amount)}</td><td class="muted">${esc(row.trigger)}</td></tr>`,
     )
     .join("");
+  // Acceptance paragraph — names both clients when a secondary is present
+  // ("I/We, <primary> and <secondary>, accept..."). Single-client offers keep
+  // the original "I/We, <primary>, accept..." wording. `I/We` covers both.
+  const acceptanceNames = secondary
+    ? `${esc(job.clientNames)} and ${esc(secondary)}`
+    : esc(job.clientNames);
+  const acceptanceLine = `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
+  // Signature block — second signer rendered when a secondary client exists.
+  const secondarySig = secondary
+    ? `<div class="sig"><h3>Client acceptance — co-owner</h3><p>Signature: _______________________</p><p>${esc(secondary)}</p><p>Date: ___________________________</p></div>`
+    : "";
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Next steps</div>
     <h1 class="title">Terms and payment schedule</h1>
-    <p class="muted" style="margin-top:12px;max-width:155mm;">This proposal forms the basis for a Master Builders Association fixed price home building contract. Contract documents, HBCF registration, signed Tender evidence and initial payment are handled before Project creation.</p>
+    <p class="muted" style="margin-top:12px;max-width:155mm;">${esc(acceptanceLine)}</p>
     <table class="pay"><thead><tr><th>Stage</th><th>Amount</th><th>Trigger</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="sigs">
       <div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>
       <div class="sig"><h3>Client acceptance</h3><p>Signature: _______________________</p><p>${esc(job.clientNames)}</p><p>Date: ___________________________</p></div>
+      ${secondarySig}
     </div>
     ${foot}
   </div>`;

@@ -80,11 +80,30 @@ export function JobSetupPanel({
               onChange={(event) => onJobChange({ clientNames: event.target.value })}
             />
           </Field>
+          <Field label="Secondary client">
+            <Input
+              value={job.secondaryCustomerName ?? ""}
+              onChange={(event) =>
+                onJobChange({ secondaryCustomerName: event.target.value })
+              }
+              placeholder="Co-owner name (optional)"
+            />
+          </Field>
           <Field label="Email">
             <Input
               type="email"
               value={job.clientEmail}
               onChange={(event) => onJobChange({ clientEmail: event.target.value })}
+            />
+          </Field>
+          <Field label="Secondary client email">
+            <Input
+              type="email"
+              value={job.secondaryCustomerEmail ?? ""}
+              onChange={(event) =>
+                onJobChange({ secondaryCustomerEmail: event.target.value })
+              }
+              placeholder="Co-owner email (optional)"
             />
           </Field>
           <Field label="Phone">

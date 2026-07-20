@@ -322,7 +322,14 @@ function ContractPreview({
 
       <dl className="grid gap-3 sm:grid-cols-2">
         <PartyBlock label="Builder" value="Royal Constructions Pty Ltd" />
-        <PartyBlock label="Customer" value={job.clientNames} />
+        <PartyBlock
+          label="Customer"
+          value={
+            job.secondaryCustomerName?.trim()
+              ? `${job.clientNames} & ${job.secondaryCustomerName.trim()}`
+              : job.clientNames
+          }
+        />
         <PartyBlock label="Site" value={job.siteAddress} />
         <PartyBlock label="Prepared by" value={job.preparedBy} />
       </dl>
@@ -376,9 +383,15 @@ function ContractPreview({
           state={state === "signed" ? "signed" : "pending"}
         />
         <SignatureLine
-          role="Customer"
+          role={`Customer${job.secondaryCustomerName?.trim() ? ` — ${job.clientNames}` : ""}`}
           state={state === "signed" ? "signed" : "pending"}
         />
+        {job.secondaryCustomerName?.trim() ? (
+          <SignatureLine
+            role={`Customer — ${job.secondaryCustomerName.trim()}`}
+            state={state === "signed" ? "signed" : "pending"}
+          />
+        ) : null}
       </div>
     </article>
   );

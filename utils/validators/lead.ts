@@ -170,6 +170,10 @@ export const updateLeadSchema = z.object({
   email: nullableTrimmedString.optional(),
   location: nullableTrimmedString.optional(),
 
+  secondaryName: nullableTrimmedString.optional(),
+  secondaryEmail: nullableTrimmedString.optional(),
+  secondaryPhone: nullableTrimmedString.optional(),
+
   source: nullableTrimmedString.optional(),
   sourceDetail: nullableTrimmedString.optional(),
 
@@ -204,6 +208,10 @@ export const createLeadSchema = z.object({
   phone: nullableTrimmedString.optional(),
   email: nullableTrimmedString.optional(),
   location: nullableTrimmedString.optional(),
+
+  secondaryName: nullableTrimmedString.optional(),
+  secondaryEmail: nullableTrimmedString.optional(),
+  secondaryPhone: nullableTrimmedString.optional(),
 
   source: z.enum(leadSources).nullable().optional(),
 

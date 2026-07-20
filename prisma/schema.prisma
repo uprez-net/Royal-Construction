@@ -502,6 +502,13 @@ model Lead {
   email    String @default("")
   location String @default("")
 
+  // Secondary client — optional second person on the same lead.
+  // Nullable ADD COLUMN, no data loss; primary name/phone/email remain the
+  // canonical client.
+  secondaryName  String?
+  secondaryEmail  String?
+  secondaryPhone  String?
+
   source       String?
   sourceDetail String?
 

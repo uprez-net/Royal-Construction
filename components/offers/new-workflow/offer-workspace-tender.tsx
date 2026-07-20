@@ -341,6 +341,8 @@ function TenderPreview({
   readonly state: "draft" | "sent" | "signed";
 }) {
   const contractValue = customerPrice.selectedContractValueIncGst;
+  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  const hasSecondaryClient = secondary.length > 0;
   const shownExclusions = exclusions
     .filter((item) => item.includedInOfferDocument)
     .map((item) => item.label);
@@ -362,7 +364,8 @@ function TenderPreview({
             Tender — fixed price building works
           </h3>
           <p className="text-sm text-muted-foreground">
-            {job.clientNames} · {job.siteAddress}
+            {job.clientNames}
+            {hasSecondaryClient ? ` & ${secondary}` : ""} · {job.siteAddress}
           </p>
         </div>
         <span className="rounded-full border border-royal-gold/40 bg-royal-gold-light/40 px-2.5 py-1 text-xs font-medium text-royal-gold-dark">
@@ -430,9 +433,15 @@ function TenderPreview({
           state={state === "signed" ? "signed" : "pending"}
         />
         <SignatureLine
-          role="Customer"
+          role={`Customer${hasSecondaryClient ? ` — ${job.clientNames}` : ""}`}
           state={state === "signed" ? "signed" : "pending"}
         />
+        {hasSecondaryClient ? (
+          <SignatureLine
+            role={`Customer — ${secondary}`}
+            state={state === "signed" ? "signed" : "pending"}
+          />
+        ) : null}
       </div>
     </article>
   );
