@@ -270,6 +270,11 @@ function extractEmailHeaders(
     from: getHeader('From'),
     replyTo: getHeader('Reply-To'),
     listUnsubscribe: getHeader('List-Unsubscribe'),
+    // Machine-mail markers. Already inside the $select projection, so reading
+    // them costs no extra Graph round-trip.
+    autoSubmitted: getHeader('Auto-Submitted'),
+    returnPath: getHeader('Return-Path'),
+    contentType: getHeader('Content-Type'),
   };
 }
 

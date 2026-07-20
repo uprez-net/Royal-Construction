@@ -248,9 +248,20 @@ export async function POST(request: Request): Promise<Response> {
             // back to the send and stop — it is not a lead/tradie message.
             const offerReplyToken = extractOfferReplyToken(message.subject);
             if (offerReplyToken) {
-              const tracked = await recordOfferReply(offerReplyToken, message);
+              const outcome = await recordOfferReply(offerReplyToken, message);
+              // Log the negatives too. An "auto-generated" line here is a
+              // bounce or an out-of-office arriving, and today this is the only
+              // trace of it — it is what a bounce classifier gets tuned against
+              // before one is built.
               console.log(
-                `  Offer reply ${offerReplyToken}: ${tracked ? 'recorded' : 'no matching send'}`,
+                `  Offer ${offerReplyToken}: ${outcome}`,
+                JSON.stringify({
+                  from: message.from,
+                  subject: message.subject,
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  returnPath: message.headers.returnPath ?? null,
+                  contentType: message.headers.contentType ?? null,
+                }),
               );
               continue;
             }
