@@ -1,7 +1,3 @@
-// Proposal image slots. Each offer stores a URL per slot (Vercel Blob). Missing
-// slots render as on-layout placeholders in the print template. The hero + the
-// six gallery slots mirror the pages of the building proposal.
-
 export type OfferImageSlotKey =
   | "hero"
   | "exterior"
@@ -28,6 +24,10 @@ export type OfferImageSlot = {
   readonly caption: string;
 };
 
+export type AttachedOfferImageSlot = OfferImageSlot & {
+  readonly image: OfferImage;
+};
+
 export const OFFER_IMAGE_SLOTS: readonly OfferImageSlot[] = [
   { key: "hero", label: "Hero — completed home / render", caption: "Cover image" },
   { key: "exterior", label: "Exterior — full render facade", caption: "Completed facade" },
@@ -39,6 +39,15 @@ export const OFFER_IMAGE_SLOTS: readonly OfferImageSlot[] = [
 ];
 
 export const EMPTY_OFFER_IMAGES: OfferImageMap = {};
+
+export function getAttachedOfferImageSlots(
+  images: OfferImageMap,
+): readonly AttachedOfferImageSlot[] {
+  return OFFER_IMAGE_SLOTS.flatMap((slot) => {
+    const image = images[slot.key];
+    return image ? [{ ...slot, image }] : [];
+  });
+}
 
 export function setOfferImage(
   images: OfferImageMap,

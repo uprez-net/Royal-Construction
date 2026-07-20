@@ -18,8 +18,9 @@ import {
 } from "@/lib/offer/workspace-proposal-content";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import {
-  OFFER_IMAGE_SLOTS,
+  getAttachedOfferImageSlots,
   offerImageCaption,
+  type AttachedOfferImageSlot,
   type OfferImageMap,
 } from "@/lib/offer/workspace-images";
 import type { ReactElement } from "react";
@@ -65,6 +66,9 @@ export function OfferWorkspacePrintTemplate(
     STANDARD_INCLUSIONS_SCHEDULE,
     INCLUSIONS_ROWS_PER_PAGE,
   );
+  const galleryImages = getAttachedOfferImageSlots(props.images).filter(
+    (slot) => slot.key !== "hero",
+  );
 
   // Assemble the ordered page renderers, then number them automatically so the
   // footer "Page N of M" stays correct as pages are added or removed.
@@ -86,9 +90,17 @@ export function OfferWorkspacePrintTemplate(
     (n, total) => (
       <PrintWelcomePage key="welcome" job={props.job} footer={foot(data, n, total)} />
     ),
-    (n, total) => (
-      <PrintGalleryPage key="gallery" images={props.images} footer={foot(data, n, total)} />
-    ),
+    ...(galleryImages.length > 0
+      ? [
+          (n: number, total: number) => (
+            <PrintGalleryPage
+              key="gallery"
+              images={galleryImages}
+              footer={foot(data, n, total)}
+            />
+          ),
+        ]
+      : []),
     (n, total) => (
       <PrintSnapshotPage key="snapshot" data={data} job={props.job} footer={foot(data, n, total)} />
     ),
@@ -155,14 +167,16 @@ function PrintCoverPage({
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <div className="mt-6">
-        <ImageSlot
-          src={heroSrc}
-          caption={heroCaption}
-          label="Hero — completed home / render"
-          heightClass="h-[95mm]"
-        />
-      </div>
+      {heroSrc ? (
+        <div className="mt-6">
+          <ImageSlot
+            src={heroSrc}
+            caption={heroCaption}
+            label="Hero — completed home / render"
+            heightClass="h-[95mm]"
+          />
+        </div>
+      ) : null}
       <div className="mt-5 text-center">
         <h1 className="font-sans text-4xl font-bold uppercase tracking-wide text-sidebar">
           Building Proposal
@@ -228,10 +242,9 @@ function PrintGalleryPage({
   images,
   footer,
 }: {
-  readonly images: OfferImageMap;
+  readonly images: readonly AttachedOfferImageSlot[];
   readonly footer: string;
 }) {
-  const gallerySlots = OFFER_IMAGE_SLOTS.filter((slot) => slot.key !== "hero");
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
@@ -247,12 +260,12 @@ function PrintGalleryPage({
         </p>
       </PrintSection>
       <div className="mt-6 grid grid-cols-2 gap-4">
-        {gallerySlots.map((slot) => (
+        {images.map((slot) => (
           <ImageSlot
             key={slot.key}
-            src={images[slot.key]?.url}
+            src={slot.image.url}
             label={slot.label}
-            caption={offerImageCaption(slot.caption, images[slot.key]?.source)}
+            caption={offerImageCaption(slot.caption, slot.image.source)}
             heightClass="h-[46mm]"
           />
         ))}
