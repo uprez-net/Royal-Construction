@@ -1,26 +1,11 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig } from '@/lib/graph/config';
-import { successResponse, errorResponse, unauthorizedResponse } from '@/utils/validators';
+import { requireAdminToken } from '@/lib/graph/route-utils';
+import { successResponse, errorResponse } from '@/utils/validators';
 import { unstable_rethrow } from 'next/navigation';
-import { NextResponse } from 'next/server';
 
-function requireAdminToken(request: Request, adminToken: string | undefined): NextResponse | null {
-  if (!adminToken) {
-    return null;
-  }
-
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return unauthorizedResponse();
-  }
-
-  const token = authHeader.slice(7);
-  if (token !== adminToken) {
-    return unauthorizedResponse();
-  }
-
-  return null;
-}
+// The local copy of requireAdminToken that used to live here failed open when
+// GRAPH_ADMIN_TOKEN was unset. Use the shared guard, which fails closed.
 
 function parseNumber(value: string | null, fallback: number): number {
   if (!value) {
