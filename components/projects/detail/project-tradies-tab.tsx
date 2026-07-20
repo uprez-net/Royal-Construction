@@ -230,7 +230,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
             key={tradies.length} // Force remount to reset internal state when tradies change
             headers={[
               "Trade",
-              "ABN",
+              "Company",
               "Contact",
               "Needed For",
               "Scheduled",
@@ -246,7 +246,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               </span>,
 
               <span className="text-[13px]" key={`${tradie.id}-company`}>
-                {tradie.tradie.abn}
+                {tradie.tradie.name}
               </span>,
 
               <span className="text-xs" key={`${tradie.id}-phone`}>
