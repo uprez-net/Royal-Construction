@@ -1,13 +1,17 @@
 import { createGraphContext } from '@/lib/graph/client';
 import { getGraphConfig, type GraphMode } from '@/lib/graph/config';
+import { requireAdminToken } from '@/lib/graph/route-utils';
 import { errorResponse, badRequestResponse } from '@/utils/validators';
 
 
+// notificationUrl and resource are deliberately NOT accepted from the caller.
+// Letting a request choose where Graph pushes notifications, and which mailbox
+// they concern, meant anyone reaching this route could redirect inbound mail
+// for any mailbox the app registration can read to an endpoint they control —
+// using our own credentials. Both now come from server config only.
 interface SubscribeBody {
-  notificationUrl?: string;
   clientState?: string;
   expirationMinutes?: number;
-  resource?: string;
 }
 
 function buildDefaultResource(mode: GraphMode, senderUpn?: string): string | undefined {
@@ -25,10 +29,10 @@ function buildDefaultResource(mode: GraphMode, senderUpn?: string): string | und
 
 export async function POST(request: Request): Promise<Response> {
   const config = getGraphConfig();
-  // const guard = requireAdminToken(request, config.adminToken);
-  // if (guard) {
-  //   return guard;
-  // }
+  const guard = requireAdminToken(request, config.adminToken);
+  if (guard) {
+    return guard;
+  }
 
   let payload: SubscribeBody = {};
   try {
@@ -37,7 +41,7 @@ export async function POST(request: Request): Promise<Response> {
     return badRequestResponse('Invalid JSON body');
   }
 
-  const notificationUrl = payload.notificationUrl || config.webhookNotificationUrl;
+  const notificationUrl = config.webhookNotificationUrl;
   if (!notificationUrl) {
     return badRequestResponse('Missing notification URL');
   }
@@ -49,7 +53,6 @@ export async function POST(request: Request): Promise<Response> {
 
   const expirationMinutes = payload.expirationMinutes ?? config.webhookSubscriptionMinutes;
   const resource =
-    payload.resource?.trim() ||
     config.webhookSubscriptionResource ||
     buildDefaultResource(config.mode, config.senderUpn);
 
