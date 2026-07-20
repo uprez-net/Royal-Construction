@@ -128,7 +128,15 @@ export async function sendOfferDocument(input: {
     }
   });
 
-  revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+  // The mail is away and the status is committed, so nothing past this point
+  // may reject: the caller would report the send as failed while the offer is
+  // durably SENT, and the workspace would keep an editable "pending" view until
+  // the next reload silently locked it. Cache invalidation is best-effort.
+  try {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+  } catch (error) {
+    console.error("[offer] revalidate after send failed:", error);
+  }
   return { ok: true, reference, token };
 }
 
