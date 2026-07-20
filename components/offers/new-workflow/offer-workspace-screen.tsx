@@ -552,7 +552,7 @@ export function OfferWorkspaceScreen({
             />
           </OfferPhaseGate>
         </div>
-        <aside className="min-w-0 space-y-5 xl:sticky xl:top-[var(--offer-sticky-offset,18rem)] xl:self-start">
+        <aside className="min-w-0 space-y-5 xl:sticky xl:top-(--offer-sticky-offset,18rem) xl:self-start">
           <PricingSummary effectiveMargin={effectiveMargin} pricing={pricing} />
           <OfferDocumentPreview
             customerPrice={customerPrice}
