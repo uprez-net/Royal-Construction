@@ -90,6 +90,26 @@ export async function createProjectFromOffer(input: {
     return { ok: false, error: "No agreed offer snapshot found." };
   }
 
+  // Both executed PDFs must be on file before a project can be created.
+  // executedPdfUrl is written only by the DocuSign completion webhook
+  // (app/api/docusign/connect/route.ts) after it archives the signed document;
+  // a null URL means the offer reached CONTRACT_SIGNED without a genuine
+  // completion (e.g. a manual status advance, or a completion webhook rejected
+  // at the HMAC gate), so there is no executed tender/contract to attach.
+  // Block here rather than creating a project with empty documents (issue #90).
+  // Runs before the claim below, so a failed gate needs no status rollback.
+  const missingExecutedDocs: string[] = [];
+  if (!offer.tender?.executedPdfUrl) missingExecutedDocs.push("tender");
+  if (!offer.contract?.executedPdfUrl) missingExecutedDocs.push("contract");
+  if (missingExecutedDocs.length > 0) {
+    return {
+      ok: false,
+      error: `Cannot create the project: no executed ${missingExecutedDocs.join(
+        " and ",
+      )} PDF is on file. Complete signing via DocuSign so the executed document is archived, then try again.`,
+    };
+  }
+
   // Atomically claim the handoff: flip CONTRACT_SIGNED → PROJECT in one
   // conditional write so two concurrent calls can't both pass the guards above
   // and each create a project/files. Only the caller that wins the claim
@@ -142,8 +162,12 @@ export async function createProjectFromOffer(input: {
     kind: "tender" | "contract",
   ): Promise<ProjectSourceDocumentReference> => {
     if (!url) {
-      warnings.push(`No executed ${kind} PDF on file — project created without it.`);
-      return { fileId: "", fileName: "", url: "", kind };
+      // Unreachable: the executed-PDF gate above guarantees both URLs are
+      // present. Kept as a defensive invariant so a future refactor can never
+      // silently attach an empty document reference (the root of issue #90).
+      // Revert the claim so the offer is retryable instead of stuck at PROJECT.
+      await revertClaim();
+      throw new Error(`Executed ${kind} PDF unexpectedly missing after gate.`);
     }
     const fileName = `Executed-${kind === "tender" ? "Tender" : "Contract"}-${reference}.pdf`;
     const file = await prisma.file.create({
