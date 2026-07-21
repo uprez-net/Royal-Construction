@@ -250,9 +250,15 @@ const OFFER_TO_LEAD_STATUS_UPDATE_MAP: Record<OfferStatus, LeadStage> = {
     TENDER_DRAFT: "WON",
     TENDER_SENT: "WON",
     TENDER_SIGNED: "WON",
+    // Declined states are set directly by the DocuSign webhook, not through
+    // updateOfferStatus (this map's only reader), so these two entries exist to
+    // satisfy the exhaustive Record; NEGOTIATING is the value to use if lead-stage
+    // sync from the offer lifecycle is ever wired up.
+    TENDER_DECLINED: "NEGOTIATING",
     CONTRACT_DRAFT: "WON",
     CONTRACT_SENT: "WON",
     CONTRACT_SIGNED: "WON",
+    CONTRACT_DECLINED: "NEGOTIATING",
     PROJECT: "WON",
     SUPERSEDED: "NEGOTIATING",
 }
@@ -268,9 +274,11 @@ const OFFER_STATE_MACHINE: Record<OfferStatus, OfferStatus[]> = {
   TENDER_DRAFT: [],
   TENDER_SENT: [],
   TENDER_SIGNED: [],
+  TENDER_DECLINED: [],
   CONTRACT_DRAFT: [],
   CONTRACT_SENT: [],
   CONTRACT_SIGNED: [],
+  CONTRACT_DECLINED: [],
   PROJECT: [],
   SUPERSEDED: [],
 };

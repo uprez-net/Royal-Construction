@@ -70,9 +70,11 @@ export const OfferStatusLabels: Record<OfferStatus, string> = {
     TENDER_DRAFT: "Tender draft",
     TENDER_SENT: "Tender sent",
     TENDER_SIGNED: "Tender signed",
+    TENDER_DECLINED: "Tender declined",
     CONTRACT_DRAFT: "Contract draft",
     CONTRACT_SENT: "Contract sent",
     CONTRACT_SIGNED: "Contract signed",
+    CONTRACT_DECLINED: "Contract declined",
     PROJECT: "Project",
     SUPERSEDED: "Superseded",
 };

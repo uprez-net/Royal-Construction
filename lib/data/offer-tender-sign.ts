@@ -29,9 +29,9 @@ type TenderSendResult =
 
 // Generate the Tender PDF from the frozen workspace snapshot and send it as a
 // runtime DocuSign envelope (no template): signature tabs AutoPlace onto the
-// anchor strings baked into the document. Builder signs first, then the
-// owner(s). Persists Tender + Envelope + EnvelopeSignature for the legal
-// audit trail and moves the offer to TENDER_SENT.
+// anchor strings baked into the document. The owner(s) sign first, then the
+// builder counter-signs (issue #89). Persists Tender + Envelope +
+// EnvelopeSignature for the legal audit trail and moves the offer to TENDER_SENT.
 export async function sendTenderForSignature(input: {
   offerId: string;
 }): Promise<TenderSendResult> {

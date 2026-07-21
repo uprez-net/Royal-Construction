@@ -63,7 +63,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     await syncRecipients(envelope.id, envelope.signatures, payload);
-    await syncEnvelopeStatus(envelope, event);
+    await syncEnvelopeStatus(envelope, event, payload);
   } catch (error) {
     console.error("[docusign] Connect processing failed:", error);
     // 500 → DocuSign retries with backoff, which is what we want here.
@@ -79,6 +79,7 @@ type ConnectRecipient = {
   routingOrder?: string;
   status?: string;
   signedDateTime?: string;
+  declinedReason?: string;
 };
 
 type ConnectPayload = {
@@ -189,6 +190,7 @@ async function syncEnvelopeStatus(
     } | null;
   },
   event: string,
+  payload: ConnectPayload,
 ): Promise<void> {
   const nextStatus = ENVELOPE_STATUS[event];
   if (!nextStatus) {
@@ -208,6 +210,13 @@ async function syncEnvelopeStatus(
         ...(nextStatus === EnvelopeStatus.VOIDED ? { voidedAt: now } : {}),
       },
     });
+  }
+
+  // A customer decline moves the offer to a revise-ready stage; it never
+  // advances to the signed state, so branch off before the completion path.
+  if (nextStatus === EnvelopeStatus.DECLINED) {
+    await advanceOfferOnDecline(envelope, payload);
+    return;
   }
 
   if (nextStatus !== EnvelopeStatus.COMPLETED) {
@@ -324,4 +333,74 @@ async function syncEnvelopeStatus(
       }
     }
   }
+}
+
+// A decline (envelope-declined) moves the offer to a revise-ready stage —
+// TENDER_DECLINED / CONTRACT_DECLINED — and records DocuSign's decline reason on
+// the status event, so the operator sees why and can revise and re-issue via a
+// new revision (issue #89).
+async function advanceOfferOnDecline(
+  envelope: {
+    id: string;
+    docType: EnvelopeDocType;
+    tender: { id: string; offerId: string } | null;
+    contract: { id: string; offerId: string } | null;
+  },
+  payload: ConnectPayload,
+): Promise<void> {
+  const isTender = envelope.docType === EnvelopeDocType.TENDER;
+  const parent = isTender ? envelope.tender : envelope.contract;
+  if (!parent) {
+    return;
+  }
+
+  // Only the offer's CURRENT envelope may move the offer. A tender/contract can
+  // carry more than one envelope — a recall-then-resend leaves the prior one
+  // live in DocuSign — so a decline on a superseded envelope must be ignored at
+  // the offer level; otherwise a genuinely-signed re-send is stranded in
+  // *_DECLINED. Compare against the most-recently-sent envelope for this parent.
+  const latest = await prisma.envelope.findFirst({
+    where: isTender ? { tenderId: parent.id } : { contractId: parent.id },
+    orderBy: { sentAt: "desc" },
+    select: { id: true },
+  });
+  if (!latest || latest.id !== envelope.id) {
+    return;
+  }
+
+  const declinedStatus = isTender
+    ? OfferStatus.TENDER_DECLINED
+    : OfferStatus.CONTRACT_DECLINED;
+  const expectedFromStatus = isTender
+    ? OfferStatus.TENDER_SENT
+    : OfferStatus.CONTRACT_SENT;
+
+  // DocuSign attaches the decliner's reason to the recipient record; surface it
+  // rather than inventing our own copy. Role-neutral wording: after the tender
+  // flip the builder is routingOrder 2 and can also decline.
+  const declineReason = (payload.data?.envelopeSummary?.recipients?.signers ?? [])
+    .find((signer) => (signer.status ?? "").toLowerCase() === "declined")
+    ?.declinedReason?.trim();
+
+  // Atomic claim: only the delivery that flips *_SENT -> *_DECLINED records the
+  // event, so concurrent duplicate webhooks can't write duplicate audit rows,
+  // and a replayed decline (or an offer that already advanced) is a no-op.
+  const claim = await prisma.offer.updateMany({
+    where: { id: parent.offerId, offerStatus: expectedFromStatus },
+    data: { offerStatus: declinedStatus },
+  });
+  if (claim.count === 0) {
+    return;
+  }
+
+  await prisma.offerStatusEvent.create({
+    data: {
+      offerId: parent.offerId,
+      fromStatus: expectedFromStatus,
+      toStatus: declinedStatus,
+      note: declineReason
+        ? `Declined via DocuSign: ${declineReason}`
+        : "Declined via DocuSign.",
+    },
+  });
 }
