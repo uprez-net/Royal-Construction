@@ -409,6 +409,13 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       offerIdRef.current = loaded.offerId;
       stateVersionRef.current = loaded.stateVersion;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+      // The customer declined the last envelope — tell the operator why (the
+      // reason comes straight from DocuSign) and point them at a new revision.
+      if (loaded.declineReason) {
+        setRevisionNotice(
+          `${loaded.declineReason} — create a new version to revise and re-send.`,
+        );
+      }
       // Show the real minted reference/revision, never the seed default.
       const baseReference = loaded.reference.replace(/-R\d+$/, "");
       const revisionLabel = `R${loaded.revisionNumber}`;

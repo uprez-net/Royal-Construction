@@ -49,6 +49,10 @@ type LoadedOfferWorkspace = {
   status: OfferStatus;
   stateVersion: number;
   snapshot: OfferWorkspaceSnapshot | null;
+  // Set only when the offer is in a *_DECLINED state: the note from the decline
+  // status event (carries DocuSign's own reason) so the workspace can tell the
+  // operator why the customer declined. Null otherwise.
+  declineReason?: string | null;
 };
 
 type OfferRow = {
@@ -73,6 +77,26 @@ function toLoaded(offer: OfferRow): LoadedOfferWorkspace {
     stateVersion: offer.stateVersion,
     snapshot,
   };
+}
+
+// A declined offer carries the reason on its most recent decline status event;
+// attach it so the workspace can tell the operator why the customer declined
+// and prompt a new revision. A no-op for any non-declined status.
+async function attachDeclineReason(
+  loaded: LoadedOfferWorkspace,
+): Promise<LoadedOfferWorkspace> {
+  if (
+    loaded.status !== OfferStatus.TENDER_DECLINED &&
+    loaded.status !== OfferStatus.CONTRACT_DECLINED
+  ) {
+    return loaded;
+  }
+  const event = await prisma.offerStatusEvent.findFirst({
+    where: { offerId: loaded.offerId, toStatus: loaded.status },
+    orderBy: { at: "desc" },
+    select: { note: true },
+  });
+  return { ...loaded, declineReason: event?.note ?? null };
 }
 
 // Mint the next base reference (RC-Q-YYYY-NNN) inside a transaction.
@@ -115,9 +139,9 @@ export async function loadActiveOfferWorkspace(
         });
       });
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
-      return toLoaded(healed);
+      return attachDeclineReason(toLoaded(healed));
     }
-    return toLoaded(existing);
+    return attachDeclineReason(toLoaded(existing));
   }
 
   // First offer for this lead — create it with a freshly minted reference.
