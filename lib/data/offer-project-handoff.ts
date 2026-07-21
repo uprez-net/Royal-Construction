@@ -176,7 +176,12 @@ export async function createProjectFromOffer(input: {
     const project = await createProjectWithLead({
       projectName: extraction.projectName,
       leadId: offer.leadId,
-      lotSize: job.lotAreaSqm ?? 0,
+      // The site's lot area, which is what project.lotSize means. This read 0 on
+      // every handoff until the Job setup panel grew an input for it — the column
+      // was never wrong, it was starved. It lands only in project.lotSize here:
+      // createProjectWithLead's `floorAreaM2: lotSize` fallback is skipped because
+      // this path always supplies `extraction`, whose own floorAreaM2 is set below.
+      lotSize: job.lotAreaSqm,
       startDate: start.toISOString(),
       estimatedEndDate: end.toISOString(),
       address: job.siteAddress,

@@ -144,6 +144,28 @@ export function JobSetupPanel({
               onChange={(event) => onJobChange({ siteAddress: event.target.value })}
             />
           </Field>
+          {/* Site particulars. These print on the proposal snapshot and the
+              tender's Project Particulars table; without inputs they stayed at
+              the model defaults and every document shipped "Lot Area: 0 m²". */}
+          <AreaField
+            label="Lot area sqm"
+            value={job.lotAreaSqm}
+            onChange={(lotAreaSqm) => onJobChange({ lotAreaSqm })}
+          />
+          <Field label="DP / title reference">
+            <Input
+              placeholder="e.g. Lot 12 DP 1234567"
+              value={job.dpNumber}
+              onChange={(event) => onJobChange({ dpNumber: event.target.value })}
+            />
+          </Field>
+          <Field label="Zoning">
+            <Input
+              placeholder="e.g. R2 Low Density Residential"
+              value={job.zoning}
+              onChange={(event) => onJobChange({ zoning: event.target.value })}
+            />
+          </Field>
           <Field label="Valid until">
             <Input
               type="date"

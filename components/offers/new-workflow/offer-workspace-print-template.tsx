@@ -8,11 +8,13 @@ import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-sche
 import {
   buildOfferPrintTemplateData,
   formatArea,
+  formatSiteParticulars,
   getPrintFooterText,
   PROPOSAL_TAGLINE,
 } from "@/lib/offer/workspace-print-template";
 import {
   buildWelcomeParagraphs,
+  OFFER_SPEC_FACTS,
   STANDARD_INCLUSIONS_SCHEDULE,
   type OfferInclusionRow,
 } from "@/lib/offer/workspace-proposal-content";
@@ -274,10 +276,11 @@ function PrintGalleryPage({
         title="Your home will be finished to this standard"
       >
         <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
-          The images below are from a recently completed double storey home —
-          built to a similar size and finish level. Full render to all
-          elevations, luxury shaker kitchen, 60mm stone benchtops, herringbone
-          flooring and floor-to-ceiling tiles.
+          The images below are from a recently completed home — built to a
+          similar size and finish level. Full render to all elevations, luxury
+          shaker kitchen, {OFFER_SPEC_FACTS.stoneBenchtopThickness} stone
+          benchtops and floor-to-ceiling tiles to the wet areas. Finishes on your
+          home are as per the inclusions schedule.
         </p>
       </PrintSection>
       <div className="mt-6 grid grid-cols-2 gap-4">
@@ -320,6 +323,7 @@ function PrintSnapshotPage({
       : []),
     { label: "Total Area", value: formatArea(totalArea), emphasis: true },
   ];
+  const siteParticulars = formatSiteParticulars(job);
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
@@ -330,10 +334,13 @@ function PrintSnapshotPage({
               Site
             </p>
             <p className="mt-2 font-semibold text-sidebar">{job.siteAddress}</p>
-            <p className="mt-3 text-sm text-muted-foreground">{job.dpNumber}</p>
-            <p className="text-sm text-muted-foreground">
-              Lot Area: {formatArea(job.lotAreaSqm)} | Zoning: {job.zoning}
-            </p>
+            {/* The gap under the address sits on the block, not on the DP line —
+                the DP line is optional, and hanging the spacing off it left the
+                particulars flush against the address whenever it was absent. */}
+            <div className="mt-3 text-sm text-muted-foreground">
+              {job.dpNumber.trim() ? <p>{job.dpNumber}</p> : null}
+              {siteParticulars ? <p>{siteParticulars}</p> : null}
+            </div>
           </div>
           <div className="border border-border p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

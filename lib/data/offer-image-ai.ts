@@ -15,10 +15,15 @@ const SLOT_PROMPTS: Record<OfferImageSlotKey, string> = {
     "Photorealistic full facade of a modern Australian {buildType}, rendered exterior, feature entry, double garage, no text, no logos.",
   render:
     "Architectural 3D render perspective of a modern Australian {buildType} facade, clean render style, no text, no logos.",
+  // Both living-area slots prompt for large-format tile, the finish the
+  // inclusions schedule actually prices. Generating a herringbone-timber floor
+  // showed the client a finish their contract does not include — the same
+  // divergence OFFER_SPEC_FACTS exists to prevent, since a picture contradicts
+  // the schedule just as loudly as a bullet does.
   kitchen:
-    "Photorealistic modern kitchen with white shaker cabinetry, stone island benchtop, herringbone timber floor, natural light, no text, no logos.",
+    "Photorealistic modern kitchen with white shaker cabinetry, stone island benchtop, large-format porcelain tile floor, natural light, no text, no logos.",
   living:
-    "Photorealistic open-plan living room, herringbone timber flooring, neutral palette, large windows, styled, no text, no logos.",
+    "Photorealistic open-plan living room, large-format porcelain tile flooring, neutral palette, large windows, styled, no text, no logos.",
   bedroom:
     "Photorealistic master bedroom, soft carpet, tray ceiling, plantation shutters, styled, warm light, no text, no logos.",
   bathroom:

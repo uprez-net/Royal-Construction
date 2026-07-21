@@ -12,6 +12,22 @@ export type OfferInclusionRow = {
   readonly highlight?: boolean;
 };
 
+// Spec facts quoted on more than one page of the proposal.
+//
+// The Investment Summary bullets, the Inclusions Schedule and the gallery blurb
+// each stated these independently and had already drifted: the schedule priced
+// 40mm stone and a $30/m² porcelain tile allowance for the living areas, while
+// the bullets sold 60mm stone and herringbone timber. Those are different
+// materials on different cost bases, so the client could not tell which contract
+// they were signing. The schedule is the priced, contractual statement, so its
+// values win — and anything printed on two pages is now defined here once, where
+// the two surfaces cannot disagree.
+export const OFFER_SPEC_FACTS = {
+  stoneBenchtopThickness: "40mm",
+  livingFloorFinish: "600 x 1200 porcelain tiles",
+  ductedAirConditioning: "18kW 4-zone",
+} as const;
+
 // Full inclusions schedule (category -> specification), grouped by trade area.
 // Mirrors the Royal "Full Inclusions Schedule".
 export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
@@ -92,8 +108,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Kitchen — Luxury",
     category: "Stone Benchtops",
-    specification:
-      "40mm engineered stone — kitchen island, perimeter bench and butler's pantry. Choice from range.",
+    specification: `${OFFER_SPEC_FACTS.stoneBenchtopThickness} engineered stone — kitchen island, perimeter bench and butler's pantry. Choice from range.`,
   },
   {
     group: "Kitchen — Luxury",
@@ -183,7 +198,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Flooring — Living",
-    specification: "600 x 1200 porcelain tiles. $30/m² allowance.",
+    specification: `${OFFER_SPEC_FACTS.livingFloorFinish}. $30/m² allowance.`,
   },
   {
     group: "Internal Finishes",
@@ -204,7 +219,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Electrical & HVAC",
     category: "Ducted Air Con",
-    specification: "18kW 4-zone ducted reverse-cycle. All living areas and bedrooms.",
+    specification: `${OFFER_SPEC_FACTS.ductedAirConditioning} ducted reverse-cycle. All living areas and bedrooms.`,
     highlight: true,
   },
   {
@@ -251,9 +266,9 @@ export const OFFER_INCLUDES_BULLETS: readonly string[] = [
   "Full render to ALL elevations — both levels",
   "All plumbing & electrical to completion",
   "Luxury shaker kitchen + butler's pantry",
-  "60mm stone benchtops throughout",
-  "18kW 4-zone ducted air conditioning",
-  "Timber-look herringbone flooring — living areas",
+  `${OFFER_SPEC_FACTS.stoneBenchtopThickness} stone benchtops throughout`,
+  `${OFFER_SPEC_FACTS.ductedAirConditioning} ducted air conditioning`,
+  `${OFFER_SPEC_FACTS.livingFloorFinish} — living areas`,
   "Floor-to-ceiling tiles — all wet areas",
   "Feature staircase with glass balustrade",
   "All PC items per inclusions schedule",

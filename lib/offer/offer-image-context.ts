@@ -51,8 +51,12 @@ const SLOT_SIGNALS: Record<OfferImageSlotKey, readonly Signal[]> = {
     [/waterfall/i, "waterfall stone ends"],
   ],
   living: [
-    [/herringbone/i, "herringbone timber flooring"],
-    [/timber floor|floor ?board|flooring|hybrid floor/i, "timber flooring"],
+    // No floor-finish signals here. The living slot's base prompt already names
+    // the finish the inclusions schedule prices, and these patterns matched the
+    // bare word "flooring" — so the default flooring cost line dragged "timber
+    // flooring" back into the prompt and generated an image of a floor the
+    // contract does not include. Bedrooms keep their timber signal: the schedule
+    // really does specify timber-look hybrid there.
     [/\bvoid\b/i, "double-height void"],
     [/stair/i, "feature staircase"],
     [/rumpus/i, "spacious rumpus"],

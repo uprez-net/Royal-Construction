@@ -214,9 +214,12 @@ function coverPage(
     <table>
       <tbody>
         ${particular("Site address", job.siteAddress)}
-        ${particular("Title reference", job.dpNumber)}
-        ${particular("Zoning", job.zoning)}
-        ${particular("Lot area", formatArea(job.lotAreaSqm))}
+        ${/* Omit unknown site particulars rather than contracting to a blank
+             title reference, a blank zoning, or a "0 m²" lot — the same reason
+             the façade row below is conditional. */ ""}
+        ${job.dpNumber.trim() ? particular("Title reference", job.dpNumber) : ""}
+        ${job.zoning.trim() ? particular("Zoning", job.zoning) : ""}
+        ${job.lotAreaSqm > 0 ? particular("Lot area", formatArea(job.lotAreaSqm)) : ""}
         ${particular("Build type", job.buildType)}
         ${job.facade ? particular("Façade", job.facade) : ""}
         ${particular("Total build area", formatArea(totalArea))}

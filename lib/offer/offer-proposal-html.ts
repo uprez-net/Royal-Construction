@@ -1,6 +1,7 @@
 import {
   buildOfferPrintTemplateData,
   formatArea,
+  formatSiteParticulars,
   getPrintFooterText,
   PROPOSAL_TAGLINE,
   COMPANY_LINE,
@@ -8,6 +9,7 @@ import {
 } from "./workspace-print-template";
 import {
   buildWelcomeParagraphs,
+  OFFER_SPEC_FACTS,
   STANDARD_INCLUSIONS_SCHEDULE,
 } from "./workspace-proposal-content";
 import {
@@ -231,7 +233,7 @@ function galleryPage(
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Our work</div>
     <h1 class="title">Your home will be finished to this standard</h1>
-    <p class="muted" style="margin-top:12px;max-width:155mm;">The images below are from a recently completed double storey home — built to a similar size and finish level. Full render to all elevations, luxury shaker kitchen, 60mm stone benchtops, herringbone flooring and floor-to-ceiling tiles.</p>
+    <p class="muted" style="margin-top:12px;max-width:155mm;">The images below are from a recently completed home — built to a similar size and finish level. Full render to all elevations, luxury shaker kitchen, ${esc(OFFER_SPEC_FACTS.stoneBenchtopThickness)} stone benchtops and floor-to-ceiling tiles to the wet areas. Finishes on your home are as per the inclusions schedule.</p>
     <div class="gallery">${slots}</div>
     ${foot}
   </div>`;
@@ -252,12 +254,13 @@ function snapshotPage(
     .join("");
   const cell = (cap: string, num: string) =>
     `<div><div class="cap">${esc(cap)}</div><div class="num">${esc(num)}</div></div>`;
+  const particulars = formatSiteParticulars(job);
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Project snapshot</div>
     <h1 class="title">Site and build scope</h1>
     <div class="grid2">
-      <div class="box"><div class="lbl">Site</div><div class="big">${esc(job.siteAddress)}</div><p class="muted" style="margin-top:10px;font-size:12px;">${esc(job.dpNumber)}</p><p class="muted" style="font-size:12px;">Lot Area: ${esc(formatArea(job.lotAreaSqm))} | Zoning: ${esc(job.zoning)}</p></div>
+      <div class="box"><div class="lbl">Site</div><div class="big">${esc(job.siteAddress)}</div><div style="margin-top:10px;">${job.dpNumber.trim() ? `<p class="muted" style="font-size:12px;">${esc(job.dpNumber)}</p>` : ""}${particulars ? `<p class="muted" style="font-size:12px;">${esc(particulars)}</p>` : ""}</div></div>
       <div class="box"><div class="lbl">Build scope</div><div class="big">${esc(job.buildType)}</div><ul style="margin-top:8px;list-style:none;">${scope}</ul></div>
     </div>
     <div class="areatable">

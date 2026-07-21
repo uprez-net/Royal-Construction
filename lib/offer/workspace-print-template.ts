@@ -109,6 +109,26 @@ export function formatArea(value: number): string {
   }).format(value)} m²`;
 }
 
+// The "Lot Area … | Zoning …" line under the site address on the proposal
+// snapshot. Unfilled particulars are dropped rather than printed: "Lot Area:
+// 0 m²" reads to a client as a surveyed measurement of zero, and a bare
+// "Zoning:" label with nothing after it reads as an omission from the contract.
+// Returns "" when neither is known, so the caller can drop the line entirely.
+export function formatSiteParticulars(
+  job: Pick<OfferWorkspaceJob, "lotAreaSqm" | "zoning">,
+): string {
+  const parts: string[] = [];
+
+  if (job.lotAreaSqm > 0) {
+    parts.push(`Lot Area: ${formatArea(job.lotAreaSqm)}`);
+  }
+  if (job.zoning.trim().length > 0) {
+    parts.push(`Zoning: ${job.zoning.trim()}`);
+  }
+
+  return parts.join(" | ");
+}
+
 export function formatDateDisplay(value: Date | string): string {
   const date = typeof value === "string" ? new Date(`${value}T00:00:00`) : value;
 
