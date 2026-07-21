@@ -11,7 +11,7 @@ export function AuthShell({
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-[calc(100dvh_-_var(--sandbox-banner-height,0px))]">
       <aside className="relative hidden w-[42%] flex-shrink-0 flex-col overflow-hidden bg-[oklch(0.16_0.03_249.8)] px-12 py-10 text-white lg:flex">
         {/* Background photo */}
         <Image
