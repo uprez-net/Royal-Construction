@@ -54,12 +54,16 @@ export async function createTenderEnvelope(args: {
     documentId: "1",
   };
 
-  // Builder signs first (routing 1); every owner signs after (routing 2).
+  // Customer/owner(s) sign first (routing 1); Royal (the builder) counter-signs
+  // to execute (routing 2). DocuSign emails routing-order 1 the moment the
+  // envelope is sent, so the customer receives the Tender immediately instead of
+  // waiting behind the builder's signature. If the customer declines, the
+  // builder is never troubled for a signature on a superseded Tender.
   const builderSigner: docusign.Signer = {
     name: args.builder.name,
     email: args.builder.email,
     recipientId: "1",
-    routingOrder: "1",
+    routingOrder: "2",
     tabs: {
       signHereTabs: [anchorTab("sigBuilder")],
       dateSignedTabs: [anchorTab("dateBuilder")],
@@ -70,7 +74,7 @@ export async function createTenderEnvelope(args: {
     name: owner.name,
     email: owner.email,
     recipientId: String(index + 2),
-    routingOrder: "2",
+    routingOrder: "1",
     tabs: {
       signHereTabs: [anchorTab(`sigOwner${index + 1}`)],
       dateSignedTabs: [anchorTab(`dateOwner${index + 1}`)],
@@ -128,14 +132,14 @@ export async function createTenderEnvelope(args: {
         role: "BUILDER",
         name: args.builder.name,
         email: args.builder.email,
-        routingOrder: 1,
+        routingOrder: 2,
         recipientId: "1",
       },
       ...args.owners.map<EnvelopeRecipientRecord>((owner, index) => ({
         role: "CUSTOMER",
         name: owner.name,
         email: owner.email,
-        routingOrder: 2,
+        routingOrder: 1,
         recipientId: String(index + 2),
       })),
     ],
