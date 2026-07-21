@@ -17,6 +17,8 @@ import {
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { resolveOfferContractValue } from "@/lib/offer/offer-contract-value";
 
 // Allowed lifecycle transitions for the offer WORKSPACE (the legacy
 // OFFER_STATE_MACHINE in offers.ts treats these new states as terminal). The
@@ -168,8 +170,12 @@ export async function saveOfferWorkspace(input: {
   }
 
   const persisted = serializeWorkspace(input.snapshot);
-  const contractValue = new Prisma.Decimal(persisted.selectedPriceCents).div(
-    100,
+  // Resolve the price through the same path the Tender/Contract and the project
+  // handoff use. `selectedPriceCents` is only the OPTIONAL manual override, and a
+  // blank override serialises to 0 cents — so reading it here stamped $0 on every
+  // offer priced the normal way, which is what the Versions timeline displayed.
+  const contractValue = new Prisma.Decimal(
+    buildProposalInput(input.snapshot).customerPrice.selectedContractValueIncGst,
   );
 
   // isActive is part of the predicate, not just the check above: forking a
@@ -314,6 +320,26 @@ export async function listOfferRevisions(
       contract: { select: { executedPdfUrl: true } },
     },
   });
+
+  // Revisions saved before the contract-value fix stored the blank price
+  // override ($0) instead of the quoted price, and only their own snapshot can
+  // recover it. Fetch those snapshots in one targeted follow-up rather than
+  // selecting every revision's workspaceState above — the blobs are large, and
+  // once the data is healthy this query matches nothing and costs nothing.
+  const unpricedIds = offers
+    .filter((offer) => Number(offer.contractValueIncGst ?? 0) <= 0)
+    .map((offer) => offer.id);
+  const stateById = new Map<string, Prisma.JsonValue | null>(
+    unpricedIds.length === 0
+      ? []
+      : (
+          await prisma.offer.findMany({
+            where: { id: { in: unpricedIds } },
+            select: { id: true, workspaceState: true },
+          })
+        ).map((row) => [row.id, row.workspaceState]),
+  );
+
   return offers.map((offer) => ({
     offerId: offer.id,
     reference:
@@ -322,10 +348,12 @@ export async function listOfferRevisions(
         : `R${offer.revisionNumber}`,
     revisionNumber: offer.revisionNumber,
     status: offer.offerStatus,
-    contractValueIncGst:
+    contractValueIncGst: resolveOfferContractValue(
       offer.contractValueIncGst === null
         ? null
         : Number(offer.contractValueIncGst),
+      stateById.get(offer.id) ?? null,
+    ),
     isActive: offer.isActive,
     createdAt: offer.createdAt.toISOString(),
     tenderPdfUrl: offer.tender?.executedPdfUrl ?? null,
@@ -531,7 +559,16 @@ export async function createOfferRevision(input: {
         amount: currentRow.amount,
         gstAmount: currentRow.gstAmount,
         totalAmount: currentRow.totalAmount,
-        contractValueIncGst: currentRow.contractValueIncGst,
+        // Derive rather than copy: the parent's column may predate the fix that
+        // wrote the resolved price, and inheriting it would carry that $0 into
+        // every future revision even after the parent's own row is repaired.
+        contractValueIncGst:
+          resolveOfferContractValue(
+            currentRow.contractValueIncGst === null
+              ? null
+              : Number(currentRow.contractValueIncGst),
+            currentRow.workspaceState,
+          ) ?? currentRow.contractValueIncGst,
         workspaceState:
           currentRow.workspaceState === null
             ? Prisma.JsonNull
