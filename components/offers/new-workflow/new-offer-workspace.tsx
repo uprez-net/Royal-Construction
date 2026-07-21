@@ -376,6 +376,12 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   // Tracks the last-persisted particulars JSON so the contract-draft save effect
   // fires only on a real change (and never re-saves what we just hydrated).
   const lastSavedParticularsRef = useRef<string | null>(null);
+  // Latest particulars for event handlers (the send flush) without stale
+  // closures; refs must not be written during render, so sync it in an effect.
+  const contractParticularsRef = useRef(contractParticulars);
+  useEffect(() => {
+    contractParticularsRef.current = contractParticulars;
+  }, [contractParticulars]);
   const snapshotRef = useRef(snapshot);
   // Keep the "latest snapshot" ref for event handlers; refs must not be
   // written during render, so sync it in an effect.
@@ -568,6 +574,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     }
     const timer = setTimeout(() => {
       void (async () => {
+        setSaveState("saving");
         try {
           const result = await saveContractParticulars({
             offerId,
@@ -575,14 +582,19 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           });
           if (result.ok) {
             lastSavedParticularsRef.current = currentJson;
+            setSaveState("saved");
           } else {
+            // Surface the failure via the same chrome the main autosave uses,
+            // so a dropped particular is never invisible to the estimator.
             console.error(
               "[offer] contract particulars save failed:",
               result.error,
             );
+            setSaveState("error");
           }
         } catch (error) {
           console.error("[offer] contract particulars save failed:", error);
+          setSaveState("error");
         }
       })();
     }, 800);
@@ -829,6 +841,25 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setContractSendError(null);
     void (async () => {
       try {
+        // Flush any un-committed particulars first, so the envelope's locked
+        // tabs reflect the latest edits (the debounced save may not have landed,
+        // and the send reads particulars from the DB, not in-memory state). Once
+        // the send flips the offer to CONTRACT_SENT, saveContractParticulars is
+        // rejected, so a value not flushed here would be dropped from the
+        // envelope AND lost — mirror the flush-before-send of sendOffer/sendTender.
+        const particulars = contractParticularsRef.current;
+        const particularsJson = JSON.stringify(particulars);
+        if (particularsJson !== lastSavedParticularsRef.current) {
+          const saved = await saveContractParticulars({ offerId, particulars });
+          if (!saved.ok) {
+            setContractSendError(
+              `Couldn't save the contract particulars before sending: ${saved.error}`,
+            );
+            setContractSending(false);
+            return;
+          }
+          lastSavedParticularsRef.current = particularsJson;
+        }
         const result = await sendContractForSignature({ offerId });
         if (result.ok) {
           setStatus("contract_sent");
