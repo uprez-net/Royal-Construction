@@ -8,6 +8,7 @@ import type {
   OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
+import type { ContractParticulars } from "@/lib/offer/contract-particulars";
 import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import type {
@@ -146,6 +147,10 @@ type OfferWorkspaceScreenProps = {
   readonly onSendContract: () => void;
   readonly contractSending?: boolean;
   readonly contractSendError?: string | null;
+  readonly contractParticulars: ContractParticulars;
+  readonly onContractParticularsChange: (
+    patch: Partial<ContractParticulars>,
+  ) => void;
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
   readonly onCreateProject: () => void;
@@ -229,6 +234,8 @@ export function OfferWorkspaceScreen({
   onSendContract,
   contractSending,
   contractSendError,
+  contractParticulars,
+  onContractParticularsChange,
   onRecallContract,
   onMarkContractSigned,
   onCreateProject,
@@ -525,6 +532,8 @@ export function OfferWorkspaceScreen({
               job={job}
               paymentSchedule={paymentSchedule}
               status={status}
+              contractParticulars={contractParticulars}
+              onContractParticularsChange={onContractParticularsChange}
               onGenerateContract={onGenerateContract}
               onMarkContractSigned={onMarkContractSigned}
               onRecallContract={onRecallContract}

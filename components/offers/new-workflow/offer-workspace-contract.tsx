@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type {
   OfferDocumentDraft,
@@ -9,7 +11,20 @@ import type {
   OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import { Info, RotateCcw, ScrollText, Send, ShieldCheck } from "lucide-react";
+import {
+  CONTRACT_PARTICULAR_FIELDS,
+  missingRecommendedParticulars,
+  type ContractParticularGroup,
+  type ContractParticulars,
+} from "@/lib/offer/contract-particulars";
+import {
+  AlertTriangle,
+  Info,
+  RotateCcw,
+  ScrollText,
+  Send,
+  ShieldCheck,
+} from "lucide-react";
 import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import {
@@ -25,6 +40,10 @@ type ContractPanelProps = {
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
+  readonly contractParticulars: ContractParticulars;
+  readonly onContractParticularsChange: (
+    patch: Partial<ContractParticulars>,
+  ) => void;
   readonly onGenerateContract: () => void;
   readonly onSendContract: () => void;
   readonly contractSending?: boolean;
@@ -39,6 +58,8 @@ export function ContractPanel({
   customerPrice,
   draft,
   paymentSchedule,
+  contractParticulars,
+  onContractParticularsChange,
   onGenerateContract,
   onSendContract,
   contractSending = false,
@@ -51,13 +72,16 @@ export function ContractPanel({
   const isDraft = status === "contract_draft";
   const isSent = status === "contract_sent";
   const isSigned = status === "contract_signed" || status === "project";
-  const hasContract = isDraft || isSent || isSigned;
+  // The customer declined this contract; it is read-only until the operator
+  // forks a new revision (the particulars form is frozen in this state too).
+  const isDeclined = status === "contract_declined";
+  const hasContract = isDraft || isSent || isSigned || isDeclined;
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
-          description="Generate the building Contract from the signed Tender, then send it for signature via DocuSign (builder, then customer)."
+          description="Generate the building Contract from the signed Tender, capture the BC4 particulars, then send it for signature via DocuSign (customer, then builder)."
           icon={<ScrollText className="size-4" aria-hidden="true" />}
           singleLineDescription
           title="Contract"
@@ -65,6 +89,7 @@ export function ContractPanel({
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">
         <ContractStatusBanner
+          isDeclined={isDeclined}
           isDraft={isDraft}
           isSent={isSent}
           isSigned={isSigned}
@@ -81,7 +106,16 @@ export function ContractPanel({
           />
         ) : null}
 
+        {hasContract ? (
+          <ContractParticularsForm
+            editable={isDraft}
+            particulars={contractParticulars}
+            onChange={onContractParticularsChange}
+          />
+        ) : null}
+
         <ContractActions
+          isDeclined={isDeclined}
           isDraft={isDraft}
           isSent={isSent}
           isSigned={isSigned}
@@ -89,6 +123,7 @@ export function ContractPanel({
           customerName={job.clientNames}
           contractValueIncGst={customerPrice.selectedContractValueIncGst}
           offerReference={formatOfferReference(job.reference, job.revision)}
+          particulars={contractParticulars}
           sending={contractSending}
           sendError={contractSendError}
           onGenerateContract={onGenerateContract}
@@ -103,35 +138,46 @@ export function ContractPanel({
 
 function ContractStatusBanner({
   isTenderSigned,
+  isDeclined,
   isDraft,
   isSent,
   isSigned,
 }: {
   readonly isTenderSigned: boolean;
+  readonly isDeclined: boolean;
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
 }) {
+  if (isDeclined) {
+    return (
+      <Banner tone="warning">
+        The customer declined this Contract. Create a new version to revise and
+        re-send.
+      </Banner>
+    );
+  }
   if (isSigned) {
     return (
       <Banner tone="success">
-        Signed by builder and customer. The executed Contract is on file — the
-        Offer is ready to hand off to Project.
+        Signed by the customer and builder. The executed Contract is on file —
+        the Offer is ready to hand off to Project.
       </Banner>
     );
   }
   if (isSent) {
     return (
       <Banner tone="active">
-        Sent for signature via DocuSign — awaiting the builder and customer.
+        Sent for signature via DocuSign — awaiting the customer, then the
+        builder.
       </Banner>
     );
   }
   if (isDraft) {
     return (
       <Banner tone="active">
-        Draft generated from the signed Tender. Review it, then send for
-        signature.
+        Draft generated from the signed Tender. Fill the BC4 particulars below,
+        then send for signature.
       </Banner>
     );
   }
@@ -145,14 +191,141 @@ function ContractStatusBanner({
   return null;
 }
 
+// Copy for each particulars group heading, in render order.
+const PARTICULAR_GROUPS: readonly {
+  readonly group: ContractParticularGroup;
+  readonly title: string;
+}[] = [
+  { group: "owner", title: "Owner contact details" },
+  { group: "timing", title: "Commencement & timing" },
+  { group: "financial", title: "Financial terms (entered per job)" },
+  { group: "funding", title: "Funding" },
+  { group: "terms", title: "Site & special conditions" },
+];
+
+// BC4 particulars the builder used to complete mid-signing. Captured here first
+// so the contract can route to the customer with those fields already filled.
+// Editable while the contract is a draft; read-only (showing what was sent) once
+// the envelope is out for signature.
+function ContractParticularsForm({
+  particulars,
+  editable,
+  onChange,
+}: {
+  readonly particulars: ContractParticulars;
+  readonly editable: boolean;
+  readonly onChange: (patch: Partial<ContractParticulars>) => void;
+}) {
+  if (!editable) {
+    const filled = CONTRACT_PARTICULAR_FIELDS.filter(
+      (field) => (particulars[field.key] ?? "").trim().length > 0,
+    );
+    return (
+      <section className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Contract particulars
+        </h4>
+        {filled.length === 0 ? (
+          <p className="text-sm text-muted-foreground/80">
+            No particulars were captured — the builder completes any open fields
+            when counter-signing.
+          </p>
+        ) : (
+          <dl className="grid gap-2 sm:grid-cols-2">
+            {filled.map((field) => (
+              <div key={field.key}>
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {field.label}
+                </dt>
+                <dd className="whitespace-pre-wrap text-sm font-medium">
+                  {particulars[field.key]}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section className="grid gap-4 rounded-lg border border-border/70 bg-background p-4">
+      <div>
+        <h4 className="font-heading text-sm font-semibold">
+          Contract particulars
+        </h4>
+        <p className="mt-1 flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          These fill the BC4 fields the builder used to complete while signing.
+          Enter them here so the customer receives a complete contract. Anything
+          left blank stays open for the builder to complete at counter-sign.
+        </p>
+      </div>
+
+      {PARTICULAR_GROUPS.map(({ group, title }) => {
+        const fields = CONTRACT_PARTICULAR_FIELDS.filter(
+          (field) => field.group === group,
+        );
+        if (fields.length === 0) {
+          return null;
+        }
+        return (
+          <div key={group} className="grid gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {title}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {fields.map((field) => (
+                <label
+                  key={field.key}
+                  className={field.multiline ? "sm:col-span-2" : undefined}
+                >
+                  <span className="mb-1 block text-xs font-medium text-foreground">
+                    {field.label}
+                    {field.recommendedBeforeSend ? (
+                      <span className="ml-1 text-royal-gold-dark">
+                        · recommended
+                      </span>
+                    ) : null}
+                  </span>
+                  {field.multiline ? (
+                    <Textarea
+                      rows={3}
+                      placeholder={field.hint}
+                      value={particulars[field.key]}
+                      onChange={(event) =>
+                        onChange({ [field.key]: event.target.value })
+                      }
+                    />
+                  ) : (
+                    <Input
+                      placeholder={field.hint}
+                      value={particulars[field.key]}
+                      onChange={(event) =>
+                        onChange({ [field.key]: event.target.value })
+                      }
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 function ContractActions({
   isTenderSigned,
+  isDeclined,
   isDraft,
   isSent,
   isSigned,
   customerName,
   contractValueIncGst,
   offerReference,
+  particulars,
   sending,
   sendError,
   onGenerateContract,
@@ -161,12 +334,14 @@ function ContractActions({
   onMarkContractSigned,
 }: {
   readonly isTenderSigned: boolean;
+  readonly isDeclined: boolean;
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
   readonly customerName: string;
   readonly contractValueIncGst: number;
   readonly offerReference: string;
+  readonly particulars: ContractParticulars;
   readonly sending: boolean;
   readonly sendError: string | null;
   readonly onGenerateContract: () => void;
@@ -176,9 +351,13 @@ function ContractActions({
 }) {
   const [confirming, setConfirming] = useState(false);
 
-  if (isSigned) {
+  // Signed and declined contracts are terminal in this panel — a declined
+  // contract is revised via "New version" at the workspace level, not here.
+  if (isSigned || isDeclined) {
     return null;
   }
+
+  const missingRecommended = missingRecommendedParticulars(particulars);
 
   return (
     <div className="grid gap-3">
@@ -186,14 +365,15 @@ function ContractActions({
         <SigningTracker
           recipients={[
             {
-              role: "Builder",
-              detail: "Royal Constructions",
+              role: "Customer",
+              detail: customerName || "signs first",
               state: "awaiting",
             },
             {
-              role: "Customer",
-              detail: customerName || "signs after the builder",
+              role: "Builder",
+              detail: "Royal Constructions",
               state: "waiting_for_prior",
+              waitingLabel: "Signs after the customer",
             },
           ]}
         />
@@ -201,9 +381,10 @@ function ContractActions({
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           Sending creates a DocuSign envelope from the MBA BC4 contract
-          template, pre-filled from the signed Tender. The builder signs first
-          (completing any open particulars), then the customer. The Connect
-          webhook records signatures and files the executed contract.
+          template, pre-filled from the signed Tender and the particulars above
+          (sent as locked fields). The customer signs first, then the builder
+          counter-signs. The Connect webhook records signatures and files the
+          executed contract.
         </p>
       )}
 
@@ -263,8 +444,23 @@ function ContractActions({
         ) : null}
       </div>
 
+      {isDraft && missingRecommended.length > 0 ? (
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            Recommended particulars still blank:{" "}
+            <span className="font-medium">
+              {missingRecommended.map((field) => field.label).join(", ")}
+            </span>
+            . You can still send — the builder can complete any blank field at
+            counter-sign.
+          </span>
+        </p>
+      ) : null}
+
       {isDraft && confirming ? (
         <EnvelopeSendConfirm
+          customerFirst
           documentName="Contract"
           recipientName={customerName}
           valueLabel="Contract sum inc GST"
@@ -451,14 +647,16 @@ function Banner({
   tone,
 }: {
   readonly children: React.ReactNode;
-  readonly tone: "active" | "success" | "muted";
+  readonly tone: "active" | "success" | "muted" | "warning";
 }) {
   const toneClass =
     tone === "success"
       ? "border-success/30 bg-success-light text-foreground"
       : tone === "active"
         ? "border-royal-gold/30 bg-royal-gold-light/40 text-foreground"
-        : "border-border bg-muted/40 text-muted-foreground";
+        : tone === "warning"
+          ? "border-warning/40 bg-warning-light text-foreground"
+          : "border-border bg-muted/40 text-muted-foreground";
 
   return (
     <p className={`rounded-lg border px-3 py-2.5 text-sm ${toneClass}`}>

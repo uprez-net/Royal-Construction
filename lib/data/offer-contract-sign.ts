@@ -5,6 +5,7 @@ import {
   EnvelopeDocType,
   EnvelopeStatus,
   OfferStatus,
+  Prisma,
   SignerRole,
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -23,6 +24,12 @@ import {
   createContractEnvelope,
   type ContractTabValue,
 } from "@/lib/docusign/contract-envelope";
+import {
+  contractParticularsToLockedTabs,
+  normalizeContractParticulars,
+  parseContractParticulars,
+  type ContractParticulars,
+} from "@/lib/offer/contract-particulars";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -39,8 +46,10 @@ function moneyWithCents(value: number): string {
 // Send the MBA BC4 building Contract for signature from the DocuSign template
 // (DOCUSIGN_CONTRACT_TEMPLATE_ID; roles + tab labels in
 // lib/docusign/contract-template-spec.md). Values derived from the signed
-// Tender's frozen snapshot are locked; the rest stay editable for the Builder,
-// who signs first. Advances the offer to CONTRACT_SENT.
+// Tender's frozen snapshot are locked, as are the estimator's BC4 particulars
+// captured during CONTRACT_DRAFT (issue #98). The contract routes to the
+// customer first (Owner routingOrder 1, Builder counter-signs at 2). Advances
+// the offer to CONTRACT_SENT.
 export async function sendContractForSignature(input: {
   offerId: string;
   customerEmail?: string;
@@ -60,6 +69,7 @@ export async function sendContractForSignature(input: {
       workspaceState: true,
       agreedSnapshot: true,
       lead: { select: { email: true } },
+      contract: { select: { particulars: true } },
     },
   });
   if (!offer) {
@@ -171,6 +181,13 @@ export async function sendContractForSignature(input: {
     locked("defectsLiabilityWeeks", "12 Weeks"),
     locked("workDescription", [job.buildType, ...job.buildScope].filter(Boolean).join(". ")),
     locked("exclusionsList", exclusions.join("\n")),
+    // Estimator-entered BC4 particulars (issue #98). Only the FILLED ones are
+    // sent as locked tabs; a blank one is omitted so it stays the template's
+    // unlocked tab for the builder to complete at counter-sign, rather than the
+    // customer receiving a permanently-empty locked box.
+    ...contractParticularsToLockedTabs(
+      parseContractParticulars(offer.contract?.particulars ?? null),
+    ),
   ];
   const ownerTextTabs: ContractTabValue[] = [locked("ownerPrintName", primaryOwner)];
 
@@ -268,6 +285,57 @@ export async function sendContractForSignature(input: {
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   return { ok: true, reference, envelopeId: envelope.envelopeId };
+}
+
+type SaveParticularsResult = { ok: true } | { ok: false; error: string };
+
+// Persist the estimator's BC4 particulars while the contract is a draft (issue
+// #98). Upserts the Contract row so the values survive to send time, where they
+// go out as locked tabs. Only editable in CONTRACT_DRAFT — once the envelope is
+// sent the particulars are frozen into it and can't be changed without a recall.
+export async function saveContractParticulars(input: {
+  offerId: string;
+  particulars: ContractParticulars;
+}): Promise<SaveParticularsResult> {
+  const access = await authorizeOfferAccess(input.offerId);
+  if (!access.ok) {
+    return { ok: false, error: access.error };
+  }
+
+  const offer = await prisma.offer.findUnique({
+    where: { id: input.offerId },
+    select: { id: true, offerStatus: true, revisionNumber: true },
+  });
+  if (!offer) {
+    return { ok: false, error: "Offer not found." };
+  }
+  if (offer.offerStatus !== OfferStatus.CONTRACT_DRAFT) {
+    return {
+      ok: false,
+      error:
+        "Contract particulars can only be edited while the contract is a draft.",
+    };
+  }
+
+  const particulars = normalizeContractParticulars(
+    input.particulars,
+  ) as unknown as Prisma.InputJsonValue;
+
+  await prisma.contract.upsert({
+    where: { offerId: offer.id },
+    update: { particulars },
+    // documentData is required on the model; it is (re)built from the frozen
+    // snapshot at send time, so seed an empty object until then.
+    create: {
+      offerId: offer.id,
+      version: offer.revisionNumber,
+      documentData: {},
+      particulars,
+    },
+  });
+
+  revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+  return { ok: true };
 }
 
 function describeDocusignError(error: unknown): string {

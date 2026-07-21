@@ -19,6 +19,10 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { resolveOfferContractValue } from "@/lib/offer/offer-contract-value";
+import {
+  parseContractParticulars,
+  type ContractParticulars,
+} from "@/lib/offer/contract-particulars";
 
 // Allowed lifecycle transitions for the offer WORKSPACE (the legacy
 // OFFER_STATE_MACHINE in offers.ts treats these new states as terminal). The
@@ -53,6 +57,10 @@ type LoadedOfferWorkspace = {
   // note (a short "Declined via DocuSign[: <reason>]" message) so the workspace
   // can tell the operator why it was declined. Null otherwise.
   declineReason?: string | null;
+  // Estimator's BC4 particulars (issue #98), hydrated into the contract-stage
+  // form. Null when the offer has no contract row yet (nothing entered), in
+  // which case the workspace starts from the empty set.
+  contractParticulars?: ContractParticulars | null;
 };
 
 type OfferRow = {
@@ -99,6 +107,24 @@ async function attachDeclineReason(
   return { ...loaded, declineReason: event?.note ?? null };
 }
 
+// Attach the estimator's saved BC4 particulars (issue #98) so the contract-stage
+// form hydrates from them. Null when the offer has no contract row yet.
+async function attachContractParticulars(
+  loaded: LoadedOfferWorkspace,
+): Promise<LoadedOfferWorkspace> {
+  const contract = await prisma.contract.findUnique({
+    where: { offerId: loaded.offerId },
+    select: { particulars: true },
+  });
+  return {
+    ...loaded,
+    contractParticulars:
+      contract?.particulars == null
+        ? null
+        : parseContractParticulars(contract.particulars),
+  };
+}
+
 // Mint the next base reference (RC-Q-YYYY-NNN) inside a transaction.
 async function mintOfferReference(
   tx: Prisma.TransactionClient,
@@ -139,9 +165,9 @@ export async function loadActiveOfferWorkspace(
         });
       });
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
-      return attachDeclineReason(toLoaded(healed));
+      return attachContractParticulars(await attachDeclineReason(toLoaded(healed)));
     }
-    return attachDeclineReason(toLoaded(existing));
+    return attachContractParticulars(await attachDeclineReason(toLoaded(existing)));
   }
 
   // First offer for this lead — create it with a freshly minted reference.
