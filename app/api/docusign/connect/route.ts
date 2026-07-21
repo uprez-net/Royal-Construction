@@ -63,7 +63,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     await syncRecipients(envelope.id, envelope.signatures, payload);
-    await syncEnvelopeStatus(envelope, event);
+    await syncEnvelopeStatus(envelope, event, payload);
   } catch (error) {
     console.error("[docusign] Connect processing failed:", error);
     // 500 → DocuSign retries with backoff, which is what we want here.
@@ -79,6 +79,7 @@ type ConnectRecipient = {
   routingOrder?: string;
   status?: string;
   signedDateTime?: string;
+  declinedReason?: string;
 };
 
 type ConnectPayload = {
@@ -189,6 +190,7 @@ async function syncEnvelopeStatus(
     } | null;
   },
   event: string,
+  payload: ConnectPayload,
 ): Promise<void> {
   const nextStatus = ENVELOPE_STATUS[event];
   if (!nextStatus) {
@@ -208,6 +210,13 @@ async function syncEnvelopeStatus(
         ...(nextStatus === EnvelopeStatus.VOIDED ? { voidedAt: now } : {}),
       },
     });
+  }
+
+  // A customer decline moves the offer to a revise-ready stage; it never
+  // advances to the signed state, so branch off before the completion path.
+  if (nextStatus === EnvelopeStatus.DECLINED) {
+    await advanceOfferOnDecline(envelope, payload);
+    return;
   }
 
   if (nextStatus !== EnvelopeStatus.COMPLETED) {
@@ -324,4 +333,64 @@ async function syncEnvelopeStatus(
       }
     }
   }
+}
+
+// A customer decline (envelope-declined) moves the offer to a revise-ready
+// stage — TENDER_DECLINED / CONTRACT_DECLINED — and records DocuSign's own
+// decline reason on the status event, so the operator sees why and can revise
+// and re-issue via a new revision (issue #89). Forward-only and idempotent: it
+// fires solely from the matching *_SENT status, so a replayed decline event is
+// a no-op, and it never drags an offer that has already moved on.
+async function advanceOfferOnDecline(
+  envelope: {
+    docusignId: string | null;
+    docType: EnvelopeDocType;
+    tender: { offerId: string } | null;
+    contract: { offerId: string } | null;
+  },
+  payload: ConnectPayload,
+): Promise<void> {
+  const isTender = envelope.docType === EnvelopeDocType.TENDER;
+  const parent = isTender ? envelope.tender : envelope.contract;
+  if (!parent) {
+    return;
+  }
+
+  const declinedStatus = isTender
+    ? OfferStatus.TENDER_DECLINED
+    : OfferStatus.CONTRACT_DECLINED;
+  const expectedFromStatus = isTender
+    ? OfferStatus.TENDER_SENT
+    : OfferStatus.CONTRACT_SENT;
+
+  // DocuSign attaches the decliner's reason to the recipient record; surface it
+  // verbatim rather than inventing our own copy.
+  const declineReason = (payload.data?.envelopeSummary?.recipients?.signers ?? [])
+    .find((signer) => (signer.status ?? "").toLowerCase() === "declined")
+    ?.declinedReason?.trim();
+
+  const offer = await prisma.offer.findUnique({
+    where: { id: parent.offerId },
+    select: { id: true, offerStatus: true },
+  });
+  if (!offer || offer.offerStatus !== expectedFromStatus) {
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.offer.update({
+      where: { id: offer.id },
+      data: { offerStatus: declinedStatus },
+    }),
+    prisma.offerStatusEvent.create({
+      data: {
+        offerId: offer.id,
+        fromStatus: offer.offerStatus,
+        toStatus: declinedStatus,
+        note: `DocuSign envelope ${envelope.docusignId ?? "?"} declined by the customer${
+          declineReason ? `: ${declineReason}` : ""
+        }`,
+      },
+    }),
+  ]);
 }

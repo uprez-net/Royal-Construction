@@ -250,9 +250,13 @@ const OFFER_TO_LEAD_STATUS_UPDATE_MAP: Record<OfferStatus, LeadStage> = {
     TENDER_DRAFT: "WON",
     TENDER_SENT: "WON",
     TENDER_SIGNED: "WON",
+    // A declined tender/contract pulls the deal back into active negotiation
+    // until a new revision is sent.
+    TENDER_DECLINED: "NEGOTIATING",
     CONTRACT_DRAFT: "WON",
     CONTRACT_SENT: "WON",
     CONTRACT_SIGNED: "WON",
+    CONTRACT_DECLINED: "NEGOTIATING",
     PROJECT: "WON",
     SUPERSEDED: "NEGOTIATING",
 }
@@ -268,9 +272,11 @@ const OFFER_STATE_MACHINE: Record<OfferStatus, OfferStatus[]> = {
   TENDER_DRAFT: [],
   TENDER_SENT: [],
   TENDER_SIGNED: [],
+  TENDER_DECLINED: [],
   CONTRACT_DRAFT: [],
   CONTRACT_SENT: [],
   CONTRACT_SIGNED: [],
+  CONTRACT_DECLINED: [],
   PROJECT: [],
   SUPERSEDED: [],
 };

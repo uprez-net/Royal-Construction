@@ -99,6 +99,11 @@ enum OfferStatus {
   CONTRACT_SIGNED
   PROJECT
   SUPERSEDED
+  // Customer declined the DocuSign envelope — a revise-ready stage the operator
+  // clears by creating a new revision (issue #89). The DocuSign decline reason
+  // is recorded on the matching OfferStatusEvent.
+  TENDER_DECLINED
+  CONTRACT_DECLINED
 }
 
 enum EnvelopeDocType {

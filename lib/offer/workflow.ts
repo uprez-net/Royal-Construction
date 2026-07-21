@@ -27,10 +27,14 @@ export function activeOfferPhase(
     case "agreed":
     case "tender_draft":
     case "tender_sent":
+    // A declined tender stays in the Tender phase so the operator can revise
+    // and re-issue it.
+    case "tender_declined":
       return "tender";
     case "tender_signed":
     case "contract_draft":
     case "contract_sent":
+    case "contract_declined":
       return "contract";
     case "contract_signed":
     case "project":

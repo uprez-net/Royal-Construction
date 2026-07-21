@@ -120,9 +120,11 @@ export type OfferWorkspaceStatus =
   | "tender_draft"
   | "tender_sent"
   | "tender_signed"
+  | "tender_declined"
   | "contract_draft"
   | "contract_sent"
   | "contract_signed"
+  | "contract_declined"
   | "project"
   | "rejected"
   | "superseded";
@@ -135,9 +137,11 @@ export const OFFER_STATUS_LABEL: Record<OfferWorkspaceStatus, string> = {
   tender_draft: "Tender draft",
   tender_sent: "Tender sent",
   tender_signed: "Tender signed",
+  tender_declined: "Tender declined",
   contract_draft: "Contract draft",
   contract_sent: "Contract sent",
   contract_signed: "Contract signed",
+  contract_declined: "Contract declined",
   project: "Project",
   rejected: "Rejected",
   superseded: "Superseded",
