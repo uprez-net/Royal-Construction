@@ -14,6 +14,10 @@ export type SigningRecipient = {
   readonly role: string;
   readonly detail: string;
   readonly state: SignerState;
+  // Overrides the default "waiting_for_prior" pill copy ("Signs after the
+  // builder"), which only fits the contract's builder-first order. The tender
+  // signs customer-first, so its builder pill reads "Signs after the customer".
+  readonly waitingLabel?: string;
 };
 
 const SIGNER_PILL: Record<
@@ -46,6 +50,10 @@ export function SigningTracker({
       </p>
       {recipients.map((recipient) => {
         const pill = SIGNER_PILL[recipient.state];
+        const pillLabel =
+          recipient.state === "waiting_for_prior" && recipient.waitingLabel
+            ? recipient.waitingLabel
+            : pill.label;
         return (
           <div
             key={recipient.role}
@@ -71,7 +79,7 @@ export function SigningTracker({
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${pill.className}`}
             >
-              {pill.label}
+              {pillLabel}
             </span>
           </div>
         );
@@ -90,6 +98,7 @@ export function EnvelopeSendConfirm({
   value,
   reference,
   sending,
+  customerFirst = false,
   onConfirm,
   onCancel,
 }: {
@@ -99,6 +108,9 @@ export function EnvelopeSendConfirm({
   readonly value: number;
   readonly reference: string;
   readonly sending: boolean;
+  // The tender routes to the customer first (issue #89); the contract keeps its
+  // builder-first order. Drives the routing sentence below.
+  readonly customerFirst?: boolean;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 }) {
@@ -114,9 +126,12 @@ export function EnvelopeSendConfirm({
       </dl>
       <p className="flex items-start gap-2 text-xs text-muted-foreground">
         <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-        Creates a DocuSign envelope and routes it to the builder, then the
-        customer. The envelope can&apos;t be edited after sending — to change
-        anything you&apos;d recall it and regenerate.
+        Creates a DocuSign envelope and routes it to{" "}
+        {customerFirst
+          ? "the customer, then the builder"
+          : "the builder, then the customer"}
+        . The envelope can&apos;t be edited after sending — to change anything
+        you&apos;d recall it and regenerate.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button

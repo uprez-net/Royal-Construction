@@ -49,9 +49,9 @@ type LoadedOfferWorkspace = {
   status: OfferStatus;
   stateVersion: number;
   snapshot: OfferWorkspaceSnapshot | null;
-  // Set only when the offer is in a *_DECLINED state: the note from the decline
-  // status event (carries DocuSign's own reason) so the workspace can tell the
-  // operator why the customer declined. Null otherwise.
+  // Set only when the offer is in a *_DECLINED state: the decline status-event
+  // note (a short "Declined via DocuSign[: <reason>]" message) so the workspace
+  // can tell the operator why it was declined. Null otherwise.
   declineReason?: string | null;
 };
 
@@ -80,8 +80,8 @@ function toLoaded(offer: OfferRow): LoadedOfferWorkspace {
 }
 
 // A declined offer carries the reason on its most recent decline status event;
-// attach it so the workspace can tell the operator why the customer declined
-// and prompt a new revision. A no-op for any non-declined status.
+// attach it so the workspace can tell the operator why it was declined and
+// prompt a new revision. A no-op for any non-declined status.
 async function attachDeclineReason(
   loaded: LoadedOfferWorkspace,
 ): Promise<LoadedOfferWorkspace> {

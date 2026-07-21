@@ -335,24 +335,36 @@ async function syncEnvelopeStatus(
   }
 }
 
-// A customer decline (envelope-declined) moves the offer to a revise-ready
-// stage — TENDER_DECLINED / CONTRACT_DECLINED — and records DocuSign's own
-// decline reason on the status event, so the operator sees why and can revise
-// and re-issue via a new revision (issue #89). Forward-only and idempotent: it
-// fires solely from the matching *_SENT status, so a replayed decline event is
-// a no-op, and it never drags an offer that has already moved on.
+// A decline (envelope-declined) moves the offer to a revise-ready stage —
+// TENDER_DECLINED / CONTRACT_DECLINED — and records DocuSign's decline reason on
+// the status event, so the operator sees why and can revise and re-issue via a
+// new revision (issue #89).
 async function advanceOfferOnDecline(
   envelope: {
-    docusignId: string | null;
+    id: string;
     docType: EnvelopeDocType;
-    tender: { offerId: string } | null;
-    contract: { offerId: string } | null;
+    tender: { id: string; offerId: string } | null;
+    contract: { id: string; offerId: string } | null;
   },
   payload: ConnectPayload,
 ): Promise<void> {
   const isTender = envelope.docType === EnvelopeDocType.TENDER;
   const parent = isTender ? envelope.tender : envelope.contract;
   if (!parent) {
+    return;
+  }
+
+  // Only the offer's CURRENT envelope may move the offer. A tender/contract can
+  // carry more than one envelope — a recall-then-resend leaves the prior one
+  // live in DocuSign — so a decline on a superseded envelope must be ignored at
+  // the offer level; otherwise a genuinely-signed re-send is stranded in
+  // *_DECLINED. Compare against the most-recently-sent envelope for this parent.
+  const latest = await prisma.envelope.findFirst({
+    where: isTender ? { tenderId: parent.id } : { contractId: parent.id },
+    orderBy: { sentAt: "desc" },
+    select: { id: true },
+  });
+  if (!latest || latest.id !== envelope.id) {
     return;
   }
 
@@ -364,33 +376,31 @@ async function advanceOfferOnDecline(
     : OfferStatus.CONTRACT_SENT;
 
   // DocuSign attaches the decliner's reason to the recipient record; surface it
-  // verbatim rather than inventing our own copy.
+  // rather than inventing our own copy. Role-neutral wording: after the tender
+  // flip the builder is routingOrder 2 and can also decline.
   const declineReason = (payload.data?.envelopeSummary?.recipients?.signers ?? [])
     .find((signer) => (signer.status ?? "").toLowerCase() === "declined")
     ?.declinedReason?.trim();
 
-  const offer = await prisma.offer.findUnique({
-    where: { id: parent.offerId },
-    select: { id: true, offerStatus: true },
+  // Atomic claim: only the delivery that flips *_SENT -> *_DECLINED records the
+  // event, so concurrent duplicate webhooks can't write duplicate audit rows,
+  // and a replayed decline (or an offer that already advanced) is a no-op.
+  const claim = await prisma.offer.updateMany({
+    where: { id: parent.offerId, offerStatus: expectedFromStatus },
+    data: { offerStatus: declinedStatus },
   });
-  if (!offer || offer.offerStatus !== expectedFromStatus) {
+  if (claim.count === 0) {
     return;
   }
 
-  await prisma.$transaction([
-    prisma.offer.update({
-      where: { id: offer.id },
-      data: { offerStatus: declinedStatus },
-    }),
-    prisma.offerStatusEvent.create({
-      data: {
-        offerId: offer.id,
-        fromStatus: offer.offerStatus,
-        toStatus: declinedStatus,
-        note: `DocuSign envelope ${envelope.docusignId ?? "?"} declined by the customer${
-          declineReason ? `: ${declineReason}` : ""
-        }`,
-      },
-    }),
-  ]);
+  await prisma.offerStatusEvent.create({
+    data: {
+      offerId: parent.offerId,
+      fromStatus: expectedFromStatus,
+      toStatus: declinedStatus,
+      note: declineReason
+        ? `Declined via DocuSign: ${declineReason}`
+        : "Declined via DocuSign.",
+    },
+  });
 }

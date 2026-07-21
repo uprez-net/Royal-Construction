@@ -60,6 +60,9 @@ export function TenderPanel({
   const isAgreed = status === "agreed";
   const isDraft = status === "tender_draft";
   const isSent = status === "tender_sent";
+  // The customer declined this tender; it is read-only until the operator forks
+  // a new revision (autosave is frozen in this state, so edits wouldn't persist).
+  const isDeclined = status === "tender_declined";
   // A fixed-price Tender's progress payments must sum to exactly 100% of the
   // contract; block sending (and warn) when the schedule is unbalanced.
   const scheduleTotalPct = getPaymentScheduleTotalPct(paymentSchedule);
@@ -79,13 +82,13 @@ export function TenderPanel({
         customerPrice={customerPrice}
         rows={paymentSchedule}
         onRowsChange={onPaymentScheduleChange}
-        locked={isSent || isSigned}
+        locked={isSent || isSigned || isDeclined}
       />
 
       <Card className="border-border/70 bg-white/95 shadow-sm">
         <CardHeader className="border-b border-border/70">
           <OfferCardHeading
-            description="Generate the fixed-price Tender from the agreed offer, then send it for signature via DocuSign (builder, then customer)."
+            description="Generate the fixed-price Tender from the agreed offer, then send it for signature via DocuSign (customer, then builder)."
             icon={<FileText className="size-4" aria-hidden="true" />}
             singleLineDescription
             title="Tender document"
@@ -94,6 +97,7 @@ export function TenderPanel({
         <CardContent className="grid gap-4 pt-4">
           <TenderStatusBanner
             isAgreed={isAgreed}
+            isDeclined={isDeclined}
             isDraft={isDraft}
             isSent={isSent}
             isSigned={isSigned}
@@ -112,6 +116,7 @@ export function TenderPanel({
 
           <TenderActions
             isAgreed={isAgreed}
+            isDeclined={isDeclined}
             isDraft={isDraft}
             isSent={isSent}
             isSigned={isSigned}
@@ -135,27 +140,38 @@ export function TenderPanel({
 
 function TenderStatusBanner({
   isAgreed,
+  isDeclined,
   isDraft,
   isSent,
   isSigned,
 }: {
   readonly isAgreed: boolean;
+  readonly isDeclined: boolean;
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
 }) {
+  if (isDeclined) {
+    return (
+      <Banner tone="warning">
+        The customer declined this Tender. Create a new version to revise and
+        re-send.
+      </Banner>
+    );
+  }
   if (isSigned) {
     return (
       <Banner tone="success">
-        Signed by builder and customer. The executed Tender is on file and the
-        Contract phase is unlocked below.
+        Signed by the customer and builder. The executed Tender is on file and
+        the Contract phase is unlocked below.
       </Banner>
     );
   }
   if (isSent) {
     return (
       <Banner tone="active">
-        Sent for signature via DocuSign — awaiting the builder and customer.
+        Sent for signature via DocuSign — awaiting the customer, then the
+        builder.
       </Banner>
     );
   }
@@ -179,6 +195,7 @@ function TenderStatusBanner({
 
 function TenderActions({
   isAgreed,
+  isDeclined,
   isDraft,
   isSent,
   isSigned,
@@ -195,6 +212,7 @@ function TenderActions({
   onMarkTenderSigned,
 }: {
   readonly isAgreed: boolean;
+  readonly isDeclined: boolean;
   readonly isDraft: boolean;
   readonly isSent: boolean;
   readonly isSigned: boolean;
@@ -212,7 +230,9 @@ function TenderActions({
 }) {
   const [confirming, setConfirming] = useState(false);
 
-  if (isSigned) {
+  // Signed and declined tenders are terminal in this panel — a declined tender
+  // is revised via "New version" at the workspace level, not from here.
+  if (isSigned || isDeclined) {
     return null;
   }
 
@@ -222,14 +242,15 @@ function TenderActions({
         <SigningTracker
           recipients={[
             {
-              role: "Builder",
-              detail: "Royal Constructions",
+              role: "Customer",
+              detail: customerName || "signs first",
               state: "awaiting",
             },
             {
-              role: "Customer",
-              detail: customerName || "signs after the builder",
+              role: "Builder",
+              detail: "Royal Constructions",
               state: "waiting_for_prior",
+              waitingLabel: "Signs after the customer",
             },
           ]}
         />
@@ -238,8 +259,8 @@ function TenderActions({
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           Sending creates a DocuSign envelope from the generated Tender PDF —
           signature tabs auto-place onto the document&apos;s anchor strings,
-          the builder signs first, then the customer. The Connect webhook
-          records each signature and files the executed PDF.
+          the customer signs first, then the builder counter-signs. The Connect
+          webhook records each signature and files the executed PDF.
         </p>
       )}
 
@@ -297,6 +318,7 @@ function TenderActions({
 
       {isDraft && confirming ? (
         <EnvelopeSendConfirm
+          customerFirst
           documentName="Tender"
           recipientName={customerName}
           valueLabel="Contract value inc GST"
@@ -512,14 +534,16 @@ function Banner({
   tone,
 }: {
   readonly children: React.ReactNode;
-  readonly tone: "active" | "success" | "muted";
+  readonly tone: "active" | "success" | "muted" | "warning";
 }) {
   const toneClass =
     tone === "success"
       ? "border-success/30 bg-success-light text-foreground"
       : tone === "active"
         ? "border-royal-gold/30 bg-royal-gold-light/40 text-foreground"
-        : "border-border bg-muted/40 text-muted-foreground";
+        : tone === "warning"
+          ? "border-warning/40 bg-warning-light text-foreground"
+          : "border-border bg-muted/40 text-muted-foreground";
 
   return (
     <p className={`rounded-lg border px-3 py-2.5 text-sm ${toneClass}`}>
