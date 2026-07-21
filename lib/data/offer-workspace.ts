@@ -230,6 +230,22 @@ export async function transitionOfferStatus(input: {
     throw new Error(access.error);
   }
 
+  // The TENDER_SIGNED / CONTRACT_SIGNED states must be reached only through a
+  // genuine DocuSign completion (the Connect webhook advances the offer and
+  // archives the executed PDF — app/api/docusign/connect/route.ts). The
+  // "Mark signed (simulate completion)" control routes here and would flip the
+  // status without an executed PDF, which then produces an empty project
+  // (issue #90). It is a local-development testing aid only, so refuse a manual
+  // jump into a signed state anywhere but local dev.
+  const isManualSignedJump =
+    input.toStatus === OfferStatus.TENDER_SIGNED ||
+    input.toStatus === OfferStatus.CONTRACT_SIGNED;
+  if (isManualSignedJump && process.env.NODE_ENV !== "development") {
+    throw new Error(
+      "Manual 'mark signed' is disabled outside local development — complete signing via DocuSign.",
+    );
+  }
+
   await prisma.$transaction(async (tx) => {
     const offer = await tx.offer.findUniqueOrThrow({
       where: { id: input.offerId },

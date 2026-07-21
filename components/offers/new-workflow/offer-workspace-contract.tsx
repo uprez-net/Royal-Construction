@@ -235,15 +235,21 @@ function ContractActions({
 
         {isSent ? (
           <>
-            <Button
-              className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-              size="sm"
-              type="button"
-              onClick={onMarkContractSigned}
-            >
-              <ShieldCheck className="size-4" aria-hidden="true" />
-              Mark signed (simulate completion)
-            </Button>
+            {/* Local-development testing aid only: the real signed state comes
+                from the DocuSign completion webhook. Hidden in staging/prod so
+                it can't manufacture a CONTRACT_SIGNED offer with no executed
+                PDF (issue #90); the server action also rejects it there. */}
+            {process.env.NODE_ENV === "development" ? (
+              <Button
+                className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+                size="sm"
+                type="button"
+                onClick={onMarkContractSigned}
+              >
+                <ShieldCheck className="size-4" aria-hidden="true" />
+                Mark signed (simulate completion)
+              </Button>
+            ) : null}
             <Button
               size="sm"
               type="button"
