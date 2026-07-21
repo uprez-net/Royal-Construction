@@ -257,8 +257,8 @@ function ContractParticularsForm({
         <p className="mt-1 flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           These fill the BC4 fields the builder used to complete while signing.
-          Enter them here so the customer receives a complete contract. Anything
-          left blank stays open for the builder to complete at counter-sign.
+          The customer signs first now, so enter them here — anything left blank
+          shows blank on the contract the customer receives.
         </p>
       </div>
 
@@ -452,8 +452,8 @@ function ContractActions({
             <span className="font-medium">
               {missingRecommended.map((field) => field.label).join(", ")}
             </span>
-            . You can still send — the builder can complete any blank field at
-            counter-sign.
+            . You can still send, but these will show blank on the contract the
+            customer signs.
           </span>
         </p>
       ) : null}

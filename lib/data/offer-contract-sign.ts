@@ -165,7 +165,11 @@ export async function sendContractForSignature(input: {
     stageRows.find((r) => r.stageName.toLowerCase().includes("deposit")) ?? stageRows[0];
   const exclusions = snapshot.draft.exclusionBullets;
 
-  const builderTextTabs: ContractTabValue[] = [
+  // Every value is a tab on the OWNER role (the first signer, issue #98), so the
+  // customer sees the complete contract on open — derived Tender values, the
+  // estimator's BC4 particulars, and the owner's print name. The Builder role
+  // (routingOrder 2) carries only its signature (defined in the template).
+  const ownerTextTabs: ContractTabValue[] = [
     locked("contractPrice", priceLabel),
     locked("contractPriceTotal", priceLabel),
     locked("ownerNames", ownerNames),
@@ -182,14 +186,13 @@ export async function sendContractForSignature(input: {
     locked("workDescription", [job.buildType, ...job.buildScope].filter(Boolean).join(". ")),
     locked("exclusionsList", exclusions.join("\n")),
     // Estimator-entered BC4 particulars (issue #98). Only the FILLED ones are
-    // sent as locked tabs; a blank one is omitted so it stays the template's
-    // unlocked tab for the builder to complete at counter-sign, rather than the
-    // customer receiving a permanently-empty locked box.
+    // sent; a blank one stays the template's locked-empty tab — read-only, so
+    // the customer can't type into a builder particular the estimator left blank.
     ...contractParticularsToLockedTabs(
       parseContractParticulars(offer.contract?.particulars ?? null),
     ),
+    locked("ownerPrintName", primaryOwner),
   ];
-  const ownerTextTabs: ContractTabValue[] = [locked("ownerPrintName", primaryOwner)];
 
   // Atomically claim the send so two concurrent calls can't both create a
   // DocuSign envelope (double-send); the claim is released on envelope failure.
@@ -219,13 +222,12 @@ export async function sendContractForSignature(input: {
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
       builder: { name: config.builderSignerName, email: config.builderSignerEmail },
       owner: { name: primaryOwner, email: customerEmail },
-      builderTextTabs,
-      builderCheckboxTabs: [
+      ownerTextTabs,
+      ownerCheckboxTabs: [
         { tabLabel: "gstInclusive", selected: true },
         { tabLabel: "hbcfIncluded", selected: true },
         { tabLabel: "exclusionsYes", selected: exclusions.length > 0 },
       ],
-      ownerTextTabs,
     });
   } catch (error) {
     // Release the claim so the builder can retry.
@@ -238,9 +240,7 @@ export async function sendContractForSignature(input: {
 
   const documentData = {
     templateId: config.contractTemplateId,
-    tabs: Object.fromEntries(
-      [...builderTextTabs, ...ownerTextTabs].map((t) => [t.tabLabel, t.value]),
-    ),
+    tabs: Object.fromEntries(ownerTextTabs.map((t) => [t.tabLabel, t.value])),
   };
 
   await prisma.$transaction(async (tx) => {

@@ -4,14 +4,14 @@ import type { DocusignContext } from "./client";
 import type { EnvelopeRecipientRecord } from "./tender-envelope";
 
 // The Contract is the MBA BC4 licensed form, sent from a DocuSign template
-// (created once in the DocuSign UI) rather than a runtime PDF — see
-// contract-template-spec.md for the template's roles and tab labels. Values
-// derived from the signed Tender arrive as locked text tabs. The estimator's
-// BC4 particulars (issue #98) are also captured in-app and sent as locked tabs,
-// so the customer (routingOrder 1) receives a complete contract and the builder
-// (routingOrder 2) counter-signs — the same customer-first order as the tender.
-// Any particular the estimator leaves blank is simply not sent, so it stays the
-// template's own unlocked tab for the builder to complete at counter-sign.
+// (created once via scripts/docusign/create-bc4-template.ts) rather than a
+// runtime PDF — see contract-template-spec.md for the roles and tab labels.
+// Customer-first (issue #98): EVERY contract value is a tab on the OWNER role
+// (routingOrder 1, signs first) — derived Tender values + the estimator's BC4
+// particulars, all locked/read-only — so the customer sees the complete
+// contract on open. The Builder (routingOrder 2) counter-signs. A particular
+// the estimator leaves blank stays the template's locked-empty tab (read-only),
+// so the customer can't type into a builder field.
 export interface ContractTabValue {
   readonly tabLabel: string;
   readonly value: string;
@@ -25,9 +25,11 @@ export interface CreateContractEnvelopeArgs {
   readonly emailSubject: string;
   readonly builder: { readonly name: string; readonly email: string };
   readonly owner: { readonly name: string; readonly email: string };
-  readonly builderTextTabs: readonly ContractTabValue[];
-  readonly builderCheckboxTabs: readonly { readonly tabLabel: string; readonly selected: boolean }[];
+  // All contract data goes on the OWNER role (the first signer, issue #98) so
+  // the customer sees a complete contract on open. The Builder (routingOrder 2)
+  // carries only its signature — no data tabs.
   readonly ownerTextTabs: readonly ContractTabValue[];
+  readonly ownerCheckboxTabs: readonly { readonly tabLabel: string; readonly selected: boolean }[];
 }
 
 export interface CreateContractEnvelopeResult {
@@ -53,27 +55,28 @@ export async function createContractEnvelope(
     // the routing baked into the BC4 template, so the Owner signs first
     // (routingOrder 1) and the Builder counter-signs (routingOrder 2). DocuSign
     // emails routingOrder 1 the moment the envelope is sent, so the customer
-    // receives the contract immediately instead of waiting behind the builder.
+    // receives the contract immediately. All data tabs are on the Owner role so
+    // the customer sees them (a recipient always sees its own locked tabs); the
+    // Builder role carries only the counter-signature defined in the template.
     templateRoles: [
       {
         roleName: "Builder",
         name: args.builder.name,
         email: args.builder.email,
         routingOrder: "2",
-        tabs: {
-          textTabs: args.builderTextTabs.map(textTab),
-          checkboxTabs: args.builderCheckboxTabs.map((c) => ({
-            tabLabel: c.tabLabel,
-            selected: c.selected ? "true" : "false",
-          })),
-        } as docusign.Tabs,
       },
       {
         roleName: "Owner",
         name: args.owner.name,
         email: args.owner.email,
         routingOrder: "1",
-        tabs: { textTabs: args.ownerTextTabs.map(textTab) } as docusign.Tabs,
+        tabs: {
+          textTabs: args.ownerTextTabs.map(textTab),
+          checkboxTabs: args.ownerCheckboxTabs.map((c) => ({
+            tabLabel: c.tabLabel,
+            selected: c.selected ? "true" : "false",
+          })),
+        } as docusign.Tabs,
       },
     ],
     status: "sent",
