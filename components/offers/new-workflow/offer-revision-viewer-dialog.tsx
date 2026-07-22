@@ -57,8 +57,18 @@ export function OfferRevisionViewerDialog({
       {/* Overrides the base grid/gap-4 so the body can own the single scroll
           area, and caps the height so a multi-page A4 document stays reachable
           (the base DialogContent sets no max-height). print:hidden keeps this
-          copy out of the way if the user prints while it is open. */}
+          copy out of the way if the user prints while it is open.
+
+          data-offer-revision-viewer marks "the revision viewer is open" for the
+          print rules in globals.css. It is present in EVERY open state —
+          loading, failed, empty, unreadable and loaded — whereas the "screen"
+          print template exists only once a revision has loaded. The print CSS
+          keys the live-offer suppression on THIS marker, not on the "screen"
+          template, so a superseded offer is never printed while the viewer is
+          open but still loading or showing an error (which would otherwise let
+          the live offer print as the wrong document). */}
       <DialogContent
+        data-offer-revision-viewer="open"
         className="flex max-h-[90vh] w-full max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[860px] print:hidden"
         onCloseAutoFocus={(event) => {
           if (restoreFocusRef?.current) {
