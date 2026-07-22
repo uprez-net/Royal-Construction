@@ -96,14 +96,10 @@ assert.deepEqual(
 );
 assert.deepEqual(result.workspacePricingSettings, {
   royalConstructionFeePct: 0.16,
+  royalConstructionOverheadPct: 0,
   gstRate: 0.1,
   homeWarrantyHbcfFixed: 8500,
-  adminCostFixed: 5000,
-  engineeringFixed: 40000,
-  legalFixed: 0,
   impactFeeFixed: 0,
-  labourCostFixed: 8000,
-  licenceFixed: 0,
 });
 assert.equal(result.areaBasis.groundFloorSqm, 110);
 assert.equal(result.areaBasis.firstFloorSqm, 90);
@@ -206,14 +202,10 @@ assert.deepEqual(
 );
 assert.deepEqual(v2Result.workspacePricingSettings, {
   royalConstructionFeePct: 0.18,
+  royalConstructionOverheadPct: 0,
   gstRate: 0.1,
   homeWarrantyHbcfFixed: 0.014,
-  adminCostFixed: 6000,
-  engineeringFixed: 0,
-  legalFixed: 0,
   impactFeeFixed: 0,
-  labourCostFixed: 12000,
-  licenceFixed: 0,
 });
 assert.equal(v2Result.areaBasis.groundFloorSqm, 202.2);
 assert.equal(v2Result.areaBasis.firstFloorSqm, 170.35);

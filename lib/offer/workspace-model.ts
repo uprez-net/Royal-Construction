@@ -147,20 +147,17 @@ export const OFFER_STATUS_LABEL: Record<OfferWorkspaceStatus, string> = {
   superseded: "Superseded",
 };
 
-// Royal quote build-up defaults (verified against real workbooks). The Royal
-// Construction Fee is the margin lever — 20% is the most common; estimators
-// set it per job. Admin ~$5k and Labour ~$10k are the usual standing additions;
-// the rest are entered per job.
+// Royal quote build-up defaults. The Royal Construction charge is a two-lever
+// markup applied additively to the cost base: Overhead 10% + Fee 10% (together
+// the former single 20%), each set per job. HBCF and the impact fee are the only
+// fixed additions; admin/labour/engineering/legal/licence were removed in #115
+// as they are captured once inside the Calculation Workbook's direct-cost lines.
 export const DEFAULT_WORKSPACE_PRICING_SETTINGS: OfferWorkspacePricingSettings = {
-  royalConstructionFeePct: 0.2,
+  royalConstructionOverheadPct: 0.1,
+  royalConstructionFeePct: 0.1,
   gstRate: 0.1,
   homeWarrantyHbcfFixed: 0,
-  adminCostFixed: 5000,
-  engineeringFixed: 0,
-  legalFixed: 0,
   impactFeeFixed: 0,
-  labourCostFixed: 10000,
-  licenceFixed: 0,
 };
 
 // Façade options the client picks in Job setup. `imageHint` is the visual

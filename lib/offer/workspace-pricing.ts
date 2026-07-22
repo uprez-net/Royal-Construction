@@ -13,21 +13,21 @@ export type MarginStatus =
   | "acceptable_below_target"
   | "below_minimum";
 
-// The Royal quote build-up, verified against 24 real project workbooks:
-//   contract = (direct trade total + fixed additions) × (1 + fee%) × (1 + GST)
-// The Royal Construction Fee % is the single margin lever (per-job; the
-// workbooks range 10–22%, default 20%). Additions are the fixed cost lines the
-// workbooks carry on top of the trades.
+// The Royal quote build-up, verified against real project workbooks:
+//   contract = (direct trade total + fixed additions)
+//              × (1 + overhead% + fee%)   ← two levers, applied additively
+//              × (1 + GST)
+// The Royal Construction charge is two markups on the SAME cost base — Overhead
+// and Fee — each rounded to the cent then summed (never compounded). Additions
+// are the fixed cost lines the workbooks carry on top of the trades (HBCF and an
+// impact fee); admin/labour/engineering/legal/licence were removed in #115 as
+// they are captured once inside the Calculation Workbook's direct-cost lines.
 export type OfferWorkspacePricingSettings = {
+  readonly royalConstructionOverheadPct: number;
   readonly royalConstructionFeePct: number;
   readonly gstRate: number;
   readonly homeWarrantyHbcfFixed: number;
-  readonly adminCostFixed: number;
-  readonly engineeringFixed: number;
-  readonly legalFixed: number;
   readonly impactFeeFixed: number;
-  readonly labourCostFixed: number;
-  readonly licenceFixed: number;
 };
 
 export type OfferWorkspacePricingInput = {
@@ -40,12 +40,25 @@ export type OfferWorkspacePricing = {
   readonly directTotal: number;
   readonly additionsTotal: number;
   readonly costBeforeFee: number;
+  readonly royalConstructionOverhead: number;
   readonly royalConstructionFee: number;
   readonly totalIncludingConstruction: number;
   readonly gstAmount: number;
   readonly contractValueIncGst: number;
   readonly perSqm: number | null;
 };
+
+// The full markup applied to costBeforeFee (overhead + fee). The margin badge's
+// "target" must be this combined markup, not one of the two levers — otherwise a
+// 20%-markup job is measured against a 10% target and always reads "at target".
+export function resolveTargetMarkupPct(
+  settings: Pick<
+    OfferWorkspacePricingSettings,
+    "royalConstructionOverheadPct" | "royalConstructionFeePct"
+  >,
+): number {
+  return settings.royalConstructionOverheadPct + settings.royalConstructionFeePct;
+}
 
 // The margin the builder ACTUALLY earns at the price being charged. Kept
 // separate from the cost build-up above because the selling price may be a
@@ -160,18 +173,14 @@ export function getMarginStatus(
   return "acceptable_below_target";
 }
 
-// Sum the fixed additions the workbooks carry on top of the trade lines.
+// Sum the fixed additions the workbooks carry on top of the trade lines. Admin,
+// labour, engineering, legal and Master Builders licence were removed in #115 —
+// they are captured once inside the Calculation Workbook's direct-cost lines.
 export function calculateAdditionsTotal(
   settings: OfferWorkspacePricingSettings,
 ): number {
   return roundCurrency(
-    settings.homeWarrantyHbcfFixed +
-      settings.adminCostFixed +
-      settings.engineeringFixed +
-      settings.legalFixed +
-      settings.impactFeeFixed +
-      settings.labourCostFixed +
-      settings.licenceFixed,
+    settings.homeWarrantyHbcfFixed + settings.impactFeeFixed,
   );
 }
 
@@ -182,11 +191,15 @@ export function calculateOfferWorkspacePricing({
 }: OfferWorkspacePricingInput): OfferWorkspacePricing {
   const additionsTotal = calculateAdditionsTotal(settings);
   const costBeforeFee = roundCurrency(directTotal + additionsTotal);
+  // Two additive markups on the same base, each rounded to the cent then summed.
+  const royalConstructionOverhead = roundCurrency(
+    costBeforeFee * settings.royalConstructionOverheadPct,
+  );
   const royalConstructionFee = roundCurrency(
     costBeforeFee * settings.royalConstructionFeePct,
   );
   const totalIncludingConstruction = roundCurrency(
-    costBeforeFee + royalConstructionFee,
+    costBeforeFee + royalConstructionOverhead + royalConstructionFee,
   );
   const gstAmount = roundCurrency(totalIncludingConstruction * settings.gstRate);
   const contractValueIncGst = roundCurrency(
@@ -199,6 +212,7 @@ export function calculateOfferWorkspacePricing({
     directTotal: roundCurrency(directTotal),
     additionsTotal,
     costBeforeFee,
+    royalConstructionOverhead,
     royalConstructionFee,
     totalIncludingConstruction,
     gstAmount,

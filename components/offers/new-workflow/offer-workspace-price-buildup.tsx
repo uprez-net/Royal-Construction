@@ -22,8 +22,8 @@ type PriceBuildupPanelProps = {
 };
 
 // The Royal quote build-up — the single source of the customer price. The Royal
-// Construction Fee % is the margin lever; the fixed additions are the standing
-// cost lines the workbooks carry on top of the trades.
+// Construction charge is two additive markup levers (Overhead % + Fee %) on the
+// cost base; HBCF and the impact fee are the standing fixed additions.
 export function PriceBuildupPanel({
   settings,
   pricing,
@@ -33,7 +33,7 @@ export function PriceBuildupPanel({
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
-          description="The Royal quote build-up: direct cost plus fixed additions, marked up by the Royal Construction Fee, then GST. This is the price shown to the client."
+          description="The Royal quote build-up: direct cost plus fixed additions, marked up by the Royal Construction Overhead and Fee, then GST. This is the price shown to the client."
           icon={<Calculator className="size-4" aria-hidden="true" />}
           singleLineDescription
           title="Price build-up"
@@ -41,6 +41,13 @@ export function PriceBuildupPanel({
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <PercentField
+            label="Royal Construction Overhead"
+            value={settings.royalConstructionOverheadPct}
+            onChange={(royalConstructionOverheadPct) =>
+              onSettingsChange({ royalConstructionOverheadPct })
+            }
+          />
           <PercentField
             label="Royal Construction Fee"
             value={settings.royalConstructionFeePct}
@@ -56,36 +63,9 @@ export function PriceBuildupPanel({
             }
           />
           <MoneyField
-            label="Admin"
-            value={settings.adminCostFixed}
-            onChange={(adminCostFixed) => onSettingsChange({ adminCostFixed })}
-          />
-          <MoneyField
-            label="Labour"
-            value={settings.labourCostFixed}
-            onChange={(labourCostFixed) => onSettingsChange({ labourCostFixed })}
-          />
-          <MoneyField
-            label="Engineering"
-            value={settings.engineeringFixed}
-            onChange={(engineeringFixed) =>
-              onSettingsChange({ engineeringFixed })
-            }
-          />
-          <MoneyField
-            label="Legal"
-            value={settings.legalFixed}
-            onChange={(legalFixed) => onSettingsChange({ legalFixed })}
-          />
-          <MoneyField
             label="Impact fee"
             value={settings.impactFeeFixed}
             onChange={(impactFeeFixed) => onSettingsChange({ impactFeeFixed })}
-          />
-          <MoneyField
-            label="Master Builders licence"
-            value={settings.licenceFixed}
-            onChange={(licenceFixed) => onSettingsChange({ licenceFixed })}
           />
         </div>
         <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
@@ -101,6 +81,12 @@ export function PriceBuildupPanel({
             <SummaryRow
               label="Cost before fee"
               value={formatCurrency(pricing.costBeforeFee)}
+            />
+            <SummaryRow
+              label={`Royal Construction Overhead (${Math.round(
+                settings.royalConstructionOverheadPct * 100,
+              )}%)`}
+              value={formatCurrency(pricing.royalConstructionOverhead)}
             />
             <SummaryRow
               label={`Royal Construction Fee (${Math.round(
@@ -147,6 +133,7 @@ function PercentField({
       </span>
       <Input
         min="0"
+        max="100"
         placeholder="0"
         step="0.5"
         type="number"

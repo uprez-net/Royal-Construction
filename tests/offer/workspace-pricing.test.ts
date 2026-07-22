@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  calculateAdditionsTotal,
   calculateRateCardComparison,
   calculateDirectTotal,
   calculateEffectiveMargin,
@@ -8,20 +9,18 @@ import {
   calculateOfferWorkspacePricing,
   getMarginStatus,
   parseNonNegativeNumberInput,
+  resolveTargetMarkupPct,
   type OfferWorkspacePricingSettings,
 } from "../../lib/offer/workspace-pricing";
 
-// The Royal quote build-up: (direct + fixed additions) × (1 + fee) × (1 + GST).
+// The Royal quote build-up: (direct + fixed additions)
+//   × (1 + overhead + fee) × (1 + GST). Overhead + fee both apply to the base.
 const SETTINGS: OfferWorkspacePricingSettings = {
-  royalConstructionFeePct: 0.2,
+  royalConstructionOverheadPct: 0.1,
+  royalConstructionFeePct: 0.1,
   gstRate: 0.1,
   homeWarrantyHbcfFixed: 0,
-  adminCostFixed: 5000,
-  engineeringFixed: 0,
-  legalFixed: 0,
   impactFeeFixed: 0,
-  labourCostFixed: 10000,
-  licenceFixed: 0,
 };
 
 const pricing = calculateOfferWorkspacePricing({
@@ -32,22 +31,24 @@ const pricing = calculateOfferWorkspacePricing({
 
 assert.deepEqual(pricing, {
   directTotal: 500000,
-  additionsTotal: 15000, // admin 5000 + labour 10000
-  costBeforeFee: 515000,
-  royalConstructionFee: 103000, // 515000 × 20%
-  totalIncludingConstruction: 618000,
-  gstAmount: 61800,
-  contractValueIncGst: 679800,
-  perSqm: 3399,
+  additionsTotal: 0,
+  costBeforeFee: 500000,
+  royalConstructionOverhead: 50000, // 500000 × 10%
+  royalConstructionFee: 50000, // 500000 × 10%
+  totalIncludingConstruction: 600000, // additive: 10% + 10% = 20%
+  gstAmount: 60000,
+  contractValueIncGst: 660000,
+  perSqm: 3300,
 });
 
-// Verified against real Royal workbooks (the fee % is the margin lever, applied
-// to the whole cost). 17 Ewing Loop: direct 948,981 @ 20% → fee 189,796.20,
-// total inc construction 1,138,777.20 — matches the workbook's own totals.
+// Verified against real Royal workbooks. These jobs carried the whole markup on
+// the single fee lever, so pin overhead to 0 to isolate it. 17 Ewing Loop:
+// direct 948,981 @ 20% → fee 189,796.20, total inc construction 1,138,777.20 —
+// matches the workbook's own totals.
 const ewing = calculateOfferWorkspacePricing({
   totalAreaSqm: 0,
   directTotal: 948981,
-  settings: { ...SETTINGS, adminCostFixed: 0, labourCostFixed: 0 },
+  settings: { ...SETTINGS, royalConstructionOverheadPct: 0, royalConstructionFeePct: 0.2 },
 });
 assert.equal(ewing.royalConstructionFee, 189796.2);
 assert.equal(ewing.totalIncludingConstruction, 1138777.2);
@@ -59,9 +60,8 @@ const ferruccio = calculateOfferWorkspacePricing({
   directTotal: 557950,
   settings: {
     ...SETTINGS,
+    royalConstructionOverheadPct: 0,
     royalConstructionFeePct: 0.12,
-    adminCostFixed: 0,
-    labourCostFixed: 0,
   },
 });
 assert.equal(ferruccio.royalConstructionFee, 66954);
@@ -141,11 +141,7 @@ assert.equal(
   calculateOfferWorkspacePricing({
     totalAreaSqm: 0,
     directTotal: 100000,
-    settings: {
-      ...SETTINGS,
-      adminCostFixed: 0,
-      labourCostFixed: 0,
-    },
+    settings: { ...SETTINGS },
   }).perSqm,
   null,
 );
@@ -157,27 +153,68 @@ assert.equal(parseNonNegativeNumberInput("-1"), null);
 assert.equal(parseNonNegativeNumberInput("not a number"), null);
 assert.equal(parseNonNegativeNumberInput("1e309"), null);
 
-// Fixed additions sit inside the cost base before the fee: e.g. direct 405,560
-// + additions (hbcf 8500 + admin 5000 + labour 8000 + engineering 40000 =
-// 61,500) = 467,060 cost before fee, × 16% fee = 74,729.60.
+// The two surviving fixed additions (HBCF + impact fee) sit inside the cost base
+// before the markup: direct 405,560 + (hbcf 8,500 + impact 1,500 = 10,000) =
+// 415,560 cost before fee, × 16% fee = 66,489.60.
 const withAdditions = calculateOfferWorkspacePricing({
   totalAreaSqm: 232,
   directTotal: 405560,
   settings: {
+    royalConstructionOverheadPct: 0,
     royalConstructionFeePct: 0.16,
     gstRate: 0.1,
     homeWarrantyHbcfFixed: 8500,
-    adminCostFixed: 5000,
-    engineeringFixed: 40000,
-    legalFixed: 0,
-    impactFeeFixed: 0,
-    labourCostFixed: 8000,
-    licenceFixed: 0,
+    impactFeeFixed: 1500,
   },
 });
-assert.equal(withAdditions.additionsTotal, 61500);
-assert.equal(withAdditions.costBeforeFee, 467060);
-assert.equal(withAdditions.royalConstructionFee, 74729.6);
+assert.equal(withAdditions.additionsTotal, 10000);
+assert.equal(withAdditions.costBeforeFee, 415560);
+assert.equal(withAdditions.royalConstructionFee, 66489.6);
+
+// calculateAdditionsTotal now sums ONLY the two kept fixed fields.
+assert.equal(
+  calculateAdditionsTotal({
+    royalConstructionOverheadPct: 0.1,
+    royalConstructionFeePct: 0.1,
+    gstRate: 0.1,
+    homeWarrantyHbcfFixed: 8500,
+    impactFeeFixed: 1500,
+  }),
+  10000,
+);
+
+// Overhead 10% + Fee 10% applied additively equals a single 20% markup — the
+// issue's "previously a single 20%" invariant, neutral vs the old fee.
+const split = calculateOfferWorkspacePricing({
+  totalAreaSqm: 0,
+  directTotal: 500000,
+  settings: { ...SETTINGS },
+});
+assert.equal(split.royalConstructionOverhead, 50000);
+assert.equal(split.royalConstructionFee, 50000);
+assert.equal(split.totalIncludingConstruction, 600000);
+
+// The margin badge's target is the COMBINED markup, never one lever.
+assert.equal(
+  resolveTargetMarkupPct({
+    royalConstructionOverheadPct: 0.1,
+    royalConstructionFeePct: 0.1,
+  }),
+  0.2,
+);
+
+// Rounding policy: overhead and fee are each rounded to the cent, then summed —
+// so at a fractional-cent base the two lines total 1¢ more than a single 20%
+// would (498,672.07 vs 498,672.06). They still sum to TIC exactly. Locked so a
+// future "optimisation" to single-round the total is a conscious change.
+const fractional = calculateOfferWorkspacePricing({
+  totalAreaSqm: 0,
+  directTotal: 415560.05,
+  settings: { ...SETTINGS },
+});
+assert.equal(fractional.royalConstructionOverhead, 41556.01);
+assert.equal(fractional.royalConstructionFee, 41556.01);
+assert.equal(fractional.totalIncludingConstruction, 498672.07);
 
 assert.deepEqual(
   calculateOfferCustomerPrice({
