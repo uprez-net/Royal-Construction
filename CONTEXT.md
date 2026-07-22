@@ -190,11 +190,11 @@ Seed a **catalog template** mapping Tender inclusion items to QUOTE **cost stage
 _Avoid_: Heuristic-only linking with no template, mandatory strict map with no override
 
 **Contract build-up**:
-The internal calculation chain: direct cost → HBCF → admin → PM → contingency → cost base → builder margin → subtotal (ex-GST) → GST (10%) → **contract value (inc GST)**. Defined in `SETTINGS` and `QUOTE` sheets.
+The internal calculation chain (#115): direct cost (from the Calculation Workbook) → + HBCF + impact fee → cost base → × Royal Construction Overhead 10% → × Royal Construction Fee 10% (both additive on the cost base) → subtotal (ex-GST) → GST (10%) → **contract value (inc GST)**.
 _Avoid_: Grand total (without specifying inc/ex GST)
 
 **Offer pricing settings** (decided):
-Margin, HBCF rate, admin, PM, contingency, and GST use **org-wide defaults** with **per-Offer overrides** on the internal cost schedule only. Overrides affect contract build-up for that Offer; they are never shown on the Tender. Build-type-specific defaults belong in the deferred **Pricing Model** section.
+Royal Construction Overhead %, Royal Construction Fee %, HBCF, impact fee, and GST use **org-wide defaults** with **per-Offer overrides** on the internal cost schedule only. Overrides affect contract build-up for that Offer; they are never shown on the Tender. Build-type-specific defaults belong in the deferred **Pricing Model** section.
 _Avoid_: Global-only (no per-job tweak), per build type defaults in Offer UI (until Pricing Model)
 
 **Prime cost (PC) allowance**:
@@ -233,7 +233,7 @@ _Avoid_: Using workbook stage/milestone labels to drive Offer/Tender wording or 
 
 **Pricing Model** — a dedicated section to define later, separate from Offer/Tender document structure. Expected to cover org-wide and per-job pricing rules not yet locked in this glossary, for example:
 
-- `SETTINGS` defaults (margin floor/target, GST, HBCF rate, admin, PM, contingency)
+- `SETTINGS` defaults (Royal Construction Overhead %, Royal Construction Fee %, GST, HBCF rate, impact fee)
 - Per-m² rate card and build-type multipliers
 - Multi-dwelling cost allocation across offer price rows
 - PC allowance caps and variation triggers
