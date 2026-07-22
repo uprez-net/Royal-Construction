@@ -140,7 +140,11 @@ function PercentField({
         value={numberInputValue(Math.round(value * 1000) / 10)}
         onChange={(event) => {
           const parsed = parseNonNegativeNumberInput(event.target.value);
-          if (parsed !== null) {
+          // Reject > 100% (like the null-reject above): max="" only guards the
+          // spinner, not typed/pasted input, so a fat-fingered 200 would store a
+          // 2.0 (200%) markup that recalculates and autosaves live, then snaps
+          // to the default on reload — a silent price change.
+          if (parsed !== null && parsed <= 100) {
             onChange(parsed / 100);
           }
         }}

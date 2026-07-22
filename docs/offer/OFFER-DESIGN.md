@@ -59,10 +59,10 @@ flowchart LR
 
 ### Canonical build-up (decision)
 
-- **Offer contract value** in app: replicate **v2** chain (direct cost → HBCF → admin → PM → contingency → margin → GST 10%).
+- **Offer contract value** in app (superseded by #115 — see "Shipped app build-up" below): the earlier v2 chain (direct cost → HBCF → admin → PM → contingency → margin → GST 10%) was aspirational and never matched the shipped code.
 - **SAMPLE footer** (20% fee on direct sum + HWI + licence + admin + labour): treat as **legacy Excel rollup** for import/export mapping, not the source of truth for Tender pricing.
 - **Shipped app build-up (#115):** `(direct cost + HBCF + impact fee) × (1 + Overhead 10% + Fee 10%) × (1 + GST 10%)`. Overhead and Fee are two additive levers on the same cost base; licence/admin/labour/engineering/legal are no longer fixed additions (they live in the direct-cost lines).
-- On import from SAMPLE, map footer lines into v2 SETTINGS/overhead rows where possible; flag unmapped lines for estimator review.
+- On import from SAMPLE, the footer's fee is kept as the single Royal Construction Fee and the overhead lever is left at 0 (no verified overhead cell in the workbook); the admin/labour/engineering footer rows are dropped (#115).
 
 ### Crosswalk catalog (implement once)
 
