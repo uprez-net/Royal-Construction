@@ -5,6 +5,7 @@ import {
   EnvelopeDocType,
   EnvelopeStatus,
   OfferStatus,
+  Prisma,
   SignerRole,
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -23,6 +24,12 @@ import {
   createContractEnvelope,
   type ContractTabValue,
 } from "@/lib/docusign/contract-envelope";
+import {
+  contractParticularsToLockedTabs,
+  normalizeContractParticulars,
+  parseContractParticulars,
+  type ContractParticulars,
+} from "@/lib/offer/contract-particulars";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -39,8 +46,10 @@ function moneyWithCents(value: number): string {
 // Send the MBA BC4 building Contract for signature from the DocuSign template
 // (DOCUSIGN_CONTRACT_TEMPLATE_ID; roles + tab labels in
 // lib/docusign/contract-template-spec.md). Values derived from the signed
-// Tender's frozen snapshot are locked; the rest stay editable for the Builder,
-// who signs first. Advances the offer to CONTRACT_SENT.
+// Tender's frozen snapshot are locked, as are the estimator's BC4 particulars
+// captured during CONTRACT_DRAFT (issue #98). The contract routes to the
+// customer first (Owner routingOrder 1, Builder counter-signs at 2). Advances
+// the offer to CONTRACT_SENT.
 export async function sendContractForSignature(input: {
   offerId: string;
   customerEmail?: string;
@@ -60,6 +69,7 @@ export async function sendContractForSignature(input: {
       workspaceState: true,
       agreedSnapshot: true,
       lead: { select: { email: true } },
+      contract: { select: { particulars: true } },
     },
   });
   if (!offer) {
@@ -155,7 +165,11 @@ export async function sendContractForSignature(input: {
     stageRows.find((r) => r.stageName.toLowerCase().includes("deposit")) ?? stageRows[0];
   const exclusions = snapshot.draft.exclusionBullets;
 
-  const builderTextTabs: ContractTabValue[] = [
+  // Every value is a tab on the OWNER role (the first signer, issue #98), so the
+  // customer sees the complete contract on open — derived Tender values, the
+  // estimator's BC4 particulars, and the owner's print name. The Builder role
+  // (routingOrder 2) carries only its signature (defined in the template).
+  const ownerTextTabs: ContractTabValue[] = [
     locked("contractPrice", priceLabel),
     locked("contractPriceTotal", priceLabel),
     locked("ownerNames", ownerNames),
@@ -171,8 +185,14 @@ export async function sendContractForSignature(input: {
     locked("defectsLiabilityWeeks", "12 Weeks"),
     locked("workDescription", [job.buildType, ...job.buildScope].filter(Boolean).join(". ")),
     locked("exclusionsList", exclusions.join("\n")),
+    // Estimator-entered BC4 particulars (issue #98). Only the FILLED ones are
+    // sent; a blank one stays the template's locked-empty tab — read-only, so
+    // the customer can't type into a builder particular the estimator left blank.
+    ...contractParticularsToLockedTabs(
+      parseContractParticulars(offer.contract?.particulars ?? null),
+    ),
+    locked("ownerPrintName", primaryOwner),
   ];
-  const ownerTextTabs: ContractTabValue[] = [locked("ownerPrintName", primaryOwner)];
 
   // Atomically claim the send so two concurrent calls can't both create a
   // DocuSign envelope (double-send); the claim is released on envelope failure.
@@ -202,13 +222,12 @@ export async function sendContractForSignature(input: {
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
       builder: { name: config.builderSignerName, email: config.builderSignerEmail },
       owner: { name: primaryOwner, email: customerEmail },
-      builderTextTabs,
-      builderCheckboxTabs: [
+      ownerTextTabs,
+      ownerCheckboxTabs: [
         { tabLabel: "gstInclusive", selected: true },
         { tabLabel: "hbcfIncluded", selected: true },
         { tabLabel: "exclusionsYes", selected: exclusions.length > 0 },
       ],
-      ownerTextTabs,
     });
   } catch (error) {
     // Release the claim so the builder can retry.
@@ -221,9 +240,7 @@ export async function sendContractForSignature(input: {
 
   const documentData = {
     templateId: config.contractTemplateId,
-    tabs: Object.fromEntries(
-      [...builderTextTabs, ...ownerTextTabs].map((t) => [t.tabLabel, t.value]),
-    ),
+    tabs: Object.fromEntries(ownerTextTabs.map((t) => [t.tabLabel, t.value])),
   };
 
   await prisma.$transaction(async (tx) => {
@@ -268,6 +285,88 @@ export async function sendContractForSignature(input: {
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   return { ok: true, reference, envelopeId: envelope.envelopeId };
+}
+
+type SaveParticularsResult = { ok: true } | { ok: false; error: string };
+
+// Persist the estimator's BC4 particulars while the contract is a draft (issue
+// #98). Upserts the Contract row so the values survive to send time, where they
+// go out as locked tabs. Only editable in CONTRACT_DRAFT — once the envelope is
+// sent the particulars are frozen into it and can't be changed without a recall.
+export async function saveContractParticulars(input: {
+  offerId: string;
+  particulars: ContractParticulars;
+}): Promise<SaveParticularsResult> {
+  const access = await authorizeOfferAccess(input.offerId);
+  if (!access.ok) {
+    return { ok: false, error: access.error };
+  }
+
+  const particulars = normalizeContractParticulars(
+    input.particulars,
+  ) as unknown as Prisma.InputJsonValue;
+
+  // Validate + persist atomically. A separate "is it a draft?" read followed by
+  // an upsert would let a concurrent send (which flips the offer to
+  // CONTRACT_SENT) or a revision fork (which deactivates this row) slip in
+  // between — writing particulars after the envelope is sent, or onto
+  // superseded history. Guard the write on the offer's live state so it can only
+  // land while the offer is an ACTIVE CONTRACT_DRAFT.
+  const result = await prisma.$transaction(async (tx) => {
+    // Common case — the contract row already exists: a single conditional
+    // update whose predicate the database evaluates atomically.
+    const updated = await tx.contract.updateMany({
+      where: {
+        offerId: input.offerId,
+        offer: { offerStatus: OfferStatus.CONTRACT_DRAFT, isActive: true },
+      },
+      data: { particulars },
+    });
+    if (updated.count > 0) {
+      return { ok: true as const };
+    }
+    // Nothing updated: either the contract row doesn't exist yet (first save) or
+    // the offer is no longer an active draft. Re-check inside the transaction and
+    // create the row only when it is genuinely a draft with no contract yet.
+    const current = await tx.offer.findUnique({
+      where: { id: input.offerId },
+      select: {
+        offerStatus: true,
+        isActive: true,
+        revisionNumber: true,
+        contract: { select: { id: true } },
+      },
+    });
+    if (
+      !current ||
+      !current.isActive ||
+      current.offerStatus !== OfferStatus.CONTRACT_DRAFT ||
+      current.contract
+    ) {
+      return {
+        ok: false as const,
+        error:
+          "Contract particulars can only be edited while the contract is a draft.",
+      };
+    }
+    // documentData is required on the model; it is (re)built from the frozen
+    // snapshot at send time, so seed an empty object until then.
+    await tx.contract.create({
+      data: {
+        offerId: input.offerId,
+        version: current.revisionNumber,
+        documentData: {},
+        particulars,
+      },
+    });
+    return { ok: true as const };
+  });
+
+  if (!result.ok) {
+    return result;
+  }
+  revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
+  return { ok: true };
 }
 
 function describeDocusignError(error: unknown): string {

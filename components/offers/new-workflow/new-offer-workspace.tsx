@@ -49,7 +49,14 @@ import {
 } from "@/lib/data/offer-workspace";
 import { sendOfferDocument } from "@/lib/data/offer-send";
 import { sendTenderForSignature } from "@/lib/data/offer-tender-sign";
-import { sendContractForSignature } from "@/lib/data/offer-contract-sign";
+import {
+  sendContractForSignature,
+  saveContractParticulars,
+} from "@/lib/data/offer-contract-sign";
+import {
+  EMPTY_CONTRACT_PARTICULARS,
+  type ContractParticulars,
+} from "@/lib/offer/contract-particulars";
 import {
   createProjectFromOffer,
   type ProjectHandoffResult,
@@ -115,6 +122,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [tenderSendError, setTenderSendError] = useState<string | null>(null);
   const [contractSending, setContractSending] = useState(false);
   const [contractSendError, setContractSendError] = useState<string | null>(null);
+  // Estimator's BC4 particulars (issue #98) — captured during the contract draft
+  // and sent as locked tabs so the contract routes to the customer first.
+  const [contractParticulars, setContractParticulars] =
+    useState<ContractParticulars>(EMPTY_CONTRACT_PARTICULARS);
   const [projectCreating, setProjectCreating] = useState(false);
   const [projectResult, setProjectResult] = useState<ProjectHandoffResult | null>(null);
   const [prefilling, setPrefilling] = useState(false);
@@ -266,6 +277,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setDraft((current) => ({ ...current, ...patch }));
   }
 
+  function updateContractParticulars(patch: Partial<ContractParticulars>) {
+    setContractParticulars((current) => ({ ...current, ...patch }));
+  }
+
   function updateAreaCalculator(patch: Partial<OfferAreaCalculator>) {
     // Rates/measurements only — floor areas are owned by Job setup.
     setAreaCalculator((current) => ({ ...current, ...patch }));
@@ -358,6 +373,68 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const offerIdRef = useRef<string | null>(null);
   const stateVersionRef = useRef(0);
   const lastSavedRef = useRef<string | null>(null);
+  // Tracks the last-persisted particulars JSON so the contract-draft save effect
+  // fires only on a real change (and never re-saves what we just hydrated).
+  const lastSavedParticularsRef = useRef<string | null>(null);
+  // Latest particulars for event handlers (the send flush) without stale
+  // closures; refs must not be written during render, so sync it in an effect.
+  const contractParticularsRef = useRef(contractParticulars);
+  useEffect(() => {
+    contractParticularsRef.current = contractParticulars;
+  }, [contractParticulars]);
+  // Serializes particulars saves so an older, still-in-flight write can never
+  // land after a newer one and then be read into the DocuSign envelope. Each run
+  // is chained behind the previous and persists the LATEST value (from the ref),
+  // so writes are ordered and the last one always wins. The pre-send flush uses
+  // the same chain, so it can't be overtaken by a stale debounced save.
+  const particularsSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const flushContractParticulars = useCallback(
+    (
+      offerId: string,
+    ): Promise<Awaited<ReturnType<typeof saveContractParticulars>>> => {
+      const run = particularsSaveChainRef.current
+        .catch(() => undefined)
+        .then(
+          async (): Promise<
+            Awaited<ReturnType<typeof saveContractParticulars>>
+          > => {
+            const particulars = contractParticularsRef.current;
+            const json = JSON.stringify(particulars);
+            if (json === lastSavedParticularsRef.current) {
+              return { ok: true };
+            }
+            setSaveState("saving");
+            try {
+              const saved = await saveContractParticulars({
+                offerId,
+                particulars,
+              });
+              if (saved.ok) {
+                lastSavedParticularsRef.current = json;
+                setSaveState("saved");
+              } else {
+                console.error(
+                  "[offer] contract particulars save failed:",
+                  saved.error,
+                );
+                setSaveState("error");
+              }
+              return saved;
+            } catch (error) {
+              console.error(
+                "[offer] contract particulars save failed:",
+                error,
+              );
+              setSaveState("error");
+              return { ok: false, error: (error as Error).message };
+            }
+          },
+        );
+      particularsSaveChainRef.current = run;
+      return run;
+    },
+    [],
+  );
   const snapshotRef = useRef(snapshot);
   // Keep the "latest snapshot" ref for event handlers; refs must not be
   // written during render, so sync it in an effect.
@@ -416,6 +493,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           `${loaded.declineReason} — create a new version to revise and re-send.`,
         );
       }
+      // Hydrate the saved BC4 particulars (issue #98); a fresh contract has none.
+      const loadedParticulars =
+        loaded.contractParticulars ?? EMPTY_CONTRACT_PARTICULARS;
+      setContractParticulars(loadedParticulars);
+      lastSavedParticularsRef.current = JSON.stringify(loadedParticulars);
       // Show the real minted reference/revision, never the seed default.
       const baseReference = loaded.reference.replace(/-R\d+$/, "");
       const revisionLabel = `R${loaded.revisionNumber}`;
@@ -531,6 +613,23 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     return () => clearTimeout(timer);
   }, [snapshot, status, leadId, hydrateSnapshot]);
 
+  // Debounced save of the BC4 particulars (issue #98). Separate from the main
+  // autosave, which freezes once the tender is sent — the particulars are edited
+  // later, during the contract draft, and persist to their own Contract column.
+  useEffect(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null || status !== "contract_draft") {
+      return;
+    }
+    if (JSON.stringify(contractParticulars) === lastSavedParticularsRef.current) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      void flushContractParticulars(offerId);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [contractParticulars, status, leadId, flushContractParticulars]);
+
   // Persist a lifecycle transition (flushing the latest state first so AGREED
   // freezes the correct snapshot), then update the UI.
   const transition = useCallback(
@@ -620,6 +719,12 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         offerIdRef.current = loaded.offerId;
         stateVersionRef.current = loaded.stateVersion;
         setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+        // A forked revision starts with no contract — clear any in-memory
+        // particulars so they can't be saved onto the new revision's contract.
+        const revisionParticulars =
+          loaded.contractParticulars ?? EMPTY_CONTRACT_PARTICULARS;
+        setContractParticulars(revisionParticulars);
+        lastSavedParticularsRef.current = JSON.stringify(revisionParticulars);
         if (loaded.snapshot) {
           hydrateSnapshot(loaded.snapshot);
           lastSavedRef.current = JSON.stringify(loaded.snapshot);
@@ -765,6 +870,19 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setContractSendError(null);
     void (async () => {
       try {
+        // Flush any un-committed particulars first — through the same serialized
+        // chain as the debounced saves, so no older in-flight save can overtake
+        // this latest value. The send reads particulars from the DB, and once it
+        // flips the offer to CONTRACT_SENT saveContractParticulars is rejected,
+        // so an un-flushed value would be dropped. Mirrors sendOffer/sendTender.
+        const flushed = await flushContractParticulars(offerId);
+        if (!flushed.ok) {
+          setContractSendError(
+            `Couldn't save the contract particulars before sending: ${flushed.error}`,
+          );
+          setContractSending(false);
+          return;
+        }
         const result = await sendContractForSignature({ offerId });
         if (result.ok) {
           setStatus("contract_sent");
@@ -780,7 +898,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         setContractSending(false);
       }
     })();
-  }, [leadId, transition]);
+  }, [leadId, transition, flushContractParticulars]);
 
   // Create the Project from the signed Contract: maps the frozen snapshot,
   // creates milestones + tradie bookings, attaches the executed PDFs, and
@@ -919,6 +1037,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         onSendContract={sendContract}
         contractSending={contractSending}
         contractSendError={contractSendError}
+        contractParticulars={contractParticulars}
+        onContractParticularsChange={updateContractParticulars}
         onRecallContract={() => transition("contract_draft")}
         onMarkContractSigned={() => transition("contract_signed")}
         onCreateProject={createProject}

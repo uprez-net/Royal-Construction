@@ -4,11 +4,14 @@ import type { DocusignContext } from "./client";
 import type { EnvelopeRecipientRecord } from "./tender-envelope";
 
 // The Contract is the MBA BC4 licensed form, sent from a DocuSign template
-// (created once in the DocuSign UI) rather than a runtime PDF — see
-// contract-template-spec.md for the template's roles and tab labels. Values
-// derived from the signed Tender arrive as locked text tabs; fields we can't
-// derive are sent unlocked and empty so the Builder (routing 1) completes
-// them during their signing session, before the Owner signs.
+// (created once via scripts/docusign/create-bc4-template.ts) rather than a
+// runtime PDF — see contract-template-spec.md for the roles and tab labels.
+// Customer-first (issue #98): EVERY contract value is a tab on the OWNER role
+// (routingOrder 1, signs first) — derived Tender values + the estimator's BC4
+// particulars, all locked/read-only — so the customer sees the complete
+// contract on open. The Builder (routingOrder 2) counter-signs. A particular
+// the estimator leaves blank stays the template's locked-empty tab (read-only),
+// so the customer can't type into a builder field.
 export interface ContractTabValue {
   readonly tabLabel: string;
   readonly value: string;
@@ -22,9 +25,11 @@ export interface CreateContractEnvelopeArgs {
   readonly emailSubject: string;
   readonly builder: { readonly name: string; readonly email: string };
   readonly owner: { readonly name: string; readonly email: string };
-  readonly builderTextTabs: readonly ContractTabValue[];
-  readonly builderCheckboxTabs: readonly { readonly tabLabel: string; readonly selected: boolean }[];
+  // All contract data goes on the OWNER role (the first signer, issue #98) so
+  // the customer sees a complete contract on open. The Builder (routingOrder 2)
+  // carries only its signature — no data tabs.
   readonly ownerTextTabs: readonly ContractTabValue[];
+  readonly ownerCheckboxTabs: readonly { readonly tabLabel: string; readonly selected: boolean }[];
 }
 
 export interface CreateContractEnvelopeResult {
@@ -46,24 +51,35 @@ export async function createContractEnvelope(
   const envelopeDefinition: docusign.EnvelopeDefinition = {
     templateId,
     emailSubject: emailSubject.slice(0, 100),
+    // Customer-first routing (issue #98). templateRole.routingOrder overrides
+    // the routing baked into the BC4 template, so the Owner signs first
+    // (routingOrder 1) and the Builder counter-signs (routingOrder 2). DocuSign
+    // emails routingOrder 1 the moment the envelope is sent, so the customer
+    // receives the contract immediately. All data tabs are on the Owner role so
+    // the customer sees them (a recipient always sees its own locked tabs); the
+    // Builder role carries only the counter-signature defined in the template.
     templateRoles: [
       {
         roleName: "Builder",
         name: args.builder.name,
         email: args.builder.email,
-        tabs: {
-          textTabs: args.builderTextTabs.map(textTab),
-          checkboxTabs: args.builderCheckboxTabs.map((c) => ({
-            tabLabel: c.tabLabel,
-            selected: c.selected ? "true" : "false",
-          })),
-        } as docusign.Tabs,
+        routingOrder: "2",
       },
       {
         roleName: "Owner",
         name: args.owner.name,
         email: args.owner.email,
-        tabs: { textTabs: args.ownerTextTabs.map(textTab) } as docusign.Tabs,
+        routingOrder: "1",
+        tabs: {
+          textTabs: args.ownerTextTabs.map(textTab),
+          checkboxTabs: args.ownerCheckboxTabs.map((c) => ({
+            tabLabel: c.tabLabel,
+            selected: c.selected ? "true" : "false",
+            // Derived contract terms (GST inclusive / HBCF included / exclusions)
+            // — locked so the customer can't toggle them before signing.
+            locked: "true",
+          })),
+        } as docusign.Tabs,
       },
     ],
     status: "sent",
@@ -113,7 +129,8 @@ export async function createContractEnvelope(
         role: isBuilder ? "BUILDER" : "CUSTOMER",
         name: signer.name ?? (isBuilder ? args.builder.name : args.owner.name),
         email: signer.email ?? (isBuilder ? args.builder.email : args.owner.email),
-        routingOrder: Number(signer.routingOrder ?? (isBuilder ? 1 : 2)),
+        // Customer-first: Owner routes at 1, Builder counter-signs at 2.
+        routingOrder: Number(signer.routingOrder ?? (isBuilder ? 2 : 1)),
         recipientId: signer.recipientId ?? (isBuilder ? "1" : "2"),
       });
     }
@@ -124,10 +141,10 @@ export async function createContractEnvelope(
   // builder email didn't match) must still yield both roles, or the webhook has
   // no record to match one party against. Restore each missing role's default.
   if (!recipients.some((recipient) => recipient.role === "BUILDER")) {
-    recipients.push({ role: "BUILDER", name: args.builder.name, email: args.builder.email, routingOrder: 1, recipientId: "1" });
+    recipients.push({ role: "BUILDER", name: args.builder.name, email: args.builder.email, routingOrder: 2, recipientId: "1" });
   }
   if (!recipients.some((recipient) => recipient.role === "CUSTOMER")) {
-    recipients.push({ role: "CUSTOMER", name: args.owner.name, email: args.owner.email, routingOrder: 2, recipientId: "2" });
+    recipients.push({ role: "CUSTOMER", name: args.owner.name, email: args.owner.email, routingOrder: 1, recipientId: "2" });
   }
 
   return { envelopeId: result.envelopeId, recipients };

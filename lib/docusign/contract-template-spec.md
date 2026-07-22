@@ -22,17 +22,24 @@ A token that appears in several places yields a tab at every occurrence
 (contract price on pages i + ii, bank details on pages iii + vi) — one label
 fills them all.
 
-## Roles
+## Roles (customer-first, issue #98)
 
-- `Builder` — routing 1. Signs first and acts as the review gate: derived
-  values arrive locked; particulars we don't capture (HBCF premium,
-  commencement date, construction days, hourly rates, …) are unlocked template
-  fields the builder completes during signing. Builder identity (name,
-  address, licence, ABN, bank account) is locked constants in the template.
-- `Owner` — routing 2. The primary/authorised signatory (the BC4 form carries
-  a single owner signature block): agreement signature, Schedule 1
-  acknowledgment signature + date + print name + capacity, and the agreement
-  date sentence (day / month / year).
+- `Owner` — routing **1**. The primary/authorised signatory, **signs first**,
+  and carries **every value on the contract** so the customer sees a complete
+  document the moment they open it: derived Tender values + the estimator's BC4
+  particulars (all locked/read-only), the builder-identity constants (locked),
+  the pre-ticked Schedule 1 checklist (locked) — plus the owner's own fields:
+  agreement signature, Schedule 1 acknowledgment signature + date + print name +
+  capacity, and the agreement date sentence (day / month / year).
+- `Builder` — routing **2**. Counter-signs to execute; carries only its
+  signature (no data tabs).
+
+Why all data is on the Owner role: with customer-first routing the Builder signs
+second, and DocuSign does not show a later recipient's field values to an earlier
+signer by default (verified on a real envelope — the customer saw a blank
+contract). A locked tab with a value renders read-only to its OWN recipient, so
+assigning the data to the first signer is the DocuSign-native fix — no dependency
+on the "write initial value for all recipients" account setting.
 
 Schedule 1's 17 statutory checklist "Yes" boxes are pre-ticked and locked in
 the template.
@@ -57,12 +64,17 @@ the template.
 
 Checkboxes set by the action: `gstInclusive`, `hbcfIncluded`, `exclusionsYes`.
 
-Unlocked template fields (builder completes while signing): `ownerAddress`,
-`ownerPhone`, `ownerMobile`, `lendingAuthority`, `fundingOwner`, `hbcfCost`,
-`paymentDays`, `interestRate`, `commencementDate`, `constructionDays`,
-`demolitionMaterials`, `preContractCosts`, `specialConditions`; owner-side:
-`signedDay`, `signedMonth`, `signedYear`, `ownerCapacity`, plus the two owner
-acknowledgment checkboxes.
+BC4 particulars — captured in-app during the contract draft (issue #98) and sent
+as **locked** Owner-role tabs; a blank one stays the template's locked-empty tab
+(read-only): `ownerAddress`, `ownerPhone`, `ownerMobile`, `lendingAuthority`,
+`fundingOwner`, `hbcfCost`, `paymentDays`, `interestRate`, `commencementDate`,
+`constructionDays`, `demolitionMaterials`, `preContractCosts`,
+`specialConditions`. (Formerly unlocked fields the builder completed while
+signing — no longer, since the customer signs first.)
+
+Owner-completed fields (unlocked, the owner fills during signing): `signedDay`,
+`signedMonth`, `signedYear`, `ownerCapacity`, plus the two owner acknowledgment
+checkboxes.
 
 Note on Schedule 2 payments: the blank form prints a single stage row (the MBA
 webform reflows per-row), so all stages render in one compact field —

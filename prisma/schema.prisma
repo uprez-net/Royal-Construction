@@ -703,6 +703,10 @@ model Contract {
   offer          Offer      @relation(fields: [offerId], references: [id], onDelete: Cascade)
   version        Int        @default(1)
   documentData   Json
+  // Estimator-entered BC4 particulars (issue #98) captured during CONTRACT_DRAFT
+  // and sent as locked tabs, so the contract routes to the customer first with
+  // the builder's fields already complete. Shape: lib/offer/contract-particulars.
+  particulars    Json?
   executedPdfUrl String?
   envelopes      Envelope[]
   createdAt      DateTime   @default(now())

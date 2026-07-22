@@ -11,11 +11,22 @@
  * is exactly right for values printed in several places (contract price on
  * pages i+ii, bank details on pages iii+vi).
  *
- * Roles: `Builder` (routing 1 — reviews and completes any open particulars
- * while signing) and `Owner` (routing 2, the primary/authorised signatory).
- * Values our send action derives from the signed Tender arrive locked at
- * envelope time (lib/data/offer-contract-sign.ts fills by tabLabel); builder
- * identity and other constants are locked defaults baked into the template.
+ * Roles (customer-first, issue #98): `Owner` (routingOrder 1 — the primary
+ * authorised signatory, signs FIRST) and `Builder` (routingOrder 2 —
+ * counter-signs to execute). EVERY value printed on the contract is a tab on
+ * the Owner role: the values our send action fills from the signed Tender + the
+ * estimator's BC4 particulars, the builder-identity constants, and the
+ * pre-ticked Schedule 1 checklist — all locked/read-only for the owner. A
+ * locked tab with a value renders read-only to its own recipient, so the
+ * customer sees the complete contract the instant they open it, independent of
+ * routing order or the "write initial value for all recipients" account
+ * setting. The Builder role carries only its signature.
+ *
+ * Why not leave the data on the Builder role? Because with customer-first
+ * routing the Builder signs SECOND, and DocuSign does not show a later
+ * recipient's field values to an earlier signer by default — the customer would
+ * open a blank contract (verified on a real envelope). Assigning the data to
+ * the first signer is the DocuSign-native fix.
  *
  * Prints the created template id and writes it to .env's
  * DOCUSIGN_CONTRACT_TEMPLATE_ID if the variable is present but empty.
@@ -134,42 +145,67 @@ const SCHEDULE1_YES_TOKENS = [
   "security_of_payment_guide_included_yes_value",
 ];
 
+// The Builder counter-signs (routingOrder 2) — all contract DATA now lives on
+// the Owner role (the first signer), so the customer opens a complete contract.
 function builderTabs(): docusign.Tabs {
-  const locked = { locked: true };
   return {
     signHereTabs: [signHereTab("signed_by_builder_value")],
+  } as docusign.Tabs;
+}
+
+// The Owner signs FIRST (routingOrder 1). Every value on the contract is a tab
+// on THIS recipient so the customer sees it read-only the moment they open the
+// envelope (see the file header for why). Three groups:
+//  1. Filled from the signed Tender + particulars at envelope time — defined
+//     empty here; the send action supplies value + locked=true by tabLabel.
+//     The estimator's BC4 particulars are marked locked here too, so a
+//     particular left blank stays read-only rather than an editable box the
+//     customer could type into.
+//  2. Builder-identity constants — locked, baked into the template.
+//  3. The owner's OWN fields (signatures, agreement date, acknowledgment) —
+//     unlocked, completed by the owner during signing.
+function ownerTabs(): docusign.Tabs {
+  const locked = { locked: true };
+  return {
+    signHereTabs: [
+      signHereTab("signed_by_owners_value"),
+      signHereTab("acknowledgement_of_owner_docusign_0_signature_value"),
+    ],
+    dateSignedTabs: [dateSignedTab("acknowledgement_of_owner_docusign_0_date_value")],
     textTabs: [
-      // ── Filled from the signed Tender at envelope time (locked there) ──
+      // ── 1a. Derived from the signed Tender (send fills value + locks) ──
       textTab("contract_price_value", "contractPrice", { width: 160 }),
       textTab("total_value", "contractPriceTotal", { width: 160 }),
       textTab("owners_0_owner_name_value", "ownerNames", { width: 380 }),
-      textTab("owners_0_owner_address_value", "ownerAddress", { width: 380 }),
-      textTab("owners_0_owner_telephone_value", "ownerPhone", { width: 120 }),
-      textTab("owners_0_owner_mobile_value", "ownerMobile", { width: 160 }),
       textTab("owners_0_owner_email_value", "ownerEmail", { width: 300 }),
       textTab("site_address_value", "siteAddress", { width: 440 }),
-      textTab("funding_lending_authority_value", "lendingAuthority", { width: 200 }),
-      textTab("funding_owner_value", "fundingOwner", { width: 200 }),
-      textTab("home_building_compensation_fund_insurance_cover_amount_value", "hbcfCost", { width: 120 }),
       textTab("percentage_allowed_on_variations_value", "variationPercent", { width: 100 }),
       textTab("installments_0_installment_item_value", "paymentSchedule", {
         width: 470, height: 22, fontSize: "size7",
       }),
       textTab("deposit_value", "depositAmount", { width: 140 }),
-      textTab("terms_for_claims_value", "paymentDays", { width: 60 }),
-      textTab("interest_rate_on_late_payments_value", "interestRate", { width: 60 }),
-      textTab("proposed_commencement_value", "commencementDate", { width: 150 }),
-      textTab("construction_period_value", "constructionDays", { width: 100 }),
       textTab("days_not_included_value", "excludedDays", { width: 170, height: 24, fontSize: "size8" }),
-      textTab("demolition_materials_value", "demolitionMaterials", { width: 480, height: 30, fontSize: "size8" }),
       textTab("defects_liability_period_value", "defectsLiabilityWeeks", { width: 120 }),
-      textTab("pre_contract_costs_value", "preContractCosts", { width: 140 }),
       textTab("description_of_the_work_to_be_completed_value", "workDescription", {
         width: 480, height: 24, fontSize: "size8",
       }),
       textTab("exclusions_value", "exclusionsList", { width: 490, height: 90, fontSize: "size8" }),
-      textTab("special_conditions_value", "specialConditions", { width: 500, height: 200, fontSize: "size8" }),
-      // ── Builder identity: locked constants baked into the template ──
+      // ── 1b. Estimator's BC4 particulars (issue #98) — locked; blank ones stay
+      //        read-only. The send fills the ones the estimator entered. ──
+      textTab("owners_0_owner_address_value", "ownerAddress", { ...locked, width: 380 }),
+      textTab("owners_0_owner_telephone_value", "ownerPhone", { ...locked, width: 120 }),
+      textTab("owners_0_owner_mobile_value", "ownerMobile", { ...locked, width: 160 }),
+      textTab("funding_lending_authority_value", "lendingAuthority", { ...locked, width: 200 }),
+      textTab("funding_owner_value", "fundingOwner", { ...locked, width: 200 }),
+      textTab("home_building_compensation_fund_insurance_cover_amount_value", "hbcfCost", { ...locked, width: 120 }),
+      textTab("terms_for_claims_value", "paymentDays", { ...locked, width: 60 }),
+      textTab("interest_rate_on_late_payments_value", "interestRate", { ...locked, width: 60 }),
+      textTab("proposed_commencement_value", "commencementDate", { ...locked, width: 150 }),
+      textTab("construction_period_value", "constructionDays", { ...locked, width: 100 }),
+      textTab("demolition_materials_value", "demolitionMaterials", { ...locked, width: 480, height: 30, fontSize: "size8" }),
+      textTab("pre_contract_costs_value", "preContractCosts", { ...locked, width: 140 }),
+      textTab("special_conditions_value", "specialConditions", { ...locked, width: 500, height: 200, fontSize: "size8" }),
+      // ── 2. Builder identity: locked constants baked into the template ──
       textTab("business_name_value", "builderName", { value: BUILDER_STATICS.businessName, ...locked, width: 300 }),
       textTab("builder_address_value", "builderAddress", { value: BUILDER_STATICS.address, ...locked, width: 380 }),
       textTab("builder_telephone_value", "builderPhone", { value: BUILDER_STATICS.telephone, ...locked, width: 120 }),
@@ -180,28 +216,7 @@ function builderTabs(): docusign.Tabs {
       textTab("builder_bank_account_name_value", "builderBankName", { value: BUILDER_STATICS.bankAccountName, ...locked, width: 300 }),
       textTab("builder_bank_account_bsb_value", "builderBankBsb", { value: BUILDER_STATICS.bankBsb, ...locked, width: 120 }),
       textTab("builder_bank_account_number_value", "builderBankNumber", { value: BUILDER_STATICS.bankAccountNumber, ...locked, width: 160 }),
-    ],
-    checkboxTabs: [
-      checkboxTab("contract_price_gst_Inclusive of GST_value", "gstInclusive", { yOffset: 8 }),
-      checkboxTab("included_in_the_contract_price__Yes_value", "hbcfIncluded", { yOffset: 8 }),
-      checkboxTab("_b_exclusions_Yes_value", "exclusionsYes", { yOffset: 8 }),
-      ...SCHEDULE1_YES_TOKENS.map((token, index) =>
-        checkboxTab(token, `sch1Yes${index + 1}`, { selected: true, locked: true }),
-      ),
-    ],
-  } as docusign.Tabs;
-}
-
-function ownerTabs(): docusign.Tabs {
-  return {
-    signHereTabs: [
-      signHereTab("signed_by_owners_value"),
-      signHereTab("acknowledgement_of_owner_docusign_0_signature_value"),
-    ],
-    dateSignedTabs: [dateSignedTab("acknowledgement_of_owner_docusign_0_date_value")],
-    textTabs: [
-      // Agreement date sentence ("this __ day of __ 20__") — typed by the
-      // Owner, whose signature completes the agreement.
+      // ── 3. Owner's own agreement/acknowledgment fields (owner completes) ──
       textTab("signed_date_value", "signedDay", { width: 40 }),
       textTab("signed_month_value", "signedMonth", { width: 100 }),
       textTab("signed_year_value", "signedYear", { width: 40 }),
@@ -209,6 +224,16 @@ function ownerTabs(): docusign.Tabs {
       textTab("acknowledgement_of_owner_docusign_0_capacity_value", "ownerCapacity", { width: 220 }),
     ],
     checkboxTabs: [
+      // Derived contract terms — value set by the send action, LOCKED so the
+      // customer can't toggle them before signing (defined here + at send time).
+      checkboxTab("contract_price_gst_Inclusive of GST_value", "gstInclusive", { yOffset: 8, locked: true }),
+      checkboxTab("included_in_the_contract_price__Yes_value", "hbcfIncluded", { yOffset: 8, locked: true }),
+      checkboxTab("_b_exclusions_Yes_value", "exclusionsYes", { yOffset: 8, locked: true }),
+      // Schedule 1 statutory checklist — pre-ticked + locked constants.
+      ...SCHEDULE1_YES_TOKENS.map((token, index) =>
+        checkboxTab(token, `sch1Yes${index + 1}`, { selected: true, locked: true }),
+      ),
+      // Owner's own acknowledgment ticks (owner completes these).
       checkboxTab("acknowledgement_of_owner_consumer_building_guide_value", "ownerAckGuide"),
       checkboxTab("acknowledgement_of_owner_checklist_all_yes_value", "ownerAckChecklist"),
     ],
@@ -245,17 +270,21 @@ async function main() {
       },
     ],
     recipients: {
+      // Customer-first (issue #98): the Owner signs first (routingOrder 1) and
+      // carries all the contract data; the Builder counter-signs (routingOrder
+      // 2). recipientIds are unchanged so the send action + Connect webhook keep
+      // matching Builder=1 / Owner=2 by id.
       signers: [
         {
           roleName: "Builder",
           recipientId: "1",
-          routingOrder: "1",
+          routingOrder: "2",
           tabs: builderTabs(),
         },
         {
           roleName: "Owner",
           recipientId: "2",
-          routingOrder: "2",
+          routingOrder: "1",
           tabs: ownerTabs(),
         },
       ],
