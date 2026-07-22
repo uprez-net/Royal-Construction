@@ -218,8 +218,8 @@ A — General Requirements · B — Site Preparation · C — Footings & Slab ·
 
 ```
 directCost = sum(stage subtotals)
-+ hbcf + admin + pm + contingency → costBase
-+ builderMargin → subtotalExGst
++ hbcf + impactFee → costBase
+× (1 + overhead 0.10 + fee 0.10) → subtotalExGst   # two additive levers on costBase (#115)
 + gst (10%) → contractValueIncGst
 ```
 
