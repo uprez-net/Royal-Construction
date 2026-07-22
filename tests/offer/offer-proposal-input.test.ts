@@ -75,8 +75,8 @@ function roundTrip(snapshot: OfferWorkspaceSnapshot): OfferWorkspaceSnapshot {
 }
 
 // Sanity: the computed baseline is a real, positive number, not $0.
-// (direct 400,000 + additions 15,000) × 1.2 fee × 1.1 GST = 547,800.
-assert.equal(COMPUTED_CONTRACT_INC_GST, 547800);
+// (direct 400,000 + additions 0) × 1.2 (overhead 10% + fee 10%) × 1.1 GST = 528,000.
+assert.equal(COMPUTED_CONTRACT_INC_GST, 528000);
 
 test("blank selected price → proposal shows the computed contract price, not $0", () => {
   const input = buildProposalInput(makeSnapshot({ selectedPriceInput: "" }));
@@ -149,9 +149,35 @@ test("migration clamps a corrupt out-of-range persisted fee, keeps a valid one",
       parseWorkspaceState(JSON.parse(JSON.stringify(persisted))),
     ).workspacePricingSettings.royalConstructionFeePct;
   };
-  assert.equal(withLegacyFee(2), 0.2); // 200% is corrupt → default 20%
-  assert.equal(withLegacyFee(-0.1), 0.2); // negative → default
+  assert.equal(withLegacyFee(2), 0.1); // 200% is corrupt → default 10%
+  assert.equal(withLegacyFee(-0.1), 0.1); // negative → default
   assert.equal(withLegacyFee(0.16), 0.16); // legitimate legacy fee preserved
+});
+
+test("an offer saved before the overhead field keeps its single-fee markup", () => {
+  const persisted = serializeWorkspace(makeSnapshot()) as Record<string, unknown>;
+  // Old-shape map: a legacy 20% fee, no overhead key at all.
+  persisted.pricingSettings = { royalConstructionFeePct: 0.2, gstRate: 0.1 };
+  const settings = deserializeWorkspace(
+    parseWorkspaceState(JSON.parse(JSON.stringify(persisted))),
+  ).workspacePricingSettings;
+  assert.equal(settings.royalConstructionFeePct, 0.2);
+  assert.equal(settings.royalConstructionOverheadPct, 0); // absent → 0, not 0.1
+});
+
+test("a corrupt out-of-range overhead falls back to the default, not 0", () => {
+  const persisted = serializeWorkspace(makeSnapshot()) as Record<string, unknown>;
+  // Present but invalid (e.g. 200% fat-fingered) — must NOT silently zero a
+  // real overhead; it clamps to the 0.1 default like the fee does.
+  persisted.pricingSettings = {
+    royalConstructionFeePct: 0.1,
+    royalConstructionOverheadPct: 2,
+    gstRate: 0.1,
+  };
+  const settings = deserializeWorkspace(
+    parseWorkspaceState(JSON.parse(JSON.stringify(persisted))),
+  ).workspacePricingSettings;
+  assert.equal(settings.royalConstructionOverheadPct, 0.1); // default, not 0
 });
 
 test("an unknown persisted rate-card product/tier coerces to the default entry", () => {

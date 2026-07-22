@@ -369,10 +369,11 @@ function findIgnoredProjectFields(
   return [...found];
 }
 
-// Read the real build-up off the SAMPLE QUOTE sheet — the Royal Construction
-// Fee % and the fixed additions — into the workspace pricing settings. Overhead
-// (a rarely-used second markup line) is folded into the fee; "other adjustment"
-// lands in engineering so the additions total is preserved.
+// Read the build-up off the SAMPLE QUOTE sheet. The sheet carries no separate
+// overhead line (row 80 is blank in the checked-in workbook), so fold any
+// overhead amount into the single fee and leave the overhead lever at 0 —
+// imported totals are unchanged and no unlabelled cell is guessed as overhead.
+// Admin/labour/engineering footer rows are no longer captured (#115).
 function parseWorkbookBuildup(
   rows: readonly (readonly unknown[])[],
 ): OfferWorkspacePricingSettings {
@@ -382,15 +383,13 @@ function parseWorkbookBuildup(
 
   return {
     ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
+    royalConstructionOverheadPct: 0,
     royalConstructionFeePct: rateFromAmount(
       overhead + royalConstructionFee,
       directTotal,
       DEFAULT_WORKSPACE_PRICING_SETTINGS.royalConstructionFeePct,
     ),
     homeWarrantyHbcfFixed: numberValue(getCell(rows, 82, 7)) ?? 0,
-    adminCostFixed: numberValue(getCell(rows, 84, 7)) ?? 0,
-    labourCostFixed: numberValue(getCell(rows, 85, 7)) ?? 0,
-    engineeringFixed: numberValue(getCell(rows, 86, 7)) ?? 0,
   };
 }
 
@@ -443,6 +442,9 @@ function parseWorkspacePricingSettings(
       [getCell(rows, 3, 1)],
       DEFAULT_WORKSPACE_PRICING_SETTINGS.royalConstructionFeePct,
     ),
+    // SETTINGS row 4 is the minimum acceptable margin, not overhead — do not
+    // read it. There is no verified overhead cell, so import leaves overhead 0.
+    royalConstructionOverheadPct: 0,
     gstRate: firstNumber(
       [getCell(rows, 5, 1)],
       DEFAULT_WORKSPACE_PRICING_SETTINGS.gstRate,
@@ -451,18 +453,7 @@ function parseWorkspacePricingSettings(
       [getCell(rows, 6, 1)],
       DEFAULT_WORKSPACE_PRICING_SETTINGS.homeWarrantyHbcfFixed,
     ),
-    adminCostFixed: firstNumber(
-      [getCell(rows, 7, 1)],
-      DEFAULT_WORKSPACE_PRICING_SETTINGS.adminCostFixed,
-    ),
-    engineeringFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.engineeringFixed,
-    legalFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.legalFixed,
     impactFeeFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.impactFeeFixed,
-    labourCostFixed: firstNumber(
-      [getCell(rows, 8, 1)],
-      DEFAULT_WORKSPACE_PRICING_SETTINGS.labourCostFixed,
-    ),
-    licenceFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.licenceFixed,
   };
 }
 

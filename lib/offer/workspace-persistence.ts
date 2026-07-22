@@ -85,24 +85,29 @@ function hydratePricingSettings(
       ? feeRaw
       : d.royalConstructionFeePct;
 
+  // Overhead is new in #115. Three cases:
+  //  - key ABSENT (num() → undefined) → 0: a legacy offer that predates the
+  //    field keeps its original single-fee markup instead of silently gaining
+  //    10%. New offers always persist an in-range key, so they never hit this.
+  //  - present & in 0..1 → use it.
+  //  - present but OUT OF RANGE (corrupt, e.g. a fat-fingered 2) → the default,
+  //    mirroring the fee clamp — NOT 0, so a real overhead is never zeroed.
+  const overheadRaw = num(pricing.royalConstructionOverheadPct);
+  const royalConstructionOverheadPct =
+    overheadRaw === undefined
+      ? 0
+      : overheadRaw >= 0 && overheadRaw <= 1
+        ? overheadRaw
+        : d.royalConstructionOverheadPct;
+
   return {
+    royalConstructionOverheadPct,
     royalConstructionFeePct,
     gstRate: pick(num(pricing.gstRate)) ?? d.gstRate,
     homeWarrantyHbcfFixed:
       pick(num(pricing.homeWarrantyHbcfFixed), num(l.hbcfInsuranceFixed)) ??
       d.homeWarrantyHbcfFixed,
-    adminCostFixed:
-      pick(num(pricing.adminCostFixed), num(l.adminCostFixed)) ??
-      d.adminCostFixed,
-    engineeringFixed:
-      pick(num(pricing.engineeringFixed), num(l.otherAdjustmentFixed)) ??
-      d.engineeringFixed,
-    legalFixed: pick(num(pricing.legalFixed)) ?? d.legalFixed,
     impactFeeFixed: pick(num(pricing.impactFeeFixed)) ?? d.impactFeeFixed,
-    labourCostFixed:
-      pick(num(pricing.labourCostFixed), num(l.labourCostFixed)) ??
-      d.labourCostFixed,
-    licenceFixed: pick(num(pricing.licenceFixed)) ?? d.licenceFixed,
   };
 }
 const parseDollarInput = (input: string): number => {

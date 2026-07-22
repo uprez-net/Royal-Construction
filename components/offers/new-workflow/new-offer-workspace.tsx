@@ -35,6 +35,7 @@ import {
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
   resolveOptionalPriceInput,
+  resolveTargetMarkupPct,
   type OfferWorkspacePricingSettings,
   type RateCardProduct,
   type RateCardTier,
@@ -185,7 +186,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         sellingContractValueIncGst:
           customerPrice.selectedContractValueIncGst,
         gstRate: workspacePricingSettings.gstRate,
-        targetFeePct: workspacePricingSettings.royalConstructionFeePct,
+        targetFeePct: resolveTargetMarkupPct(workspacePricingSettings),
       }),
     [customerPrice, pricing.costBeforeFee, workspacePricingSettings],
   );

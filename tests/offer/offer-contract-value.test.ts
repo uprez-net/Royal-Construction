@@ -124,10 +124,16 @@ test("an unpriced revision reports null so the UI renders a dash, not a $0 quote
 });
 
 test("a costed-at-zero workspace still reports the price its own document prints", () => {
-  // Given a saved workspace with no cost lines. It does not price at $0 — the
-  // fixed additions still flow through the fee and GST — so the timeline must
-  // show that figure rather than suppress it as "not priced".
-  const snapshot = makeSnapshot({ lines: [] });
+  // Given a saved workspace with no cost lines. It does not price at $0 — a
+  // fixed addition (HBCF) still flows through the markup and GST — so the
+  // timeline must show that figure rather than suppress it as "not priced".
+  const snapshot = makeSnapshot({
+    lines: [],
+    workspacePricingSettings: {
+      ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
+      homeWarrantyHbcfFixed: 8500,
+    },
+  });
   const state = storedState(snapshot);
 
   // When

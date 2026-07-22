@@ -60,6 +60,10 @@ export function PricingSummary({
     ["Direct total", formatCurrency(pricing.directTotal)],
     ["Fixed additions", formatCurrency(pricing.additionsTotal)],
     ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
+    [
+      "Royal Construction Overhead",
+      formatCurrency(pricing.royalConstructionOverhead),
+    ],
     ["Royal Construction Fee", formatCurrency(pricing.royalConstructionFee)],
     [
       "Total inc construction",
