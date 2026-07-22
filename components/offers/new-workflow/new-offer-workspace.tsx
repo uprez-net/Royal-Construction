@@ -382,6 +382,59 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   useEffect(() => {
     contractParticularsRef.current = contractParticulars;
   }, [contractParticulars]);
+  // Serializes particulars saves so an older, still-in-flight write can never
+  // land after a newer one and then be read into the DocuSign envelope. Each run
+  // is chained behind the previous and persists the LATEST value (from the ref),
+  // so writes are ordered and the last one always wins. The pre-send flush uses
+  // the same chain, so it can't be overtaken by a stale debounced save.
+  const particularsSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const flushContractParticulars = useCallback(
+    (
+      offerId: string,
+    ): Promise<Awaited<ReturnType<typeof saveContractParticulars>>> => {
+      const run = particularsSaveChainRef.current
+        .catch(() => undefined)
+        .then(
+          async (): Promise<
+            Awaited<ReturnType<typeof saveContractParticulars>>
+          > => {
+            const particulars = contractParticularsRef.current;
+            const json = JSON.stringify(particulars);
+            if (json === lastSavedParticularsRef.current) {
+              return { ok: true };
+            }
+            setSaveState("saving");
+            try {
+              const saved = await saveContractParticulars({
+                offerId,
+                particulars,
+              });
+              if (saved.ok) {
+                lastSavedParticularsRef.current = json;
+                setSaveState("saved");
+              } else {
+                console.error(
+                  "[offer] contract particulars save failed:",
+                  saved.error,
+                );
+                setSaveState("error");
+              }
+              return saved;
+            } catch (error) {
+              console.error(
+                "[offer] contract particulars save failed:",
+                error,
+              );
+              setSaveState("error");
+              return { ok: false, error: (error as Error).message };
+            }
+          },
+        );
+      particularsSaveChainRef.current = run;
+      return run;
+    },
+    [],
+  );
   const snapshotRef = useRef(snapshot);
   // Keep the "latest snapshot" ref for event handlers; refs must not be
   // written during render, so sync it in an effect.
@@ -568,38 +621,14 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     if (leadId === undefined || offerId === null || status !== "contract_draft") {
       return;
     }
-    const currentJson = JSON.stringify(contractParticulars);
-    if (currentJson === lastSavedParticularsRef.current) {
+    if (JSON.stringify(contractParticulars) === lastSavedParticularsRef.current) {
       return;
     }
     const timer = setTimeout(() => {
-      void (async () => {
-        setSaveState("saving");
-        try {
-          const result = await saveContractParticulars({
-            offerId,
-            particulars: contractParticulars,
-          });
-          if (result.ok) {
-            lastSavedParticularsRef.current = currentJson;
-            setSaveState("saved");
-          } else {
-            // Surface the failure via the same chrome the main autosave uses,
-            // so a dropped particular is never invisible to the estimator.
-            console.error(
-              "[offer] contract particulars save failed:",
-              result.error,
-            );
-            setSaveState("error");
-          }
-        } catch (error) {
-          console.error("[offer] contract particulars save failed:", error);
-          setSaveState("error");
-        }
-      })();
+      void flushContractParticulars(offerId);
     }, 800);
     return () => clearTimeout(timer);
-  }, [contractParticulars, status, leadId]);
+  }, [contractParticulars, status, leadId, flushContractParticulars]);
 
   // Persist a lifecycle transition (flushing the latest state first so AGREED
   // freezes the correct snapshot), then update the UI.
@@ -841,24 +870,18 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setContractSendError(null);
     void (async () => {
       try {
-        // Flush any un-committed particulars first, so the envelope's locked
-        // tabs reflect the latest edits (the debounced save may not have landed,
-        // and the send reads particulars from the DB, not in-memory state). Once
-        // the send flips the offer to CONTRACT_SENT, saveContractParticulars is
-        // rejected, so a value not flushed here would be dropped from the
-        // envelope AND lost — mirror the flush-before-send of sendOffer/sendTender.
-        const particulars = contractParticularsRef.current;
-        const particularsJson = JSON.stringify(particulars);
-        if (particularsJson !== lastSavedParticularsRef.current) {
-          const saved = await saveContractParticulars({ offerId, particulars });
-          if (!saved.ok) {
-            setContractSendError(
-              `Couldn't save the contract particulars before sending: ${saved.error}`,
-            );
-            setContractSending(false);
-            return;
-          }
-          lastSavedParticularsRef.current = particularsJson;
+        // Flush any un-committed particulars first — through the same serialized
+        // chain as the debounced saves, so no older in-flight save can overtake
+        // this latest value. The send reads particulars from the DB, and once it
+        // flips the offer to CONTRACT_SENT saveContractParticulars is rejected,
+        // so an un-flushed value would be dropped. Mirrors sendOffer/sendTender.
+        const flushed = await flushContractParticulars(offerId);
+        if (!flushed.ok) {
+          setContractSendError(
+            `Couldn't save the contract particulars before sending: ${flushed.error}`,
+          );
+          setContractSending(false);
+          return;
         }
         const result = await sendContractForSignature({ offerId });
         if (result.ok) {
@@ -875,7 +898,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         setContractSending(false);
       }
     })();
-  }, [leadId, transition]);
+  }, [leadId, transition, flushContractParticulars]);
 
   // Create the Project from the signed Contract: maps the frozen snapshot,
   // creates milestones + tradie bookings, attaches the executed PDFs, and

@@ -75,6 +75,9 @@ export async function createContractEnvelope(
           checkboxTabs: args.ownerCheckboxTabs.map((c) => ({
             tabLabel: c.tabLabel,
             selected: c.selected ? "true" : "false",
+            // Derived contract terms (GST inclusive / HBCF included / exclusions)
+            // — locked so the customer can't toggle them before signing.
+            locked: "true",
           })),
         } as docusign.Tabs,
       },

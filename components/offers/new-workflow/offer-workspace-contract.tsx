@@ -227,8 +227,8 @@ function ContractParticularsForm({
         </h4>
         {filled.length === 0 ? (
           <p className="text-sm text-muted-foreground/80">
-            No particulars were captured — the builder completes any open fields
-            when counter-signing.
+            No particulars were captured — these fields appear blank on the
+            signed contract.
           </p>
         ) : (
           <dl className="grid gap-2 sm:grid-cols-2">

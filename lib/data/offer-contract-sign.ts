@@ -302,39 +302,70 @@ export async function saveContractParticulars(input: {
     return { ok: false, error: access.error };
   }
 
-  const offer = await prisma.offer.findUnique({
-    where: { id: input.offerId },
-    select: { id: true, offerStatus: true, revisionNumber: true },
-  });
-  if (!offer) {
-    return { ok: false, error: "Offer not found." };
-  }
-  if (offer.offerStatus !== OfferStatus.CONTRACT_DRAFT) {
-    return {
-      ok: false,
-      error:
-        "Contract particulars can only be edited while the contract is a draft.",
-    };
-  }
-
   const particulars = normalizeContractParticulars(
     input.particulars,
   ) as unknown as Prisma.InputJsonValue;
 
-  await prisma.contract.upsert({
-    where: { offerId: offer.id },
-    update: { particulars },
+  // Validate + persist atomically. A separate "is it a draft?" read followed by
+  // an upsert would let a concurrent send (which flips the offer to
+  // CONTRACT_SENT) or a revision fork (which deactivates this row) slip in
+  // between — writing particulars after the envelope is sent, or onto
+  // superseded history. Guard the write on the offer's live state so it can only
+  // land while the offer is an ACTIVE CONTRACT_DRAFT.
+  const result = await prisma.$transaction(async (tx) => {
+    // Common case — the contract row already exists: a single conditional
+    // update whose predicate the database evaluates atomically.
+    const updated = await tx.contract.updateMany({
+      where: {
+        offerId: input.offerId,
+        offer: { offerStatus: OfferStatus.CONTRACT_DRAFT, isActive: true },
+      },
+      data: { particulars },
+    });
+    if (updated.count > 0) {
+      return { ok: true as const };
+    }
+    // Nothing updated: either the contract row doesn't exist yet (first save) or
+    // the offer is no longer an active draft. Re-check inside the transaction and
+    // create the row only when it is genuinely a draft with no contract yet.
+    const current = await tx.offer.findUnique({
+      where: { id: input.offerId },
+      select: {
+        offerStatus: true,
+        isActive: true,
+        revisionNumber: true,
+        contract: { select: { id: true } },
+      },
+    });
+    if (
+      !current ||
+      !current.isActive ||
+      current.offerStatus !== OfferStatus.CONTRACT_DRAFT ||
+      current.contract
+    ) {
+      return {
+        ok: false as const,
+        error:
+          "Contract particulars can only be edited while the contract is a draft.",
+      };
+    }
     // documentData is required on the model; it is (re)built from the frozen
     // snapshot at send time, so seed an empty object until then.
-    create: {
-      offerId: offer.id,
-      version: offer.revisionNumber,
-      documentData: {},
-      particulars,
-    },
+    await tx.contract.create({
+      data: {
+        offerId: input.offerId,
+        version: current.revisionNumber,
+        documentData: {},
+        particulars,
+      },
+    });
+    return { ok: true as const };
   });
 
-  revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+  if (!result.ok) {
+    return result;
+  }
+  revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   return { ok: true };
 }
 

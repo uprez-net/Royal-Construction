@@ -224,10 +224,11 @@ function ownerTabs(): docusign.Tabs {
       textTab("acknowledgement_of_owner_docusign_0_capacity_value", "ownerCapacity", { width: 220 }),
     ],
     checkboxTabs: [
-      // Set by the send action (defined here, anchored).
-      checkboxTab("contract_price_gst_Inclusive of GST_value", "gstInclusive", { yOffset: 8 }),
-      checkboxTab("included_in_the_contract_price__Yes_value", "hbcfIncluded", { yOffset: 8 }),
-      checkboxTab("_b_exclusions_Yes_value", "exclusionsYes", { yOffset: 8 }),
+      // Derived contract terms — value set by the send action, LOCKED so the
+      // customer can't toggle them before signing (defined here + at send time).
+      checkboxTab("contract_price_gst_Inclusive of GST_value", "gstInclusive", { yOffset: 8, locked: true }),
+      checkboxTab("included_in_the_contract_price__Yes_value", "hbcfIncluded", { yOffset: 8, locked: true }),
+      checkboxTab("_b_exclusions_Yes_value", "exclusionsYes", { yOffset: 8, locked: true }),
       // Schedule 1 statutory checklist — pre-ticked + locked constants.
       ...SCHEDULE1_YES_TOKENS.map((token, index) =>
         checkboxTab(token, `sch1Yes${index + 1}`, { selected: true, locked: true }),
