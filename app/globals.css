@@ -250,6 +250,68 @@
     [data-offer-print-template="true"] {
     display: block !important;
   }
+
+  /* Printing the revision viewer (issue #93). When the read-only viewer is
+     open it renders a second template marked "screen" inside a DialogContent
+     that is portalled to <body>, position: fixed, transform: translate(...),
+     max-height: 90vh and overflow: hidden (components/ui/dialog.tsx). These
+     rules are the counterpart to the live-offer unwrap above: they promote
+     the "screen" copy instead, so printing emits the revision on screen
+     rather than the live offer. They are mutually exclusive with the rules
+     above — those carry :not(:has("screen")) and switch off exactly when
+     these switch on — so one and only one document ever prints.
+
+     Two things differ from the live path. First, the live "true" template
+     sits in the app's normal flow, a separate <body> branch from the portal;
+     rule (a) hides that whole branch (app chrome + the live template + the
+     scrim), keeping only the portal branch that holds the viewer. Second, the
+     unwrap must additionally reset `position`, `transform` and `max-height`
+     (rule b) or the fixed, transformed, height-capped dialog prints as a
+     single clipped page no matter how many A4 pages are inside it.
+
+     The "screen" template and DialogContent keep their print:hidden as a safe
+     fallback: if any selector here fails to match, they stay hidden and
+     printing fails safe (nothing) rather than emitting a clipped or wrong
+     document. Rules b and d override that print:hidden with !important on the
+     path that is actually promoted. */
+
+  /* (a) Keep only the <body> branch that contains the viewer. This hides the
+     entire app — including the live "true" template — and the dialog scrim. */
+  body:has([data-offer-print-template="screen"])
+    > :not(:has([data-offer-print-template="screen"])) {
+    display: none !important;
+  }
+
+  /* (b) Flatten every ancestor of the viewer's template into page flow,
+     including the fixed / transformed / height-capped dialog chrome. */
+  body:has([data-offer-print-template="screen"])
+    :has([data-offer-print-template="screen"]) {
+    background: white !important;
+    display: block !important;
+    height: auto !important;
+    margin: 0 !important;
+    max-height: none !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    position: static !important;
+    transform: none !important;
+  }
+
+  /* (c) Drop everything off the path to the template: the dialog header,
+     the close button and the overlay. */
+  body:has([data-offer-print-template="screen"])
+    :has([data-offer-print-template="screen"])
+    > :not(:has([data-offer-print-template="screen"])):not([data-offer-print-template="screen"]) {
+    display: none !important;
+  }
+
+  /* (d) Promote the viewer's template itself (overrides its print:hidden). */
+  body:has([data-offer-print-template="screen"])
+    [data-offer-print-template="screen"] {
+    display: block !important;
+  }
 }
 
 .toaster {
