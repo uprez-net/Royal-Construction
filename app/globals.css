@@ -215,15 +215,19 @@
   }
 
   /* These rules promote the live offer's hidden print template into THE printed
-     document. They are switched off while the read-only revision viewer is open
-     (it renders a second template marked "screen"): the viewer's copy is not
-     printable, so leaving them on would print the live offer while a different
-     revision is on screen — the operator would file the wrong document without
-     any sign of it. Printing a superseded revision is not supported; refusing
-     is the safe outcome. With no viewer open the :not() always holds, so the
-     live print path is unchanged. */
+     document. They are switched off whenever the read-only revision viewer is
+     open, keyed on the [data-offer-revision-viewer] marker the viewer's dialog
+     carries in EVERY open state (loading, error, empty and loaded alike). That
+     matters: the "screen" print template only exists once a revision has
+     loaded, so guarding on it would leave the live offer printing while the
+     viewer is still loading or showing an error — the operator would file the
+     wrong document with no sign of it. Guarding on the always-present marker
+     closes that window: while the viewer is open the live offer never prints,
+     and the branch below prints the on-screen revision when it has loaded (or
+     nothing when it has not). With no viewer open the :not() always holds, so
+     the live print path is unchanged. */
   body:has([data-offer-print-template="true"]):not(
-      :has([data-offer-print-template="screen"])
+      :has([data-offer-revision-viewer])
     )
     :has([data-offer-print-template="true"]) {
     background: white !important;
@@ -237,7 +241,7 @@
   }
 
   body:has([data-offer-print-template="true"]):not(
-      :has([data-offer-print-template="screen"])
+      :has([data-offer-revision-viewer])
     )
     :has([data-offer-print-template="true"])
     > :not(:has([data-offer-print-template="true"])):not([data-offer-print-template="true"]) {
@@ -245,7 +249,7 @@
   }
 
   body:has([data-offer-print-template="true"]):not(
-      :has([data-offer-print-template="screen"])
+      :has([data-offer-revision-viewer])
     )
     [data-offer-print-template="true"] {
     display: block !important;
@@ -257,9 +261,9 @@
      max-height: 90vh and overflow: hidden (components/ui/dialog.tsx). These
      rules are the counterpart to the live-offer unwrap above: they promote
      the "screen" copy instead, so printing emits the revision on screen
-     rather than the live offer. They are mutually exclusive with the rules
-     above — those carry :not(:has("screen")) and switch off exactly when
-     these switch on — so one and only one document ever prints.
+     rather than the live offer. The live rules above switch off whenever the
+     [data-offer-revision-viewer] marker is present, so one and only one
+     document ever prints.
 
      Two things differ from the live path. First, the live "true" template
      sits in the app's normal flow, a separate <body> branch from the portal;
@@ -269,16 +273,25 @@
      (rule b) or the fixed, transformed, height-capped dialog prints as a
      single clipped page no matter how many A4 pages are inside it.
 
-     The "screen" template and DialogContent keep their print:hidden as a safe
-     fallback: if any selector here fails to match, they stay hidden and
-     printing fails safe (nothing) rather than emitting a clipped or wrong
-     document. Rules b and d override that print:hidden with !important on the
-     path that is actually promoted. */
+     Fail-safe when the viewer is open but no revision has loaded (loading,
+     load error, or an empty/unreadable snapshot — states where no "screen"
+     template exists): rule (a) still hides the whole app (it is keyed on the
+     marker), the live rules above are off (marker present), and rules (b)-(d)
+     are inert (no "screen" node), so the only surviving branch is the
+     DialogContent — which carries print:hidden — and nothing prints. Rules b
+     and d override that print:hidden with !important only on the path that is
+     actually promoted once a revision has loaded. */
 
-  /* (a) Keep only the <body> branch that contains the viewer. This hides the
-     entire app — including the live "true" template — and the dialog scrim. */
-  body:has([data-offer-print-template="screen"])
-    > :not(:has([data-offer-print-template="screen"])) {
+  /* (a) Keep only the <body> branch that holds the viewer. This hides the
+     entire app — including the live "true" template — and the dialog scrim.
+     Keyed on the viewer marker (present in EVERY open state), not on the
+     "screen" template (present only once a revision has loaded): so while the
+     viewer is open but still loading or showing an error, the live offer is
+     suppressed here too and cannot print as the wrong document. When no
+     revision has loaded, rules (b)-(d) below are inert and the DialogContent's
+     own print:hidden leaves nothing to print — the safe outcome. */
+  body:has([data-offer-revision-viewer])
+    > :not(:has([data-offer-revision-viewer])) {
     display: none !important;
   }
 
