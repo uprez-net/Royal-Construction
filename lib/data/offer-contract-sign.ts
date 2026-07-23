@@ -149,6 +149,43 @@ export async function sendContractForSignature(input: {
     ? `${primarySigner?.capacity ?? "Director"} of ${primaryEntityName}`
     : primarySigner?.capacity ?? "Owner";
 
+  // Ordered customer-side signers for the envelope — each individual owner + each
+  // company director (collectOfferSigners order), emailed at their own valid
+  // address, falling back to the primary client's so no signer is left without a
+  // link. The primary carries the data tabs; the rest stack a signature in the
+  // OWNER(S) area (ADR 0003).
+  const isValidEmail = (value: string): boolean =>
+    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
+  const ownerSigners = contractSigners.map((signer) => {
+    const own = (signer.signatory.email ?? "").trim();
+    return {
+      name: signer.signatory.name,
+      email: isValidEmail(own) ? own : customerEmail,
+      capacity: signer.signatory.capacity,
+      entityName: signer.entityName,
+      entityAbn: signer.entityAbn,
+    };
+  });
+  if (ownerSigners.length === 0) {
+    ownerSigners.push({
+      name: primaryOwner,
+      email: customerEmail,
+      capacity: "Owner",
+      entityName: null,
+      entityAbn: null,
+    });
+  }
+  // The single BC4 OWNER(S) signature area can only stack so many signatures.
+  // Refuse rather than silently drop a signatory (ADR 0003). Runs before the
+  // send is claimed, so no status rollback is needed.
+  const MAX_CONTRACT_SIGNERS = 6;
+  if (ownerSigners.length > MAX_CONTRACT_SIGNERS) {
+    return {
+      ok: false,
+      error: `This contract has ${ownerSigners.length} signatories; the BC4 owner signature area supports up to ${MAX_CONTRACT_SIGNERS}. Reduce the owner/director signatories or arrange a separate signing.`,
+    };
+  }
+
   // ── Tab values (labels defined by scripts/docusign/create-bc4-template.ts;
   // unlocked particulars live in the template and are completed by the
   // builder while signing) ──
@@ -257,13 +294,7 @@ export async function sendContractForSignature(input: {
       templateId: config.contractTemplateId,
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
       builder: { name: config.builderSignerName, email: config.builderSignerEmail },
-      owner: {
-        name: primaryOwner,
-        email: customerEmail,
-        capacity: primarySigner?.capacity ?? "Owner",
-        entityName: primaryEntityName,
-        entityAbn: contractSigners[0]?.entityAbn ?? null,
-      },
+      owners: ownerSigners,
       ownerTextTabs,
       ownerCheckboxTabs: [
         { tabLabel: "gstInclusive", selected: true },
