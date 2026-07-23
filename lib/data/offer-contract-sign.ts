@@ -16,7 +16,10 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
-import { splitOwners } from "@/lib/offer/offer-tender-html";
+import {
+  collectOfferSigners,
+  formatOwnerNamesLine,
+} from "@/lib/offer/workspace-model";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { resolveOfferCustomerEmail } from "@/lib/offer/offer-customer-email";
@@ -117,11 +120,6 @@ export async function sendContractForSignature(input: {
         "No valid client email found on the offer or lead — set the client email in Job setup before sending the Contract.",
     };
   }
-  // The BC4 contract template exposes a single Customer signer role; the
-  // primary owner is the named signer. ownerNames (rendered on the cover) is
-  // populated with both clients when a secondary is present.
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-
   // Resolve the price through the same path the Tender used — a blank override
   // round-trips to "0", so Number(...) would lock a $0.00 contract (the signed
   // Tender showed the computed value). buildProposalInput runs
@@ -129,15 +127,27 @@ export async function sendContractForSignature(input: {
   const contractValue =
     buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
-  const owners = splitOwners(job.clientNames);
-  const primaryOwner = owners[0];
-  // The BC4 contract template's ownerNames tab renders the named owners on the
-  // cover. When a secondary client is present, name both so the printed
-  // contract lists every co-owner (the template renders a single ownerNames
-  // string; it does not split into separate signer roles here).
-  const ownerNames = secondary
-    ? `${job.clientNames} and ${secondary}`
-    : job.clientNames;
+
+  // Owner parties (ADR 0003). The BC4 form has a single OWNER(S) area, so every
+  // owner is named on the ownerNames line (companies annotated with ABN/ACN),
+  // and the primary owner's Current Location + contact fill the single owner
+  // address/contact lines (see below). The primary SIGNER — the primary owner
+  // if an individual, else its first director — is the DocuSign Owner recipient.
+  // NOTE: true N stacked owner/director signers (send-to-all, #103/#120) require
+  // the BC4 template rework (bounded-max roles + stacked owner-area tabs). Until
+  // then the primary signer signs on the owners' behalf; every owner is still
+  // named on the contract and recorded on the signature audit.
+  const ownerParties = job.owners ?? [];
+  const contractSigners = collectOfferSigners(ownerParties);
+  const primarySigner = contractSigners[0]?.signatory;
+  const primaryEntityName = contractSigners[0]?.entityName ?? null;
+  const primaryOwner = primarySigner?.name || job.clientNames;
+  const ownerNames = formatOwnerNamesLine(ownerParties) || job.clientNames;
+  // The primary signer's capacity for the BC4 capacity line, e.g. "Owner" or
+  // "Director of ABC Pty Ltd".
+  const capacityLabel = primaryEntityName
+    ? `${primarySigner?.capacity ?? "Director"} of ${primaryEntityName}`
+    : primarySigner?.capacity ?? "Owner";
 
   // ── Tab values (labels defined by scripts/docusign/create-bc4-template.ts;
   // unlocked particulars live in the template and are completed by the
@@ -165,6 +175,25 @@ export async function sendContractForSignature(input: {
     stageRows.find((r) => r.stageName.toLowerCase().includes("deposit")) ?? stageRows[0];
   const exclusions = snapshot.draft.exclusionBullets;
 
+  // Owner address/contact for the single BC4 owner lines. Current Location (from
+  // Job setup) supersedes the hand-typed owner-address particular as the source
+  // for the "of …" line (ADR 0003); the particular remains a fallback for offers
+  // created before Current Location existed. Owner phone comes from the primary
+  // signer; the mobile line stays on the particular (the owner model has one
+  // phone per signatory).
+  const parsedParticulars = parseContractParticulars(
+    offer.contract?.particulars ?? null,
+  );
+  const ownerAddressValue =
+    job.currentLocation.trim() || parsedParticulars.ownerAddress.trim();
+  const ownerPhoneValue =
+    (primarySigner?.phone ?? "").trim() || parsedParticulars.ownerPhone.trim();
+  const ownerMobileValue = parsedParticulars.ownerMobile.trim();
+  const ownerContactTabs: ContractTabValue[] = [];
+  if (ownerAddressValue) ownerContactTabs.push(locked("ownerAddress", ownerAddressValue));
+  if (ownerPhoneValue) ownerContactTabs.push(locked("ownerPhone", ownerPhoneValue));
+  if (ownerMobileValue) ownerContactTabs.push(locked("ownerMobile", ownerMobileValue));
+
   // Every value is a tab on the OWNER role (the first signer, issue #98), so the
   // customer sees the complete contract on open — derived Tender values, the
   // estimator's BC4 particulars, and the owner's print name. The Builder role
@@ -185,11 +214,18 @@ export async function sendContractForSignature(input: {
     locked("defectsLiabilityWeeks", "12 Weeks"),
     locked("workDescription", [job.buildType, ...job.buildScope].filter(Boolean).join(". ")),
     locked("exclusionsList", exclusions.join("\n")),
+    // Owner address/contact — sourced from the primary owner's Current Location +
+    // contact (ADR 0003).
+    ...ownerContactTabs,
+    // The primary signer's capacity ("Owner" / "Director of ABC Pty Ltd").
+    locked("ownerCapacity", capacityLabel),
     // Estimator-entered BC4 particulars (issue #98). Only the FILLED ones are
     // sent; a blank one stays the template's locked-empty tab — read-only, so
     // the customer can't type into a builder particular the estimator left blank.
-    ...contractParticularsToLockedTabs(
-      parseContractParticulars(offer.contract?.particulars ?? null),
+    // The owner address/phone/mobile are excluded here — sourced above from the
+    // owner party — so we never send a duplicate tab label.
+    ...contractParticularsToLockedTabs(parsedParticulars).filter(
+      (tab) => !["ownerAddress", "ownerPhone", "ownerMobile"].includes(tab.tabLabel),
     ),
     locked("ownerPrintName", primaryOwner),
   ];
@@ -221,7 +257,13 @@ export async function sendContractForSignature(input: {
       templateId: config.contractTemplateId,
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
       builder: { name: config.builderSignerName, email: config.builderSignerEmail },
-      owner: { name: primaryOwner, email: customerEmail },
+      owner: {
+        name: primaryOwner,
+        email: customerEmail,
+        capacity: primarySigner?.capacity ?? "Owner",
+        entityName: primaryEntityName,
+        entityAbn: contractSigners[0]?.entityAbn ?? null,
+      },
       ownerTextTabs,
       ownerCheckboxTabs: [
         { tabLabel: "gstInclusive", selected: true },
@@ -265,6 +307,9 @@ export async function sendContractForSignature(input: {
             email: recipient.email,
             routingOrder: recipient.routingOrder,
             docusignRecipientId: recipient.recipientId,
+            capacity: recipient.capacity ?? null,
+            entityName: recipient.entityName ?? null,
+            entityAbn: recipient.entityAbn ?? null,
           })),
         },
       },

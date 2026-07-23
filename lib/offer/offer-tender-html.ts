@@ -5,6 +5,12 @@ import {
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
 import { STANDARD_INCLUSIONS_SCHEDULE } from "./workspace-proposal-content";
+import {
+  collectOfferSigners,
+  type OfferOwner,
+  type OfferSignerContext,
+  type OfferWorkspaceJob,
+} from "./workspace-model";
 
 // Legal fixed-price building Tender document (distinct from the marketing Offer
 // proposal). Sections: parties + contract sum, particulars, numbered inclusions
@@ -73,7 +79,11 @@ export function masthead(): string {
 export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   const data = buildOfferPrintTemplateData(input);
   const { job } = input;
-  const owners = resolveTenderOwners(job);
+  // The ordered signer list — one per individual owner and one per company
+  // director. The DocuSign envelope (offer-tender-sign.ts) builds recipients
+  // from the SAME collectOfferSigners() call in the SAME order, so anchor
+  // sigOwner{k} on this PDF maps to recipient k. See ADR 0003.
+  const signers = collectOfferSigners(job.owners);
   const reference = `${job.reference}-${job.revision}`;
   const totalArea =
     job.groundFloorSqm +
@@ -98,13 +108,13 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   };
 
   const body = [
-    coverPage(input, data, reference, owners, totalArea, foot()),
+    coverPage(input, data, reference, totalArea, foot()),
     ...inclusionChunks.map((rows, index) =>
       inclusionsPage(rows, index * INCLUSIONS_ROWS_PER_PAGE, index > 0, foot()),
     ),
     exclusionsPaymentPage(data, foot()),
     termsPage(data, foot()),
-    executionPage(job, reference, owners, foot()),
+    executionPage(job, reference, signers, foot()),
   ].join("");
 
   return legalDocShell(body);
@@ -128,10 +138,6 @@ export function getTenderOwners(job: {
     (name) => name.trim().toLowerCase() === secondary.toLowerCase(),
   );
   return alreadyPresent ? fromNames : [...fromNames, secondary];
-}
-
-function resolveTenderOwners(job: OfferPrintTemplateInput["job"]): string[] {
-  return getTenderOwners(job);
 }
 
 // Shared A4 page shell + stylesheet for the legal documents (Tender and
@@ -181,24 +187,14 @@ function coverPage(
   input: OfferPrintTemplateInput,
   data: ReturnType<typeof buildOfferPrintTemplateData>,
   reference: string,
-  owners: string[],
   totalArea: number,
   foot: string,
 ): string {
   const { job, customerPrice } = input;
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-  // Render the secondary client as a second line under the primary owner(s)
-  // only when it is not already part of job.clientNames. The Owners label
-  // pluralises when there is more than one named owner.
-  const secondaryAlreadyInNames = secondary
-    ? splitOwners(job.clientNames).some(
-        (name) => name.trim().toLowerCase() === secondary.toLowerCase(),
-      )
-    : true;
-  const ownerWho = secondary && !secondaryAlreadyInNames
-    ? `${esc(job.clientNames)}<br /><span style="font-size:11px;color:${MUTED};">and ${esc(secondary)}</span>`
-    : esc(job.clientNames);
+  const owners = job.owners ?? [];
   const ownerLabel = owners.length > 1 ? "Owners" : "Owner";
+  const ownerWho = ownerPartyNamesHtml(job);
+  const ownerDetails = owners.map(ownerDetailRowsHtml).join("");
   return `<div class="page">
     ${masthead()}
     <h1 class="doc">Fixed Price Building Tender</h1>
@@ -207,13 +203,17 @@ function coverPage(
     <h2>Parties</h2>
     <div class="parties">
       <div class="party"><div class="role">The Builder</div><div class="who">Royal Constructions Pty Ltd</div><div style="color:${MUTED};font-size:10px;margin-top:4px;">Licence No. 383992C · ABN 56 644 111 580 · MBA Accredited</div></div>
-      <div class="party"><div class="role">The ${ownerLabel}</div><div class="who">${ownerWho}</div><div style="color:${MUTED};font-size:10px;margin-top:4px;">Site: ${esc(job.siteAddress)}</div></div>
+      <div class="party"><div class="role">The ${ownerLabel}</div><div class="who">${ownerWho}</div><div style="color:${MUTED};font-size:10px;margin-top:4px;">Site Location: ${esc(job.siteAddress)}</div></div>
     </div>
     <div class="sum"><div class="top">Contract Sum (including GST)</div><div class="amt">${money(customerPrice.selectedContractValueIncGst)}</div></div>
+    ${owners.length > 0
+      ? `<h2>Owner Details</h2>
+    <table><thead><tr><th>Owner</th><th>Current Location</th><th>Email</th><th>Phone</th></tr></thead><tbody>${ownerDetails}</tbody></table>`
+      : ""}
     <h2>Project Particulars</h2>
     <table>
       <tbody>
-        ${particular("Site address", job.siteAddress)}
+        ${particular("Site Location", job.siteAddress)}
         ${/* Omit unknown site particulars rather than contracting to a blank
              title reference, a blank zoning, or a "0 m²" lot — the same reason
              the façade row below is conditional. */ ""}
@@ -233,6 +233,50 @@ function coverPage(
 
 function particular(label: string, value: string): string {
   return `<tr><td class="cat" style="width:45mm;">${esc(label)}</td><td>${esc(value)}</td></tr>`;
+}
+
+// Owner display name with ABN/ACN annotation for companies.
+function ownerDisplayName(owner: OfferOwner): string {
+  const name = owner.displayName.trim();
+  if (owner.kind === "company" && owner.abn.trim().length > 0) {
+    return `${name} (ABN/ACN ${owner.abn.trim()})`;
+  }
+  return name;
+}
+
+// Combined owner names for the party block: primary on the first line, any
+// co-owners on a muted "and …" sub-line (companies annotated with ABN/ACN).
+function ownerPartyNamesHtml(job: OfferWorkspaceJob): string {
+  const owners = (job.owners ?? []).filter(
+    (owner) => owner.displayName.trim().length > 0,
+  );
+  if (owners.length === 0) return esc(job.clientNames);
+  const primary = esc(ownerDisplayName(owners[0]));
+  const rest = owners.slice(1).map((owner) => esc(ownerDisplayName(owner)));
+  if (rest.length === 0) return primary;
+  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${rest.join("; ")}</span>`;
+}
+
+// One or more Owner Details rows: an individual is a single row (name / current
+// location / email / phone); a company is a header row (name + ABN + registered
+// office) followed by one sub-row per director signatory.
+function ownerDetailRowsHtml(owner: OfferOwner): string {
+  const nameCell =
+    owner.kind === "company" && owner.abn.trim().length > 0
+      ? `${esc(owner.displayName)} <span style="color:${MUTED};">(ABN/ACN ${esc(owner.abn)})</span>`
+      : esc(owner.displayName);
+  if (owner.kind === "individual") {
+    const signer = owner.signatories[0];
+    return `<tr><td class="cat" style="width:55mm;">${nameCell}</td><td>${esc(owner.currentLocation)}</td><td>${esc(signer?.email ?? "")}</td><td>${esc(signer?.phone ?? "")}</td></tr>`;
+  }
+  const header = `<tr><td class="cat" style="width:55mm;">${nameCell}</td><td>${esc(owner.currentLocation)}</td><td colspan="2" style="color:${MUTED};font-size:9px;">Signed by its director(s) below</td></tr>`;
+  const directors = owner.signatories
+    .map(
+      (director) =>
+        `<tr><td style="padding-left:14px;color:${MUTED};">↳ ${esc(director.name)}, ${esc(director.capacity)}</td><td></td><td>${esc(director.email)}</td><td>${esc(director.phone)}</td></tr>`,
+    )
+    .join("");
+  return header + directors;
 }
 
 function inclusionsPage(
@@ -308,27 +352,39 @@ function termsPage(
 function executionPage(
   job: OfferPrintTemplateInput["job"],
   reference: string,
-  owners: string[],
+  signers: OfferSignerContext[],
   foot: string,
 ): string {
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-  // Acceptance paragraph — names both clients when a secondary client is
-  // present ("...the parties — <primary> and <secondary> — accept...").
-  const acceptSubject = secondary
-    ? `${esc(job.clientNames)} and ${esc(secondary)}`
-    : "the parties";
-  const ownerBlocks = owners
-    .map(
-      (owner, index) => `
+  const owners = job.owners ?? [];
+  // Acceptance paragraph — names every owner when there is more than one
+  // ("…<A> and <B>… accept…"); a single owner keeps the neutral "the parties".
+  const acceptSubject =
+    owners.length > 1
+      ? owners
+          .map((owner) => owner.displayName.trim())
+          .filter(Boolean)
+          .map(esc)
+          .join(" and ")
+      : "the parties";
+  // One block per signer (each individual owner; each company director). The
+  // sigOwner{k}/dateOwner{k}/initOwner{k} anchors are ordered identically to
+  // the DocuSign recipients built by collectOfferSigners in offer-tender-sign.
+  const ownerBlocks = signers
+    .map((signer, index) => {
+      const k = index + 1;
+      const who = signer.entityName
+        ? `For ${esc(signer.entityName)} — ${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)}`
+        : `The Owner — ${esc(signer.signatory.name)}`;
+      return `
     <div class="sig">
-      <div class="who">The Owner — ${esc(owner)}</div>
+      <div class="who">${who}</div>
       <div class="lines">
-        <div><div class="sigspace">${anchor(`sigOwner${index + 1}`)}</div><div class="field">Signature</div></div>
-        <div><div class="sigspace">${anchor(`dateOwner${index + 1}`)}</div><div class="field">Date</div></div>
+        <div><div class="sigspace">${anchor(`sigOwner${k}`)}</div><div class="field">Signature</div></div>
+        <div><div class="sigspace">${anchor(`dateOwner${k}`)}</div><div class="field">Date</div></div>
       </div>
-      <div style="margin-top:10px;font-size:9px;color:${MUTED};">Initial each page: ${anchor(`initOwner${index + 1}`)}</div>
-    </div>`,
-    )
+      <div style="margin-top:10px;font-size:9px;color:${MUTED};">Initial each page: ${anchor(`initOwner${k}`)}</div>
+    </div>`;
+    })
     .join("");
   return `<div class="page">
     ${masthead()}

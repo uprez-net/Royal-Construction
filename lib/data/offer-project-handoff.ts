@@ -14,7 +14,7 @@ import {
   parseWorkspaceState,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
-import { splitOwners } from "@/lib/offer/offer-tender-html";
+import { collectOfferSigners } from "@/lib/offer/workspace-model";
 import type { ProjectRequirementsPayload, ProjectSourceDocumentReference } from "@/types/project-flow";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -209,8 +209,14 @@ export async function createProjectFromOffer(input: {
       startDate: start.toISOString(),
       estimatedEndDate: end.toISOString(),
       address: job.siteAddress,
-      council: "TBC",
+      // Site council captured on Job setup via /api/address (ADR 0003); falls
+      // back to the historical "TBC" placeholder when unknown.
+      council: job.siteCouncil.trim() || "TBC",
       siteManagerId: actor.id,
+      // Primary owner's Current Location → Customer.address; the full owner set
+      // → Project.parties (companies, directors, both addresses, contacts).
+      customerAddress: job.currentLocation.trim() || null,
+      parties: JSON.parse(JSON.stringify(job.owners ?? [])),
       extraction,
       sourceDocuments,
     });
@@ -262,7 +268,27 @@ function buildExtractionPayload(
   sourceDocuments: { tender: ProjectSourceDocumentReference; contract: ProjectSourceDocumentReference },
 ): ProjectRequirementsPayload {
   const job = snapshot.job;
-  const owners = splitOwners(job.clientNames);
+  // Owner contacts for the project-extraction legalAdministration block, now
+  // sourced from owners[] (ADR 0003) — every owner's name, and every signer's
+  // email + phone (fixing the owner emails/phones the doc mapping expected but
+  // the old splitOwners path never carried). Falls back to the flat projection.
+  const ownerParties = job.owners ?? [];
+  const signers = collectOfferSigners(ownerParties);
+  const ownerNames = ownerParties
+    .map((owner) => owner.displayName.trim())
+    .filter(Boolean);
+  const ownerEmails = Array.from(
+    new Set(
+      signers
+        .map((signer) => signer.signatory.email.trim())
+        .filter((email) => EMAIL_RE.test(email)),
+    ),
+  );
+  const ownerPhones = Array.from(
+    new Set(
+      signers.map((signer) => signer.signatory.phone.trim()).filter(Boolean),
+    ),
+  );
   const paymentStages = snapshot.paymentSchedule.map((row) => ({
     label: row.stageName,
     percentage: row.percentOfContract * 100,
@@ -281,9 +307,19 @@ function buildExtractionPayload(
     legalAdministration: {
       siteAddress: job.siteAddress,
       ownerContacts: {
-        names: owners,
-        emails: EMAIL_RE.test(job.clientEmail) ? [job.clientEmail] : [],
-        phones: [],
+        names:
+          ownerNames.length > 0
+            ? ownerNames
+            : job.clientNames
+              ? [job.clientNames]
+              : [],
+        emails:
+          ownerEmails.length > 0
+            ? ownerEmails
+            : EMAIL_RE.test(job.clientEmail)
+              ? [job.clientEmail]
+              : [],
+        phones: ownerPhones,
       },
       commencementTrigger: "Executed contract + council/CDC approval",
       signedDate: new Date().toISOString().slice(0, 10),

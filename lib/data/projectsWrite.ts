@@ -128,6 +128,10 @@ export interface CreateProjectWithLeadInput {
   address: string;
   council: string;
   siteManagerId: string;
+  // Primary owner's Current Location, promoted to Customer.address (ADR 0003).
+  customerAddress?: string | null;
+  // Full owner party set (owners[]) preserved on Project.parties (ADR 0003).
+  parties?: Prisma.InputJsonValue | null;
   extraction?: ProjectRequirementsPayload | ProjectExtractionData | null;
   sourceDocuments: {
     tender: ProjectSourceDocumentReference;
@@ -352,7 +356,7 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
  * Re-throws any database, AI inference, milestone generation, notification,
  * or transaction errors encountered during execution.
  */
-export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName, extraction, sourceDocuments }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName, customerAddress, parties, extraction, sourceDocuments }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
@@ -516,6 +520,7 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
         name: lead.name,
         email: lead.email,
         phone: lead.phone,
+        address: customerAddress ?? null,
       }, tx);
 
       const normalisedStartDate = new Date(startDate);
@@ -535,6 +540,7 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
           estimatedEndDate: normalisedEstimatedEndDate,
           siteManagerId: siteManagerId,
           requirements: projectRequirements as unknown as Prisma.InputJsonValue,
+          ...(parties ? { parties } : {}),
           customerId: customer.id,
         }
       });

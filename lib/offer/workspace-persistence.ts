@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
+  ownersFromLegacyClientFields,
   type OfferWorkspaceCostLine,
   type OfferWorkspaceJob,
   type OfferWorkspaceScopeItem,
@@ -39,7 +40,7 @@ export type OfferWorkspaceSnapshot = {
   readonly images: OfferImageMap;
 };
 
-export const CURRENT_WORKSPACE_SCHEMA_VERSION = 1 as const;
+export const CURRENT_WORKSPACE_SCHEMA_VERSION = 2 as const;
 
 // ─── Money helpers (ADR 0002: money persisted as integer cents) ───
 export const dollarsToCents = (value: number): number =>
@@ -113,15 +114,39 @@ const parseDollarInput = (input: string): number => {
 // ─── Persisted (JSON) schema — money in cents, percentages in basis points ───
 const moneyCents = z.number().int();
 
+const ownerSignatorySchema = z.object({
+  id: z.string(),
+  name: z.string().default(""),
+  email: z.string().default(""),
+  phone: z.string().default(""),
+  capacity: z.string().default("Owner"),
+});
+
+const ownerSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["individual", "company"]).default("individual"),
+  displayName: z.string().default(""),
+  currentLocation: z.string().default(""),
+  abn: z.string().default(""),
+  signatories: z.array(ownerSignatorySchema).default([]),
+});
+
 const jobSchema = z.object({
   reference: z.string(),
   revision: z.string(),
+  // Owner parties (ADR 0003) — source of truth. Older (v1) snapshots have no
+  // owners[]; migrateWorkspaceState builds it from the flat client* fields.
+  owners: z.array(ownerSchema).default([]),
   clientNames: z.string(),
   secondaryCustomerName: z.string().default(""),
   clientEmail: z.string(),
   secondaryCustomerEmail: z.string().default(""),
   clientPhone: z.string(),
+  currentLocation: z.string().default(""),
   siteAddress: z.string(),
+  siteCouncil: z.string().default(""),
+  siteState: z.string().default(""),
+  sitePostcode: z.string().default(""),
   buildType: z.string(),
   facade: z.string().default(""),
   groundFloorSqm: z.number(),
@@ -205,7 +230,7 @@ const rateCardTierSchema = z
   .catch("MID");
 
 const workspaceStateV1Schema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   job: jobSchema,
   costLines: z.array(costLineSchema),
   allowances: z.array(scopeItemSchema),
@@ -260,10 +285,53 @@ export function migrateWorkspaceState(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null) {
     return raw;
   }
-  const version = (raw as { schemaVersion?: number }).schemaVersion ?? 1;
-  // v1 is current. Future migrations chain here: if (version < 2) { ...; version = 2 }
-  void version;
-  return raw;
+  const state = raw as Record<string, unknown>;
+  const version =
+    typeof state.schemaVersion === "number" ? state.schemaVersion : 1;
+  let next = state;
+  if (version < 2) {
+    next = migrateV1ToV2(next);
+  }
+  return next;
+}
+
+// v1 → v2 (ADR 0003): introduce job.owners[] — the source of truth for the
+// customer side — built from the flat client* fields when absent, plus the new
+// currentLocation + site council/state/postcode fields. The combined primary
+// name string is preserved on owner 1 (not split), so already-generated offers
+// re-render identically.
+function migrateV1ToV2(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const job = (state.job ?? {}) as Record<string, unknown>;
+  const str = (value: unknown): string =>
+    typeof value === "string" ? value : "";
+  const existingOwners = Array.isArray(job.owners) ? job.owners : [];
+  const owners =
+    existingOwners.length > 0
+      ? existingOwners
+      : ownersFromLegacyClientFields({
+          clientNames: str(job.clientNames),
+          secondaryCustomerName: str(job.secondaryCustomerName),
+          clientEmail: str(job.clientEmail),
+          secondaryCustomerEmail: str(job.secondaryCustomerEmail),
+          clientPhone: str(job.clientPhone),
+          currentLocation: str(job.currentLocation),
+        });
+  const firstOwner = owners[0] as { currentLocation?: string } | undefined;
+  return {
+    ...state,
+    schemaVersion: 2,
+    job: {
+      ...job,
+      owners,
+      currentLocation:
+        str(job.currentLocation) || (firstOwner?.currentLocation ?? ""),
+      siteCouncil: str(job.siteCouncil),
+      siteState: str(job.siteState),
+      sitePostcode: str(job.sitePostcode),
+    },
+  };
 }
 
 export function parseWorkspaceState(
@@ -278,7 +346,16 @@ export function serializeWorkspace(
 ): PersistedOfferWorkspaceState {
   return {
     schemaVersion: CURRENT_WORKSPACE_SCHEMA_VERSION,
-    job: { ...snapshot.job, buildScope: [...snapshot.job.buildScope] },
+    job: {
+      ...snapshot.job,
+      buildScope: [...snapshot.job.buildScope],
+      // Clone the readonly owner arrays into mutable copies to match the
+      // persisted (zod-inferred) shape.
+      owners: snapshot.job.owners.map((owner) => ({
+        ...owner,
+        signatories: owner.signatories.map((signatory) => ({ ...signatory })),
+      })),
+    },
     costLines: snapshot.lines.map((line) => ({
       id: line.id,
       stageCode: line.stageCode,

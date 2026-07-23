@@ -24,7 +24,15 @@ export interface CreateContractEnvelopeArgs {
   readonly templateId: string;
   readonly emailSubject: string;
   readonly builder: { readonly name: string; readonly email: string };
-  readonly owner: { readonly name: string; readonly email: string };
+  readonly owner: {
+    readonly name: string;
+    readonly email: string;
+    // Audit metadata (ADR 0003) persisted on EnvelopeSignature — the primary
+    // signer's capacity ("Owner"/"Director") and the company they sign for.
+    readonly capacity?: string | null;
+    readonly entityName?: string | null;
+    readonly entityAbn?: string | null;
+  };
   // All contract data goes on the OWNER role (the first signer, issue #98) so
   // the customer sees a complete contract on open. The Builder (routingOrder 2)
   // carries only its signature — no data tabs.
@@ -132,6 +140,9 @@ export async function createContractEnvelope(
         // Customer-first: Owner routes at 1, Builder counter-signs at 2.
         routingOrder: Number(signer.routingOrder ?? (isBuilder ? 2 : 1)),
         recipientId: signer.recipientId ?? (isBuilder ? "1" : "2"),
+        capacity: isBuilder ? null : args.owner.capacity ?? null,
+        entityName: isBuilder ? null : args.owner.entityName ?? null,
+        entityAbn: isBuilder ? null : args.owner.entityAbn ?? null,
       });
     }
   } catch {
@@ -144,7 +155,16 @@ export async function createContractEnvelope(
     recipients.push({ role: "BUILDER", name: args.builder.name, email: args.builder.email, routingOrder: 2, recipientId: "1" });
   }
   if (!recipients.some((recipient) => recipient.role === "CUSTOMER")) {
-    recipients.push({ role: "CUSTOMER", name: args.owner.name, email: args.owner.email, routingOrder: 1, recipientId: "2" });
+    recipients.push({
+      role: "CUSTOMER",
+      name: args.owner.name,
+      email: args.owner.email,
+      routingOrder: 1,
+      recipientId: "2",
+      capacity: args.owner.capacity ?? null,
+      entityName: args.owner.entityName ?? null,
+      entityAbn: args.owner.entityAbn ?? null,
+    });
   }
 
   return { envelopeId: result.envelopeId, recipients };

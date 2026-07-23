@@ -29,9 +29,59 @@ export const OFFER_STAGE_CATALOG = [
 
 export type OfferStageCode = (typeof OFFER_STAGE_CATALOG)[number]["code"];
 
+// ─── Owner parties (issues #103 / #111 / #120; ADR 0003) ───
+
+// Signatory capacities. Individuals sign in their own right ("Owner"); a company
+// owner signs through its directors ("Director"). Stored as free strings on the
+// signatory + EnvelopeSignature so unusual capacities (e.g. "Trustee") are
+// possible, with these two as the canonical defaults.
+export const OWNER_SIGNER_CAPACITY = "Owner" as const;
+export const DIRECTOR_SIGNER_CAPACITY = "Director" as const;
+
+export type OfferOwnerKind = "individual" | "company";
+
+// One natural person who must sign. For an individual owner this is the owner
+// themselves (capacity "Owner"); for a company owner these are its directors
+// (capacity "Director"). Each maps 1:1 to a DocuSign recipient with its own
+// tracked signing link + status (#120).
+export type OfferOwnerSignatory = {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly phone: string;
+  readonly capacity: string;
+};
+
+// A party on the customer side of the deal (an "Owner" — see CONTEXT.md). This
+// is the SOURCE OF TRUTH for client identity on the offer. The flat client*
+// fields on OfferWorkspaceJob are a derived primary/secondary projection kept
+// for legacy renderers; N-owner / company rendering + signing reads owners[].
+export type OfferOwner = {
+  readonly id: string;
+  readonly kind: OfferOwnerKind;
+  // Individual: the person's full name. Company: the registered company name.
+  // Rendered on the Contract OWNER(S) line and the Tender party block.
+  readonly displayName: string;
+  // The party's "Current Location": residential address (individual) or
+  // registered office (company). Captured on Job setup via /api/address.
+  readonly currentLocation: string;
+  // Company only: ABN or ACN. Empty string for individuals.
+  readonly abn: string;
+  // Individual: exactly one signatory (the person, capacity "Owner").
+  // Company: one or more director signatories (capacity "Director").
+  readonly signatories: readonly OfferOwnerSignatory[];
+};
+
 export type OfferWorkspaceJob = {
   readonly reference: string;
   readonly revision: string;
+  // Source of truth for the customer side (issues #103/#111). One or more
+  // owners, each an individual or a company with director signatories.
+  readonly owners: readonly OfferOwner[];
+  // ── Derived legacy projection of owners[] (primary = owners[0], secondary =
+  // owners[1]). Never edited directly — recomputed from owners[] via
+  // deriveOwnerProjection so legacy renderers/consumers stay correct for the
+  // common 1–2 owner case. Prefer reading owners[] in new code. ──
   readonly clientNames: string;
   // Secondary client sourced from the lead's secondaryName — rendered at the
   // existing client insertion points in the Offer/Tender/Contract documents
@@ -48,7 +98,17 @@ export type OfferWorkspaceJob = {
   // behaviour.
   readonly secondaryCustomerEmail: string;
   readonly clientPhone: string;
+  // Primary owner's Current Location (residential/postal), derived from
+  // owners[0]. Printed on the Offer one-pager, Tender, and the Contract "of …"
+  // line. Distinct from siteAddress. See CONTEXT.md "Current Location".
+  readonly currentLocation: string;
+  // The construction Site Location. Kept as siteAddress for back-compat; the
+  // council/state/postcode below enrich it from /api/address (site council
+  // feeds Project.council at handoff).
   readonly siteAddress: string;
+  readonly siteCouncil: string;
+  readonly siteState: string;
+  readonly sitePostcode: string;
   readonly buildType: string;
   readonly facade: string;
   readonly groundFloorSqm: number;
@@ -225,15 +285,200 @@ export function defaultOfferValidUntil(from: Date = new Date()): string {
   return until.toISOString().slice(0, 10);
 }
 
+// ─── Owner helpers (ADR 0003) ───
+
+export function createOfferSignatory(
+  id: string,
+  capacity: string,
+): OfferOwnerSignatory {
+  return { id, name: "", email: "", phone: "", capacity };
+}
+
+// A blank individual owner: one signatory (the person themselves, capacity
+// "Owner").
+export function createIndividualOwner(id: string): OfferOwner {
+  return {
+    id,
+    kind: "individual",
+    displayName: "",
+    currentLocation: "",
+    abn: "",
+    signatories: [createOfferSignatory(`${id}-signer-1`, OWNER_SIGNER_CAPACITY)],
+  };
+}
+
+// A blank company owner: one director signatory to start (capacity "Director").
+export function createCompanyOwner(id: string): OfferOwner {
+  return {
+    id,
+    kind: "company",
+    displayName: "",
+    currentLocation: "",
+    abn: "",
+    signatories: [createOfferSignatory(`${id}-dir-1`, DIRECTOR_SIGNER_CAPACITY)],
+  };
+}
+
+// The primary owner (first in the list), or undefined when there are none.
+export function primaryOwner(
+  owners: readonly OfferOwner[],
+): OfferOwner | undefined {
+  return owners[0];
+}
+
+// One customer-side signer (an individual owner, or one director of a company
+// owner), with the represented entity so the signature record + printed block
+// can show the signing capacity.
+export type OfferSignerContext = {
+  readonly owner: OfferOwner;
+  readonly signatory: OfferOwnerSignatory;
+  readonly ownerIndex: number;
+  readonly signerIndex: number;
+  // Represented company (name + abn) when the owner is a company; null for an
+  // individual signing in their own right.
+  readonly entityName: string | null;
+  readonly entityAbn: string | null;
+};
+
+// Every customer-side signer across all owners, in owner-then-signatory order —
+// the exact set of DocuSign recipients (all routingOrder 1; builder counter-
+// signs last). Each individual owner contributes one signer; each company owner
+// contributes one per director.
+export function collectOfferSigners(
+  owners: readonly OfferOwner[],
+): OfferSignerContext[] {
+  const signers: OfferSignerContext[] = [];
+  owners.forEach((owner, ownerIndex) => {
+    owner.signatories.forEach((signatory, signerIndex) => {
+      signers.push({
+        owner,
+        signatory,
+        ownerIndex,
+        signerIndex,
+        entityName: owner.kind === "company" ? owner.displayName : null,
+        entityAbn: owner.kind === "company" ? owner.abn : null,
+      });
+    });
+  });
+  return signers;
+}
+
+// The legacy flat client* projection (primary = owners[0], secondary =
+// owners[1]) derived from owners[].
+export type OfferClientProjection = {
+  readonly clientNames: string;
+  readonly secondaryCustomerName: string;
+  readonly clientEmail: string;
+  readonly secondaryCustomerEmail: string;
+  readonly clientPhone: string;
+  readonly currentLocation: string;
+};
+
+export function deriveOwnerProjection(
+  owners: readonly OfferOwner[],
+): OfferClientProjection {
+  const primary = owners[0];
+  const secondary = owners[1];
+  const primarySigner = primary?.signatories[0];
+  const secondarySigner = secondary?.signatories[0];
+  return {
+    clientNames: primary?.displayName ?? "",
+    secondaryCustomerName: secondary?.displayName ?? "",
+    clientEmail: primarySigner?.email ?? "",
+    secondaryCustomerEmail: secondarySigner?.email ?? "",
+    clientPhone: primarySigner?.phone ?? "",
+    currentLocation: primary?.currentLocation ?? "",
+  };
+}
+
+// Recompute the derived flat client* fields from owners[] and return the job
+// with both in sync. Call after any owners[] mutation (Job setup) and on
+// deserialize so legacy renderers/consumers always see a correct primary/
+// secondary projection.
+export function withOwnerProjection(job: OfferWorkspaceJob): OfferWorkspaceJob {
+  return { ...job, ...deriveOwnerProjection(job.owners) };
+}
+
+// Combined display of every owner name for the Contract OWNER(S) line, e.g.
+// "John Smith & Jane Smith & ABC Pty Ltd (ABN/ACN 12 345 678 901)".
+export function formatOwnerNamesLine(owners: readonly OfferOwner[]): string {
+  return owners
+    .map((owner) => {
+      const name = owner.displayName.trim();
+      if (owner.kind === "company" && owner.abn.trim().length > 0) {
+        return `${name} (ABN/ACN ${owner.abn.trim()})`;
+      }
+      return name;
+    })
+    .filter((entry) => entry.length > 0)
+    .join(" & ");
+}
+
+// Build owners[] from the legacy flat client fields (migrate-on-read for
+// pre-owners snapshots). The combined primary name string is kept as-is on
+// owner 1 (NOT split on "&") so already-rendered offers stay byte-identical; a
+// secondary client becomes owner 2. Always returns ≥1 owner.
+export function ownersFromLegacyClientFields(fields: {
+  clientNames: string;
+  secondaryCustomerName: string;
+  clientEmail: string;
+  secondaryCustomerEmail: string;
+  clientPhone: string;
+  currentLocation?: string;
+}): OfferOwner[] {
+  const owners: OfferOwner[] = [
+    {
+      id: "owner-1",
+      kind: "individual",
+      displayName: fields.clientNames,
+      currentLocation: fields.currentLocation ?? "",
+      abn: "",
+      signatories: [
+        {
+          id: "owner-1-signer-1",
+          name: fields.clientNames,
+          email: fields.clientEmail,
+          phone: fields.clientPhone,
+          capacity: OWNER_SIGNER_CAPACITY,
+        },
+      ],
+    },
+  ];
+  if (fields.secondaryCustomerName.trim().length > 0) {
+    owners.push({
+      id: "owner-2",
+      kind: "individual",
+      displayName: fields.secondaryCustomerName,
+      currentLocation: "",
+      abn: "",
+      signatories: [
+        {
+          id: "owner-2-signer-1",
+          name: fields.secondaryCustomerName,
+          email: fields.secondaryCustomerEmail || fields.clientEmail,
+          phone: "",
+          capacity: OWNER_SIGNER_CAPACITY,
+        },
+      ],
+    });
+  }
+  return owners;
+}
+
 export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   reference: "",
   revision: "R1",
+  owners: [createIndividualOwner("owner-1")],
   clientNames: "",
   secondaryCustomerName: "",
   clientEmail: "",
   secondaryCustomerEmail: "",
   clientPhone: "",
+  currentLocation: "",
   siteAddress: "",
+  siteCouncil: "",
+  siteState: "",
+  sitePostcode: "",
   buildType: "",
   facade: "",
   groundFloorSqm: 0,

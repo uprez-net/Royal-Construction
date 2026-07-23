@@ -13,11 +13,19 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import type { OfferPrefillResult } from "@/lib/data/offer-prefill";
 import {
+  createIndividualOwner,
+  createOfferSignatory,
+  deriveOwnerProjection,
+  DIRECTOR_SIGNER_CAPACITY,
   FACADE_OPTIONS,
+  OWNER_SIGNER_CAPACITY,
+  type OfferOwner,
+  type OfferOwnerKind,
+  type OfferOwnerSignatory,
   type OfferWorkspaceJob,
 } from "@/lib/offer/workspace-model";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
-import { ClipboardList, Info, Sparkles } from "lucide-react";
+import { ClipboardList, Info, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
@@ -47,6 +55,12 @@ export function JobSetupPanel({
     job.porchSqm +
     job.grannyFlatSqm;
 
+  const owners = job.owners ?? [];
+  // owners[] is the source of truth; emit the derived flat client* projection in
+  // the same patch so legacy consumers stay in sync (ADR 0003).
+  const emitOwners = (next: readonly OfferOwner[]) =>
+    onJobChange({ owners: next, ...deriveOwnerProjection(next) });
+
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
@@ -73,45 +87,8 @@ export function JobSetupPanel({
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">
         <PrefillBanner result={prefillResult} />
+        <OwnersSection owners={owners} onOwnersChange={emitOwners} />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Client names">
-            <Input
-              value={job.clientNames}
-              onChange={(event) => onJobChange({ clientNames: event.target.value })}
-            />
-          </Field>
-          <Field label="Secondary client">
-            <Input
-              value={job.secondaryCustomerName ?? ""}
-              onChange={(event) =>
-                onJobChange({ secondaryCustomerName: event.target.value })
-              }
-              placeholder="Co-owner name (optional)"
-            />
-          </Field>
-          <Field label="Email">
-            <Input
-              type="email"
-              value={job.clientEmail}
-              onChange={(event) => onJobChange({ clientEmail: event.target.value })}
-            />
-          </Field>
-          <Field label="Secondary client email">
-            <Input
-              type="email"
-              value={job.secondaryCustomerEmail ?? ""}
-              onChange={(event) =>
-                onJobChange({ secondaryCustomerEmail: event.target.value })
-              }
-              placeholder="Co-owner email (optional)"
-            />
-          </Field>
-          <Field label="Phone">
-            <Input
-              value={job.clientPhone}
-              onChange={(event) => onJobChange({ clientPhone: event.target.value })}
-            />
-          </Field>
           <Field label="Build type">
             <Input
               value={job.buildType}
@@ -138,10 +115,18 @@ export function JobSetupPanel({
               </SelectContent>
             </Select>
           </Field>
-          <Field className="md:col-span-2" label="Site address">
+          <Field className="md:col-span-2" label="Site Location">
             <Input
+              placeholder="Construction site address"
               value={job.siteAddress}
               onChange={(event) => onJobChange({ siteAddress: event.target.value })}
+            />
+          </Field>
+          <Field label="Council">
+            <Input
+              placeholder="e.g. Sydney City Council"
+              value={job.siteCouncil}
+              onChange={(event) => onJobChange({ siteCouncil: event.target.value })}
             />
           </Field>
           {/* Site particulars. These print on the proposal snapshot and the
@@ -231,6 +216,305 @@ export function JobSetupPanel({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Owner parties editor (ADR 0003 / issues #103, #111). owners[] is the source of
+// truth; the parent syncs the derived flat client* projection. Each owner is an
+// individual (one signatory) or a company (name + ABN/ACN + registered office +
+// one or more director signatories). For an individual the display name mirrors
+// their single signatory's name so the signature blocks + DocuSign recipient use
+// it.
+// Module-scope id generator (kept out of the render body so it does not trip the
+// react purity rule) — used only in event handlers to key new owners/directors.
+function newOwnerId(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function OwnersSection({
+  owners,
+  onOwnersChange,
+}: {
+  readonly owners: readonly OfferOwner[];
+  readonly onOwnersChange: (next: readonly OfferOwner[]) => void;
+}) {
+  const updateOwner = (index: number, patch: Partial<OfferOwner>) =>
+    onOwnersChange(
+      owners.map((owner, i) => (i === index ? { ...owner, ...patch } : owner)),
+    );
+
+  const setKind = (index: number, kind: OfferOwnerKind) =>
+    onOwnersChange(
+      owners.map((owner, i) => {
+        if (i !== index || owner.kind === kind) return owner;
+        if (kind === "company") {
+          // Existing signatories become directors.
+          const directors =
+            owner.signatories.length > 0
+              ? owner.signatories
+              : [createOfferSignatory(newOwnerId(`${owner.id}-dir`), DIRECTOR_SIGNER_CAPACITY)];
+          return {
+            ...owner,
+            kind,
+            signatories: directors.map((signatory) => ({
+              ...signatory,
+              capacity: DIRECTOR_SIGNER_CAPACITY,
+            })),
+          };
+        }
+        // Individual: collapse to one signatory (the person themselves).
+        const first =
+          owner.signatories[0] ??
+          createOfferSignatory(newOwnerId(`${owner.id}-signer`), OWNER_SIGNER_CAPACITY);
+        return {
+          ...owner,
+          kind,
+          signatories: [
+            {
+              ...first,
+              name: owner.displayName || first.name,
+              capacity: OWNER_SIGNER_CAPACITY,
+            },
+          ],
+        };
+      }),
+    );
+
+  const setIndividualName = (index: number, value: string) =>
+    onOwnersChange(
+      owners.map((owner, i) =>
+        i === index
+          ? {
+              ...owner,
+              displayName: value,
+              signatories: owner.signatories.map((signatory, si) =>
+                si === 0 ? { ...signatory, name: value } : signatory,
+              ),
+            }
+          : owner,
+      ),
+    );
+
+  const updateSignatory = (
+    ownerIndex: number,
+    sigIndex: number,
+    patch: Partial<OfferOwnerSignatory>,
+  ) =>
+    onOwnersChange(
+      owners.map((owner, i) =>
+        i === ownerIndex
+          ? {
+              ...owner,
+              signatories: owner.signatories.map((signatory, si) =>
+                si === sigIndex ? { ...signatory, ...patch } : signatory,
+              ),
+            }
+          : owner,
+      ),
+    );
+
+  const addDirector = (index: number) =>
+    onOwnersChange(
+      owners.map((owner, i) =>
+        i === index
+          ? {
+              ...owner,
+              signatories: [
+                ...owner.signatories,
+                createOfferSignatory(newOwnerId(`${owner.id}-dir`), DIRECTOR_SIGNER_CAPACITY),
+              ],
+            }
+          : owner,
+      ),
+    );
+
+  const removeDirector = (ownerIndex: number, sigIndex: number) =>
+    onOwnersChange(
+      owners.map((owner, i) =>
+        i === ownerIndex
+          ? {
+              ...owner,
+              signatories: owner.signatories.filter((_, si) => si !== sigIndex),
+            }
+          : owner,
+      ),
+    );
+
+  const addOwner = () =>
+    onOwnersChange([...owners, createIndividualOwner(newOwnerId("owner"))]);
+
+  const removeOwner = (index: number) =>
+    onOwnersChange(owners.filter((_, i) => i !== index));
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Owners
+        </span>
+        <Button size="sm" type="button" variant="outline" onClick={addOwner}>
+          <Plus className="size-4" aria-hidden="true" /> Add owner
+        </Button>
+      </div>
+      {owners.map((owner, index) => (
+        <div
+          key={owner.id}
+          className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex rounded-md border border-border/70 p-0.5">
+              {(["individual", "company"] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setKind(index, kind)}
+                  className={`rounded px-2.5 py-1 text-xs font-medium capitalize ${
+                    owner.kind === kind
+                      ? "bg-royal-gold text-white"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {kind}
+                </button>
+              ))}
+            </div>
+            {owners.length > 1 ? (
+              <Button
+                size="sm"
+                type="button"
+                variant="ghost"
+                onClick={() => removeOwner(index)}
+                aria-label={`Remove owner ${index + 1}`}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+              </Button>
+            ) : null}
+          </div>
+
+          {owner.kind === "individual" ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <Field label="Owner name">
+                <Input
+                  value={owner.displayName}
+                  onChange={(event) => setIndividualName(index, event.target.value)}
+                />
+              </Field>
+              <Field label="Email">
+                <Input
+                  type="email"
+                  value={owner.signatories[0]?.email ?? ""}
+                  onChange={(event) =>
+                    updateSignatory(index, 0, { email: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Phone">
+                <Input
+                  value={owner.signatories[0]?.phone ?? ""}
+                  onChange={(event) =>
+                    updateSignatory(index, 0, { phone: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Current Location">
+                <Input
+                  placeholder="Where the owner currently lives"
+                  value={owner.currentLocation}
+                  onChange={(event) =>
+                    updateOwner(index, { currentLocation: event.target.value })
+                  }
+                />
+              </Field>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Field label="Company name">
+                  <Input
+                    value={owner.displayName}
+                    onChange={(event) =>
+                      updateOwner(index, { displayName: event.target.value })
+                    }
+                  />
+                </Field>
+                <Field label="ABN / ACN">
+                  <Input
+                    value={owner.abn}
+                    onChange={(event) => updateOwner(index, { abn: event.target.value })}
+                  />
+                </Field>
+                <Field
+                  className="md:col-span-2"
+                  label="Registered office (Current Location)"
+                >
+                  <Input
+                    value={owner.currentLocation}
+                    onChange={(event) =>
+                      updateOwner(index, { currentLocation: event.target.value })
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-2 rounded-md border border-border/60 bg-background/60 p-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Director signatories
+                  </span>
+                  <Button
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                    onClick={() => addDirector(index)}
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" /> Add director
+                  </Button>
+                </div>
+                {owner.signatories.map((director, sigIndex) => (
+                  <div
+                    key={director.id}
+                    className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"
+                  >
+                    <Input
+                      placeholder="Director name"
+                      value={director.name}
+                      onChange={(event) =>
+                        updateSignatory(index, sigIndex, { name: event.target.value })
+                      }
+                    />
+                    <Input
+                      type="email"
+                      placeholder="Director email"
+                      value={director.email}
+                      onChange={(event) =>
+                        updateSignatory(index, sigIndex, { email: event.target.value })
+                      }
+                    />
+                    <Input
+                      placeholder="Director phone"
+                      value={director.phone}
+                      onChange={(event) =>
+                        updateSignatory(index, sigIndex, { phone: event.target.value })
+                      }
+                    />
+                    {owner.signatories.length > 1 ? (
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                        onClick={() => removeDirector(index, sigIndex)}
+                        aria-label={`Remove director ${sigIndex + 1}`}
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 

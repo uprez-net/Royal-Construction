@@ -146,11 +146,20 @@ export async function findCustomerByContact(email?: string | null, phone?: strin
  * @throws Error if customer creation fails
  * Also triggers revalidation of the customers cache to ensure new customer appears in dropdowns.
  */
-export async function createCustomerForProject(input: { name: string; email: string; phone: string }, tx?: Prisma.TransactionClient) {
+export async function createCustomerForProject(input: { name: string; email: string; phone: string; address?: string | null }, tx?: Prisma.TransactionClient) {
 
     const prismClient = tx ?? prisma;
+    const address = input.address?.trim() || null;
     const existing = await findCustomerByContact(input.email, input.phone, tx);
     if (existing) {
+        // Backfill the address on a repeat customer created before addresses were
+        // captured, when we now have one and they don't (ADR 0003).
+        if (address && !existing.address) {
+            return prismClient.customer.update({
+                where: { id: existing.id },
+                data: { address },
+            });
+        }
         return existing;
     }
 
@@ -159,6 +168,7 @@ export async function createCustomerForProject(input: { name: string; email: str
             name: input.name,
             email: input.email,
             phone: input.phone,
+            address,
         },
     });
 

@@ -205,7 +205,10 @@ function PrintCoverPage({
           {secondary ? (
             <CoverRow label="Co-owner" value={secondary} />
           ) : null}
-          <CoverRow label="Site Address" value={job.siteAddress} />
+          {job.currentLocation.trim() ? (
+            <CoverRow label="Current Location" value={job.currentLocation} />
+          ) : null}
+          <CoverRow label="Site Location" value={job.siteAddress} />
           <CoverRow label="Build Type" value={job.buildType} />
           <CoverRow label="Total Build Area" value={data.areaLabel} />
           <CoverRow emphasis label="Contract Price" value={data.priceLine} />

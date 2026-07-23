@@ -18,6 +18,11 @@ import {
   type AttachedOfferImageSlot,
   type OfferImageMap,
 } from "./workspace-images";
+import {
+  collectOfferSigners,
+  type OfferOwner,
+  type OfferWorkspaceJob,
+} from "./workspace-model";
 
 const NAVY = "#1e2b4d";
 const GOLD = "#b8873b";
@@ -45,6 +50,33 @@ function money(value: number | null): string {
     currency: "AUD",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+// One owner's display name for the cover — companies annotated with ABN/ACN.
+function ownerDisplayName(owner: OfferOwner): string {
+  const name = owner.displayName.trim();
+  if (owner.kind === "company" && owner.abn.trim().length > 0) {
+    return `${name} (ABN/ACN ${owner.abn.trim()})`;
+  }
+  return name;
+}
+
+// Cover "Client" cell for N owners: primary on the first line, any co-owners on
+// a muted "and …" sub-line (companies annotated). Falls back to the legacy
+// clientNames projection when owners[] is somehow empty.
+function ownerNamesCellHtml(job: OfferWorkspaceJob): string {
+  const owners = (job.owners ?? []).filter((owner) =>
+    owner.displayName.trim().length > 0,
+  );
+  if (owners.length === 0) {
+    return esc(job.clientNames);
+  }
+  const primary = esc(ownerDisplayName(owners[0]));
+  const rest = owners.slice(1).map((owner) => esc(ownerDisplayName(owner)));
+  if (rest.length === 0) {
+    return primary;
+  }
+  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${rest.join("; ")}</span>`;
 }
 
 // Build a complete, self-contained HTML document of the building proposal,
@@ -154,12 +186,15 @@ function coverPage(
 ): string {
   const { job } = input;
   const hero = images.hero;
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-  // "Prepared For" cover row — secondary client rendered as a second line
-  // under the primary client when present; single-client offers unchanged.
-  const clientCell = secondary
-    ? `${esc(job.clientNames)}<br /><span style="font-size:11px;color:${MUTED};">and ${esc(secondary)}</span>`
-    : esc(job.clientNames);
+  // "Client" cover row lists every owner (companies annotated with ABN/ACN);
+  // co-owners fall onto a muted "and …" sub-line. Reads owners[] (source of
+  // truth); single-owner offers render unchanged.
+  const clientCell = ownerNamesCellHtml(job);
+  // Both addresses are labelled per issue #109. Current Location is the primary
+  // owner's residential/postal address; Site Location is the build site.
+  const currentLocationRow = job.currentLocation.trim()
+    ? coverRow("Current Location", job.currentLocation)
+    : "";
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     ${hero ? `<div class="hero"><img src="${esc(hero.url)}" alt="" /></div>` : ""}
@@ -167,7 +202,8 @@ function coverPage(
     <div class="cover-title"><h1>Building Proposal</h1><div class="sub">${esc(job.buildType)}</div></div>
     <table class="cover-table">
       ${coverRowHtml("Client", clientCell)}
-      ${coverRow("Site Address", job.siteAddress)}
+      ${currentLocationRow}
+      ${coverRow("Site Location", job.siteAddress)}
       ${coverRow("Build Type", job.buildType)}
       ${coverRow("Total Build Area", data.areaLabel)}
       ${coverRow("Contract Price", data.priceLine, true)}
@@ -336,24 +372,43 @@ function termsPage(
   foot: string,
 ): string {
   const { job } = input;
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
   const rows = data.paymentRows
     .map(
       (row) =>
         `<tr><td class="stage">${esc(row.stageName)}</td><td class="amt">${(row.percentOfContract * 100).toFixed(0)}% - ${money(row.amount)}</td><td class="muted">${esc(row.trigger)}</td></tr>`,
     )
     .join("");
-  // Acceptance paragraph — names both clients when a secondary is present
-  // ("I/We, <primary> and <secondary>, accept..."). Single-client offers keep
-  // the original "I/We, <primary>, accept..." wording. `I/We` covers both.
-  const acceptanceNames = secondary
-    ? `${esc(job.clientNames)} and ${esc(secondary)}`
-    : esc(job.clientNames);
+  const owners = job.owners ?? [];
+  // Acceptance paragraph — names every owner ("I/We, A and B and C, accept…").
+  // Single-owner offers keep the "I/We, <owner>, accept…" wording. `I/We`
+  // covers both. Falls back to the clientNames projection if owners[] is empty.
+  const acceptanceNames =
+    owners.length > 0
+      ? owners
+          .map((owner) => owner.displayName.trim())
+          .filter(Boolean)
+          .map(esc)
+          .join(" and ")
+      : esc(job.clientNames);
   const acceptanceLine = `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
-  // Signature block — second signer rendered when a secondary client exists.
-  const secondarySig = secondary
-    ? `<div class="sig"><h3>Client acceptance — co-owner</h3><p>Signature: _______________________</p><p>${esc(secondary)}</p><p>Date: ___________________________</p></div>`
-    : "";
+  // One client signature block per signer (each individual owner; each company
+  // director, labelled with their capacity + company). Builder block unchanged.
+  const signers = collectOfferSigners(owners);
+  const clientSigs = (signers.length > 0
+    ? signers.map((signer, index) => {
+        const heading =
+          signers.length > 1
+            ? `Client acceptance ${index + 1}`
+            : "Client acceptance";
+        const who = signer.entityName
+          ? `${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)} of ${esc(signer.entityName)}`
+          : esc(signer.signatory.name);
+        return `<div class="sig"><h3>${esc(heading)}</h3><p>Signature: _______________________</p><p>${who}</p><p>Date: ___________________________</p></div>`;
+      })
+    : [
+        `<div class="sig"><h3>Client acceptance</h3><p>Signature: _______________________</p><p>${esc(job.clientNames)}</p><p>Date: ___________________________</p></div>`,
+      ]
+  ).join("");
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Next steps</div>
@@ -362,8 +417,7 @@ function termsPage(
     <table class="pay"><thead><tr><th>Stage</th><th>Amount</th><th>Trigger</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="sigs">
       <div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>
-      <div class="sig"><h3>Client acceptance</h3><p>Signature: _______________________</p><p>${esc(job.clientNames)}</p><p>Date: ___________________________</p></div>
-      ${secondarySig}
+      ${clientSigs}
     </div>
     ${foot}
   </div>`;

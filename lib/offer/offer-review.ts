@@ -6,11 +6,13 @@ import {
   getAreaBasisTotalSqm,
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
-import type {
-  OfferDocumentDraft,
-  OfferWorkspaceCostLine,
-  OfferWorkspaceJob,
-  OfferWorkspaceScopeItem,
+import {
+  collectOfferSigners,
+  formatOwnerNamesLine,
+  type OfferDocumentDraft,
+  type OfferWorkspaceCostLine,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 
@@ -54,6 +56,26 @@ function section(
   return { ...s, status: s.issues.length === 0 ? "complete" : "incomplete" };
 }
 
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// Job-setup owner gates (ADR 0003 / issues #109–#111 + #110): at least one named
+// owner, and every signer (each individual owner; each company director) has a
+// valid email before the offer can be sent / the Tender or Contract generated.
+function ownerIssues(job: OfferWorkspaceJob): string[] {
+  const owners = job.owners ?? [];
+  const namedOwners = owners.filter(
+    (owner) => owner.displayName.trim().length > 0,
+  );
+  if (namedOwners.length === 0) {
+    return ["Owner name"];
+  }
+  const signers = collectOfferSigners(owners);
+  const everyEmailValid =
+    signers.length > 0 &&
+    signers.every((signer) => EMAIL_PATTERN.test(signer.signatory.email.trim()));
+  return everyEmailValid ? [] : ["A valid email for every owner/director"];
+}
+
 export function buildOfferReview(
   input: OfferReviewInput,
 ): readonly OfferReviewSection[] {
@@ -74,16 +96,21 @@ export function buildOfferReview(
       stepId: "offer-step-job-setup",
       title: "Job setup",
       issues: [
-        job.clientNames.trim().length === 0 && "Client names",
-        job.siteAddress.trim().length === 0 && "Site address",
+        ...ownerIssues(job),
+        job.currentLocation.trim().length === 0 && "Current Location",
+        job.siteAddress.trim().length === 0 && "Site Location",
         job.buildType.trim().length === 0 && "Build type",
         totalAreaSqm <= 0 && "Floor areas",
       ]
         .filter((v): v is string => Boolean(v))
         .map((field) => `${field} is missing.`),
       rows: [
-        { label: "Client", value: job.clientNames || "—" },
-        { label: "Site", value: job.siteAddress || "—" },
+        {
+          label: (job.owners?.length ?? 0) > 1 ? "Owners" : "Owner",
+          value: formatOwnerNamesLine(job.owners ?? []) || job.clientNames || "—",
+        },
+        { label: "Current Location", value: job.currentLocation || "—" },
+        { label: "Site Location", value: job.siteAddress || "—" },
         { label: "Build type", value: job.buildType || "—" },
         { label: "Total area", value: `${totalAreaSqm} sqm` },
       ],
