@@ -1,5 +1,6 @@
 "use client";
 
+import { AddressAutocomplete } from "@/components/common/address-autocomplete";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -116,15 +117,23 @@ export function JobSetupPanel({
             </Select>
           </Field>
           <Field className="md:col-span-2" label="Site Location">
-            <Input
+            <AddressAutocomplete
               placeholder="Construction site address"
               value={job.siteAddress}
-              onChange={(event) => onJobChange({ siteAddress: event.target.value })}
+              onChange={(siteAddress) => onJobChange({ siteAddress })}
+              onPick={(pick) =>
+                onJobChange({
+                  siteAddress: pick.address,
+                  siteCouncil: pick.council ?? job.siteCouncil,
+                  siteState: pick.state ?? job.siteState,
+                  sitePostcode: pick.postcode ?? job.sitePostcode,
+                })
+              }
             />
           </Field>
           <Field label="Council">
             <Input
-              placeholder="e.g. Sydney City Council"
+              placeholder="Auto-filled from Site Location"
               value={job.siteCouncil}
               onChange={(event) => onJobChange({ siteCouncil: event.target.value })}
             />
@@ -417,11 +426,11 @@ function OwnersSection({
                 />
               </Field>
               <Field label="Current Location">
-                <Input
+                <AddressAutocomplete
                   placeholder="Where the owner currently lives"
                   value={owner.currentLocation}
-                  onChange={(event) =>
-                    updateOwner(index, { currentLocation: event.target.value })
+                  onChange={(currentLocation) =>
+                    updateOwner(index, { currentLocation })
                   }
                 />
               </Field>
@@ -447,10 +456,11 @@ function OwnersSection({
                   className="md:col-span-2"
                   label="Registered office (Current Location)"
                 >
-                  <Input
+                  <AddressAutocomplete
+                    placeholder="Company registered office"
                     value={owner.currentLocation}
-                    onChange={(event) =>
-                      updateOwner(index, { currentLocation: event.target.value })
+                    onChange={(currentLocation) =>
+                      updateOwner(index, { currentLocation })
                     }
                   />
                 </Field>

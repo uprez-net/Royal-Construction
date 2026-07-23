@@ -1,0 +1,147 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+import { Input } from "@/components/ui/input";
+import { fetchJson } from "@/utils/fetch";
+import type { AddressSuggestion } from "@/types/data";
+
+export type AddressPick = {
+  readonly address: string;
+  readonly council?: string;
+  readonly state?: string;
+  readonly postcode?: string;
+};
+
+// Free-text address input with a Google/Geoscape (/api/address) suggestion
+// dropdown. Unlike SearchableSelect, the TYPED text is always the committed
+// value — so a contract-grade address that doesn't autocomplete (rural lots,
+// or when the address API keys aren't configured) still saves. Picking a
+// suggestion fills the address and surfaces the council/state/postcode via
+// onPick (used for the Site Location → Project.council). Fully controlled: the
+// `value` prop is the single source of truth.
+export function AddressAutocomplete({
+  value,
+  onChange,
+  onPick,
+  placeholder,
+  id,
+}: {
+  readonly value: string;
+  readonly onChange: (address: string) => void;
+  readonly onPick?: (pick: AddressPick) => void;
+  readonly placeholder?: string;
+  readonly id?: string;
+}) {
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Skip the next fetch when the value change came from picking a suggestion,
+  // so selecting an address doesn't immediately re-query it.
+  const skipNextFetch = useRef(false);
+
+  useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length < 3) {
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetchJson<{ suggestions: AddressSuggestion[] }>(
+          `/api/address?query=${encodeURIComponent(trimmed)}`,
+          { method: "GET" },
+          "Error fetching address suggestions",
+          controller.signal,
+        );
+        setSuggestions(response.data.suggestions);
+        setOpen(true);
+      } catch (error) {
+        // A missing API key (500) or any failure degrades gracefully to plain
+        // free-text entry; only a real abort is silently ignored.
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setSuggestions([]);
+        }
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (event: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open]);
+
+  const pick = (suggestion: AddressSuggestion) => {
+    const address = suggestion.address || suggestion.label;
+    skipNextFetch.current = true;
+    setSuggestions([]);
+    setOpen(false);
+    onChange(address);
+    onPick?.({
+      address,
+      council: suggestion.council,
+      state: suggestion.state,
+      postcode: suggestion.postcode,
+    });
+  };
+
+  const showList = open && suggestions.length > 0 && value.trim().length >= 3;
+
+  return (
+    <div ref={boxRef} className="relative">
+      <Input
+        id={id}
+        autoComplete="off"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => {
+          if (suggestions.length > 0) setOpen(true);
+        }}
+      />
+      {showList ? (
+        <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
+          {suggestions.map((suggestion) => {
+            const meta = [
+              suggestion.postcode,
+              suggestion.council ? `Council: ${suggestion.council}` : null,
+            ]
+              .filter((part): part is string => Boolean(part?.trim()))
+              .join(" · ");
+            return (
+              <li key={suggestion.id}>
+                <button
+                  type="button"
+                  className="flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-muted"
+                  onClick={() => pick(suggestion)}
+                >
+                  <span className="text-sm font-medium text-foreground">
+                    {suggestion.label}
+                  </span>
+                  {meta ? (
+                    <span className="text-xs text-muted-foreground">{meta}</span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
