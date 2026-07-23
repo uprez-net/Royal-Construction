@@ -16,6 +16,8 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
+import { generatePDF } from "@/lib/utils/generatePDF";
+import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
 import {
   collectOfferSigners,
   formatOwnerNamesLine,
@@ -175,15 +177,43 @@ export async function sendContractForSignature(input: {
       entityAbn: null,
     });
   }
-  // The single BC4 OWNER(S) signature area can only stack so many signatures.
-  // Refuse rather than silently drop a signatory (ADR 0003). Runs before the
-  // send is claimed, so no status rollback is needed.
-  const MAX_CONTRACT_SIGNERS = 6;
+  // Cap total signatories: the primary signs the BC4 form; the rest sign the
+  // generated Owner Signature Schedule (annexure), a single page of blocks.
+  // Refuse rather than silently drop a signatory (ADR 0003). Runs before the send
+  // is claimed, so no status rollback is needed.
+  const MAX_CONTRACT_SIGNERS = 10;
   if (ownerSigners.length > MAX_CONTRACT_SIGNERS) {
     return {
       ok: false,
-      error: `This contract has ${ownerSigners.length} signatories; the BC4 owner signature area supports up to ${MAX_CONTRACT_SIGNERS}. Reduce the owner/director signatories or arrange a separate signing.`,
+      error: `This contract has ${ownerSigners.length} signatories; up to ${MAX_CONTRACT_SIGNERS} are supported. Reduce the owner/director signatories or arrange a separate signing.`,
     };
+  }
+
+  // The primary owner signs the BC4 form's owner line; every additional owner /
+  // director signs the appended Owner Signature Schedule (the single BC4 owner
+  // area only fits ~2 signatures before the Builder block — ADR 0003). Generate
+  // it before the send is claimed so a failure needs no status rollback.
+  let annexurePdfBase64: string | null = null;
+  if (ownerSigners.length > 1) {
+    try {
+      annexurePdfBase64 = await generatePDF({
+        html: buildContractSignatureAnnexureHtml({
+          reference,
+          siteAddress: job.siteAddress,
+          ownerNamesLine: ownerNames,
+          signers: ownerSigners.slice(1).map((signer) => ({
+            name: signer.name,
+            capacity: signer.capacity,
+            entityName: signer.entityName,
+          })),
+        }),
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: `Failed to generate the owner signature schedule: ${(error as Error).message}`,
+      };
+    }
   }
 
   // ── Tab values (labels defined by scripts/docusign/create-bc4-template.ts;
@@ -295,6 +325,7 @@ export async function sendContractForSignature(input: {
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
       builder: { name: config.builderSignerName, email: config.builderSignerEmail },
       owners: ownerSigners,
+      annexurePdfBase64,
       ownerTextTabs,
       ownerCheckboxTabs: [
         { tabLabel: "gstInclusive", selected: true },

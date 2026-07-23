@@ -82,57 +82,55 @@ webform reflows per-row), so all stages render in one compact field —
 needed, attach a generated payment-schedule annexure to the envelope (the form
 itself invites attached schedules).
 
-## Multi-owner / director signers (planned — issues #103, #111, #120; ADR 0003)
+## Multi-owner / director signers (implemented — issues #103, #111, #120; ADR 0003)
 
-Today the contract has **one** customer-side signer role (`Owner`). The offer now
-models `owners[]` (individuals + companies with N director signatories), so every
-owner is **named** on the contract (`ownerNames` = `formatOwnerNamesLine`, e.g.
-"A & B & ABC Pty Ltd (ABN/ACN …)") and each signer is **recorded** on
-`EnvelopeSignature` with capacity/entity — but only the **primary** signer signs.
-True send-to-all signing is the last piece; this is the design for it.
+The offer models `owners[]` (individuals + companies with N director signatories).
+Every owner is **named** on the contract (`ownerNames` = `formatOwnerNamesLine`,
+e.g. "A & B & ABC Pty Ltd (ABN/ACN …)") and each signer is a **separate DocuSign
+recipient** (routing 1, parallel) with its own tracked link + `EnvelopeSignature`
+row (capacity/entity). The base template is **not** regenerated — this is all done
+at send time.
 
-### The constraint
+### The constraint (confirmed from the PDF)
 
-The BC4 "WHO" block and the `SIGNED BY THE OWNER(S)` area are a **single** region
-(confirmed from the MBA form). The MBA webform export uses single-row `_0_`
-tokens that reflow (see the Schedule 2 note above), so the blank PDF almost
-certainly has **only** `owners_0_*` + one `signed_by_owners_value` anchor — **no**
-`owners_1_*` tokens. **First action once the blank PDF is in hand:** confirm with
-`pdftotext -layout blank-BC4.pdf - | grep -oE 'owners_[0-9]+_[a-z_]+|signed_by_owners_value|acknowledgement_of_owner_docusign_[0-9]+'`.
+`pdftotext` on the blank BC4 shows only `owners_0_*` tokens + a single
+`signed_by_owners_value` anchor (the MBA webform reflows single `_0_` rows), and
+the `SIGNED BY THE OWNER(S)` area has ~59pt of clear space before the Builder line
+— room for the primary **+ ~1** signature only. So extra signatures cannot stack in
+that area.
 
-### Approach: composite templates + stacked anchor offsets
+### Approach: primary on the form, everyone else on an appended schedule
 
-Because we can't rely on `owners_1_*` tokens, stack signatures by **`anchorYOffset`
-on the single `signed_by_owners_value`** rather than per-owner tokens:
+- **N = 1** — the plain `templateId` + `templateRoles` path (Builder + Owner),
+  unchanged and known-good.
+- **N > 1** — the send generates an **"Owner Signature Schedule"** PDF
+  (`lib/offer/contract-annexure-html.ts` → `generatePDF`), one clean block per
+  co-owner/director with `sigAnnex{k}` / `dateAnnex{k}` anchor tokens, and builds
+  the envelope from **two composite-template layers**:
+  1. the BC4 server template with `Builder` + primary `Owner` (all data tabs; the
+     primary signs the BC4 form's owner line);
+  2. an inline layer that **adds the schedule as document 2** plus signers 2..N,
+     each `signHere`/`dateSigned` anchored on `sigAnnex{k}`/`dateAnnex{k}`.
+  The document **must** be its own composite layer — a document placed inside the
+  server-template layer's inline template is silently dropped (verified).
+- Composite templates **re-number recipientIds**, so the send reads recipients back
+  via `listRecipients` and maps capacity/entity by roleName (`Builder` / `Owner` /
+  `AnnexOwner{k}`); the recorded id then matches the Connect webhook's.
+- **Bounded max** = 10 signatories (`offer-contract-sign.ts`); beyond that the send
+  is refused with a clear message (never silently dropped). Data tabs stay on the
+  primary Owner so the customer opens a complete contract (customer-first, #98).
 
-- **Base server template** (create-bc4-template.ts) — unchanged in shape: `Builder`
-  (routing 2) + `Owner` (routing 1) carrying ALL data tabs + the primary signature
-  (anchored on `signed_by_owners_value`, yOffset 0) + the Schedule-1 acknowledgment.
-- **For N > 1 signers**, the send builds the envelope with **`compositeTemplates`**:
-  the server template + an **inline template** adding signers 2..N as extra
-  recipients (routing 1), each a `signHere` **anchored on `signed_by_owners_value`
-  with a stacked `anchorYOffset`** (e.g. −8 − k·24 px) so they sit one under
-  another in the owner signature area. Composite templates avoid the "unused
-  template role → empty-recipient send failure" problem that pre-defining
-  `Owner1..OwnerMAX` roles would create.
-- **N = 1 stays on the current `templateRoles` path** — fully backward compatible.
-- **Bounded max** ~4 owner parties × ~3 directors; beyond that, `log` + block with a
-  clear message (never silently drop a signer). Data tabs (ownerNames, ownerAddress
-  = primary Current Location, etc.) stay on the primary Owner recipient so the
-  customer opens a complete contract (the customer-first invariant, issue #98).
+`createContractEnvelope` takes an ordered `owners: {name,email,capacity,entityName,
+entityAbn}[]` + `annexurePdfBase64`; `collectOfferSigners(owners)` is the shared
+ordered list (same one the Tender uses).
 
-`createContractEnvelope` grows to accept an ordered `owners: {name,email,capacity,
-entityName,entityAbn}[]` (it already threads capacity/entity to `EnvelopeSignature`);
-`collectOfferSigners(owners)` is the shared ordered list (same one the Tender uses).
+### Verified (sandbox — account-d/demo)
 
-### Verification (sandbox — creds already target account-d/demo)
-
-1. Regenerate the template from the blank PDF → new `DOCUSIGN_CONTRACT_TEMPLATE_ID`.
-2. Test-send with **1, 2, and 4** signers. Confirm: each signer gets their own
-   tracked link + `EnvelopeSignature` row + Connect status; signatures land stacked
-   in the OWNER(S) area **without overlap** (calibrate the yOffset step visually,
-   like the existing checkbox offsets); the customer still opens a complete
-   contract; builder counter-signs last.
-3. Re-verify the Connect webhook (envelope-level HMAC) still matches recipients.
-
-**Blocked on:** the blank BC4 PDF (script argument) + a sandbox test-send slot.
+A 4-signer send (2 individuals + 1 company × 2 directors) confirmed: document 2
+(the schedule) is attached; the primary signs the BC4 form (p5 owner line + p7
+acknowledgment); the builder counter-signs (p5); the 3 co-owners/directors each get
+a `sigAnnex` tab on the schedule (y = 220 / 331 / 442, no overlap); every signer is
+a distinct RO-1 recipient with its own link; recipientIds + capacity/entity read
+back correctly. Remaining: exercise the full `sendContractForSignature` path (a
+real CONTRACT_DRAFT offer) end-to-end, and confirm the Connect webhook updates each
+`EnvelopeSignature` by the read-back recipientId.

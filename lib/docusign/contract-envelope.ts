@@ -28,12 +28,6 @@ export interface ContractOwnerSigner {
   readonly entityAbn?: string | null;
 }
 
-// Vertical spacing (pixels) between stacked owner signatures in the single
-// OWNER(S) area (the BC4 form has no per-owner tokens — see
-// contract-template-spec.md). NEEDS one-time visual calibration on a sandbox
-// send, like the checkbox offsets in create-bc4-template.ts.
-const OWNER_SIGNATURE_STACK_STEP_PX = 26;
-
 export interface CreateContractEnvelopeArgs {
   readonly context: DocusignContext;
   readonly config: DocusignConfig;
@@ -41,11 +35,15 @@ export interface CreateContractEnvelopeArgs {
   readonly emailSubject: string;
   readonly builder: { readonly name: string; readonly email: string };
   // Ordered customer-side signers, primary first (collectOfferSigners order).
-  // The PRIMARY carries all data tabs + the primary signature from the template;
-  // signers 2..N are added as extra recipients whose signature stacks in the
-  // single OWNER(S) area via a vertical anchor offset. N=1 uses the plain
-  // templateRoles path (unchanged, known-good).
+  // The PRIMARY signs the BC4 form's owner line + carries all data tabs. Signers
+  // 2..N sign the appended "Owner Signature Schedule" annexure (annexurePdfBase64)
+  // — the single BC4 owner area only fits ~2 signatures before the Builder block,
+  // so co-owners/directors go on a clean generated page (ADR 0003). N=1 uses the
+  // plain templateRoles path (no annexure).
   readonly owners: readonly ContractOwnerSigner[];
+  // The "Owner Signature Schedule" PDF (base64) — required when owners.length > 1;
+  // its sigAnnex{k}/dateAnnex{k} anchors receive signers 2..N's signature tabs.
+  readonly annexurePdfBase64?: string | null;
   // All contract data goes on the primary OWNER (issue #98) so the customer sees
   // a complete contract on open. The Builder (routingOrder 2) carries only its
   // signature — no data tabs.
@@ -112,42 +110,72 @@ export async function createContractEnvelope(
           status: "sent",
         }
       : {
-          // Multiple signers: composite = BC4 server template + an inline
-          // template assigning Builder + primary Owner (with data tabs) and
-          // adding signers 2..N, each a signHere anchored on the single
-          // signed_by_owners_value token, stacked by a vertical offset (the BC4
-          // form has no per-owner tokens — see contract-template-spec.md).
+          // Multiple signers, two composite layers (ADR 0003):
+          //   1) the BC4 server template with Builder + primary Owner (data tabs);
+          //   2) an inline layer that ADDS the Owner Signature Schedule as
+          //      document 2 and signers 2..N, each anchored on the schedule's
+          //      sigAnnex{k}/dateAnnex{k} tokens.
+          // The document must be its own composite layer — a document placed in the
+          // server-template layer's inline template is silently dropped (verified).
           emailSubject: emailSubject.slice(0, 100),
           compositeTemplates: [
             {
               serverTemplates: [{ sequence: "1", templateId }],
               inlineTemplates: [
+                { sequence: "2", recipients: { signers: [builderRole, ownerRole] } },
+              ],
+            },
+            {
+              inlineTemplates: [
                 {
-                  sequence: "2",
+                  sequence: "1",
+                  ...(args.annexurePdfBase64
+                    ? {
+                        documents: [
+                          {
+                            documentBase64: args.annexurePdfBase64,
+                            name: "Owner-Signature-Schedule.pdf",
+                            fileExtension: "pdf",
+                            documentId: "2",
+                          },
+                        ],
+                      }
+                    : {}),
                   recipients: {
-                    signers: [
-                      builderRole,
-                      ownerRole,
-                      ...owners.slice(1).map<docusign.Signer>((signer, index) => ({
+                    signers: owners.slice(1).map<docusign.Signer>((signer, index) => {
+                      const k = index + 1;
+                      return {
                         recipientId: String(index + 3),
+                        // roleName lets us map DocuSign's re-numbered recipientId
+                        // back to this signer's capacity/entity on readback.
+                        roleName: `AnnexOwner${k}`,
                         name: signer.name,
                         email: signer.email,
                         routingOrder: "1",
                         tabs: {
                           signHereTabs: [
                             {
-                              anchorString: "signed_by_owners_value",
+                              anchorString: `sigAnnex${k}`,
                               anchorUnits: "pixels",
                               anchorXOffset: "0",
-                              anchorYOffset: String(
-                                (index + 1) * OWNER_SIGNATURE_STACK_STEP_PX,
-                              ),
-                              anchorIgnoreIfNotPresent: "true",
+                              anchorYOffset: "-8",
+                              // Fail loud if the schedule anchor is missing, rather
+                              // than silently leaving a signer with no signature tab.
+                              anchorIgnoreIfNotPresent: "false",
+                            },
+                          ],
+                          dateSignedTabs: [
+                            {
+                              anchorString: `dateAnnex${k}`,
+                              anchorUnits: "pixels",
+                              anchorXOffset: "0",
+                              anchorYOffset: "-3",
+                              anchorIgnoreIfNotPresent: "false",
                             },
                           ],
                         } as docusign.Tabs,
-                      })),
-                    ],
+                      };
+                    }),
                   },
                 },
               ],
@@ -184,13 +212,46 @@ export async function createContractEnvelope(
     throw new Error("DocuSign did not return an envelope id.");
   }
 
-  // Records for EnvelopeSignature. The recipientIds match what we assigned —
-  // DocuSign preserves them (template ids Builder=1 / Owner=2; composite uses the
-  // explicit ids for signers 2..N) — so the Connect webhook matches by id. We do
-  // NOT enrich from listRecipients: signers who fall back to the shared primary
-  // email would collide on an email-keyed lookup.
-  const recipients: EnvelopeRecipientRecord[] = [
-    {
+  // Composite templates re-number recipientIds, so read the actual recipients
+  // back and map our capacity/entity onto them by roleName (Builder / Owner /
+  // AnnexOwner{k}). The recorded recipientId then matches what the Connect webhook
+  // reports, so per-signer status updates land on the right EnvelopeSignature.
+  const recipients: EnvelopeRecipientRecord[] = [];
+  try {
+    const list = await envelopesApi.listRecipients(
+      context.accountId,
+      result.envelopeId,
+      {},
+    );
+    for (const signer of list.signers ?? []) {
+      const roleName = (signer.roleName ?? "").toLowerCase();
+      let role: "BUILDER" | "CUSTOMER" = "CUSTOMER";
+      let source: ContractOwnerSigner | undefined;
+      if (roleName === "builder") {
+        role = "BUILDER";
+      } else if (roleName === "owner") {
+        source = owners[0];
+      } else if (roleName.startsWith("annexowner")) {
+        source = owners[Number(roleName.slice("annexowner".length))];
+      }
+      recipients.push({
+        role,
+        name: signer.name ?? source?.name ?? "",
+        email: signer.email ?? source?.email ?? "",
+        routingOrder: Number(signer.routingOrder ?? (role === "BUILDER" ? 2 : 1)),
+        recipientId: signer.recipientId ?? "",
+        capacity: source?.capacity ?? null,
+        entityName: source?.entityName ?? null,
+        entityAbn: source?.entityAbn ?? null,
+      });
+    }
+  } catch {
+    // Non-fatal: the Connect webhook can still match recipients by email.
+  }
+  // Defensive: if the readback returned nothing, record our intended set (the
+  // webhook then matches by email) so no signer is lost from the audit trail.
+  if (recipients.length === 0) {
+    recipients.push({
       role: "BUILDER",
       name: args.builder.name,
       email: args.builder.email,
@@ -199,18 +260,20 @@ export async function createContractEnvelope(
       capacity: null,
       entityName: null,
       entityAbn: null,
-    },
-    ...owners.map<EnvelopeRecipientRecord>((signer, index) => ({
-      role: "CUSTOMER",
-      name: signer.name,
-      email: signer.email,
-      routingOrder: 1,
-      recipientId: String(index + 2),
-      capacity: signer.capacity ?? null,
-      entityName: signer.entityName ?? null,
-      entityAbn: signer.entityAbn ?? null,
-    })),
-  ];
+    });
+    owners.forEach((signer, index) =>
+      recipients.push({
+        role: "CUSTOMER",
+        name: signer.name,
+        email: signer.email,
+        routingOrder: 1,
+        recipientId: String(index + 2),
+        capacity: signer.capacity ?? null,
+        entityName: signer.entityName ?? null,
+        entityAbn: signer.entityAbn ?? null,
+      }),
+    );
+  }
 
   return { envelopeId: result.envelopeId, recipients };
 }
