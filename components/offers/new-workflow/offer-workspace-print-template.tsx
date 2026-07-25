@@ -1,8 +1,9 @@
-import type {
-  OfferDocumentDraft,
-  OfferWorkspaceCostLine,
-  OfferWorkspaceJob,
-  OfferWorkspaceScopeItem,
+import {
+  formatOwnerNamesLine,
+  type OfferDocumentDraft,
+  type OfferWorkspaceCostLine,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import {
@@ -177,7 +178,11 @@ function PrintCoverPage({
   readonly heroCaption?: string;
   readonly footer: string;
 }) {
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
+  // Render every owner from owners[] (companies annotated with ABN/ACN), not the
+  // primary/secondary projection — otherwise window.print() dropped owners 3+
+  // while the emailed HTML listed them all (codex #8).
+  const ownerNamesLine = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
+  const ownerLabel = (job.owners?.length ?? 0) > 1 ? "Owners" : "Client";
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
@@ -201,10 +206,7 @@ function PrintCoverPage({
       </div>
       <div className="mt-6 border-t border-royal-gold pt-5">
         <dl className="grid grid-cols-[50mm_minmax(0,1fr)] text-sm">
-          <CoverRow label="Client" value={job.clientNames} />
-          {secondary ? (
-            <CoverRow label="Co-owner" value={secondary} />
-          ) : null}
+          <CoverRow label={ownerLabel} value={ownerNamesLine} />
           {job.currentLocation.trim() ? (
             <CoverRow label="Current Location" value={job.currentLocation} />
           ) : null}

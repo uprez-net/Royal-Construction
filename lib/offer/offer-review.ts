@@ -7,7 +7,7 @@ import {
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
 import {
-  collectOfferSigners,
+  collectOwnerIssues,
   formatOwnerNamesLine,
   type OfferDocumentDraft,
   type OfferWorkspaceCostLine,
@@ -56,25 +56,6 @@ function section(
   return { ...s, status: s.issues.length === 0 ? "complete" : "incomplete" };
 }
 
-const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
-// Job-setup owner gates (ADR 0003 / issues #109–#111 + #110): at least one named
-// owner, and every signer (each individual owner; each company director) has a
-// valid email before the offer can be sent / the Tender or Contract generated.
-function ownerIssues(job: OfferWorkspaceJob): string[] {
-  const owners = job.owners ?? [];
-  const namedOwners = owners.filter(
-    (owner) => owner.displayName.trim().length > 0,
-  );
-  if (namedOwners.length === 0) {
-    return ["Owner name"];
-  }
-  const signers = collectOfferSigners(owners);
-  const everyEmailValid =
-    signers.length > 0 &&
-    signers.every((signer) => EMAIL_PATTERN.test(signer.signatory.email.trim()));
-  return everyEmailValid ? [] : ["A valid email for every owner/director"];
-}
 
 export function buildOfferReview(
   input: OfferReviewInput,
@@ -96,14 +77,17 @@ export function buildOfferReview(
       stepId: "offer-step-job-setup",
       title: "Job setup",
       issues: [
-        ...ownerIssues(job),
-        job.currentLocation.trim().length === 0 && "Current Location",
-        job.siteAddress.trim().length === 0 && "Site Location",
-        job.buildType.trim().length === 0 && "Build type",
-        totalAreaSqm <= 0 && "Floor areas",
-      ]
-        .filter((v): v is string => Boolean(v))
-        .map((field) => `${field} is missing.`),
+        // Owner-level issues (every owner named + Current Location, every
+        // signatory named + valid email) are already full sentences.
+        ...collectOwnerIssues(job.owners),
+        ...[
+          job.siteAddress.trim().length === 0 && "Site Location",
+          job.buildType.trim().length === 0 && "Build type",
+          totalAreaSqm <= 0 && "Floor areas",
+        ]
+          .filter((v): v is string => Boolean(v))
+          .map((field) => `${field} is missing.`),
+      ],
       rows: [
         {
           label: (job.owners?.length ?? 0) > 1 ? "Owners" : "Owner",

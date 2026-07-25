@@ -363,6 +363,45 @@ export function collectOfferSigners(
   return signers;
 }
 
+const OWNER_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// Completeness issues for the owner party set (codex review; issues #109/#110/
+// #103): every owner needs a name and a Current Location, and every signatory a
+// name + valid own email. Returned as human-readable labels. Shared by the
+// readiness review (badge), the offer-document send blockers (client gate), and
+// the server send guard — so an offer can't be sent/locked with party data that
+// would print blank on the legal documents or route a signing link nowhere.
+export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
+  const named = owners.filter((owner) => owner.displayName.trim().length > 0);
+  if (named.length === 0) {
+    return ["Add at least one owner with a name."];
+  }
+  const issues: string[] = [];
+  owners.forEach((owner, index) => {
+    const isCompany = owner.kind === "company";
+    const who = owner.displayName.trim() || `Owner ${index + 1}`;
+    if (owner.displayName.trim().length === 0) {
+      issues.push(`Owner ${index + 1} needs a ${isCompany ? "company name" : "name"}.`);
+    }
+    if (owner.currentLocation.trim().length === 0) {
+      issues.push(
+        `${who} needs a ${isCompany ? "registered office (Current Location)" : "Current Location"}.`,
+      );
+    }
+    owner.signatories.forEach((signatory) => {
+      if (signatory.name.trim().length === 0) {
+        issues.push(`${who} has a ${isCompany ? "director" : "signatory"} without a name.`);
+      }
+      if (!OWNER_EMAIL_PATTERN.test(signatory.email.trim())) {
+        const label =
+          signatory.name.trim() || (isCompany ? "a director" : "the owner");
+        issues.push(`${who}: ${label} needs a valid email.`);
+      }
+    });
+  });
+  return issues;
+}
+
 // The legacy flat client* projection (primary = owners[0], secondary =
 // owners[1]) derived from owners[].
 export type OfferClientProjection = {

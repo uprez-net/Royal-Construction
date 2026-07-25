@@ -152,17 +152,31 @@ export async function sendContractForSignature(input: {
     : primarySigner?.capacity ?? "Owner";
 
   // Ordered customer-side signers for the envelope — each individual owner + each
-  // company director (collectOfferSigners order), emailed at their own valid
-  // address, falling back to the primary client's so no signer is left without a
-  // link. The primary carries the data tabs; the rest stack a signature in the
-  // OWNER(S) area (ADR 0003).
+  // company director (collectOfferSigners order). The primary carries the data
+  // tabs; the rest sign the appended schedule (ADR 0003).
   const isValidEmail = (value: string): boolean =>
     /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
-  const ownerSigners = contractSigners.map((signer) => {
+  // Every co-owner / director MUST have their own valid email — a fallback to
+  // the primary's inbox would route their signing link to the wrong party
+  // (codex #2). Only the primary may use the resolved customer email. Runs
+  // before the send is claimed, so a rejection needs no status rollback.
+  const contractSignersMissingEmail = contractSigners
+    .filter(
+      (signer, index) =>
+        index > 0 && !isValidEmail((signer.signatory.email ?? "").trim()),
+    )
+    .map((signer) => signer.signatory.name.trim() || "a co-owner/director");
+  if (contractSignersMissingEmail.length > 0) {
+    return {
+      ok: false,
+      error: `Add a valid email for every signatory before sending the Contract — missing for: ${contractSignersMissingEmail.join(", ")}.`,
+    };
+  }
+  const ownerSigners = contractSigners.map((signer, index) => {
     const own = (signer.signatory.email ?? "").trim();
     return {
       name: signer.signatory.name,
-      email: isValidEmail(own) ? own : customerEmail,
+      email: index === 0 ? (isValidEmail(own) ? own : customerEmail) : own,
       capacity: signer.signatory.capacity,
       entityName: signer.entityName,
       entityAbn: signer.entityAbn,
@@ -368,7 +382,9 @@ export async function sendContractForSignature(input: {
             name: recipient.name,
             email: recipient.email,
             routingOrder: recipient.routingOrder,
-            docusignRecipientId: recipient.recipientId,
+            // Empty id means "unknown" (composite readback failure) — persist
+            // null so the webhook matches by email, not a wrong id (codex #3).
+            docusignRecipientId: recipient.recipientId || null,
             capacity: recipient.capacity ?? null,
             entityName: recipient.entityName ?? null,
             entityAbn: recipient.entityAbn ?? null,

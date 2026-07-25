@@ -248,15 +248,22 @@ export async function createContractEnvelope(
   } catch {
     // Non-fatal: the Connect webhook can still match recipients by email.
   }
-  // Defensive: if the readback returned nothing, record our intended set (the
-  // webhook then matches by email) so no signer is lost from the audit trail.
+  // Defensive: if the readback returned nothing, record our intended set so no
+  // signer is lost from the audit trail — but do NOT guess recipientIds for a
+  // composite envelope. Composite templates renumber recipients, so a guessed id
+  // could make the Connect webhook (which matches by id first) update the WRONG
+  // EnvelopeSignature (codex #3). Emit an empty id (→ persisted as null) so the
+  // webhook falls back to email matching, which is unique per signer (codex #2).
+  // The single-owner templateRoles path keeps its deterministic ids (Builder 1 /
+  // Owner 2), which DocuSign does not renumber.
   if (recipients.length === 0) {
+    const isComposite = owners.length > 1;
     recipients.push({
       role: "BUILDER",
       name: args.builder.name,
       email: args.builder.email,
       routingOrder: 2,
-      recipientId: "1",
+      recipientId: isComposite ? "" : "1",
       capacity: null,
       entityName: null,
       entityAbn: null,
@@ -267,7 +274,7 @@ export async function createContractEnvelope(
         name: signer.name,
         email: signer.email,
         routingOrder: 1,
-        recipientId: String(index + 2),
+        recipientId: isComposite ? "" : String(index + 2),
         capacity: signer.capacity ?? null,
         entityName: signer.entityName ?? null,
         entityAbn: signer.entityAbn ?? null,

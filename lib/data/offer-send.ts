@@ -9,6 +9,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
+import { collectOwnerIssues } from "@/lib/offer/workspace-model";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
@@ -136,6 +137,20 @@ export async function sendOfferDocument(input: {
   }
   if (!offer.workspaceState) {
     return { ok: false, error: "Add and save offer content before sending." };
+  }
+
+  // Server-side owner gate (codex #1): the client blocks send on incomplete
+  // owner data, but re-check here so the offer can't be sent + locked with a
+  // missing owner name / Current Location / signatory email via any other path.
+  const gateSnapshot = deserializeWorkspace(
+    parseWorkspaceState(offer.workspaceState),
+  );
+  const ownerIssues = collectOwnerIssues(gateSnapshot.job.owners);
+  if (ownerIssues.length > 0) {
+    return {
+      ok: false,
+      error: `Complete the owner details before sending: ${ownerIssues.join(" ")}`,
+    };
   }
 
   let pdfBase64: string;

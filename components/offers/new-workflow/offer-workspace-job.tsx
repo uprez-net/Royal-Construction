@@ -120,13 +120,24 @@ export function JobSetupPanel({
             <AddressAutocomplete
               placeholder="Construction site address"
               value={job.siteAddress}
-              onChange={(siteAddress) => onJobChange({ siteAddress })}
+              onChange={(siteAddress) =>
+                // A free-text edit invalidates the council/state/postcode from a
+                // previously-picked suggestion — clear them so a hand-corrected
+                // address can't ship a stale council to Project.council (codex
+                // #6). onPick re-sets them when a suggestion is chosen.
+                onJobChange({
+                  siteAddress,
+                  siteCouncil: "",
+                  siteState: "",
+                  sitePostcode: "",
+                })
+              }
               onPick={(pick) =>
                 onJobChange({
                   siteAddress: pick.address,
-                  siteCouncil: pick.council ?? job.siteCouncil,
-                  siteState: pick.state ?? job.siteState,
-                  sitePostcode: pick.postcode ?? job.sitePostcode,
+                  siteCouncil: pick.council ?? "",
+                  siteState: pick.state ?? "",
+                  sitePostcode: pick.postcode ?? "",
                 })
               }
             />

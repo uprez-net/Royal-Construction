@@ -9,6 +9,7 @@ import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   defaultOfferValidUntil,
   applyTaskMappingToCostLine,
+  collectOwnerIssues,
   createOfferScopeItem,
   removeOfferScopeItem,
   updateOfferScopeItems,
@@ -79,6 +80,54 @@ import {
 } from "@/lib/offer/workspace-images";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
 import { OfferWorkspaceScreen } from "./offer-workspace-screen";
+
+// Identity fields carrying estimator-entered owner/address data. The lead only
+// ever has individual contacts, so re-running "Pre-fill from lead" over an
+// already-populated offer would wipe a company / directors / Current Location.
+// A manual prefill preserves these and only refreshes the rest (codex #4).
+const PREFILL_IDENTITY_KEYS: readonly (keyof OfferWorkspaceJob)[] = [
+  "owners",
+  "clientNames",
+  "secondaryCustomerName",
+  "clientEmail",
+  "secondaryCustomerEmail",
+  "clientPhone",
+  "currentLocation",
+  "siteAddress",
+  "siteCouncil",
+  "siteState",
+  "sitePostcode",
+];
+
+// True once the estimator has entered any owner/site identity — a brand-new
+// (pristine) offer returns false so auto-prefill fills everything.
+function jobHasEnteredIdentity(job: OfferWorkspaceJob): boolean {
+  return (
+    (job.owners[0]?.displayName.trim().length ?? 0) > 0 ||
+    job.owners.length > 1 ||
+    job.siteAddress.trim().length > 0 ||
+    job.clientNames.trim().length > 0
+  );
+}
+
+// Apply a lead-prefill patch without destroying identity already entered: a
+// pristine offer takes the full patch; a populated one keeps its owner/address
+// identity and only refreshes non-identity fields (build type, scope, façade).
+function applyPrefillPatch(
+  current: OfferWorkspaceJob,
+  patch: Partial<OfferWorkspaceJob>,
+): OfferWorkspaceJob {
+  if (!jobHasEnteredIdentity(current)) {
+    return { ...current, ...patch };
+  }
+  const preserved: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (!PREFILL_IDENTITY_KEYS.includes(key as keyof OfferWorkspaceJob)) {
+      preserved[key] = value;
+    }
+  }
+  return { ...current, ...(preserved as Partial<OfferWorkspaceJob>) };
+}
 
 // Embed with a leadId to persist to the DB (ADR 0002). The standalone
 // /offers/new-workflow demo route passes none and stays in-memory.
@@ -202,8 +251,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         hasLead: leadId !== undefined,
         needsOverrideReason: customerPrice.needsOverrideReason,
         expiryState: offerExpiry?.state ?? "none",
+        ownerIssues: collectOwnerIssues(job.owners),
       }),
-    [leadId, customerPrice.needsOverrideReason, offerExpiry],
+    [leadId, customerPrice.needsOverrideReason, offerExpiry, job.owners],
   );
 
   function updateJob(patch: Partial<OfferWorkspaceJob>) {
@@ -607,7 +657,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           setPrefillResult(result);
           if (result.ok) {
             if (Object.keys(result.job).length > 0) {
-              setJob((current) => ({ ...current, ...result.job }));
+              setJob((current) => applyPrefillPatch(current, result.job));
             }
             if (Object.keys(result.draft).length > 0) {
               setDraft((current) => ({ ...current, ...result.draft }));
@@ -970,7 +1020,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         setPrefillResult(result);
         if (result.ok) {
           if (Object.keys(result.job).length > 0) {
-            setJob((current) => ({ ...current, ...result.job }));
+            setJob((current) => applyPrefillPatch(current, result.job));
           }
           if (Object.keys(result.draft).length > 0) {
             setDraft((current) => ({ ...current, ...result.draft }));

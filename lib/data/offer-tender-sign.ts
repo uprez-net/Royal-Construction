@@ -116,16 +116,33 @@ export async function sendTenderForSignature(input: {
   // Build the DocuSign recipient list from the ordered signer set — one
   // recipient per individual owner and per company director, in the SAME order
   // as the sigOwner{k} anchors baked into the Tender PDF (collectOfferSigners).
-  // Each signer is emailed at their own valid address, falling back to the
-  // primary client's email so no owner is left without a signature tab.
   const isValidEmail = (value: string): boolean =>
     /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
   const signers = collectOfferSigners(snapshot.job.owners);
-  const owners = signers.map((signer) => {
+  // Every co-owner / director MUST have their own valid email. Falling back to
+  // the primary client's inbox would send that signer's DocuSign link to the
+  // wrong party, letting them access/sign on the other's behalf (codex #2). Only
+  // the primary signer may use the resolved customer email. Runs before the send
+  // is claimed, so a rejection needs no status rollback.
+  const signersMissingEmail = signers
+    .filter(
+      (signer, index) =>
+        index > 0 && !isValidEmail((signer.signatory.email ?? "").trim()),
+    )
+    .map((signer) => signer.signatory.name.trim() || "a co-owner/director");
+  if (signersMissingEmail.length > 0) {
+    return {
+      ok: false,
+      error: `Add a valid email for every signatory before sending the Tender — missing for: ${signersMissingEmail.join(", ")}.`,
+    };
+  }
+  const owners = signers.map((signer, index) => {
     const own = (signer.signatory.email ?? "").trim();
     return {
       name: signer.signatory.name,
-      email: isValidEmail(own) ? own : customerEmail,
+      // Primary may use the resolved customer email; others use their own
+      // (validated above).
+      email: index === 0 ? (isValidEmail(own) ? own : customerEmail) : own,
       capacity: signer.signatory.capacity,
       entityName: signer.entityName,
       entityAbn: signer.entityAbn,

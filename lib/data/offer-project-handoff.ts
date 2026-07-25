@@ -213,6 +213,12 @@ export async function createProjectFromOffer(input: {
       // back to the historical "TBC" placeholder when unknown.
       council: job.siteCouncil.trim() || "TBC",
       siteManagerId: actor.id,
+      // Promote the primary owner identity to the Customer so Project screens and
+      // notifications show the legal owner, not the original lead contact (codex
+      // #7). clientNames/Email/Phone are the derived primary-owner projection.
+      customerName: job.clientNames.trim() || null,
+      customerEmail: EMAIL_RE.test(job.clientEmail) ? job.clientEmail : null,
+      customerPhone: job.clientPhone.trim() || null,
       // Primary owner's Current Location → Customer.address; the full owner set
       // → Project.parties (companies, directors, both addresses, contacts).
       customerAddress: job.currentLocation.trim() || null,
