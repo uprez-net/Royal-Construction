@@ -6,11 +6,15 @@ import {
   getPaymentScheduleTotalPct,
   type OfferPaymentScheduleRow,
 } from "@/lib/offer/workspace-payment-schedule";
-import type {
-  OfferDocumentDraft,
-  OfferWorkspaceJob,
-  OfferWorkspaceScopeItem,
-  OfferWorkspaceStatus,
+import {
+  collectOfferSigners,
+  collectOfferSignerLabels,
+  formatOwnerNamesLine,
+  offerSignerLabel,
+  type OfferDocumentDraft,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceScopeItem,
+  type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import { FileText, Info, RotateCcw, Send, ShieldCheck } from "lucide-react";
@@ -120,7 +124,8 @@ export function TenderPanel({
             isDraft={isDraft}
             isSent={isSent}
             isSigned={isSigned}
-            customerName={job.clientNames}
+            customerName={formatOwnerNamesLine(job.owners ?? []) || job.clientNames}
+            signerLabels={collectOfferSignerLabels(job.owners ?? [])}
             contractValueIncGst={customerPrice.selectedContractValueIncGst}
             offerReference={formatOfferReference(job.reference, job.revision)}
             scheduleBalanced={scheduleBalanced}
@@ -200,6 +205,7 @@ function TenderActions({
   isSent,
   isSigned,
   customerName,
+  signerLabels,
   contractValueIncGst,
   offerReference,
   scheduleBalanced,
@@ -217,6 +223,9 @@ function TenderActions({
   readonly isSent: boolean;
   readonly isSigned: boolean;
   readonly customerName: string;
+  // Every customer signer (individual owners + company directors), the exact
+  // DocuSign recipient set — replaces the old single hardcoded customer row.
+  readonly signerLabels: readonly string[];
   readonly contractValueIncGst: number;
   readonly offerReference: string;
   readonly scheduleBalanced: boolean;
@@ -241,15 +250,20 @@ function TenderActions({
       {isSent ? (
         <SigningTracker
           recipients={[
-            {
-              role: "Customer",
-              detail: customerName || "signs first",
-              state: "awaiting",
-            },
+            // One row per customer signer (all sign in parallel), then the
+            // builder counter-signs — mirroring the real envelope.
+            ...(signerLabels.length > 0
+              ? signerLabels
+              : [customerName || "signs first"]
+            ).map((label) => ({
+              role: "Customer" as const,
+              detail: label,
+              state: "awaiting" as const,
+            })),
             {
               role: "Builder",
               detail: "Royal Constructions",
-              state: "waiting_for_prior",
+              state: "waiting_for_prior" as const,
               waitingLabel: "Signs after the customer",
             },
           ]}
@@ -369,8 +383,11 @@ function TenderPreview({
   readonly state: "draft" | "sent" | "signed";
 }) {
   const contractValue = customerPrice.selectedContractValueIncGst;
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-  const hasSecondaryClient = secondary.length > 0;
+  // Render every signer from owners[] (the exact DocuSign recipient set) — not
+  // the legacy primary/secondary projection, which showed a company owner as one
+  // "Customer — <company>" line and dropped its directors.
+  const ownerNamesLine = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
+  const signers = collectOfferSigners(job.owners ?? []);
   const shownExclusions = exclusions
     .filter((item) => item.includedInOfferDocument)
     .map((item) => item.label);
@@ -392,8 +409,7 @@ function TenderPreview({
             Tender — fixed price building works
           </h3>
           <p className="text-sm text-muted-foreground">
-            {job.clientNames}
-            {hasSecondaryClient ? ` & ${secondary}` : ""} · {job.siteAddress}
+            {ownerNamesLine} · {job.siteAddress}
           </p>
         </div>
         <span className="rounded-full border border-royal-gold/40 bg-royal-gold-light/40 px-2.5 py-1 text-xs font-medium text-royal-gold-dark">
@@ -460,16 +476,13 @@ function TenderPreview({
           role="Builder"
           state={state === "signed" ? "signed" : "pending"}
         />
-        <SignatureLine
-          role={`Customer${hasSecondaryClient ? ` — ${job.clientNames}` : ""}`}
-          state={state === "signed" ? "signed" : "pending"}
-        />
-        {hasSecondaryClient ? (
+        {signers.map((signer) => (
           <SignatureLine
-            role={`Customer — ${secondary}`}
+            key={`${signer.ownerIndex}-${signer.signerIndex}`}
+            role={`Customer — ${offerSignerLabel(signer)}`}
             state={state === "signed" ? "signed" : "pending"}
           />
-        ) : null}
+        ))}
       </div>
     </article>
   );

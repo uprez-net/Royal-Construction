@@ -363,6 +363,31 @@ export function collectOfferSigners(
   return signers;
 }
 
+// Display label for one customer-side signer in the workspace UI (tender/contract
+// preview signature lines + the DocuSign signing tracker). An individual owner
+// shows their name; a company director shows "Name (Director, Company)". This
+// MUST mirror collectOfferSigners so the UI shows exactly the recipients that are
+// actually sent to DocuSign — the on-screen preview must not diverge from the
+// envelope (the bug: the panels rendered the legacy clientNames/secondary
+// projection and a hardcoded 2-recipient list instead).
+export function offerSignerLabel(signer: OfferSignerContext): string {
+  const name = signer.signatory.name.trim();
+  if (signer.entityName) {
+    const capacity = signer.signatory.capacity.trim() || DIRECTOR_SIGNER_CAPACITY;
+    const who = name || capacity;
+    return `${who} (${capacity}, ${signer.entityName})`;
+  }
+  return name || OWNER_SIGNER_CAPACITY;
+}
+
+// The ordered customer-signer display labels for a set of owners — the exact
+// customer parties the DocuSign envelope carries, formatted for the UI.
+export function collectOfferSignerLabels(
+  owners: readonly OfferOwner[],
+): string[] {
+  return collectOfferSigners(owners).map(offerSignerLabel);
+}
+
 const OWNER_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 // Completeness issues for the owner party set (codex review; issues #109/#110/
