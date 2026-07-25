@@ -324,17 +324,22 @@ export async function transitionOfferStatus(input: {
       (input.toStatus === OfferStatus.SENT ||
         input.toStatus === OfferStatus.AGREED) &&
       offer.offerStatus !== input.toStatus;
-    if (requiresCompleteOwners && offer.workspaceState) {
+    if (requiresCompleteOwners) {
+      const verb =
+        input.toStatus === OfferStatus.SENT
+          ? "marking the offer sent"
+          : "marking the offer agreed";
+      // A blank offer (no workspaceState) has no owners at all — refuse to lock /
+      // freeze it, not just skip the check (PR #124).
+      if (!offer.workspaceState) {
+        throw new Error(`Add and save offer content before ${verb}.`);
+      }
       const ownerIssues = collectOwnerIssues(
         parseWorkspaceState(offer.workspaceState).job.owners,
       );
       if (ownerIssues.length > 0) {
         throw new Error(
-          `Complete the owner details before ${
-            input.toStatus === OfferStatus.SENT
-              ? "marking the offer sent"
-              : "marking the offer agreed"
-          }: ${ownerIssues.join(" ")}`,
+          `Complete the owner details before ${verb}: ${ownerIssues.join(" ")}`,
         );
       }
     }

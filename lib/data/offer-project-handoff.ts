@@ -138,14 +138,17 @@ export async function createProjectFromOffer(input: {
 
   // The project's Customer is created from the lead, whose email is validated
   // deep inside the transaction — reconcile it from the offer up front so a
-  // blank lead email doesn't fail with a cryptic error.
-  if (!EMAIL_RE.test(offer.lead.email)) {
-    if (EMAIL_RE.test(job.clientEmail)) {
+  // blank lead email doesn't fail with a cryptic error. Trim both sides: a valid
+  // owner email with surrounding whitespace must not block the handoff (PR #124).
+  const leadEmail = offer.lead.email.trim();
+  const jobEmail = job.clientEmail.trim();
+  if (!EMAIL_RE.test(leadEmail)) {
+    if (EMAIL_RE.test(jobEmail)) {
       await prisma.lead.update({
         where: { id: offer.lead.id },
-        data: { email: job.clientEmail },
+        data: { email: jobEmail },
       });
-      warnings.push(`Lead email was blank — set to ${job.clientEmail} from the offer.`);
+      warnings.push(`Lead email was blank — set to ${jobEmail} from the offer.`);
     } else {
       await revertClaim();
       return {

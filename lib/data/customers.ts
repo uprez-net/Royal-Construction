@@ -150,16 +150,36 @@ export async function createCustomerForProject(input: { name: string; email: str
 
     const prismClient = tx ?? prisma;
     const address = input.address?.trim() || null;
-    const existing = await findCustomerByContact(input.email, input.phone, tx);
+    const name = input.name?.trim();
+    const email = input.email?.trim();
+    const phone = input.phone?.trim();
+
+    // Resolve email and phone INDEPENDENTLY (PR #124). The old helper returned the
+    // email match and never looked at phone, so a conflict — email and phone
+    // belonging to DIFFERENT customers — silently attached the Project to the
+    // email record without anyone noticing. Here the conflict is explicit: email
+    // is the authoritative identity and wins deterministically, but we never steal
+    // the phone record's contact fields (below), and changed values are refreshed.
+    const byEmail = email
+        ? await prismClient.customer.findUnique({ where: { email } })
+        : null;
+    const byPhone = phone
+        ? await prismClient.customer.findUnique({ where: { phone } })
+        : null;
+    const existing = byEmail ?? byPhone;
+
     if (existing) {
-        // Refresh the legal owner identity on a repeat customer (PR #124 review):
-        // the handoff promotes the current primary owner, so update name + address
-        // when they changed — not just backfill a missing address. Email/phone are
-        // the @unique match keys, so they're left as-is to avoid collisions.
-        const name = input.name?.trim();
         const patch: Prisma.CustomerUpdateInput = {};
         if (name && name !== existing.name) patch.name = name;
         if (address && address !== existing.address) patch.address = address;
+        // Refresh a changed email/phone only when no OTHER customer already holds
+        // it, so we never trip the @unique constraint or hijack a different record.
+        if (email && email !== existing.email && (byEmail === null || byEmail.id === existing.id)) {
+            patch.email = email;
+        }
+        if (phone && phone !== existing.phone && (byPhone === null || byPhone.id === existing.id)) {
+            patch.phone = phone;
+        }
         if (Object.keys(patch).length > 0) {
             const updated = await prismClient.customer.update({
                 where: { id: existing.id },

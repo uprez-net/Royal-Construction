@@ -20,6 +20,7 @@ import { generatePDF } from "@/lib/utils/generatePDF";
 import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
 import {
   collectOfferSigners,
+  collectOwnerIssues,
   formatOwnerNamesLine,
 } from "@/lib/offer/workspace-model";
 import { getDocusignConfig } from "@/lib/docusign/config";
@@ -110,6 +111,17 @@ export async function sendContractForSignature(input: {
 
   const snapshot = deserializeWorkspace(parseWorkspaceState(state));
   const job = snapshot.job;
+  // Server-side owner gate (PR #124): re-validate owner completeness, especially
+  // UNIQUE signer emails — a shared address makes the Contract completion webhook
+  // (which falls back to email matching) attribute both signatures to one row,
+  // corrupting the per-signer audit. Guards existing/directly-invoked offers.
+  const contractOwnerIssues = collectOwnerIssues(job.owners);
+  if (contractOwnerIssues.length > 0) {
+    return {
+      ok: false,
+      error: `Complete the owner details before sending the Contract: ${contractOwnerIssues.join(" ")}`,
+    };
+  }
   const customerEmail = resolveOfferCustomerEmail({
     overrideEmail: input.customerEmail,
     jobEmail: job.clientEmail,

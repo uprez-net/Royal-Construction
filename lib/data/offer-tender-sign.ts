@@ -13,7 +13,10 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
-import { collectOfferSigners } from "@/lib/offer/workspace-model";
+import {
+  collectOfferSigners,
+  collectOwnerIssues,
+} from "@/lib/offer/workspace-model";
 import { getPaymentScheduleTotalPct } from "@/lib/offer/workspace-payment-schedule";
 import { resolveOfferCustomerEmail } from "@/lib/offer/offer-customer-email";
 import {
@@ -69,6 +72,19 @@ export async function sendTenderForSignature(input: {
   }
 
   const snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
+
+  // Server-side owner gate (PR #124): re-validate owner completeness — crucially,
+  // UNIQUE signer emails. Two signers sharing an address would create DocuSign
+  // recipients the completion webhook can't tell apart (it falls back to email
+  // matching), corrupting the per-signer audit. Guards existing/directly-invoked
+  // offers that never passed the client gate.
+  const ownerIssues = collectOwnerIssues(snapshot.job.owners);
+  if (ownerIssues.length > 0) {
+    return {
+      ok: false,
+      error: `Complete the owner details before sending the Tender: ${ownerIssues.join(" ")}`,
+    };
+  }
 
   // A Tender is a fixed-price contract: its progress-payment schedule must sum
   // to exactly the contract value (100%), or the customer is asked to sign a

@@ -139,13 +139,22 @@ export async function sendOfferDocument(input: {
     return { ok: false, error: "Add and save offer content before sending." };
   }
 
-  // Server-side owner gate (codex #1): the client blocks send on incomplete
-  // owner data, but re-check here so the offer can't be sent + locked with a
-  // missing owner name / Current Location / signatory email via any other path.
-  const gateSnapshot = deserializeWorkspace(
-    parseWorkspaceState(offer.workspaceState),
-  );
-  const ownerIssues = collectOwnerIssues(gateSnapshot.job.owners);
+  // Parse the saved workspace ONCE, guarded, so a malformed/legacy blob returns
+  // the normal SendResult error instead of throwing an unhandled server-action
+  // rejection (PR #124). Reused for the owner gate and the PDF below.
+  let snapshot: ReturnType<typeof deserializeWorkspace>;
+  try {
+    snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Couldn't read the saved offer: ${(error as Error).message}`,
+    };
+  }
+
+  // Server-side owner gate: re-check owner completeness (names, Current Location,
+  // unique valid signer emails) so the offer can't be sent + locked via any path.
+  const ownerIssues = collectOwnerIssues(snapshot.job.owners);
   if (ownerIssues.length > 0) {
     return {
       ok: false,
@@ -155,9 +164,6 @@ export async function sendOfferDocument(input: {
 
   let pdfBase64: string;
   try {
-    const snapshot = deserializeWorkspace(
-      parseWorkspaceState(offer.workspaceState),
-    );
     const proposalInput = buildProposalInput(snapshot);
     // A manual price override without a stated reason must not be emailed —
     // mirror the client-side "Send offer"/"Mark sent" guard server-side.

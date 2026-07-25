@@ -178,7 +178,18 @@ export function AddressAutocomplete({
         }
         placeholder={placeholder}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          const next = event.target.value;
+          // Drop stale results the moment the query falls below 3 chars, so
+          // retyping a 3rd char can't briefly reopen the previous address's
+          // suggestions before the new request resolves (PR #124).
+          if (next.trim().length < 3) {
+            setSuggestions([]);
+            setActiveIndex(-1);
+            setOpen(false);
+          }
+          onChange(next);
+        }}
         onKeyDown={onKeyDown}
         onFocus={() => {
           if (suggestions.length > 0) setOpen(true);
