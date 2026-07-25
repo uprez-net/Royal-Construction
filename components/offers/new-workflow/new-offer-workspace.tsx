@@ -460,6 +460,85 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setImages(s.images);
   }, []);
 
+  // Single-flight workspace autosave (fixes the overlapping-save clobber).
+  //
+  // Previously each debounced save fired independently with whatever
+  // stateVersionRef held at dispatch time. stateVersionRef only advances after a
+  // save RESOLVES, so when a save took longer than the 800ms debounce (slow
+  // network / cold server), a second edit dispatched a second save with the SAME
+  // (now stale) version. The server rejected it as `stale`, and the stale-handler
+  // reloaded + hydrated the server copy — discarding the newer edit. Fast
+  // successive edits could therefore be silently reverted.
+  //
+  // Chaining every run behind the previous one (like the contract-particulars
+  // save) guarantees only one save is ever in flight, so our OWN edits can never
+  // race each other. Each run loops on the LATEST snapshot (from snapshotRef), so
+  // an edit made mid-save is persisted on the next iteration rather than dropped.
+  // A `stale`/`superseded` result now only ever means a genuine OTHER writer
+  // (another tab), which still reconciles to the live copy per ADR 0002.
+  type WorkspaceFlushResult = "clean" | "reconciled" | "error";
+  const workspaceSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const flushWorkspace = useCallback(
+    (offerId: string): Promise<WorkspaceFlushResult> => {
+      const run = workspaceSaveChainRef.current
+        .catch(() => undefined)
+        .then(async (): Promise<WorkspaceFlushResult> => {
+          if (leadId === undefined) {
+            return "clean";
+          }
+          // Loop until the persisted state matches the latest snapshot, so edits
+          // made while a save is in flight are saved next (never dropped).
+          for (;;) {
+            const snapshot = snapshotRef.current;
+            const currentJson = JSON.stringify(snapshot);
+            if (currentJson === lastSavedRef.current) {
+              return "clean";
+            }
+            setSaveState("saving");
+            let result: Awaited<ReturnType<typeof saveOfferWorkspace>>;
+            try {
+              result = await saveOfferWorkspace({
+                offerId,
+                expectedStateVersion: stateVersionRef.current,
+                snapshot,
+              });
+            } catch (error) {
+              console.error("[offer] autosave failed:", error);
+              setSaveState("error");
+              return "error";
+            }
+            if (result.ok) {
+              stateVersionRef.current = result.stateVersion;
+              lastSavedRef.current = currentJson;
+              setSaveState("saved");
+              continue; // re-check: capture edits made during the save
+            }
+            if (result.reason === "stale" || result.reason === "superseded") {
+              // A different tab moved on (single-flight rules out our own
+              // overlap) — reconcile to the live copy rather than clobber it.
+              // "superseded" means another tab forked a new revision; the same
+              // reload lands us on the live one. See ADR 0002 (no field merge).
+              const loaded = await loadActiveOfferWorkspace(leadId);
+              offerIdRef.current = loaded.offerId;
+              stateVersionRef.current = loaded.stateVersion;
+              setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+              if (loaded.snapshot) {
+                hydrateSnapshot(loaded.snapshot);
+                lastSavedRef.current = JSON.stringify(loaded.snapshot);
+              }
+              setSaveState("error");
+              return "reconciled";
+            }
+            setSaveState("error");
+            return "error";
+          }
+        });
+      workspaceSaveChainRef.current = run;
+      return run;
+    },
+    [leadId, hydrateSnapshot],
+  );
+
   // Load the active offer for the lead on mount.
   useEffect(() => {
     if (leadId === undefined) {
@@ -569,49 +648,14 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     if (currentJson === lastSavedRef.current) {
       return;
     }
+    // Debounce, then hand off to the single-flight flush. The flush reads the
+    // latest snapshot itself and serializes saves, so overlapping timers can
+    // never dispatch competing saves that clobber each other (see flushWorkspace).
     const timer = setTimeout(() => {
-      void (async () => {
-        setSaveState("saving");
-        try {
-          const result = await saveOfferWorkspace({
-            offerId,
-            expectedStateVersion: stateVersionRef.current,
-            snapshot,
-          });
-          if (result.ok) {
-            stateVersionRef.current = result.stateVersion;
-            lastSavedRef.current = currentJson;
-            setSaveState("saved");
-          } else if (
-            result.reason === "stale" ||
-            result.reason === "superseded"
-          ) {
-            // Another writer moved on — reload the server copy. Report it as an
-            // error state so the operator knows their unsaved edits were
-            // reconciled to the newer version (rather than silently clobbered).
-            // "superseded" means this tab was editing a revision that another
-            // tab has since forked; the same reload lands us on the live one.
-            const loaded = await loadActiveOfferWorkspace(leadId);
-            offerIdRef.current = loaded.offerId;
-            stateVersionRef.current = loaded.stateVersion;
-            if (loaded.snapshot) {
-              hydrateSnapshot(loaded.snapshot);
-              lastSavedRef.current = JSON.stringify(loaded.snapshot);
-            }
-            setSaveState("error");
-          } else {
-            setSaveState("error");
-          }
-        } catch (error) {
-          // Network/server failure — previously swallowed. Surface it so the
-          // operator does not assume their work is saved.
-          console.error("[offer] autosave failed:", error);
-          setSaveState("error");
-        }
-      })();
+      void flushWorkspace(offerId);
     }, 800);
     return () => clearTimeout(timer);
-  }, [snapshot, status, leadId, hydrateSnapshot]);
+  }, [snapshot, status, leadId, flushWorkspace]);
 
   // Debounced save of the BC4 particulars (issue #98). Separate from the main
   // autosave, which freezes once the tender is sent — the particulars are edited
@@ -640,33 +684,14 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       }
       void (async () => {
         try {
-          const currentJson = JSON.stringify(snapshotRef.current);
-          if (currentJson !== lastSavedRef.current) {
-            const saved = await saveOfferWorkspace({
-              offerId,
-              expectedStateVersion: stateVersionRef.current,
-              snapshot: snapshotRef.current,
-            });
-            if (saved.ok) {
-              stateVersionRef.current = saved.stateVersion;
-              lastSavedRef.current = currentJson;
-            } else if (
-              saved.reason === "stale" ||
-              saved.reason === "superseded"
-            ) {
-              // A concurrent save moved on, or this revision was superseded by
-              // another tab — reload and abort rather than freezing a stale
-              // snapshot at AGREED or transitioning a revision that is history.
-              const loaded = await loadActiveOfferWorkspace(leadId);
-              offerIdRef.current = loaded.offerId;
-              stateVersionRef.current = loaded.stateVersion;
-              setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
-              if (loaded.snapshot) {
-                hydrateSnapshot(loaded.snapshot);
-                lastSavedRef.current = JSON.stringify(loaded.snapshot);
-              }
-              return;
-            }
+          // Flush the latest edits through the single-flight saver first, so
+          // AGREED freezes the correct snapshot and no in-flight autosave races
+          // this transition. If it had to reconcile to another tab's version (or
+          // failed to save), abort rather than transition on stale/unsaved state —
+          // flushWorkspace has already reloaded the UI to the live copy.
+          const flush = await flushWorkspace(offerId);
+          if (flush !== "clean") {
+            return;
           }
           await transitionOfferStatus({
             offerId,
@@ -693,7 +718,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         }
       })();
     },
-    [leadId, hydrateSnapshot],
+    [leadId, hydrateSnapshot, flushWorkspace],
   );
 
   // Fork a new active revision (supersedes the current one), then reload the
