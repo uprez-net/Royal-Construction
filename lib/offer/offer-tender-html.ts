@@ -175,7 +175,7 @@ export function legalDocShell(body: string): string {
   ol.terms > li { margin-bottom: 9px; }
   ol.terms b { color: ${NAVY}; }
   .note { margin-top: 14px; border-left: 3px solid ${GOLD}; background: #faf6ec; padding: 10px 12px; font-size: 10.5px; color: ${MUTED}; }
-  .sig { border: 1px solid ${BORDER}; padding: 14px; margin-top: 14px; }
+  .sig { border: 1px solid ${BORDER}; padding: 14px; margin-top: 14px; break-inside: avoid; page-break-inside: avoid; }
   .sig .who { font-weight: 700; color: ${NAVY}; }
   .sig .lines { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 22px; }
   .sig .field { border-top: 1px solid #333; padding-top: 4px; font-size: 9px; color: ${MUTED}; text-transform: uppercase; letter-spacing: 1px; }
