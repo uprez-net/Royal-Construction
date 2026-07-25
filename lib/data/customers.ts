@@ -152,13 +152,21 @@ export async function createCustomerForProject(input: { name: string; email: str
     const address = input.address?.trim() || null;
     const existing = await findCustomerByContact(input.email, input.phone, tx);
     if (existing) {
-        // Backfill the address on a repeat customer created before addresses were
-        // captured, when we now have one and they don't (ADR 0003).
-        if (address && !existing.address) {
-            return prismClient.customer.update({
+        // Refresh the legal owner identity on a repeat customer (PR #124 review):
+        // the handoff promotes the current primary owner, so update name + address
+        // when they changed — not just backfill a missing address. Email/phone are
+        // the @unique match keys, so they're left as-is to avoid collisions.
+        const name = input.name?.trim();
+        const patch: Prisma.CustomerUpdateInput = {};
+        if (name && name !== existing.name) patch.name = name;
+        if (address && address !== existing.address) patch.address = address;
+        if (Object.keys(patch).length > 0) {
+            const updated = await prismClient.customer.update({
                 where: { id: existing.id },
-                data: { address },
+                data: patch,
             });
+            revalidateTag("customers", CACHE_PROFILES.MEDIUM);
+            return updated;
         }
         return existing;
     }

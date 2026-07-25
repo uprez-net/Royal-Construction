@@ -62,6 +62,14 @@ export async function createContractEnvelope(
   const { context, config, templateId, emailSubject } = args;
   const owners = args.owners;
   const primary = owners[0];
+  // Signers 2..N sign the Owner Signature Schedule (annexure). Without it, their
+  // sigAnnex{k} tabs would anchor to a document that was never attached, silently
+  // orphaning their signatures. Fail before creating the envelope (PR #124).
+  if (owners.length > 1 && !args.annexurePdfBase64) {
+    throw new Error(
+      "The owner signature schedule (annexure) is required when there is more than one signer.",
+    );
+  }
   if (!primary) {
     throw new Error("A contract envelope needs at least one owner signer.");
   }

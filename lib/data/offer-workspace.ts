@@ -23,6 +23,7 @@ import {
   parseContractParticulars,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
+import { collectOwnerIssues } from "@/lib/offer/workspace-model";
 
 // Allowed lifecycle transitions for the offer WORKSPACE (the legacy
 // OFFER_STATE_MACHINE in offers.ts treats these new states as terminal). The
@@ -311,6 +312,31 @@ export async function transitionOfferStatus(input: {
       throw new Error(
         `Invalid offer transition from ${offer.offerStatus} to ${input.toStatus}`,
       );
+    }
+
+    // Owner completeness gate (PR #124 review): SENT locks the offer and AGREED
+    // freezes it for the Tender, so both require complete owner parties. A
+    // missing name / Current Location / signer email (or a shared signer email)
+    // must not be lockable and advanced into the legal documents. This guards the
+    // generic "Mark sent" / "Mark agreed" path, which does not go through the
+    // send actions that already validate owners.
+    const requiresCompleteOwners =
+      (input.toStatus === OfferStatus.SENT ||
+        input.toStatus === OfferStatus.AGREED) &&
+      offer.offerStatus !== input.toStatus;
+    if (requiresCompleteOwners && offer.workspaceState) {
+      const ownerIssues = collectOwnerIssues(
+        parseWorkspaceState(offer.workspaceState).job.owners,
+      );
+      if (ownerIssues.length > 0) {
+        throw new Error(
+          `Complete the owner details before ${
+            input.toStatus === OfferStatus.SENT
+              ? "marking the offer sent"
+              : "marking the offer agreed"
+          }: ${ownerIssues.join(" ")}`,
+        );
+      }
     }
 
     // Freeze only on the first transition into AGREED. An AGREED → AGREED

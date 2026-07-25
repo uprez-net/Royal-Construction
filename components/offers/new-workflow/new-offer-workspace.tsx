@@ -245,15 +245,21 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     () => describeOfferExpiry(job.validUntil, now),
     [job.validUntil, now],
   );
+  // Owner completeness (names, Current Location, unique valid signer emails). Any
+  // issue must block not just "Send offer" (server-gated) but also "Mark sent"
+  // and "Mark agreed" — otherwise an incomplete offer can be locked/frozen and
+  // advanced into the legal documents (server transition guards this too).
+  const ownerIssues = useMemo(() => collectOwnerIssues(job.owners), [job.owners]);
+  const ownersComplete = ownerIssues.length === 0;
   const sendBlockers = useMemo(
     () =>
       collectOfferSendBlockers({
         hasLead: leadId !== undefined,
         needsOverrideReason: customerPrice.needsOverrideReason,
         expiryState: offerExpiry?.state ?? "none",
-        ownerIssues: collectOwnerIssues(job.owners),
+        ownerIssues,
       }),
-    [leadId, customerPrice.needsOverrideReason, offerExpiry, job.owners],
+    [leadId, customerPrice.needsOverrideReason, offerExpiry, ownerIssues],
   );
 
   function updateJob(patch: Partial<OfferWorkspaceJob>) {
@@ -838,17 +844,19 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       setSentInfo(null);
       void (async () => {
         try {
-          const currentJson = JSON.stringify(snapshotRef.current);
-          if (currentJson !== lastSavedRef.current) {
-            const saved = await saveOfferWorkspace({
-              offerId,
-              expectedStateVersion: stateVersionRef.current,
-              snapshot: snapshotRef.current,
-            });
-            if (saved.ok) {
-              stateVersionRef.current = saved.stateVersion;
-              lastSavedRef.current = currentJson;
-            }
+          // Flush the latest edits through the single-flight saver first, so the
+          // emailed PDF matches the workspace. If it couldn't persist (a stale
+          // save reconciled to another writer, or a save error), abort — don't
+          // email an offer built from an older snapshot (flushWorkspace has
+          // already reloaded the UI on a reconcile).
+          const flush = await flushWorkspace(offerId);
+          if (flush !== "clean") {
+            setSendError(
+              flush === "reconciled"
+                ? "Your view was refreshed with a newer saved version — review it and send again."
+                : "Couldn't save your latest changes before sending. Try again.",
+            );
+            return;
           }
           const result = await sendOfferDocument({
             offerId,
@@ -887,7 +895,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         }
       })();
     },
-    [leadId],
+    [leadId, flushWorkspace],
   );
 
   // Send the Tender as a runtime DocuSign envelope (anchor-tab AutoPlace).
@@ -903,17 +911,17 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setTenderSendError(null);
     void (async () => {
       try {
-        const currentJson = JSON.stringify(snapshotRef.current);
-        if (currentJson !== lastSavedRef.current) {
-          const saved = await saveOfferWorkspace({
-            offerId,
-            expectedStateVersion: stateVersionRef.current,
-            snapshot: snapshotRef.current,
-          });
-          if (saved.ok) {
-            stateVersionRef.current = saved.stateVersion;
-            lastSavedRef.current = currentJson;
-          }
+        // Flush through the single-flight saver so the generated Tender PDF
+        // matches the workspace; abort if it couldn't persist (stale reconcile or
+        // save error) rather than send an envelope built from an older snapshot.
+        const flush = await flushWorkspace(offerId);
+        if (flush !== "clean") {
+          setTenderSendError(
+            flush === "reconciled"
+              ? "Your view was refreshed with a newer saved version — review it and send again."
+              : "Couldn't save your latest changes before sending. Try again.",
+          );
+          return;
         }
         const result = await sendTenderForSignature({ offerId });
         if (result.ok) {
@@ -930,7 +938,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         setTenderSending(false);
       }
     })();
-  }, [leadId, transition]);
+  }, [leadId, transition, flushWorkspace]);
 
   // Send the MBA BC4 Contract from the DocuSign template, filled from the
   // signed Tender's snapshot. Without a leadId (in-memory demo) it just
@@ -1085,7 +1093,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         onWorkspacePricingSettingsChange={updateWorkspacePricingSettings}
         onLineChange={updateLine}
         onMarkSent={() => transition("sent")}
-        canMarkSent={!customerPrice.needsOverrideReason}
+        canMarkSent={!customerPrice.needsOverrideReason && ownersComplete}
         onMarkAgreed={() => transition("agreed")}
         onMarkRejected={() => transition("rejected")}
         onCreateRevision={createRevision}
@@ -1098,7 +1106,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         revisionNotice={revisionNotice}
         revisionExecuted={status === "contract_signed" || status === "project"}
         onSendOffer={sendOffer}
-        canSend={leadId !== undefined && !customerPrice.needsOverrideReason}
+        canSend={
+          leadId !== undefined &&
+          !customerPrice.needsOverrideReason &&
+          ownersComplete
+        }
         sending={sending}
         sendError={sendError}
         sentInfo={sentInfo}

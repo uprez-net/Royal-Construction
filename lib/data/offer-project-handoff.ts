@@ -217,7 +217,11 @@ export async function createProjectFromOffer(input: {
       // notifications show the legal owner, not the original lead contact (codex
       // #7). clientNames/Email/Phone are the derived primary-owner projection.
       customerName: job.clientNames.trim() || null,
-      customerEmail: EMAIL_RE.test(job.clientEmail) ? job.clientEmail : null,
+      // Trim before validating — readiness + DocuSign trim, so a valid email with
+      // surrounding whitespace must not fall back to the lead here (PR #124).
+      customerEmail: EMAIL_RE.test(job.clientEmail.trim())
+        ? job.clientEmail.trim()
+        : null,
       customerPhone: job.clientPhone.trim() || null,
       // Primary owner's Current Location → Customer.address; the full owner set
       // → Project.parties (companies, directors, both addresses, contacts).

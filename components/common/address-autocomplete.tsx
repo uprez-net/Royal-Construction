@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 import { fetchJson } from "@/utils/fetch";
@@ -20,6 +20,10 @@ export type AddressPick = {
 // suggestion fills the address and surfaces the council/state/postcode via
 // onPick (used for the Site Location → Project.council). Fully controlled: the
 // `value` prop is the single source of truth.
+//
+// Implements the ARIA combobox + listbox pattern with full keyboard support
+// (Arrow up/down, Enter, Escape, Home/End) so suggestions are usable by keyboard
+// and screen-reader users (WCAG 2.1 AA; PR #124 review).
 export function AddressAutocomplete({
   value,
   onChange,
@@ -35,10 +39,14 @@ export function AddressAutocomplete({
 }) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const boxRef = useRef<HTMLDivElement>(null);
   // Skip the next fetch when the value change came from picking a suggestion,
   // so selecting an address doesn't immediately re-query it.
   const skipNextFetch = useRef(false);
+  const reactId = useId();
+  const listboxId = `${id ?? reactId}-listbox`;
+  const optionId = (index: number) => `${listboxId}-option-${index}`;
 
   useEffect(() => {
     if (skipNextFetch.current) {
@@ -59,6 +67,7 @@ export function AddressAutocomplete({
           controller.signal,
         );
         setSuggestions(response.data.suggestions);
+        setActiveIndex(-1);
         setOpen(true);
       } catch (error) {
         // A missing API key (500) or any failure degrades gracefully to plain
@@ -86,11 +95,22 @@ export function AddressAutocomplete({
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, [open]);
 
+  // Keep the highlighted option scrolled into view during keyboard navigation.
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    document
+      .getElementById(optionId(activeIndex))
+      ?.scrollIntoView({ block: "nearest" });
+    // optionId is derived from stable ids; only the index drives this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex]);
+
   const pick = (suggestion: AddressSuggestion) => {
     const address = suggestion.address || suggestion.label;
     skipNextFetch.current = true;
     setSuggestions([]);
     setOpen(false);
+    setActiveIndex(-1);
     onChange(address);
     onPick?.({
       address,
@@ -102,41 +122,105 @@ export function AddressAutocomplete({
 
   const showList = open && suggestions.length > 0 && value.trim().length >= 3;
 
+  const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showList) {
+      if (event.key === "ArrowDown" && suggestions.length > 0) {
+        event.preventDefault();
+        setOpen(true);
+        setActiveIndex(0);
+      }
+      return;
+    }
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        setActiveIndex((i) => (i + 1) % suggestions.length);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+        break;
+      case "Home":
+        event.preventDefault();
+        setActiveIndex(0);
+        break;
+      case "End":
+        event.preventDefault();
+        setActiveIndex(suggestions.length - 1);
+        break;
+      case "Enter":
+        if (activeIndex >= 0 && activeIndex < suggestions.length) {
+          event.preventDefault();
+          pick(suggestions[activeIndex]);
+        }
+        break;
+      case "Escape":
+        event.preventDefault();
+        setOpen(false);
+        setActiveIndex(-1);
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <div ref={boxRef} className="relative">
       <Input
         id={id}
         autoComplete="off"
+        role="combobox"
+        aria-expanded={showList}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
+        aria-activedescendant={
+          showList && activeIndex >= 0 ? optionId(activeIndex) : undefined
+        }
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
         onFocus={() => {
           if (suggestions.length > 0) setOpen(true);
         }}
       />
       {showList ? (
-        <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
-          {suggestions.map((suggestion) => {
+        <ul
+          id={listboxId}
+          role="listbox"
+          className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+        >
+          {suggestions.map((suggestion, index) => {
             const meta = [
               suggestion.postcode,
               suggestion.council ? `Council: ${suggestion.council}` : null,
             ]
               .filter((part): part is string => Boolean(part?.trim()))
               .join(" · ");
+            const isActive = index === activeIndex;
             return (
-              <li key={suggestion.id}>
-                <button
-                  type="button"
-                  className="flex w-full flex-col gap-0.5 rounded px-2 py-1.5 text-left hover:bg-muted"
-                  onClick={() => pick(suggestion)}
-                >
-                  <span className="text-sm font-medium text-foreground">
-                    {suggestion.label}
-                  </span>
-                  {meta ? (
-                    <span className="text-xs text-muted-foreground">{meta}</span>
-                  ) : null}
-                </button>
+              <li
+                key={suggestion.id}
+                id={optionId(index)}
+                role="option"
+                aria-selected={isActive}
+                // Pick on mousedown so the input's blur/outside-click handler
+                // doesn't close the list before the click lands.
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  pick(suggestion);
+                }}
+                onMouseEnter={() => setActiveIndex(index)}
+                className={`flex cursor-pointer flex-col gap-0.5 rounded px-2 py-1.5 text-left ${
+                  isActive ? "bg-muted" : ""
+                }`}
+              >
+                <span className="text-sm font-medium text-foreground">
+                  {suggestion.label}
+                </span>
+                {meta ? (
+                  <span className="text-xs text-muted-foreground">{meta}</span>
+                ) : null}
               </li>
             );
           })}

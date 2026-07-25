@@ -413,6 +413,12 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
         `${who} needs a ${isCompany ? "registered office (Current Location)" : "Current Location"}.`,
       );
     }
+    // An owner with no signatories has nobody to sign — the persisted schema
+    // defaults signatories to [], so guard it here (the individual editor can't
+    // repair a zero-signatory owner either).
+    if (owner.signatories.length === 0) {
+      issues.push(`${who} needs at least one ${isCompany ? "director" : "signatory"}.`);
+    }
     owner.signatories.forEach((signatory) => {
       if (signatory.name.trim().length === 0) {
         issues.push(`${who} has a ${isCompany ? "director" : "signatory"} without a name.`);
@@ -424,6 +430,24 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
       }
     });
   });
+  // Every signer needs a UNIQUE email. DocuSign routes + tracks per recipient and
+  // the completion webhook falls back to matching by email, so two signers on the
+  // same address make their signatures indistinguishable and corrupt the
+  // per-signer audit trail. Flag any address shared across signatories.
+  const emailCounts = new Map<string, number>();
+  collectOfferSigners(owners).forEach((signer) => {
+    const email = signer.signatory.email.trim().toLowerCase();
+    if (OWNER_EMAIL_PATTERN.test(email)) {
+      emailCounts.set(email, (emailCounts.get(email) ?? 0) + 1);
+    }
+  });
+  for (const [email, count] of emailCounts) {
+    if (count > 1) {
+      issues.push(
+        `The email ${email} is shared by ${count} signatories — each owner/director needs their own email.`,
+      );
+    }
+  }
   return issues;
 }
 
@@ -519,7 +543,11 @@ export function ownersFromLegacyClientFields(fields: {
         {
           id: "owner-2-signer-1",
           name: fields.secondaryCustomerName,
-          email: fields.secondaryCustomerEmail || fields.clientEmail,
+          // Do NOT fall back to the primary's email — that would seed a shared
+          // address that collectOwnerIssues now flags and the DocuSign audit
+          // can't disambiguate. Leave it blank so the operator supplies the
+          // co-owner's own email (surfaced as a readiness issue).
+          email: fields.secondaryCustomerEmail,
           phone: "",
           capacity: OWNER_SIGNER_CAPACITY,
         },
