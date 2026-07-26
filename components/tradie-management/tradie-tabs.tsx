@@ -133,7 +133,9 @@ export function TradieTabs() {
     if (search) labels.push(`Search: “${search}”`);
     if (query.category) labels.push(`Trade: ${query.category}`);
     if (query.rating !== undefined) {
-      labels.push(`Rating: ${query.rating} star${query.rating === 1 ? "" : "s"}`);
+      // Minimum-rating semantics: "3+ stars" matches 3.4 too. Always plural —
+      // "1+ star" would read as exactly one.
+      labels.push(`Rating: ${query.rating}+ stars`);
     }
     if (query.favourite !== undefined) {
       labels.push(query.favourite ? "Favourites only" : "Non-favourites only");
@@ -263,9 +265,7 @@ export function TradieTabs() {
                     className="size-3 text-muted-foreground"
                     aria-hidden="true"
                   />
-                  <span>
-                    {rating} star{rating === 1 ? "" : "s"}
-                  </span>
+                  <span>{rating}+ stars</span>
                 </div>
               </SelectItem>
             ))}

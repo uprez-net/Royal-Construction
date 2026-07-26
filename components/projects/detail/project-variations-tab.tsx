@@ -146,6 +146,31 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
     new Date(project.estimatedEndDate),
   );
   const noDelay = projectVariationImpact.totalDelayDays === 0;
+  // `adjustedEndLabel` carries a "New end " prefix for the chart caption; the
+  // aria-label supplies its own wording, so it needs the bare date.
+  const adjustedEndDateLabel = dateFormat.format(
+    addDays(
+      new Date(project.estimatedEndDate),
+      projectVariationImpact.totalDelayDays,
+    ),
+  );
+
+  // Variations arrive newest-first (`createdAt desc`). The log reads
+  // chronologically: V-001 is the first variation raised, and each row's
+  // "New total" is the contract total once that variation and every earlier
+  // one has been applied — so the last row matches the footer total.
+  const orderedVariations = [...project.variations].sort(
+    (a, b) =>
+      new Date(a.requestedDate).getTime() - new Date(b.requestedDate).getTime(),
+  );
+
+  const revisedTotals = orderedVariations.reduce<number[]>(
+    (totals, variation) => [
+      ...totals,
+      (totals.at(-1) ?? totalBudget) + Number(variation.cost),
+    ],
+    [],
+  );
 
   return (
     <section className="space-y-4">
@@ -188,7 +213,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
               role="img"
               aria-label={
                 noDelay
-                  ? `Original plan runs the full duration, ${projectVariationImpact.startDateLabel} to ${projectVariationImpact.adjustedEndLabel}.`
+                  ? `Original plan runs the full duration, ${projectVariationImpact.startDateLabel} to ${adjustedEndDateLabel}.`
                   : `Original plan is ${projectVariationImpact.originalDurationPercent}% of the revised duration; approved variations add ${projectVariationImpact.totalDelayDays} days.`
               }
             >
@@ -323,7 +348,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                 "end",
                 "start",
               ]}
-              rows={project.variations.map((variation, index) => {
+              rows={orderedVariations.map((variation, index) => {
                 const variationCost = Number(variation.cost);
 
                 return [
@@ -377,7 +402,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                     className="font-mono tabular-nums text-foreground"
                     key={`${variation.id}-new-total`}
                   >
-                    {currency.format(totalBudget + variationCost)}
+                    {currency.format(revisedTotals[index])}
                   </span>,
 
                   <StatusPill

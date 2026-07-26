@@ -88,6 +88,16 @@ export default function ReportTradieModal({
     incidentSeverity: "LOW",
     incidentDescription: "",
   });
+  // A pristine required field is not an error. Without this, both controls are
+  // announced as invalid the moment the dialog opens.
+  const [touched, setTouched] = useState({
+    incidentType: false,
+    incidentDescription: false,
+  });
+
+  const markTouched = (field: keyof typeof touched) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -96,6 +106,7 @@ export default function ReportTradieModal({
       });
       onClose();
       resetQueue();
+      setTouched({ incidentType: false, incidentDescription: false });
       dispatch(clearProjectUploads(uploadScopeKey));
     }
   };
@@ -198,7 +209,10 @@ export default function ReportTradieModal({
 
         toast.success("Incident reported successfully.");
 
-        onClose();
+        // Closing is single-sourced through handleOpenChange so the queue reset
+        // and the upload-progress cleanup run on every exit path, not just the
+        // dialog's own dismissal.
+        handleOpenChange(false);
       } catch (error) {
         toast.error("Error reporting tradie. Please try again.");
         console.error(error);
@@ -237,16 +251,18 @@ export default function ReportTradieModal({
 
               <Select
                 value={formData.incidentType}
-                onValueChange={(value) =>
+                onValueChange={(value) => {
+                  markTouched("incidentType");
                   setFormData((prev) => ({
                     ...prev,
                     incidentType: value,
-                  }))
-                }
+                  }));
+                }}
               >
                 <SelectTrigger
                   id="incident-type"
-                  aria-invalid={!formData.incidentType}
+                  aria-invalid={touched.incidentType && !formData.incidentType}
+                  onBlur={() => markTouched("incidentType")}
                 >
                   <SelectValue placeholder="Select incident type…" />
                 </SelectTrigger>
@@ -310,13 +326,17 @@ export default function ReportTradieModal({
               required
               placeholder="Describe what happened in detail…"
               value={formData.incidentDescription}
-              aria-invalid={!formData.incidentDescription.trim()}
+              aria-invalid={
+                touched.incidentDescription &&
+                !formData.incidentDescription.trim()
+              }
               onChange={(e) =>
                 setFormData((prev) => ({
                   ...prev,
                   incidentDescription: e.target.value,
                 }))
               }
+              onBlur={() => markTouched("incidentDescription")}
             />
           </div>
 
@@ -359,7 +379,11 @@ export default function ReportTradieModal({
           {/* Footer */}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose} disabled={isPending}>
+            <Button
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
 

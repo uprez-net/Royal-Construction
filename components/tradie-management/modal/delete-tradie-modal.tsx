@@ -1,4 +1,4 @@
-import { AlertOctagon, Send, Trash2 } from "lucide-react";
+import { AlertOctagon, Loader2, Send, Trash2 } from "lucide-react";
 
 import { TradieRow } from "@/types/tradie";
 
@@ -58,8 +58,7 @@ export default function DeleteTradieModal({
 
         toast.success("Deletion request submitted successfully.");
 
-        setReason("");
-        onClose();
+        handleOpenChange(false);
       } catch (error) {
         toast.error("Error deleting tradie. Please try again.");
 
@@ -133,7 +132,11 @@ export default function DeleteTradieModal({
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose} disabled={isPending}>
+            <Button
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
 
@@ -142,9 +145,20 @@ export default function DeleteTradieModal({
               onClick={handleSubmit}
               disabled={isPending || !reason.trim()}
             >
-              <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-
-              {isPending ? "Submitting…" : "Submit for approval"}
+              {isPending ? (
+                <>
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Submit for approval
+                </>
+              )}
             </Button>
           </div>
         </div>

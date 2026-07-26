@@ -192,7 +192,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
       toast.success("Tradie created", {
         description: `${formData.name} has been added successfully.`,
       });
-      onClose();
+      handleOpenChange(false);
     } catch (error) {
       console.error(error);
       toast.error("Unable to add tradie");
@@ -232,7 +232,10 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
             </h3>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="tradie-name" className="flex items-center gap-2">
+                <Label
+                  htmlFor="tradie-name"
+                  className="flex items-center gap-2"
+                >
                   <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />
                   Business / tradie name
                   <RequiredMark />
@@ -253,7 +256,10 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   )}
                 />
                 {fieldError("name") && (
-                  <p id="tradie-name-error" className="text-xs text-destructive">
+                  <p
+                    id="tradie-name-error"
+                    className="text-xs text-destructive"
+                  >
                     {fieldError("name")}
                   </p>
                 )}
@@ -351,7 +357,10 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tradie-rate" className="flex items-center gap-2">
+                <Label
+                  htmlFor="tradie-rate"
+                  className="flex items-center gap-2"
+                >
                   <DollarSign className="h-4 w-4" aria-hidden="true" />
                   Hourly rate
                   <RequiredMark />
@@ -387,7 +396,10 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   />
                 </div>
                 {fieldError("hourlyRate") && (
-                  <p id="tradie-rate-error" className="text-xs text-destructive">
+                  <p
+                    id="tradie-rate-error"
+                    className="text-xs text-destructive"
+                  >
                     {fieldError("hourlyRate")}
                   </p>
                 )}
@@ -535,7 +547,11 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
             </p>
           </section>
           <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
-            <Button variant="outline" disabled={isPending} onClick={onClose}>
+            <Button
+              variant="outline"
+              disabled={isPending}
+              onClick={() => handleOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button

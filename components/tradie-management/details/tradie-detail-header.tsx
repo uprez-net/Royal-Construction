@@ -104,10 +104,6 @@ export function TradieCard() {
               )}
             </div>
 
-            {/* The second slot here used to print {name} a second time. There is
-                no business-name field on Tradie (name IS the business/tradie
-                name), so the duplicate is removed and the trade chip stands
-                alone as the subtitle. */}
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <TradieBadge trade={trade} />
             </div>
@@ -140,10 +136,7 @@ export function TradieCard() {
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem
-                onClick={handleDelete}
-                className="text-destructive focus:text-destructive"
-              >
+              <DropdownMenuItem onClick={handleDelete} variant="destructive">
                 <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                 Delete tradie
               </DropdownMenuItem>

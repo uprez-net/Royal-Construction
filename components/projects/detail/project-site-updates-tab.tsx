@@ -107,9 +107,23 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
                     ))}
 
                     {photoCount > VISIBLE_PHOTOS && (
-                      <p className="flex aspect-4/3 w-full items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground">
+                      <button
+                        type="button"
+                        aria-label={`View the remaining ${photoCount - VISIBLE_PHOTOS} photos from this update`}
+                        className="flex aspect-4/3 w-full items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        onClick={() =>
+                          dispatch(
+                            openModal({
+                              type: "viewPicture",
+                              payload: {
+                                imageUrl: update.photoUrls[VISIBLE_PHOTOS],
+                              },
+                            }),
+                          )
+                        }
+                      >
                         {photoCount - VISIBLE_PHOTOS} more
-                      </p>
+                      </button>
                     )}
                   </div>
                 )}

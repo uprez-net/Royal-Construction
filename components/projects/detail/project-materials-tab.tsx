@@ -131,7 +131,6 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
                 aria-hidden="true"
               />
               <Input
-                id="material-search"
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}

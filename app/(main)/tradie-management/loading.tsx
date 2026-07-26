@@ -7,7 +7,14 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export default function TradieManagementSkeleton() {
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading tradies">
+    <div
+      className="space-y-6"
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <span className="sr-only">Loading tradies</span>
+
       {/* Header card */}
       <div className="rounded-lg border border-border/70 bg-card p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">

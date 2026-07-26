@@ -18,7 +18,14 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { updateProjectMilestoneStatus } from "@/lib/store/slices/projectsSlice";
 import { MilestoneUpdateData, milestoneUpdateSchema } from "@/utils/validators";
 import type { MilestoneStatus } from "@prisma/client";
-import { useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,12 +43,15 @@ interface UpdateMilestoneModalProps {
   onClose: () => void;
 }
 
-const initialFormState: MilestoneUpdateData = {
-  status: "PENDING",
-  startDate: undefined,
-  actualDate: undefined,
-  spend: undefined,
-};
+/** `yyyy-MM-dd` for a nullable date field, or `undefined` when unset. */
+function toDateInputValue(value: Date | string | null | undefined) {
+  if (!value) return undefined;
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? undefined
+    : format(parsed, "yyyy-MM-dd");
+}
 
 const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Pending", value: "PENDING" },
@@ -108,23 +118,55 @@ export default function UpdateMilestoneModal({
     return totalSpend;
   }, [project, milestoneId]);
   const [isPending, startTransition] = useTransition();
-  const [formState, setFormState] = useState<MilestoneUpdateData>({
-    ...initialFormState,
-    status: status ?? "PENDING",
-    startDate: milestone?.startDate
-      ? format(milestone.startDate, "yyyy-MM-dd")
-      : undefined,
-    spend: spend,
-  });
+
+  // Derived from the milestone as it stands right now, so reopening the dialog
+  // never shows the previous session's dates or spend.
+  const buildFormState = useCallback((): MilestoneUpdateData => {
+    const currentStatus = status ?? milestone?.status ?? "PENDING";
+
+    return {
+      status: currentStatus,
+      startDate: toDateInputValue(milestone?.startDate),
+      actualDate:
+        toDateInputValue(milestone?.actualDate) ??
+        (currentStatus === "DONE"
+          ? format(new Date(), "yyyy-MM-dd")
+          : undefined),
+      spend: spend > 0 ? spend : undefined,
+    };
+  }, [milestone, spend, status]);
+
+  const [formState, setFormState] =
+    useState<MilestoneUpdateData>(buildFormState);
   const [fieldErrors, setFieldErrors] = useState<MilestoneUpdateErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Re-seed on open, on a milestone switch, and once the milestone arrives in
+  // the store (the first render can happen before `activeProject` is loaded,
+  // which is how an empty start date and a zero spend used to stick). Keyed so
+  // later store updates cannot wipe out edits made while the dialog is open.
+  const hydrationKey = isOpen
+    ? `${milestoneId}|${milestone ? "loaded" : "pending"}`
+    : null;
+  const hydratedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (hydrationKey === null) {
+      hydratedKeyRef.current = null;
+      return;
+    }
+
+    if (hydratedKeyRef.current === hydrationKey) return;
+
+    hydratedKeyRef.current = hydrationKey;
+    setFormState(buildFormState());
+    setFieldErrors({});
+    setSubmitError(null);
+  }, [buildFormState, hydrationKey]);
+
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      setFormState({
-        ...initialFormState,
-        status: status ?? milestone?.status ?? "PENDING",
-      });
+      setFormState(buildFormState());
       setFieldErrors({});
       setSubmitError(null);
       onClose();

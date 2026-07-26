@@ -68,6 +68,7 @@ interchangeable:
 `--info` as a text colour.** Always `-ink` for text.
 
 **Status badge pattern** (use this exact shape everywhere):
+
 ```tsx
 <span className="rounded-full bg-warning-light px-2 py-0.5 text-xs font-medium text-warning-ink">
 ```

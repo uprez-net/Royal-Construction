@@ -216,8 +216,11 @@ export default function EditTradieModal({
         <div className="space-y-6 pt-2">
           <div className="grid gap-5 md:grid-cols-2">
             {fields.map(({ key, label, icon: Icon, placeholder, mono }) => (
+              // Add and edit modals can be mounted in the same document, so the
+              // DOM ids are namespaced per modal; bare "email"/"phone" ids would
+              // collide and point a <label for> at the wrong control.
               <div key={key} className="space-y-2">
-                <Label htmlFor={key}>
+                <Label htmlFor={`tradie-edit-${key}`}>
                   {label}
                   <span className="text-destructive">
                     *<span className="sr-only"> required</span>
@@ -231,19 +234,24 @@ export default function EditTradieModal({
                   />
 
                   <Input
-                    id={key}
+                    id={`tradie-edit-${key}`}
                     required
                     className={cn("pl-9", mono && "font-mono tabular-nums")}
                     placeholder={placeholder}
                     value={formData[key]}
                     aria-invalid={Boolean(errors[key])}
-                    aria-describedby={errors[key] ? `${key}-error` : undefined}
+                    aria-describedby={
+                      errors[key] ? `tradie-edit-${key}-error` : undefined
+                    }
                     onChange={(e) => handleInputChange(key, e.target.value)}
                   />
                 </div>
 
                 {errors[key] && (
-                  <p id={`${key}-error`} className="text-xs text-destructive">
+                  <p
+                    id={`tradie-edit-${key}-error`}
+                    className="text-xs text-destructive"
+                  >
                     {errors[key]}
                   </p>
                 )}
@@ -283,7 +291,10 @@ export default function EditTradieModal({
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="tradie-edit-note" className="flex items-center gap-2">
+              <Label
+                htmlFor="tradie-edit-note"
+                className="flex items-center gap-2"
+              >
                 <StickyNote className="h-4 w-4" aria-hidden="true" />
                 Internal notes
               </Label>
@@ -296,7 +307,9 @@ export default function EditTradieModal({
                 value={formData.note}
                 aria-invalid={Boolean(errors.note)}
                 aria-describedby={
-                  errors.note ? "tradie-edit-note-error" : "tradie-edit-note-count"
+                  errors.note
+                    ? "tradie-edit-note-error"
+                    : "tradie-edit-note-count"
                 }
                 onChange={(e) => handleInputChange("note", e.target.value)}
               />

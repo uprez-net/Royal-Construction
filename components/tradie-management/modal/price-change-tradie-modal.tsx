@@ -44,7 +44,10 @@ export default function PriceChangeTradieModal({
     Number.isFinite(formData.newHourlyRate) && formData.newHourlyRate > 0;
   const isRateChanged = formData.newHourlyRate !== currentRate;
   const canSubmit =
-    !isPending && isRateValid && isRateChanged && Boolean(formData.reason.trim());
+    !isPending &&
+    isRateValid &&
+    isRateChanged &&
+    Boolean(formData.reason.trim());
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -82,7 +85,7 @@ export default function PriceChangeTradieModal({
       ).unwrap();
 
       toast.success("Price change submitted for approval.");
-      onClose();
+      handleOpenChange(false);
     } catch (error) {
       toast.error("Error submitting price change. Please try again.");
       console.error(error);
@@ -160,9 +163,11 @@ export default function PriceChangeTradieModal({
             />
 
             <p id="new-rate-hint" className="text-xs text-muted-foreground">
-              {isRateValid
-                ? "Must differ from the current rate."
-                : "Enter a rate greater than zero."}
+              {!isRateValid
+                ? "Enter a rate greater than zero."
+                : !isRateChanged
+                  ? "The proposed rate matches the current rate."
+                  : "Ready to submit for approval."}
             </p>
           </div>
 
@@ -208,7 +213,11 @@ export default function PriceChangeTradieModal({
 
           {/* Footer */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose} disabled={isPending}>
+            <Button
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
 

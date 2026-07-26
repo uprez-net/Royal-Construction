@@ -31,6 +31,9 @@ export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("activeTab");
+  // `searchParams` is a fresh object on every navigation; the serialized string
+  // is what handleTabChange actually needs, and it keeps the callback stable.
+  const searchParamsString = searchParams.toString();
 
   const selector = useMemo(
     () => selectProjectDetailUiState(project.id),
@@ -60,11 +63,11 @@ export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
     (tab: VisibleProjectDetailTabKey) => {
       dispatch(setProjectDetailTab({ projectId: project.id, tab }));
 
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParamsString);
       params.set("activeTab", tab);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     },
-    [dispatch, pathname, project.id, router, searchParams],
+    [dispatch, pathname, project.id, router, searchParamsString],
   );
 
   return (

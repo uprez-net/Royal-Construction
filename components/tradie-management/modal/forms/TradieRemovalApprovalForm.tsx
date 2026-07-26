@@ -137,7 +137,9 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
                     ? `${rateCurrency.format(Number(approval.tradie.hourlyRate))}/hr`
                     : "Not set"
                 }
-                mono
+                // Mono is reserved for actual figures; the "Not set" placeholder
+                // renders as prose so a missing rate does not read like data.
+                mono={Boolean(approval.tradie.hourlyRate)}
               />
             </div>
 

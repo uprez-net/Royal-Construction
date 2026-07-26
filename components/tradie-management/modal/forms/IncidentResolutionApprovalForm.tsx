@@ -33,6 +33,10 @@ interface Props {
 
 export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
   const [resolution, setResolution] = useState("");
+  // A pristine field is not an error. `aria-invalid` only fires once the
+  // operator has left the field or tried to submit, otherwise a screen reader
+  // announces "invalid" before anything has been typed.
+  const [resolutionTouched, setResolutionTouched] = useState(false);
 
   const mutation = useApprovalMutation(onSuccess);
 
@@ -44,6 +48,12 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
   };
 
   const submit = (resolutionStatus: "approved" | "rejected") => {
+    if (resolutionStatus === "approved") {
+      setResolutionTouched(true);
+
+      if (!resolution.trim()) return;
+    }
+
     mutation.mutate({
       approvalId: approval.id,
       type: TradieApprovalActionType.INCIDENT_RESOLUTION,
@@ -230,9 +240,10 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
             rows={5}
             required
             value={resolution}
-            aria-invalid={!resolution.trim()}
+            aria-invalid={resolutionTouched && !resolution.trim()}
             aria-describedby="incident-resolution-hint"
             onChange={(e) => setResolution(e.target.value)}
+            onBlur={() => setResolutionTouched(true)}
             placeholder="Describe how this incident has been resolved…"
           />
 

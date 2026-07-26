@@ -30,10 +30,10 @@ function matchesTradieQuery(tradie: TradieRow, query: TradieTableQuery) {
     return false;
   }
 
-  if (
-    query.rating !== undefined &&
-    Number(tradie.rating ?? 0) !== query.rating
-  ) {
+  // Minimum-rating semantics. Ratings are decimals, so an exact match meant a
+  // "3 stars" filter hid a 3.4 tradie. Missing ratings still default to 0 so
+  // unrated tradies stay out of every rating filter.
+  if (query.rating !== undefined && Number(tradie.rating ?? 0) < query.rating) {
     return false;
   }
 
@@ -127,6 +127,8 @@ export function TradieBody() {
       role="tabpanel"
       id={TRADIE_VIEW_PANEL_ID}
       aria-labelledby={tradieViewTabId(activeTab)}
+      tabIndex={0}
+      className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {panel}
     </div>

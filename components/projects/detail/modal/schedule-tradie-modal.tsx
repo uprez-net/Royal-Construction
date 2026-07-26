@@ -258,7 +258,7 @@ export default function ScheduleTradieModal({
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={onClose}
+                onClick={() => handleOpenChange(false)}
                 disabled={isSubmitting}
               >
                 Cancel

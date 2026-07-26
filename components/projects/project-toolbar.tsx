@@ -22,13 +22,21 @@ import {
 import { cn } from "@/lib/utils";
 
 type SortOption = "name" | "progress" | "budget" | "startDate" | "spent";
+type SortDirection = "asc" | "desc";
 
-const SORT_OPTIONS: { label: string; value: SortOption }[] = [
-  { label: "Name A–Z", value: "name" },
-  { label: "Progress, high to low", value: "progress" },
-  { label: "Budget, high to low", value: "budget" },
-  { label: "Start date, newest first", value: "startDate" },
-  { label: "Spent, high to low", value: "spent" },
+// Each option carries its own direction: the labels promise a direction
+// ("high to low", "newest first"), so dispatching `sortBy` alone left the
+// previous `sortOrder` in place and sorted the opposite way.
+const SORT_OPTIONS: {
+  label: string;
+  value: SortOption;
+  sortOrder: SortDirection;
+}[] = [
+  { label: "Name A–Z", value: "name", sortOrder: "asc" },
+  { label: "Progress, high to low", value: "progress", sortOrder: "desc" },
+  { label: "Budget, high to low", value: "budget", sortOrder: "desc" },
+  { label: "Start date, newest first", value: "startDate", sortOrder: "desc" },
+  { label: "Spent, high to low", value: "spent", sortOrder: "desc" },
 ];
 
 interface ProjectToolbarProps {
@@ -97,9 +105,18 @@ export function ProjectToolbar({ onSearchChange }: ProjectToolbarProps) {
             <DropdownMenuLabel>Sort by</DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={sortBy}
-              onValueChange={(value) =>
-                dispatch(setProjectSort({ sortBy: value as SortOption }))
-              }
+              onValueChange={(value) => {
+                const option = SORT_OPTIONS.find(
+                  (candidate) => candidate.value === value,
+                );
+                if (!option) return;
+                dispatch(
+                  setProjectSort({
+                    sortBy: option.value,
+                    sortOrder: option.sortOrder,
+                  }),
+                );
+              }}
             >
               {SORT_OPTIONS.map((option) => (
                 <DropdownMenuRadioItem key={option.value} value={option.value}>

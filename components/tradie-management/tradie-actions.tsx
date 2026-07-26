@@ -105,6 +105,12 @@ export function TradieActionsDropdown({
     e.stopPropagation();
     try {
       const tradieDetails = await getTradieByIdCached(tradieRow.id);
+      if (!tradieDetails) {
+        // A deleted tradie resolves to null rather than rejecting, so without
+        // this guard the edit modal opens with nothing in it.
+        toast.error("Could not load tradie details. Please try again.");
+        return;
+      }
       dispatch(
         openModal({ type: "editTradie", payload: { tradie: tradieDetails } }),
       );

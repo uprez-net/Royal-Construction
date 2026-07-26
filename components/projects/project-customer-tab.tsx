@@ -121,7 +121,7 @@ export function CustomerTab({ project }: CustomerTabProps) {
 
         <Field label="Project value">
           <span className="font-mono tabular-nums">
-            {currency.format(Number(project.totalBudget))}
+            {formatMoneyField(Number(project.totalBudget))}
           </span>
         </Field>
 

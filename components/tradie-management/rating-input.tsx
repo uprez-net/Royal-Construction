@@ -23,10 +23,23 @@ export function StarRatingInput({
   const [hovered, setHovered] = useState<number | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  const displayValue = hovered ?? value;
+  // This is an input, and only whole stars are selectable — `onChange` never
+  // emits a fraction. A fractional `value` still arrives from callers that seed
+  // the control with a stored average, so it is floored to the whole star the
+  // fill already shows (4.5 fills four stars, so option 4 is the selected one).
+  // Everything downstream reads from this, which keeps the fill, the readout,
+  // the checked option and the single tab stop in agreement; previously a
+  // fractional value put the tab stop on an option that was never aria-checked,
+  // and could put it on a star the fill left empty.
+  const selectedRating =
+    Number.isFinite(value) && value >= 1
+      ? Math.min(max, Math.floor(value))
+      : null;
+
+  const displayValue = hovered ?? selectedRating ?? 0;
   // A radiogroup is a single tab stop: the checked option holds tabIndex 0, or
   // the first option when nothing is selected yet.
-  const activeRating = value >= 1 && value <= max ? Math.round(value) : 1;
+  const activeRating = selectedRating ?? 1;
 
   const moveTo = (rating: number) => {
     const clamped = Math.min(max, Math.max(1, rating));
@@ -85,7 +98,7 @@ export function StarRatingInput({
               type="button"
               disabled={readonly}
               role="radio"
-              aria-checked={rating === value}
+              aria-checked={rating === selectedRating}
               aria-label={`${rating} ${rating === 1 ? "star" : "stars"}`}
               tabIndex={rating === activeRating ? 0 : -1}
               onClick={() => onChange(rating)}

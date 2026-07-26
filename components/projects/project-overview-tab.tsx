@@ -29,13 +29,20 @@ export function OverviewTab({
   setActiveTab,
   onClose,
 }: ProjectOverviewTabProps) {
-  const spent = Number(project.spent);
-  const budget = Number(project.totalBudget);
-  // Guard the denominator: a project with no budget set would otherwise render
-  // NaN% here and an NaN-width bar below.
-  const spentPercent = budget > 0 ? Math.round((spent / budget) * 100) : null;
-  const remaining = budget - spent;
-  const isOverBudget = remaining < 0;
+  // A missing or non-numeric Decimal string must not reach the formatter: it
+  // rendered "$NaN" in the tiles and "NaN%" in the label.
+  const spentValue = Number(project.spent);
+  const budgetValue = Number(project.totalBudget);
+  const spent = Number.isFinite(spentValue) ? spentValue : null;
+  const budget = Number.isFinite(budgetValue) ? budgetValue : null;
+  // Guard the denominator too: a project with no budget set would otherwise
+  // render NaN% here and an NaN-width bar below.
+  const spentPercent =
+    budget !== null && budget > 0 && spent !== null
+      ? Math.round((spent / budget) * 100)
+      : null;
+  const remaining = budget !== null && spent !== null ? budget - spent : null;
+  const isOverBudget = remaining !== null && remaining < 0;
 
   const progressPercent = Math.min(
     100,
@@ -43,6 +50,9 @@ export function OverviewTab({
   );
 
   const customerPhone = project.customer.phone?.trim();
+  const telHref = customerPhone
+    ? `tel:${customerPhone.replace(/\s+/g, "")}`
+    : null;
   const customerEmail = project.customer.email?.trim();
   const statusConfig = projectStatusConfig(project.status);
   const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -56,7 +66,7 @@ export function OverviewTab({
         <div className="rounded-lg bg-muted p-4">
           <p className="text-xs font-medium text-muted-foreground">Budget</p>
           <p className="mt-1 font-mono text-lg font-semibold text-foreground tabular-nums">
-            {compactCurrency.format(budget)}
+            {budget !== null ? compactCurrency.format(budget) : "—"}
           </p>
         </div>
 
@@ -69,7 +79,7 @@ export function OverviewTab({
               isOverBudget ? "text-destructive-ink" : "text-foreground"
             }`}
           >
-            {compactCurrency.format(spent)}
+            {spent !== null ? compactCurrency.format(spent) : "—"}
           </p>
         </div>
 
@@ -82,7 +92,9 @@ export function OverviewTab({
               isOverBudget ? "text-destructive-ink" : "text-success-ink"
             }`}
           >
-            {compactCurrency.format(Math.abs(remaining))}
+            {remaining !== null
+              ? compactCurrency.format(Math.abs(remaining))
+              : "—"}
           </p>
         </div>
       </div>
@@ -120,9 +132,9 @@ export function OverviewTab({
         <Field label="Customer">{project.customer.name}</Field>
 
         <Field label="Customer phone">
-          {customerPhone ? (
+          {customerPhone && telHref ? (
             <a
-              href={`tel:${customerPhone.replace(/\s+/g, "")}`}
+              href={telHref}
               className="font-mono tabular-nums underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               {customerPhone}
@@ -192,9 +204,9 @@ export function OverviewTab({
           Milestones
         </Button>
 
-        {customerPhone ? (
+        {telHref ? (
           <Button asChild variant="outline" size="lg">
-            <a href={`tel:${customerPhone.replace(/\s+/g, "")}`}>
+            <a href={telHref}>
               <Phone aria-hidden="true" />
               Call {project.customer.name}
             </a>

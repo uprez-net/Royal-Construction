@@ -310,10 +310,7 @@ export default function AddMilestonePictureModal({
               type="button"
               variant="outline"
               disabled={isPending}
-              onClick={() => {
-                resetForm();
-                handleOpenChange(false);
-              }}
+              onClick={() => handleOpenChange(false)}
               className="h-10 rounded-[10px] px-4 text-sm font-medium"
             >
               Cancel

@@ -26,14 +26,18 @@ function MoneyTile({
           ? "text-destructive-ink"
           : "text-foreground";
 
+  // A missing or non-numeric Decimal string must not reach the formatter: it
+  // rendered "$NaN" in both the tile and its tooltip.
+  const hasValue = Number.isFinite(value);
+
   return (
     <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p
         className={`mt-1 font-mono text-lg font-semibold tabular-nums ${valueTone}`}
-        title={currency.format(value)}
+        title={hasValue ? currency.format(value) : "Not recorded"}
       >
-        {compactCurrency.format(value)}
+        {hasValue ? compactCurrency.format(value) : "—"}
       </p>
     </div>
   );
@@ -46,9 +50,12 @@ export function FinancialTab({ project }: FinancialTabProps) {
   const remaining = budget - spent;
   const isOverBudget = remaining < 0;
 
-  // Guard the denominator: a project with no budget recorded must not render
-  // NaN% or an NaN-width bar.
-  const utilisation = budget > 0 ? Math.round((spent / budget) * 100) : null;
+  // Guard both operands: a project with no budget recorded, or an unparseable
+  // spend, must not render NaN% or an NaN-width bar.
+  const utilisation =
+    budget > 0 && Number.isFinite(spent)
+      ? Math.round((spent / budget) * 100)
+      : null;
   const barWidth = Math.min(100, Math.max(0, utilisation ?? 0));
 
   return (
@@ -73,10 +80,13 @@ export function FinancialTab({ project }: FinancialTabProps) {
             {utilisation === null ? "No budget recorded" : `${utilisation}%`}
           </p>
         </div>
+        {/* aria-valuenow is clamped like the bar itself: an over-budget project
+            must not announce a value above aria-valuemax. The exact figure
+            stays in aria-valuetext. */}
         <div
           role="progressbar"
           aria-label="Budget utilisation"
-          aria-valuenow={utilisation ?? 0}
+          aria-valuenow={barWidth}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuetext={
@@ -95,11 +105,11 @@ export function FinancialTab({ project }: FinancialTabProps) {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           <span className="font-mono tabular-nums">
-            {currency.format(spent)}
+            {Number.isFinite(spent) ? currency.format(spent) : "—"}
           </span>{" "}
           spent of{" "}
           <span className="font-mono tabular-nums">
-            {currency.format(budget)}
+            {Number.isFinite(budget) ? currency.format(budget) : "—"}
           </span>
         </p>
       </div>

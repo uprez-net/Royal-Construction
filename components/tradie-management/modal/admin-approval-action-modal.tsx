@@ -45,8 +45,9 @@ export function AdminApprovalActionModal({
   const renderForm = () => {
     if (!data) return null;
 
-    // `approvalType` is what the caller believed it was opening; the fetched
-    // record is authoritative, so a mismatch means stale UI state.
+    // The fetched record is authoritative. `approvalType` — what the caller
+    // believed it was opening — is only a fallback for records that carry no
+    // `actionType`.
     const actionType = data.actionType ?? approvalType;
 
     switch (actionType) {
@@ -62,11 +63,9 @@ export function AdminApprovalActionModal({
         return (
           <IncidentResolutionApprovalForm approval={data} onSuccess={onClose} />
         );
-      
+
       case TradieApprovalActionType.SCHEDULE_APPROVAL:
-        return (
-          <ScheduleApprovalForm approval={data} onSuccess={onClose} />
-        );
+        return <ScheduleApprovalForm approval={data} onSuccess={onClose} />;
 
       default:
         return (
@@ -85,7 +84,10 @@ export function AdminApprovalActionModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[70vh] w-full max-w-2xl overflow-y-auto no-scrollbar">
         {isLoading ? (
-          <div className="flex h-40 items-center justify-center" aria-busy="true">
+          <div
+            className="flex h-40 items-center justify-center"
+            aria-busy="true"
+          >
             <DialogTitle className="sr-only">Loading request</DialogTitle>
             <DialogDescription className="sr-only">
               Please wait while the approval request loads.

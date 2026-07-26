@@ -45,7 +45,7 @@ export function ProjectWorkersTab({ project }: ProjectWorkersTabProps) {
 
             <p className="text-sm text-muted-foreground">
               {bookingCount === 0
-                ? "Trades booked to work on this project are listed on the Tradies tab."
+                ? "No trades are booked on this project yet. Bookings appear on the Tradies tab."
                 : `The ${bookingCount} trade ${bookingCount === 1 ? "booking" : "bookings"} on this project are listed on the Tradies tab.`}
             </p>
           </div>

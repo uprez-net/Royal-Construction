@@ -10,7 +10,6 @@ import {
   Download,
   Loader2,
   Plus,
-  ToolCaseIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -420,6 +419,10 @@ export function ProjectsClient({
                 ))}
               </div>
             ) : (
+              /* No emptyState prop: this branch only renders when
+                 visibleProjects.length > 0, so the table can never be empty.
+                 The page-level empty state above covers both "no data" and
+                 "no matches", and it offers Clear filters. */
               <DataTable
                 headers={TABLE_HEADERS}
                 align={[...TABLE_ALIGN]}
@@ -498,27 +501,6 @@ export function ProjectsClient({
                   const project = visibleProjects[rowIndex];
                   if (project) openQuickView(project);
                 }}
-                emptyState={
-                  <div className="flex flex-col items-center justify-center gap-3">
-                    <div className="flex size-12 items-center justify-center">
-                      <ToolCaseIcon
-                        className="size-5 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-foreground">
-                        No projects yet
-                      </p>
-
-                      <p className="text-xs text-muted-foreground">
-                        Projects appear here once a signed offer is handed over
-                        to delivery.
-                      </p>
-                    </div>
-                  </div>
-                }
               />
             )}
           </div>

@@ -203,7 +203,16 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     );
   };
 
-  const stageGroups = Object.entries(visualMilestonesGroupedByProjectStage);
+  // Grouping by stage yields whatever order the milestones happened to arrive
+  // in (they are sorted by `order`, which need not follow the contract stages),
+  // so the accordion is driven by the canonical stage sequence instead.
+  const stageGroups = (
+    Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[]
+  )
+    .filter((stage) => visualMilestonesGroupedByProjectStage[stage]?.length)
+    .map(
+      (stage) => [stage, visualMilestonesGroupedByProjectStage[stage]] as const,
+    );
 
   return (
     <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
@@ -261,8 +270,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
             </div>
           ) : (
             stageGroups.map(([stage, milestones]) => {
-              const stagePercentage =
-                PROJECT_STAGE_PERCENTAGE[stage as ProjectStage] ?? 0;
+              const stagePercentage = PROJECT_STAGE_PERCENTAGE[stage] ?? 0;
               const projectBudget = Number(project.totalBudget);
               const stageBudget = Number.isFinite(projectBudget)
                 ? stagePercentage * projectBudget
@@ -281,7 +289,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                   <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-semibold text-foreground">
-                        {PROJECT_STAGE_LABELS[stage as ProjectStage] ?? stage}
+                        {PROJECT_STAGE_LABELS[stage] ?? stage}
                       </h3>
 
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">

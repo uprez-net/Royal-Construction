@@ -6,6 +6,7 @@ import {
   DollarSign,
   Loader2,
   Mail,
+  Minus,
   Phone,
   TrendingDown,
   TrendingUp,
@@ -46,6 +47,12 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   const newRate = Number(data.newHourlyRate ?? 0);
   const hasRates = Number.isFinite(currentRate) && Number.isFinite(newRate);
 
+  // Every rate render site goes through this so an unparseable payload shows the
+  // placeholder rather than "$NaN".
+  const RATE_PLACEHOLDER = "Not recorded";
+  const formatRate = (value: number) =>
+    hasRates ? rateCurrency.format(value) : RATE_PLACEHOLDER;
+
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({
       approvalId: approval.id,
@@ -65,6 +72,14 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
     currentRate > 0 ? ((difference / currentRate) * 100).toFixed(1) : null;
 
   const isIncrease = difference > 0;
+  const isDecrease = difference < 0;
+  // A zero difference is neither a rise nor a fall — it gets its own neutral
+  // affordance instead of borrowing the "decrease" arrow.
+  const ChangeIcon = isIncrease
+    ? TrendingUp
+    : isDecrease
+      ? TrendingDown
+      : Minus;
 
   return (
     <>
@@ -156,7 +171,9 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                     ? `${rateCurrency.format(Number(approval.tradie.hourlyRate))}/hr`
                     : "Not set"
                 }
-                mono
+                // Mono is reserved for actual figures; the "Not set" placeholder
+                // renders as prose so a missing rate does not read like data.
+                mono={Boolean(approval.tradie.hourlyRate)}
               />
             </div>
           </div>
@@ -175,8 +192,15 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">Current rate</p>
 
-                <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">
-                  {rateCurrency.format(currentRate)}
+                <p
+                  className={cn(
+                    "mt-2 text-2xl font-semibold",
+                    hasRates
+                      ? "font-mono tabular-nums"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {formatRate(currentRate)}
                 </p>
 
                 <p className="text-sm text-muted-foreground">per hour</p>
@@ -192,8 +216,15 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">Requested rate</p>
 
-                <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">
-                  {rateCurrency.format(newRate)}
+                <p
+                  className={cn(
+                    "mt-2 text-2xl font-semibold",
+                    hasRates
+                      ? "font-mono tabular-nums"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {formatRate(newRate)}
                 </p>
 
                 <p className="text-sm text-muted-foreground">per hour</p>
@@ -202,18 +233,21 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
             <div className="mt-6 flex justify-center">
               <Badge variant="outline" className="gap-2 px-3 py-1">
-                {isIncrease ? (
-                  <TrendingUp className="size-3" aria-hidden="true" />
+                <ChangeIcon className="size-3" aria-hidden="true" />
+
+                {!hasRates ? (
+                  <span>Change unavailable</span>
+                ) : difference === 0 ? (
+                  <span>No change to the hourly rate</span>
                 ) : (
-                  <TrendingDown className="size-3" aria-hidden="true" />
+                  <span className="font-mono tabular-nums">
+                    {isIncrease ? "+" : ""}
+                    {rateCurrency.format(difference)}/hr
+                    {percentageChange
+                      ? ` (${isIncrease ? "+" : ""}${percentageChange}%)`
+                      : ""}
+                  </span>
                 )}
-                <span className="font-mono tabular-nums">
-                  {isIncrease ? "+" : ""}
-                  {rateCurrency.format(difference)}/hr
-                  {percentageChange
-                    ? ` (${isIncrease ? "+" : ""}${percentageChange}%)`
-                    : ""}
-                </span>
               </Badge>
             </div>
           </div>
@@ -261,13 +295,14 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
               <p className="font-medium text-info-ink">Approval impact</p>
 
               <p className="mt-1 text-sm text-foreground/80">
-                Approving this request updates the tradie&apos;s hourly rate from{" "}
-                <span className="font-mono tabular-nums">
-                  {rateCurrency.format(currentRate)}
+                Approving this request updates the tradie&apos;s hourly rate
+                from{" "}
+                <span className={cn(hasRates && "font-mono tabular-nums")}>
+                  {formatRate(currentRate)}
                 </span>{" "}
                 to{" "}
-                <span className="font-mono tabular-nums">
-                  {rateCurrency.format(newRate)}
+                <span className={cn(hasRates && "font-mono tabular-nums")}>
+                  {formatRate(newRate)}
                 </span>
                 . Future estimates, quotations and project calculations use the
                 updated rate.

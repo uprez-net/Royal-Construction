@@ -13,6 +13,12 @@ interface ProjectPaymentsTabProps {
  * rather than rendering a bare "$" or "$NaN" when the value is missing.
  */
 function money(value: string | null | undefined) {
+  // `Number(null)` and `Number("")` are both 0, so a missing value would
+  // otherwise render as "$0" — a figure the project does not actually hold.
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
   const parsed = Number(value);
 
   return Number.isFinite(parsed) ? currency.format(parsed) : "—";
