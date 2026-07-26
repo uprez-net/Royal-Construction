@@ -217,50 +217,73 @@ export async function sendOfferDocument(input: {
   }));
 
   const isFirstSend = offer.offerStatus === OfferStatus.PENDING;
-  let toSend = sends;
+
+  // Atomic first-send claim (PR #124 review). Flip PENDING→SENT in ONE conditional
+  // write; the caller that WINS the flip is the one — and the only one — that goes
+  // on to email. A second concurrent sender (the offer open in two tabs) loses the
+  // compare-and-swap and returns without emailing, so no recipient is mailed twice
+  // and the loser can't mark the winner's in-flight send as done. The status flip
+  // IS the mutual-exclusion primitive: no advisory lock, and — crucially — no rows
+  // written before delivery, so a crash can never strand a "reserved but never
+  // emailed" recipient as a phantom completed send. A first send that ultimately
+  // delivers NOTHING is reverted to PENDING below so it stays retryable.
   if (isFirstSend) {
-    // Concurrency claim (PR #124 review). A FIRST send serializes on a per-offer
-    // Postgres advisory lock (the same pattern the lead dedupe uses), then CLAIMS
-    // the not-yet-sent recipients by inserting their OfferDocumentSend rows inside
-    // the same short transaction — no email I/O under the lock. A second sender
-    // (the offer open in two tabs) blocks on the lock, then sees those rows and
-    // finds nothing left to send, so no recipient is emailed twice and no
-    // duplicate audit rows are written. The rows are claimed BEFORE the emails and
-    // the undelivered ones are rolled back below, so a real delivery failure still
-    // lets a retry re-send. A partial-failure retry likewise skips the already
-    // tracked recipients; an explicit Resend (offer already SENT) skips this block
-    // and re-emails everyone.
-    toSend = await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`offer-send:${offer.id}`}, 0))`;
-      const priorSends = await tx.offerDocumentSend.findMany({
-        where: { offerId: offer.id, offerFileVersion: offer.revisionNumber },
-        select: { recipientEmail: true },
-      });
-      const alreadySent = new Set(
-        priorSends.map((prior) => prior.recipientEmail.trim().toLowerCase()),
-      );
-      const fresh = sends.filter(
-        (send) => !alreadySent.has(send.recipientEmail.toLowerCase()),
-      );
-      for (const send of fresh) {
-        await tx.offerDocumentSend.create({
-          data: {
-            offerId: offer.id,
-            offerFileVersion: offer.revisionNumber,
-            recipientEmail: send.recipientEmail,
-            trackedLinkToken: send.token,
-          },
-        });
-      }
-      return fresh;
+    const claim = await prisma.offer.updateMany({
+      where: { id: offer.id, offerStatus: OfferStatus.PENDING },
+      data: { offerStatus: OfferStatus.SENT, sentAt: new Date() },
     });
+    if (claim.count !== 1) {
+      return {
+        ok: false,
+        error:
+          "This offer is already being sent (or was just sent) — refresh to see its current status.",
+      };
+    }
   }
 
-  const delivered = new Set<string>();
+  // A pending PENDING→SENT claim has no prior rows, so a clean first send emails
+  // every recipient. On a retry (the offer is already SENT after a partial send or
+  // a crash) skip anyone already recorded for this file version, so we never email
+  // + duplicate a recipient who already received THIS version. A revision bumps
+  // offerFileVersion and re-sends to everyone.
+  const priorSends = await prisma.offerDocumentSend.findMany({
+    where: { offerId: offer.id, offerFileVersion: offer.revisionNumber },
+    select: { recipientEmail: true },
+  });
+  const alreadySent = new Set(
+    priorSends.map((prior) => prior.recipientEmail.trim().toLowerCase()),
+  );
+  const toSend = sends.filter(
+    (send) => !alreadySent.has(send.recipientEmail.toLowerCase()),
+  );
+
+  if (toSend.length === 0) {
+    // A resend where every recipient already has this version — nothing to email.
+    // (A first send always has recipients and no prior rows, so this only reaches
+    // an explicit resend; guard the claim anyway in case it somehow gets here.)
+    if (isFirstSend) {
+      await prisma.offer
+        .updateMany({
+          where: { id: offer.id, offerStatus: OfferStatus.SENT },
+          data: { offerStatus: OfferStatus.PENDING, sentAt: null },
+        })
+        .catch(() => undefined);
+    }
+    return {
+      ok: false,
+      error:
+        "Every recipient already has this version of the offer. Create a revision to send an updated copy.",
+    };
+  }
+
+  const deliveredEmails: string[] = [];
+  let sendError: string | null = null;
   try {
     const client = await createGraphContext(getGraphConfig());
     // One email per signatory — same PDF, each with its own tracking token so
-    // replies correlate to the right send record.
+    // replies correlate to the right send record. Persist each OfferDocumentSend
+    // the moment its email is ACCEPTED (never before, never batched), so a mid-loop
+    // failure records exactly who received it and leaves no phantom rows.
     for (const send of toSend) {
       await client.sendMail({
         to: send.recipientEmail,
@@ -274,60 +297,49 @@ export async function sendOfferDocument(input: {
           },
         ],
       });
-      delivered.add(send.token);
-      // A Resend (offer already SENT) didn't pre-claim above, so persist each
-      // tracking row the moment its email is accepted — never batched, so a
-      // mid-loop failure still records the recipients that did receive it.
-      if (!isFirstSend) {
-        await prisma.offerDocumentSend.create({
-          data: {
-            offerId: offer.id,
-            offerFileVersion: offer.revisionNumber,
-            recipientEmail: send.recipientEmail,
-            trackedLinkToken: send.token,
-          },
-        });
-      }
+      await prisma.offerDocumentSend.create({
+        data: {
+          offerId: offer.id,
+          offerFileVersion: offer.revisionNumber,
+          recipientEmail: send.recipientEmail,
+          trackedLinkToken: send.token,
+        },
+      });
+      deliveredEmails.push(send.recipientEmail);
     }
   } catch (error) {
-    // First send: drop the claims we did NOT deliver so a retry re-sends only the
-    // remaining recipients; the delivered ones keep their tracking row.
-    if (isFirstSend) {
-      const undelivered = toSend
-        .filter((send) => !delivered.has(send.token))
-        .map((send) => send.token);
-      if (undelivered.length > 0) {
-        await prisma.offerDocumentSend
-          .deleteMany({ where: { trackedLinkToken: { in: undelivered } } })
-          .catch(() => undefined);
-      }
-    }
-    return {
-      ok: false,
-      error: `Failed to send the email: ${(error as Error).message}`,
-    };
+    sendError = `Failed to send the email: ${(error as Error).message}`;
   }
 
-  // Every email is delivered + tracked. Flip PENDING→SENT exactly once, guarded on
-  // the current status so a concurrent second sender (which sent nothing) doesn't
-  // write a duplicate status event. A Resend leaves the offer SENT.
-  if (isFirstSend) {
-    await prisma.$transaction(async (tx) => {
-      const flip = await tx.offer.updateMany({
-        where: { id: offer.id, offerStatus: OfferStatus.PENDING },
-        data: { offerStatus: OfferStatus.SENT, sentAt: new Date() },
-      });
-      if (flip.count === 1) {
-        await tx.offerStatusEvent.create({
-          data: {
-            offerId: offer.id,
-            fromStatus: OfferStatus.PENDING,
-            toStatus: OfferStatus.SENT,
-            note: `Emailed to ${sends.map((send) => send.recipientEmail).join(", ")}`,
-          },
-        });
-      }
-    });
+  if (isFirstSend && deliveredEmails.length === 0) {
+    // The claim flipped us to SENT but nothing went out — release it back to
+    // PENDING so the offer is retryable rather than locked as a zero-delivery send.
+    await prisma.offer
+      .updateMany({
+        where: { id: offer.id, offerStatus: OfferStatus.SENT },
+        data: { offerStatus: OfferStatus.PENDING, sentAt: null },
+      })
+      .catch(() => undefined);
+  } else if (isFirstSend) {
+    // At least one recipient received it — the offer is genuinely SENT (a later
+    // failure keeps it SENT; recover the missing recipients via a retry, which
+    // dedupes). Record the audit event with who actually received it.
+    await prisma.offerStatusEvent
+      .create({
+        data: {
+          offerId: offer.id,
+          fromStatus: OfferStatus.PENDING,
+          toStatus: OfferStatus.SENT,
+          note: `Emailed to ${deliveredEmails.join(", ")}`,
+        },
+      })
+      .catch((error) =>
+        console.error("[offer] status event after send failed:", error),
+      );
+  }
+
+  if (sendError) {
+    return { ok: false, error: sendError };
   }
 
   // The mail is away and the status is committed, so nothing past this point
@@ -342,7 +354,7 @@ export async function sendOfferDocument(input: {
   return {
     ok: true,
     reference,
-    recipients: sends.map((send) => send.recipientEmail),
+    recipients: deliveredEmails,
   };
 }
 

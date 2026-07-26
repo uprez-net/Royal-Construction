@@ -78,15 +78,19 @@ as structured JSON on the Project (`Project.parties`). Site → `Project.locatio
 
 ## Consequences
 
-- **Migration + template work is non-trivial:** `schemaVersion` bump with migrate-on-read for
+- **Migration work is non-trivial:** `schemaVersion` bump with migrate-on-read for
   `job.owners[]`, new columns (`Customer.address`, `Project.parties`, `EnvelopeSignature`
-  capacity/entity), a regenerated BC4 template + new template ID + staging webhook re-test.
+  capacity/entity). The **existing BC4 template is retained** — no regenerated template, no new
+  template ID; multi-signer envelopes are assembled at send time via composite templates
+  (a server template whose document 2 is the app-generated Owner Signature Schedule), so the
+  only DocuSign re-test is the composite/annexure send path, not a new template.
 - **`splitOwners()` heuristic is retired** for new data; kept only to migrate legacy
   `clientNames` into `owners[]`.
 - **Contract face vs. richness gap:** the BC4 form shows only the primary owner's
-  address/contact; co-owner richness lives on the Tender + in-app, not the contract face
-  (accepted trade-off; a co-owner Schedule page was considered and deferred).
-- **Bounded-max cap:** jobs beyond ~4 owners / ~3 directors need a manual fallback; logged, not
-  silently truncated.
+  address/contact; co-owner richness lives on the Tender + in-app, and — for signatures — on
+  the appended Owner Signature Schedule, not the contract face (accepted trade-off).
+- **Bounded-max cap:** the total signatory count is capped at `MAX_OWNER_SIGNERS` (10),
+  enforced at the offer/Tender/Contract owner gates; a larger party set is refused (not
+  silently truncated) and needs a separate signing arrangement.
 - **Reversible at cost:** promoting `job.owners[]` / `Project.parties` JSON to normalized
   tables later is a standard migration if a downstream feature needs to query them.

@@ -128,78 +128,84 @@ export async function createProjectFromOffer(input: {
     });
 
   const warnings: string[] = [];
-  const snapshot = deserializeWorkspace(parseWorkspaceState(state));
-  const job = snapshot.job;
-  // Resolve via the same path the Tender/Contract used — a blank override
-  // round-trips to "0", so Number(...) would record a $0 contract value.
-  const contractValue =
-    buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
-  const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
 
-  // The project's Customer is created from the lead, whose email is validated
-  // deep inside the transaction — reconcile it from the offer up front so a
-  // blank lead email doesn't fail with a cryptic error. Trim both sides: a valid
-  // owner email with surrounding whitespace must not block the handoff (PR #124).
-  const leadEmail = offer.lead.email.trim();
-  const jobEmail = job.clientEmail.trim();
-  if (!EMAIL_RE.test(leadEmail)) {
-    if (EMAIL_RE.test(jobEmail)) {
-      await prisma.lead.update({
-        where: { id: offer.lead.id },
-        data: { email: jobEmail },
-      });
-      warnings.push(`Lead email was blank — set to ${jobEmail} from the offer.`);
-    } else {
-      await revertClaim();
-      return {
-        ok: false,
-        error: "The lead has no valid email and the offer has no client email — set one before creating the project.",
-      };
-    }
-  }
-
-  // Attach the executed legal documents as lead files (createProjectWithLead
-  // re-parents them onto the project).
-  const docRef = async (
-    url: string | null | undefined,
-    kind: "tender" | "contract",
-  ): Promise<ProjectSourceDocumentReference> => {
-    if (!url) {
-      // Unreachable: the executed-PDF gate above guarantees both URLs are
-      // present. Kept as a defensive invariant so a future refactor can never
-      // silently attach an empty document reference (the root of issue #90).
-      // Revert the claim so the offer is retryable instead of stuck at PROJECT.
-      await revertClaim();
-      throw new Error(`Executed ${kind} PDF unexpectedly missing after gate.`);
-    }
-    const fileName = `Executed-${kind === "tender" ? "Tender" : "Contract"}-${reference}.pdf`;
-    const file = await prisma.file.create({
-      data: {
-        leadId: offer.lead!.id,
-        filename: fileName,
-        fileType: "application/pdf",
-        filesize: 0,
-        url,
-        uploadedBy: actor.id,
-      },
-    });
-    return { fileId: file.id, fileName, url, kind };
-  };
-  const sourceDocuments = {
-    tender: await docRef(offer.tender?.executedPdfUrl, "tender"),
-    contract: await docRef(offer.contract?.executedPdfUrl, "contract"),
-  };
-
-  const extraction = buildExtractionPayload(snapshot, contractValue, reference, sourceDocuments);
-
-  const start = new Date();
-  start.setDate(start.getDate() + 14);
-  const end = new Date(start);
-  end.setMonth(end.getMonth() + 9);
-
-  let projectId: string;
-  let milestoneCount = 0;
+  // ALL work below runs AFTER the status claim, so ANY failure — snapshot
+  // parsing, lead reconciliation, executed-file creation, project creation —
+  // must revert the claim, or the offer is stranded at PROJECT with no project
+  // and no retry path (PR #124 review; previously only createProjectWithLead was
+  // guarded). One try wraps the whole fallible sequence; the catch reverts once.
+  // revalidate + the success return stay OUTSIDE it so a best-effort cache miss
+  // can never roll back a project that was actually created.
+  let handoff: { projectId: string; projectName: string; milestoneCount: number };
   try {
+    const snapshot = deserializeWorkspace(parseWorkspaceState(state));
+    const job = snapshot.job;
+    // Resolve via the same path the Tender/Contract used — a blank override
+    // round-trips to "0", so Number(...) would record a $0 contract value.
+    const contractValue =
+      buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
+    const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
+
+    // The project's Customer is created from the lead, whose email is validated
+    // deep inside the transaction — reconcile it from the offer up front so a
+    // blank lead email doesn't fail with a cryptic error. Trim both sides: a valid
+    // owner email with surrounding whitespace must not block the handoff (PR #124).
+    const leadEmail = offer.lead.email.trim();
+    const jobEmail = job.clientEmail.trim();
+    if (!EMAIL_RE.test(leadEmail)) {
+      if (EMAIL_RE.test(jobEmail)) {
+        await prisma.lead.update({
+          where: { id: offer.lead.id },
+          data: { email: jobEmail },
+        });
+        warnings.push(`Lead email was blank — set to ${jobEmail} from the offer.`);
+      } else {
+        await revertClaim();
+        return {
+          ok: false,
+          error: "The lead has no valid email and the offer has no client email — set one before creating the project.",
+        };
+      }
+    }
+
+    // Attach the executed legal documents as lead files (createProjectWithLead
+    // re-parents them onto the project).
+    const docRef = async (
+      url: string | null | undefined,
+      kind: "tender" | "contract",
+    ): Promise<ProjectSourceDocumentReference> => {
+      if (!url) {
+        // Unreachable: the executed-PDF gate above guarantees both URLs are
+        // present. Kept as a defensive invariant so a future refactor can never
+        // silently attach an empty document reference (the root of issue #90). The
+        // outer catch reverts the claim so the offer stays retryable.
+        throw new Error(`Executed ${kind} PDF unexpectedly missing after gate.`);
+      }
+      const fileName = `Executed-${kind === "tender" ? "Tender" : "Contract"}-${reference}.pdf`;
+      const file = await prisma.file.create({
+        data: {
+          leadId: offer.lead!.id,
+          filename: fileName,
+          fileType: "application/pdf",
+          filesize: 0,
+          url,
+          uploadedBy: actor.id,
+        },
+      });
+      return { fileId: file.id, fileName, url, kind };
+    };
+    const sourceDocuments = {
+      tender: await docRef(offer.tender?.executedPdfUrl, "tender"),
+      contract: await docRef(offer.contract?.executedPdfUrl, "contract"),
+    };
+
+    const extraction = buildExtractionPayload(snapshot, contractValue, reference, sourceDocuments);
+
+    const start = new Date();
+    start.setDate(start.getDate() + 14);
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + 9);
+
     const project = await createProjectWithLead({
       projectName: extraction.projectName,
       leadId: offer.leadId,
@@ -233,8 +239,30 @@ export async function createProjectFromOffer(input: {
       extraction,
       sourceDocuments,
     });
-    projectId = (project as { id: string }).id;
-    milestoneCount = project.milestones.length
+    const projectId = (project as { id: string }).id;
+    warnings.push(
+      "Start date defaulted to +14 days (9-month duration) and you are the site manager — adjust in the project settings.",
+    );
+
+    // Status already flipped to PROJECT by the atomic claim above; record the
+    // audit event now that the project exists (still guarded — a failure here
+    // must also revert, or we'd have a project with the offer's claim un-audited
+    // and non-retryable).
+    await prisma.offerStatusEvent.create({
+      data: {
+        offerId: offer.id,
+        fromStatus: OfferStatus.CONTRACT_SIGNED,
+        toStatus: OfferStatus.PROJECT,
+        actorId: actor.id,
+        note: `Project ${projectId} created from executed contract`,
+      },
+    });
+
+    handoff = {
+      projectId,
+      projectName: extraction.projectName,
+      milestoneCount: project.milestones.length,
+    };
   } catch (error) {
     await revertClaim();
     return {
@@ -242,31 +270,18 @@ export async function createProjectFromOffer(input: {
       error: `Project creation failed: ${(error as Error).message}`,
     };
   }
-  warnings.push(
-    "Start date defaulted to +14 days (9-month duration) and you are the site manager — adjust in the project settings.",
-  );
 
-  // Status already flipped to PROJECT by the atomic claim above; just record
-  // the audit event now that the project exists.
-  await prisma.offerStatusEvent.create({
-    data: {
-      offerId: offer.id,
-      fromStatus: offer.offerStatus,
-      toStatus: OfferStatus.PROJECT,
-      actorId: actor.id,
-      note: `Project ${projectId} created from executed contract`,
-    },
-  });
-
+  // Best-effort cache invalidation — OUTSIDE the guarded block so it can never
+  // trigger a revert of the project that was just created.
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-  revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
+  revalidateTag(`project-${handoff.projectId}`, CACHE_PROFILES.MEDIUM);
 
   return {
     ok: true,
-    projectId,
-    projectName: extraction.projectName,
-    milestoneCount: milestoneCount,
+    projectId: handoff.projectId,
+    projectName: handoff.projectName,
+    milestoneCount: handoff.milestoneCount,
     schedulesCreated: 0,
     warnings,
   };

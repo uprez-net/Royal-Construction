@@ -282,17 +282,26 @@ function OwnersSection({
             })),
           };
         }
-        // Individual: collapse to one signatory (the person themselves).
+        // Individual: collapse to one signatory (the person themselves). The
+        // person's name is the FIRST director's name — NOT owner.displayName, which
+        // holds the COMPANY name; using it made the individual signer "ABC Pty Ltd"
+        // and still pass completeness validation (PR #124 review). When no director
+        // name was entered, leave it blank (the gate flags an empty name) rather
+        // than promote the company name to a person.
         const first =
           owner.signatories[0] ??
           createOfferSignatory(newOwnerId(`${owner.id}-signer`), OWNER_SIGNER_CAPACITY);
+        const personName = first.name.trim();
         return {
           ...owner,
           kind,
+          // Drop the company name from the display too — an individual has none;
+          // keep it in sync with the person's signer name.
+          displayName: personName,
           signatories: [
             {
               ...first,
-              name: owner.displayName || first.name,
+              name: personName,
               capacity: OWNER_SIGNER_CAPACITY,
             },
           ],
