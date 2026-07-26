@@ -408,6 +408,13 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
     if (owner.displayName.trim().length === 0) {
       issues.push(`Owner ${index + 1} needs a ${isCompany ? "company name" : "name"}.`);
     }
+    // A company is a legal person identified by its ABN/ACN — the Tender/Contract
+    // print the number next to the company name, so an entity owner without one
+    // would render an incomplete party on the executed documents. Individuals
+    // carry no such identifier, so only gate companies.
+    if (isCompany && owner.abn.trim().length === 0) {
+      issues.push(`${who} needs an ABN or ACN.`);
+    }
     if (owner.currentLocation.trim().length === 0) {
       issues.push(
         `${who} needs a ${isCompany ? "registered office (Current Location)" : "Current Location"}.`,

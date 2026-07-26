@@ -1,4 +1,5 @@
 import {
+  collectOfferSigners,
   formatOwnerNamesLine,
   type OfferDocumentDraft,
   type OfferWorkspaceCostLine,
@@ -496,13 +497,22 @@ function PrintTermsPage({
   readonly footer: string;
   readonly last?: boolean;
 }) {
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-  // Acceptance paragraph — names both clients when present
-  // ("I/We, <primary> and <secondary>, accept..."). `I/We` covers both.
-  const acceptanceNames = secondary
-    ? `${job.clientNames} and ${secondary}`
-    : job.clientNames;
+  // Acceptance paragraph + signature blocks derive from owners[] /
+  // collectOfferSigners — the SAME source the emailed proposal HTML uses (see
+  // offer-proposal-html.ts) — so a window.print() download names every owner and
+  // gives every signatory (each individual owner + each company director) its own
+  // block, instead of dropping owners 3+ and extra directors (codex #8). Falls
+  // back to the clientNames projection only when owners[] is somehow empty.
+  const owners = job.owners ?? [];
+  const acceptanceNames =
+    owners.length > 0
+      ? owners
+          .map((owner) => owner.displayName.trim())
+          .filter(Boolean)
+          .join(" and ")
+      : job.clientNames;
   const acceptanceLine = `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
+  const signers = collectOfferSigners(owners);
   return (
     <PrintPage breakAfter={!last} footerText={footer}>
       <ProposalMasthead />
@@ -541,10 +551,27 @@ function PrintTermsPage({
           label="For Royal Constructions Pty Ltd"
           name={job.preparedBy}
         />
-        <SignatureBlock label="Client acceptance" name={job.clientNames} />
-        {secondary ? (
-          <SignatureBlock label="Client acceptance — co-owner" name={secondary} />
-        ) : null}
+        {signers.length > 0 ? (
+          signers.map((signer, index) => (
+            <SignatureBlock
+              key={signer.signatory.id}
+              label={
+                signers.length > 1
+                  ? `Client acceptance ${index + 1}`
+                  : "Client acceptance"
+              }
+              // Company directors sign as "Name, Director of Company"; individual
+              // owners sign under their own name — mirrors the emailed HTML.
+              name={
+                signer.entityName
+                  ? `${signer.signatory.name}, ${signer.signatory.capacity} of ${signer.entityName}`
+                  : signer.signatory.name
+              }
+            />
+          ))
+        ) : (
+          <SignatureBlock label="Client acceptance" name={job.clientNames} />
+        )}
       </div>
     </PrintPage>
   );

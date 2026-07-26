@@ -41,7 +41,10 @@ const nullableTrimmedString = z.preprocess((value) => {
 // cannot be cleared on update (required-when-present). Secondary/owner emails
 // are enforced later at the offer send/sign gates (see lib/offer/offer-review).
 const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const requiredLeadEmail = z
+// Exported so the data-layer createLead can re-validate at the DB boundary —
+// direct callers (e.g. the consultation-booking route) bypass createLeadSchema
+// and only null-checked truthiness, letting a malformed address through (#110).
+export const requiredLeadEmail = z
   .string()
   .trim()
   .min(1, "Client email is required")

@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   collectOwnerIssues,
+  createCompanyOwner,
   createIndividualOwner,
   ownersFromLegacyClientFields,
   type OfferOwner,
@@ -22,12 +23,56 @@ function individual(
   };
 }
 
+function company(
+  id: string,
+  name: string,
+  directorEmail: string,
+  abn = "12 345 678 901",
+): OfferOwner {
+  return {
+    ...createCompanyOwner(id),
+    displayName: name,
+    abn,
+    currentLocation: "10 Corporate Ave, Sydney NSW 2000",
+    signatories: [
+      {
+        id: `${id}-d`,
+        name: "Director One",
+        email: directorEmail,
+        phone: "",
+        capacity: "Director",
+      },
+    ],
+  };
+}
+
 test("complete individual owners produce no issues", () => {
   const owners = [
     individual("o1", "Radhika", "radhika@example.com"),
     individual("o2", "Jane", "jane@example.com"),
   ];
   assert.deepEqual(collectOwnerIssues(owners), []);
+});
+
+test("a company owner without an ABN/ACN is flagged (PR #124 P1)", () => {
+  const owners = [company("c1", "Rakhi Pty Ltd", "dir@example.com", "")];
+  const issues = collectOwnerIssues(owners);
+  assert.ok(
+    issues.some((i) => i.includes("Rakhi Pty Ltd") && i.includes("ABN")),
+    `expected an ABN/ACN issue, got: ${JSON.stringify(issues)}`,
+  );
+});
+
+test("a company owner with an ABN and a director produces no issues", () => {
+  const owners = [company("c1", "Rakhi Pty Ltd", "dir@example.com")];
+  assert.deepEqual(collectOwnerIssues(owners), []);
+});
+
+test("an individual owner is NOT asked for an ABN", () => {
+  const issues = collectOwnerIssues([
+    individual("o1", "Radhika", "radhika@example.com"),
+  ]);
+  assert.ok(!issues.some((i) => i.includes("ABN")));
 });
 
 test("two signers sharing an email is flagged (PR #124 P1)", () => {

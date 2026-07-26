@@ -100,13 +100,32 @@ const PREFILL_IDENTITY_KEYS: readonly (keyof OfferWorkspaceJob)[] = [
 ];
 
 // True once the estimator has entered any owner/site identity — a brand-new
-// (pristine) offer returns false so auto-prefill fills everything.
+// (pristine) offer returns false so auto-prefill fills everything. Inspects
+// EVERY owner-carried field, not just the first owner's name: an estimator who
+// typed only an email, phone, ABN, Current Location, or a director's name before
+// the async prefill resolved must not have that work wiped by the full patch
+// (codex #4). owners is the source of truth, so its deep scan subsumes the flat
+// client* projection; only the site fields live outside it.
 function jobHasEnteredIdentity(job: OfferWorkspaceJob): boolean {
+  const ownerEntered = job.owners.some(
+    (owner) =>
+      owner.displayName.trim().length > 0 ||
+      owner.abn.trim().length > 0 ||
+      owner.currentLocation.trim().length > 0 ||
+      owner.signatories.some(
+        (signatory) =>
+          signatory.name.trim().length > 0 ||
+          signatory.email.trim().length > 0 ||
+          signatory.phone.trim().length > 0,
+      ),
+  );
   return (
-    (job.owners[0]?.displayName.trim().length ?? 0) > 0 ||
+    ownerEntered ||
     job.owners.length > 1 ||
     job.siteAddress.trim().length > 0 ||
-    job.clientNames.trim().length > 0
+    job.siteCouncil.trim().length > 0 ||
+    job.siteState.trim().length > 0 ||
+    job.sitePostcode.trim().length > 0
   );
 }
 
@@ -574,13 +593,24 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
               // overlap) — reconcile to the live copy rather than clobber it.
               // "superseded" means another tab forked a new revision; the same
               // reload lands us on the live one. See ADR 0002 (no field merge).
-              const loaded = await loadActiveOfferWorkspace(leadId);
-              offerIdRef.current = loaded.offerId;
-              stateVersionRef.current = loaded.stateVersion;
-              setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
-              if (loaded.snapshot) {
-                hydrateSnapshot(loaded.snapshot);
-                lastSavedRef.current = JSON.stringify(loaded.snapshot);
+              try {
+                const loaded = await loadActiveOfferWorkspace(leadId);
+                offerIdRef.current = loaded.offerId;
+                stateVersionRef.current = loaded.stateVersion;
+                setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+                if (loaded.snapshot) {
+                  hydrateSnapshot(loaded.snapshot);
+                  lastSavedRef.current = JSON.stringify(loaded.snapshot);
+                }
+              } catch (error) {
+                // The reconciling reload is OUTSIDE the save try above, so an
+                // unguarded failure here (network drop mid-reconcile) rejected
+                // the chained promise unhandled AND left saveState stuck at
+                // "saving" forever, since line-572's "saving" was never cleared
+                // (codex PR #124). Report it as a normal save error instead.
+                console.error("[offer] reconcile reload failed:", error);
+                setSaveState("error");
+                return "error";
               }
               setSaveState("error");
               return "reconciled";
@@ -865,10 +895,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           });
           if (result.ok) {
             setStatus("sent");
-            const recipientSummary = secondaryRecipientEmail
-              ? `${recipientEmail} and ${secondaryRecipientEmail}`
-              : recipientEmail;
-            setSentInfo(`Sent ${result.reference} to ${recipientSummary}.`);
+            // Report exactly who the server emailed (every signatory), not just
+            // the primary/secondary the dialog passed in.
+            setSentInfo(
+              `Sent ${result.reference} to ${result.recipients.join(", ")}.`,
+            );
           } else {
             setSendError(result.error);
           }
