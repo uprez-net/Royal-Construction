@@ -261,6 +261,12 @@ export async function sendOfferDocument(input: {
     }
   } catch (error) {
     sendError = `Failed to send the email: ${(error as Error).message}`;
+    // Name who DID receive it. A partial send still flips the offer to SENT below,
+    // so an error that only said "sending failed" left the estimator unable to tell
+    // whether anyone got the proposal (PR #124 review).
+    if (deliveredEmails.length > 0) {
+      sendError += ` Delivered to ${deliveredEmails.join(", ")} before the failure — the offer is marked Sent; resend to reach the rest.`;
+    }
   }
 
   // Flip PENDING→SENT only AFTER at least one email was accepted, and only on a

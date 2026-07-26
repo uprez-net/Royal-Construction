@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
+import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
 import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
@@ -63,8 +66,23 @@ function proposalHtmlFor(owners: OfferOwner[]): string {
   );
 }
 
+// The separate React path behind the browser's "Download Offer" (window.print()).
+function reactPrintHtmlFor(owners: OfferOwner[]): string {
+  return renderToStaticMarkup(
+    createElement(OfferWorkspacePrintTemplate, {
+      ...buildProposalInput(snapshotWithOwners(owners)),
+      images: EMPTY_OFFER_IMAGES,
+    }),
+  );
+}
+
 function physicalPageCount(html: string): number {
   return (html.match(/<div class="page">/g) ?? []).length;
+}
+
+// Each React PrintPage is a <section> sized to a full A4 sheet.
+function reactPageCount(html: string): number {
+  return (html.match(/min-h-\[297mm\]/g) ?? []).length;
 }
 
 // Every "… | Page X of M" footer must agree on M, and the last X must equal M.
@@ -104,6 +122,51 @@ test("the max-signer proposal foots the true physical page count (PR #124)", () 
   for (let i = 1; i <= MAX_OWNER_SIGNERS; i++) {
     assert.ok(html.includes(`Owner ${i}`), `owner ${i} missing from the proposal`);
   }
+});
+
+test("the React print path also foots its true page count at max signers (PR #124)", () => {
+  const owners = Array.from({ length: MAX_OWNER_SIGNERS }, (_, i) =>
+    individualOwner(i + 1),
+  );
+  const html = reactPrintHtmlFor(owners);
+
+  // The browser "Download Offer" template is a SEPARATE renderer from the emailed
+  // HTML; it kept every signature block under the payment table on one nominal A4
+  // page, so 10 signers spilled into extra physical pages the footer never counted.
+  const pages = reactPageCount(html);
+  const { lastPage, total } = footerPaging(html);
+  assert.equal(
+    pages,
+    total,
+    `React print pages (${pages}) must equal the footer total (${total})`,
+  );
+  assert.equal(lastPage, total, "last footer number must equal the total");
+
+  assert.match(html, /Acceptance &amp; signatures/);
+  for (let i = 1; i <= MAX_OWNER_SIGNERS; i++) {
+    assert.ok(html.includes(`Owner ${i}`), `owner ${i} missing from the print view`);
+  }
+});
+
+test("the React print path keeps a single signer inline", () => {
+  const html = reactPrintHtmlFor([individualOwner(1)]);
+  const pages = reactPageCount(html);
+  const { lastPage, total } = footerPaging(html);
+  assert.equal(pages, total);
+  assert.equal(lastPage, total);
+  assert.doesNotMatch(html, /Acceptance &amp; signatures/);
+});
+
+test("the emailed and printed documents agree on page count (PR #124)", () => {
+  // Both renderers must paginate identically — otherwise the PDF the client
+  // receives and the copy the estimator downloads disagree.
+  const owners = Array.from({ length: MAX_OWNER_SIGNERS }, (_, i) =>
+    individualOwner(i + 1),
+  );
+  assert.equal(
+    footerPaging(reactPrintHtmlFor(owners)).total,
+    footerPaging(proposalHtmlFor(owners)).total,
+  );
 });
 
 test("company names with '&' are single-escaped in the acceptance line (PR #124)", () => {

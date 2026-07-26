@@ -425,11 +425,19 @@ function OwnersSection({
           className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3"
         >
           <div className="flex items-center justify-between gap-2">
-            <div className="inline-flex rounded-md border border-border/70 p-0.5">
+            {/* Toggle group: each button reports its own pressed state so a screen
+                reader announces which owner type is selected — colour alone
+                conveyed it before (PR #124 review). */}
+            <div
+              className="inline-flex rounded-md border border-border/70 p-0.5"
+              role="group"
+              aria-label={`Owner ${index + 1} type`}
+            >
               {(["individual", "company"] as const).map((kind) => (
                 <button
                   key={kind}
                   type="button"
+                  aria-pressed={owner.kind === kind}
                   onClick={() => setKind(index, kind)}
                   className={`rounded px-2.5 py-1 text-xs font-medium capitalize ${
                     owner.kind === kind
@@ -538,8 +546,12 @@ function OwnersSection({
                     key={director.id}
                     className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"
                   >
+                    {/* Repeated rows carry an explicit accessible name each — a
+                        placeholder is not a label, and every row otherwise
+                        announced identically (PR #124 review). */}
                     <Input
                       placeholder="Director name"
+                      aria-label={`Director ${sigIndex + 1} name`}
                       value={director.name}
                       onChange={(event) =>
                         updateSignatory(index, sigIndex, { name: event.target.value })
@@ -548,6 +560,7 @@ function OwnersSection({
                     <Input
                       type="email"
                       placeholder="Director email"
+                      aria-label={`Director ${sigIndex + 1} email`}
                       value={director.email}
                       onChange={(event) =>
                         updateSignatory(index, sigIndex, { email: event.target.value })
@@ -555,6 +568,7 @@ function OwnersSection({
                     />
                     <Input
                       placeholder="Director phone"
+                      aria-label={`Director ${sigIndex + 1} phone`}
                       value={director.phone}
                       onChange={(event) =>
                         updateSignatory(index, sigIndex, { phone: event.target.value })

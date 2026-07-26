@@ -60,6 +60,19 @@ type OfferWorkspacePrintTemplateProps = {
 };
 
 const INCLUSIONS_ROWS_PER_PAGE = 12;
+// Mirrors offer-proposal-html.ts: builder + up to 3 client signers still fit under
+// the terms-page payment table (the common case); beyond that the signatures move
+// onto their own page(s) so they can't overflow a nominal A4 page and desync the
+// "Page N of M" footer (PR #124 review — the emailed PDF was fixed first, this is
+// the separate React window.print() path).
+const INLINE_SIGNATURE_LIMIT = 4;
+const SIGNATURES_PER_PAGE = 8;
+
+type SignatureBlockSpec = {
+  readonly key: string;
+  readonly label: string;
+  readonly name: string;
+};
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
   const pages: T[][] = [];
@@ -67,6 +80,54 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
     pages.push(items.slice(i, i + size));
   }
   return pages;
+}
+
+// Acceptance paragraph naming every owner ("I/We, A and B and C, accept…"), the
+// same wording the emailed HTML uses. Falls back to the clientNames projection
+// when owners[] is empty.
+function offerAcceptanceLine(job: OfferWorkspaceJob): string {
+  const owners = job.owners ?? [];
+  const acceptanceNames =
+    owners.length > 0
+      ? owners
+          .map((owner) => owner.displayName.trim())
+          .filter(Boolean)
+          .join(" and ")
+      : job.clientNames;
+  return `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
+}
+
+// Ordered signature blocks: the builder first, then one per customer signer (each
+// individual owner; each company director shown as "Name, Director of Company").
+function offerSignatureBlocks(job: OfferWorkspaceJob): SignatureBlockSpec[] {
+  const signers = collectOfferSigners(job.owners ?? []);
+  const clientBlocks: SignatureBlockSpec[] =
+    signers.length > 0
+      ? signers.map((signer, index) => ({
+          key: signer.signatory.id,
+          label:
+            signers.length > 1
+              ? `Client acceptance ${index + 1}`
+              : "Client acceptance",
+          name: signer.entityName
+            ? `${signer.signatory.name}, ${signer.signatory.capacity} of ${signer.entityName}`
+            : signer.signatory.name,
+        }))
+      : [
+          {
+            key: "client-fallback",
+            label: "Client acceptance",
+            name: job.clientNames,
+          },
+        ];
+  return [
+    {
+      key: "builder",
+      label: "For Royal Constructions Pty Ltd",
+      name: job.preparedBy,
+    },
+    ...clientBlocks,
+  ];
 }
 
 export function OfferWorkspacePrintTemplate(
@@ -80,6 +141,13 @@ export function OfferWorkspacePrintTemplate(
   const galleryImages = getAttachedOfferImageSlots(props.images).filter(
     (slot) => slot.key !== "hero",
   );
+  // Few signers stay inline under the payment table; more move to their own
+  // counted page(s) so the footer total matches the real page count.
+  const signatureBlocks = offerSignatureBlocks(props.job);
+  const inlineSignatures = signatureBlocks.length <= INLINE_SIGNATURE_LIMIT;
+  const signatureChunks = inlineSignatures
+    ? []
+    : chunk(signatureBlocks, SIGNATURES_PER_PAGE);
 
   // Assemble the ordered page renderers, then number them automatically so the
   // footer "Page N of M" stays correct as pages are added or removed.
@@ -138,7 +206,29 @@ export function OfferWorkspacePrintTemplate(
           ),
     ),
     (n, total) => (
-      <PrintTermsPage key="terms" data={data} job={props.job} footer={foot(data, n, total)} last />
+      <PrintTermsPage
+        key="terms"
+        data={data}
+        job={props.job}
+        inlineBlocks={inlineSignatures ? signatureBlocks : null}
+        footer={foot(data, n, total)}
+        last={signatureChunks.length === 0}
+      />
+    ),
+    ...signatureChunks.map(
+      (blocks, i) =>
+        // eslint-disable-next-line react/display-name -- page factory, not a component
+        (n: number, total: number) =>
+          (
+            <PrintSignaturePage
+              key={`signatures-${i}`}
+              job={props.job}
+              blocks={blocks}
+              continued={i > 0}
+              footer={foot(data, n, total)}
+              last={i === signatureChunks.length - 1}
+            />
+          ),
     ),
   ];
 
@@ -489,37 +579,31 @@ function PrintInclusionsPage({
 function PrintTermsPage({
   data,
   job,
+  inlineBlocks,
   footer,
   last,
 }: {
   readonly data: ReturnType<typeof buildOfferPrintTemplateData>;
   readonly job: OfferWorkspaceJob;
+  // Signature blocks to render inline under the payment table, or null when there
+  // are too many and they go on their own PrintSignaturePage(s) instead.
+  readonly inlineBlocks: readonly SignatureBlockSpec[] | null;
   readonly footer: string;
   readonly last?: boolean;
 }) {
-  // Acceptance paragraph + signature blocks derive from owners[] /
-  // collectOfferSigners — the SAME source the emailed proposal HTML uses (see
-  // offer-proposal-html.ts) — so a window.print() download names every owner and
-  // gives every signatory (each individual owner + each company director) its own
-  // block, instead of dropping owners 3+ and extra directors (codex #8). Falls
-  // back to the clientNames projection only when owners[] is somehow empty.
-  const owners = job.owners ?? [];
-  const acceptanceNames =
-    owners.length > 0
-      ? owners
-          .map((owner) => owner.displayName.trim())
-          .filter(Boolean)
-          .join(" and ")
-      : job.clientNames;
-  const acceptanceLine = `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
-  const signers = collectOfferSigners(owners);
+  // Acceptance text + signature blocks derive from owners[] / collectOfferSigners
+  // — the SAME source the emailed proposal HTML uses (see offer-proposal-html.ts)
+  // — so a window.print() download names every owner and gives every signatory
+  // (each individual owner + each company director) its own block.
   return (
     <PrintPage breakAfter={!last} footerText={footer}>
       <ProposalMasthead />
       <PrintSection eyebrow="Next steps" title="Terms and payment schedule">
-        <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
-          {acceptanceLine}
-        </p>
+        {inlineBlocks ? (
+          <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+            {offerAcceptanceLine(job)}
+          </p>
+        ) : null}
         <p className="mt-3 max-w-[155mm] text-sm leading-6 text-muted-foreground">
           Contract documents, HBCF registration, signed Tender evidence and
           initial payment are handled before Project creation.
@@ -546,32 +630,55 @@ function PrintTermsPage({
           ))}
         </tbody>
       </table>
-      <div className="mt-8 grid grid-cols-2 gap-8 text-sm">
-        <SignatureBlock
-          label="For Royal Constructions Pty Ltd"
-          name={job.preparedBy}
-        />
-        {signers.length > 0 ? (
-          signers.map((signer, index) => (
-            <SignatureBlock
-              key={signer.signatory.id}
-              label={
-                signers.length > 1
-                  ? `Client acceptance ${index + 1}`
-                  : "Client acceptance"
-              }
-              // Company directors sign as "Name, Director of Company"; individual
-              // owners sign under their own name — mirrors the emailed HTML.
-              name={
-                signer.entityName
-                  ? `${signer.signatory.name}, ${signer.signatory.capacity} of ${signer.entityName}`
-                  : signer.signatory.name
-              }
-            />
-          ))
-        ) : (
-          <SignatureBlock label="Client acceptance" name={job.clientNames} />
+      {inlineBlocks ? (
+        <div className="mt-8 grid grid-cols-2 gap-8 text-sm">
+          {inlineBlocks.map((block) => (
+            <SignatureBlock key={block.key} label={block.label} name={block.name} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-8 max-w-[155mm] text-sm leading-6 text-muted-foreground">
+          Sign the acceptance on the following page to proceed.
+        </p>
+      )}
+    </PrintPage>
+  );
+}
+
+// A dedicated signature page, used when there are too many signers to fit inline
+// on the terms page. The acceptance paragraph leads the first such page. Mirrors
+// signaturePage() in offer-proposal-html.ts so the printed and emailed documents
+// agree.
+function PrintSignaturePage({
+  job,
+  blocks,
+  continued,
+  footer,
+  last,
+}: {
+  readonly job: OfferWorkspaceJob;
+  readonly blocks: readonly SignatureBlockSpec[];
+  readonly continued: boolean;
+  readonly footer: string;
+  readonly last?: boolean;
+}) {
+  return (
+    <PrintPage breakAfter={!last} footerText={footer}>
+      <ProposalMasthead />
+      <PrintSection
+        eyebrow="Acceptance"
+        title={continued ? "Acceptance & signatures (cont.)" : "Acceptance & signatures"}
+      >
+        {continued ? null : (
+          <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+            {offerAcceptanceLine(job)}
+          </p>
         )}
+      </PrintSection>
+      <div className="mt-8 grid grid-cols-2 gap-8 text-sm">
+        {blocks.map((block) => (
+          <SignatureBlock key={block.key} label={block.label} name={block.name} />
+        ))}
       </div>
     </PrintPage>
   );

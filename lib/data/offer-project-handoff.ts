@@ -144,13 +144,14 @@ export async function createProjectFromOffer(input: {
 
   const warnings: string[] = [];
 
-  // Everything up to and including project creation is REVERTABLE: any failure
-  // rolls the status back to CONTRACT_SIGNED and deletes the executed-PDF rows, so
-  // the offer is retryable and no orphans remain. Once createProjectWithLead
-  // COMMITS, the project is real and we must NEVER revert past that point — a later
-  // audit-event or cache failure that reverted would leave a live project on an
-  // offer that claims none, permanently un-retryable (PR #124 review). So the
-  // post-commit steps below run OUTSIDE this try and are best-effort.
+  // Everything up to and including project creation is REVERTABLE *only while no
+  // Project has been committed*. The commit boundary is INSIDE
+  // createProjectWithLead — it commits its transaction and then does a post-commit
+  // detail read that can itself throw ("Project was created but could not be
+  // retrieved"). So a thrown error does NOT prove the project is absent, and the
+  // catch below must ASK the database rather than assume (PR #124 review): if a
+  // project now exists for this lead, rolling back would strand a live project on
+  // an offer that claims none — and `offer.lead.project` would block every retry.
   let handoff: { projectId: string; projectName: string; milestoneCount: number };
   try {
     const snapshot = deserializeWorkspace(parseWorkspaceState(state));
@@ -262,11 +263,46 @@ export async function createProjectFromOffer(input: {
       milestoneCount: project.milestones.length,
     };
   } catch (error) {
-    await rollback();
-    return {
-      ok: false,
-      error: `Project creation failed: ${(error as Error).message}`,
-    };
+    // Did a Project actually commit before the throw? createProjectWithLead's
+    // transaction commits before its detail read, so "it threw" and "no project
+    // exists" are NOT the same thing. Ask the database instead of assuming.
+    const committed = await prisma.lead
+      .findUnique({
+        where: { id: offer.lead.id },
+        select: { project: { select: { id: true, name: true } } },
+      })
+      .catch(() => null);
+
+    if (committed?.project) {
+      // The project IS real — never roll back (that would delete its executed-PDF
+      // rows and revert the offer to CONTRACT_SIGNED, with `lead.project` then
+      // blocking every retry). Keep the PROJECT claim and report success, flagging
+      // that the post-commit detail read failed so the caller can refresh.
+      console.error(
+        "[offer] handoff: project committed but post-commit step failed:",
+        error,
+      );
+      warnings.push(
+        `The project was created, but loading its details failed (${(error as Error).message}). Refresh to see it.`,
+      );
+      handoff = {
+        projectId: committed.project.id,
+        projectName: committed.project.name,
+        // Unknown here — the detail read is what failed. The caller shows the
+        // project itself after a refresh.
+        milestoneCount: 0,
+      };
+      // Fall through to the post-commit block so the audit event + cache
+      // invalidation still run for this (genuinely created) project.
+    } else {
+      // Nothing committed — safe to revert the claim and delete the executed-PDF
+      // rows so the handoff is cleanly retryable.
+      await rollback();
+      return {
+        ok: false,
+        error: `Project creation failed: ${(error as Error).message}`,
+      };
+    }
   }
 
   // ── Past this point the project is COMMITTED — never revert. ──

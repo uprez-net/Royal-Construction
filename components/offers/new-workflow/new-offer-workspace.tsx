@@ -922,6 +922,18 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             );
           } else {
             setSendError(result.error);
+            // A PARTIAL send fails but still commits: the server flips the offer to
+            // SENT once anyone received it. Resync the status so the UI doesn't sit
+            // at "pending" against an offer that is durably SENT (PR #124 review) —
+            // previously only the throw path below resynced.
+            try {
+              const loaded = await loadActiveOfferWorkspace(leadId);
+              offerIdRef.current = loaded.offerId;
+              stateVersionRef.current = loaded.stateVersion;
+              setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+            } catch {
+              // Reload failed — leave the UI as-is; the error message still shows.
+            }
           }
         } catch (error) {
           // A throw (rather than a returned {ok:false}) used to surface nothing
