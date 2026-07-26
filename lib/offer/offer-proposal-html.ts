@@ -32,6 +32,11 @@ const BORDER = "#e3e3e0";
 const MUTED = "#6b6b6b";
 
 const INCLUSIONS_ROWS_PER_PAGE = 12;
+// Builder + up to 3 client signers still fit under the terms-page payment table
+// (the common case, kept byte-identical); beyond that, signatures move onto their
+// own page(s), chunked so blocks never overflow a physical page (PR #124 review).
+const INLINE_SIGNATURE_LIMIT = 4;
+const SIGNATURES_PER_PAGE = 8;
 
 function esc(value: string): string {
   return value
@@ -99,8 +104,26 @@ export function buildProposalHtml(
     );
   }
 
+  // Signature blocks (builder + one per customer signer). A handful fit under the
+  // terms-page payment table (the common 1–3 signer case, unchanged); more than
+  // that overflowed a single fixed-height page — the 10-signer offer split a
+  // signer's line across two physical pages and left the footer reading
+  // "Page 9 of 9" over 10 pages (PR #124 review). Past the inline limit, move the
+  // whole set onto its own chunked page(s), each counted so the footer stays true.
+  const signatureBlocks = signatureBlocksHtml(job);
+  const inlineSignatures = signatureBlocks.length <= INLINE_SIGNATURE_LIMIT;
+  const signatureChunks: string[][] = [];
+  if (!inlineSignatures) {
+    for (let i = 0; i < signatureBlocks.length; i += SIGNATURES_PER_PAGE) {
+      signatureChunks.push(signatureBlocks.slice(i, i + SIGNATURES_PER_PAGE));
+    }
+  }
+
   const totalPages =
-    5 + inclusionPages.length + (galleryImages.length > 0 ? 1 : 0);
+    5 +
+    inclusionPages.length +
+    (galleryImages.length > 0 ? 1 : 0) +
+    signatureChunks.length;
   let pageNo = 0;
   const foot = () => {
     pageNo += 1;
@@ -114,7 +137,10 @@ export function buildProposalHtml(
     snapshotPage(input, data, foot()),
     investmentPage(input, data, foot()),
     ...inclusionPages.map((rows, index) => inclusionsPage(rows, index > 0, foot())),
-    termsPage(input, data, foot()),
+    termsPage(input, data, inlineSignatures ? signatureBlocks : null, foot()),
+    ...signatureChunks.map((chunk, index) =>
+      signaturePage(job, chunk, index > 0, foot()),
+    ),
   ];
 
   return `<!doctype html><html><head><meta charset="utf-8" />
@@ -173,6 +199,7 @@ export function buildProposalHtml(
   .pay td.stage { font-weight: 700; }
   .pay td.amt { font-family: monospace; }
   .sigs { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 30px; font-size: 13px; }
+  .sig { break-inside: avoid; }
   .sig h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; margin-bottom: 14px; }
   .sig p { margin-bottom: 14px; }
 </style></head><body>${pages.join("")}</body></html>`;
@@ -366,9 +393,55 @@ function inclusionsPage(
   </div>`;
 }
 
+// Acceptance paragraph — names every owner ("I/We, A and B and C, accept…").
+// Single-owner offers keep the "I/We, <owner>, accept…" wording; `I/We` covers
+// both. Falls back to the clientNames projection when owners[] is empty.
+function acceptanceLineHtml(job: OfferWorkspaceJob): string {
+  const owners = job.owners ?? [];
+  const acceptanceNames =
+    owners.length > 0
+      ? owners
+          .map((owner) => owner.displayName.trim())
+          .filter(Boolean)
+          .map(esc)
+          .join(" and ")
+      : esc(job.clientNames);
+  return `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
+}
+
+// The ordered signature blocks: the builder first, then one client block per
+// signer (each individual owner; each company director, labelled with capacity +
+// company). Falls back to the clientNames projection when owners[] is empty.
+function signatureBlocksHtml(job: OfferWorkspaceJob): string[] {
+  const signers = collectOfferSigners(job.owners ?? []);
+  const clientSigs =
+    signers.length > 0
+      ? signers.map((signer, index) => {
+          const heading =
+            signers.length > 1
+              ? `Client acceptance ${index + 1}`
+              : "Client acceptance";
+          const who = signer.entityName
+            ? `${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)} of ${esc(signer.entityName)}`
+            : esc(signer.signatory.name);
+          return `<div class="sig"><h3>${esc(heading)}</h3><p>Signature: _______________________</p><p>${who}</p><p>Date: ___________________________</p></div>`;
+        })
+      : [
+          `<div class="sig"><h3>Client acceptance</h3><p>Signature: _______________________</p><p>${esc(job.clientNames)}</p><p>Date: ___________________________</p></div>`,
+        ];
+  return [
+    `<div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>`,
+    ...clientSigs,
+  ];
+}
+
+// Terms + payment schedule. When the signatures fit inline (few signers) they are
+// rendered here under the table exactly as before; otherwise inlineBlocks is null
+// and the signatures are emitted on their own signaturePage(s).
 function termsPage(
   input: OfferPrintTemplateInput,
   data: ReturnType<typeof buildOfferPrintTemplateData>,
+  inlineBlocks: readonly string[] | null,
   foot: string,
 ): string {
   const { job } = input;
@@ -378,47 +451,40 @@ function termsPage(
         `<tr><td class="stage">${esc(row.stageName)}</td><td class="amt">${(row.percentOfContract * 100).toFixed(0)}% - ${money(row.amount)}</td><td class="muted">${esc(row.trigger)}</td></tr>`,
     )
     .join("");
-  const owners = job.owners ?? [];
-  // Acceptance paragraph — names every owner ("I/We, A and B and C, accept…").
-  // Single-owner offers keep the "I/We, <owner>, accept…" wording. `I/We`
-  // covers both. Falls back to the clientNames projection if owners[] is empty.
-  const acceptanceNames =
-    owners.length > 0
-      ? owners
-          .map((owner) => owner.displayName.trim())
-          .filter(Boolean)
-          .map(esc)
-          .join(" and ")
-      : esc(job.clientNames);
-  const acceptanceLine = `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
-  // One client signature block per signer (each individual owner; each company
-  // director, labelled with their capacity + company). Builder block unchanged.
-  const signers = collectOfferSigners(owners);
-  const clientSigs = (signers.length > 0
-    ? signers.map((signer, index) => {
-        const heading =
-          signers.length > 1
-            ? `Client acceptance ${index + 1}`
-            : "Client acceptance";
-        const who = signer.entityName
-          ? `${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)} of ${esc(signer.entityName)}`
-          : esc(signer.signatory.name);
-        return `<div class="sig"><h3>${esc(heading)}</h3><p>Signature: _______________________</p><p>${who}</p><p>Date: ___________________________</p></div>`;
-      })
-    : [
-        `<div class="sig"><h3>Client acceptance</h3><p>Signature: _______________________</p><p>${esc(job.clientNames)}</p><p>Date: ___________________________</p></div>`,
-      ]
-  ).join("");
+  const acceptance = inlineBlocks
+    ? `<p class="muted" style="margin-top:12px;max-width:155mm;">${esc(acceptanceLineHtml(job))}</p>`
+    : "";
+  const sigs = inlineBlocks
+    ? `<div class="sigs">${inlineBlocks.join("")}</div>`
+    : `<p class="muted" style="margin-top:12px;max-width:155mm;">Sign the acceptance on the following page to proceed.</p>`;
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Next steps</div>
     <h1 class="title">Terms and payment schedule</h1>
-    <p class="muted" style="margin-top:12px;max-width:155mm;">${esc(acceptanceLine)}</p>
+    ${acceptance}
     <table class="pay"><thead><tr><th>Stage</th><th>Amount</th><th>Trigger</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="sigs">
-      <div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>
-      ${clientSigs}
-    </div>
+    ${sigs}
+    ${foot}
+  </div>`;
+}
+
+// A dedicated signature page (used when there are too many signers to fit inline
+// on the terms page). The acceptance paragraph leads the first such page.
+function signaturePage(
+  job: OfferWorkspaceJob,
+  blocks: readonly string[],
+  continued: boolean,
+  foot: string,
+): string {
+  const acceptance = continued
+    ? ""
+    : `<p class="muted" style="margin-top:12px;max-width:155mm;">${esc(acceptanceLineHtml(job))}</p>`;
+  return `<div class="page">
+    <div class="masthead">${esc(COMPANY_LINE)}</div>
+    <div class="eyebrow">Acceptance</div>
+    <h1 class="title">Acceptance &amp; signatures${continued ? " (cont.)" : ""}</h1>
+    ${acceptance}
+    <div class="sigs">${blocks.join("")}</div>
     ${foot}
   </div>`;
 }

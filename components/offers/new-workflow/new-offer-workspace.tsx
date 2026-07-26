@@ -109,6 +109,12 @@ const PREFILL_IDENTITY_KEYS: readonly (keyof OfferWorkspaceJob)[] = [
 function jobHasEnteredIdentity(job: OfferWorkspaceJob): boolean {
   const ownerEntered = job.owners.some(
     (owner) =>
+      // Structural choices count as "entered" too, not just typed text: switching
+      // a pristine owner to a company, or adding a second signatory/director,
+      // configures the party set and must not be wiped by a late prefill (codex
+      // #3). A pristine owner is one blank individual with exactly one signatory.
+      owner.kind === "company" ||
+      owner.signatories.length !== 1 ||
       owner.displayName.trim().length > 0 ||
       owner.abn.trim().length > 0 ||
       owner.currentLocation.trim().length > 0 ||
@@ -186,6 +192,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentInfo, setSentInfo] = useState<string | null>(null);
+  // Surfaced when a lifecycle action (Mark sent/agreed/rejected) can't proceed
+  // because the pre-transition save reconciled to another tab or failed — without
+  // it the button looked like a silent no-op (codex #4).
+  const [transitionError, setTransitionError] = useState<string | null>(null);
   const [tenderSending, setTenderSending] = useState(false);
   const [tenderSendError, setTenderSendError] = useState<string | null>(null);
   const [contractSending, setContractSending] = useState(false);
@@ -768,15 +778,22 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       if (leadId === undefined || offerId === null) {
         return;
       }
+      setTransitionError(null);
       void (async () => {
         try {
           // Flush the latest edits through the single-flight saver first, so
           // AGREED freezes the correct snapshot and no in-flight autosave races
           // this transition. If it had to reconcile to another tab's version (or
           // failed to save), abort rather than transition on stale/unsaved state —
-          // flushWorkspace has already reloaded the UI to the live copy.
+          // flushWorkspace has already reloaded the UI to the live copy. Tell the
+          // user why nothing happened (codex #4) instead of returning silently.
           const flush = await flushWorkspace(offerId);
           if (flush !== "clean") {
+            setTransitionError(
+              flush === "reconciled"
+                ? "Your view was refreshed with a newer saved version — review it and try again."
+                : "Couldn't save your latest changes, so the status wasn't updated. Try again.",
+            );
             return;
           }
           await transitionOfferStatus({
@@ -787,6 +804,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           setStatus(next);
         } catch (error) {
           console.error("[offer] status transition failed:", error);
+          setTransitionError(
+            `Couldn't update the offer status: ${(error as Error).message}`,
+          );
           // Resync the UI to the server's actual state instead of the
           // optimistic target.
           try {
@@ -1148,6 +1168,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         sending={sending}
         sendError={sendError}
         sentInfo={sentInfo}
+        transitionError={transitionError}
         onGenerateTender={() => transition("tender_draft")}
         onSendTender={sendTender}
         tenderSending={tenderSending}

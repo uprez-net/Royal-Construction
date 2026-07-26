@@ -48,6 +48,9 @@ type SendNegotiatePanelProps = {
   // with a blank Current Location), so the button must not look actionable.
   readonly canMarkAgreed: boolean;
   readonly onMarkRejected: () => void;
+  // Why a lifecycle action (Mark sent/agreed/rejected) didn't take effect — a
+  // stale-save reconcile or a failed save — instead of a silent no-op.
+  readonly transitionError: string | null;
 };
 
 // Scroll a blocker's owning step into view so "fix it" is one click. Mirrors the
@@ -81,6 +84,7 @@ export function SendNegotiatePanel({
   onMarkAgreed,
   canMarkAgreed,
   onMarkRejected,
+  transitionError,
 }: SendNegotiatePanelProps) {
   const [confirming, setConfirming] = useState(false);
   // The server derives recipients from the owners; the primary owner's email is
@@ -229,6 +233,12 @@ export function SendNegotiatePanel({
             Mark rejected
           </Button>
         </div>
+
+        {transitionError ? (
+          <p className="text-xs font-medium text-destructive">
+            {transitionError}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

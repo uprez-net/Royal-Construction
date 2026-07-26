@@ -216,11 +216,33 @@ export async function sendOfferDocument(input: {
     token: `RCOFR-${randomBytes(6).toString("hex").toUpperCase()}`,
   }));
 
+  // On a FIRST send (offer still PENDING) a partial failure can leave some
+  // recipients already emailed + tracked; skip those on the retry so they aren't
+  // double-sent with a fresh untracked token. An explicit Resend (offer already
+  // SENT) intentionally re-emails everyone, so only dedupe while PENDING.
+  let toSend = sends;
+  if (offer.offerStatus === OfferStatus.PENDING) {
+    const priorSends = await prisma.offerDocumentSend.findMany({
+      where: { offerId: offer.id, offerFileVersion: offer.revisionNumber },
+      select: { recipientEmail: true },
+    });
+    const alreadySent = new Set(
+      priorSends.map((prior) => prior.recipientEmail.trim().toLowerCase()),
+    );
+    toSend = sends.filter(
+      (send) => !alreadySent.has(send.recipientEmail.toLowerCase()),
+    );
+  }
+
   try {
     const client = await createGraphContext(getGraphConfig());
     // One email per signatory — same PDF, each with its own tracking token so
-    // replies correlate to the right send record.
-    for (const send of sends) {
+    // replies correlate to the right send record. Persist EACH OfferDocumentSend
+    // the moment its email is accepted, NOT batched after the whole loop: a later
+    // recipient's failure must not strand an already-delivered recipient with an
+    // untracked token (its reply couldn't be attributed, and the retry would
+    // duplicate it — PR #124 review).
+    for (const send of toSend) {
       await client.sendMail({
         to: send.recipientEmail,
         subject: `Your Building Proposal — ${reference} [${send.token}]`,
@@ -233,17 +255,7 @@ export async function sendOfferDocument(input: {
           },
         ],
       });
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      error: `Failed to send the email: ${(error as Error).message}`,
-    };
-  }
-
-  await prisma.$transaction(async (tx) => {
-    for (const send of sends) {
-      await tx.offerDocumentSend.create({
+      await prisma.offerDocumentSend.create({
         data: {
           offerId: offer.id,
           offerFileVersion: offer.revisionNumber,
@@ -252,7 +264,18 @@ export async function sendOfferDocument(input: {
         },
       });
     }
-    if (offer.offerStatus === OfferStatus.PENDING) {
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Failed to send the email: ${(error as Error).message}`,
+    };
+  }
+
+  // Every email is delivered + tracked. Flip the offer to SENT exactly once (a
+  // Resend leaves it SENT). The note lists every recipient for this file version,
+  // including any tracked on an earlier partial attempt.
+  if (offer.offerStatus === OfferStatus.PENDING) {
+    await prisma.$transaction(async (tx) => {
       await tx.offer.update({
         where: { id: offer.id },
         data: { offerStatus: OfferStatus.SENT, sentAt: new Date() },
@@ -265,8 +288,8 @@ export async function sendOfferDocument(input: {
           note: `Emailed to ${sends.map((send) => send.recipientEmail).join(", ")}`,
         },
       });
-    }
-  });
+    });
+  }
 
   // The mail is away and the status is committed, so nothing past this point
   // may reject: the caller would report the send as failed while the offer is

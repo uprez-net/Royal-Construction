@@ -289,6 +289,13 @@ export async function sendContractForSignature(input: {
   if (ownerPhoneValue) ownerContactTabs.push(locked("ownerPhone", ownerPhoneValue));
   if (ownerMobileValue) ownerContactTabs.push(locked("ownerMobile", ownerMobileValue));
 
+  // The DocuSign OWNER recipient routes to ownerSigners[0].email (the primary
+  // signer's own email if valid, else the resolved customer email). The printed
+  // ownerEmail tab MUST show that same address — using customerEmail directly let
+  // a direct caller's override diverge from where the envelope actually went, so
+  // the contract could display one email while routing to another (PR #124).
+  const primaryOwnerEmail = ownerSigners[0]?.email ?? customerEmail;
+
   // Every value is a tab on the OWNER role (the first signer, issue #98), so the
   // customer sees the complete contract on open — derived Tender values, the
   // estimator's BC4 particulars, and the owner's print name. The Builder role
@@ -297,7 +304,7 @@ export async function sendContractForSignature(input: {
     locked("contractPrice", priceLabel),
     locked("contractPriceTotal", priceLabel),
     locked("ownerNames", ownerNames),
-    locked("ownerEmail", customerEmail),
+    locked("ownerEmail", primaryOwnerEmail),
     locked("siteAddress", job.siteAddress),
     locked("variationPercent", "10%"),
     locked("paymentSchedule", paymentScheduleLine),
@@ -415,7 +422,7 @@ export async function sendContractForSignature(input: {
         offerId: offer.id,
         fromStatus: offer.offerStatus,
         toStatus: OfferStatus.CONTRACT_SENT,
-        note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${customerEmail}`,
+        note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${primaryOwnerEmail}`,
       },
     });
   });

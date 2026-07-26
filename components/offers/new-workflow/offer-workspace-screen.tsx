@@ -142,6 +142,7 @@ type OfferWorkspaceScreenProps = {
   readonly sending: boolean;
   readonly sendError: string | null;
   readonly sentInfo: string | null;
+  readonly transitionError: string | null;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
   readonly tenderSending?: boolean;
@@ -230,6 +231,7 @@ export function OfferWorkspaceScreen({
   sending,
   sendError,
   sentInfo,
+  transitionError,
   onGenerateTender,
   onSendTender,
   tenderSending,
@@ -495,6 +497,7 @@ export function OfferWorkspaceScreen({
               sending={sending}
               sendError={sendError}
               sentInfo={sentInfo}
+              transitionError={transitionError}
               canMarkSent={canMarkSent}
               onSendOffer={onSendOffer}
               onMarkSent={onMarkSent}
