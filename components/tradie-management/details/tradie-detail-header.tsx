@@ -1,17 +1,26 @@
 import {
   AlertTriangle,
   BadgeAlert,
+  MoreVertical,
   Pencil,
-  Star,
   Tag,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { TradieBadge } from "../trade-badge";
 import { TradieRow } from "@/types/tradie";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { TRADE_AVATAR_CLASS } from "@/constants/tradeChip";
+import { cn } from "@/lib/utils";
 
 export function TradieCard() {
   const dispatch = useAppDispatch();
@@ -57,10 +66,6 @@ export function TradieCard() {
     );
   };
 
-  const handleSetPriority = () => {
-    dispatch(openModal({ type: "rateTradie", payload: { tradie: tradieRow } }));
-  };
-
   const handleDelete = () => {
     dispatch(
       openModal({ type: "deleteTradie", payload: { tradie: tradieRow } }),
@@ -74,62 +79,76 @@ export function TradieCard() {
   };
 
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm">
+    <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-100 text-lg font-bold text-emerald-600">
+          <div
+            className={cn(TRADE_AVATAR_CLASS, "h-14 w-14 text-lg")}
+            aria-hidden="true"
+          >
             {initials}
           </div>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-lg font-extrabold">{name}</h3>
+              <h1 className="truncate font-heading text-xl font-semibold text-foreground">
+                {name}
+              </h1>
 
               {openIncidentsCount > 0 && (
                 <Badge variant="destructive" className="gap-1">
-                  <BadgeAlert className="h-3 w-3" />
-                  {openIncidentsCount} Flagged
+                  <BadgeAlert className="h-3 w-3" aria-hidden="true" />
+                  {openIncidentsCount} open{" "}
+                  {openIncidentsCount === 1 ? "incident" : "incidents"}
                 </Badge>
               )}
             </div>
 
+            {/* The second slot here used to print {name} a second time. There is
+                no business-name field on Tradie (name IS the business/tradie
+                name), so the duplicate is removed and the trade chip stands
+                alone as the subtitle. */}
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span>{name}</span>
-
               <TradieBadge trade={trade} />
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={handleEditTradie}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit Details
+        <div className="flex shrink-0 items-center gap-2">
+          <Button onClick={handleEditTradie}>
+            <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+            Edit details
           </Button>
 
-          <Button variant="outline" size="sm" onClick={handlePriceChange}>
-            <Tag className="mr-2 h-4 w-4" />
-            Price Change
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="More actions">
+                <MoreVertical className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
 
-          <Button variant="outline" size="sm" onClick={handleReport}>
-            <AlertTriangle className="mr-2 h-4 w-4" />
-            Report
-          </Button>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={handlePriceChange}>
+                <Tag className="mr-2 h-4 w-4" aria-hidden="true" />
+                Price change
+              </DropdownMenuItem>
 
-          <Button
-            size="sm"
-            className="bg-amber-500 hover:bg-amber-600"
-            onClick={handleSetPriority}
-          >
-            <Star className="mr-2 h-4 w-4" />
-            Set Ratings
-          </Button>
+              <DropdownMenuItem onClick={handleReport}>
+                <AlertTriangle className="mr-2 h-4 w-4" aria-hidden="true" />
+                Report incident
+              </DropdownMenuItem>
 
-          <Button variant="destructive" size="sm" onClick={handleDelete}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem
+                onClick={handleDelete}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                Delete tradie
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>

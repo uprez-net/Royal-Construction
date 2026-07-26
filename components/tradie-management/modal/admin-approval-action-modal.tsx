@@ -8,7 +8,9 @@ import { fetchTradieApprovalById } from "@/lib/data/tradie-approvals";
 import { SafeTradieApproval } from "@/types/tradie";
 import { TradieApprovalActionType } from "@prisma/client";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { PriceChangeApprovalForm } from "./forms/PriceChangeApprovalForm";
 import { TradieRemovalApprovalForm } from "./forms/TradieRemovalApprovalForm";
 import { IncidentResolutionApprovalForm } from "./forms/IncidentResolutionApprovalForm";
@@ -27,13 +29,12 @@ export function AdminApprovalActionModal({
   approvalType,
   onClose,
 }: AdminApprovalActionModalProps) {
-  const { data, isLoading, isError, error } = useQuery<SafeTradieApproval>({
-    queryKey: ["approval", approvalId],
-    queryFn: () => fetchTradieApprovalById(approvalId),
-    enabled: open && !!approvalId,
-  });
-
-  console.log("approvalType", approvalType);
+  const { data, isLoading, isError, error, refetch, isFetching } =
+    useQuery<SafeTradieApproval>({
+      queryKey: ["approval", approvalId],
+      queryFn: () => fetchTradieApprovalById(approvalId),
+      enabled: open && !!approvalId,
+    });
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
@@ -44,7 +45,11 @@ export function AdminApprovalActionModal({
   const renderForm = () => {
     if (!data) return null;
 
-    switch (data.actionType) {
+    // `approvalType` is what the caller believed it was opening; the fetched
+    // record is authoritative, so a mismatch means stale UI state.
+    const actionType = data.actionType ?? approvalType;
+
+    switch (actionType) {
       case TradieApprovalActionType.PRICE_CHANGE:
         return <PriceChangeApprovalForm approval={data} onSuccess={onClose} />;
 
@@ -64,7 +69,15 @@ export function AdminApprovalActionModal({
         );
 
       default:
-        return null;
+        return (
+          <div className="space-y-2">
+            <DialogTitle>Unsupported approval type</DialogTitle>
+            <DialogDescription>
+              This request type has no review form yet. Ask an administrator to
+              action it directly.
+            </DialogDescription>
+          </div>
+        );
     }
   };
 
@@ -72,17 +85,40 @@ export function AdminApprovalActionModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[70vh] w-full max-w-2xl overflow-y-auto no-scrollbar">
         {isLoading ? (
-          <div className="flex h-40 items-center justify-center">
-            <DialogTitle className="sr-only">Loading Form...</DialogTitle>
+          <div className="flex h-40 items-center justify-center" aria-busy="true">
+            <DialogTitle className="sr-only">Loading request</DialogTitle>
             <DialogDescription className="sr-only">
-              Please wait while the form is loading.
+              Please wait while the approval request loads.
             </DialogDescription>
-            <Loader2 className="size-6 animate-spin" />
+            <Loader2 className="size-6 animate-spin" aria-hidden="true" />
           </div>
         ) : isError ? (
-          <div className="space-y-2 p-4">
-            <DialogTitle>Unable to load approval</DialogTitle>
-            <DialogDescription>{error.message}</DialogDescription>
+          <div className="space-y-3 p-4">
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="size-5" aria-hidden="true" />
+              Unable to load this request
+            </DialogTitle>
+
+            <DialogDescription>
+              The approval request could not be retrieved. It may have already
+              been actioned.
+            </DialogDescription>
+
+            <p className="text-xs text-muted-foreground">{error.message}</p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={onClose}>
+                Close
+              </Button>
+
+              <Button onClick={() => refetch()} disabled={isFetching}>
+                <RefreshCw
+                  className={cn("mr-2 size-4", isFetching && "animate-spin")}
+                  aria-hidden="true"
+                />
+                Try again
+              </Button>
+            </div>
           </div>
         ) : (
           renderForm()

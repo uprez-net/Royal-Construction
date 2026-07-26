@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Building2,
   Calendar,
+  Loader2,
   Mail,
   Phone,
   ShieldAlert,
@@ -14,12 +15,16 @@ import {
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 
 import { SafeTradieApproval } from "@/types/tradie";
 import { useApprovalMutation } from "@/hooks/use-approval-mutation";
 import { TradieBadge } from "@/components/tradie-management/trade-badge";
+import { RatingStars } from "@/components/common/rating-stars";
+import { dataTimeFormat, dateFormat, formatStatus } from "@/utils/formatters";
+import { cn } from "@/lib/utils";
 
 interface Props {
   approval: SafeTradieApproval;
@@ -56,8 +61,8 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
     <>
       <DialogHeader className="pb-4">
         <DialogTitle className="flex items-center gap-2">
-          <ShieldAlert className="size-5" />
-          Incident Resolution Approval
+          <ShieldAlert className="size-5" aria-hidden="true" />
+          Incident resolution approval
         </DialogTitle>
       </DialogHeader>
 
@@ -65,22 +70,23 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
         {/* Approval Metadata */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            Approval Information
+            Approval information
           </h3>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <InfoItem
-              label="Action Type"
-              value={approval.actionType.replaceAll("_", " ")}
+              label="Action type"
+              value={formatStatus(approval.actionType)}
             />
 
-            <InfoItem label="Status" value={approval.status} />
+            <InfoItem label="Status" value={formatStatus(approval.status)} />
 
-            <InfoItem label="Requested By" value={approval.requestBy} />
+            <InfoItem label="Requested by" value={approval.requestBy} />
 
             <InfoItem
               label="Created"
-              value={new Date(approval.createdAt).toLocaleString()}
+              value={dataTimeFormat.format(new Date(approval.createdAt))}
+              mono
             />
           </div>
         </div>
@@ -90,13 +96,13 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
         {/* Tradie Details */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            Tradie Information
+            Tradie information
           </h3>
 
-          <div className="rounded-lg border p-4">
-            <div className="flex items-start justify-between">
+          <div className="rounded-lg border border-border/70 p-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <h4 className="text-lg font-semibold">
+                <h4 className="text-base font-semibold">
                   {approval.tradie.name}
                 </h4>
 
@@ -105,11 +111,11 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
                 </div>
               </div>
 
-              <Badge variant="secondary">
-                {approval.tradie.rating
-                  ? `${approval.tradie.rating} ★`
-                  : "No Rating"}
-              </Badge>
+              {approval.tradie.rating ? (
+                <RatingStars rating={parseFloat(approval.tradie.rating)} />
+              ) : (
+                <Badge variant="secondary">No rating</Badge>
+              )}
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -123,24 +129,27 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
                 icon={<Phone className="size-4" />}
                 label="Phone"
                 value={approval.tradie.phone}
+                mono
               />
 
               <DetailRow
                 icon={<Building2 className="size-4" />}
                 label="ABN"
                 value={approval.tradie.abn}
+                mono
               />
 
               <DetailRow
                 icon={<Calendar className="size-4" />}
                 label="Joined"
-                value={new Date(approval.tradie.createdAt).toLocaleDateString()}
+                value={dateFormat.format(new Date(approval.tradie.createdAt))}
+                mono
               />
             </div>
 
             {approval.tradie.note && (
-              <div className="mt-4 rounded-md border bg-muted/30 p-3">
-                <p className="text-sm font-medium">Tradie Notes</p>
+              <div className="mt-4 rounded-md border border-border/70 bg-muted/30 p-3">
+                <p className="text-sm font-medium">Tradie notes</p>
 
                 <p className="mt-1 text-sm text-muted-foreground">
                   {approval.tradie.note}
@@ -155,19 +164,27 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
         {/* Incident Details */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            Incident Details
+            Incident details
           </h3>
 
-          <div className="rounded-lg border p-4 space-y-4">
+          <div className="rounded-lg border border-border/70 p-4 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <InfoItem
-                label="Incident Type"
-                value={incidentData.incidentType ?? "Not Provided"}
+                label="Incident type"
+                value={
+                  incidentData.incidentType
+                    ? formatStatus(incidentData.incidentType)
+                    : "Not provided"
+                }
               />
 
               <InfoItem
                 label="Severity"
-                value={incidentData.severity ?? "Not Provided"}
+                value={
+                  incidentData.severity
+                    ? formatStatus(incidentData.severity)
+                    : "Not provided"
+                }
               />
             </div>
 
@@ -188,39 +205,59 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
         {/* Approval Reason */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            Approval Request Reason
+            Approval request reason
           </h3>
 
-          <div className="rounded-lg border bg-muted/20 p-4">
+          <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
             <p className="text-sm">{approval.reason}</p>
           </div>
         </div>
 
         {/* Resolution */}
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
+          <Label
+            htmlFor="incident-resolution"
+            className="mb-3 text-sm font-semibold text-muted-foreground"
+          >
             Resolution
-          </h3>
+            <span className="text-destructive">
+              *<span className="sr-only"> required</span>
+            </span>
+          </Label>
 
           <Textarea
+            id="incident-resolution"
             rows={5}
+            required
             value={resolution}
+            aria-invalid={!resolution.trim()}
+            aria-describedby="incident-resolution-hint"
             onChange={(e) => setResolution(e.target.value)}
-            placeholder="Describe how this incident has been resolved..."
+            placeholder="Describe how this incident has been resolved…"
           />
+
+          <p
+            id="incident-resolution-hint"
+            className="mt-1 text-xs text-muted-foreground"
+          >
+            Required before this resolution can be approved.
+          </p>
         </div>
 
         {/* Warning */}
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <div className="rounded-lg bg-warning-light p-4">
           <div className="flex gap-3">
-            <AlertTriangle className="size-5 text-amber-600 shrink-0" />
+            <AlertTriangle
+              className="size-5 shrink-0 text-warning-ink"
+              aria-hidden="true"
+            />
 
             <div>
-              <p className="font-medium text-amber-900">Approval Impact</p>
+              <p className="font-medium text-warning-ink">Approval impact</p>
 
-              <p className="mt-1 text-sm text-amber-800">
-                Approving this request will mark the incident as resolved and
-                permanently store the supplied resolution against the incident
+              <p className="mt-1 text-sm text-foreground/80">
+                Approving this request marks the incident as resolved and
+                permanently stores the supplied resolution against the incident
                 record.
               </p>
             </div>
@@ -228,7 +265,7 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 border-t pt-4">
+        <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
           <Button
             variant="outline"
             disabled={mutation.isPending}
@@ -241,7 +278,17 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
             disabled={mutation.isPending || !resolution.trim()}
             onClick={() => submit("approved")}
           >
-            Approve Resolution
+            {mutation.isPending ? (
+              <>
+                <Loader2
+                  className="mr-2 size-4 animate-spin"
+                  aria-hidden="true"
+                />
+                Submitting…
+              </>
+            ) : (
+              "Approve resolution"
+            )}
           </Button>
         </div>
       </div>
@@ -249,12 +296,22 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
   );
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
+function InfoItem({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
 
-      <p className="font-medium">{value}</p>
+      <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -263,19 +320,25 @@ function DetailRow({
   icon,
   label,
   value,
+  mono,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  mono?: boolean;
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="mt-0.5 text-muted-foreground">{icon}</div>
+      <div className="mt-0.5 text-muted-foreground" aria-hidden="true">
+        {icon}
+      </div>
 
       <div>
         <p className="text-xs text-muted-foreground">{label}</p>
 
-        <p className="font-medium">{value}</p>
+        <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+          {value}
+        </p>
       </div>
     </div>
   );

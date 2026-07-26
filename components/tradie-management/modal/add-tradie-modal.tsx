@@ -89,6 +89,15 @@ const tradieSchema = z.object({
 
 type TradieField = keyof CreateTradieInput;
 
+/** Visible required indicator that also announces itself. */
+function RequiredMark() {
+  return (
+    <span className="text-destructive">
+      *<span className="sr-only"> required</span>
+    </span>
+  );
+}
+
 export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
@@ -206,30 +215,36 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-xl">
             <div className="rounded-lg bg-primary/10 p-2">
-              <PlusCircle className="h-5 w-5 text-primary" />
+              <PlusCircle className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
-            Add New Tradie
+            Add new tradie
           </DialogTitle>
           <DialogDescription>
             Register a contractor profile with contact, trade and pricing
-            information.
+            information. Fields marked with an asterisk are required.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6">
           <section className="space-y-4">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Building2 className="h-4 w-4" />
-              Business Information
+              <Building2 className="h-4 w-4" aria-hidden="true" />
+              Business information
             </h3>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <BriefcaseBusiness className="h-4 w-4" />
-                  Business / Tradie Name
+                <Label htmlFor="tradie-name" className="flex items-center gap-2">
+                  <BriefcaseBusiness className="h-4 w-4" aria-hidden="true" />
+                  Business / tradie name
+                  <RequiredMark />
                 </Label>
                 <Input
-                  placeholder="Business / Tradie name"
+                  id="tradie-name"
+                  required
                   value={formData.name}
+                  aria-invalid={Boolean(fieldError("name"))}
+                  aria-describedby={
+                    fieldError("name") ? "tradie-name-error" : undefined
+                  }
                   onChange={(e) => updateField("name", e.target.value)}
                   onBlur={() => markTouched("name")}
                   className={cn(
@@ -238,15 +253,19 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   )}
                 />
                 {fieldError("name") && (
-                  <p className="text-xs text-destructive">
+                  <p id="tradie-name-error" className="text-xs text-destructive">
                     {fieldError("name")}
                   </p>
                 )}
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <HardHat className="h-4 w-4" />
-                  Trade Type
+                <Label
+                  htmlFor="tradie-trade"
+                  className="flex items-center gap-2"
+                >
+                  <HardHat className="h-4 w-4" aria-hidden="true" />
+                  Trade type
+                  <RequiredMark />
                 </Label>
                 <Select
                   value={formData.trade}
@@ -256,6 +275,11 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   }}
                 >
                   <SelectTrigger
+                    id="tradie-trade"
+                    aria-invalid={Boolean(fieldError("trade"))}
+                    aria-describedby={
+                      fieldError("trade") ? "tradie-trade-error" : undefined
+                    }
                     className={cn(
                       fieldError("trade") &&
                         "border-destructive focus-visible:ring-destructive",
@@ -270,7 +294,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                       return (
                         <SelectItem key={key} value={label}>
                           <div className="flex gap-2">
-                            <Icon className="h-4 w-4" />
+                            <Icon className="h-4 w-4" aria-hidden="true" />
                             {label}
                           </div>
                         </SelectItem>
@@ -279,60 +303,80 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   </SelectContent>
                 </Select>
                 {fieldError("trade") && (
-                  <p className="text-xs text-destructive">
+                  <p
+                    id="tradie-trade-error"
+                    className="text-xs text-destructive"
+                  >
                     {fieldError("trade")}
                   </p>
                 )}
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
+                <Label htmlFor="tradie-abn" className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4" aria-hidden="true" />
                   ABN
+                  <RequiredMark />
                 </Label>
                 <Input
-                  placeholder="11 digit ABN"
+                  id="tradie-abn"
+                  required
                   inputMode="numeric"
                   maxLength={14} // allows for "XX XXX XXX XXX" spacing while typing
                   value={formData.abn}
+                  aria-invalid={Boolean(fieldError("abn"))}
+                  aria-describedby="tradie-abn-hint"
+                  className={cn(
+                    "font-mono tabular-nums",
+                    fieldError("abn") &&
+                      "border-destructive focus-visible:ring-destructive",
+                  )}
                   onChange={(e) => {
                     // Only allow digits and spaces as the user types
                     const raw = e.target.value.replace(/[^\d\s]/g, "");
                     updateField("abn", raw);
                   }}
                   onBlur={() => markTouched("abn")}
-                  className={cn(
-                    fieldError("abn") &&
-                      "border-destructive focus-visible:ring-destructive",
-                  )}
                 />
                 {fieldError("abn") ? (
-                  <p className="text-xs text-destructive">
+                  <p id="tradie-abn-hint" className="text-xs text-destructive">
                     {fieldError("abn")}
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
+                  <p
+                    id="tradie-abn-hint"
+                    className="text-xs text-muted-foreground"
+                  >
                     Format: XX XXX XXX XXX
                   </p>
                 )}
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  Hourly Rate
+                <Label htmlFor="tradie-rate" className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" aria-hidden="true" />
+                  Hourly rate
+                  <RequiredMark />
                 </Label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <DollarSign
+                    className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   <Input
+                    id="tradie-rate"
+                    required
                     className={cn(
-                      "pl-8",
+                      "pl-8 font-mono tabular-nums",
                       fieldError("hourlyRate") &&
                         "border-destructive focus-visible:ring-destructive",
                     )}
                     type="number"
                     min={0}
                     step="0.01"
-                    placeholder="Hourly rate"
                     value={formData.hourlyRate || ""}
+                    aria-invalid={Boolean(fieldError("hourlyRate"))}
+                    aria-describedby={
+                      fieldError("hourlyRate") ? "tradie-rate-error" : undefined
+                    }
                     onChange={(e) =>
                       updateField(
                         "hourlyRate",
@@ -343,7 +387,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   />
                 </div>
                 {fieldError("hourlyRate") && (
-                  <p className="text-xs text-destructive">
+                  <p id="tradie-rate-error" className="text-xs text-destructive">
                     {fieldError("hourlyRate")}
                   </p>
                 )}
@@ -352,46 +396,69 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
           </section>
           <section className="space-y-4">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Phone className="h-4 w-4" />
-              Contact Details
+              <Phone className="h-4 w-4" aria-hidden="true" />
+              Contact details
             </h3>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" />
-                  Phone Number
+                <Label
+                  htmlFor="tradie-phone"
+                  className="flex items-center gap-2"
+                >
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  Phone number
+                  <RequiredMark />
                 </Label>
                 <Input
-                  placeholder="04XX XXX XXX"
+                  id="tradie-phone"
+                  required
                   inputMode="tel"
                   value={formData.phone}
+                  aria-invalid={Boolean(fieldError("phone"))}
+                  aria-describedby="tradie-phone-hint"
                   onChange={(e) => updateField("phone", e.target.value)}
                   onBlur={() => markTouched("phone")}
                   className={cn(
+                    "font-mono tabular-nums",
                     fieldError("phone") &&
                       "border-destructive focus-visible:ring-destructive",
                   )}
                 />
                 {fieldError("phone") ? (
-                  <p className="text-xs text-destructive">
+                  <p
+                    id="tradie-phone-hint"
+                    className="text-xs text-destructive"
+                  >
                     {fieldError("phone")}
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
+                  <p
+                    id="tradie-phone-hint"
+                    className="text-xs text-muted-foreground"
+                  >
                     Mobile: 04XX XXX XXX &middot; Landline: 02/03/07/08 XXXX
                     XXXX
                   </p>
                 )}
               </div>
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  Email Address
+                <Label
+                  htmlFor="tradie-email"
+                  className="flex items-center gap-2"
+                >
+                  <Mail className="h-4 w-4" aria-hidden="true" />
+                  Email address
+                  <RequiredMark />
                 </Label>
                 <Input
+                  id="tradie-email"
+                  required
                   type="email"
-                  placeholder="Email address"
                   value={formData.email}
+                  aria-invalid={Boolean(fieldError("email"))}
+                  aria-describedby={
+                    fieldError("email") ? "tradie-email-error" : undefined
+                  }
                   onChange={(e) => updateField("email", e.target.value)}
                   onBlur={() => markTouched("email")}
                   className={cn(
@@ -400,17 +467,31 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   )}
                 />
                 {fieldError("email") && (
-                  <p className="text-xs text-destructive">
+                  <p
+                    id="tradie-email-error"
+                    className="text-xs text-destructive"
+                  >
                     {fieldError("email")}
                   </p>
                 )}
               </div>
               <div className="md:col-span-2 space-y-2">
-                <Label className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  Tradie Location
-                </Label>
+                {/* The trigger is a Popover button with its own internal search
+                    field, so the visible text above is a plain div rather than a
+                    <label>. It is wired to the trigger by id via `labelledById`
+                    instead — without it the trigger's accessible name fell back
+                    to the placeholder ("Search service location..."), which
+                    names the control after its hint rather than its field. */}
+                <div
+                  id="tradie-location-label"
+                  className="flex items-center gap-2 text-sm font-medium"
+                >
+                  <MapPin className="h-4 w-4" aria-hidden="true" />
+                  Tradie location
+                  <RequiredMark />
+                </div>
                 <SearchableSelect
+                  labelledById="tradie-location-label"
                   label=""
                   placeholder="Search service location..."
                   searchValue={siteAddress}
@@ -433,22 +514,27 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
             </div>
           </section>
           <section>
-            <Label className="mb-2 flex gap-2">
-              <StickyNote className="h-4 w-4" />
-              Internal Notes
+            <Label htmlFor="tradie-note" className="mb-2 flex gap-2">
+              <StickyNote className="h-4 w-4" aria-hidden="true" />
+              Internal notes
             </Label>
             <Textarea
+              id="tradie-note"
               rows={4}
               maxLength={500}
               placeholder="Availability, reliability notes, preferences..."
               value={formData.note}
+              aria-describedby="tradie-note-count"
               onChange={(e) => updateField("note", e.target.value)}
             />
-            <p className="mt-1 text-right text-xs text-muted-foreground">
-              {(formData.note ?? "").length}/500
+            <p
+              id="tradie-note-count"
+              className="mt-1 text-right text-xs text-muted-foreground"
+            >
+              {(formData.note ?? "").length}/500 characters
             </p>
           </section>
-          <div className="flex justify-end gap-2 border-t pt-4">
+          <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
             <Button variant="outline" disabled={isPending} onClick={onClose}>
               Cancel
             </Button>
@@ -458,13 +544,16 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
             >
               {isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Creating…
                 </>
               ) : (
                 <>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Create Tradie
+                  <PlusCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Create tradie
                 </>
               )}
             </Button>

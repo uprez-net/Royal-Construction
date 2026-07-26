@@ -77,21 +77,21 @@ export default function RateTradieModal({
       <DialogContent className="sm:max-w-106.25">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-amber-500 fill-amber-500" />
-            Rate Tradie
+            <Star className="h-5 w-5 fill-warning text-warning" aria-hidden="true" />
+            Rate tradie
           </DialogTitle>
 
           <DialogDescription>
-            {tradie.name} • {tradie.trade}
+            {tradie.name} &middot; {tradie.trade}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Current Rating */}
+          {/* Current rating */}
 
-          <div className="rounded-lg border bg-muted/40 p-4">
+          <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
             <div className="mb-2 text-xs font-medium text-muted-foreground">
-              Current Rating
+              Current rating
             </div>
 
             <div className="flex items-center gap-3">
@@ -102,23 +102,35 @@ export default function RateTradieModal({
             </div>
           </div>
 
-          {/* New Rating */}
+          {/* New rating */}
 
           <div className="space-y-2">
-            <div className="text-sm font-medium">New Rating</div>
+            <div id="new-rating-label" className="text-sm font-medium">
+              New rating
+              <span className="text-destructive">
+                *<span className="sr-only"> required</span>
+              </span>
+            </div>
 
-            <div className="rounded-lg border p-4">
-              <StarRatingInput value={rating} onChange={setRating} />
+            <div className="rounded-lg border border-border/70 p-4">
+              <StarRatingInput
+                value={rating}
+                onChange={setRating}
+                labelledById="new-rating-label"
+              />
             </div>
           </div>
 
           {/* Info */}
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="rounded-lg bg-info-light p-3">
             <div className="flex gap-3">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-info-ink"
+                aria-hidden="true"
+              />
 
-              <p className="text-xs leading-relaxed text-muted-foreground">
+              <p className="text-xs leading-relaxed text-foreground/80">
                 Updating a tradie&apos;s rating affects their overall performance
                 score and visibility throughout the platform.
               </p>
@@ -133,9 +145,9 @@ export default function RateTradieModal({
             </Button>
 
             <Button onClick={handleSubmit} disabled={isPending || rating === 0}>
-              <Star className="mr-2 h-4 w-4" />
+              <Star className="mr-2 h-4 w-4" aria-hidden="true" />
 
-              {isPending ? "Submitting..." : "Submit Rating"}
+              {isPending ? "Submitting…" : "Submit rating"}
             </Button>
           </div>
         </div>

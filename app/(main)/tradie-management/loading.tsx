@@ -1,64 +1,69 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
+/**
+ * Mirrors the real layout of `TradieManagementClient` (flat card header, three
+ * metric cards, wrapping toolbar, category grid) so the skeleton→content swap
+ * does not flash a different design.
+ */
 export default function TradieManagementSkeleton() {
   return (
-    <div className="space-y-6">
-      {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl border bg-emerald-50 p-8">
-        <div className="space-y-3">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-125" />
-        </div>
+    <div className="space-y-6" aria-busy="true" aria-label="Loading tradies">
+      {/* Header card */}
+      <div className="rounded-lg border border-border/70 bg-card p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-56" />
+            <Skeleton className="h-4 w-96 max-w-full" />
+          </div>
 
-        <div className="absolute right-8 top-8 flex gap-3">
-          <Skeleton className="h-10 w-32 rounded-lg" />
-          <Skeleton className="h-10 w-28 rounded-lg" />
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-9 w-32 rounded-lg" />
+            <Skeleton className="h-9 w-28 rounded-lg" />
+          </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* Metric cards */}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="flex items-center justify-between rounded-xl border p-6"
+            className="flex min-h-[72px] items-center gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm"
           >
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-12 w-12 rounded-lg" />
+            <Skeleton className="size-9 rounded-lg" />
 
-              <div className="space-y-2">
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-4 w-28" />
-              </div>
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-6 w-16" />
+              <Skeleton className="h-3 w-28" />
             </div>
 
-            <Skeleton className="h-6 w-14 rounded-full" />
+            <Skeleton className="h-5 w-12 rounded-full" />
           </div>
         ))}
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap gap-3">
-        <Skeleton className="h-10 w-72 rounded-lg" />
-        <Skeleton className="h-10 w-32 rounded-lg" />
-        <Skeleton className="h-10 w-40 rounded-lg" />
-        <Skeleton className="h-10 w-32 rounded-lg" />
+      <div className="flex flex-wrap items-center gap-2">
+        <Skeleton className="h-11 w-44 rounded-lg" />
+        <Skeleton className="h-9 w-64 max-w-full rounded-lg" />
+        <Skeleton className="h-9 w-36 rounded-lg" />
+        <Skeleton className="h-9 w-36 rounded-lg" />
+        <Skeleton className="h-9 w-28 rounded-lg" />
       </div>
 
-      {/* Category Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Category cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         {Array.from({ length: 12 }).map((_, i) => (
           <div
             key={i}
-            className="rounded-xl border p-5 space-y-5"
+            className="relative rounded-lg border border-border/70 bg-card p-4 shadow-sm"
           >
-            <div className="flex items-start justify-between">
-              <Skeleton className="h-10 w-10 rounded-lg" />
-              <Skeleton className="h-6 w-6 rounded-full" />
-            </div>
+            <Skeleton className="absolute right-3 top-3 h-5 w-8 rounded-full" />
+
+            <Skeleton className="mb-3 size-10 rounded-lg" />
 
             <div className="space-y-2">
-              <Skeleton className="h-5 w-28" />
+              <Skeleton className="h-4 w-28" />
               <Skeleton className="h-4 w-20" />
             </div>
           </div>

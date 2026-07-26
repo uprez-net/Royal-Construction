@@ -14,7 +14,6 @@ import {
 import { UnresolvedIncidentsCard } from "./tradie-warning-badge";
 import { TradieTabs } from "./tradie-tabs";
 import { TradieBody } from "./tradie-body";
-import { usePathname } from "next/navigation";
 
 interface TradieManagementClientProps {
   tradies: TradiesByCategory[];
@@ -30,17 +29,20 @@ export function TradieManagementClient({
   tradieKPIData,
 }: TradieManagementClientProps) {
   const dispatch = useAppDispatch();
-  const pathname = usePathname();
 
+  // Cleanup always runs, unconditionally. The previous guard —
+  // `if (!pathname.includes("tradie-management")) clearState()` — could never
+  // fire: the cleanup closes over the pathname from the render that scheduled
+  // it, which on this page always contains "tradie-management". So the tradie
+  // slice was never cleared and leaked across navigations. This component
+  // remounts and re-seeds from server props on every visit.
   useEffect(() => {
     dispatch(setTradies(tradies));
     dispatch(setKPIData(tradieKPIData));
     return () => {
-      if (!pathname.includes("tradie-management")) {
-        dispatch(clearState());
-      }
+      dispatch(clearState());
     };
-  }, [dispatch, tradies, tradieKPIData, pathname]);
+  }, [dispatch, tradies, tradieKPIData]);
 
   return (
     <div className="space-y-6">

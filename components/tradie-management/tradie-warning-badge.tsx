@@ -1,46 +1,54 @@
-import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { setQuery } from "@/lib/store/slices/tradieManagementSlice";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import {
+  setActiveTab,
+  setQuery,
+} from "@/lib/store/slices/tradieManagementSlice";
+import { AlertTriangle } from "lucide-react";
 import { useMemo } from "react";
 
 export function UnresolvedIncidentsCard() {
   const dispatch = useAppDispatch();
   const { tradies } = useAppSelector((state) => state.tradieManagement);
   const count: number = useMemo(() => {
-    return tradies.reduce((acc, tradies) => {
-      return acc + tradies.incidentCount.open;
+    return tradies.reduce((acc, tradie) => {
+      return acc + tradie.incidentCount.open;
     }, 0);
   }, [tradies]);
 
+  // The callout is an action, not a link: it filters the surface to the tradies
+  // carrying open incidents and shows them in the table view, where the incident
+  // counts are visible. The label says exactly that, so there is no chevron
+  // implying navigation to another page.
   const handleAction = () => {
+    dispatch(setActiveTab("table"));
     dispatch(setQuery({ tab: "flagged" }));
   };
 
-  if(count === 0) {
+  if (count === 0) {
     return null;
   }
 
   return (
-    <Card
-      onClick={handleAction}
-      className="flex cursor-pointer items-start gap-3 border-red-200 bg-red-50 p-4 transition-colors hover:bg-red-100"
-    >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white">
-        <AlertTriangle className="h-5 w-5" />
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/70 bg-destructive-light p-4 shadow-sm">
+      <AlertTriangle
+        className="size-5 shrink-0 text-destructive-ink"
+        aria-hidden="true"
+      />
+
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-destructive-ink">
+          {count} unresolved incident{count !== 1 ? "s" : ""}
+        </p>
+
+        <p className="text-xs text-muted-foreground">
+          Reported against tradies you are still working with.
+        </p>
       </div>
 
-      <div className="flex-1">
-        <div className="mb-0.5 text-sm font-bold text-red-600">
-          {count} Unresolved Incident{count !== 1 ? "s" : ""}
-        </div>
-
-        <div className="text-xs text-muted-foreground">
-          Click to view flagged tradies in table view
-        </div>
-      </div>
-
-      <ChevronRight className="mt-2 h-4 w-4 text-red-600" />
-    </Card>
+      <Button variant="outline" onClick={handleAction}>
+        View flagged tradies
+      </Button>
+    </div>
   );
 }

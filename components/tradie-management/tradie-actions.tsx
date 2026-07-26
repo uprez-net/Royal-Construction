@@ -103,10 +103,17 @@ export function TradieActionsDropdown({
     e: MouseEvent<HTMLDivElement, globalThis.MouseEvent>,
   ) => {
     e.stopPropagation();
-    const tradieDetails = await getTradieByIdCached(tradieRow.id);
-    dispatch(
-      openModal({ type: "editTradie", payload: { tradie: tradieDetails } }),
-    );
+    try {
+      const tradieDetails = await getTradieByIdCached(tradieRow.id);
+      dispatch(
+        openModal({ type: "editTradie", payload: { tradie: tradieDetails } }),
+      );
+    } catch (error) {
+      // A rejection inside startTransition is otherwise unhandled: the spinner
+      // would clear with no modal and no explanation.
+      toast.error("Could not load tradie details. Please try again.");
+      console.error("Error loading tradie details:", error);
+    }
   };
 
   return (
@@ -169,7 +176,7 @@ export function TradieActionsDropdown({
         >
           <Star
             className={`mr-2 h-4 w-4 ${
-              tradieRow.isFavourite ? "fill-yellow-400 text-yellow-400" : ""
+              tradieRow.isFavourite ? "fill-warning text-warning" : ""
             }`}
           />
 

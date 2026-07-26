@@ -4,8 +4,10 @@ import {
   ArrowRight,
   Building2,
   DollarSign,
+  Loader2,
   Mail,
   Phone,
+  TrendingDown,
   TrendingUp,
 } from "lucide-react";
 
@@ -18,6 +20,9 @@ import { TradieApprovalActionType } from "@prisma/client";
 import { SafeTradieApproval } from "@/types/tradie";
 import { TradieBadge } from "@/components/tradie-management/trade-badge";
 import { useApprovalMutation } from "@/hooks/use-approval-mutation";
+import { RatingStars } from "@/components/common/rating-stars";
+import { rateCurrency, dataTimeFormat, formatStatus } from "@/utils/formatters";
+import { cn } from "@/lib/utils";
 
 interface Props {
   approval: SafeTradieApproval;
@@ -27,11 +32,19 @@ interface Props {
 export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   const mutation = useApprovalMutation(onSuccess);
 
-  const data = approval.updationData as {
-    currentHourlyRate: number;
-    newHourlyRate: number;
+  const data = (approval.updationData ?? {}) as {
+    currentHourlyRate?: number;
+    newHourlyRate?: number;
     reason?: string;
   };
+
+  // The stored payload only guarantees `newHourlyRate`; the "current" rate has
+  // to fall back to the tradie record, or the comparison renders NaN / "$undefined".
+  const currentRate = Number(
+    data.currentHourlyRate ?? approval.tradie.hourlyRate ?? 0,
+  );
+  const newRate = Number(data.newHourlyRate ?? 0);
+  const hasRates = Number.isFinite(currentRate) && Number.isFinite(newRate);
 
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({
@@ -39,17 +52,17 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
       type: TradieApprovalActionType.PRICE_CHANGE,
       resolution,
       payload: {
-        newHourlyRate: data.newHourlyRate,
+        newHourlyRate: newRate,
       },
     });
   };
 
-  const difference = data.newHourlyRate - data.currentHourlyRate;
+  const difference = hasRates ? newRate - currentRate : 0;
 
+  // Zero-denominator guard: a tradie with no stored rate would otherwise give
+  // Infinity here.
   const percentageChange =
-    data.currentHourlyRate > 0
-      ? ((difference / data.currentHourlyRate) * 100).toFixed(1)
-      : "0";
+    currentRate > 0 ? ((difference / currentRate) * 100).toFixed(1) : null;
 
   const isIncrease = difference > 0;
 
@@ -57,8 +70,8 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
     <>
       <DialogHeader className="pb-4">
         <DialogTitle className="flex items-center gap-2">
-          <DollarSign className="size-5" />
-          Price Change Approval
+          <DollarSign className="size-5" aria-hidden="true" />
+          Price change approval
         </DialogTitle>
       </DialogHeader>
 
@@ -66,22 +79,23 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
         {/* Approval Metadata */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            Approval Information
+            Approval information
           </h3>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <InfoItem
-              label="Action Type"
-              value={approval.actionType.replaceAll("_", " ")}
+              label="Action type"
+              value={formatStatus(approval.actionType)}
             />
 
-            <InfoItem label="Status" value={approval.status} />
+            <InfoItem label="Status" value={formatStatus(approval.status)} />
 
-            <InfoItem label="Requested By" value={approval.requestBy} />
+            <InfoItem label="Requested by" value={approval.requestBy} />
 
             <InfoItem
               label="Created"
-              value={new Date(approval.createdAt).toLocaleString()}
+              value={dataTimeFormat.format(new Date(approval.createdAt))}
+              mono
             />
           </div>
         </div>
@@ -91,13 +105,13 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
         {/* Tradie Information */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            Tradie Information
+            Tradie information
           </h3>
 
-          <div className="rounded-lg border p-4">
-            <div className="flex items-start justify-between">
+          <div className="rounded-lg border border-border/70 p-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <h4 className="text-lg font-semibold">
+                <h4 className="text-base font-semibold">
                   {approval.tradie.name}
                 </h4>
 
@@ -106,11 +120,11 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 </div>
               </div>
 
-              <Badge variant="secondary">
-                {approval.tradie.rating
-                  ? `${approval.tradie.rating} ★`
-                  : "No Rating"}
-              </Badge>
+              {approval.tradie.rating ? (
+                <RatingStars rating={parseFloat(approval.tradie.rating)} />
+              ) : (
+                <Badge variant="secondary">No rating</Badge>
+              )}
             </div>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -124,22 +138,25 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 icon={<Phone className="size-4" />}
                 label="Phone"
                 value={approval.tradie.phone}
+                mono
               />
 
               <DetailRow
                 icon={<Building2 className="size-4" />}
                 label="ABN"
                 value={approval.tradie.abn}
+                mono
               />
 
               <DetailRow
                 icon={<DollarSign className="size-4" />}
-                label="Current Stored Rate"
+                label="Current stored rate"
                 value={
                   approval.tradie.hourlyRate
-                    ? `$${approval.tradie.hourlyRate}/hr`
-                    : "-"
+                    ? `${rateCurrency.format(Number(approval.tradie.hourlyRate))}/hr`
+                    : "Not set"
                 }
+                mono
               />
             </div>
           </div>
@@ -150,29 +167,34 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
         {/* Price Comparison */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            Requested Rate Change
+            Requested rate change
           </h3>
 
-          <div className="rounded-lg border p-6">
+          <div className="rounded-lg border border-border/70 p-6">
             <div className="grid grid-cols-3 items-center gap-4">
               <div className="text-center">
-                <p className="text-xs text-muted-foreground">Current Rate</p>
+                <p className="text-xs text-muted-foreground">Current rate</p>
 
-                <p className="mt-2 text-2xl font-bold">
-                  ${data.currentHourlyRate}
+                <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">
+                  {rateCurrency.format(currentRate)}
                 </p>
 
                 <p className="text-sm text-muted-foreground">per hour</p>
               </div>
 
               <div className="flex justify-center">
-                <ArrowRight className="size-6 text-muted-foreground" />
+                <ArrowRight
+                  className="size-6 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </div>
 
               <div className="text-center">
-                <p className="text-xs text-muted-foreground">Requested Rate</p>
+                <p className="text-xs text-muted-foreground">Requested rate</p>
 
-                <p className="mt-2 text-2xl font-bold">${data.newHourlyRate}</p>
+                <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">
+                  {rateCurrency.format(newRate)}
+                </p>
 
                 <p className="text-sm text-muted-foreground">per hour</p>
               </div>
@@ -180,10 +202,18 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
             <div className="mt-6 flex justify-center">
               <Badge variant="outline" className="gap-2 px-3 py-1">
-                <TrendingUp className="size-3" />
-                {isIncrease ? "+" : ""}${difference.toFixed(2)}
-                {" / hr "}({isIncrease ? "+" : ""}
-                {percentageChange}%)
+                {isIncrease ? (
+                  <TrendingUp className="size-3" aria-hidden="true" />
+                ) : (
+                  <TrendingDown className="size-3" aria-hidden="true" />
+                )}
+                <span className="font-mono tabular-nums">
+                  {isIncrease ? "+" : ""}
+                  {rateCurrency.format(difference)}/hr
+                  {percentageChange
+                    ? ` (${isIncrease ? "+" : ""}${percentageChange}%)`
+                    : ""}
+                </span>
               </Badge>
             </div>
           </div>
@@ -196,10 +226,10 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
             <div>
               <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-                Requested Reason
+                Requested reason
               </h3>
 
-              <div className="rounded-lg border bg-muted/20 p-4">
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
                 <p className="text-sm leading-relaxed">{data.reason}</p>
               </div>
             </div>
@@ -211,26 +241,35 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
         {/* Approval Request Reason */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
-            Approval Request Notes
+            Approval request notes
           </h3>
 
-          <div className="rounded-lg border bg-muted/20 p-4">
+          <div className="rounded-lg border border-border/70 bg-muted/20 p-4">
             <p className="text-sm">{approval.reason}</p>
           </div>
         </div>
 
         {/* Impact */}
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="rounded-lg bg-info-light p-4">
           <div className="flex gap-3">
-            <DollarSign className="size-5 text-blue-600 shrink-0" />
+            <DollarSign
+              className="size-5 shrink-0 text-info-ink"
+              aria-hidden="true"
+            />
 
             <div>
-              <p className="font-medium text-blue-900">Approval Impact</p>
+              <p className="font-medium text-info-ink">Approval impact</p>
 
-              <p className="mt-1 text-sm text-blue-800">
-                Approving this request will update the tradie&amp;s hourly rate from
-                ${data.currentHourlyRate} to ${data.newHourlyRate}. Future
-                estimates, quotations and project calculations will use the
+              <p className="mt-1 text-sm text-foreground/80">
+                Approving this request updates the tradie&apos;s hourly rate from{" "}
+                <span className="font-mono tabular-nums">
+                  {rateCurrency.format(currentRate)}
+                </span>{" "}
+                to{" "}
+                <span className="font-mono tabular-nums">
+                  {rateCurrency.format(newRate)}
+                </span>
+                . Future estimates, quotations and project calculations use the
                 updated rate.
               </p>
             </div>
@@ -238,7 +277,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 border-t pt-4">
+        <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
           <Button
             variant="outline"
             onClick={() => submit("rejected")}
@@ -249,9 +288,19 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
           <Button
             onClick={() => submit("approved")}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || !hasRates || newRate <= 0}
           >
-            Approve Price Change
+            {mutation.isPending ? (
+              <>
+                <Loader2
+                  className="mr-2 size-4 animate-spin"
+                  aria-hidden="true"
+                />
+                Submitting…
+              </>
+            ) : (
+              "Approve price change"
+            )}
           </Button>
         </div>
       </div>
@@ -259,12 +308,22 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   );
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
+function InfoItem({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
 
-      <p className="font-medium">{value}</p>
+      <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -273,19 +332,25 @@ function DetailRow({
   icon,
   label,
   value,
+  mono,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  mono?: boolean;
 }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="mt-0.5 text-muted-foreground">{icon}</div>
+      <div className="mt-0.5 text-muted-foreground" aria-hidden="true">
+        {icon}
+      </div>
 
       <div>
         <p className="text-xs text-muted-foreground">{label}</p>
 
-        <p className="font-medium">{value}</p>
+        <p className={cn("font-medium", mono && "font-mono tabular-nums")}>
+          {value}
+        </p>
       </div>
     </div>
   );

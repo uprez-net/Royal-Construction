@@ -2,7 +2,7 @@ import { TradiesByCategory } from "@/types/tradie";
 import { TRADIE_TYPE_ICONS, TRADIE_TYPES } from "@/constants/tradieTypes";
 import { Square } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { randomColourHexGenerator } from "@/utils/generator";
+import { TRADE_ICON_TILE_CLASS } from "@/constants/tradeChip";
 import { useAppDispatch } from "@/lib/store/hooks";
 import {
   setSelectedCategory,
@@ -12,14 +12,12 @@ import {
   convertCategoryToTradieType,
   type TradieType,
 } from "@/utils/normalize-tradie-type";
-import Link from "next/link";
 
 interface CategoryCardProps {
   name: string;
   count: number;
   totalJobs: number;
   icon?: React.ReactNode;
-  color?: string;
   onClick?: () => void;
 }
 
@@ -36,24 +34,21 @@ export function TradieCategory({
   };
 
   return (
-    <div className="space-y-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
       {filteredTradies.map((category) => {
         const Icon =
           TRADIE_TYPE_ICONS[convertCategoryToTradieType(category.category)!] ||
           Square;
+        const name =
+          TRADIE_TYPES[category.category as TradieType] ?? category.category;
         return (
           <CategoryCard
             key={category.category}
-            name={TRADIE_TYPES[category.category as TradieType]}
+            name={name}
             count={category.tradies.length}
             totalJobs={category.totalCategoryJobsCompleted}
-            icon={<Icon className="h-5 w-5" />}
-            color={randomColourHexGenerator(
-              TRADIE_TYPES[category.category as TradieType],
-            )}
-            onClick={() =>
-              handleActionClick(TRADIE_TYPES[category.category as TradieType])
-            }
+            icon={<Icon className="size-5" aria-hidden="true" />}
+            onClick={() => handleActionClick(name)}
           />
         );
       })}
@@ -65,37 +60,32 @@ function CategoryCard({
   name,
   count,
   totalJobs,
-  icon = <Square className="h-5 w-5" />,
-  color = "#2563EB",
+  icon = <Square className="size-5" aria-hidden="true" />,
   onClick,
 }: CategoryCardProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-label={`${name}: ${count} tradie${count === 1 ? "" : "s"}, ${totalJobs} total jobs`}
       className={cn(
-        "group relative flex flex-col rounded-xl border bg-card p-4 text-left transition-all",
-        "hover:shadow-md hover:-translate-y-0.5",
+        "relative flex flex-col rounded-lg border border-border/70 bg-card p-4 text-left shadow-sm transition-colors",
+        "hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
       )}
     >
-      <Link href={`#${name}`}>
-        <span className="absolute right-3 top-3 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold">
-          {count}
-        </span>
+      <span className="absolute right-3 top-3 rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-foreground">
+        {count}
+      </span>
 
-        <div
-          className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg"
-          style={{
-            backgroundColor: `${color}15`,
-            color,
-          }}
-        >
-          {icon}
-        </div>
+      {/* Trade identity is carried by the icon, not a per-trade hue — see
+          constants/tradeChip.ts for why the hashed colour was removed. */}
+      <div className={cn(TRADE_ICON_TILE_CLASS, "mb-3 size-10")}>{icon}</div>
 
-        <h4 className="font-semibold">{name}</h4>
+      <span className="font-medium text-foreground">{name}</span>
 
-        <p className="text-sm text-muted-foreground">{totalJobs} total jobs</p>
-      </Link>
+      <span className="text-sm text-muted-foreground">
+        {totalJobs} total jobs
+      </span>
     </button>
   );
 }
