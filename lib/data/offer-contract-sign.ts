@@ -22,6 +22,7 @@ import {
   collectOfferSigners,
   collectOwnerIssues,
   formatOwnerNamesLine,
+  MAX_OWNER_SIGNERS,
 } from "@/lib/offer/workspace-model";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
@@ -207,11 +208,12 @@ export async function sendContractForSignature(input: {
   // generated Owner Signature Schedule (annexure), a single page of blocks.
   // Refuse rather than silently drop a signatory (ADR 0003). Runs before the send
   // is claimed, so no status rollback is needed.
-  const MAX_CONTRACT_SIGNERS = 10;
-  if (ownerSigners.length > MAX_CONTRACT_SIGNERS) {
+  // Shared with the offer-send owner gate (collectOwnerIssues) so the offer can't
+  // be sent with more signers than the contract can complete (PR #124 review).
+  if (ownerSigners.length > MAX_OWNER_SIGNERS) {
     return {
       ok: false,
-      error: `This contract has ${ownerSigners.length} signatories; up to ${MAX_CONTRACT_SIGNERS} are supported. Reduce the owner/director signatories or arrange a separate signing.`,
+      error: `This contract has ${ownerSigners.length} signatories; up to ${MAX_OWNER_SIGNERS} are supported. Reduce the owner/director signatories or arrange a separate signing.`,
     };
   }
 

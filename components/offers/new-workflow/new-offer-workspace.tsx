@@ -1126,6 +1126,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         onMarkSent={() => transition("sent")}
         canMarkSent={!customerPrice.needsOverrideReason && ownersComplete}
         onMarkAgreed={() => transition("agreed")}
+        // Same owner gate as send/mark-sent: the server transition to AGREED
+        // rejects an incomplete party set, so don't leave the button actionable.
+        canMarkAgreed={ownersComplete}
         onMarkRejected={() => transition("rejected")}
         onCreateRevision={createRevision}
         canRevise={

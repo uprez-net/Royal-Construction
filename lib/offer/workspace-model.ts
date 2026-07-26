@@ -390,6 +390,16 @@ export function collectOfferSignerLabels(
 
 const OWNER_EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+// Hard ceiling on customer-side signatories (individual owners + company
+// directors). The BC4 contract flow fans these out to DocuSign — the primary
+// signs the form, the rest sign the appended Owner Signature Schedule — and the
+// contract-envelope build rejects more than this. Enforced HERE (the shared
+// owner gate) so an oversized party set is blocked at OFFER send, before Job
+// setup locks, instead of only failing later at Contract signing with the Tender
+// already signed and no normal path forward (PR #124 review). Keep in sync with
+// the contract-envelope cap that imports it.
+export const MAX_OWNER_SIGNERS = 10;
+
 // Completeness issues for the owner party set (codex review; issues #109/#110/
 // #103): every owner needs a name and a Current Location, and every signatory a
 // name + valid own email. Returned as human-readable labels. Shared by the
@@ -437,12 +447,21 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
       }
     });
   });
+  const signers = collectOfferSigners(owners);
+  // Cap the total signatory count at the same ceiling the BC4 contract enforces,
+  // so an oversized party set is caught at offer send rather than stranding a
+  // signed Tender (PR #124 review).
+  if (signers.length > MAX_OWNER_SIGNERS) {
+    issues.push(
+      `This offer has ${signers.length} signatories; up to ${MAX_OWNER_SIGNERS} are supported. Reduce the owner/director signatories or arrange a separate signing.`,
+    );
+  }
   // Every signer needs a UNIQUE email. DocuSign routes + tracks per recipient and
   // the completion webhook falls back to matching by email, so two signers on the
   // same address make their signatures indistinguishable and corrupt the
   // per-signer audit trail. Flag any address shared across signatories.
   const emailCounts = new Map<string, number>();
-  collectOfferSigners(owners).forEach((signer) => {
+  signers.forEach((signer) => {
     const email = signer.signatory.email.trim().toLowerCase();
     if (OWNER_EMAIL_PATTERN.test(email)) {
       emailCounts.set(email, (emailCounts.get(email) ?? 0) + 1);

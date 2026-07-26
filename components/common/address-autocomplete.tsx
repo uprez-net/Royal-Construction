@@ -107,7 +107,11 @@ export function AddressAutocomplete({
 
   const pick = (suggestion: AddressSuggestion) => {
     const address = suggestion.address || suggestion.label;
-    skipNextFetch.current = true;
+    // Only arm the skip-guard when the pick actually changes the value. If the
+    // chosen address already equals the current value, onChange is a no-op so the
+    // value-effect never runs to clear this flag — leaving it armed would swallow
+    // the user's NEXT genuine edit and show no suggestions (PR #124 review).
+    skipNextFetch.current = address !== value;
     setSuggestions([]);
     setOpen(false);
     setActiveIndex(-1);

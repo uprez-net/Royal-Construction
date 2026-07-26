@@ -5,6 +5,7 @@ import {
   collectOwnerIssues,
   createCompanyOwner,
   createIndividualOwner,
+  MAX_OWNER_SIGNERS,
   ownersFromLegacyClientFields,
   type OfferOwner,
 } from "../../lib/offer/workspace-model";
@@ -65,6 +66,24 @@ test("a company owner without an ABN/ACN is flagged (PR #124 P1)", () => {
 
 test("a company owner with an ABN and a director produces no issues", () => {
   const owners = [company("c1", "Rakhi Pty Ltd", "dir@example.com")];
+  assert.deepEqual(collectOwnerIssues(owners), []);
+});
+
+test("more than the signer cap is flagged (PR #124 review)", () => {
+  const owners = Array.from({ length: MAX_OWNER_SIGNERS + 1 }, (_, i) =>
+    individual(`o${i}`, `Owner ${i}`, `owner${i}@example.com`),
+  );
+  const issues = collectOwnerIssues(owners);
+  assert.ok(
+    issues.some((i) => i.includes("signatories") && i.includes("supported")),
+    `expected a signer-cap issue, got: ${JSON.stringify(issues)}`,
+  );
+});
+
+test("exactly the signer cap is allowed", () => {
+  const owners = Array.from({ length: MAX_OWNER_SIGNERS }, (_, i) =>
+    individual(`o${i}`, `Owner ${i}`, `owner${i}@example.com`),
+  );
   assert.deepEqual(collectOwnerIssues(owners), []);
 });
 
