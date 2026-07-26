@@ -103,12 +103,26 @@ export async function getTradieById(tradieId: string): Promise<TradieDetails | n
             return null;
         }
 
+        // `ratings` and `schedules` are destructured OFF the returned object, not
+        // just replaced. `...tradie` used to spread them through: `hourlyRate` and
+        // `rating` were safely overwritten because the key names match, but
+        // `ratings` -> `reviews` is a *rename*, so the raw Prisma rows survived
+        // underneath the mapped copy. Those rows carry `rating: Decimal`, and a
+        // Prisma Decimal is not serializable across the RSC boundary — React threw
+        // "Only plain objects can be passed to Client Components" on every visit to
+        // the tradie detail page.
+        //
+        // Dropping them also cuts the payload: neither is read anywhere on the
+        // client (verified across components/), so both were dead weight embedded
+        // in the HTML response and every subsequent RSC request.
+        const { ratings, schedules, ...tradieFields } = tradie;
+
         return {
-            ...tradie,
+            ...tradieFields,
             hourlyRate: tradie.hourlyRate?.toString(),
             rating: tradie.rating?.toString(),
-            jobsCompleted: tradie.schedules.length,
-            reviews: tradie.ratings.map(r => ({
+            jobsCompleted: schedules.length,
+            reviews: ratings.map(r => ({
                 ...r,
                 rating: r.rating.toString(),
                 user: {
@@ -917,12 +931,18 @@ export async function updateTradie(tradieId: string, data: Partial<Pick<Tradie, 
             revalidateTag('tradie-management', CACHE_PROFILES.MEDIUM);
         });
 
+        // Same Decimal-leak fix as getTradieById: drop `ratings`/`schedules` rather
+        // than letting `...updatedTradie` spread the raw Prisma rows through beside
+        // the mapped `reviews`. This return value goes straight back to the client
+        // after an edit, so the unserializable Decimal would surface there too.
+        const { ratings, schedules, ...tradieFields } = updatedTradie;
+
         return {
-            ...updatedTradie,
+            ...tradieFields,
             hourlyRate: updatedTradie.hourlyRate?.toString(),
             rating: updatedTradie.rating?.toString(),
-            jobsCompleted: updatedTradie.schedules.length,
-            reviews: updatedTradie.ratings.map(r => ({
+            jobsCompleted: schedules.length,
+            reviews: ratings.map(r => ({
                 ...r,
                 rating: r.rating.toString(),
                 user: {
