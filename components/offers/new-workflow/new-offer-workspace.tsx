@@ -838,6 +838,20 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setRevisionNotice(null);
     void (async () => {
       try {
+        // Persist pending edits BEFORE forking. createOfferRevision copies the
+        // PERSISTED snapshot, so without this an edit still inside the 800ms
+        // autosave debounce is missing from the new revision — and the debounced
+        // save then lands on the revision we just superseded (PR #124 review).
+        // Every other lifecycle action already flushes first; this one didn't.
+        const flush = await flushWorkspace(offerId);
+        if (flush !== "clean") {
+          setRevisionNotice(
+            flush === "reconciled"
+              ? "Your view was refreshed with a newer saved version — review it and create the revision again."
+              : "Couldn't save your latest changes, so no revision was created. Try again.",
+          );
+          return;
+        }
         const result = await createOfferRevision({ offerId });
         if (!result.ok) {
           // Only reason today is an executed contract.
@@ -878,7 +892,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         setRevising(false);
       }
     })();
-  }, [leadId, hydrateSnapshot]);
+  }, [leadId, hydrateSnapshot, flushWorkspace]);
 
   // Email the proposal PDF to the client. Flushes the latest edits first so the
   // generated PDF matches the workspace, then routes through sendOfferDocument.

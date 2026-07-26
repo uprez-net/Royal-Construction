@@ -27,7 +27,7 @@ import {
 } from "@/lib/offer/workspace-model";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { ClipboardList, Info, Plus, Sparkles, Trash2 } from "lucide-react";
-import type { PropsWithChildren } from "react";
+import { useState, type PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
 
@@ -258,17 +258,44 @@ function OwnersSection({
   readonly owners: readonly OfferOwner[];
   readonly onOwnersChange: (next: readonly OfferOwner[]) => void;
 }) {
+  // Explains a refused Individual/Company switch (see setKind) rather than
+  // silently discarding directors.
+  const [kindNotice, setKindNotice] = useState<string | null>(null);
+
   const updateOwner = (index: number, patch: Partial<OfferOwner>) =>
     onOwnersChange(
       owners.map((owner, i) => (i === index ? { ...owner, ...patch } : owner)),
     );
 
-  const setKind = (index: number, kind: OfferOwnerKind) =>
+  const setKind = (index: number, kind: OfferOwnerKind) => {
+    const target = owners[index];
+    if (!target || target.kind === kind) {
+      return;
+    }
+    // Converting a company with several directors to an individual would discard
+    // every director but the first — silent, irreversible data loss on the party
+    // set that drives the legal documents. Refuse and say why instead (PR #124
+    // review); the estimator can remove the extra directors deliberately.
+    if (
+      kind === "individual" &&
+      target.kind === "company" &&
+      target.signatories.length > 1
+    ) {
+      setKindNotice(
+        `Owner ${index + 1}: remove the extra directors first — an individual owner has a single signatory, so switching now would discard ${target.signatories.length - 1} of them.`,
+      );
+      return;
+    }
+    setKindNotice(null);
     onOwnersChange(
       owners.map((owner, i) => {
         if (i !== index || owner.kind === kind) return owner;
         if (kind === "company") {
-          // Existing signatories become directors.
+          // Existing signatories become directors — a person's name is a valid
+          // director name. But the COMPANY name is not the person's name: keeping
+          // owner.displayName here made "John Smith" the registered entity, which
+          // then passed readiness once any ABN was typed (PR #124 review). Clear
+          // it so the company's legal name must be entered deliberately.
           const directors =
             owner.signatories.length > 0
               ? owner.signatories
@@ -276,6 +303,7 @@ function OwnersSection({
           return {
             ...owner,
             kind,
+            displayName: "",
             signatories: directors.map((signatory) => ({
               ...signatory,
               capacity: DIRECTOR_SIGNER_CAPACITY,
@@ -308,6 +336,7 @@ function OwnersSection({
         };
       }),
     );
+  };
 
   const setIndividualName = (index: number, value: string) =>
     onOwnersChange(
@@ -419,6 +448,14 @@ function OwnersSection({
           <Plus className="size-4" aria-hidden="true" /> Add owner
         </Button>
       </div>
+      {kindNotice ? (
+        <p
+          role="status"
+          className="rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground"
+        >
+          {kindNotice}
+        </p>
+      ) : null}
       {owners.map((owner, index) => (
         <div
           key={owner.id}

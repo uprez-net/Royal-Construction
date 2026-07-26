@@ -133,14 +133,40 @@ export async function createProjectFromOffer(input: {
   // rollback() must delete them alongside the status revert — otherwise they
   // orphan on the lead and a retry creates duplicate attachments (PR #124 review).
   const createdFileIds: string[] = [];
-  const rollback = async () => {
-    await revertClaim().catch(() => undefined);
-    if (createdFileIds.length > 0) {
-      await prisma.file
-        .deleteMany({ where: { id: { in: createdFileIds } } })
-        .catch(() => undefined);
+  // Compensation is itself fallible. Swallowing its errors reported an ordinary
+  // "project creation failed" while the offer stayed stuck at PROJECT (no retry
+  // possible) or executed-document rows were left orphaned to be duplicated by
+  // the next attempt (PR #124 review). Return what actually failed so the caller
+  // can say so instead of implying a clean rollback.
+  const rollback = async (): Promise<string[]> => {
+    const failures: string[] = [];
+    try {
+      await revertClaim();
+    } catch (revertError) {
+      console.error("[offer] handoff: status revert failed:", revertError);
+      failures.push(
+        "the offer is still marked as handed off to a project (status revert failed)",
+      );
     }
+    if (createdFileIds.length > 0) {
+      try {
+        await prisma.file.deleteMany({ where: { id: { in: createdFileIds } } });
+      } catch (deleteError) {
+        console.error("[offer] handoff: file cleanup failed:", deleteError);
+        failures.push(
+          "the executed Tender/Contract file rows could not be cleaned up (a retry may duplicate them)",
+        );
+      }
+    }
+    return failures;
   };
+
+  // Compose the caller-facing error, appending anything the compensation itself
+  // failed to undo so a half-rolled-back handoff is never reported as a clean one.
+  const failedWith = (message: string, rollbackFailures: string[]): string =>
+    rollbackFailures.length === 0
+      ? message
+      : `${message}. Additionally, the cleanup did not fully succeed: ${rollbackFailures.join("; ")}. Manual reconciliation is needed before retrying.`;
 
   const warnings: string[] = [];
 
@@ -176,10 +202,13 @@ export async function createProjectFromOffer(input: {
         });
         warnings.push(`Lead email was blank — set to ${jobEmail} from the offer.`);
       } else {
-        await rollback();
+        const rollbackFailures = await rollback();
         return {
           ok: false,
-          error: "The lead has no valid email and the offer has no client email — set one before creating the project.",
+          error: failedWith(
+            "The lead has no valid email and the offer has no client email — set one before creating the project",
+            rollbackFailures,
+          ),
         };
       }
     }
@@ -324,10 +353,13 @@ export async function createProjectFromOffer(input: {
       // CONFIRMED absent: the query succeeded and the lead has no project. Only
       // now is it safe to revert the claim and delete the executed-PDF rows, so
       // the handoff is cleanly retryable.
-      await rollback();
+      const rollbackFailures = await rollback();
       return {
         ok: false,
-        error: `Project creation failed: ${(error as Error).message}`,
+        error: failedWith(
+          `Project creation failed: ${(error as Error).message}`,
+          rollbackFailures,
+        ),
       };
     }
   }

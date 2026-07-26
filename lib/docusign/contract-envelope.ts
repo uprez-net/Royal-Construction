@@ -231,8 +231,10 @@ export async function createContractEnvelope(
       result.envelopeId,
       {},
     );
+    const builderEmail = args.builder.email.trim().toLowerCase();
     for (const signer of list.signers ?? []) {
       const roleName = (signer.roleName ?? "").toLowerCase();
+      const signerEmail = (signer.email ?? "").trim().toLowerCase();
       let role: "BUILDER" | "CUSTOMER" = "CUSTOMER";
       let source: ContractOwnerSigner | undefined;
       if (roleName === "builder") {
@@ -241,6 +243,18 @@ export async function createContractEnvelope(
         source = owners[0];
       } else if (roleName.startsWith("annexowner")) {
         source = owners[Number(roleName.slice("annexowner".length))];
+      } else {
+        // No/unknown roleName: classify by EMAIL rather than defaulting everyone
+        // to CUSTOMER, which recorded the builder as a customer signer and
+        // corrupted the party audit trail (PR #124 review). Owner emails are
+        // unique per signer (collectOwnerIssues enforces it), so this is exact.
+        if (signerEmail && signerEmail === builderEmail) {
+          role = "BUILDER";
+        } else {
+          source = owners.find(
+            (owner) => owner.email.trim().toLowerCase() === signerEmail,
+          );
+        }
       }
       recipients.push({
         role,
@@ -256,39 +270,54 @@ export async function createContractEnvelope(
   } catch {
     // Non-fatal: the Connect webhook can still match recipients by email.
   }
-  // Defensive: if the readback returned nothing, record our intended set so no
-  // signer is lost from the audit trail — but do NOT guess recipientIds for a
-  // composite envelope. Composite templates renumber recipients, so a guessed id
-  // could make the Connect webhook (which matches by id first) update the WRONG
-  // EnvelopeSignature (codex #3). Emit an empty id (→ persisted as null) so the
-  // webhook falls back to email matching, which is unique per signer (codex #2).
-  // The single-owner templateRoles path keeps its deterministic ids (Builder 1 /
-  // Owner 2), which DocuSign does not renumber.
-  if (recipients.length === 0) {
-    const isComposite = owners.length > 1;
+  // Defensive: record any INTENDED signer the readback did not return, so no
+  // signer is lost from the audit trail. This must handle a PARTIAL list, not
+  // just a completely empty one — DocuSign returning 3 of 11 signers previously
+  // left the other 8 unrecorded, and the completion webhook could then never
+  // correlate their signatures (PR #124 review).
+  //
+  // Do NOT guess recipientIds for a composite envelope: composite templates
+  // renumber recipients, so a guessed id could make the Connect webhook (which
+  // matches by id first) update the WRONG EnvelopeSignature (codex #3). Emit an
+  // empty id (→ persisted as null) so the webhook falls back to email matching,
+  // which is unique per signer (codex #2). The single-owner templateRoles path
+  // keeps its deterministic ids (Builder 1 / Owner 2), which DocuSign does not
+  // renumber — but only trust those when nothing was read back at all, since a
+  // partial readback means the numbering is already not what we assumed.
+  const isComposite = owners.length > 1;
+  const readbackWasEmpty = recipients.length === 0;
+  const deterministicId = (fallback: string) =>
+    isComposite || !readbackWasEmpty ? "" : fallback;
+  const recorded = new Set(
+    recipients.map((recipient) => recipient.email.trim().toLowerCase()),
+  );
+  if (!recorded.has(args.builder.email.trim().toLowerCase())) {
     recipients.push({
       role: "BUILDER",
       name: args.builder.name,
       email: args.builder.email,
       routingOrder: 2,
-      recipientId: isComposite ? "" : "1",
+      recipientId: deterministicId("1"),
       capacity: null,
       entityName: null,
       entityAbn: null,
     });
-    owners.forEach((signer, index) =>
-      recipients.push({
-        role: "CUSTOMER",
-        name: signer.name,
-        email: signer.email,
-        routingOrder: 1,
-        recipientId: isComposite ? "" : String(index + 2),
-        capacity: signer.capacity ?? null,
-        entityName: signer.entityName ?? null,
-        entityAbn: signer.entityAbn ?? null,
-      }),
-    );
   }
+  owners.forEach((signer, index) => {
+    if (recorded.has(signer.email.trim().toLowerCase())) {
+      return;
+    }
+    recipients.push({
+      role: "CUSTOMER",
+      name: signer.name,
+      email: signer.email,
+      routingOrder: 1,
+      recipientId: deterministicId(String(index + 2)),
+      capacity: signer.capacity ?? null,
+      entityName: signer.entityName ?? null,
+      entityAbn: signer.entityAbn ?? null,
+    });
+  });
 
   return { envelopeId: result.envelopeId, recipients };
 }

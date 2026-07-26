@@ -35,6 +35,10 @@ const INCLUSIONS_ROWS_PER_PAGE = 12;
 // fit for A4 alongside the masthead and the acceptance paragraph. Shared with the
 // contract annexure so both legal documents paginate signatures identically.
 export const SIGNATURE_BLOCKS_PER_PAGE = 4;
+// Owner Details rows that still fit on the cover beneath the masthead, parties
+// block and contract sum; past this the table moves to its own page(s).
+const OWNER_DETAIL_ROWS_INLINE = 4;
+const OWNER_DETAIL_OWNERS_PER_PAGE = 8;
 
 type InclusionRow = (typeof STANDARD_INCLUSIONS_SCHEDULE)[number];
 
@@ -108,8 +112,37 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     executionChunks.push(executionBlocks.slice(i, i + SIGNATURE_BLOCKS_PER_PAGE));
   }
 
+  // Owner Details rows also lived entirely on the cover, under the masthead,
+  // parties block and contract sum. With ten owners that pushed the cover past
+  // one physical sheet, so Chromium printed a page the footer never counted and
+  // "Page 1 of N" appeared on sheet 2 (PR #124 review). A short list still sits
+  // inline on the cover (the common case, output unchanged); anything longer
+  // moves to its own counted page(s). Note a COMPANY owner contributes a header
+  // row plus one row per director, so count rendered ROWS, not owners.
+  const detailOwners = job.owners ?? [];
+  const ownerDetailRows = detailOwners.map(ownerDetailRowsHtml);
+  const ownerDetailRowCount = detailOwners.reduce(
+    (sum: number, owner: OfferOwner) =>
+      sum + (owner.kind === "company" ? 1 + owner.signatories.length : 1),
+    0,
+  );
+  const inlineOwnerDetails = ownerDetailRowCount <= OWNER_DETAIL_ROWS_INLINE;
+  const ownerDetailChunks: string[][] = [];
+  if (!inlineOwnerDetails) {
+    for (let i = 0; i < ownerDetailRows.length; i += OWNER_DETAIL_OWNERS_PER_PAGE) {
+      ownerDetailChunks.push(
+        ownerDetailRows.slice(i, i + OWNER_DETAIL_OWNERS_PER_PAGE),
+      );
+    }
+  }
+
   const totalPages =
-    1 + inclusionChunks.length + 1 + 1 + executionChunks.length;
+    1 +
+    ownerDetailChunks.length +
+    inclusionChunks.length +
+    1 +
+    1 +
+    executionChunks.length;
   let pageNo = 0;
   const foot = (): string => {
     pageNo += 1;
@@ -117,7 +150,17 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   };
 
   const body = [
-    coverPage(input, data, reference, totalArea, foot()),
+    coverPage(
+      input,
+      data,
+      reference,
+      totalArea,
+      inlineOwnerDetails ? ownerDetailRows : null,
+      foot(),
+    ),
+    ...ownerDetailChunks.map((rows, index) =>
+      ownerDetailsPage(rows, index > 0, foot()),
+    ),
     ...inclusionChunks.map((rows, index) =>
       inclusionsPage(rows, index * INCLUSIONS_ROWS_PER_PAGE, index > 0, foot()),
     ),
@@ -194,13 +237,13 @@ function coverPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
   reference: string,
   totalArea: number,
+  inlineOwnerDetailRows: readonly string[] | null,
   foot: string,
 ): string {
   const { job, customerPrice } = input;
   const owners = job.owners ?? [];
   const ownerLabel = owners.length > 1 ? "Owners" : "Owner";
   const ownerWho = ownerPartyNamesHtml(job);
-  const ownerDetails = owners.map(ownerDetailRowsHtml).join("");
   return `<div class="page">
     ${masthead()}
     <h1 class="doc">Fixed Price Building Tender</h1>
@@ -212,9 +255,9 @@ function coverPage(
       <div class="party"><div class="role">The ${ownerLabel}</div><div class="who">${ownerWho}</div><div style="color:${MUTED};font-size:10px;margin-top:4px;">Site Location: ${esc(job.siteAddress)}</div></div>
     </div>
     <div class="sum"><div class="top">Contract Sum (including GST)</div><div class="amt">${money(customerPrice.selectedContractValueIncGst)}</div></div>
-    ${owners.length > 0
+    ${inlineOwnerDetailRows && inlineOwnerDetailRows.length > 0
       ? `<h2>Owner Details</h2>
-    <table><thead><tr><th>Owner</th><th>Current Location</th><th>Email</th><th>Phone</th></tr></thead><tbody>${ownerDetails}</tbody></table>`
+    <table><thead><tr><th>Owner</th><th>Current Location</th><th>Email</th><th>Phone</th></tr></thead><tbody>${inlineOwnerDetailRows.join("")}</tbody></table>`
       : ""}
     <h2>Project Particulars</h2>
     <table>
@@ -351,6 +394,21 @@ function termsPage(
       <li><b>Validity.</b> This Tender is valid until ${esc(data.validUntilLabel)} unless extended in writing.</li>
     </ol>
     <p class="note">Insert Royal Constructions' standard special conditions and any NCC 2025 clauses from the master tender template here before issuing. The clauses above are structural placeholders and should be reconciled with legal wording.</p>
+    ${foot}
+  </div>`;
+}
+
+// Owner Details on their own page, used when the table is too long to sit on the
+// cover without pushing it past one physical sheet.
+function ownerDetailsPage(
+  rows: readonly string[],
+  continued: boolean,
+  foot: string,
+): string {
+  return `<div class="page">
+    ${masthead()}
+    <h2 style="margin-top:20px;">Owner Details${continued ? " (cont.)" : ""}</h2>
+    <table><thead><tr><th>Owner</th><th>Current Location</th><th>Email</th><th>Phone</th></tr></thead><tbody>${rows.join("")}</tbody></table>
     ${foot}
   </div>`;
 }
