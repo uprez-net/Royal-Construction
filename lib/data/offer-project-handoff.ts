@@ -127,15 +127,30 @@ export async function createProjectFromOffer(input: {
       data: { offerStatus: OfferStatus.CONTRACT_SIGNED },
     });
 
+  // Executed-PDF File rows are created before createProjectWithLead (it needs
+  // their ids to re-parent them onto the project), so they live OUTSIDE that
+  // call's transaction. If anything up to and including project creation fails,
+  // rollback() must delete them alongside the status revert — otherwise they
+  // orphan on the lead and a retry creates duplicate attachments (PR #124 review).
+  const createdFileIds: string[] = [];
+  const rollback = async () => {
+    await revertClaim().catch(() => undefined);
+    if (createdFileIds.length > 0) {
+      await prisma.file
+        .deleteMany({ where: { id: { in: createdFileIds } } })
+        .catch(() => undefined);
+    }
+  };
+
   const warnings: string[] = [];
 
-  // ALL work below runs AFTER the status claim, so ANY failure — snapshot
-  // parsing, lead reconciliation, executed-file creation, project creation —
-  // must revert the claim, or the offer is stranded at PROJECT with no project
-  // and no retry path (PR #124 review; previously only createProjectWithLead was
-  // guarded). One try wraps the whole fallible sequence; the catch reverts once.
-  // revalidate + the success return stay OUTSIDE it so a best-effort cache miss
-  // can never roll back a project that was actually created.
+  // Everything up to and including project creation is REVERTABLE: any failure
+  // rolls the status back to CONTRACT_SIGNED and deletes the executed-PDF rows, so
+  // the offer is retryable and no orphans remain. Once createProjectWithLead
+  // COMMITS, the project is real and we must NEVER revert past that point — a later
+  // audit-event or cache failure that reverted would leave a live project on an
+  // offer that claims none, permanently un-retryable (PR #124 review). So the
+  // post-commit steps below run OUTSIDE this try and are best-effort.
   let handoff: { projectId: string; projectName: string; milestoneCount: number };
   try {
     const snapshot = deserializeWorkspace(parseWorkspaceState(state));
@@ -160,7 +175,7 @@ export async function createProjectFromOffer(input: {
         });
         warnings.push(`Lead email was blank — set to ${jobEmail} from the offer.`);
       } else {
-        await revertClaim();
+        await rollback();
         return {
           ok: false,
           error: "The lead has no valid email and the offer has no client email — set one before creating the project.",
@@ -169,7 +184,8 @@ export async function createProjectFromOffer(input: {
     }
 
     // Attach the executed legal documents as lead files (createProjectWithLead
-    // re-parents them onto the project).
+    // re-parents them onto the project). Track each created id so rollback() can
+    // delete it if a later step fails before the project commits.
     const docRef = async (
       url: string | null | undefined,
       kind: "tender" | "contract",
@@ -178,7 +194,7 @@ export async function createProjectFromOffer(input: {
         // Unreachable: the executed-PDF gate above guarantees both URLs are
         // present. Kept as a defensive invariant so a future refactor can never
         // silently attach an empty document reference (the root of issue #90). The
-        // outer catch reverts the claim so the offer stays retryable.
+        // outer catch rolls back the claim + files so the offer stays retryable.
         throw new Error(`Executed ${kind} PDF unexpectedly missing after gate.`);
       }
       const fileName = `Executed-${kind === "tender" ? "Tender" : "Contract"}-${reference}.pdf`;
@@ -192,6 +208,7 @@ export async function createProjectFromOffer(input: {
           uploadedBy: actor.id,
         },
       });
+      createdFileIds.push(file.id);
       return { fileId: file.id, fileName, url, kind };
     };
     const sourceDocuments = {
@@ -239,40 +256,43 @@ export async function createProjectFromOffer(input: {
       extraction,
       sourceDocuments,
     });
-    const projectId = (project as { id: string }).id;
-    warnings.push(
-      "Start date defaulted to +14 days (9-month duration) and you are the site manager — adjust in the project settings.",
-    );
-
-    // Status already flipped to PROJECT by the atomic claim above; record the
-    // audit event now that the project exists (still guarded — a failure here
-    // must also revert, or we'd have a project with the offer's claim un-audited
-    // and non-retryable).
-    await prisma.offerStatusEvent.create({
-      data: {
-        offerId: offer.id,
-        fromStatus: OfferStatus.CONTRACT_SIGNED,
-        toStatus: OfferStatus.PROJECT,
-        actorId: actor.id,
-        note: `Project ${projectId} created from executed contract`,
-      },
-    });
-
     handoff = {
-      projectId,
+      projectId: (project as { id: string }).id,
       projectName: extraction.projectName,
       milestoneCount: project.milestones.length,
     };
   } catch (error) {
-    await revertClaim();
+    await rollback();
     return {
       ok: false,
       error: `Project creation failed: ${(error as Error).message}`,
     };
   }
 
-  // Best-effort cache invalidation — OUTSIDE the guarded block so it can never
-  // trigger a revert of the project that was just created.
+  // ── Past this point the project is COMMITTED — never revert. ──
+  warnings.push(
+    "Start date defaulted to +14 days (9-month duration) and you are the site manager — adjust in the project settings.",
+  );
+
+  // Record the PROJECT status event (the status itself was flipped by the atomic
+  // claim). BEST-EFFORT: a failure here must NOT roll back a real project (finding
+  // #3), so log and continue — the offer stays PROJECT with its project intact.
+  await prisma.offerStatusEvent
+    .create({
+      data: {
+        offerId: offer.id,
+        fromStatus: OfferStatus.CONTRACT_SIGNED,
+        toStatus: OfferStatus.PROJECT,
+        actorId: actor.id,
+        note: `Project ${handoff.projectId} created from executed contract`,
+      },
+    })
+    .catch((error) =>
+      console.error("[offer] handoff audit event failed:", error),
+    );
+
+  // Best-effort cache invalidation — also outside the guarded block so it can
+  // never trigger a revert of the project that was just created.
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   revalidateTag("projects", CACHE_PROFILES.MEDIUM);
   revalidateTag(`project-${handoff.projectId}`, CACHE_PROFILES.MEDIUM);
