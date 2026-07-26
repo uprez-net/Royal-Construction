@@ -307,9 +307,23 @@ function OwnersSection({
           ? {
               ...owner,
               displayName: value,
-              signatories: owner.signatories.map((signatory, si) =>
-                si === 0 ? { ...signatory, name: value } : signatory,
-              ),
+              // Create signatory 0 if the owner arrived with none, so a
+              // zero-signatory owner (which the readiness gate flags) can be
+              // repaired here instead of mapping over [] forever (PR #124 review).
+              signatories:
+                owner.signatories.length > 0
+                  ? owner.signatories.map((signatory, si) =>
+                      si === 0 ? { ...signatory, name: value } : signatory,
+                    )
+                  : [
+                      {
+                        ...createOfferSignatory(
+                          newOwnerId(`${owner.id}-signer`),
+                          OWNER_SIGNER_CAPACITY,
+                        ),
+                        name: value,
+                      },
+                    ],
             }
           : owner,
       ),
@@ -321,16 +335,36 @@ function OwnersSection({
     patch: Partial<OfferOwnerSignatory>,
   ) =>
     onOwnersChange(
-      owners.map((owner, i) =>
-        i === ownerIndex
-          ? {
-              ...owner,
-              signatories: owner.signatories.map((signatory, si) =>
-                si === sigIndex ? { ...signatory, ...patch } : signatory,
-              ),
-            }
-          : owner,
-      ),
+      owners.map((owner, i) => {
+        if (i !== ownerIndex) {
+          return owner;
+        }
+        // Same repair for the email/phone fields, which target signatory 0: a
+        // zero-signatory owner had no row for .map to patch, so its contact
+        // details could never be entered. Seed signatory 0 from the patch.
+        if (owner.signatories.length === 0 && sigIndex === 0) {
+          return {
+            ...owner,
+            signatories: [
+              {
+                ...createOfferSignatory(
+                  newOwnerId(`${owner.id}-signer`),
+                  owner.kind === "company"
+                    ? DIRECTOR_SIGNER_CAPACITY
+                    : OWNER_SIGNER_CAPACITY,
+                ),
+                ...patch,
+              },
+            ],
+          };
+        }
+        return {
+          ...owner,
+          signatories: owner.signatories.map((signatory, si) =>
+            si === sigIndex ? { ...signatory, ...patch } : signatory,
+          ),
+        };
+      }),
     );
 
   const addDirector = (index: number) =>

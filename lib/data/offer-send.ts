@@ -216,32 +216,51 @@ export async function sendOfferDocument(input: {
     token: `RCOFR-${randomBytes(6).toString("hex").toUpperCase()}`,
   }));
 
-  // On a FIRST send (offer still PENDING) a partial failure can leave some
-  // recipients already emailed + tracked; skip those on the retry so they aren't
-  // double-sent with a fresh untracked token. An explicit Resend (offer already
-  // SENT) intentionally re-emails everyone, so only dedupe while PENDING.
+  const isFirstSend = offer.offerStatus === OfferStatus.PENDING;
   let toSend = sends;
-  if (offer.offerStatus === OfferStatus.PENDING) {
-    const priorSends = await prisma.offerDocumentSend.findMany({
-      where: { offerId: offer.id, offerFileVersion: offer.revisionNumber },
-      select: { recipientEmail: true },
+  if (isFirstSend) {
+    // Concurrency claim (PR #124 review). A FIRST send serializes on a per-offer
+    // Postgres advisory lock (the same pattern the lead dedupe uses), then CLAIMS
+    // the not-yet-sent recipients by inserting their OfferDocumentSend rows inside
+    // the same short transaction — no email I/O under the lock. A second sender
+    // (the offer open in two tabs) blocks on the lock, then sees those rows and
+    // finds nothing left to send, so no recipient is emailed twice and no
+    // duplicate audit rows are written. The rows are claimed BEFORE the emails and
+    // the undelivered ones are rolled back below, so a real delivery failure still
+    // lets a retry re-send. A partial-failure retry likewise skips the already
+    // tracked recipients; an explicit Resend (offer already SENT) skips this block
+    // and re-emails everyone.
+    toSend = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`offer-send:${offer.id}`}, 0))`;
+      const priorSends = await tx.offerDocumentSend.findMany({
+        where: { offerId: offer.id, offerFileVersion: offer.revisionNumber },
+        select: { recipientEmail: true },
+      });
+      const alreadySent = new Set(
+        priorSends.map((prior) => prior.recipientEmail.trim().toLowerCase()),
+      );
+      const fresh = sends.filter(
+        (send) => !alreadySent.has(send.recipientEmail.toLowerCase()),
+      );
+      for (const send of fresh) {
+        await tx.offerDocumentSend.create({
+          data: {
+            offerId: offer.id,
+            offerFileVersion: offer.revisionNumber,
+            recipientEmail: send.recipientEmail,
+            trackedLinkToken: send.token,
+          },
+        });
+      }
+      return fresh;
     });
-    const alreadySent = new Set(
-      priorSends.map((prior) => prior.recipientEmail.trim().toLowerCase()),
-    );
-    toSend = sends.filter(
-      (send) => !alreadySent.has(send.recipientEmail.toLowerCase()),
-    );
   }
 
+  const delivered = new Set<string>();
   try {
     const client = await createGraphContext(getGraphConfig());
     // One email per signatory — same PDF, each with its own tracking token so
-    // replies correlate to the right send record. Persist EACH OfferDocumentSend
-    // the moment its email is accepted, NOT batched after the whole loop: a later
-    // recipient's failure must not strand an already-delivered recipient with an
-    // untracked token (its reply couldn't be attributed, and the retry would
-    // duplicate it — PR #124 review).
+    // replies correlate to the right send record.
     for (const send of toSend) {
       await client.sendMail({
         to: send.recipientEmail,
@@ -255,39 +274,59 @@ export async function sendOfferDocument(input: {
           },
         ],
       });
-      await prisma.offerDocumentSend.create({
-        data: {
-          offerId: offer.id,
-          offerFileVersion: offer.revisionNumber,
-          recipientEmail: send.recipientEmail,
-          trackedLinkToken: send.token,
-        },
-      });
+      delivered.add(send.token);
+      // A Resend (offer already SENT) didn't pre-claim above, so persist each
+      // tracking row the moment its email is accepted — never batched, so a
+      // mid-loop failure still records the recipients that did receive it.
+      if (!isFirstSend) {
+        await prisma.offerDocumentSend.create({
+          data: {
+            offerId: offer.id,
+            offerFileVersion: offer.revisionNumber,
+            recipientEmail: send.recipientEmail,
+            trackedLinkToken: send.token,
+          },
+        });
+      }
     }
   } catch (error) {
+    // First send: drop the claims we did NOT deliver so a retry re-sends only the
+    // remaining recipients; the delivered ones keep their tracking row.
+    if (isFirstSend) {
+      const undelivered = toSend
+        .filter((send) => !delivered.has(send.token))
+        .map((send) => send.token);
+      if (undelivered.length > 0) {
+        await prisma.offerDocumentSend
+          .deleteMany({ where: { trackedLinkToken: { in: undelivered } } })
+          .catch(() => undefined);
+      }
+    }
     return {
       ok: false,
       error: `Failed to send the email: ${(error as Error).message}`,
     };
   }
 
-  // Every email is delivered + tracked. Flip the offer to SENT exactly once (a
-  // Resend leaves it SENT). The note lists every recipient for this file version,
-  // including any tracked on an earlier partial attempt.
-  if (offer.offerStatus === OfferStatus.PENDING) {
+  // Every email is delivered + tracked. Flip PENDING→SENT exactly once, guarded on
+  // the current status so a concurrent second sender (which sent nothing) doesn't
+  // write a duplicate status event. A Resend leaves the offer SENT.
+  if (isFirstSend) {
     await prisma.$transaction(async (tx) => {
-      await tx.offer.update({
-        where: { id: offer.id },
+      const flip = await tx.offer.updateMany({
+        where: { id: offer.id, offerStatus: OfferStatus.PENDING },
         data: { offerStatus: OfferStatus.SENT, sentAt: new Date() },
       });
-      await tx.offerStatusEvent.create({
-        data: {
-          offerId: offer.id,
-          fromStatus: offer.offerStatus,
-          toStatus: OfferStatus.SENT,
-          note: `Emailed to ${sends.map((send) => send.recipientEmail).join(", ")}`,
-        },
-      });
+      if (flip.count === 1) {
+        await tx.offerStatusEvent.create({
+          data: {
+            offerId: offer.id,
+            fromStatus: OfferStatus.PENDING,
+            toStatus: OfferStatus.SENT,
+            note: `Emailed to ${sends.map((send) => send.recipientEmail).join(", ")}`,
+          },
+        });
+      }
     });
   }
 

@@ -396,6 +396,9 @@ function inclusionsPage(
 // Acceptance paragraph — names every owner ("I/We, A and B and C, accept…").
 // Single-owner offers keep the "I/We, <owner>, accept…" wording; `I/We` covers
 // both. Falls back to the clientNames projection when owners[] is empty.
+// Returns HTML-ready text (owner names already escaped) — insert it directly, do
+// NOT wrap in esc() again or a company name like "Smith & Jones" double-escapes to
+// "Smith &amp;amp; Jones" in the legal acceptance paragraph (PR #124 review).
 function acceptanceLineHtml(job: OfferWorkspaceJob): string {
   const owners = job.owners ?? [];
   const acceptanceNames =
@@ -452,7 +455,7 @@ function termsPage(
     )
     .join("");
   const acceptance = inlineBlocks
-    ? `<p class="muted" style="margin-top:12px;max-width:155mm;">${esc(acceptanceLineHtml(job))}</p>`
+    ? `<p class="muted" style="margin-top:12px;max-width:155mm;">${acceptanceLineHtml(job)}</p>`
     : "";
   const sigs = inlineBlocks
     ? `<div class="sigs">${inlineBlocks.join("")}</div>`
@@ -478,7 +481,7 @@ function signaturePage(
 ): string {
   const acceptance = continued
     ? ""
-    : `<p class="muted" style="margin-top:12px;max-width:155mm;">${esc(acceptanceLineHtml(job))}</p>`;
+    : `<p class="muted" style="margin-top:12px;max-width:155mm;">${acceptanceLineHtml(job)}</p>`;
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Acceptance</div>

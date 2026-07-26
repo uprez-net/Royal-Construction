@@ -5,6 +5,7 @@ import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import {
+  createCompanyOwner,
   createIndividualOwner,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
@@ -103,6 +104,28 @@ test("the max-signer proposal foots the true physical page count (PR #124)", () 
   for (let i = 1; i <= MAX_OWNER_SIGNERS; i++) {
     assert.ok(html.includes(`Owner ${i}`), `owner ${i} missing from the proposal`);
   }
+});
+
+test("company names with '&' are single-escaped in the acceptance line (PR #124)", () => {
+  const base = createCompanyOwner("c1");
+  const owner: OfferOwner = {
+    ...base,
+    displayName: "Smith & Jones Holdings Pty Ltd",
+    abn: "12 345 678 901",
+    currentLocation: "1 Test St, Sydney NSW 2000",
+    signatories: [
+      {
+        ...base.signatories[0],
+        name: "Pat Smith",
+        email: "pat@example.com",
+      },
+    ],
+  };
+  const html = proposalHtmlFor([owner]);
+  // The legal acceptance paragraph must escape the "&" exactly once — the old
+  // esc(esc(...)) double-escape rendered "Smith &amp;amp; Jones" literally.
+  assert.match(html, /I\/We, Smith &amp; Jones Holdings Pty Ltd, accept/);
+  assert.doesNotMatch(html, /&amp;amp;/);
 });
 
 test("a single-signer proposal keeps signatures inline, footer consistent", () => {

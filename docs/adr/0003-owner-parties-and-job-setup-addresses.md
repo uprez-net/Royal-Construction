@@ -49,14 +49,20 @@ stays `BUILDER | CUSTOMER`; `EnvelopeSignature` gains `capacity` + represented-e
 columns. Each signer is a distinct DocuSign recipient with its own tracked link + status
 (#120). The Tender already routes N owner-signers; the Contract is extended to match.
 
-**4. Bounded-max BC4 template; tabs composed at send.** The BC4 template is regenerated with
-a practical cap (~4 owner parties × ~3 director signers) and the app composes the used
-recipients + locked tabs at send time. Because the form has one owner area, **all owners are
-named on the `OWNER(S):` line**, the primary owner's Current Location fills `of …` and the
-primary owner's phone/mobile/email fill the contact block, and **one signature tab per signer
-is stacked in the single `SIGNED BY THE OWNER(S):` area**. Full per-owner
-addresses/contacts still render on our own Tender HTML and in-app. Requires a new
-`DOCUSIGN_CONTRACT_TEMPLATE_ID` and a staging re-test of the envelope webhook.
+**4. Base BC4 template retained; an appended signature schedule carries the extra signers.**
+_(Shipped design — supersedes the earlier "regenerate the template and stack every signature
+in the one owner area" plan, which is NOT what was built.)_ We keep the existing BC4 template
+and **do not mint a new `DOCUSIGN_CONTRACT_TEMPLATE_ID`**; the app composes the used recipients
++ locked tabs at send time via composite templates (single-signer offers use the plain
+`templateRoles` path; multi-signer offers add a server template whose document 2 is the
+generated annexure). Because the form has one owner area, **all owners are named on the
+`OWNER(S):` line** and the primary owner's Current Location / phone / mobile / email fill the
+`of …` and contact lines. The **primary** owner signs the form's single
+`SIGNED BY THE OWNER(S):` area; every **additional** owner/director signs an app-generated
+**Owner Signature Schedule** appended as a second document (one signature block each). The
+total signatory count is capped at `MAX_OWNER_SIGNERS` (10) and the offer/Tender/Contract owner
+gates refuse more rather than silently dropping a signer. Full per-owner addresses/contacts
+still render on our own Tender HTML and in-app.
 
 **5. Document rendering.** Both addresses are labelled on all three documents. The legal
 Tender + Contract additionally print each owner's email + phone; the customer-facing Offer

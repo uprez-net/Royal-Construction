@@ -267,7 +267,10 @@ export async function sendTenderForSignature(input: {
         offerId: offer.id,
         fromStatus: offer.offerStatus,
         toStatus: OfferStatus.TENDER_SENT,
-        note: `DocuSign envelope ${envelope.envelopeId} sent to ${customerEmail}`,
+        // Record the ACTUAL customer recipients (every owner/director the envelope
+        // routed to), not just the resolved customerEmail — which may not even be
+        // the primary signer's address (PR #124 review).
+        note: `DocuSign envelope ${envelope.envelopeId} sent to ${owners.map((owner) => owner.email).join(", ")}`,
       },
     });
   });
