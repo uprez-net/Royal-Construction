@@ -14,6 +14,25 @@ export const currency = new Intl.NumberFormat("en-AU", {
 });
 
 /**
+ * Formats hourly and unit rates as Australian Dollars (AUD), always with cents.
+ *
+ * Use this — not {@link currency} — for any figure a person could quote with
+ * cents: hourly rates, day rates, per-unit prices. {@link currency} rounds to
+ * whole dollars, which is right for budgets and contract values but turns a
+ * tradie on $85.50/hr into "$86".
+ *
+ * Example:
+ * - 85.5 → "$85.50"
+ * - 120 → "$120.00"
+ */
+export const rateCurrency = new Intl.NumberFormat("en-AU", {
+  style: "currency",
+  currency: "AUD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
  * Formats numeric values as compact Australian Dollars (AUD).
  *
  * Example:
@@ -138,10 +157,26 @@ export function formatFileType(fileType: string): string {
  * formatStatus("NEEDS_ATTENTION")
  * // "Needs Attention"
  */
+/**
+ * Turns a `SCREAMING_SNAKE_CASE` enum value into a display label.
+ *
+ * `NEEDS_ATTENTION` → `"Needs attention"`
+ *
+ * Sentence case, not title case. This used to title-case every word
+ * ("Needs Attention") while a second, identically-named `formatStatus` in
+ * `components/projects/project-status.ts` sentence-cased — two same-named
+ * formatters with divergent output, which is exactly the drift this pass exists
+ * to remove. Sentence case is the rule for labels, so it won here and the
+ * duplicate now re-exports this one.
+ */
 export function formatStatus(status: string) {
   return status
     .split("_")
-    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .map((part, index) =>
+      index === 0
+        ? part.charAt(0) + part.slice(1).toLowerCase()
+        : part.toLowerCase(),
+    )
     .join(" ");
 }
 
