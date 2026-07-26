@@ -422,10 +422,27 @@ export async function sendContractForSignature(input: {
         offerId: offer.id,
         fromStatus: offer.offerStatus,
         toStatus: OfferStatus.CONTRACT_SENT,
-        note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${primaryOwnerEmail}`,
+        // Record EVERY customer recipient the envelope routed to, not just the
+        // primary — the contract fans out to each owner/director exactly like the
+        // Tender does, and a single-address note misrepresents the audit trail
+        // (PR #124 sweep; the identical defect was fixed on the Tender note).
+        note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${ownerSigners.map((signer) => signer.email).join(", ")}`,
       },
     });
-  });
+  })
+    .catch((error) => {
+      // Same invariant as the Tender: the executed contract envelope is already
+      // with the customer and cannot be un-sent, so never release the claim — a
+      // retry would double-send a BC4 contract. Surface the envelope id so the
+      // send can be reconciled (PR #124 sweep; this write was unguarded).
+      console.error(
+        `[offer] contract envelope ${envelope.envelopeId} sent but persisting it failed:`,
+        error,
+      );
+      throw new Error(
+        `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
+      );
+    });
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   return { ok: true, reference, envelopeId: envelope.envelopeId };

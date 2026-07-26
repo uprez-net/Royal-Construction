@@ -11,6 +11,7 @@ import {
   createCompanyOwner,
   createIndividualOwner,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
+  formatOwnerGreetingNames,
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
@@ -166,6 +167,27 @@ test("the emailed and printed documents agree on page count (PR #124)", () => {
   assert.equal(
     footerPaging(reactPrintHtmlFor(owners)).total,
     footerPaging(proposalHtmlFor(owners)).total,
+  );
+});
+
+test("the welcome letter greets EVERY owner in both renderers (PR #124 sweep)", () => {
+  // The legacy clientNames + secondaryCustomerName greeting dropped owners 3+,
+  // so a three-owner proposal opened "Dear A and B," and ignored the third.
+  const owners = [individualOwner(1), individualOwner(2), individualOwner(3)];
+  for (const html of [proposalHtmlFor(owners), reactPrintHtmlFor(owners)]) {
+    assert.match(html, /Dear Owner 1, Owner 2 and Owner 3,/);
+  }
+});
+
+test("honorifics are stripped but company owners keep their legal name", () => {
+  const person = createIndividualOwner("o1");
+  const company = createCompanyOwner("c1");
+  assert.equal(
+    formatOwnerGreetingNames([
+      { ...person, displayName: "Mr Mahesh Kumar" },
+      { ...company, displayName: "Rakhi Pty Ltd" },
+    ]),
+    "Mahesh Kumar and Rakhi Pty Ltd",
   );
 });
 

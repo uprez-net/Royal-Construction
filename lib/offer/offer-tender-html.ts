@@ -56,16 +56,6 @@ export function money(value: number | null): string {
   }).format(value);
 }
 
-// Split "Mr Mahesh & Ms Anisha" into individual owners for separate signatures.
-// Exported so the DocuSign envelope builds the same signer list as the anchors.
-export function splitOwners(clientNames: string): string[] {
-  const owners = clientNames
-    .split(/\s*&\s*|\s+and\s+/i)
-    .map((o) => o.trim())
-    .filter(Boolean);
-  return owners.length > 0 ? owners : [clientNames];
-}
-
 // A DocuSign anchor rendered small and light — present for AutoPlace, unobtrusive.
 export function anchor(tag: string): string {
   return `<span style="color:#c8c8c8;font-size:7px;">\\${tag}\\</span>`;
@@ -120,25 +110,13 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   return legalDocShell(body);
 }
 
-// Owners rendered on the Tender execution page. Falls back to splitting the
-// combined `clientNames` ("Mr X & Ms Y"); when an explicit secondary client
-// is present and not already included in that split, append it as its own
-// signer so each co-owner receives a separate signature/date/initial block.
-// Exported so the DocuSign envelope builds the same signer list (and count)
-// as the AutoPlace anchors baked into the PDF — a mismatch would orphan an
-// anchor with no recipient to receive its signature tab.
-export function getTenderOwners(job: {
-  clientNames: string;
-  secondaryCustomerName?: string;
-}): string[] {
-  const fromNames = splitOwners(job.clientNames);
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-  if (!secondary) return fromNames;
-  const alreadyPresent = fromNames.some(
-    (name) => name.trim().toLowerCase() === secondary.toLowerCase(),
-  );
-  return alreadyPresent ? fromNames : [...fromNames, secondary];
-}
+// NOTE: getTenderOwners()/splitOwners() were removed here (PR #124 sweep). They
+// derived the Tender signer list by splitting the legacy combined `clientNames`
+// string, which the owners[] party model replaced. Both were already dead (zero
+// callers) but remained EXPORTED — a live trap, since a future caller would have
+// produced a signer list that diverges from collectOfferSigners() and orphaned
+// the AutoPlace anchors, exactly the mismatch their own comments warned about.
+// The anchors and the DocuSign recipients both come from collectOfferSigners().
 
 // Shared A4 page shell + stylesheet for the legal documents (Tender and
 // Contract) so both render with identical branding and print metrics.

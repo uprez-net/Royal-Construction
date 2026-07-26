@@ -1,5 +1,6 @@
 import {
   collectOfferSigners,
+  formatOwnerGreetingNames,
   formatOwnerNamesLine,
   type OfferDocumentDraft,
   type OfferWorkspaceCostLine,
@@ -328,15 +329,18 @@ function PrintWelcomePage({
   readonly footer: string;
 }) {
   const paragraphs = buildWelcomeParagraphs(job);
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-  const primaryGreeting = job.clientNames
-    .replace(/^(Mr|Ms|Mrs|Mr & Ms|Mr & Mrs)\s+/i, "")
-    .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
-  // Welcome greeting — addresses both clients by name when a secondary is
-  // present ("Dear Jaswinder and Harpreet,").
-  const greetingName = secondary
-    ? `${primaryGreeting} and ${secondary}`
-    : primaryGreeting;
+  // Greet EVERY owner via the shared helper the emailed HTML also uses, so the
+  // printed and emailed letters address the same people. The legacy
+  // clientNames/secondary pair (fallback only) dropped owners 3+.
+  const legacyGreeting = (() => {
+    const secondary = job.secondaryCustomerName?.trim() ?? "";
+    const primary = job.clientNames
+      .replace(/^(Mr|Ms|Mrs|Mr & Ms|Mr & Mrs)\s+/i, "")
+      .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
+    return secondary ? `${primary} and ${secondary}` : primary;
+  })();
+  const greetingName =
+    formatOwnerGreetingNames(job.owners ?? []) || legacyGreeting;
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />

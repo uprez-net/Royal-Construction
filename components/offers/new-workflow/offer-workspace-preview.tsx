@@ -9,7 +9,10 @@ import type {
   OfferWorkspaceJob,
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
-import { getIncludedOfferTenderLineItems } from "@/lib/offer/workspace-model";
+import {
+  formatOwnerNamesLine,
+  getIncludedOfferTenderLineItems,
+} from "@/lib/offer/workspace-model";
 import type {
   EffectiveMargin,
   OfferCustomerPrice,
@@ -156,8 +159,12 @@ export function OfferDocumentPreview({
               <h2 className="font-heading text-2xl font-semibold">
                 {draft.headline}
               </h2>
+              {/* The preview stands in for the generated document, whose cover
+                  names every owner — showing only the primary here made the
+                  on-screen preview disagree with the PDF (PR #124 sweep). */}
               <p className="mt-1 text-sm text-muted-foreground">
-                {job.clientNames} · {job.siteAddress}
+                {formatOwnerNamesLine(job.owners ?? []) || job.clientNames} ·{" "}
+                {job.siteAddress}
               </p>
             </div>
             <div className="text-right">

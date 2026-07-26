@@ -513,6 +513,31 @@ export function withOwnerProjection(job: OfferWorkspaceJob): OfferWorkspaceJob {
   return { ...job, ...deriveOwnerProjection(job.owners) };
 }
 
+// Personal greeting list for the proposal welcome letter ("Dear A, B and C,").
+// Names EVERY owner: the legacy clientNames + secondaryCustomerName pair silently
+// dropped owners 3+, so a three-owner proposal greeted only two of them by name
+// (PR #124 sweep). Individual honorifics are stripped so the letter reads
+// personally; a company owner keeps its legal name. Shared by BOTH the emailed
+// HTML and the React print template so the two can't drift apart.
+export function formatOwnerGreetingNames(
+  owners: readonly OfferOwner[],
+): string {
+  const names = owners
+    .map((owner) =>
+      owner.kind === "company"
+        ? owner.displayName.trim()
+        : owner.displayName.trim().replace(/^(Mr|Mrs|Ms|Miss|Dr)\.?\s+/i, ""),
+    )
+    .filter((name) => name.length > 0);
+  if (names.length === 0) {
+    return "";
+  }
+  if (names.length === 1) {
+    return names[0];
+  }
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 // Combined display of every owner name for the Contract OWNER(S) line, e.g.
 // "John Smith & Jane Smith & ABC Pty Ltd (ABN/ACN 12 345 678 901)".
 export function formatOwnerNamesLine(owners: readonly OfferOwner[]): string {

@@ -20,6 +20,7 @@ import {
 } from "./workspace-images";
 import {
   collectOfferSigners,
+  formatOwnerGreetingNames,
   type OfferOwner,
   type OfferWorkspaceJob,
 } from "./workspace-model";
@@ -257,15 +258,18 @@ function welcomePage(
   job: OfferPrintTemplateInput["job"],
   foot: string,
 ): string {
-  const secondary = job.secondaryCustomerName?.trim() ?? "";
-  const primaryGreeting = job.clientNames
-    .replace(/^(Mr|Ms|Mrs|Mr & Ms|Mr & Mrs)\s+/i, "")
-    .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
-  // Welcome greeting — when a secondary client is present, address both by
-  // first name ("Dear Jaswinder and Harpreet,"). Falls back to the primary.
-  const greeting = secondary
-    ? `${primaryGreeting} and ${secondary}`
-    : primaryGreeting;
+  // Greet EVERY owner (shared helper, also used by the React print template).
+  // Falls back to the legacy clientNames/secondary pair only when owners[] is
+  // empty — that pair dropped owners 3+ from the greeting.
+  const legacyGreeting = (() => {
+    const secondary = job.secondaryCustomerName?.trim() ?? "";
+    const primary = job.clientNames
+      .replace(/^(Mr|Ms|Mrs|Mr & Ms|Mr & Mrs)\s+/i, "")
+      .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
+    return secondary ? `${primary} and ${secondary}` : primary;
+  })();
+  const greeting =
+    formatOwnerGreetingNames(job.owners ?? []) || legacyGreeting;
   const paragraphs = buildWelcomeParagraphs(job)
     .map((p) => `<p style="margin-bottom:14px;">${esc(p)}</p>`)
     .join("");

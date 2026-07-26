@@ -273,7 +273,22 @@ export async function sendTenderForSignature(input: {
         note: `DocuSign envelope ${envelope.envelopeId} sent to ${owners.map((owner) => owner.email).join(", ")}`,
       },
     });
-  });
+  })
+    .catch((error) => {
+      // The envelope is ALREADY with the client and cannot be un-sent, so this
+      // must never release the claim (that would let a retry double-send a
+      // contract-grade document). Surface the envelope id so the send is
+      // recoverable: the offer stays TENDER_SENT but has no Tender/recipient
+      // rows, which the completion webhook needs to correlate (PR #124 sweep —
+      // this write was previously unguarded, mirroring the handoff finding).
+      console.error(
+        `[offer] tender envelope ${envelope.envelopeId} sent but persisting it failed:`,
+        error,
+      );
+      throw new Error(
+        `The Tender was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
+      );
+    });
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   return { ok: true, reference, envelopeId: envelope.envelopeId };
