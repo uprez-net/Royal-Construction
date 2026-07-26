@@ -266,14 +266,40 @@ export async function createProjectFromOffer(input: {
     // Did a Project actually commit before the throw? createProjectWithLead's
     // transaction commits before its detail read, so "it threw" and "no project
     // exists" are NOT the same thing. Ask the database instead of assuming.
-    const committed = await prisma.lead
-      .findUnique({
+    //
+    // Three outcomes, and they must stay DISTINCT: a swallowed query error that
+    // collapsed into "no project" would let a DB blip trigger the destructive
+    // rollback — and a DB blip is the most likely reason the original call threw,
+    // so the verification query is exactly when it's likeliest to fail too. Only a
+    // SUCCESSFUL query that returns project: null proves the rollback is safe.
+    let committed: { project: { id: string; name: string } | null } | null = null;
+    let verificationFailed = false;
+    try {
+      committed = await prisma.lead.findUnique({
         where: { id: offer.lead.id },
         select: { project: { select: { id: true, name: true } } },
-      })
-      .catch(() => null);
+      });
+    } catch (verifyError) {
+      verificationFailed = true;
+      console.error(
+        "[offer] handoff: could not verify whether a project committed:",
+        verifyError,
+      );
+    }
 
-    if (committed?.project) {
+    if (verificationFailed || committed === null) {
+      // We cannot PROVE the project is absent (query failed, or the lead row
+      // itself couldn't be read). Never destroy data on an unproven assumption:
+      // leave the PROJECT claim and the executed-PDF rows intact and ask for
+      // manual reconciliation. Worst case a retry is blocked until someone looks;
+      // the alternative is deleting a live project's documents.
+      return {
+        ok: false,
+        error: `Project creation failed (${(error as Error).message}) and the result could not be verified. The offer has been left as-is to avoid discarding a project that may have been created — check the lead for a project before retrying.`,
+      };
+    }
+
+    if (committed.project) {
       // The project IS real — never roll back (that would delete its executed-PDF
       // rows and revert the offer to CONTRACT_SIGNED, with `lead.project` then
       // blocking every retry). Keep the PROJECT claim and report success, flagging
@@ -295,8 +321,9 @@ export async function createProjectFromOffer(input: {
       // Fall through to the post-commit block so the audit event + cache
       // invalidation still run for this (genuinely created) project.
     } else {
-      // Nothing committed — safe to revert the claim and delete the executed-PDF
-      // rows so the handoff is cleanly retryable.
+      // CONFIRMED absent: the query succeeded and the lead has no project. Only
+      // now is it safe to revert the claim and delete the executed-PDF rows, so
+      // the handoff is cleanly retryable.
       await rollback();
       return {
         ok: false,

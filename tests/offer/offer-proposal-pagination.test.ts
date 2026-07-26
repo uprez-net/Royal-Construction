@@ -4,7 +4,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
+import { buildContractSignatureAnnexureHtml } from "../../lib/offer/contract-annexure-html";
 import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
+import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import {
@@ -189,6 +191,100 @@ test("honorifics are stripped but company owners keep their legal name", () => {
     ]),
     "Mahesh Kumar and Rakhi Pty Ltd",
   );
+});
+
+// ─── The legal documents: Tender + Contract annexure ───
+// These are the 3rd and 4th signature renderers. The proposal + browser-print
+// pair was fixed first; both of these kept every signature block on one A4 page.
+
+test("the Tender execution page paginates at max signers and foots truly (PR #124)", () => {
+  const owners = Array.from({ length: MAX_OWNER_SIGNERS }, (_, i) =>
+    individualOwner(i + 1),
+  );
+  const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+
+  const pages = physicalPageCount(html);
+  const { lastPage, total } = footerPaging(html);
+  assert.equal(
+    pages,
+    total,
+    `Tender pages (${pages}) must equal the footer total (${total})`,
+  );
+  assert.equal(lastPage, total);
+  assert.match(html, /Acceptance &amp; Execution \(cont\.\)/);
+});
+
+test("Tender signature anchors stay globally indexed across pages (PR #124)", () => {
+  // Pagination must NOT restart the anchor numbering: sigOwner{k} maps to
+  // DocuSign recipient k, so a per-page reset would orphan anchors and mis-route
+  // signature tabs on a legally executed document.
+  const owners = Array.from({ length: MAX_OWNER_SIGNERS }, (_, i) =>
+    individualOwner(i + 1),
+  );
+  const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+  for (let k = 1; k <= MAX_OWNER_SIGNERS; k++) {
+    assert.ok(
+      html.includes(`sigOwner${k}`),
+      `anchor sigOwner${k} missing from the Tender`,
+    );
+  }
+  // Exactly one of each — a duplicate would mean the index restarted per page.
+  for (let k = 1; k <= MAX_OWNER_SIGNERS; k++) {
+    const hits = html.split(`sigOwner${k}\\`).length - 1;
+    assert.ok(hits <= 1, `anchor sigOwner${k} appears ${hits} times`);
+  }
+  assert.ok(html.includes("sigBuilder"));
+});
+
+test("a single-signer Tender keeps one execution page", () => {
+  const html = buildTenderHtml(
+    buildProposalInput(snapshotWithOwners([individualOwner(1)])),
+  );
+  const { lastPage, total } = footerPaging(html);
+  assert.equal(physicalPageCount(html), total);
+  assert.equal(lastPage, total);
+  assert.doesNotMatch(html, /Acceptance &amp; Execution \(cont\.\)/);
+});
+
+test("the contract annexure paginates its overflow signers (PR #124)", () => {
+  // The annexure exists to carry MAX_OWNER_SIGNERS - 1 overflow signers — the
+  // exact case where a single page overflowed and could split a signature block
+  // away from the name it belongs to.
+  const signers = Array.from({ length: MAX_OWNER_SIGNERS - 1 }, (_, i) => ({
+    name: `Director ${i + 1}`,
+    capacity: "Director",
+    entityName: "Rakhi Pty Ltd",
+  }));
+  const html = buildContractSignatureAnnexureHtml({
+    reference: "RC-1001-R1",
+    siteAddress: "1 Test St, Sydney NSW 2000",
+    ownerNamesLine: "Rakhi Pty Ltd",
+    signers,
+  });
+
+  assert.ok(
+    physicalPageCount(html) > 1,
+    "9 annexure signers must span more than one page",
+  );
+  assert.match(html, /Owner Signature Schedule \(cont\.\)/);
+  // Global anchor indices preserved across the page split.
+  for (let k = 1; k <= signers.length; k++) {
+    assert.ok(html.includes(`sigAnnex${k}`), `anchor sigAnnex${k} missing`);
+  }
+  // The binding preamble appears once (first page only), the legal closing once.
+  assert.equal(html.split("forms part of").length - 1, 1);
+  assert.equal(html.split("legal system of record").length - 1, 1);
+});
+
+test("a two-signer annexure stays on one page", () => {
+  const html = buildContractSignatureAnnexureHtml({
+    reference: "RC-1001-R1",
+    siteAddress: "1 Test St, Sydney NSW 2000",
+    ownerNamesLine: "A & B",
+    signers: [{ name: "A" }, { name: "B" }],
+  });
+  assert.equal(physicalPageCount(html), 1);
+  assert.doesNotMatch(html, /\(cont\.\)/);
 });
 
 test("company names with '&' are single-escaped in the acceptance line (PR #124)", () => {

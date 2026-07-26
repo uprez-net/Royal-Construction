@@ -1,4 +1,10 @@
-import { anchor, esc, legalDocShell, masthead } from "./offer-tender-html";
+import {
+  anchor,
+  esc,
+  legalDocShell,
+  masthead,
+  SIGNATURE_BLOCKS_PER_PAGE,
+} from "./offer-tender-html";
 
 // One additional owner/director who signs on the annexure (everyone except the
 // primary, who signs the BC4 form itself).
@@ -21,13 +27,14 @@ export function buildContractSignatureAnnexureHtml(args: {
   readonly ownerNamesLine: string;
   readonly signers: readonly ContractAnnexureSigner[];
 }): string {
-  const blocks = args.signers
-    .map((signer, index) => {
-      const k = index + 1;
-      const who = signer.entityName
-        ? `${esc(signer.name)}, ${esc(signer.capacity ?? "Director")} of ${esc(signer.entityName)}`
-        : `${esc(signer.name)}${signer.capacity ? `, ${esc(signer.capacity)}` : ""}`;
-      return `
+  // sigAnnex{k}/dateAnnex{k} use the signer's GLOBAL index so the anchors stay
+  // aligned with the DocuSign recipients regardless of how blocks are paginated.
+  const blocks = args.signers.map((signer, index) => {
+    const k = index + 1;
+    const who = signer.entityName
+      ? `${esc(signer.name)}, ${esc(signer.capacity ?? "Director")} of ${esc(signer.entityName)}`
+      : `${esc(signer.name)}${signer.capacity ? `, ${esc(signer.capacity)}` : ""}`;
+    return `
     <div class="sig">
       <div class="who">${who}</div>
       <div class="lines">
@@ -35,16 +42,41 @@ export function buildContractSignatureAnnexureHtml(args: {
         <div><div class="sigspace">${anchor(`dateAnnex${k}`)}</div><div class="field">Date</div></div>
       </div>
     </div>`;
+  });
+
+  // This schedule exists precisely to carry the OVERFLOW signers (up to
+  // MAX_OWNER_SIGNERS - 1 = 9), yet emitted them all on a single A4 page — so on
+  // the very case it was built for, blocks ran past the page and a signature line
+  // could land on a different physical page from the name it belongs to, on a
+  // document that is legally executed (PR #124 review — same class as the Tender
+  // execution page). Chunk them at the shared per-page limit.
+  const chunks: string[][] = [];
+  for (let i = 0; i < blocks.length; i += SIGNATURE_BLOCKS_PER_PAGE) {
+    chunks.push(blocks.slice(i, i + SIGNATURE_BLOCKS_PER_PAGE));
+  }
+  if (chunks.length === 0) {
+    chunks.push([]);
+  }
+
+  const body = chunks
+    .map((chunk, index) => {
+      const continued = index > 0;
+      const last = index === chunks.length - 1;
+      const preamble = continued
+        ? ""
+        : `<p class="note">This schedule forms part of, and is to be read with, the Residential Building Contract (BC4) between Royal Constructions Pty Ltd and the Owner(s) — ${esc(args.ownerNamesLine)} — for the works at ${esc(args.siteAddress)}. Each owner named below executes the Contract by signing this schedule; their signature has the same effect as signing the Contract's owner execution block.</p>`;
+      const closing = last
+        ? `<p class="note">Signed copies are retained with the executed Contract as the legal system of record. Royal Constructions Pty Ltd · Lic. 383992C · ABN 56 644 111 580.</p>`
+        : "";
+      return `<div class="page">
+    ${masthead()}
+    <h1 class="doc">Owner Signature Schedule${continued ? " (cont.)" : ""}</h1>
+    <div class="refline">Contract Reference: ${esc(args.reference)}</div>
+    ${preamble}
+    ${chunk.join("")}
+    ${closing}
+  </div>`;
     })
     .join("");
-
-  const body = `<div class="page">
-    ${masthead()}
-    <h1 class="doc">Owner Signature Schedule</h1>
-    <div class="refline">Contract Reference: ${esc(args.reference)}</div>
-    <p class="note">This schedule forms part of, and is to be read with, the Residential Building Contract (BC4) between Royal Constructions Pty Ltd and the Owner(s) — ${esc(args.ownerNamesLine)} — for the works at ${esc(args.siteAddress)}. Each owner named below executes the Contract by signing this schedule; their signature has the same effect as signing the Contract's owner execution block.</p>
-    ${blocks}
-    <p class="note">Signed copies are retained with the executed Contract as the legal system of record. Royal Constructions Pty Ltd · Lic. 383992C · ABN 56 644 111 580.</p>
-  </div>`;
   return legalDocShell(body);
 }

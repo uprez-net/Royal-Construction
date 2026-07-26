@@ -30,6 +30,11 @@ const BORDER = "#d9d9d6";
 const MUTED = "#5f5f5f";
 
 const INCLUSIONS_ROWS_PER_PAGE = 12;
+// Execution signature blocks per page. Each carries a signature space, a date
+// line and (for owners) an initial line, so they are tall — 4 is a conservative
+// fit for A4 alongside the masthead and the acceptance paragraph. Shared with the
+// contract annexure so both legal documents paginate signatures identically.
+export const SIGNATURE_BLOCKS_PER_PAGE = 4;
 
 type InclusionRow = (typeof STANDARD_INCLUSIONS_SCHEDULE)[number];
 
@@ -90,7 +95,21 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     );
   }
 
-  const totalPages = 1 + inclusionChunks.length + 1 + 1 + 1;
+  // Execution signature blocks (builder + one per signer) are chunked across as
+  // many pages as they need. Previously every block was emitted on ONE page while
+  // the footer counted a single execution page, so the supported 10 signers
+  // overflowed onto physical pages the count never declared and a block could
+  // split mid-signature — on the document that is actually signed (PR #124 review;
+  // the proposal + browser-print renderers were fixed earlier, this legal Tender
+  // renderer is a third, separate one).
+  const executionBlocks = buildExecutionBlocks(job, signers);
+  const executionChunks: string[][] = [];
+  for (let i = 0; i < executionBlocks.length; i += SIGNATURE_BLOCKS_PER_PAGE) {
+    executionChunks.push(executionBlocks.slice(i, i + SIGNATURE_BLOCKS_PER_PAGE));
+  }
+
+  const totalPages =
+    1 + inclusionChunks.length + 1 + 1 + executionChunks.length;
   let pageNo = 0;
   const foot = (): string => {
     pageNo += 1;
@@ -104,7 +123,16 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     ),
     exclusionsPaymentPage(data, foot()),
     termsPage(data, foot()),
-    executionPage(job, reference, signers, foot()),
+    ...executionChunks.map((blocks, index) =>
+      executionPage(
+        job,
+        reference,
+        blocks,
+        index > 0,
+        index === executionChunks.length - 1,
+        foot(),
+      ),
+    ),
   ].join("");
 
   return legalDocShell(body);
@@ -327,10 +355,49 @@ function termsPage(
   </div>`;
 }
 
+// The ordered execution signature blocks: the builder first, then one per signer
+// (each individual owner; each company director). The sigOwner{k}/dateOwner{k}/
+// initOwner{k} anchors use the signer's GLOBAL index, so they stay aligned with
+// the DocuSign recipients built by collectOfferSigners in offer-tender-sign no
+// matter how the blocks are later distributed across pages.
+function buildExecutionBlocks(
+  job: OfferPrintTemplateInput["job"],
+  signers: OfferSignerContext[],
+): string[] {
+  const builderBlock = `
+    <div class="sig">
+      <div class="who">The Builder — Royal Constructions Pty Ltd</div>
+      <div class="lines">
+        <div><div class="sigspace">${anchor("sigBuilder")}</div><div class="field">Signature (${esc(job.preparedBy)})</div></div>
+        <div><div class="sigspace">${anchor("dateBuilder")}</div><div class="field">Date</div></div>
+      </div>
+    </div>`;
+  const ownerBlocks = signers.map((signer, index) => {
+    const k = index + 1;
+    const who = signer.entityName
+      ? `For ${esc(signer.entityName)} — ${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)}`
+      : `The Owner — ${esc(signer.signatory.name)}`;
+    return `
+    <div class="sig">
+      <div class="who">${who}</div>
+      <div class="lines">
+        <div><div class="sigspace">${anchor(`sigOwner${k}`)}</div><div class="field">Signature</div></div>
+        <div><div class="sigspace">${anchor(`dateOwner${k}`)}</div><div class="field">Date</div></div>
+      </div>
+      <div style="margin-top:10px;font-size:9px;color:${MUTED};">Initial each page: ${anchor(`initOwner${k}`)}</div>
+    </div>`;
+  });
+  return [builderBlock, ...ownerBlocks];
+}
+
+// One page of execution signature blocks. The acceptance paragraph leads the
+// first page; the legal footnote closes the last.
 function executionPage(
   job: OfferPrintTemplateInput["job"],
   reference: string,
-  signers: OfferSignerContext[],
+  blocks: readonly string[],
+  continued: boolean,
+  last: boolean,
   foot: string,
 ): string {
   const owners = job.owners ?? [];
@@ -344,39 +411,18 @@ function executionPage(
           .map(esc)
           .join(" and ")
       : "the parties";
-  // One block per signer (each individual owner; each company director). The
-  // sigOwner{k}/dateOwner{k}/initOwner{k} anchors are ordered identically to
-  // the DocuSign recipients built by collectOfferSigners in offer-tender-sign.
-  const ownerBlocks = signers
-    .map((signer, index) => {
-      const k = index + 1;
-      const who = signer.entityName
-        ? `For ${esc(signer.entityName)} — ${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)}`
-        : `The Owner — ${esc(signer.signatory.name)}`;
-      return `
-    <div class="sig">
-      <div class="who">${who}</div>
-      <div class="lines">
-        <div><div class="sigspace">${anchor(`sigOwner${k}`)}</div><div class="field">Signature</div></div>
-        <div><div class="sigspace">${anchor(`dateOwner${k}`)}</div><div class="field">Date</div></div>
-      </div>
-      <div style="margin-top:10px;font-size:9px;color:${MUTED};">Initial each page: ${anchor(`initOwner${k}`)}</div>
-    </div>`;
-    })
-    .join("");
+  const intro = continued
+    ? ""
+    : `<p>By signing below, ${acceptSubject} accept this Fixed Price Building Tender (${esc(reference)}) and agree to enter into the MBA fixed-price home building contract for the Contract Sum and scope described herein.</p>`;
+  const closing = last
+    ? `<p class="note">Royal Constructions Pty Ltd · Lic. 383992C · ABN 56 644 111 580 · MBA Accredited. Signed copies are retained as the legal system of record.</p>`
+    : "";
   return `<div class="page">
     ${masthead()}
-    <h2 style="margin-top:20px;">Acceptance &amp; Execution</h2>
-    <p>By signing below, ${acceptSubject} accept this Fixed Price Building Tender (${esc(reference)}) and agree to enter into the MBA fixed-price home building contract for the Contract Sum and scope described herein.</p>
-    <div class="sig">
-      <div class="who">The Builder — Royal Constructions Pty Ltd</div>
-      <div class="lines">
-        <div><div class="sigspace">${anchor("sigBuilder")}</div><div class="field">Signature (${esc(job.preparedBy)})</div></div>
-        <div><div class="sigspace">${anchor("dateBuilder")}</div><div class="field">Date</div></div>
-      </div>
-    </div>
-    ${ownerBlocks}
-    <p class="note">Royal Constructions Pty Ltd · Lic. 383992C · ABN 56 644 111 580 · MBA Accredited. Signed copies are retained as the legal system of record.</p>
+    <h2 style="margin-top:20px;">Acceptance &amp; Execution${continued ? " (cont.)" : ""}</h2>
+    ${intro}
+    ${blocks.join("")}
+    ${closing}
     ${foot}
   </div>`;
 }
