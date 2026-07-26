@@ -1,9 +1,11 @@
-import { ProjectWithStats } from "@/types/project";
-import { dateFormat } from "@/utils/formatters";
-import { Button } from "../ui/button";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRightCircle, CalendarCheck, MapPin, Phone } from "lucide-react";
-import { toast } from "sonner";
+
+import { ProjectWithStats } from "@/types/project";
+import { compactCurrency, dateFormat } from "@/utils/formatters";
+import { Button } from "../ui/button";
+import { formatStatus, projectStatusConfig } from "./project-status";
 
 type TabType = "overview" | "customer" | "milestones" | "financials" | "team";
 
@@ -13,6 +15,15 @@ interface ProjectOverviewTabProps {
   onClose: () => void;
 }
 
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-sm font-medium text-foreground">{children}</dd>
+    </div>
+  );
+}
+
 export function OverviewTab({
   project,
   setActiveTab,
@@ -20,164 +31,181 @@ export function OverviewTab({
 }: ProjectOverviewTabProps) {
   const spent = Number(project.spent);
   const budget = Number(project.totalBudget);
-  const spentPercent = Math.round((spent / budget) * 100);
+  // Guard the denominator: a project with no budget set would otherwise render
+  // NaN% here and an NaN-width bar below.
+  const spentPercent = budget > 0 ? Math.round((spent / budget) * 100) : null;
+  const remaining = budget - spent;
+  const isOverBudget = remaining < 0;
+
+  const progressPercent = Math.min(
+    100,
+    Math.max(0, Math.round(project.progressPercent ?? 0)),
+  );
+
+  const customerPhone = project.customer.phone?.trim();
+  const customerEmail = project.customer.email?.trim();
+  const statusConfig = projectStatusConfig(project.status);
+  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    project.location,
+  )}`;
 
   return (
     <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Budget summary */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-lg bg-muted p-4">
-          <p className="text-xs text-muted-foreground font-medium">Budget</p>
-          <p className="text-lg font-bold text-foreground mt-1">
-            ${Math.round(budget / 1000)}K
+          <p className="text-xs font-medium text-muted-foreground">Budget</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-foreground tabular-nums">
+            {compactCurrency.format(budget)}
           </p>
         </div>
+
         <div className="rounded-lg bg-muted p-4">
-          <p className="text-xs text-muted-foreground font-medium">
-            Spent ({spentPercent}%)
+          <p className="text-xs font-medium text-muted-foreground">
+            {spentPercent === null ? "Spent" : `Spent (${spentPercent}%)`}
           </p>
           <p
-            className={`text-lg font-bold mt-1 ${
-              spentPercent > 80 ? "text-red-600" : "text-foreground"
+            className={`mt-1 font-mono text-lg font-semibold tabular-nums ${
+              isOverBudget ? "text-destructive-ink" : "text-foreground"
             }`}
           >
-            ${Math.round(spent / 1000)}K
+            {compactCurrency.format(spent)}
           </p>
         </div>
+
         <div className="rounded-lg bg-muted p-4">
-          <p className="text-xs text-muted-foreground font-medium">Remaining</p>
-          <p className="text-lg font-bold text-emerald-600 mt-1">
-            ${Math.round((budget - spent) / 1000)}K
+          <p className="text-xs font-medium text-muted-foreground">
+            {isOverBudget ? "Over budget" : "Remaining"}
+          </p>
+          <p
+            className={`mt-1 font-mono text-lg font-semibold tabular-nums ${
+              isOverBudget ? "text-destructive-ink" : "text-success-ink"
+            }`}
+          >
+            {compactCurrency.format(Math.abs(remaining))}
           </p>
         </div>
       </div>
 
       {/* Progress */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-medium text-foreground">
-            Overall Progress
-          </p>
-          <p className="text-sm font-bold text-teal-600">
-            {project.progressPercent}%
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-medium text-foreground">Overall progress</p>
+          <p className="font-mono text-sm font-medium text-primary tabular-nums">
+            {progressPercent}%
           </p>
         </div>
-        <div className="h-3 rounded-full bg-muted overflow-hidden">
+        <div
+          role="progressbar"
+          aria-label="Overall progress"
+          aria-valuenow={progressPercent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuetext={`${progressPercent}% complete`}
+          className="h-3 overflow-hidden rounded-full bg-muted"
+        >
           <div
-            className="h-full bg-teal-500 transition-all"
-            style={{ width: `${project.progressPercent}%` }}
+            className="h-full bg-primary transition-[width] duration-200 ease-out motion-reduce:transition-none"
+            style={{ width: `${progressPercent}%` }}
           />
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
+        <p className="mt-2 text-xs text-muted-foreground">
           {project.completedMilestoneCount} of {project.milestoneCount}{" "}
           milestones completed
         </p>
       </div>
 
-      {/* Details Grid */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">Customer</p>
-          <p className="text-sm font-semibold text-foreground mt-1">
-            {project.customer.name}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">
-            Customer Phone
-          </p>
-          <p className="text-sm font-semibold text-foreground mt-1">
-            {project.customer.phone || "—"}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">
-            Customer Email
-          </p>
-          <p className="text-sm font-semibold text-foreground mt-1">
-            {project.customer.email || "—"}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">
-            Site Manager
-          </p>
-          <p className="text-sm font-semibold text-foreground mt-1">
-            {project.siteManager?.name || "Unassigned"}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">Location</p>
-          <p className="text-sm font-semibold text-foreground mt-1">
-            {project.location}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">Status</p>
-          <p className="text-sm font-semibold text-foreground mt-1">
-            {project.status
-              .split("_")
-              .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
-              .join(" ")}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">
-            Start Date
-          </p>
-          <p className="text-sm font-semibold text-foreground mt-1">
+      {/* Details */}
+      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Customer">{project.customer.name}</Field>
+
+        <Field label="Customer phone">
+          {customerPhone ? (
+            <a
+              href={`tel:${customerPhone.replace(/\s+/g, "")}`}
+              className="font-mono tabular-nums underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {customerPhone}
+            </a>
+          ) : (
+            <span className="text-muted-foreground">Not recorded</span>
+          )}
+        </Field>
+
+        <Field label="Customer email">
+          {customerEmail ? (
+            <a
+              href={`mailto:${customerEmail}`}
+              className="break-all underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {customerEmail}
+            </a>
+          ) : (
+            <span className="text-muted-foreground">Not recorded</span>
+          )}
+        </Field>
+
+        <Field label="Site manager">
+          {project.siteManager?.name ?? (
+            <span className="text-muted-foreground">Unassigned</span>
+          )}
+        </Field>
+
+        <Field label="Location">{project.location}</Field>
+
+        <Field label="Status">
+          <span
+            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.badge}`}
+          >
+            {formatStatus(project.status)}
+          </span>
+        </Field>
+
+        <Field label="Start date">
+          <span className="font-mono tabular-nums">
             {dateFormat.format(new Date(project.startDate))}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground font-medium">
-            Est. Completion
-          </p>
-          <p className="text-sm font-semibold text-foreground mt-1">
+          </span>
+        </Field>
+
+        <Field label="Est. completion">
+          <span className="font-mono tabular-nums">
             {dateFormat.format(new Date(project.estimatedEndDate))}
-          </p>
-        </div>
-      </div>
+          </span>
+        </Field>
+      </dl>
 
       <div className="flex flex-wrap gap-2">
-        <Button asChild className="gap-1.5" onClick={onClose}>
+        <Button asChild size="lg" onClick={onClose}>
           <Link href={`/projects/${project.id}`}>
-            <ArrowRightCircle className="h-4 w-4" />
-            Open Full Details
+            <ArrowRightCircle aria-hidden="true" />
+            Open full details
           </Link>
         </Button>
 
         <Button
+          type="button"
           variant="outline"
-          className="gap-1.5"
-          onClick={() => {
-            setActiveTab("milestones");
-          }}
+          size="lg"
+          onClick={() => setActiveTab("milestones")}
         >
-          <CalendarCheck className="h-4 w-4" />
+          <CalendarCheck aria-hidden="true" />
           Milestones
         </Button>
 
-        <Button
-          variant="outline"
-          className="gap-1.5"
-          onClick={() =>
-            toast.info(
-              `Calling ${project.customer} at ${project.customer.phone}...`,
-            )
-          }
-        >
-          <Phone className="h-4 w-4" />
-          Call Client
-        </Button>
+        {customerPhone ? (
+          <Button asChild variant="outline" size="lg">
+            <a href={`tel:${customerPhone.replace(/\s+/g, "")}`}>
+              <Phone aria-hidden="true" />
+              Call {project.customer.name}
+            </a>
+          </Button>
+        ) : null}
 
-        <Button
-          variant="outline"
-          className="gap-1.5"
-          onClick={() => toast.info(`Opening ${project.location} in Maps...`)}
-        >
-          <MapPin className="h-4 w-4" />
-          Directions
+        <Button asChild variant="outline" size="lg">
+          <a href={mapsHref} target="_blank" rel="noopener noreferrer">
+            <MapPin aria-hidden="true" />
+            Directions
+          </a>
         </Button>
       </div>
     </div>

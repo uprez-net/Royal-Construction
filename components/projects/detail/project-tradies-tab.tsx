@@ -1,6 +1,7 @@
 import type {
   ProjectDetail,
   TradieScheduleListItem,
+  TradieScheduleWithTradieAndMilestone,
   TradieUrgentReminderItem,
 } from "@/types/project";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,23 +9,38 @@ import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
   Plus,
-  Send,
   Bell,
   Phone,
   Pencil,
-  CheckCircle2,
-  XCircle,
   Clock10,
 } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
 import { StatusPill } from "@/components/common/status-pill";
-import { dateFormat, shortDateFormat } from "@/utils/formatters";
+import {
+  currency,
+  dateFormat,
+  formatStatus,
+  shortDateFormat,
+} from "@/utils/formatters";
 import type { TradieScheduleStatus } from "@prisma/client";
 import { differenceInDays } from "date-fns";
 import { DataTable } from "@/components/common/data-table";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { calculateScheduleTotalCost } from "@/utils/calculations";
+
+/**
+ * Formats a money value, falling back to an em dash rather than rendering
+ * "$NaN" or a bare "$" when the underlying Decimal-as-string is missing or
+ * unparseable.
+ */
+function money(value: string | number | null | undefined) {
+  const parsed = typeof value === "number" ? value : Number(value);
+
+  return Number.isFinite(parsed) && value !== null && value !== ""
+    ? currency.format(parsed)
+    : "—";
+}
 
 export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const getStatusTone = (status: TradieScheduleStatus) => {
@@ -47,11 +63,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const getStatusText = (status: TradieScheduleStatus) => {
     switch (status) {
       case "PENDING":
-        return "Pending Confirmation";
+        return "Pending confirmation";
       case "PENDING_RESPONSE":
-        return "Awaiting Response";
+        return "Awaiting response";
       case "NO_RESPONSE":
-        return "No Response";
+        return "No response";
       case "CONFIRMED":
         return "Confirmed";
       case "DECLINED":
@@ -59,9 +75,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       case "COMPLETED":
         return "Completed";
       case "AWAITING_QUOTE":
-        return "Awaiting Quote";
+        return "Awaiting quote";
       default:
-        return status;
+        // Never render a raw enum: a status added to the schema but not to this
+        // switch still reads as a label rather than SCREAMING_SNAKE_CASE.
+        return formatStatus(status);
     }
   };
 
@@ -121,32 +139,23 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       );
 
       const tradieName = tradie.tradie.name;
-      const scheduledDate = new Date(tradie.scheduledDate).toLocaleDateString(
-        "en-AU",
-        {
-          month: "short",
-        },
+      const scheduledDate = shortDateFormat.format(
+        new Date(tradie.scheduledDate),
       );
 
-      if (getStatusTone(tradie.status) === "danger") {
-        switch (tradie.status) {
-          case "PENDING":
-          case "PENDING_RESPONSE":
-            return `${tradieName} confirmation pending`;
+      // Switched on status rather than on tone: the previous version gated the
+      // switch on `getStatusTone(...) === "danger"`, so its PENDING and
+      // PENDING_RESPONSE cases (tone "warning") were unreachable.
+      if (tradie.status === "NO_RESPONSE") {
+        return `${tradieName} is not responding`;
+      }
 
-          case "NO_RESPONSE":
-            return `${tradieName} not responding`;
-
-          case "DECLINED":
-            return `${tradieName} declined the schedule`;
-
-          default:
-            return `${tradieName} needs attention`;
-        }
+      if (tradie.status === "DECLINED") {
+        return `${tradieName} declined the ${scheduledDate} booking`;
       }
 
       if (reminderTone === "warning") {
-        return `${tradieName} yet to be connected for ${scheduledDate} milestone`;
+        return `${tradieName} has not confirmed the ${scheduledDate} booking`;
       }
 
       return null;
@@ -170,45 +179,102 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
   const attentionStatus = getAttentionStatus(tradies);
   const dispatch = useAppDispatch();
 
+  /**
+   * Builds the payload the tradie modals expect. Previously inlined three times
+   * with `updatedAt: new Date().toISOString()` — a fabricated timestamp; the row
+   * carries a real `updatedAt`.
+   */
+  const toScheduleListItem = (
+    tradie: TradieScheduleWithTradieAndMilestone,
+    options: { includeQuote: boolean },
+  ): TradieScheduleListItem => ({
+    id: tradie.id,
+    tradieId: tradie.tradie.id,
+    tradieName: tradie.tradie.name,
+    tradeType: tradie.tradie.trade,
+    abn: tradie.tradie.abn,
+    projectId: project.id,
+    projectName: project.name,
+    milestoneId: tradie.milestone?.id,
+    milestoneName: tradie.milestone?.name,
+    taskLabel: tradie.milestone?.name
+      ? `${tradie.tradie.trade} for ${tradie.milestone.name}`
+      : tradie.tradie.trade,
+    scheduledDate: new Date(tradie.scheduledDate).toISOString(),
+    durationDays: tradie.durationDays,
+    status: tradie.status,
+    updatedAt: new Date(tradie.updatedAt).toISOString(),
+    reminderSentAt: tradie.reminderSentAt
+      ? new Date(tradie.reminderSentAt).toISOString()
+      : undefined,
+    contact: {
+      email: tradie.tradie.email,
+      phone: tradie.tradie.phone,
+    },
+    siteManager: {
+      name: project.siteManager?.name ?? "Unassigned",
+      email: project.siteManager?.email ?? "",
+      phone: project.siteManager?.phone ?? "",
+    },
+    isFavourite: tradie.tradie.isFavourite,
+    note: tradie.tradie.note,
+    requiresQuote: options.includeQuote ? tradie.requiresQuote : false,
+    quotedPrice: options.includeQuote
+      ? (tradie.quotedPrice ?? undefined)
+      : undefined,
+  });
+
+  const scheduleCost = (tradie: TradieScheduleWithTradieAndMilestone) => {
+    if (tradie.requiresQuote) {
+      return tradie.status === "AWAITING_QUOTE"
+        ? "Awaiting quote"
+        : money(tradie.quotedPrice);
+    }
+
+    const hourlyRate = Number(tradie.tradie.hourlyRate);
+
+    // No rate on file is "unknown", not "$0" — and Number(null) is 0, so the
+    // nullish check has to come before the finite check.
+    if (tradie.tradie.hourlyRate == null || !Number.isFinite(hourlyRate)) {
+      return "—";
+    }
+
+    return calculateScheduleTotalCost(hourlyRate, tradie.durationDays);
+  };
+
   return (
     <div className="space-y-4">
       {attentionStatus && (
-        <Card className="border-red-200 bg-red-50/50 shadow-sm">
+        <Card
+          role="alert"
+          className="border-destructive/40 bg-destructive-light shadow-sm"
+        >
           <CardContent className="flex items-center gap-3 p-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
-              <AlertTriangle className="size-5" />
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-card text-destructive-ink">
+              <AlertTriangle className="size-5" aria-hidden="true" />
             </div>
 
             <div className="flex-1">
-              <h4 className="text-[13px] font-bold text-red-600">
-                {attentionStatus.count}{" "}
-                {attentionStatus.count === 1 ? "Tradie Needs" : "Tradies Need"}{" "}
-                Attention
-              </h4>
+              <p className="text-sm font-semibold text-destructive-ink">
+                {attentionStatus.count === 1
+                  ? "1 tradie needs attention"
+                  : `${attentionStatus.count} tradies need attention`}
+              </p>
 
               <p className="text-xs text-muted-foreground">
                 {attentionStatus.summary}
               </p>
             </div>
-
-            <Button
-              size="sm"
-              variant="destructive"
-              className="h-8 rounded-md px-3 text-xs font-semibold"
-            >
-              <Send className="mr-1 size-3.5" />
-              Send All Reminders
-            </Button>
           </CardContent>
         </Card>
       )}
 
       <SectionCard
-        title="Tradie Coordination Board"
+        title="Tradie coordination board"
         action={
           <Button
             size="sm"
-            className="h-8 rounded-md bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700"
+            className="h-8 rounded-md px-3 text-xs font-medium"
             onClick={() =>
               dispatch(
                 openModal({
@@ -220,84 +286,102 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
               )
             }
           >
-            <Plus className="mr-1 size-3.5" />
-            Schedule Tradies
+            <Plus className="mr-1 size-3.5" aria-hidden="true" />
+            Schedule tradies
           </Button>
         }
       >
-        <div className="overflow-x-auto">
-          <DataTable
-            key={tradies.length} // Force remount to reset internal state when tradies change
-            headers={[
-              "Trade",
-              "Company",
-              "Contact",
-              "Needed For",
-              "Scheduled",
-              "1-Week Reminder",
-              "Confirmed",
-              "Status",
-              "Cost",
-              "Action",
-            ]}
-            rows={tradies.map((tradie) => [
-              <span className="text-[13px] font-bold" key={tradie.id}>
+        <DataTable
+          caption="Tradies scheduled on this project, with reminder status, confirmation status and cost."
+          align={[
+            "start",
+            "start",
+            "start",
+            "start",
+            "start",
+            "start",
+            "start",
+            "start",
+            "end",
+            "start",
+          ]}
+          headers={[
+            "Trade",
+            "Company",
+            "Contact",
+            "Needed for",
+            "Scheduled",
+            "1-week reminder",
+            "Duration",
+            "Status",
+            "Cost",
+            "Actions",
+          ]}
+          rows={tradies.map((tradie) => {
+            const reminderTone = getReminderTone(
+              tradie.reminderSentAt,
+              new Date(tradie.scheduledDate),
+              tradie.status,
+            );
+
+            const reminderDate = tradie.reminderSentAt
+              ? shortDateFormat.format(new Date(tradie.reminderSentAt))
+              : "Not sent";
+
+            return [
+              <span className="text-sm font-medium" key={tradie.id}>
                 {tradie.tradie.trade}
               </span>,
 
-              <span className="text-[13px]" key={`${tradie.id}-company`}>
+              <span className="text-sm" key={`${tradie.id}-company`}>
                 {tradie.tradie.name}
               </span>,
 
-              <span className="text-xs" key={`${tradie.id}-phone`}>
+              <span
+                className="font-mono text-xs tabular-nums"
+                key={`${tradie.id}-phone`}
+              >
                 {tradie.tradie.phone}
               </span>,
 
               <span className="text-xs" key={`${tradie.id}-milestone`}>
-                {tradie.milestone?.name ?? "N/A"}
+                {tradie.milestone?.name ?? "Not linked to a milestone"}
               </span>,
 
-              <span className="text-xs" key={`${tradie.id}-scheduled`}>
+              <span
+                className="font-mono text-xs tabular-nums"
+                key={`${tradie.id}-scheduled`}
+              >
                 {dateFormat.format(new Date(tradie.scheduledDate))}
               </span>,
 
-              <StatusPill
-                key={`${tradie.id}-reminder`}
-                id={`${tradie.id}-reminder`}
-                tone={getReminderTone(
-                  tradie.reminderSentAt,
-                  new Date(tradie.scheduledDate),
-                  tradie.status,
-                )}
-              >
-                {tradie.reminderSentAt
-                  ? shortDateFormat.format(new Date(tradie.reminderSentAt))
-                  : "-"}
+              // The tone is a second signal only: the cell always spells out
+              // the reminder date, and adds "follow up" in words when the tone
+              // is a warning, so colour is never the sole carrier of meaning.
+              <StatusPill key={`${tradie.id}-reminder`} tone={reminderTone}>
+                {reminderTone === "warning"
+                  ? `${reminderDate} · follow up`
+                  : reminderDate}
               </StatusPill>,
 
-              tradie.status === "CONFIRMED" ? (
-                <CheckCircle2 className="size-4 text-emerald-600" />
-              ) : (
-                <XCircle className="size-4 text-muted-foreground" />
-              ),
+              <span className="text-xs" key={`${tradie.id}-duration`}>
+                {tradie.durationDays === 1
+                  ? "1 day"
+                  : `${tradie.durationDays} days`}
+              </span>,
 
               <StatusPill
                 key={`${tradie.id}-status`}
-                id={`${tradie.id}-status`}
                 tone={getStatusTone(tradie.status)}
               >
                 {getStatusText(tradie.status)}
               </StatusPill>,
 
-              <span className="text-xs text-semibold" key={`${tradie.id}-cost`}>
-                {!tradie.requiresQuote
-                  ? calculateScheduleTotalCost(
-                      parseFloat(tradie.tradie.hourlyRate ?? "0"),
-                      tradie.durationDays,
-                    )
-                  : tradie.status === "AWAITING_QUOTE"
-                    ? "-"
-                    : tradie.quotedPrice}
+              <span
+                className="font-mono text-xs font-medium tabular-nums"
+                key={`${tradie.id}-cost`}
+              >
+                {scheduleCost(tradie)}
               </span>,
 
               <div className="flex gap-1" key={`${tradie.id}-actions`}>
@@ -305,196 +389,139 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="size-8 rounded-lg text-muted-foreground hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600"
-                    onClick={() => {
+                    aria-label={`Send a reminder to ${tradie.tradie.name}`}
+                    className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
+                    onClick={(event) => {
+                      // The row itself is a control; without this the row's
+                      // own handler fires too and two modals race.
+                      event.stopPropagation();
                       dispatch(
                         openModal({
                           type: "tradieReminder",
                           payload: {
-                            schedule: {
-                              id: tradie.id,
-                              tradieId: tradie.tradie.id,
-                              tradieName: tradie.tradie.name,
-                              tradeType: tradie.tradie.trade,
-                              abn: tradie.tradie.abn,
-                              projectId: project.id,
-                              projectName: project.name,
-                              taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
-                              scheduledDate: new Date(
-                                tradie.scheduledDate,
-                              ).toISOString(),
-                              durationDays: tradie.durationDays,
-                              status: tradie.status,
-                              updatedAt: new Date().toISOString(),
-                              contact: {
-                                email: tradie.tradie.email,
-                                phone: tradie.tradie.phone,
-                              },
-                              siteManager: {
-                                name: project.siteManager?.name ?? "N/A",
-                                email: project.siteManager?.email ?? "N/A",
-                                phone: project.siteManager?.phone ?? "N/A",
-                              },
-                              isFavourite: tradie.tradie.isFavourite,
-                              note: tradie.tradie.note,
-                              requiresQuote: tradie.requiresQuote,
-                              quotedPrice: tradie.quotedPrice ?? undefined,
-                            } satisfies TradieScheduleListItem,
+                            schedule: toScheduleListItem(tradie, {
+                              includeQuote: true,
+                            }),
                           },
                         }),
                       );
                     }}
                   >
-                    <Bell className="size-3.5" />
+                    <Bell className="size-3.5" aria-hidden="true" />
                   </Button>
                 )}
 
                 <Button
                   variant="outline"
                   size="icon"
-                  className="size-8 rounded-lg text-muted-foreground hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600"
-                  onClick={() => {
+                  aria-label={`Log a call with ${tradie.tradie.name}`}
+                  className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
+                  onClick={(event) => {
+                    event.stopPropagation();
                     dispatch(
                       openModal({
                         type: "logCall",
                         payload: {
-                          schedule: {
-                            id: tradie.id,
-                            tradieId: tradie.tradie.id,
-                            tradieName: tradie.tradie.name,
-                            tradeType: tradie.tradie.trade,
-                            abn: tradie.tradie.abn,
-                            projectId: project.id,
-                            projectName: project.name,
-                            taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
-                            scheduledDate: new Date(
-                              tradie.scheduledDate,
-                            ).toISOString(),
-                            durationDays: tradie.durationDays,
-                            status: tradie.status,
-                            updatedAt: new Date().toISOString(),
-                            contact: {
-                              email: tradie.tradie.email,
-                              phone: tradie.tradie.phone,
-                            },
-                            siteManager: {
-                              name: project.siteManager?.name ?? "N/A",
-                              email: project.siteManager?.email ?? "N/A",
-                              phone: project.siteManager?.phone ?? "N/A",
-                            },
-                            isFavourite: tradie.tradie.isFavourite,
-                            note: tradie.tradie.note,
-                            requiresQuote: false,
-                          } satisfies TradieScheduleListItem,
+                          schedule: toScheduleListItem(tradie, {
+                            includeQuote: false,
+                          }),
                         },
                       }),
                     );
                   }}
                 >
-                  <Phone className="size-3.5" />
+                  <Phone className="size-3.5" aria-hidden="true" />
                 </Button>
 
                 <Button
                   variant="outline"
                   size="icon"
-                  className="size-8 rounded-lg text-muted-foreground hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600"
-                  onClick={() => {
+                  aria-label={`Update the status of ${tradie.tradie.name}`}
+                  className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
+                  onClick={(event) => {
+                    event.stopPropagation();
                     dispatch(
                       openModal({
                         type: "confirmStatus",
                         payload: {
-                          schedule: {
-                            id: tradie.id,
-                            tradieId: tradie.tradie.id,
-                            tradieName: tradie.tradie.name,
-                            tradeType: tradie.tradie.trade,
-                            abn: tradie.tradie.abn,
-                            projectId: project.id,
-                            projectName: project.name,
-                            taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
-                            scheduledDate: new Date(
-                              tradie.scheduledDate,
-                            ).toISOString(),
-                            durationDays: tradie.durationDays,
-                            status: tradie.status,
-                            updatedAt: new Date().toISOString(),
-                            contact: {
-                              email: tradie.tradie.email,
-                              phone: tradie.tradie.phone,
-                            },
-                            siteManager: {
-                              name: project.siteManager?.name ?? "N/A",
-                              email: project.siteManager?.email ?? "N/A",
-                              phone: project.siteManager?.phone ?? "N/A",
-                            },
-                            isFavourite: tradie.tradie.isFavourite,
-                            note: tradie.tradie.note,
-                            requiresQuote: false,
-                          } satisfies TradieScheduleListItem,
+                          schedule: toScheduleListItem(tradie, {
+                            includeQuote: false,
+                          }),
                         },
                       }),
                     );
                   }}
                 >
-                  <Pencil className="size-3.5" />
+                  <Pencil className="size-3.5" aria-hidden="true" />
                 </Button>
               </div>,
-            ])}
-            onRowClick={(rowIndex) => {
-              const tradie = tradies[rowIndex];
-              dispatch(
-                openModal({
-                  type: "tradieScheduleDetails",
-                  payload: {
-                    schedule: {
-                      id: tradie.id,
-                      tradieName: tradie.tradie.name,
-                      tradeType: tradie.tradie.trade,
-                      abn: tradie.tradie.abn,
-                      projectName: project.name,
-                      milestoneName: tradie.milestone?.name ?? "N/A",
-                      taskLabel: `${tradie.tradie.trade} for ${tradie.milestone?.name ?? "N/A"}`,
-                      scheduledDate: new Date(
-                        tradie.scheduledDate,
-                      ).toISOString(),
-                      daysLeft: differenceInDays(
-                        new Date(tradie.scheduledDate),
-                        new Date(),
-                      ),
-                      status: tradie.status,
-                      contact: {
-                        email: tradie.tradie.email,
-                        phone: tradie.tradie.phone,
-                      },
-                      siteManager: {
-                        name: project.siteManager?.name ?? "N/A",
-                        email: project.siteManager?.email ?? "N/A",
-                        phone: project.siteManager?.phone ?? "N/A",
-                      },
-                    } satisfies TradieUrgentReminderItem,
-                  },
-                }),
-              );
-            }}
-            emptyState={
-              <div className="flex flex-col items-center justify-center gap-3">
-                <div className="flex size-12 items-center justify-center">
-                  <Clock10 className="size-5 text-muted-foreground" />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    No Tradie Schedule data available
-                  </p>
-
-                  <p className="text-xs text-muted-foreground">
-                    Your Tradie Schedule details will appear here.
-                  </p>
-                </div>
+            ];
+          })}
+          rowLabel={(rowIndex) =>
+            `Open schedule details for ${tradies[rowIndex].tradie.name}`
+          }
+          onRowClick={(rowIndex) => {
+            const tradie = tradies[rowIndex];
+            dispatch(
+              openModal({
+                type: "tradieScheduleDetails",
+                payload: {
+                  schedule: {
+                    id: tradie.id,
+                    tradieName: tradie.tradie.name,
+                    tradeType: tradie.tradie.trade,
+                    abn: tradie.tradie.abn,
+                    projectName: project.name,
+                    milestoneName: tradie.milestone?.name,
+                    taskLabel: tradie.milestone?.name
+                      ? `${tradie.tradie.trade} for ${tradie.milestone.name}`
+                      : tradie.tradie.trade,
+                    scheduledDate: new Date(
+                      tradie.scheduledDate,
+                    ).toISOString(),
+                    daysLeft: differenceInDays(
+                      new Date(tradie.scheduledDate),
+                      new Date(),
+                    ),
+                    status: tradie.status,
+                    reminderSentAt: tradie.reminderSentAt
+                      ? new Date(tradie.reminderSentAt).toISOString()
+                      : undefined,
+                    contact: {
+                      email: tradie.tradie.email,
+                      phone: tradie.tradie.phone,
+                    },
+                    siteManager: {
+                      name: project.siteManager?.name ?? "Unassigned",
+                      email: project.siteManager?.email ?? "",
+                      phone: project.siteManager?.phone ?? "",
+                    },
+                  } satisfies TradieUrgentReminderItem,
+                },
+              }),
+            );
+          }}
+          emptyState={
+            <div className="flex flex-col items-center justify-center gap-3">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
+                <Clock10
+                  className="size-5 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </div>
-            }
-          />
-        </div>
+
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">
+                  No tradies scheduled on this project
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  Use Schedule tradies to book a trade against a milestone.
+                </p>
+              </div>
+            </div>
+          }
+        />
       </SectionCard>
     </div>
   );

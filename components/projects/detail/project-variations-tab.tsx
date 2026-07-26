@@ -4,11 +4,12 @@ import { StatusPill } from "@/components/common/status-pill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { VariationImpactTone, VariationTimelineImpact } from "@/types/ui";
-import { Clock, Plus, Eye, Bell } from "lucide-react";
+import { Clock, Plus } from "lucide-react";
 
 import {
   currency,
   dateFormat,
+  formatStatus,
   variationStatusTone,
 } from "../../../utils/formatters";
 
@@ -72,33 +73,33 @@ const calculateVariationImpact = (
     VariationTimelineImpact["styles"] & { titleText: string }
   > = {
     neutral: {
-      titleText: "Timeline On Track",
-      card: "border-emerald-200 bg-emerald-50/70",
-      iconWrapper: "bg-emerald-100 text-emerald-600",
-      icon: "text-emerald-600",
-      title: "text-emerald-700",
-      originalBar: "bg-emerald-600",
-      delayBar: "bg-emerald-400",
+      titleText: "Timeline on track",
+      card: "border-border/70 bg-card",
+      iconWrapper: "bg-success-light text-success-ink",
+      icon: "text-success-ink",
+      title: "text-foreground",
+      originalBar: "bg-primary",
+      delayBar: "bg-success",
     },
 
     warning: {
-      titleText: "Timeline Impact Detected",
-      card: "border-amber-200 bg-amber-50/70",
-      iconWrapper: "bg-amber-100 text-amber-600",
-      icon: "text-amber-600",
-      title: "text-amber-700",
-      originalBar: "bg-teal-600",
-      delayBar: "bg-amber-500",
+      titleText: "Timeline impact detected",
+      card: "border-border/70 bg-card",
+      iconWrapper: "bg-warning-light text-warning-ink",
+      icon: "text-warning-ink",
+      title: "text-warning-ink",
+      originalBar: "bg-primary",
+      delayBar: "bg-warning",
     },
 
     danger: {
-      titleText: "Critical Timeline Delay",
-      card: "border-red-200 bg-red-50/70",
-      iconWrapper: "bg-red-100 text-red-600",
-      icon: "text-red-600",
-      title: "text-red-700",
-      originalBar: "bg-teal-600",
-      delayBar: "bg-red-500",
+      titleText: "Critical timeline delay",
+      card: "border-border/70 bg-card",
+      iconWrapper: "bg-destructive-light text-destructive-ink",
+      icon: "text-destructive-ink",
+      title: "text-destructive-ink",
+      originalBar: "bg-primary",
+      delayBar: "bg-destructive",
     },
   };
 
@@ -125,8 +126,8 @@ const calculateVariationImpact = (
     visualDelayPercent,
 
     startDateLabel: `${dateFormat.format(startDate)}`,
-    originalEndLabel: `Original End: ${dateFormat.format(endDate)}`,
-    adjustedEndLabel: `New End: ${dateFormat.format(adjustedEndDate)}`,
+    originalEndLabel: `Original end ${dateFormat.format(endDate)}`,
+    adjustedEndLabel: `New end ${dateFormat.format(adjustedEndDate)}`,
 
     styles: toneConfig[tone],
   };
@@ -150,7 +151,7 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
     <section className="space-y-4">
       <Card
         className={cn(
-          "rounded-xl shadow-sm transition-colors",
+          "rounded-xl shadow-sm",
           projectVariationImpact.styles.card,
         )}
       >
@@ -158,83 +159,115 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
           <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <div
               className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-xl",
+                "flex size-10 shrink-0 items-center justify-center rounded-2xl",
                 projectVariationImpact.styles.iconWrapper,
               )}
             >
-              <Clock className="size-5" />
+              <Clock className="size-5" aria-hidden="true" />
             </div>
 
             <div className="flex-1">
-              <h4
+              <h2
                 className={cn(
-                  "mb-0.5 text-[13px] font-bold",
+                  "mb-0.5 text-base font-semibold",
                   projectVariationImpact.styles.title,
                 )}
               >
                 {projectVariationImpact.title}
-              </h4>
+              </h2>
 
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {projectVariationImpact.summary}
               </p>
             </div>
           </div>
 
           <div className="mt-4">
-            <div className="flex h-6 overflow-hidden rounded-lg bg-white/70">
+            <div
+              className="flex h-6 overflow-hidden rounded-lg bg-muted"
+              role="img"
+              aria-label={
+                noDelay
+                  ? `Original plan runs the full duration, ${projectVariationImpact.startDateLabel} to ${projectVariationImpact.adjustedEndLabel}.`
+                  : `Original plan is ${projectVariationImpact.originalDurationPercent}% of the revised duration; approved variations add ${projectVariationImpact.totalDelayDays} days.`
+              }
+            >
               <div
                 className={cn(
-                  "flex h-full items-center justify-center text-[10px] font-semibold text-white transition-all",
+                  "h-full",
                   projectVariationImpact.styles.originalBar,
                 )}
                 style={{
                   width: `${projectVariationImpact.visualOriginalPercent}%`,
                 }}
-              >
-                Original Plan
-              </div>
+              />
 
               {!noDelay && (
                 <div
                   className={cn(
-                    "flex h-full items-center justify-center text-[10px] font-semibold text-white transition-all",
+                    "h-full",
                     projectVariationImpact.styles.delayBar,
                   )}
                   style={{
                     width: `${projectVariationImpact.visualDelayPercent}%`,
                   }}
-                >
-                  +{projectVariationImpact.totalDelayDays}d Delay
-                </div>
+                />
               )}
             </div>
 
-            <div className="relative mt-2 h-5 text-[10px] text-muted-foreground">
-              {/* Start */}
-              <span className="absolute left-0 -translate-x-0">
+            <ul className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              <li className="flex items-center gap-1.5">
+                <span
+                  className="inline-block size-2 rounded-full bg-primary"
+                  aria-hidden="true"
+                />
+                Original plan
+              </li>
+              {!noDelay && (
+                <li className="flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "inline-block size-2 rounded-full",
+                      projectVariationImpact.styles.delayBar,
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    Delay{" "}
+                    <span className="font-mono tabular-nums">
+                      +{projectVariationImpact.totalDelayDays}
+                    </span>{" "}
+                    {projectVariationImpact.totalDelayDays === 1
+                      ? "day"
+                      : "days"}
+                  </span>
+                </li>
+              )}
+            </ul>
+
+            <div className="relative mt-2 h-5 font-mono text-xs tabular-nums text-muted-foreground">
+              <span className="absolute left-0">
                 {projectVariationImpact.startDateLabel}
               </span>
 
-              {/* Original completion */}
               <span
-                className={`absolute whitespace-nowrap ${
-                  noDelay ? "-translate-x-full" : "-translate-x-1/2"
-                }`}
+                className={cn(
+                  "absolute whitespace-nowrap",
+                  noDelay ? "-translate-x-full" : "-translate-x-1/2",
+                )}
                 style={{
                   left: noDelay
                     ? `calc(${projectVariationImpact.visualOriginalPercent}% - 8px)`
                     : `${projectVariationImpact.visualOriginalPercent}%`,
                 }}
               >
-                {!noDelay
-                  ? projectVariationImpact.originalEndLabel
-                  : projectVariationImpact.adjustedEndLabel}
+                {noDelay
+                  ? projectVariationImpact.adjustedEndLabel
+                  : projectVariationImpact.originalEndLabel}
               </span>
 
-              {/* Adjusted completion */}
               {!noDelay && (
-                <span className="absolute right-0 translate-x-0 whitespace-nowrap">
+                <span className="absolute right-0 whitespace-nowrap">
                   {projectVariationImpact.adjustedEndLabel}
                 </span>
               )}
@@ -243,93 +276,105 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
         </CardContent>
       </Card>
 
-      <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
-        <CardHeader className="border-b border-border/60 pb-4">
+      <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+        <CardHeader className="border-b border-border/70 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
-              Variation Log
+            <CardTitle
+              as="h2"
+              className="text-base font-semibold text-foreground"
+            >
+              Variation log
             </CardTitle>
             <Button
               size="sm"
-              className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
+              className="h-9 rounded-lg px-3.5 text-sm font-medium"
               onClick={() =>
                 dispatch(
                   openModal({ type: "createVariation", payload: { project } }),
                 )
               }
             >
-              <Plus className="mr-1 size-4" />
-              Add Variation
+              <Plus className="mr-1 size-4" aria-hidden="true" />
+              Add variation
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4 pt-0 px-0 pb-5">
-          <div className="overflow-x-auto">
+        <CardContent className="space-y-4 px-0 pb-5 pt-0">
+          <div className="mx-4 mt-2">
             <DataTable
-              key={project.variations.length}
+              caption={`Variation log for ${project.name}, with dates, delay, cost impact and revised contract total.`}
               headers={[
                 "Var #",
-                "Date Sent",
-                "Reply Date",
+                "Date sent",
+                "Reply date",
                 "Delay",
                 "Description",
-                "Reason",
-                "Cost Impact",
-                "New Total",
+                "Cost impact",
+                "New total",
                 "Status",
-                "Action",
+              ]}
+              align={[
+                "start",
+                "start",
+                "start",
+                "end",
+                "start",
+                "end",
+                "end",
+                "start",
               ]}
               rows={project.variations.map((variation, index) => {
                 const variationCost = Number(variation.cost);
 
                 return [
                   <span
-                    className="font-semibold text-slate-900"
+                    className="font-mono font-medium tabular-nums text-foreground"
                     key={variation.id}
                   >
                     V-{String(index + 1).padStart(3, "0")}
                   </span>,
 
-                  <span key={`${variation.id}-sent`}>
+                  <span
+                    key={`${variation.id}-sent`}
+                    className="font-mono tabular-nums"
+                  >
                     {dateFormat.format(variation.requestedDate)}
                   </span>,
 
-                  <span key={`${variation.id}-approved`}>
+                  <span
+                    key={`${variation.id}-approved`}
+                    className="font-mono tabular-nums"
+                  >
                     {variation.approvedDate
                       ? dateFormat.format(variation.approvedDate)
-                      : "-"}
+                      : "—"}
                   </span>,
 
                   <span
                     key={`${variation.id}-delay`}
-                    className="text-center text-slate-700"
+                    className="font-mono tabular-nums"
                   >
-                    {variation.delayDays ? `${variation.delayDays} days` : "-"}
+                    {variation.delayDays
+                      ? `${variation.delayDays} ${variation.delayDays === 1 ? "day" : "days"}`
+                      : "—"}
                   </span>,
 
                   <span
-                    className="max-w-10 text-wrap text-slate-700 max-h-20 no-scrollbar"
+                    className="block max-w-xs text-pretty"
                     key={`${variation.id}-description`}
                   >
                     {variation.description}
                   </span>,
 
                   <span
-                    className="text-slate-600"
-                    key={`${variation.id}-reason`}
-                  >
-                    Client Request
-                  </span>,
-
-                  <span
-                    className="font-semibold text-red-600"
+                    className="font-mono font-medium tabular-nums text-warning-ink"
                     key={`${variation.id}-cost`}
                   >
                     +{currency.format(variationCost)}
                   </span>,
 
                   <span
-                    className="font-medium text-slate-900"
+                    className="font-mono tabular-nums text-foreground"
                     key={`${variation.id}-new-total`}
                   >
                     {currency.format(totalBudget + variationCost)}
@@ -337,50 +382,41 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
 
                   <StatusPill
                     key={`${variation.id}-status`}
-                    id={`${variation.id}-status`}
                     tone={variationStatusTone(variation.status)}
                   >
-                    {variation.status}
+                    {formatStatus(variation.status)}
                   </StatusPill>,
-
-                  <div
-                    className="flex justify-end gap-1.5"
-                    key={`${variation.id}-actions`}
-                  >
-                    {variation.status !== "APPROVED" && (
-                      <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-[#D97706] hover:bg-amber-50 hover:text-[#D97706]">
-                        <Bell className="size-3.5" />
-                      </button>
-                    )}
-
-                    <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600">
-                      <Eye className="size-3.5" />
-                    </button>
-                  </div>,
                 ];
               })}
-              onRowClick={(rowIndex) => {
-                const variation = project.variations[rowIndex];
-
-                // handle navigation / dialog
-                console.log("Clicked variation:", variation.id);
-              }}
+              emptyState={
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-sm font-medium text-foreground">
+                    No variations raised
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Changes to scope, cost or timeline will be logged here.
+                  </p>
+                </div>
+              }
             />
           </div>
-          <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-4 py-3">
-            <div className="text-[13px]">
-              <b>Original Quote:</b> {currency.format(totalBudget)} &rarr;{" "}
-              <b>With Variations:</b>{" "}
-              <span className="ml-1 text-base font-extrabold text-[#E8730C]">
+          <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted px-4 py-3">
+            <p className="text-sm text-foreground">
+              <span className="font-medium">Original quote:</span>{" "}
+              <span className="font-mono tabular-nums">
+                {currency.format(totalBudget)}
+              </span>{" "}
+              &rarr; <span className="font-medium">with variations:</span>{" "}
+              <span className="ml-1 font-mono text-base font-semibold tabular-nums text-foreground">
                 {currency.format(totalBudget + variationTotal)}
               </span>
-            </div>
-            <div className="text-[13px]">
-              <b>Total Variation Cost:</b>{" "}
-              <span className="ml-1 text-[14px] font-extrabold text-red-600">
+            </p>
+            <p className="text-sm text-foreground">
+              <span className="font-medium">Total variation cost:</span>{" "}
+              <span className="ml-1 font-mono text-base font-semibold tabular-nums text-warning-ink">
                 +{currency.format(variationTotal)}
               </span>
-            </div>
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -1,104 +1,147 @@
 "use client";
 
-
 import { cn } from "@/lib/utils";
 import {
   LayoutGrid,
   CalendarCheck,
-  Package,
   CreditCard,
-  Camera,
   Wrench,
-  QrCode,
   FileText,
-  ArrowLeftRight,
   History,
   Mail,
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { ProjectDetailTabKey } from "@/utils/validators/projects";
 
-const TabIcons: Record<ProjectDetailTabKey, React.ElementType> = {
+/**
+ * The tabs that are actually navigable. `projectTabsValidator` still accepts
+ * `materials`, `updates`, `workers` and `variations` because those tab bodies
+ * exist, but they were deliberately hidden (commit 230c35e) as unfinished
+ * surfaces. This list is the single source of truth for what a user can reach,
+ * and `project-detail-tabs.tsx` narrows the URL parameter against it so a
+ * hidden key can no longer render a panel with no way back.
+ */
+export const VISIBLE_PROJECT_DETAIL_TABS = [
+  "overview",
+  "milestones",
+  "payments",
+  "tradies",
+  "docs",
+  "history",
+  "communications",
+] as const satisfies readonly ProjectDetailTabKey[];
+
+export type VisibleProjectDetailTabKey =
+  (typeof VISIBLE_PROJECT_DETAIL_TABS)[number];
+
+export function isVisibleProjectDetailTab(
+  value: string,
+): value is VisibleProjectDetailTabKey {
+  return (VISIBLE_PROJECT_DETAIL_TABS as readonly string[]).includes(value);
+}
+
+export const projectTabTriggerId = (key: VisibleProjectDetailTabKey) =>
+  `project-tab-${key}`;
+export const projectTabPanelId = (key: VisibleProjectDetailTabKey) =>
+  `project-tabpanel-${key}`;
+
+const TabIcons: Record<VisibleProjectDetailTabKey, React.ElementType> = {
   overview: LayoutGrid,
   milestones: CalendarCheck,
-  materials: Package,
   payments: CreditCard,
-  updates: Camera,
   tradies: Wrench,
-  workers: QrCode,
   history: History,
   docs: FileText,
-  variations: ArrowLeftRight,
   communications: Mail,
 };
 
-const generateProjectDetailTabs = (
-  project: ProjectDetail,
-): {
-  key: ProjectDetailTabKey;
+type BadgeTone = "primary" | "warning" | "danger" | "neutral";
+
+type ProjectDetailTab = {
+  key: VisibleProjectDetailTabKey;
   label: string;
   badge?: string;
-  badgeTone?: "primary" | "warning" | "danger" | "neutral";
-}[] => {
-  const pendingMilestones = project.milestones.filter(
-    (m) => m.status !== "DONE",
+  badgeTone?: BadgeTone;
+  /** Spells out what the bare number means for screen readers. */
+  badgeDescription?: string;
+};
+
+const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
+  primary: "bg-primary/15 text-primary",
+  warning: "bg-warning-light text-warning-ink",
+  danger: "bg-destructive-light text-destructive-ink",
+  neutral: "bg-muted text-muted-foreground",
+};
+
+const OPEN_MILESTONE_STATUSES = new Set(["PENDING", "ACTIVE"]);
+const BLOCKED_TRADIE_STATUSES = new Set(["NO_RESPONSE", "DECLINED"]);
+const AWAITING_TRADIE_STATUSES = new Set([
+  "PENDING",
+  "PENDING_RESPONSE",
+  "AWAITING_QUOTE",
+]);
+
+const generateProjectDetailTabs = (
+  project: ProjectDetail,
+): ProjectDetailTab[] => {
+  const now = Date.now();
+
+  const openMilestones = project.milestones.filter((m) =>
+    OPEN_MILESTONE_STATUSES.has(m.status),
+  );
+  // Urgency comes from actual lateness, not from a milestone merely being
+  // incomplete — eight upcoming milestones on a new project is normal.
+  const overdueMilestones = openMilestones.filter(
+    (m) => new Date(m.targetDate).getTime() < now,
   ).length;
 
-  const tradieAlerts = project.tradieSchedules.filter(
-    (schedule) =>
-      schedule.status === "PENDING" ||
-      schedule.status === "PENDING_RESPONSE" ||
-      schedule.status === "AWAITING_QUOTE" ||
-      schedule.status === "NO_RESPONSE" ||
-      schedule.status === "DECLINED",
+  const blockedTradies = project.tradieSchedules.filter((schedule) =>
+    BLOCKED_TRADIE_STATUSES.has(schedule.status),
   ).length;
+  const awaitingTradies = project.tradieSchedules.filter((schedule) =>
+    AWAITING_TRADIE_STATUSES.has(schedule.status),
+  ).length;
+  const tradieAlerts = blockedTradies + awaitingTradies;
 
-  // const siteUpdates = project.siteUpdates.length;
-  // const variations = project.variations.length;
-
-  const tabs: {
-    key: ProjectDetailTabKey;
-    label: string;
-    badge?: string;
-    badgeTone?: "primary" | "warning" | "danger" | "neutral";
-  }[] = [
+  return [
     { key: "overview", label: "Overview" },
     {
       key: "milestones",
       label: "Milestones",
-      badge: pendingMilestones.toString(),
-      badgeTone: "warning",
+      ...(openMilestones.length > 0
+        ? {
+            badge: openMilestones.length.toString(),
+            // Only a real problem — a missed target date — earns a red badge.
+            badgeTone: overdueMilestones > 0 ? ("danger" as const) : ("neutral" as const),
+            badgeDescription:
+              overdueMilestones > 0
+                ? `${openMilestones.length} milestones remaining, ${overdueMilestones} past their target date`
+                : `${openMilestones.length} milestones remaining`,
+          }
+        : {}),
     },
-    // { key: "materials", label: "Materials" },
     { key: "payments", label: "Payments" },
-    // {
-    //   key: "updates",
-    //   label: "Site Updates",
-    //   badge: siteUpdates.toString(),
-    //   badgeTone: "primary",
-    // },
     {
       key: "tradies",
       label: "Tradies",
-      badge: tradieAlerts.toString(),
-      badgeTone:
-        tradieAlerts > 4 ? "danger" : tradieAlerts > 2 ? "warning" : "neutral",
+      ...(tradieAlerts > 0
+        ? {
+            badge: tradieAlerts.toString(),
+            // Declined or unanswered requests are blocked work; requests still
+            // inside their response window are merely open.
+            badgeTone: blockedTradies > 0 ? ("danger" as const) : ("neutral" as const),
+            badgeDescription:
+              blockedTradies > 0
+                ? `${tradieAlerts} tradie requests unresolved, ${blockedTradies} declined or unanswered`
+                : `${tradieAlerts} tradie requests awaiting a response`,
+          }
+        : {}),
     },
-    // { key: "workers", label: "Workers & QR" },
     { key: "docs", label: "Documents" },
     { key: "history", label: "History" },
     { key: "communications", label: "Communications" },
-    // {
-    //   key: "variations",
-    //   label: "Variations",
-    //   badge: variations.toString(),
-    //   badgeTone:
-    //     variations > 4 ? "danger" : variations > 2 ? "warning" : "neutral",
-    // },
   ];
-
-  return tabs;
 };
 
 export function ProjectTabNavigation({
@@ -107,47 +150,108 @@ export function ProjectTabNavigation({
   onTabChange,
 }: {
   project: ProjectDetail;
-  activeTab: ProjectDetailTabKey;
-  onTabChange: (tab: ProjectDetailTabKey) => void;
+  activeTab: VisibleProjectDetailTabKey;
+  onTabChange: (tab: VisibleProjectDetailTabKey) => void;
 }) {
   const projectDetailTabs = useMemo(
     () => generateProjectDetailTabs(project),
     [project],
   );
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const focusTab = useCallback(
+    (tab: ProjectDetailTab) => {
+      onTabChange(tab.key);
+      tabRefs.current[tab.key]?.focus();
+    },
+    [onTabChange],
+  );
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const currentIndex = projectDetailTabs.findIndex(
+        (tab) => tab.key === activeTab,
+      );
+      if (currentIndex === -1) return;
+
+      const last = projectDetailTabs.length - 1;
+      let nextIndex: number | null = null;
+
+      switch (event.key) {
+        case "ArrowRight":
+        case "ArrowDown":
+          nextIndex = currentIndex === last ? 0 : currentIndex + 1;
+          break;
+        case "ArrowLeft":
+        case "ArrowUp":
+          nextIndex = currentIndex === 0 ? last : currentIndex - 1;
+          break;
+        case "Home":
+          nextIndex = 0;
+          break;
+        case "End":
+          nextIndex = last;
+          break;
+        default:
+          return;
+      }
+
+      event.preventDefault();
+      focusTab(projectDetailTabs[nextIndex]);
+    },
+    [activeTab, focusTab, projectDetailTabs],
+  );
 
   return (
-    <nav className="hide-scrollbar flex gap-0 overflow-x-auto border-b-2 border-border/60 mb-5">
+    // Wrapping rather than horizontally scrolling: a scroll container with a
+    // hidden scrollbar gave no affordance that further tabs existed.
+    <div
+      role="tablist"
+      aria-label="Project sections"
+      aria-orientation="horizontal"
+      onKeyDown={handleKeyDown}
+      className="mb-5 flex flex-wrap gap-x-1 border-b-2 border-border/60"
+    >
       {projectDetailTabs.map((tab) => {
         const Icon = TabIcons[tab.key];
+        const isActive = activeTab === tab.key;
         return (
           <button
-            key={`${tab.key}-${tab.label}-${tab.badge}`}
+            key={tab.key}
+            ref={(node) => {
+              tabRefs.current[tab.key] = node;
+            }}
             type="button"
+            role="tab"
+            id={projectTabTriggerId(tab.key)}
+            aria-selected={isActive}
+            aria-controls={projectTabPanelId(tab.key)}
+            tabIndex={isActive ? 0 : -1}
             onClick={() => onTabChange(tab.key)}
             className={cn(
-              "relative inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4.5 py-2.75 text-[12.5px] font-medium text-muted-foreground transition-all hover:text-teal-600 focus:outline-none",
-              activeTab === tab.key &&
-                "border-teal-600 font-bold text-teal-600",
+              "relative -mb-0.5 inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+              isActive && "border-primary font-semibold text-primary",
             )}
           >
-            <Icon className="size-4" />
+            <Icon className="size-4" aria-hidden="true" />
             <span>{tab.label}</span>
             {tab.badge ? (
-              <span
-                className={cn(
-                  "ml-1 inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1.25 text-[10px] font-bold leading-none",
-                  tab.badgeTone === "warning" && "bg-amber-100 text-[#D97706]",
-                  tab.badgeTone === "danger" && "bg-red-100 text-red-600",
-                  tab.badgeTone === "primary" && "bg-teal-600/15 text-teal-600",
-                  tab.badgeTone === "neutral" && "bg-slate-100 text-slate-700",
-                )}
-              >
-                {tab.badge}
-              </span>
+              <>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none",
+                    BADGE_TONE_CLASS[tab.badgeTone ?? "neutral"],
+                  )}
+                >
+                  {tab.badge}
+                </span>
+                <span className="sr-only">{tab.badgeDescription}</span>
+              </>
             ) : null}
           </button>
         );
       })}
-    </nav>
+    </div>
   );
 }

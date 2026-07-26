@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type { ProjectDetail } from "@/types/project";
 import type {
   ProjectRequirementsPayload,
@@ -18,9 +18,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { fetchJson } from "@/utils/fetch";
+import { formatValue, toLabel } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -70,52 +79,52 @@ const SECTION_META: Record<
   { label: string; description: string; icon: React.ElementType }
 > = {
   legalAdministration: {
-    label: "Legal and Administration",
+    label: "Legal and administration",
     description: "Site details, ownership and sign-off",
     icon: ScrollText,
   },
   commercialsAndClaims: {
-    label: "Commercials and Claims",
+    label: "Commercials and claims",
     description: "Contract sum, GST and payment schedule",
     icon: Landmark,
   },
   subStructureAndGround: {
-    label: "Sub Structure and Ground",
+    label: "Sub structure and ground",
     description: "Slab, termite and drainage specification",
     icon: Layers,
   },
   shellAndExternal: {
-    label: "Shell and External",
+    label: "Shell and external",
     description: "Ceilings, roofing, brick and window allowances",
     icon: Building2,
   },
   mechanicalDetails: {
-    label: "Mechanical Details",
+    label: "Mechanical details",
     description: "Air conditioning, lighting and power",
     icon: Fan,
   },
   internalFitOutAndFinishes: {
-    label: "Internal Fit Out and Finishes",
+    label: "Internal fit out and finishes",
     description: "Doors, stone, tiles and tapware",
     icon: Paintbrush,
   },
   exclusionsAndRisks: {
-    label: "Exclusions and Risks",
+    label: "Exclusions and risks",
     description: "Items excluded, owner risk and variation triggers",
     icon: ShieldAlert,
   },
   utilityInfrastructure: {
-    label: "Utility Infrastructure",
+    label: "Utility infrastructure",
     description: "Electrical, gas and comms provisioning",
     icon: Plug,
   },
   wetAreaCompliance: {
-    label: "Wet Area Compliance",
+    label: "Wet area compliance",
     description: "Waterproofing and shower compliance",
     icon: Droplets,
   },
   safetyAndSiteLogistics: {
-    label: "Safety and Site Logistics",
+    label: "Safety and site logistics",
     description: "Site safety, sediment control and clean-up",
     icon: HardHat,
   },
@@ -123,153 +132,153 @@ const SECTION_META: Record<
 
 const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
   legalAdministration: [
-    { key: "siteAddress", label: "Site Address", type: "textarea", span: 2 },
-    { key: "commencementTrigger", label: "Commencement Trigger", type: "text" },
-    { key: "signedDate", label: "Signed Date", type: "text" },
-    { key: "pcaInspector", label: "PCA Inspector", type: "text" },
+    { key: "siteAddress", label: "Site address", type: "textarea", span: 2 },
+    { key: "commencementTrigger", label: "Commencement trigger", type: "text" },
+    { key: "signedDate", label: "Signed date", type: "text" },
+    { key: "pcaInspector", label: "PCA inspector", type: "text" },
   ],
   commercialsAndClaims: [
-    { key: "totalContractSum", label: "Total Contract Sum", type: "currency" },
-    { key: "tenderTotalPrice", label: "Tender Total Price", type: "currency" },
-    { key: "contractPrice", label: "Contract Price", type: "currency" },
-    { key: "gstIncluded", label: "GST Included", type: "boolean" },
-    { key: "gstAmount", label: "GST Amount", type: "currency" },
-    { key: "depositValue", label: "Deposit Value", type: "currency" },
+    { key: "totalContractSum", label: "Total contract sum", type: "currency" },
+    { key: "tenderTotalPrice", label: "Tender total price", type: "currency" },
+    { key: "contractPrice", label: "Contract price", type: "currency" },
+    { key: "gstIncluded", label: "GST included", type: "boolean" },
+    { key: "gstAmount", label: "GST amount", type: "currency" },
+    { key: "depositValue", label: "Deposit value", type: "currency" },
     {
       key: "claimStageSlabPercentage",
-      label: "Slab Claim Stage",
+      label: "Slab claim stage",
       type: "percent",
     },
     {
       key: "claimStageSlabDollarValue",
-      label: "Slab Claim Value",
+      label: "Slab claim value",
       type: "currency",
     },
     {
       key: "variationAdminFee",
-      label: "Variation Admin Fee",
+      label: "Variation admin fee",
       type: "currency",
     },
-    { key: "latePenaltyRate", label: "Late Penalty Rate", type: "percent" },
+    { key: "latePenaltyRate", label: "Late penalty rate", type: "percent" },
   ],
   subStructureAndGround: [
-    { key: "concreteSlabClass", label: "Concrete Slab Class", type: "text" },
+    { key: "concreteSlabClass", label: "Concrete slab class", type: "text" },
     {
       key: "concreteStrengthMpa",
-      label: "Concrete Strength",
+      label: "Concrete strength",
       type: "number",
       unit: "MPa",
     },
-    { key: "vapourBarrier", label: "Vapour Barrier", type: "text" },
-    { key: "termiteSystem", label: "Termite System", type: "text" },
-    { key: "sewerConnection", label: "Sewer Connection", type: "text" },
+    { key: "vapourBarrier", label: "Vapour barrier", type: "text" },
+    { key: "termiteSystem", label: "Termite system", type: "text" },
+    { key: "sewerConnection", label: "Sewer connection", type: "text" },
   ],
   shellAndExternal: [
     {
       key: "ceilingHeightGroundFloor",
-      label: "Ceiling Height (Ground)",
+      label: "Ceiling height (ground)",
       type: "text",
     },
     {
       key: "ceilingHeightFirstFloor",
-      label: "Ceiling Height (First Floor)",
+      label: "Ceiling height (first floor)",
       type: "text",
     },
-    { key: "roofingMaterial", label: "Roofing Material", type: "text" },
-    { key: "brickAllowance", label: "Brick Allowance", type: "currency" },
-    { key: "brickCount", label: "Brick Count", type: "number" },
+    { key: "roofingMaterial", label: "Roofing material", type: "text" },
+    { key: "brickAllowance", label: "Brick allowance", type: "currency" },
+    { key: "brickCount", label: "Brick count", type: "number" },
     {
       key: "selectedBrickPrice",
-      label: "Selected Brick Price",
+      label: "Selected brick price",
       type: "currency",
     },
-    { key: "windowProvider", label: "Window Provider", type: "text" },
-    { key: "floorAreaM2", label: "Floor Area", type: "number", unit: "m²" },
+    { key: "windowProvider", label: "Window provider", type: "text" },
+    { key: "floorAreaM2", label: "Floor area", type: "number", unit: "m²" },
   ],
   mechanicalDetails: [
-    { key: "acSystemZones", label: "AC System Zones", type: "text" },
+    { key: "acSystemZones", label: "AC system zones", type: "text" },
     {
       key: "acRequiredCapacityKw",
-      label: "AC Required Capacity",
+      label: "AC required capacity",
       type: "number",
       unit: "kW",
     },
     {
       key: "acInstalledCapacityKw",
-      label: "AC Installed Capacity",
+      label: "AC installed capacity",
       type: "number",
       unit: "kW",
     },
-    { key: "lightingCount", label: "Lighting Count", type: "number" },
+    { key: "lightingCount", label: "Lighting count", type: "number" },
     {
       key: "tenderLightingCount",
-      label: "Tender Lighting Count",
+      label: "Tender lighting count",
       type: "number",
     },
-    { key: "powerPointCount", label: "Power Point Count", type: "number" },
-    { key: "externalPower", label: "External Power", type: "text" },
-    { key: "jointSealants", label: "Joint Sealants", type: "text" },
+    { key: "powerPointCount", label: "Power point count", type: "number" },
+    { key: "externalPower", label: "External power", type: "text" },
+    { key: "jointSealants", label: "Joint sealants", type: "text" },
   ],
   internalFitOutAndFinishes: [
-    { key: "internalDoorHeight", label: "Internal Door Height", type: "text" },
-    { key: "skirtingSize", label: "Skirting Size", type: "text" },
-    { key: "stoneThickness", label: "Stone Thickness", type: "text" },
-    { key: "waterfallEnds", label: "Waterfall Ends", type: "text" },
-    { key: "tapwareFinish", label: "Tapware Finish", type: "text" },
-    { key: "tilesProvisionRate", label: "Tiles Provision Rate", type: "text" },
-    { key: "tileAllowance", label: "Tile Allowance", type: "currency" },
+    { key: "internalDoorHeight", label: "Internal door height", type: "text" },
+    { key: "skirtingSize", label: "Skirting size", type: "text" },
+    { key: "stoneThickness", label: "Stone thickness", type: "text" },
+    { key: "waterfallEnds", label: "Waterfall ends", type: "text" },
+    { key: "tapwareFinish", label: "Tapware finish", type: "text" },
+    { key: "tilesProvisionRate", label: "Tiles provision rate", type: "text" },
+    { key: "tileAllowance", label: "Tile allowance", type: "currency" },
     {
       key: "selectedTilePrice",
-      label: "Selected Tile Price",
+      label: "Selected tile price",
       type: "currency",
     },
     {
       key: "wetAreaSizeM2",
-      label: "Wet Area Size",
+      label: "Wet area size",
       type: "number",
       unit: "m²",
     },
   ],
   exclusionsAndRisks: [
-    { key: "retainingWalls", label: "Retaining Walls", type: "text" },
+    { key: "retainingWalls", label: "Retaining walls", type: "text" },
     { key: "fencing", label: "Fencing", type: "text" },
     { key: "blinds", label: "Blinds", type: "text" },
-    { key: "solarProvisions", label: "Solar Provisions", type: "text" },
-    { key: "rockExcavation", label: "Rock Excavation", type: "text" },
+    { key: "solarProvisions", label: "Solar provisions", type: "text" },
+    { key: "rockExcavation", label: "Rock excavation", type: "text" },
   ],
   utilityInfrastructure: [
-    { key: "electricalPhase", label: "Electrical Phase", type: "text" },
+    { key: "electricalPhase", label: "Electrical phase", type: "text" },
     {
       key: "communicationConduit",
-      label: "Communication Conduit",
+      label: "Communication conduit",
       type: "text",
     },
-    { key: "gasConnection", label: "Gas Connection", type: "text" },
-    { key: "fridgeWaterPoint", label: "Fridge Water Point", type: "text" },
-    { key: "smartLockBrand", label: "Smart Lock Brand", type: "text" },
+    { key: "gasConnection", label: "Gas connection", type: "text" },
+    { key: "fridgeWaterPoint", label: "Fridge water point", type: "text" },
+    { key: "smartLockBrand", label: "Smart lock brand", type: "text" },
   ],
   wetAreaCompliance: [
     {
       key: "waterproofingStandard",
-      label: "Waterproofing Standard",
+      label: "Waterproofing standard",
       type: "text",
     },
-    { key: "showerScreenType", label: "Shower Screen Type", type: "text" },
-    { key: "tiledNicheCount", label: "Tiled Niche Count", type: "number" },
-    { key: "showerCount", label: "Shower Count", type: "number" },
+    { key: "showerScreenType", label: "Shower screen type", type: "text" },
+    { key: "tiledNicheCount", label: "Tiled niche count", type: "number" },
+    { key: "showerCount", label: "Shower count", type: "number" },
     {
       key: "floorToCeilingTiles",
-      label: "Floor to Ceiling Tiles",
+      label: "Floor to ceiling tiles",
       type: "text",
     },
-    { key: "floorWasteType", label: "Floor Waste Type", type: "text" },
+    { key: "floorWasteType", label: "Floor waste type", type: "text" },
   ],
   safetyAndSiteLogistics: [
-    { key: "roofGuardrails", label: "Roof Guardrails", type: "text" },
-    { key: "sedimentControl", label: "Sediment Control", type: "text" },
-    { key: "scaffoldingSafety", label: "Scaffolding Safety", type: "text" },
-    { key: "tradeWaste", label: "Trade Waste", type: "text" },
-    { key: "finalCleanStatus", label: "Final Clean Status", type: "text" },
+    { key: "roofGuardrails", label: "Roof guardrails", type: "text" },
+    { key: "sedimentControl", label: "Sediment control", type: "text" },
+    { key: "scaffoldingSafety", label: "Scaffolding safety", type: "text" },
+    { key: "tradeWaste", label: "Trade waste", type: "text" },
+    { key: "finalCleanStatus", label: "Final clean status", type: "text" },
   ],
 };
 
@@ -296,25 +305,40 @@ function displayValue(value: unknown) {
 // Reusable field primitives
 // ---------------------------------------------------------------------------
 
+const FIELD_LABEL_CLASS = "gap-1 text-xs font-medium text-muted-foreground";
+const FIELD_CONTROL_CLASS = "h-9 rounded-lg bg-card text-sm";
+
 function FieldShell({
   label,
   unit,
+  htmlFor,
   children,
 }: {
   label: string;
   unit?: string;
+  htmlFor?: string;
   children: React.ReactNode;
 }) {
+  const content = (
+    <>
+      {label}
+      {unit ? (
+        <span className="font-normal text-muted-foreground">({unit})</span>
+      ) : null}
+    </>
+  );
+
   return (
     <div className="space-y-1.5">
-      <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-        {label}
-        {unit ? (
-          <span className="ml-1 font-normal normal-case text-slate-400">
-            ({unit})
-          </span>
-        ) : null}
-      </label>
+      {htmlFor ? (
+        <Label htmlFor={htmlFor} className={FIELD_LABEL_CLASS}>
+          {content}
+        </Label>
+      ) : (
+        <p className={cn("flex items-center", FIELD_LABEL_CLASS)}>
+          {content}
+        </p>
+      )}
       {children}
     </div>
   );
@@ -331,21 +355,22 @@ function TextField({
   onChange: (v: string | null) => void;
   multiline?: boolean;
 }) {
+  const id = useId();
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} htmlFor={id}>
       {multiline ? (
         <Textarea
+          id={id}
           value={displayValue(value)}
           onChange={(e) => onChange(emptyToNull(e.target.value))}
-          placeholder="Not specified"
-          className="min-h-20 resize-none rounded-lg border-slate-200 bg-white text-sm"
+          className="min-h-20 resize-none rounded-lg bg-card text-sm"
         />
       ) : (
         <Input
+          id={id}
           value={displayValue(value)}
           onChange={(e) => onChange(emptyToNull(e.target.value))}
-          placeholder="Not specified"
-          className="h-9 rounded-lg border-slate-200 bg-white text-sm"
+          className={FIELD_CONTROL_CLASS}
         />
       )}
     </FieldShell>
@@ -363,14 +388,16 @@ function NumberField({
   onChange: (v: number | null) => void;
   unit?: string;
 }) {
+  const id = useId();
   return (
-    <FieldShell label={label} unit={unit}>
+    <FieldShell label={label} unit={unit} htmlFor={id}>
       <Input
+        id={id}
         type="number"
+        inputMode="decimal"
         value={displayValue(value)}
         onChange={(e) => onChange(parseNumber(e.target.value))}
-        placeholder="—"
-        className="h-9 rounded-lg border-slate-200 bg-white text-sm"
+        className={cn(FIELD_CONTROL_CLASS, "font-mono tabular-nums")}
       />
     </FieldShell>
   );
@@ -385,18 +412,23 @@ function CurrencyField({
   value: unknown;
   onChange: (v: number | null) => void;
 }) {
+  const id = useId();
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} unit="AUD" htmlFor={id}>
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+        >
           $
         </span>
         <Input
+          id={id}
           type="number"
+          inputMode="decimal"
           value={displayValue(value)}
           onChange={(e) => onChange(parseNumber(e.target.value))}
-          placeholder="0.00"
-          className="h-9 rounded-lg border-slate-200 bg-white pl-6 text-sm"
+          className={cn(FIELD_CONTROL_CLASS, "pl-6 font-mono tabular-nums")}
         />
       </div>
     </FieldShell>
@@ -412,17 +444,22 @@ function PercentField({
   value: unknown;
   onChange: (v: number | null) => void;
 }) {
+  const id = useId();
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} unit="%" htmlFor={id}>
       <div className="relative">
         <Input
+          id={id}
           type="number"
+          inputMode="decimal"
           value={displayValue(value)}
           onChange={(e) => onChange(parseNumber(e.target.value))}
-          placeholder="0"
-          className="h-9 rounded-lg border-slate-200 bg-white pr-7 text-sm"
+          className={cn(FIELD_CONTROL_CLASS, "pr-7 font-mono tabular-nums")}
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+        >
           %
         </span>
       </div>
@@ -439,20 +476,28 @@ function BooleanField({
   value: unknown;
   onChange: (v: boolean | null) => void;
 }) {
-  const current = value === true ? "true" : value === false ? "false" : "";
+  const id = useId();
+  const current = value === true ? "yes" : value === false ? "no" : "unknown";
   return (
-    <FieldShell label={label}>
-      <select
+    <FieldShell label={label} htmlFor={id}>
+      <Select
         value={current}
-        onChange={(e) =>
-          onChange(e.target.value === "" ? null : e.target.value === "true")
+        onValueChange={(next) =>
+          onChange(next === "unknown" ? null : next === "yes")
         }
-        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"
       >
-        <option value="">Unknown</option>
-        <option value="true">Yes</option>
-        <option value="false">No</option>
-      </select>
+        <SelectTrigger
+          id={id}
+          className="w-full rounded-lg bg-card text-sm data-[size=default]:h-9"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="unknown">Not recorded</SelectItem>
+          <SelectItem value="yes">Yes</SelectItem>
+          <SelectItem value="no">No</SelectItem>
+        </SelectContent>
+      </Select>
     </FieldShell>
   );
 }
@@ -510,9 +555,13 @@ function TagListField({
   values: string[];
   onChange: (values: string[]) => void;
 }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
   return (
-    <FieldShell label={label}>
+    <FieldShell label={label} htmlFor={id}>
       <Textarea
+        id={id}
+        aria-describedby={hintId}
         value={values.join("\n")}
         onChange={(e) =>
           onChange(
@@ -522,16 +571,18 @@ function TagListField({
               .filter(Boolean),
           )
         }
-        placeholder="One per line"
-        className="min-h-16 resize-none rounded-lg border-slate-200 bg-white text-sm"
+        className="min-h-16 resize-none rounded-lg bg-card text-sm"
       />
+      <p id={hintId} className="text-xs text-muted-foreground">
+        One entry per line.
+      </p>
       {values.length > 0 ? (
         <div className="flex flex-wrap gap-1.5 pt-0.5">
           {values.map((entry, i) => (
             <Badge
               key={`${label}-${i}`}
               variant="outline"
-              className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-normal text-slate-600"
+              className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-normal text-muted-foreground"
             >
               {entry}
             </Badge>
@@ -558,19 +609,19 @@ function OwnerContactsBlock({
   onChange: (field: "names" | "emails" | "phones", values: string[]) => void;
 }) {
   return (
-    <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 md:grid-cols-3">
+    <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-3">
       <TagListField
-        label="Owner Names"
+        label="Owner names"
         values={names}
         onChange={(v) => onChange("names", v)}
       />
       <TagListField
-        label="Owner Emails"
+        label="Owner emails"
         values={emails}
         onChange={(v) => onChange("emails", v)}
       />
       <TagListField
-        label="Owner Phones"
+        label="Owner phones"
         values={phones}
         onChange={(v) => onChange("phones", v)}
       />
@@ -598,93 +649,96 @@ function PaymentStagesTable({
     onChange([...stages, { label: "", percentage: null, amount: null }]);
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+    <div className="space-y-2 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-700">Payment Stages</p>
+        <p className="text-sm font-semibold text-foreground">Payment stages</p>
         <Badge
           variant="outline"
-          className="rounded-full border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"
+          className="rounded-full bg-muted text-xs font-medium text-muted-foreground"
         >
           {stages.length} stage{stages.length === 1 ? "" : "s"}
         </Badge>
       </div>
 
       {stages.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-slate-200">
-          <div className="grid grid-cols-[1fr_100px_120px_32px] gap-2 bg-slate-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        <div className="overflow-hidden rounded-lg border border-border">
+          <div className="grid grid-cols-[1fr_100px_120px_32px] gap-2 bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <span>Label</span>
             <span>Percent</span>
             <span>Amount</span>
-            <span />
+            <span className="sr-only">Actions</span>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border">
             {stages.map((stage, index) => (
               <div
                 key={index}
                 className="grid grid-cols-[1fr_100px_120px_32px] items-center gap-2 px-3 py-2"
               >
                 <Input
+                  aria-label={`Stage ${index + 1} label`}
                   value={stage.label ?? ""}
                   onChange={(e) => updateRow(index, { label: e.target.value })}
-                  placeholder="Stage label"
-                  className="h-8 rounded-md border-slate-200 bg-white text-sm"
+                  className="h-8 rounded-md bg-card text-sm"
                 />
                 <div className="relative">
                   <Input
+                    aria-label={`Stage ${index + 1} percent of contract`}
                     type="number"
+                    inputMode="decimal"
                     value={displayValue(stage.percentage)}
                     onChange={(e) =>
                       updateRow(index, {
                         percentage: parseNumber(e.target.value),
                       })
                     }
-                    placeholder="0"
-                    className="h-8 rounded-md border-slate-200 bg-white pr-5 text-sm"
+                    className="h-8 rounded-md bg-card pr-5 font-mono text-sm tabular-nums"
                   />
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+                  >
                     %
                   </span>
                 </div>
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+                  >
                     $
                   </span>
                   <Input
+                    aria-label={`Stage ${index + 1} amount in AUD`}
                     type="number"
+                    inputMode="decimal"
                     value={displayValue(stage.amount)}
                     onChange={(e) =>
                       updateRow(index, { amount: parseNumber(e.target.value) })
                     }
-                    placeholder="0.00"
-                    className="h-8 rounded-md border-slate-200 bg-white pl-5 text-sm"
+                    className="h-8 rounded-md bg-card pl-5 font-mono text-sm tabular-nums"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                  aria-label="Remove stage"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-label={`Remove stage ${index + 1}`}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X aria-hidden="true" className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
           </div>
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-slate-200 py-4 text-center text-sm text-slate-400">
-          No payment stages recorded
+        <p className="rounded-lg border border-dashed border-border py-4 text-center text-sm text-muted-foreground">
+          No payment stages recorded yet. Add a stage to build the claim
+          schedule.
         </p>
       )}
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={addRow}
-        className="gap-1.5 rounded-lg border-slate-200 text-slate-600"
-      >
-        <Plus className="h-3.5 w-3.5" /> Add stage
+      <Button type="button" variant="outline" size="sm" onClick={addRow}>
+        <Plus aria-hidden="true" className="h-3.5 w-3.5" /> Add stage
       </Button>
     </div>
   );
@@ -701,13 +755,16 @@ function SourceDocumentCard({
   url: string;
   onChange: (field: "fileName" | "url", value: string) => void;
 }) {
+  const fileNameId = useId();
+  const urlId = useId();
+
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-slate-400" />
-          <span className="text-sm font-semibold text-slate-700">
-            {kind} Document
+          <FileText aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold text-foreground">
+            {kind} document
           </span>
         </div>
         {url ? (
@@ -715,24 +772,30 @@ function SourceDocumentCard({
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:underline"
+            aria-label={`Open the ${kind.toLowerCase()} document in a new tab`}
+            className="flex items-center gap-1 rounded-md text-xs font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
-            Open <ExternalLink className="h-3 w-3" />
+            Open <ExternalLink aria-hidden="true" className="h-3 w-3" />
           </a>
         ) : null}
       </div>
-      <Input
-        value={fileName}
-        onChange={(e) => onChange("fileName", e.target.value)}
-        placeholder="File name"
-        className="h-9 rounded-lg border-slate-200 bg-white text-sm"
-      />
-      <Input
-        value={url}
-        onChange={(e) => onChange("url", e.target.value)}
-        placeholder="File URL"
-        className="h-9 rounded-lg border-slate-200 bg-white text-sm"
-      />
+      <FieldShell label="File name" htmlFor={fileNameId}>
+        <Input
+          id={fileNameId}
+          value={fileName}
+          onChange={(e) => onChange("fileName", e.target.value)}
+          className={FIELD_CONTROL_CLASS}
+        />
+      </FieldShell>
+      <FieldShell label="File URL" htmlFor={urlId}>
+        <Input
+          id={urlId}
+          type="url"
+          value={url}
+          onChange={(e) => onChange("url", e.target.value)}
+          className={FIELD_CONTROL_CLASS}
+        />
+      </FieldShell>
     </div>
   );
 }
@@ -751,25 +814,28 @@ function AutomationToggle({
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={cn(
-        "flex w-full items-start justify-between gap-3 rounded-xl border p-3 text-left transition-colors",
-        checked ? "border-teal-200 bg-teal-50/60" : "border-slate-200 bg-white",
+        "flex w-full items-start justify-between gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        checked ? "border-primary/40 bg-primary/5" : "border-border bg-card",
       )}
     >
       <div>
-        <p className="text-sm font-medium text-slate-700">{label}</p>
-        <p className="text-xs text-slate-400">{description}</p>
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <span
+        aria-hidden="true"
         className={cn(
           "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors",
-          checked ? "bg-teal-600" : "bg-slate-200",
+          checked ? "bg-primary" : "bg-border",
         )}
       >
         <span
           className={cn(
-            "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+            "absolute top-0.5 h-4 w-4 rounded-full bg-card shadow-sm transition-transform motion-reduce:transition-none",
             checked ? "translate-x-4" : "translate-x-0.5",
           )}
         />
@@ -791,10 +857,16 @@ function ValidationRow({
         : Info;
   const tone =
     validation.severity === "fail"
-      ? "text-red-600 bg-red-50 border-red-100"
+      ? "border-destructive/25 bg-destructive-light text-destructive-ink"
       : validation.severity === "warning"
-        ? "text-amber-700 bg-amber-50 border-amber-100"
-        : "text-slate-600 bg-slate-50 border-slate-100";
+        ? "border-warning/30 bg-warning-light text-warning-ink"
+        : "border-border bg-muted text-muted-foreground";
+  const severityLabel =
+    validation.severity === "fail"
+      ? "Issue"
+      : validation.severity === "warning"
+        ? "Warning"
+        : "Note";
 
   return (
     <div
@@ -803,11 +875,14 @@ function ValidationRow({
         tone,
       )}
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="space-y-0.5">
-        <p>{validation.message}</p>
+        <p>
+          <span className="font-medium">{severityLabel}: </span>
+          {validation.message}
+        </p>
         {validation.ownerResponsibility || validation.variationRequired ? (
-          <p className="text-xs uppercase tracking-wide opacity-70">
+          <p className="text-xs">
             {[
               validation.ownerResponsibility ? "Owner responsibility" : null,
               validation.variationRequired ? "Variation required" : null,
@@ -821,46 +896,35 @@ function ValidationRow({
   );
 }
 
+function ConflictValue({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="font-mono text-xs tabular-nums text-foreground">
+        {formatValue(value)}
+      </p>
+    </div>
+  );
+}
+
 function ConflictRow({ conflict }: { conflict: ProjectConflictResult }) {
   return (
-    <div className="space-y-2 rounded-lg border border-orange-100 bg-orange-50/60 p-3 text-sm">
-      <div className="flex items-center justify-between">
-        <span className="font-medium text-slate-700">{conflict.fieldPath}</span>
-        <Badge
-          variant="outline"
-          className="rounded-full border-orange-200 bg-white text-[10px] uppercase tracking-wide text-orange-700"
-        >
-          {conflict.resolution.replace(/-/g, " ")}
+    <div className="space-y-2 rounded-lg border border-warning/30 bg-warning-light p-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-xs text-foreground">
+          {conflict.fieldPath}
+        </span>
+        <Badge className="rounded-full bg-card px-2 py-0.5 text-xs font-medium text-warning-ink">
+          {toLabel(conflict.resolution)}
         </Badge>
       </div>
-      <div className="grid grid-cols-3 gap-2 text-xs text-slate-500">
-        <div>
-          <p className="font-semibold uppercase tracking-wide text-slate-400">
-            Tender
-          </p>
-          <p className="text-slate-700">
-            {displayValue(conflict.tenderValue) || "—"}
-          </p>
-        </div>
-        <div>
-          <p className="font-semibold uppercase tracking-wide text-slate-400">
-            Contract
-          </p>
-          <p className="text-slate-700">
-            {displayValue(conflict.contractValue) || "—"}
-          </p>
-        </div>
-        <div>
-          <p className="font-semibold uppercase tracking-wide text-slate-400">
-            Resolved
-          </p>
-          <p className="text-slate-700">
-            {displayValue(conflict.resolvedValue) || "—"}
-          </p>
-        </div>
+      <div className="grid grid-cols-3 gap-2">
+        <ConflictValue label="Tender" value={conflict.tenderValue} />
+        <ConflictValue label="Contract" value={conflict.contractValue} />
+        <ConflictValue label="Resolved" value={conflict.resolvedValue} />
       </div>
       {conflict.note ? (
-        <p className="text-xs text-slate-500">{conflict.note}</p>
+        <p className="text-xs text-muted-foreground">{conflict.note}</p>
       ) : null}
     </div>
   );
@@ -874,6 +938,21 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
   const [saving, setSaving] = useState(false);
+  // Validations and conflicts are produced upstream from the tender/contract
+  // extraction and stored on the requirements payload — nothing in the app
+  // derives them (`buildProjectRequirementsPayload` takes them as an argument),
+  // so they cannot be recomputed from the live form without inventing rules the
+  // server does not have. Instead, track whether the form has unsaved edits and
+  // label the counts honestly while it does.
+  const [dirty, setDirty] = useState(false);
+
+  // Every edit path goes through this so `dirty` can never drift from `draft`.
+  const editDraft = (
+    updater: (current: RequirementsData) => RequirementsData,
+  ) => {
+    setDirty(true);
+    setDraft(updater);
+  };
 
   const sectionKeys = useMemo(
     () => Object.keys(SECTION_META) as ProjectFlowSectionKey[],
@@ -884,13 +963,14 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
   const conflicts = draft.conflicts ?? [];
   const failCount = validations.filter((v) => v.severity === "fail").length;
   const warnCount = validations.filter((v) => v.severity === "warning").length;
+  const countsAreStale = dirty && failCount + warnCount > 0;
 
   const updateSectionField = (
     section: ProjectFlowSectionKey,
     field: string,
     value: unknown,
   ) => {
-    setDraft((current) => ({
+    editDraft((current) => ({
       ...current,
       [section]: { ...(current[section] as object), [field]: value },
     }));
@@ -900,7 +980,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
     field: "names" | "emails" | "phones",
     values: string[],
   ) => {
-    setDraft((current) => {
+    editDraft((current) => {
       const legal = (current.legalAdministration ?? {}) as Record<
         string,
         unknown
@@ -920,7 +1000,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
   };
 
   const updatePaymentStages = (stages: ProjectPaymentStage[]) => {
-    setDraft((current) => ({
+    editDraft((current) => ({
       ...current,
       commercialsAndClaims: {
         ...(current.commercialsAndClaims as object),
@@ -941,7 +1021,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
     field: "fileName" | "url",
     value: string,
   ) => {
-    setDraft((current) => {
+    editDraft((current) => {
       const sourceDocuments = (current.sourceDocuments ?? {}) as Record<
         string,
         Record<string, unknown>
@@ -966,7 +1046,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
     field: "orderReminders" | "rainDelayCalculations" | "noticeCountdowns",
     value: boolean,
   ) => {
-    setDraft((current) => ({
+    editDraft((current) => ({
       ...current,
       automationTriggers: {
         ...(current.automationTriggers ?? {}),
@@ -989,6 +1069,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
       );
       toast.success("Project sections updated");
       setDraft((response.data.requirements ?? draft) as RequirementsData);
+      setDirty(false);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to update project",
@@ -1023,33 +1104,44 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
 
   return (
     <section className="space-y-4">
-      <Card className="border-slate-200 bg-white shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      <Card className="border-border/70 bg-card shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/70 pb-4">
           <div>
-            <CardTitle className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
-              Project Information
+            {/* The page <h1> is the project name in project-header.tsx and
+                nothing between here and it is an <h2>, so this panel title is
+                the first h2 on the tab. The accordion triggers below sit in
+                Radix's <h3> headers, so there is no level skip. */}
+            <CardTitle as="h2" className="text-base font-semibold text-foreground">
+              Project information
             </CardTitle>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               Extracted from the tender and contract documents.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {failCount > 0 ? (
-              <Badge className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">
-                {failCount} issue{failCount === 1 ? "" : "s"}
-              </Badge>
+            {failCount + warnCount > 0 ? (
+              /* Live region so the "as of last save" qualifier is announced when
+                 the first edit makes these counts stale, not just seen. */
+              <div aria-live="polite" className="flex items-center gap-2">
+                {failCount > 0 ? (
+                  <Badge className="rounded-full bg-destructive-light px-3 py-1 text-xs font-medium text-destructive-ink">
+                    {failCount} issue{failCount === 1 ? "" : "s"}
+                  </Badge>
+                ) : null}
+                {warnCount > 0 ? (
+                  <Badge className="rounded-full bg-warning-light px-3 py-1 text-xs font-medium text-warning-ink">
+                    {warnCount} warning{warnCount === 1 ? "" : "s"}
+                  </Badge>
+                ) : null}
+                {countsAreStale ? (
+                  <span className="max-w-24 text-xs leading-tight text-muted-foreground">
+                    as of last save
+                  </span>
+                ) : null}
+              </div>
             ) : null}
-            {warnCount > 0 ? (
-              <Badge className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100">
-                {warnCount} warning{warnCount === 1 ? "" : "s"}
-              </Badge>
-            ) : null}
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded-lg bg-teal-600 text-white hover:bg-teal-700"
-            >
-              {saving ? "Saving..." : "Save Changes"}
+            <Button onClick={handleSave} disabled={saving} aria-busy={saving}>
+              {saving ? "Saving…" : "Save changes"}
             </Button>
           </div>
         </CardHeader>
@@ -1058,21 +1150,21 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
           {/* Overview fields */}
           <div className="grid gap-4 md:grid-cols-3">
             <TextField
-              label="Project Name"
+              label="Project name"
               value={draft.projectName}
               onChange={(v) =>
-                setDraft((c) => ({ ...c, projectName: v ?? "" }))
+                editDraft((c) => ({ ...c, projectName: v ?? "" }))
               }
             />
             <TextField
-              label="Project Type"
+              label="Project type"
               value={draft.projectType}
               onChange={(v) =>
-                setDraft((c) => ({ ...c, projectType: v ?? "" }))
+                editDraft((c) => ({ ...c, projectType: v ?? "" }))
               }
             />
             <FieldShell label="Version">
-              <p className="flex h-9 items-center rounded-lg border border-slate-100 bg-slate-50 px-3 text-sm text-slate-500">
+              <p className="flex h-9 items-center rounded-lg border border-border bg-muted px-3 font-mono text-sm tabular-nums text-muted-foreground">
                 v{draft.version ?? 1}
               </p>
             </FieldShell>
@@ -1080,7 +1172,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
           <TextField
             label="Summary"
             value={draft.summary}
-            onChange={(v) => setDraft((c) => ({ ...c, summary: v ?? "" }))}
+            onChange={(v) => editDraft((c) => ({ ...c, summary: v ?? "" }))}
             multiline
           />
 
@@ -1107,19 +1199,19 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
           {/* Automation triggers */}
           <div className="grid gap-3 md:grid-cols-3">
             <AutomationToggle
-              label="Order Reminders"
+              label="Order reminders"
               description="Notify when material orders are due"
               checked={Boolean(automation.orderReminders)}
               onChange={(v) => updateAutomationTrigger("orderReminders", v)}
             />
             <AutomationToggle
-              label="Notice Countdowns"
+              label="Notice countdowns"
               description="Track contractual notice periods"
               checked={Boolean(automation.noticeCountdowns)}
               onChange={(v) => updateAutomationTrigger("noticeCountdowns", v)}
             />
             <AutomationToggle
-              label="Rain Delay Calculations"
+              label="Rain delay calculations"
               description="Auto-extend dates for weather delays"
               checked={Boolean(automation.rainDelayCalculations)}
               onChange={(v) =>
@@ -1131,8 +1223,8 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
           {/* Conflicts */}
           {conflicts.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                Conflicts Between Tender and Contract
+              <p className="text-sm font-semibold text-foreground">
+                Conflicts between tender and contract
               </p>
               <div className="space-y-2">
                 {conflicts.map((conflict, i) => (
@@ -1146,7 +1238,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
           ) : null}
 
           {/* Sections */}
-          <Accordion type="single" className="space-y-2">
+          <Accordion type="single" collapsible className="space-y-2">
             {sectionKeys.map((key) => {
               const meta = SECTION_META[key];
               const Icon = meta.icon;
@@ -1162,27 +1254,30 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                 <AccordionItem
                   key={key}
                   value={key}
-                  className="rounded-xl border border-slate-200 bg-white px-4"
+                  className="rounded-xl border border-border bg-card px-4"
                 >
                   <AccordionTrigger className="py-3 hover:no-underline">
                     <div className="flex flex-1 items-center justify-between gap-3 pr-3 text-left">
                       <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-                          <Icon className="h-4 w-4" />
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                          <Icon aria-hidden="true" className="h-4 w-4" />
                         </span>
                         <div>
-                          <p className="text-sm font-semibold text-slate-700">
+                          <p className="text-sm font-semibold text-foreground">
                             {meta.label}
                           </p>
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-muted-foreground">
                             {meta.description}
                           </p>
                         </div>
                       </div>
                       {sectionFailCount > 0 ? (
-                        <Badge className="rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-semibold text-red-700 hover:bg-red-100">
+                        <Badge className="rounded-full bg-destructive-light px-2.5 py-0.5 text-xs font-medium text-destructive-ink">
                           {sectionFailCount} issue
                           {sectionFailCount === 1 ? "" : "s"}
+                          {dirty ? (
+                            <span className="sr-only"> as of last save</span>
+                          ) : null}
                         </Badge>
                       ) : null}
                     </div>
@@ -1228,9 +1323,9 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                     ) : null}
 
                     {key === "exclusionsAndRisks" ? (
-                      <div className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 md:grid-cols-2">
+                      <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
                         <TagListField
-                          label="Owner Responsibility"
+                          label="Owner responsibility"
                           values={
                             (sectionData.ownerResponsibility as string[]) ?? []
                           }
@@ -1239,7 +1334,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                           }
                         />
                         <TagListField
-                          label="Variation Required"
+                          label="Variation required"
                           values={
                             (sectionData.variationRequired as string[]) ?? []
                           }

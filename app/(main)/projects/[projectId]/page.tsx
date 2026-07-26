@@ -17,11 +17,11 @@ export async function generateMetadata({
   if (project) {
     return {
       title: `${project.name}, ${project.location}`,
-      description: `Details for project #${project.name}, ${project.location}.`,
+      description: `Project details for ${project.name}, ${project.location}.`,
     };
   } else {
     return {
-      title: `Project Not Found`,
+      title: `Project not found`,
       description: `The requested project could not be found.`,
     };
   }

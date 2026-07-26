@@ -252,12 +252,12 @@ export default function AddMilestonePictureModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[18px] border border-border/80 bg-white p-0 shadow-[0_20px_60px_rgba(15,23,42,0.18)] sm:max-w-170">
+      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[18px] border border-border/80 bg-card p-0 shadow-lg sm:max-w-170">
         <DialogHeader className="border-b border-border/70 px-6 py-5">
-          <DialogTitle className="text-[18px] font-semibold tracking-[-0.02em] text-slate-900">
-            Add Milestone Picture
+          <DialogTitle className="text-lg font-semibold text-foreground">
+            Add milestone photos
           </DialogTitle>
-          <DialogDescription className="text-[13px] text-slate-500">
+          <DialogDescription className="text-sm text-muted-foreground">
             Upload progress photos for this milestone and keep attachments tied
             to the project timeline.
           </DialogDescription>
@@ -265,26 +265,36 @@ export default function AddMilestonePictureModal({
 
         <form
           className="space-y-5 px-6 pb-6 pt-5"
-          onSubmit={(data) =>
-            startTransition(async () => await handleSubmit(data))
-          }
+          onSubmit={(data) => {
+            if (isPending) {
+              data.preventDefault();
+              return;
+            }
+            startTransition(async () => await handleSubmit(data));
+          }}
         >
           {submitError ? (
-            <div className="flex items-start gap-2 rounded-[12px] border border-amber-200/80 bg-amber-50 px-3.5 py-3 text-[12.5px] text-amber-900">
-              <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-[12px] border border-destructive/40 bg-destructive-light px-3.5 py-3 text-sm text-destructive-ink"
+            >
+              <AlertCircle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
               <p>{submitError}</p>
             </div>
           ) : null}
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" aria-busy={isPending}>
             <UploadDropzone
-              label="Attach Photos"
+              label="Attach photos"
               summary={
                 queuedFiles.length > 0
                   ? `${queuedFiles.length} photo${queuedFiles.length === 1 ? "" : "s"} selected · ${completedUploadCount} uploaded`
-                  : "Click to upload photos (max 5)"
+                  : `Choose up to ${maxFiles} photos`
               }
-              helperText="Choose multiple images at once. Upload progress stays visible below."
+              helperText={`JPEG, PNG, WebP or HEIC images, up to ${maxFiles} at a time. Each file shows its own upload progress below, and any failure is reported per file.`}
               files={queuedFiles}
               accept="image/*"
               maxFiles={maxFiles}
@@ -299,25 +309,30 @@ export default function AddMilestonePictureModal({
             <Button
               type="button"
               variant="outline"
+              disabled={isPending}
               onClick={() => {
                 resetForm();
                 handleOpenChange(false);
               }}
-              className="h-10 rounded-[10px] px-4 text-[12.5px] font-medium transition-all hover:border-teal-600 hover:bg-slate-50 hover:text-teal-600"
+              className="h-10 rounded-[10px] px-4 text-sm font-medium"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isPending || queuedFiles.length === 0}
-              className="h-10 rounded-[10px] bg-[#0D9488] px-4 text-[12.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#0F766E] hover:shadow-[0_6px_14px_rgba(13,148,136,0.26)]"
+              aria-busy={isPending}
+              className="h-10 rounded-[10px] bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               {isPending ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2
+                  className="mr-1.5 size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
               ) : (
-                <Upload className="mr-1.5 size-4" />
+                <Upload className="mr-1.5 size-4" aria-hidden="true" />
               )}
-              Upload Photos
+              {isPending ? "Uploading…" : "Upload photos"}
             </Button>
           </div>
         </form>
