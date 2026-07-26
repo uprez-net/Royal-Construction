@@ -88,6 +88,8 @@ export function SearchableSelect({
   // pulling in the clear control's own label.
   const nameSource = labelledById ?? (hasOwnLabel ? ownLabelId : undefined);
   const triggerLabelledBy = nameSource ? `${nameSource} ${valueId}` : undefined;
+  const canClear = Boolean(selectedItem && onClear);
+  const clearHintId = `${reactId}-clear-hint`;
 
   const triggerLabel = selectedItem
     ? isLookupOption(selectedItem)
@@ -99,10 +101,17 @@ export function SearchableSelect({
 
   return (
     <div className="space-y-2">
-      {/* Named via aria-labelledby on the trigger, not `for` — see above. */}
-      <label id={ownLabelId} className="text-sm font-medium text-foreground">
-        {label}
-      </label>
+      {/* Named via aria-labelledby on the trigger, not `for` — see above.
+          Rendered only when there is text: callers passing label="" supply
+          their own visible label, and an empty <label> inside `space-y-2`
+          added a phantom row of vertical spacing plus an empty node in the
+          accessibility tree. `nameSource` already falls back to
+          `labelledById` when this is absent. */}
+      {hasOwnLabel ? (
+        <label id={ownLabelId} className="text-sm font-medium text-foreground">
+          {label}
+        </label>
+      ) : null}
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -114,31 +123,33 @@ export function SearchableSelect({
             disabled={disabled}
             aria-label={triggerLabelledBy ? undefined : ariaLabel}
             aria-labelledby={triggerLabelledBy}
+            aria-describedby={canClear ? clearHintId : undefined}
+            // Keyboard path for clearing. The visible X is a plain click target
+            // rather than a focusable control, because a focusable one would be
+            // an interactive element nested inside this button (invalid ARIA).
+            // Backspace/Delete gives keyboard users parity without the nesting.
+            onKeyDown={(event) => {
+              if (!canClear) return;
+              if (event.key !== "Backspace" && event.key !== "Delete") return;
+              event.preventDefault();
+              onClear?.();
+            }}
           >
             <span id={valueId} className="truncate text-left">
               {triggerLabel}
             </span>
 
             <div className="flex items-center gap-1">
-              {selectedItem && onClear ? (
+              {canClear ? (
                 <span
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Clear selection"
-                  className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-hidden="true"
+                  className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onClear();
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onClear();
-                    }
+                    onClear?.();
                   }}
                 >
-                  <X className="size-4" aria-hidden="true" />
+                  <X className="size-4" />
                 </span>
               ) : null}
 
@@ -259,6 +270,14 @@ export function SearchableSelect({
           </Command>
         </PopoverContent>
       </Popover>
+
+      {/* Makes the keyboard clear affordance discoverable. Without it, Backspace
+          and Delete work but nothing announces that they do. */}
+      {canClear ? (
+        <span id={clearHintId} className="sr-only">
+          Press Backspace or Delete to clear the current selection.
+        </span>
+      ) : null}
     </div>
   );
 }

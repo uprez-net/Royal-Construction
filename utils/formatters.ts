@@ -148,19 +148,7 @@ export function formatFileType(fileType: string): string {
 }
 
 /**
- * Converts enum-style status values into human-readable labels.
- *
- * @param status - Status string in SCREAMING_SNAKE_CASE.
- * @returns Formatted status label.
- *
- * @example
- * formatStatus("NEEDS_ATTENTION")
- * // "Needs Attention"
- */
-/**
  * Turns a `SCREAMING_SNAKE_CASE` enum value into a display label.
- *
- * `NEEDS_ATTENTION` → `"Needs attention"`
  *
  * Sentence case, not title case. This used to title-case every word
  * ("Needs Attention") while a second, identically-named `formatStatus` in
@@ -168,6 +156,13 @@ export function formatFileType(fileType: string): string {
  * formatters with divergent output, which is exactly the drift this pass exists
  * to remove. Sentence case is the rule for labels, so it won here and the
  * duplicate now re-exports this one.
+ *
+ * @param status - Status string in SCREAMING_SNAKE_CASE.
+ * @returns Formatted status label.
+ *
+ * @example
+ * formatStatus("NEEDS_ATTENTION")
+ * // "Needs attention"
  */
 export function formatStatus(status: string) {
   return status

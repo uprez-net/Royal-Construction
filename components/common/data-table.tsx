@@ -86,7 +86,13 @@ export function DataTable({
                   ? {
                       role: "button" as const,
                       tabIndex: 0,
-                      "aria-label": rowLabel?.(rowIndex),
+                      // Falls back to a positional name. `rowLabel` is optional,
+                      // so without this a caller that forgets it ships a
+                      // role="button" with aria-label={undefined} — an unnamed
+                      // interactive control. A generic name is a poor label but
+                      // a far better failure mode than none.
+                      "aria-label":
+                        rowLabel?.(rowIndex) ?? `Open row ${rowIndex + 1}`,
                       onClick: () => onRowClick(rowIndex),
                       onKeyDown: (event: KeyboardEvent<HTMLTableRowElement>) =>
                         handleRowKeyDown(event, rowIndex),
