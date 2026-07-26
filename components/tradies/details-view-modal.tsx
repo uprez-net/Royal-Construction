@@ -21,9 +21,9 @@ import type {
   TradieScheduleListItem,
   TradieUrgentReminderItem,
 } from "@/types/project";
-import { currency, dataTimeFormat, dateFormat } from "@/utils/formatters";
+import { rateCurrency, dataTimeFormat, dateFormat } from "@/utils/formatters";
 import { daysUntil } from "@/utils/parser";
-import { RatingStars } from "../common/rating-star";
+import { RatingStars } from "../common/rating-stars";
 
 interface ViewDetailsModalProps {
   schedule: TradieUrgentReminderItem;
@@ -203,7 +203,7 @@ export function TradieScheduleDetailsModal({
                   label="Hourly Rate"
                   value={
                     <span className="truncate">
-                      {currency.format(Number(schedule.hourlyRate))}/hr
+                      {rateCurrency.format(Number(schedule.hourlyRate))}/hr
                     </span>
                   }
                 />

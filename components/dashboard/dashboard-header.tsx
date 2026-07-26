@@ -7,7 +7,6 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { Download, Plus, RotateCw } from "lucide-react";
 import { useState } from "react";
-import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -79,6 +78,8 @@ export function DashboardHeader({
           `${e.date} ${e.time}`.trim(),
         ]),
       );
+      // Loaded on demand: see projects-client.tsx.
+      const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(
         wb,
