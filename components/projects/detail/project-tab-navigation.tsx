@@ -58,13 +58,26 @@ const TabIcons: Record<VisibleProjectDetailTabKey, React.ElementType> = {
 
 type BadgeTone = "primary" | "warning" | "danger" | "neutral";
 
+/**
+ * The badge is one value, not three loose fields.
+ *
+ * As separate optionals, a tab could carry `badge` without `badgeDescription`
+ * and still typecheck — and the render emitted `<span class="sr-only">
+ * {undefined}</span>`, so the bare number reached screen readers with nothing
+ * explaining it. Grouping them makes the description structurally impossible to
+ * omit, and `tone` explicit rather than silently defaulting.
+ */
+type TabBadge = {
+  count: string;
+  tone: BadgeTone;
+  /** Spells out what the bare number means for screen readers. */
+  description: string;
+};
+
 type ProjectDetailTab = {
   key: VisibleProjectDetailTabKey;
   label: string;
-  badge?: string;
-  badgeTone?: BadgeTone;
-  /** Spells out what the bare number means for screen readers. */
-  badgeDescription?: string;
+  badge?: TabBadge;
 };
 
 const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
@@ -111,13 +124,15 @@ const generateProjectDetailTabs = (
       label: "Milestones",
       ...(openMilestones.length > 0
         ? {
-            badge: openMilestones.length.toString(),
-            // Only a real problem — a missed target date — earns a red badge.
-            badgeTone: overdueMilestones > 0 ? ("danger" as const) : ("neutral" as const),
-            badgeDescription:
-              overdueMilestones > 0
-                ? `${openMilestones.length} milestones remaining, ${overdueMilestones} past their target date`
-                : `${openMilestones.length} milestones remaining`,
+            badge: {
+              count: openMilestones.length.toString(),
+              // Only a real problem — a missed target date — earns a red badge.
+              tone: overdueMilestones > 0 ? "danger" : "neutral",
+              description:
+                overdueMilestones > 0
+                  ? `${openMilestones.length} milestones remaining, ${overdueMilestones} past their target date`
+                  : `${openMilestones.length} milestones remaining`,
+            } satisfies TabBadge,
           }
         : {}),
     },
@@ -127,14 +142,16 @@ const generateProjectDetailTabs = (
       label: "Tradies",
       ...(tradieAlerts > 0
         ? {
-            badge: tradieAlerts.toString(),
-            // Declined or unanswered requests are blocked work; requests still
-            // inside their response window are merely open.
-            badgeTone: blockedTradies > 0 ? ("danger" as const) : ("neutral" as const),
-            badgeDescription:
-              blockedTradies > 0
-                ? `${tradieAlerts} tradie requests unresolved, ${blockedTradies} declined or unanswered`
-                : `${tradieAlerts} tradie requests awaiting a response`,
+            badge: {
+              count: tradieAlerts.toString(),
+              // Declined or unanswered requests are blocked work; requests still
+              // inside their response window are merely open.
+              tone: blockedTradies > 0 ? "danger" : "neutral",
+              description:
+                blockedTradies > 0
+                  ? `${tradieAlerts} tradie requests unresolved, ${blockedTradies} declined or unanswered`
+                  : `${tradieAlerts} tradie requests awaiting a response`,
+            } satisfies TabBadge,
           }
         : {}),
     },
@@ -241,12 +258,12 @@ export function ProjectTabNavigation({
                   aria-hidden="true"
                   className={cn(
                     "ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium leading-none",
-                    BADGE_TONE_CLASS[tab.badgeTone ?? "neutral"],
+                    BADGE_TONE_CLASS[tab.badge.tone],
                   )}
                 >
-                  {tab.badge}
+                  {tab.badge.count}
                 </span>
-                <span className="sr-only">{tab.badgeDescription}</span>
+                <span className="sr-only">{tab.badge.description}</span>
               </>
             ) : null}
           </button>

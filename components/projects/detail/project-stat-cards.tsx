@@ -28,15 +28,37 @@ const BADGE = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs f
 export function ProjectStatCards() {
   const budgetSummary = useAppSelector(selectActiveProjectBudgetSummary);
 
+  // `selectActiveProjectBudgetSummary` returns null for exactly one reason:
+  // `activeProject` is not in the store yet. It never returns null for a missing
+  // contract value — a project with totalBudget 0 still yields a summary. So this
+  // branch is the unhydrated state, and the old copy ("no contract value recorded
+  // yet") asserted a fact about the project that the data did not support.
   if (!budgetSummary) {
+    return (
+      <section className={CARD_SURFACE} aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading budget summary</span>
+        <p className="text-base font-semibold text-foreground">
+          Budget summary
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Loading this project&rsquo;s contract, spend and remaining figures.
+        </p>
+      </section>
+    );
+  }
+
+  // A contract value of zero is a real, loaded state — not a missing one. It is
+  // where the "nothing recorded" message actually belongs, and the percentage
+  // figures below are meaningless without a denominator.
+  if (budgetSummary.totalBudget <= 0) {
     return (
       <section className={CARD_SURFACE}>
         <p className="text-base font-semibold text-foreground">
-          Budget summary unavailable
+          No contract value recorded
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          This project has no contract value recorded yet, so contract, spend and
-          remaining figures cannot be calculated.
+          Spend and remaining figures are calculated against the contract value,
+          so they cannot be shown until one is set on this project.
         </p>
       </section>
     );
