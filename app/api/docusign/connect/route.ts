@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { put } from "@vercel/blob";
 import {
   EnvelopeDocType,
@@ -11,6 +10,7 @@ import {
 import prisma from "@/lib/prisma";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
+import { verifyConnectSignature } from "@/lib/docusign/connect-signature";
 import { downloadCombinedDocument } from "@/lib/docusign/tender-envelope";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
@@ -25,8 +25,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const hmacKey = process.env.DOCUSIGN_CONNECT_HMAC_KEY;
   if (hmacKey) {
-    const signature = request.headers.get("x-docusign-signature-1");
-    if (!signature || !verifyHmac(raw, hmacKey, signature)) {
+    // DocuSign supports SEVERAL concurrent Connect HMAC keys — that is how a key
+    // is rotated without downtime — and signs each delivery with EVERY active
+    // key, emitting one header per key: x-docusign-signature-1, -2, -3…
+    // Checking only `-1` therefore breaks the moment a second key is added: the
+    // header we read is signed with the OLD key while the env var holds the NEW
+    // one, so every callback 401s (observed on staging, PR #124 follow-up). The
+    // payload is authentic if it matches ANY of the presented signatures.
+    if (!verifyConnectSignature(request.headers, raw, hmacKey)) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
   } else if (process.env.NODE_ENV === "production") {
@@ -92,12 +98,6 @@ type ConnectPayload = {
   };
 };
 
-function verifyHmac(raw: string, key: string, signature: string): boolean {
-  const computed = createHmac("sha256", key).update(raw, "utf8").digest("base64");
-  const a = Buffer.from(computed);
-  const b = Buffer.from(signature);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 const RECIPIENT_STATUS: Record<string, SignerStatus> = {
   sent: SignerStatus.SENT,
