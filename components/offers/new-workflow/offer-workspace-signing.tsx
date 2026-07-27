@@ -56,7 +56,7 @@ export function SigningTracker({
             : pill.label;
         return (
           <div
-            key={recipient.role}
+            key={`${recipient.role}-${recipient.detail}`}
             className="flex items-center justify-between gap-3"
           >
             <span className="flex min-w-0 items-center gap-2">

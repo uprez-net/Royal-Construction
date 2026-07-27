@@ -84,14 +84,28 @@ export type OfferSendReadinessInput = {
   readonly hasLead: boolean;
   readonly needsOverrideReason: boolean;
   readonly expiryState: OfferExpiryState;
+  // Owner party problems from collectOwnerIssues (missing owner name / Current
+  // Location / signatory email). Block-severity so the offer can't be sent and
+  // locked with party data that prints blank on the legal documents (codex #1).
+  readonly ownerIssues?: readonly string[];
 };
 
 export function collectOfferSendBlockers({
   hasLead,
   needsOverrideReason,
   expiryState,
+  ownerIssues = [],
 }: OfferSendReadinessInput): readonly OfferSendBlocker[] {
   const blockers: OfferSendBlocker[] = [];
+
+  ownerIssues.forEach((issue, index) => {
+    blockers.push({
+      id: `owner-${index}`,
+      label: issue,
+      stepId: "offer-step-job-setup",
+      severity: "block",
+    });
+  });
 
   if (!hasLead) {
     blockers.push({

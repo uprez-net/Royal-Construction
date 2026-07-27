@@ -8,9 +8,11 @@ import {
   generateOfferPrefillDraft,
   type OfferPrefillDraft,
 } from "@/lib/offer/offer-prefill-ai";
-import type {
-  OfferDocumentDraft,
-  OfferWorkspaceJob,
+import {
+  deriveOwnerProjection,
+  ownersFromLegacyClientFields,
+  type OfferDocumentDraft,
+  type OfferWorkspaceJob,
 } from "@/lib/offer/workspace-model";
 
 // Mutable accumulators (the job/draft types are readonly; the returned patch
@@ -61,15 +63,33 @@ export async function generateOfferPrefillFromLead(input: {
     return { ok: false, error: "Lead not found." };
   }
 
-  // ── Phase 0: deterministic contact + site copy ──
+  // ── Phase 0: deterministic owners + site copy ──
   const job: WritableJobPatch = {};
-  if (lead.name?.trim()) job.clientNames = lead.name.trim();
-  if (lead.secondaryName?.trim()) job.secondaryCustomerName = lead.secondaryName.trim();
-  if (lead.email?.trim()) job.clientEmail = lead.email.trim();
-  if (lead.secondaryEmail?.trim()) job.secondaryCustomerEmail = lead.secondaryEmail.trim();
-  if (lead.phone?.trim()) job.clientPhone = lead.phone.trim();
+
+  // Build the owner party set from the lead — primary + optional secondary, both
+  // individuals (a lead never carries a company/directors; the estimator marks
+  // that on Job setup). owners[] is the source of truth; the flat client*
+  // fields are its derived projection, set here too so consumers not yet reading
+  // owners[] stay correct. See ADR 0003.
+  const owners = ownersFromLegacyClientFields({
+    clientNames: lead.name?.trim() ?? "",
+    secondaryCustomerName: lead.secondaryName?.trim() ?? "",
+    clientEmail: lead.email?.trim() ?? "",
+    secondaryCustomerEmail: lead.secondaryEmail?.trim() ?? "",
+    clientPhone: lead.phone?.trim() ?? "",
+  });
+  const projection = deriveOwnerProjection(owners);
+  job.owners = owners;
+  job.clientNames = projection.clientNames;
+  job.secondaryCustomerName = projection.secondaryCustomerName;
+  job.clientEmail = projection.clientEmail;
+  job.secondaryCustomerEmail = projection.secondaryCustomerEmail;
+  job.clientPhone = projection.clientPhone;
+  job.currentLocation = projection.currentLocation;
   // Lead.location is often a suburb, not a full street address — a starting
-  // point the estimator refines, not a contract-grade address.
+  // point the estimator refines on Job setup into a contract-grade Site
+  // Location (with council via /api/address). The client's Current Location is
+  // captured fresh on Job setup (leads carry no current/residential address).
   if (lead.location?.trim()) job.siteAddress = lead.location.trim();
 
   // ── Build the AI context from the sales conversation ──

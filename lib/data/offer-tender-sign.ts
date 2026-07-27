@@ -12,7 +12,11 @@ import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
-import { buildTenderHtml, getTenderOwners } from "@/lib/offer/offer-tender-html";
+import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
+import {
+  collectOfferSigners,
+  collectOwnerIssues,
+} from "@/lib/offer/workspace-model";
 import { getPaymentScheduleTotalPct } from "@/lib/offer/workspace-payment-schedule";
 import { resolveOfferCustomerEmail } from "@/lib/offer/offer-customer-email";
 import {
@@ -69,6 +73,19 @@ export async function sendTenderForSignature(input: {
 
   const snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
 
+  // Server-side owner gate (PR #124): re-validate owner completeness — crucially,
+  // UNIQUE signer emails. Two signers sharing an address would create DocuSign
+  // recipients the completion webhook can't tell apart (it falls back to email
+  // matching), corrupting the per-signer audit. Guards existing/directly-invoked
+  // offers that never passed the client gate.
+  const ownerIssues = collectOwnerIssues(snapshot.job.owners);
+  if (ownerIssues.length > 0) {
+    return {
+      ok: false,
+      error: `Complete the owner details before sending the Tender: ${ownerIssues.join(" ")}`,
+    };
+  }
+
   // A Tender is a fixed-price contract: its progress-payment schedule must sum
   // to exactly the contract value (100%), or the customer is asked to sign a
   // schedule that over- or under-claims. Block sending an unbalanced schedule.
@@ -93,23 +110,6 @@ export async function sendTenderForSignature(input: {
         "No valid client email found on the offer or lead — set the client email in Job setup before sending the Tender.",
     };
   }
-  // Secondary client receives their own copy of the envelope when they have a
-  // distinct, sendable email. Falls back to the primary client's email (the
-  // pre-secondary-client behaviour) when the secondary client has no email of
-  // their own — every named owner still receives a signature tab.
-  const secondaryRawEmail = (
-    snapshot.job.secondaryCustomerEmail ?? ""
-  ).trim();
-  const secondaryOwnerName = (snapshot.job.secondaryCustomerName ?? "").trim();
-  const hasSecondary = secondaryOwnerName.length > 0;
-  const secondaryEmail =
-    hasSecondary &&
-    secondaryRawEmail.length > 0 &&
-    secondaryRawEmail !== customerEmail &&
-    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(secondaryRawEmail)
-      ? secondaryRawEmail
-      : null;
-
   let config;
   try {
     config = getDocusignConfig();
@@ -129,21 +129,52 @@ export async function sendTenderForSignature(input: {
   }
 
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
-  // Build the DocuSign recipient list so each owner receives an envelope at
-  // their own email when one is available. The secondary owner gets the
-  // secondary email when present; otherwise both get the primary email (the
-  // pre-secondary-client behaviour — every named owner still receives a
-  // signature tab, just via the shared address).
-  const owners = getTenderOwners(snapshot.job).map((name) => {
-    const isSecondaryByName =
-      hasSecondary &&
-      name.trim().toLowerCase() === secondaryOwnerName.toLowerCase();
+  // Build the DocuSign recipient list from the ordered signer set — one
+  // recipient per individual owner and per company director, in the SAME order
+  // as the sigOwner{k} anchors baked into the Tender PDF (collectOfferSigners).
+  const isValidEmail = (value: string): boolean =>
+    /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
+  const signers = collectOfferSigners(snapshot.job.owners);
+  // Every co-owner / director MUST have their own valid email. Falling back to
+  // the primary client's inbox would send that signer's DocuSign link to the
+  // wrong party, letting them access/sign on the other's behalf (codex #2). Only
+  // the primary signer may use the resolved customer email. Runs before the send
+  // is claimed, so a rejection needs no status rollback.
+  const signersMissingEmail = signers
+    .filter(
+      (signer, index) =>
+        index > 0 && !isValidEmail((signer.signatory.email ?? "").trim()),
+    )
+    .map((signer) => signer.signatory.name.trim() || "a co-owner/director");
+  if (signersMissingEmail.length > 0) {
     return {
-      name,
-      email:
-        isSecondaryByName && secondaryEmail ? secondaryEmail : customerEmail,
+      ok: false,
+      error: `Add a valid email for every signatory before sending the Tender — missing for: ${signersMissingEmail.join(", ")}.`,
+    };
+  }
+  const owners = signers.map((signer, index) => {
+    const own = (signer.signatory.email ?? "").trim();
+    return {
+      name: signer.signatory.name,
+      // Primary may use the resolved customer email; others use their own
+      // (validated above).
+      email: index === 0 ? (isValidEmail(own) ? own : customerEmail) : own,
+      capacity: signer.signatory.capacity,
+      entityName: signer.entityName,
+      entityAbn: signer.entityAbn,
     };
   });
+  // Safety net: a snapshot with no owners still needs one customer signer so the
+  // Tender's owner anchors receive a recipient.
+  if (owners.length === 0) {
+    owners.push({
+      name: snapshot.job.clientNames,
+      email: customerEmail,
+      capacity: "Owner",
+      entityName: null,
+      entityAbn: null,
+    });
+  }
 
   // Atomically claim the send so two concurrent calls can't both create a
   // DocuSign envelope (double-send). Only the caller that flips the status off
@@ -220,6 +251,9 @@ export async function sendTenderForSignature(input: {
             email: recipient.email,
             routingOrder: recipient.routingOrder,
             docusignRecipientId: recipient.recipientId,
+            capacity: recipient.capacity ?? null,
+            entityName: recipient.entityName ?? null,
+            entityAbn: recipient.entityAbn ?? null,
           })),
         },
       },
@@ -233,10 +267,28 @@ export async function sendTenderForSignature(input: {
         offerId: offer.id,
         fromStatus: offer.offerStatus,
         toStatus: OfferStatus.TENDER_SENT,
-        note: `DocuSign envelope ${envelope.envelopeId} sent to ${customerEmail}`,
+        // Record the ACTUAL customer recipients (every owner/director the envelope
+        // routed to), not just the resolved customerEmail — which may not even be
+        // the primary signer's address (PR #124 review).
+        note: `DocuSign envelope ${envelope.envelopeId} sent to ${owners.map((owner) => owner.email).join(", ")}`,
       },
     });
-  });
+  })
+    .catch((error) => {
+      // The envelope is ALREADY with the client and cannot be un-sent, so this
+      // must never release the claim (that would let a retry double-send a
+      // contract-grade document). Surface the envelope id so the send is
+      // recoverable: the offer stays TENDER_SENT but has no Tender/recipient
+      // rows, which the completion webhook needs to correlate (PR #124 sweep —
+      // this write was previously unguarded, mirroring the handoff finding).
+      console.error(
+        `[offer] tender envelope ${envelope.envelopeId} sent but persisting it failed:`,
+        error,
+      );
+      throw new Error(
+        `The Tender was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
+      );
+    });
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   return { ok: true, reference, envelopeId: envelope.envelopeId };

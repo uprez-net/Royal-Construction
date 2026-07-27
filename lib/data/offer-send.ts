@@ -10,6 +10,10 @@ import { generatePDF } from "@/lib/utils/generatePDF";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
 import {
+  collectOfferSigners,
+  collectOwnerIssues,
+} from "@/lib/offer/workspace-model";
+import {
   deserializeWorkspace,
   parseWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
@@ -74,18 +78,19 @@ async function recipientDomainAcceptsMail(
 }
 
 type SendResult =
-  | { ok: true; reference: string; token: string; secondaryToken?: string }
+  | { ok: true; reference: string; recipients: readonly string[] }
   | { ok: false; error: string };
 
-// Email the offer PDF to the client(s). When a secondary recipient is
-// provided, BOTH clients receive the proposal as separate emails — each carries
+// Email the offer PDF to EVERY customer signatory — each individual owner and
+// each company director, in collectOfferSigners order, not just a primary +
+// secondary. Every recipient receives the proposal as a separate email carrying
 // its own [RCOFR-…] tracking token, persisted as its own OfferDocumentSend
 // record, so the inbound Graph reply tracker can attribute each reply to the
 // correct sender (see recordOfferReply: the recipient guard already checks the
 // matching send's recipientEmail). This mirrors how the Tender/Contract DocuSign
-// envelopes fan out to each owner as a distinct recipient. A single client
-// receive a single email, byte-for-byte identical to the pre-secondary-client
-// behaviour.
+// envelopes fan out to each owner/director as a distinct recipient. The
+// caller-supplied recipientEmail/secondaryRecipientEmail are only a fallback for
+// legacy/in-memory offers whose owners carry no email.
 export async function sendOfferDocument(input: {
   offerId: string;
   recipientEmail: string;
@@ -95,32 +100,6 @@ export async function sendOfferDocument(input: {
   if (!access.ok) {
     return { ok: false, error: access.error };
   }
-  const email = input.recipientEmail.trim();
-  if (!EMAIL_RE.test(email)) {
-    return { ok: false, error: "Enter a valid recipient email address." };
-  }
-  const secondaryRaw = (input.secondaryRecipientEmail ?? "").trim();
-  const hasSecondary = secondaryRaw.length > 0 && secondaryRaw !== email;
-  const secondaryEmail = hasSecondary ? secondaryRaw : "";
-  if (hasSecondary && !EMAIL_RE.test(secondaryEmail)) {
-    return {
-      ok: false,
-      error: "Enter a valid secondary recipient email address.",
-    };
-  }
-
-  // Checked before the PDF is built so a typo costs a DNS lookup, not a render.
-  const deliverable = await recipientDomainAcceptsMail(email);
-  if (!deliverable.ok) {
-    return { ok: false, error: deliverable.error };
-  }
-  if (hasSecondary) {
-    const secondaryDeliverable = await recipientDomainAcceptsMail(secondaryEmail);
-    if (!secondaryDeliverable.ok) {
-      return { ok: false, error: secondaryDeliverable.error };
-    }
-  }
-
   const offer = await prisma.offer.findUnique({
     where: { id: input.offerId },
     select: {
@@ -138,11 +117,78 @@ export async function sendOfferDocument(input: {
     return { ok: false, error: "Add and save offer content before sending." };
   }
 
+  // Parse the saved workspace ONCE, guarded, so a malformed/legacy blob returns
+  // the normal SendResult error instead of throwing an unhandled server-action
+  // rejection (PR #124). Reused for the recipients, the owner gate and the PDF.
+  let snapshot: ReturnType<typeof deserializeWorkspace>;
+  try {
+    snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Couldn't read the saved offer: ${(error as Error).message}`,
+    };
+  }
+
+  // Server-side owner gate: re-check owner completeness (names, Current Location,
+  // unique valid signer emails) so the offer can't be sent + locked via any path.
+  const ownerIssues = collectOwnerIssues(snapshot.job.owners);
+  if (ownerIssues.length > 0) {
+    return {
+      ok: false,
+      error: `Complete the owner details before sending: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // Recipients = EVERY customer signatory (individual owners + company
+  // directors), not just primary + secondary. The old flat projection dropped
+  // every email past the second owner's first signer, so a third owner or a
+  // company's extra directors — all required to supply an email — never got the
+  // proposal or a tracking link. Build the list straight from collectOfferSigners
+  // (the same ordered signer set the Tender/Contract sign against), de-duped
+  // case-insensitively and preserving first-seen order.
+  const recipients: string[] = [];
+  const seenRecipients = new Set<string>();
+  for (const signer of collectOfferSigners(snapshot.job.owners)) {
+    const addr = signer.signatory.email.trim();
+    const key = addr.toLowerCase();
+    if (EMAIL_RE.test(addr) && !seenRecipients.has(key)) {
+      seenRecipients.add(key);
+      recipients.push(addr);
+    }
+  }
+  // Fall back to the caller-supplied recipient(s) only for legacy/in-memory
+  // offers whose owners carry no usable email. collectOwnerIssues already blocks
+  // the normal path from reaching here without valid signer emails.
+  if (recipients.length === 0) {
+    const primary = input.recipientEmail.trim();
+    if (!EMAIL_RE.test(primary)) {
+      return { ok: false, error: "Enter a valid recipient email address." };
+    }
+    recipients.push(primary);
+    seenRecipients.add(primary.toLowerCase());
+    const secondary = (input.secondaryRecipientEmail ?? "").trim();
+    if (secondary.length > 0 && !seenRecipients.has(secondary.toLowerCase())) {
+      if (!EMAIL_RE.test(secondary)) {
+        return {
+          ok: false,
+          error: "Enter a valid secondary recipient email address.",
+        };
+      }
+      recipients.push(secondary);
+    }
+  }
+
+  // Checked before the PDF is built so a typo costs a DNS lookup, not a render.
+  for (const addr of recipients) {
+    const deliverable = await recipientDomainAcceptsMail(addr);
+    if (!deliverable.ok) {
+      return { ok: false, error: deliverable.error };
+    }
+  }
+
   let pdfBase64: string;
   try {
-    const snapshot = deserializeWorkspace(
-      parseWorkspaceState(offer.workspaceState),
-    );
     const proposalInput = buildProposalInput(snapshot);
     // A manual price override without a stated reason must not be emailed —
     // mirror the client-side "Send offer"/"Mark sent" guard server-side.
@@ -163,34 +209,38 @@ export async function sendOfferDocument(input: {
   }
 
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
-  const token = `RCOFR-${randomBytes(6).toString("hex").toUpperCase()}`;
-  const secondaryToken = hasSecondary
-    ? `RCOFR-${randomBytes(6).toString("hex").toUpperCase()}`
-    : undefined;
+  // One tracked token per recipient so each signer's inbound reply correlates to
+  // their own OfferDocumentSend record (recordOfferReply matches by recipient).
+  const sends = recipients.map((recipientEmail) => ({
+    recipientEmail,
+    token: `RCOFR-${randomBytes(6).toString("hex").toUpperCase()}`,
+  }));
 
+  const isFirstSend = offer.offerStatus === OfferStatus.PENDING;
+
+  // An Offer document may be sent REPEATEDLY (PR #124 review, finding #1): every
+  // call emails ALL recipients. No per-recipient dedupe — that made an explicit
+  // Resend reject itself once everyone already had the current version.
+  //
+  // The offer stays PENDING throughout delivery and is flipped to SENT only AFTER
+  // an email is actually accepted (finding #2). The previous design flipped to
+  // SENT up front to use the status as a concurrency lock, but that let another
+  // tab reload, observe SENT and advance the offer (e.g. Mark agreed) while
+  // delivery was still in flight — and if delivery then failed, the revert (which
+  // only matched SENT) couldn't undo an already-agreed offer nobody received.
+  const deliveredEmails: string[] = [];
+  let sendError: string | null = null;
   try {
     const client = await createGraphContext(getGraphConfig());
-    // Primary recipient — always sent.
-    await client.sendMail({
-      to: email,
-      subject: `Your Building Proposal — ${reference} [${token}]`,
-      body: buildEmailBody(reference, token),
-      attachments: [
-        {
-          name: `Building-Proposal-${reference}.pdf`,
-          contentType: "application/pdf",
-          contentBytes: pdfBase64,
-        },
-      ],
-    });
-    // Secondary recipient — a separate email with its own tracking token so
-    // each client's replies correlate to their own send record. The same PDF
-    // body is reused; only the subject/body token differs.
-    if (hasSecondary && secondaryToken) {
+    // One email per signatory — same PDF, each with its own tracking token so
+    // replies correlate to the right send record. Persist each OfferDocumentSend
+    // the moment its email is ACCEPTED (never before, never batched), so a mid-loop
+    // failure records exactly who received it and leaves no phantom rows.
+    for (const send of sends) {
       await client.sendMail({
-        to: secondaryEmail,
-        subject: `Your Building Proposal — ${reference} [${secondaryToken}]`,
-        body: buildEmailBody(reference, secondaryToken),
+        to: send.recipientEmail,
+        subject: `Your Building Proposal — ${reference} [${send.token}]`,
+        body: buildEmailBody(reference, send.token),
         attachments: [
           {
             name: `Building-Proposal-${reference}.pdf`,
@@ -199,51 +249,57 @@ export async function sendOfferDocument(input: {
           },
         ],
       });
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      error: `Failed to send the email: ${(error as Error).message}`,
-    };
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.offerDocumentSend.create({
-      data: {
-        offerId: offer.id,
-        offerFileVersion: offer.revisionNumber,
-        recipientEmail: email,
-        trackedLinkToken: token,
-      },
-    });
-    if (hasSecondary && secondaryToken) {
-      await tx.offerDocumentSend.create({
+      await prisma.offerDocumentSend.create({
         data: {
           offerId: offer.id,
           offerFileVersion: offer.revisionNumber,
-          recipientEmail: secondaryEmail,
-          trackedLinkToken: secondaryToken,
+          recipientEmail: send.recipientEmail,
+          trackedLinkToken: send.token,
         },
       });
+      deliveredEmails.push(send.recipientEmail);
     }
-    if (offer.offerStatus === OfferStatus.PENDING) {
-      await tx.offer.update({
-        where: { id: offer.id },
-        data: { offerStatus: OfferStatus.SENT, sentAt: new Date() },
-      });
-      const recipients = hasSecondary
-        ? `${email} and ${secondaryEmail}`
-        : email;
-      await tx.offerStatusEvent.create({
-        data: {
-          offerId: offer.id,
-          fromStatus: offer.offerStatus,
-          toStatus: OfferStatus.SENT,
-          note: `Emailed to ${recipients}`,
-        },
-      });
+  } catch (error) {
+    sendError = `Failed to send the email: ${(error as Error).message}`;
+    // Name who DID receive it. A partial send still flips the offer to SENT below,
+    // so an error that only said "sending failed" left the estimator unable to tell
+    // whether anyone got the proposal (PR #124 review).
+    if (deliveredEmails.length > 0) {
+      sendError += ` Delivered to ${deliveredEmails.join(", ")} before the failure — the offer is marked Sent; resend to reach the rest.`;
     }
-  });
+  }
+
+  // Flip PENDING→SENT only AFTER at least one email was accepted, and only on a
+  // first send. The conditional match on PENDING makes the transition + its audit
+  // event exactly-once: a concurrent sender that already flipped it (or a Mark
+  // agreed that moved it on) leaves count 0, so no duplicate event is written.
+  // Concurrent first sends each still email (consistent with repeatable sends);
+  // only the status audit is deduplicated. A zero-delivery send never flips, so
+  // the offer simply stays PENDING and is retryable — no revert needed.
+  if (isFirstSend && deliveredEmails.length > 0) {
+    const flip = await prisma.offer.updateMany({
+      where: { id: offer.id, offerStatus: OfferStatus.PENDING },
+      data: { offerStatus: OfferStatus.SENT, sentAt: new Date() },
+    });
+    if (flip.count === 1) {
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: OfferStatus.PENDING,
+            toStatus: OfferStatus.SENT,
+            note: `Emailed to ${deliveredEmails.join(", ")}`,
+          },
+        })
+        .catch((error) =>
+          console.error("[offer] status event after send failed:", error),
+        );
+    }
+  }
+
+  if (sendError) {
+    return { ok: false, error: sendError };
+  }
 
   // The mail is away and the status is committed, so nothing past this point
   // may reject: the caller would report the send as failed while the offer is
@@ -254,7 +310,11 @@ export async function sendOfferDocument(input: {
   } catch (error) {
     console.error("[offer] revalidate after send failed:", error);
   }
-  return { ok: true, reference, token, secondaryToken };
+  return {
+    ok: true,
+    reference,
+    recipients: deliveredEmails,
+  };
 }
 
 function buildEmailBody(reference: string, token: string): string {

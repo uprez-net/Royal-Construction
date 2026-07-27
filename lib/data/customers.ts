@@ -146,23 +146,77 @@ export async function findCustomerByContact(email?: string | null, phone?: strin
  * @throws Error if customer creation fails
  * Also triggers revalidation of the customers cache to ensure new customer appears in dropdowns.
  */
-export async function createCustomerForProject(input: { name: string; email: string; phone: string }, tx?: Prisma.TransactionClient) {
+export async function createCustomerForProject(input: { name: string; email: string; phone: string; address?: string | null }, tx?: Prisma.TransactionClient) {
 
     const prismClient = tx ?? prisma;
-    const existing = await findCustomerByContact(input.email, input.phone, tx);
+    // When running INSIDE a caller's transaction, cache invalidation must not
+    // fire here: the write has not committed yet, so another request could refill
+    // the "customers" cache from pre-commit data and there would be no
+    // post-commit invalidation to correct it (PR #124 review). The caller
+    // revalidates after its transaction commits instead. Standalone calls (no tx)
+    // are already committed by the time they return, so they invalidate here.
+    const deferInvalidation = Boolean(tx);
+    const invalidate = () => {
+        if (!deferInvalidation) {
+            revalidateTag("customers", CACHE_PROFILES.MEDIUM);
+        }
+    };
+    const address = input.address?.trim() || null;
+    const name = input.name?.trim();
+    const email = input.email?.trim();
+    const phone = input.phone?.trim();
+
+    // Resolve email and phone INDEPENDENTLY (PR #124). The old helper returned the
+    // email match and never looked at phone, so a conflict — email and phone
+    // belonging to DIFFERENT customers — silently attached the Project to the
+    // email record without anyone noticing. Here the conflict is explicit: email
+    // is the authoritative identity and wins deterministically, but we never steal
+    // the phone record's contact fields (below), and changed values are refreshed.
+    const byEmail = email
+        ? await prismClient.customer.findUnique({ where: { email } })
+        : null;
+    const byPhone = phone
+        ? await prismClient.customer.findUnique({ where: { phone } })
+        : null;
+    const existing = byEmail ?? byPhone;
+
     if (existing) {
+        const patch: Prisma.CustomerUpdateInput = {};
+        if (name && name !== existing.name) patch.name = name;
+        if (address && address !== existing.address) patch.address = address;
+        // Refresh a changed email/phone only when no OTHER customer already holds
+        // it, so we never trip the @unique constraint or hijack a different record.
+        if (email && email !== existing.email && (byEmail === null || byEmail.id === existing.id)) {
+            patch.email = email;
+        }
+        if (phone && phone !== existing.phone && (byPhone === null || byPhone.id === existing.id)) {
+            patch.phone = phone;
+        }
+        if (Object.keys(patch).length > 0) {
+            const updated = await prismClient.customer.update({
+                where: { id: existing.id },
+                data: patch,
+            });
+            invalidate();
+            return updated;
+        }
         return existing;
     }
 
     const customer = await prismClient.customer.create({
         data: {
-            name: input.name,
-            email: input.email,
-            phone: input.phone,
+            // Persist the NORMALISED values — the same trimmed locals the
+            // findUnique lookups above use. Storing the raw input meant a record
+            // created from " a@b.com " never matched the trimmed lookup again, so
+            // the next call created a duplicate customer instead of reusing it.
+            name,
+            email,
+            phone,
+            address,
         },
     });
 
-    revalidateTag("customers", CACHE_PROFILES.MEDIUM);
+    invalidate();
 
     return customer;
 }

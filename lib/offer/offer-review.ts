@@ -6,11 +6,13 @@ import {
   getAreaBasisTotalSqm,
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
-import type {
-  OfferDocumentDraft,
-  OfferWorkspaceCostLine,
-  OfferWorkspaceJob,
-  OfferWorkspaceScopeItem,
+import {
+  collectOwnerIssues,
+  formatOwnerNamesLine,
+  type OfferDocumentDraft,
+  type OfferWorkspaceCostLine,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 
@@ -54,6 +56,7 @@ function section(
   return { ...s, status: s.issues.length === 0 ? "complete" : "incomplete" };
 }
 
+
 export function buildOfferReview(
   input: OfferReviewInput,
 ): readonly OfferReviewSection[] {
@@ -74,16 +77,27 @@ export function buildOfferReview(
       stepId: "offer-step-job-setup",
       title: "Job setup",
       issues: [
-        job.clientNames.trim().length === 0 && "Client names",
-        job.siteAddress.trim().length === 0 && "Site address",
-        job.buildType.trim().length === 0 && "Build type",
-        totalAreaSqm <= 0 && "Floor areas",
-      ]
-        .filter((v): v is string => Boolean(v))
-        .map((field) => `${field} is missing.`),
+        // Owner-level issues (every owner named + Current Location, every
+        // signatory named + valid email) are already full sentences.
+        // `?? []` for consistency with the row rendering below — a legacy job
+        // whose owners[] is absent must surface the "add an owner" issue, not
+        // throw inside the readiness review.
+        ...collectOwnerIssues(job.owners ?? []),
+        ...[
+          job.siteAddress.trim().length === 0 && "Site Location",
+          job.buildType.trim().length === 0 && "Build type",
+          totalAreaSqm <= 0 && "Floor areas",
+        ]
+          .filter((v): v is string => Boolean(v))
+          .map((field) => `${field} is missing.`),
+      ],
       rows: [
-        { label: "Client", value: job.clientNames || "—" },
-        { label: "Site", value: job.siteAddress || "—" },
+        {
+          label: (job.owners?.length ?? 0) > 1 ? "Owners" : "Owner",
+          value: formatOwnerNamesLine(job.owners ?? []) || job.clientNames || "—",
+        },
+        { label: "Current Location", value: job.currentLocation || "—" },
+        { label: "Site Location", value: job.siteAddress || "—" },
         { label: "Build type", value: job.buildType || "—" },
         { label: "Total area", value: `${totalAreaSqm} sqm` },
       ],

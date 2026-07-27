@@ -22,12 +22,15 @@ type SendNegotiatePanelProps = {
   readonly status: OfferWorkspaceStatus;
   readonly canRevise: boolean;
   readonly revising: boolean;
-  readonly clientEmail: string;
-  // Optional secondary recipient — when provided, the offer is emailed to BOTH
-  // clients (a separate email + tracking token each). Empty/undefined falls
-  // back to single-recipient sends (the pre-secondary-client behaviour).
-  readonly secondaryClientEmail?: string;
-  readonly secondaryClientName?: string;
+  // Every customer signatory the server will email (each individual owner + each
+  // company director), in DocuSign order. Rendered READ-ONLY: sendOfferDocument
+  // derives its recipients from the same owners, so an editable field here could
+  // confirm one address while the proposal goes to another (PR #124 review). To
+  // change an address, edit the owner on Job setup — the source of truth.
+  readonly recipients: readonly {
+    readonly email: string;
+    readonly label: string;
+  }[];
   readonly contractValueIncGst: number;
   readonly offerReference: string;
   readonly sendBlockers: readonly OfferSendBlocker[];
@@ -40,7 +43,14 @@ type SendNegotiatePanelProps = {
   readonly onMarkSent: () => void;
   readonly onCreateRevision: () => void;
   readonly onMarkAgreed: () => void;
+  // Owner details must be complete to agree, exactly as for send/mark-sent — the
+  // server transition rejects an incomplete party set (migrated SENT v1 offers
+  // with a blank Current Location), so the button must not look actionable.
+  readonly canMarkAgreed: boolean;
   readonly onMarkRejected: () => void;
+  // Why a lifecycle action (Mark sent/agreed/rejected) didn't take effect — a
+  // stale-save reconcile or a failed save — instead of a silent no-op.
+  readonly transitionError: string | null;
 };
 
 // Scroll a blocker's owning step into view so "fix it" is one click. Mirrors the
@@ -59,9 +69,7 @@ export function SendNegotiatePanel({
   status,
   canRevise,
   revising,
-  clientEmail,
-  secondaryClientEmail,
-  secondaryClientName,
+  recipients,
   contractValueIncGst,
   offerReference,
   sendBlockers,
@@ -74,14 +82,15 @@ export function SendNegotiatePanel({
   onMarkSent,
   onCreateRevision,
   onMarkAgreed,
+  canMarkAgreed,
   onMarkRejected,
+  transitionError,
 }: SendNegotiatePanelProps) {
-  const [email, setEmail] = useState(clientEmail);
-  const [secondaryEmail, setSecondaryEmail] = useState(
-    secondaryClientEmail ?? "",
-  );
   const [confirming, setConfirming] = useState(false);
-  const hasSecondaryRecipient = (secondaryClientName ?? "").trim().length > 0;
+  // The server derives recipients from the owners; the primary owner's email is
+  // passed only so the legacy/in-memory fallback in sendOfferDocument has a seed.
+  const primaryRecipientEmail = recipients[0]?.email ?? "";
+  const hasRecipients = recipients.some((r) => r.email.trim().length > 0);
   const isPending = status === "pending";
   const isSent = status === "sent";
   const isRejected = status === "rejected";
@@ -110,37 +119,21 @@ export function SendNegotiatePanel({
         {isPending || isSent ? (
           <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
             <ReadinessStrip blockers={sendBlockers} />
-            <label
-              className="text-xs font-medium text-foreground"
-              htmlFor="offer-recipient"
-            >
-              Email the proposal PDF to the client
-            </label>
+            <p className="text-xs font-medium text-foreground">
+              {recipients.length > 1
+                ? `Email the proposal PDF to all ${recipients.length} signatories`
+                : "Email the proposal PDF to the client"}
+            </p>
+            <RecipientList recipients={recipients} />
             <div className="flex flex-wrap gap-2">
-              <input
-                className="min-w-0 flex-1 rounded-md border border-border bg-white px-3 py-1.5 text-sm"
-                id="offer-recipient"
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  setConfirming(false);
-                }}
-                placeholder="client@email.com"
-                type="email"
-                value={email}
-              />
               <Button
                 className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-                disabled={
-                  !canSend ||
-                  sending ||
-                  confirming ||
-                  email.trim().length === 0
-                }
+                disabled={!canSend || sending || confirming || !hasRecipients}
                 onClick={() => setConfirming(true)}
                 size="sm"
                 title={
                   canSend
-                    ? "Review the recipient and price, then confirm the send."
+                    ? "Review the recipients and price, then confirm the send."
                     : "Resolve the items above before sending."
                 }
                 type="button"
@@ -166,53 +159,22 @@ export function SendNegotiatePanel({
                 </Button>
               ) : null}
             </div>
-
-            {hasSecondaryRecipient ? (
-              <div className="grid gap-1">
-                <label
-                  className="text-xs font-medium text-foreground"
-                  htmlFor="offer-secondary-recipient"
-                >
-                  Secondary client ({secondaryClientName}) — email
-                </label>
-                <input
-                  className="min-w-0 flex-1 rounded-md border border-border bg-white px-3 py-1.5 text-sm"
-                  id="offer-secondary-recipient"
-                  onChange={(event) => {
-                    setSecondaryEmail(event.target.value);
-                    setConfirming(false);
-                  }}
-                  placeholder="secondary@email.com (leave blank to send only to the primary)"
-                  type="email"
-                  value={secondaryEmail}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  When this is filled in, the proposal is emailed to both
-                  clients (a separate email each). Leave blank to send only to
-                  the primary client.
-                </p>
-              </div>
-            ) : null}
+            <p className="text-[11px] text-muted-foreground">
+              Recipients are the owners on Job setup — every individual owner and
+              company director. To change an address, edit the owner there.
+            </p>
 
             {confirming ? (
               <SendConfirm
                 contractValueIncGst={contractValueIncGst}
                 offerReference={offerReference}
-                recipient={email}
-                secondaryRecipient={
-                  hasSecondaryRecipient && secondaryEmail.trim().length > 0
-                    ? secondaryEmail.trim()
-                    : null
-                }
+                recipients={recipients}
                 sending={sending}
                 onCancel={() => setConfirming(false)}
                 onConfirm={() => {
-                  onSendOffer(
-                    email,
-                    hasSecondaryRecipient && secondaryEmail.trim().length > 0
-                      ? secondaryEmail.trim()
-                      : null,
-                  );
+                  // Server derives the real recipients from the saved owners; the
+                  // primary email is only a fallback seed (see sendOfferDocument).
+                  onSendOffer(primaryRecipientEmail, null);
                   setConfirming(false);
                 }}
               />
@@ -245,8 +207,15 @@ export function SendNegotiatePanel({
           </Button>
           <Button
             className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-            disabled={!isSent}
+            disabled={!isSent || !canMarkAgreed}
             size="sm"
+            title={
+              !isSent
+                ? "Available once the offer is sent."
+                : canMarkAgreed
+                  ? "Record the client's acceptance and freeze the internal snapshot."
+                  : "Complete the owner details listed above before marking the offer agreed."
+            }
             type="button"
             onClick={onMarkAgreed}
           >
@@ -264,6 +233,12 @@ export function SendNegotiatePanel({
             Mark rejected
           </Button>
         </div>
+
+        {transitionError ? (
+          <p className="text-xs font-medium text-destructive">
+            {transitionError}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -307,42 +282,63 @@ function ReadinessStrip({
   );
 }
 
-// Restates the frozen facts (recipient, price, reference) before the send leaves
+// Read-only list of the exact signatories the server will email — every
+// individual owner and company director. Rendered both in the send strip and the
+// confirmation so what's shown always matches where the proposal actually goes.
+function RecipientList({
+  recipients,
+}: {
+  readonly recipients: readonly { readonly email: string; readonly label: string }[];
+}) {
+  if (recipients.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="grid gap-1">
+      {recipients.map((recipient, index) => (
+        <li
+          key={`${recipient.label}-${recipient.email}-${index}`}
+          className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-md border border-border bg-white px-3 py-1.5 text-sm"
+        >
+          <span className="min-w-0 truncate font-medium text-foreground">
+            {recipient.label}
+          </span>
+          <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+            {recipient.email || "email missing"}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Restates the frozen facts (recipients, price, reference) before the send leaves
 // the workspace — a deliberate beat on an outward-facing, hard-to-recall action.
 function SendConfirm({
   contractValueIncGst,
   offerReference,
-  recipient,
-  secondaryRecipient,
+  recipients,
   sending,
   onCancel,
   onConfirm,
 }: {
   readonly contractValueIncGst: number;
   readonly offerReference: string;
-  readonly recipient: string;
-  readonly secondaryRecipient?: string | null;
+  readonly recipients: readonly { readonly email: string; readonly label: string }[];
   readonly sending: boolean;
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }) {
-  const hasSecondary =
-    !!secondaryRecipient && secondaryRecipient.length > 0 && secondaryRecipient !== recipient;
+  const multiple = recipients.length > 1;
   return (
     <div className="grid gap-2 rounded-lg border border-royal-gold/40 bg-royal-gold-light/40 p-3">
       <p className="text-sm font-medium text-foreground">
-        {hasSecondary
-          ? "Send this offer to both clients?"
+        {multiple
+          ? `Send this offer to all ${recipients.length} signatories?`
           : "Send this offer to the client?"}
       </p>
+      <RecipientList recipients={recipients} />
       <dl className="grid gap-1 text-xs">
-        <ConfirmRow label="Recipient" value={recipient} />
-        {hasSecondary ? (
-          <ConfirmRow
-            label="Secondary recipient"
-            value={secondaryRecipient ?? ""}
-          />
-        ) : null}
         <ConfirmRow
           label="Fixed price inc GST"
           mono
@@ -351,8 +347,8 @@ function SendConfirm({
         <ConfirmRow label="Reference" mono value={offerReference} />
       </dl>
       <p className="text-xs text-muted-foreground">
-        {hasSecondary
-          ? "This emails the proposal PDF to both recipients (a separate email each) and moves the offer to Sent. Check the price and recipients — this leaves your workspace."
+        {multiple
+          ? "This emails the proposal PDF to every signatory (a separate email each) and moves the offer to Sent. Check the price and recipients — this leaves your workspace."
           : "This emails the proposal PDF and moves the offer to Sent. Check the price and recipient — this leaves your workspace."}
       </p>
       <div className="flex flex-wrap gap-2">

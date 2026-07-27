@@ -5,10 +5,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
-import type {
-  OfferDocumentDraft,
-  OfferWorkspaceJob,
-  OfferWorkspaceStatus,
+import {
+  collectOfferSigners,
+  collectOfferSignerLabels,
+  formatOwnerNamesLine,
+  offerSignerLabel,
+  type OfferDocumentDraft,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import {
@@ -120,7 +124,8 @@ export function ContractPanel({
           isSent={isSent}
           isSigned={isSigned}
           isTenderSigned={isTenderSigned}
-          customerName={job.clientNames}
+          customerName={formatOwnerNamesLine(job.owners ?? []) || job.clientNames}
+          signerLabels={collectOfferSignerLabels(job.owners ?? [])}
           contractValueIncGst={customerPrice.selectedContractValueIncGst}
           offerReference={formatOfferReference(job.reference, job.revision)}
           particulars={contractParticulars}
@@ -323,6 +328,7 @@ function ContractActions({
   isSent,
   isSigned,
   customerName,
+  signerLabels,
   contractValueIncGst,
   offerReference,
   particulars,
@@ -339,6 +345,9 @@ function ContractActions({
   readonly isSent: boolean;
   readonly isSigned: boolean;
   readonly customerName: string;
+  // Every customer signer (individual owners + company directors) — the exact
+  // DocuSign recipient set, replacing the single hardcoded customer row.
+  readonly signerLabels: readonly string[];
   readonly contractValueIncGst: number;
   readonly offerReference: string;
   readonly particulars: ContractParticulars;
@@ -364,15 +373,20 @@ function ContractActions({
       {isSent ? (
         <SigningTracker
           recipients={[
-            {
-              role: "Customer",
-              detail: customerName || "signs first",
-              state: "awaiting",
-            },
+            // One row per customer signer (individual owners + company directors);
+            // the builder counter-signs — mirroring the real envelope.
+            ...(signerLabels.length > 0
+              ? signerLabels
+              : [customerName || "signs first"]
+            ).map((label) => ({
+              role: "Customer" as const,
+              detail: label,
+              state: "awaiting" as const,
+            })),
             {
               role: "Builder",
               detail: "Royal Constructions",
-              state: "waiting_for_prior",
+              state: "waiting_for_prior" as const,
               waitingLabel: "Signs after the customer",
             },
           ]}
@@ -525,12 +539,8 @@ function ContractPreview({
       <dl className="grid gap-3 sm:grid-cols-2">
         <PartyBlock label="Builder" value="Royal Constructions Pty Ltd" />
         <PartyBlock
-          label="Customer"
-          value={
-            job.secondaryCustomerName?.trim()
-              ? `${job.clientNames} & ${job.secondaryCustomerName.trim()}`
-              : job.clientNames
-          }
+          label={(job.owners?.length ?? 0) > 1 ? "Owners" : "Customer"}
+          value={formatOwnerNamesLine(job.owners ?? []) || job.clientNames}
         />
         <PartyBlock label="Site" value={job.siteAddress} />
         <PartyBlock label="Prepared by" value={job.preparedBy} />
@@ -584,16 +594,22 @@ function ContractPreview({
           role="Builder"
           state={state === "signed" ? "signed" : "pending"}
         />
-        <SignatureLine
-          role={`Customer${job.secondaryCustomerName?.trim() ? ` — ${job.clientNames}` : ""}`}
-          state={state === "signed" ? "signed" : "pending"}
-        />
-        {job.secondaryCustomerName?.trim() ? (
+        {/* An offer with no owners yet still has a customer party — show a single
+            generic line rather than a builder-only signature list. */}
+        {collectOfferSigners(job.owners ?? []).length > 0 ? (
+          collectOfferSigners(job.owners ?? []).map((signer) => (
+            <SignatureLine
+              key={`${signer.ownerIndex}-${signer.signerIndex}`}
+              role={`Customer — ${offerSignerLabel(signer)}`}
+              state={state === "signed" ? "signed" : "pending"}
+            />
+          ))
+        ) : (
           <SignatureLine
-            role={`Customer — ${job.secondaryCustomerName.trim()}`}
+            role="Customer"
             state={state === "signed" ? "signed" : "pending"}
           />
-        ) : null}
+        )}
       </div>
     </article>
   );
