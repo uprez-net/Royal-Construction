@@ -45,6 +45,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { OfferStatus } from "@prisma/client";
 import {
   loadActiveOfferWorkspace,
+  pollOfferSigningStatus,
   saveOfferWorkspace,
   transitionOfferStatus,
   createOfferRevision,
@@ -82,6 +83,11 @@ import {
 } from "@/lib/offer/workspace-images";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
 import { OfferWorkspaceScreen } from "./offer-workspace-screen";
+
+// How often to re-check signing progress while an envelope is out for signature.
+// The DocuSign Connect webhook drives the truth; this only decides how quickly an
+// open tab reflects it. 8s is responsive without hammering the server.
+const SIGNING_POLL_INTERVAL_MS = 8000;
 
 // Identity fields carrying estimator-entered owner/address data. The lead only
 // ever has individual contacts, so re-running "Pre-fill from lead" over an
@@ -730,6 +736,82 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       cancelled = true;
     };
   }, [leadId, hydrateSnapshot]);
+
+  // Live signing updates. While an envelope is out for signature, the DocuSign
+  // Connect webhook updates the database in the background, but an already-open
+  // tab holds React state that only re-hydrates on a user action — so a signature
+  // landed while the screen still showed "Awaiting signature" until a manual
+  // refresh (#121/#123 follow-up). Poll a LIGHTWEIGHT action (status + per-signer
+  // status only, no snapshot, so it can't clobber local state) while — and only
+  // while — the offer is in one of the two "envelope sent" states. Pauses on a
+  // hidden tab and stops the moment the phase advances (signed/declined), because
+  // that status change re-runs this effect and the cleanup clears the timer.
+  useEffect(() => {
+    if (leadId === undefined) {
+      return;
+    }
+    if (status !== "tender_sent" && status !== "contract_sent") {
+      return;
+    }
+    const offerId = offerIdRef.current;
+    if (offerId === null) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleNext = () => {
+      if (!cancelled) {
+        timer = setTimeout(tick, SIGNING_POLL_INTERVAL_MS);
+      }
+    };
+    const tick = async () => {
+      // Don't poll a backgrounded tab; resume on the next tick once it's visible.
+      if (typeof document !== "undefined" && document.hidden) {
+        scheduleNext();
+        return;
+      }
+      try {
+        const result = await pollOfferSigningStatus({ offerId });
+        // Drop a response whose offer identity changed underneath us. `cancelled`
+        // alone is insufficient: it flips in the effect cleanup, which React
+        // defers to commit time — so a user action that forks a new revision
+        // (createRevision sets offerIdRef to the new offer synchronously) leaves
+        // a window where this response would otherwise write R1's version/signers
+        // onto R2. Re-checking the captured offerId closes that race, matching
+        // every other reload path in this file (adversarial review).
+        if (cancelled || offerIdRef.current !== offerId) {
+          return;
+        }
+        if (result.ok) {
+          setSignerStatuses(result.signerStatuses);
+          stateVersionRef.current = result.stateVersion;
+          const next = result.status.toLowerCase() as OfferWorkspaceStatus;
+          if (next !== status) {
+            setStatus(next);
+            if (result.declineReason) {
+              setRevisionNotice(
+                `${result.declineReason} — create a new version to revise and re-send.`,
+              );
+            }
+          }
+        }
+      } catch (error) {
+        // Best-effort: a transient poll failure must not stop the live updates or
+        // surface an error — the tab still works, we just try again next tick.
+        console.error("[offer] signing-status poll failed:", error);
+      }
+      scheduleNext();
+    };
+
+    timer = setTimeout(tick, SIGNING_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [leadId, status]);
 
   // Debounced autosave with optimistic concurrency, while the offer is editable.
   useEffect(() => {
