@@ -1,5 +1,8 @@
 import {
+  CHARS_PER_LINE_SIGNATURE,
+  chunkByEstimatedHeight,
   collectOfferSigners,
+  estimateWrappedLines,
   formatOwnerGreetingNames,
   formatOwnerNamesLine,
   type OfferDocumentDraft,
@@ -67,7 +70,22 @@ const INCLUSIONS_ROWS_PER_PAGE = 12;
 // "Page N of M" footer (PR #124 review — the emailed PDF was fixed first, this is
 // the separate React window.print() path).
 const INLINE_SIGNATURE_LIMIT = 4;
-const SIGNATURES_PER_PAGE = 8;
+// Page budgets in LINE UNITS, matching offer-proposal-html.ts exactly. These two
+// renderers must paginate identically — they were drifting (8 blocks per page
+// here vs 6 there), so the browser download and the emailed PDF could disagree on
+// page count for the same offer (PR #124 review).
+const SIGNATURE_PAGE_BUDGET = 34;
+const SIGNATURE_PAGE_HEADING_LINES = 4;
+const MIN_FIRST_SIGNATURE_PAGE_BUDGET = 10;
+const INLINE_SIGNATURE_BUDGET = 22;
+const SIGNATURE_BLOCK_CHROME_LINES = 4;
+
+function signatureBlockLines(whoText: string): number {
+  return (
+    SIGNATURE_BLOCK_CHROME_LINES +
+    estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE)
+  );
+}
 
 type SignatureBlockSpec = {
   readonly key: string;
@@ -144,11 +162,39 @@ export function OfferWorkspacePrintTemplate(
   );
   // Few signers stay inline under the payment table; more move to their own
   // counted page(s) so the footer total matches the real page count.
+  // Identical content-aware pagination to the emailed renderer: budget by
+  // estimated wrapped-line height, and subtract the acceptance paragraph (which
+  // names every owner and is legal text) from the first page's budget.
   const signatureBlocks = offerSignatureBlocks(props.job);
-  const inlineSignatures = signatureBlocks.length <= INLINE_SIGNATURE_LIMIT;
-  const signatureChunks = inlineSignatures
-    ? []
-    : chunk(signatureBlocks, SIGNATURES_PER_PAGE);
+  const signatureLines = signatureBlocks.reduce(
+    (sum, block) => sum + signatureBlockLines(block.name),
+    0,
+  );
+  const inlineSignatures =
+    signatureBlocks.length <= INLINE_SIGNATURE_LIMIT &&
+    signatureLines <= INLINE_SIGNATURE_BUDGET;
+  let signatureChunks: SignatureBlockSpec[][] = [];
+  if (!inlineSignatures) {
+    const acceptanceLines = estimateWrappedLines(
+      offerAcceptanceLine(props.job),
+      CHARS_PER_LINE_SIGNATURE,
+    );
+    const firstBudget = Math.max(
+      MIN_FIRST_SIGNATURE_PAGE_BUDGET,
+      SIGNATURE_PAGE_BUDGET - acceptanceLines - SIGNATURE_PAGE_HEADING_LINES,
+    );
+    const first =
+      chunkByEstimatedHeight(signatureBlocks, firstBudget, (b) =>
+        signatureBlockLines(b.name),
+      )[0] ?? [];
+    const rest = signatureBlocks.slice(first.length);
+    signatureChunks = [
+      first,
+      ...chunkByEstimatedHeight(rest, SIGNATURE_PAGE_BUDGET, (b) =>
+        signatureBlockLines(b.name),
+      ),
+    ].filter((c) => c.length > 0);
+  }
 
   // Assemble the ordered page renderers, then number them automatically so the
   // footer "Page N of M" stays correct as pages are added or removed.

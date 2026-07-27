@@ -6,11 +6,16 @@ import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
 import {
   createCompanyOwner,
   createIndividualOwner,
   createOfferSignatory,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
+  MAX_OWNER_NAME_LENGTH,
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
@@ -95,16 +100,35 @@ function individualOwner(index: number): OfferOwner {
   };
 }
 
+// Pad a name to exactly `length` characters so tests can sweep name length,
+// which is the variable that actually drives wrapped height.
+function nameOfLength(base: string, length: number): string {
+  if (base.length >= length) {
+    return base.slice(0, length);
+  }
+  const filler = " Holdings and Investments Group of Companies Australia";
+  let out = base;
+  while (out.length < length) {
+    out += filler;
+  }
+  return out.slice(0, length);
+}
+
 // A company owner renders a header row PLUS one row per director, and carries a
 // long legal name + ABN/ACN — the configuration that broke owner-count-based
 // chunking and the unbounded cover cells.
-function companyOwner(index: number, directors: number): OfferOwner {
+function companyOwner(
+  index: number,
+  directors: number,
+  nameLength = 70,
+): OfferOwner {
   const base = createCompanyOwner(`company-${index}`);
   return {
     ...base,
-    // Realistic worst-case AU legal name length — these cells are unbounded, so
-    // name length is the variable that decides whether a cover overflows.
-    displayName: `Kensington Grove Property Holdings and Investments Number ${index} Pty Ltd`,
+    displayName: nameOfLength(
+      `Kensington Grove Property No ${index} Pty Ltd`,
+      nameLength,
+    ),
     abn: `12 345 678 ${String(900 + index).slice(0, 3)}`,
     currentLocation: `Level ${index}, 100 Somewhat Long Street, Sydney NSW 2000`,
     signatories: Array.from({ length: directors }, (_, d) => ({
@@ -146,6 +170,74 @@ const OWNER_CONFIGURATIONS: ReadonlyArray<{
     ],
   },
 ];
+
+// Name-length sweep. The app enforces MAX_OWNER_NAME_LENGTH, so every length up
+// to and including that ceiling must paginate correctly in ALL THREE renderers —
+// the emailed proposal, the legal Tender, and the browser window.print() view.
+// Earlier tests used ~70-character names and called them "worst-case"; they were
+// not, and 110/140-character names broke every renderer (PR #124 review).
+for (const nameLength of [70, 110, MAX_OWNER_NAME_LENGTH]) {
+  const owners = Array.from({ length: 10 }, (_, i) =>
+    companyOwner(i + 1, 1, nameLength),
+  );
+  const label = `10 companies, ${nameLength}-char legal names`;
+
+  test(`Tender prints what it declares — ${label}`, async () => {
+    const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Tender printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+
+  test(`Proposal prints what it declares — ${label}`, async () => {
+    const html = buildProposalHtml(
+      buildProposalInput(snapshotWithOwners(owners)),
+      EMPTY_OFFER_IMAGES,
+    );
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Proposal printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+
+  // The React window.print() renderer is a THIRD, independent implementation. It
+  // cannot be render-verified here: its layout comes from the app's compiled
+  // Tailwind build, and standing up a fake stylesheet would only test the fake.
+  //
+  // Instead assert it makes the SAME pagination decisions as the emailed
+  // renderer, which IS verified against real Chromium above. Both now share the
+  // same budget constants and content-aware logic, so equal page counts mean the
+  // React path inherits that verification. This is exactly the drift that shipped
+  // (8 signature blocks per page here vs 6 there) and it is what this catches.
+  test(`Browser print view paginates identically to the emailed PDF — ${label}`, () => {
+    const input = buildProposalInput(snapshotWithOwners(owners));
+    const emailed = buildProposalHtml(input, EMPTY_OFFER_IMAGES);
+    const browser = renderToStaticMarkup(
+      createElement(OfferWorkspacePrintTemplate, {
+        ...input,
+        images: EMPTY_OFFER_IMAGES,
+      }),
+    );
+    assert.equal(
+      declaredPageTotal(browser),
+      declaredPageTotal(emailed),
+      `browser print declares ${declaredPageTotal(browser)} pages but the emailed PDF declares ${declaredPageTotal(emailed)} (${label})`,
+    );
+    // And the same number of physical page elements are emitted.
+    assert.equal(
+      (browser.match(/min-h-\[297mm\]/g) ?? []).length,
+      (emailed.match(/<div class="page">/g) ?? []).length,
+      `renderers emit a different number of pages (${label})`,
+    );
+  });
+}
 
 for (const { label, owners } of OWNER_CONFIGURATIONS) {
   test(`Tender prints what it declares — ${label}`, async () => {

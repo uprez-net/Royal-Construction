@@ -205,9 +205,13 @@ export async function createCustomerForProject(input: { name: string; email: str
 
     const customer = await prismClient.customer.create({
         data: {
-            name: input.name,
-            email: input.email,
-            phone: input.phone,
+            // Persist the NORMALISED values — the same trimmed locals the
+            // findUnique lookups above use. Storing the raw input meant a record
+            // created from " a@b.com " never matched the trimmed lookup again, so
+            // the next call created a duplicate customer instead of reusing it.
+            name,
+            email,
+            phone,
             address,
         },
     });

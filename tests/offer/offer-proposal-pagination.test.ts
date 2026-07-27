@@ -83,7 +83,8 @@ function physicalPageCount(html: string): number {
   return (html.match(/<div class="page">/g) ?? []).length;
 }
 
-// Each React PrintPage is a <section> sized to a full A4 sheet.
+// Counts declared page elements (each React PrintPage is a full-A4 <section>).
+// This is a STRUCTURAL count, not a rendered-page count.
 function reactPageCount(html: string): number {
   return (html.match(/min-h-\[297mm\]/g) ?? []).length;
 }
@@ -102,7 +103,13 @@ function footerPaging(html: string): { lastPage: number; total: number } {
   return { lastPage: Math.max(...pageNumbers), total: [...totals][0] };
 }
 
-test("the max-signer proposal foots the true physical page count (PR #124)", () => {
+// NOTE ON WHAT THIS FILE PROVES: these assertions inspect the DECLARED document
+// structure (emitted page elements, footer totals, which blocks land where). They
+// cannot see content overflowing its A4 box — that is verified for real, through
+// headless Chromium, in offer-document-print-pages.test.ts. Keep both: this file
+// pins the structural decisions, that one pins the physical output.
+
+test("the max-signer proposal emits a page element per declared page (PR #124)", () => {
   const owners = Array.from({ length: MAX_OWNER_SIGNERS }, (_, i) =>
     individualOwner(i + 1),
   );
@@ -178,6 +185,27 @@ test("the welcome letter greets EVERY owner in both renderers (PR #124 sweep)", 
   const owners = [individualOwner(1), individualOwner(2), individualOwner(3)];
   for (const html of [proposalHtmlFor(owners), reactPrintHtmlFor(owners)]) {
     assert.match(html, /Dear Owner 1, Owner 2 and Owner 3,/);
+  }
+});
+
+test("combined honorifics are stripped whole, not partially (CodeRabbit)", () => {
+  // Matching a SINGLE honorific left the rest behind: "Mr & Mrs Smith" greeted
+  // the clients as "Dear & Mrs Smith,".
+  const person = createIndividualOwner("o1");
+  for (const [input, expected] of [
+    ["Mr & Mrs Smith", "Smith"],
+    ["Mr and Ms Nguyen", "Nguyen"],
+    ["Dr Patel", "Patel"],
+    ["Mr & Mrs & Dr Chen", "Chen"],
+  ] as const) {
+    assert.equal(
+      formatOwnerGreetingNames([
+        { ...person, displayName: input },
+        { ...person, id: "o2", displayName: "Jane Doe" },
+      ]),
+      `${expected} and Jane Doe`,
+      `honorific not fully stripped from "${input}"`,
+    );
   }
 });
 

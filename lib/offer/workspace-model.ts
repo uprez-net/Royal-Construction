@@ -425,6 +425,14 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
     if (isCompany && owner.abn.trim().length === 0) {
       issues.push(`${who} needs an ABN or ACN.`);
     }
+    // Backstop on name length: past this the legal documents cannot be laid out
+    // within the page budgets the renderers are proven to support, which would
+    // print sheets the "Page N of M" footers never declared (PR #124 review).
+    if (owner.displayName.trim().length > MAX_OWNER_NAME_LENGTH) {
+      issues.push(
+        `${isCompany ? "Company" : "Owner"} name is ${owner.displayName.trim().length} characters; the documents support up to ${MAX_OWNER_NAME_LENGTH}. Shorten it or arrange a manual layout.`,
+      );
+    }
     if (owner.currentLocation.trim().length === 0) {
       issues.push(
         `${who} needs a ${isCompany ? "registered office (Current Location)" : "Current Location"}.`,
@@ -521,6 +529,78 @@ export function withOwnerProjection(job: OfferWorkspaceJob): OfferWorkspaceJob {
 // (PR #124 review). Bound what the summary shows; the complete party list still
 // appears in full elsewhere in each document (the Tender's Owner Details table,
 // the Proposal's acceptance + signature blocks), so nothing is hidden.
+// ─── Document layout budgeting (PR #124 review) ───
+//
+// Every page-chunking decision in every renderer must budget by ESTIMATED
+// RENDERED HEIGHT, not by item count. Counting items assumes each one occupies a
+// fixed height, which is false: a long company legal name wraps to several lines,
+// so N "rows" or N "signature blocks" can be twice as tall as expected. That is
+// how 110- and 140-character company names still overflowed pages whose item
+// counts looked safe.
+//
+// Heights are expressed in LINE UNITS (1 unit = one rendered text line). The
+// per-page budgets below were verified against real Chromium output across the
+// owner-configuration matrix — see tests/offer/offer-document-print-pages.test.ts.
+
+// Approximate characters per line for the width each element renders at. Derived
+// from the shared A4 page metrics (210mm wide, ~174mm of content) at the document
+// font sizes, then confirmed empirically. Deliberately CONSERVATIVE (assumes
+// fewer chars fit than really do), so the estimate over-counts height rather than
+// under-counting it — over-counting costs a mostly-empty page, under-counting
+// prints a sheet the footer never declared.
+export const CHARS_PER_LINE_SIGNATURE = 60;
+export const CHARS_PER_LINE_TABLE_CELL = 34;
+
+// How many wrapped lines `text` occupies in a column that fits `charsPerLine`.
+// Always at least 1 so an empty cell still occupies its row.
+export function estimateWrappedLines(
+  text: string,
+  charsPerLine: number,
+): number {
+  const length = text.trim().length;
+  if (length === 0 || charsPerLine <= 0) {
+    return 1;
+  }
+  return Math.max(1, Math.ceil(length / charsPerLine));
+}
+
+// Pack items into pages by estimated height rather than count. `heightOf` returns
+// an item's height in line units; an item never splits across pages, so one that
+// would exceed the budget starts the next page. An item taller than the whole
+// budget still gets its own page rather than looping forever.
+export function chunkByEstimatedHeight<T>(
+  items: readonly T[],
+  budget: number,
+  heightOf: (item: T) => number,
+): T[][] {
+  const pages: T[][] = [];
+  let current: T[] = [];
+  let used = 0;
+  for (const item of items) {
+    const height = heightOf(item);
+    if (current.length > 0 && used + height > budget) {
+      pages.push(current);
+      current = [];
+      used = 0;
+    }
+    current.push(item);
+    used += height;
+  }
+  if (current.length > 0) {
+    pages.push(current);
+  }
+  return pages;
+}
+
+// A hard ceiling on owner/company display names, enforced by collectOwnerIssues.
+// Content-aware pagination above handles ordinary long names; this is the
+// backstop that keeps the documents inside a length the renderers are PROVEN to
+// support by the Chromium matrix, so a pathological paste can't silently produce
+// a mis-paginated legal document. Generous enough for real Australian company
+// legal names (ASIC's own limit is longer, but names near it do not fit a
+// contract page and need a manual layout anyway).
+export const MAX_OWNER_NAME_LENGTH = 140;
+
 // Bounding by COUNT alone is not enough: three long Australian company legal
 // names with ABN/ACNs still wrapped far enough to push a cover onto a second
 // sheet. Height is driven by rendered LENGTH, so budget characters as well as
@@ -541,13 +621,40 @@ export function boundOwnerNames(
     }
     // "; " separator once past the first entry.
     const cost = name.length + (shown.length > 0 ? 2 : 0);
-    if (shown.length > 0 && used + cost > maxChars) {
+    // The budget applies to EVERY entry including the first — exempting it let a
+    // single very long name blow the whole character budget on its own.
+    if (used + cost > maxChars) {
       break;
     }
     shown.push(name);
     used += cost;
   }
+  // Always keep at least one name: an empty list would render as a dangling
+  // "and 9 further owners" with nothing to attach to.
+  if (shown.length === 0 && names.length > 0) {
+    shown.push(names[0]);
+  }
   return { shown, remaining: names.length - shown.length };
+}
+
+// Render a bounded name list as prose: "A, B and C", or "A, B and 4 further
+// owners" once the budget truncates it. Centralised so every caller handles the
+// truncated and non-truncated cases identically.
+export function formatBoundedOwnerList(
+  names: readonly string[],
+  separator = ", ",
+): string {
+  const { shown, remaining } = boundOwnerNames(names);
+  if (shown.length === 0) {
+    return "";
+  }
+  if (remaining > 0) {
+    return `${shown.join(separator)} and ${remaining} further owner${remaining === 1 ? "" : "s"}`;
+  }
+  if (shown.length === 1) {
+    return shown[0];
+  }
+  return `${shown.slice(0, -1).join(separator)} and ${shown[shown.length - 1]}`;
 }
 
 // Personal greeting list for the proposal welcome letter ("Dear A, B and C,").
@@ -563,7 +670,15 @@ export function formatOwnerGreetingNames(
     .map((owner) =>
       owner.kind === "company"
         ? owner.displayName.trim()
-        : owner.displayName.trim().replace(/^(Mr|Mrs|Ms|Miss|Dr)\.?\s+/i, ""),
+        : // Strip the WHOLE leading honorific, including combined forms like
+          // "Mr & Mrs" / "Mr and Ms". Matching a single honorific left the rest
+          // behind, greeting "Mr & Mrs Smith" as "Dear & Mrs Smith".
+          owner.displayName
+            .trim()
+            .replace(
+              /^(?:(?:Mr|Mrs|Ms|Miss|Dr)\.?)(?:\s*(?:&|and)\s*(?:Mr|Mrs|Ms|Miss|Dr)\.?)*\s+/i,
+              "",
+            ),
     )
     .filter((name) => name.length > 0);
   if (names.length === 0) {
@@ -572,7 +687,12 @@ export function formatOwnerGreetingNames(
   if (names.length === 1) {
     return names[0];
   }
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  // Bounded: this is the letter's SALUTATION, not legal text (every owner is
+  // still named in full in the acceptance clause and gets their own signature
+  // block). Left unbounded, ten long company names wrapped the greeting heading
+  // over many lines and pushed the welcome page onto a second sheet (PR #124
+  // review).
+  return formatBoundedOwnerList(names);
 }
 
 // Combined display of every owner name for the Contract OWNER(S) line, e.g.

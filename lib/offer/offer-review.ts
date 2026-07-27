@@ -79,7 +79,10 @@ export function buildOfferReview(
       issues: [
         // Owner-level issues (every owner named + Current Location, every
         // signatory named + valid email) are already full sentences.
-        ...collectOwnerIssues(job.owners),
+        // `?? []` for consistency with the row rendering below — a legacy job
+        // whose owners[] is absent must surface the "add an owner" issue, not
+        // throw inside the readiness review.
+        ...collectOwnerIssues(job.owners ?? []),
         ...[
           job.siteAddress.trim().length === 0 && "Site Location",
           job.buildType.trim().length === 0 && "Build type",

@@ -6,8 +6,12 @@ import {
 } from "./workspace-print-template";
 import { STANDARD_INCLUSIONS_SCHEDULE } from "./workspace-proposal-content";
 import {
-  boundOwnerNames,
+  formatBoundedOwnerList,
+  CHARS_PER_LINE_SIGNATURE,
+  CHARS_PER_LINE_TABLE_CELL,
+  chunkByEstimatedHeight,
   collectOfferSigners,
+  estimateWrappedLines,
   type OfferOwner,
   type OfferSignerContext,
   type OfferWorkspaceJob,
@@ -36,12 +40,56 @@ const INCLUSIONS_ROWS_PER_PAGE = 12;
 // fit for A4 alongside the masthead and the acceptance paragraph. Shared with the
 // contract annexure so both legal documents paginate signatures identically.
 export const SIGNATURE_BLOCKS_PER_PAGE = 4;
+
+type ExecutionBlock = { readonly html: string; readonly lines: number };
+
+// An execution signature block in line units: its fixed chrome (border, 46px
+// signature space, date rule, and for owners an "initial each page" line) plus
+// however many lines the party description wraps to.
+function executionBlockLines(whoText: string, hasInitialLine: boolean): number {
+  const chrome = hasInitialLine ? 7 : 6;
+  return chrome + estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE);
+}
+
+// Line budget for one execution page. Verified against real Chromium output.
+const EXECUTION_LINES_PER_PAGE = 30;
 // Owner Details rows that still fit on the cover beneath the masthead, parties
 // block and contract sum; past this the table moves to its own page(s).
-const OWNER_DETAIL_ROWS_INLINE = 4;
-// Budget in RENDERED ROWS per Owner Details page (a company = header + one row
-// per director), not owners — verified against real Chromium output.
-const OWNER_DETAIL_ROWS_PER_PAGE = 12;
+// Budgets in ESTIMATED WRAPPED LINES (not logical rows): a long company legal
+// name or registered office wraps, making its row several lines tall. Verified
+// against real Chromium output across the owner-configuration matrix.
+const OWNER_DETAIL_LINES_INLINE = 5;
+const OWNER_DETAIL_LINES_PER_PAGE = 26;
+
+// An owner's contribution to the Owner Details table, in line units. An
+// individual is one row whose height is the tallest of its cells; a company is a
+// header row plus one row per director.
+function ownerDetailLines(owner: OfferOwner): number {
+  const cell = (text: string) =>
+    estimateWrappedLines(text, CHARS_PER_LINE_TABLE_CELL);
+  const nameCell = cell(
+    owner.kind === "company" && owner.abn.trim().length > 0
+      ? `${owner.displayName} (ABN/ACN ${owner.abn})`
+      : owner.displayName,
+  );
+  const headerRow = Math.max(nameCell, cell(owner.currentLocation));
+  if (owner.kind === "individual") {
+    const signer = owner.signatories[0];
+    return Math.max(
+      headerRow,
+      cell(signer?.email ?? ""),
+      cell(signer?.phone ?? ""),
+    );
+  }
+  return (
+    headerRow +
+    owner.signatories.reduce(
+      (sum, director) =>
+        sum + Math.max(cell(director.name), cell(director.email)),
+      0,
+    )
+  );
+}
 
 type InclusionRow = (typeof STANDARD_INCLUSIONS_SCHEDULE)[number];
 
@@ -110,10 +158,11 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   // the proposal + browser-print renderers were fixed earlier, this legal Tender
   // renderer is a third, separate one).
   const executionBlocks = buildExecutionBlocks(job, signers);
-  const executionChunks: string[][] = [];
-  for (let i = 0; i < executionBlocks.length; i += SIGNATURE_BLOCKS_PER_PAGE) {
-    executionChunks.push(executionBlocks.slice(i, i + SIGNATURE_BLOCKS_PER_PAGE));
-  }
+  const executionChunks: string[][] = chunkByEstimatedHeight(
+    executionBlocks,
+    EXECUTION_LINES_PER_PAGE,
+    (block) => block.lines,
+  ).map((chunk) => chunk.map((block) => block.html));
 
   // Owner Details rows also lived entirely on the cover, under the masthead,
   // parties block and contract sum. With ten owners that pushed the cover past
@@ -124,37 +173,32 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   // row plus one row per director, so count rendered ROWS, not owners.
   const detailOwners = job.owners ?? [];
   const ownerDetailRows = detailOwners.map(ownerDetailRowsHtml);
-  // A company renders a header row PLUS one row per director, so pages must be
-  // budgeted in rendered ROWS. Chunking by owner count (as this first did) put
-  // eight two-row companies — sixteen rows — on one page and overflowed it.
-  const rowsForOwner = (owner: OfferOwner): number =>
-    owner.kind === "company" ? 1 + owner.signatories.length : 1;
-  const ownerDetailRowCount = detailOwners.reduce(
-    (sum: number, owner: OfferOwner) => sum + rowsForOwner(owner),
+  // A company renders a header row PLUS one row per director, and any cell can
+  // WRAP — a long legal name or registered office makes its row several lines
+  // tall. Counting logical rows (as this first did) therefore still under-counted
+  // height; budget by estimated wrapped lines instead (PR #124 review).
+  const ownerDetailEntries = detailOwners.map(
+    (owner: OfferOwner, index: number) => ({
+      html: ownerDetailRows[index],
+      lines: ownerDetailLines(owner),
+    }),
+  );
+  const ownerDetailTotal = ownerDetailEntries.reduce(
+    (sum: number, entry: { lines: number }) => sum + entry.lines,
     0,
   );
-  const inlineOwnerDetails = ownerDetailRowCount <= OWNER_DETAIL_ROWS_INLINE;
-  const ownerDetailChunks: string[][] = [];
-  if (!inlineOwnerDetails) {
-    // Pack owners into pages up to the row budget. An owner is ATOMIC — its
-    // header and director rows must not be split across sheets — so an owner
-    // that would exceed the budget starts the next page instead.
-    let current: string[] = [];
-    let currentRows = 0;
-    detailOwners.forEach((owner: OfferOwner, index: number) => {
-      const rows = rowsForOwner(owner);
-      if (current.length > 0 && currentRows + rows > OWNER_DETAIL_ROWS_PER_PAGE) {
-        ownerDetailChunks.push(current);
-        current = [];
-        currentRows = 0;
-      }
-      current.push(ownerDetailRows[index]);
-      currentRows += rows;
-    });
-    if (current.length > 0) {
-      ownerDetailChunks.push(current);
-    }
-  }
+  const inlineOwnerDetails = ownerDetailTotal <= OWNER_DETAIL_LINES_INLINE;
+  // An owner is ATOMIC — its header and director rows must not split across
+  // sheets — so an owner that would exceed the budget starts the next page.
+  const ownerDetailChunks: string[][] = (
+    inlineOwnerDetails
+      ? []
+      : chunkByEstimatedHeight(
+          ownerDetailEntries,
+          OWNER_DETAIL_LINES_PER_PAGE,
+          (entry) => entry.lines,
+        )
+  ).map((chunk) => chunk.map((entry) => entry.html));
 
   const totalPages =
     1 +
@@ -326,12 +370,7 @@ function ownerPartyNamesHtml(job: OfferWorkspaceJob): string {
   // Bounded: the full party list is in the Owner Details table, so this fixed
   // cover block shows a few names and counts the rest rather than growing
   // unboundedly and pushing the cover onto a second sheet (PR #124 review).
-  const { shown, remaining } = boundOwnerNames(rest);
-  const more =
-    remaining > 0
-      ? `${shown.length > 0 ? "; " : ""}and ${remaining} further owner${remaining === 1 ? "" : "s"} (see Owner Details)`
-      : "";
-  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${shown.join("; ")}${more}</span>`;
+  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${formatBoundedOwnerList(rest, "; ")} (see Owner Details)</span>`;
 }
 
 // One or more Owner Details rows: an individual is a single row (name / current
@@ -449,7 +488,7 @@ function ownerDetailsPage(
 function buildExecutionBlocks(
   job: OfferPrintTemplateInput["job"],
   signers: OfferSignerContext[],
-): string[] {
+): ExecutionBlock[] {
   const builderBlock = `
     <div class="sig">
       <div class="who">The Builder — Royal Constructions Pty Ltd</div>
@@ -460,10 +499,14 @@ function buildExecutionBlocks(
     </div>`;
   const ownerBlocks = signers.map((signer, index) => {
     const k = index + 1;
+    // Plain-text twin drives the height estimate (escaping would inflate it).
+    const whoText = signer.entityName
+      ? `For ${signer.entityName} — ${signer.signatory.name}, ${signer.signatory.capacity}`
+      : `The Owner — ${signer.signatory.name}`;
     const who = signer.entityName
       ? `For ${esc(signer.entityName)} — ${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)}`
       : `The Owner — ${esc(signer.signatory.name)}`;
-    return `
+    const html = `
     <div class="sig">
       <div class="who">${who}</div>
       <div class="lines">
@@ -472,8 +515,18 @@ function buildExecutionBlocks(
       </div>
       <div style="margin-top:10px;font-size:9px;color:${MUTED};">Initial each page: ${anchor(`initOwner${k}`)}</div>
     </div>`;
+    return { html, lines: executionBlockLines(whoText, true) };
   });
-  return [builderBlock, ...ownerBlocks];
+  return [
+    {
+      html: builderBlock,
+      lines: executionBlockLines(
+        `The Builder — Royal Constructions Pty Ltd ${job.preparedBy}`,
+        false,
+      ),
+    },
+    ...ownerBlocks,
+  ];
 }
 
 // One page of execution signature blocks. The acceptance paragraph leads the

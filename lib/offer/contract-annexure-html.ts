@@ -1,10 +1,13 @@
+import { anchor, esc, legalDocShell, masthead } from "./offer-tender-html";
 import {
-  anchor,
-  esc,
-  legalDocShell,
-  masthead,
-  SIGNATURE_BLOCKS_PER_PAGE,
-} from "./offer-tender-html";
+  CHARS_PER_LINE_SIGNATURE,
+  chunkByEstimatedHeight,
+  estimateWrappedLines,
+} from "./workspace-model";
+
+// Line budget for one annexure page (the first also carries the binding
+// preamble). Verified against real Chromium output.
+const ANNEXURE_LINES_PER_PAGE = 26;
 
 // One additional owner/director who signs on the annexure (everyone except the
 // primary, who signs the BC4 form itself).
@@ -31,10 +34,14 @@ export function buildContractSignatureAnnexureHtml(args: {
   // aligned with the DocuSign recipients regardless of how blocks are paginated.
   const blocks = args.signers.map((signer, index) => {
     const k = index + 1;
+    // Plain-text twin drives the height estimate (escaping would inflate it).
+    const whoText = signer.entityName
+      ? `${signer.name}, ${signer.capacity ?? "Director"} of ${signer.entityName}`
+      : `${signer.name}${signer.capacity ? `, ${signer.capacity}` : ""}`;
     const who = signer.entityName
       ? `${esc(signer.name)}, ${esc(signer.capacity ?? "Director")} of ${esc(signer.entityName)}`
       : `${esc(signer.name)}${signer.capacity ? `, ${esc(signer.capacity)}` : ""}`;
-    return `
+    const html = `
     <div class="sig">
       <div class="who">${who}</div>
       <div class="lines">
@@ -42,6 +49,11 @@ export function buildContractSignatureAnnexureHtml(args: {
         <div><div class="sigspace">${anchor(`dateAnnex${k}`)}</div><div class="field">Date</div></div>
       </div>
     </div>`;
+    return {
+      html,
+      // Fixed chrome (border, signature space, date rule) plus wrapped name.
+      lines: 6 + estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE),
+    };
   });
 
   // This schedule exists precisely to carry the OVERFLOW signers (up to
@@ -50,10 +62,14 @@ export function buildContractSignatureAnnexureHtml(args: {
   // could land on a different physical page from the name it belongs to, on a
   // document that is legally executed (PR #124 review — same class as the Tender
   // execution page). Chunk them at the shared per-page limit.
-  const chunks: string[][] = [];
-  for (let i = 0; i < blocks.length; i += SIGNATURE_BLOCKS_PER_PAGE) {
-    chunks.push(blocks.slice(i, i + SIGNATURE_BLOCKS_PER_PAGE));
-  }
+  // Height-aware, like the Tender and Proposal: a director of a long-named
+  // company renders as "Name, Director of <full legal name>" and wraps, so a
+  // fixed blocks-per-page count under-counted the real height (PR #124 review).
+  const chunks: string[][] = chunkByEstimatedHeight(
+    blocks,
+    ANNEXURE_LINES_PER_PAGE,
+    (block) => block.lines,
+  ).map((chunk) => chunk.map((block) => block.html));
   if (chunks.length === 0) {
     chunks.push([]);
   }

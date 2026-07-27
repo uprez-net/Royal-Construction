@@ -594,13 +594,22 @@ function ContractPreview({
           role="Builder"
           state={state === "signed" ? "signed" : "pending"}
         />
-        {collectOfferSigners(job.owners ?? []).map((signer) => (
+        {/* An offer with no owners yet still has a customer party — show a single
+            generic line rather than a builder-only signature list. */}
+        {collectOfferSigners(job.owners ?? []).length > 0 ? (
+          collectOfferSigners(job.owners ?? []).map((signer) => (
+            <SignatureLine
+              key={`${signer.ownerIndex}-${signer.signerIndex}`}
+              role={`Customer — ${offerSignerLabel(signer)}`}
+              state={state === "signed" ? "signed" : "pending"}
+            />
+          ))
+        ) : (
           <SignatureLine
-            key={`${signer.ownerIndex}-${signer.signerIndex}`}
-            role={`Customer — ${offerSignerLabel(signer)}`}
+            role="Customer"
             state={state === "signed" ? "signed" : "pending"}
           />
-        ))}
+        )}
       </div>
     </article>
   );

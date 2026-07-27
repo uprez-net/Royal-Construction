@@ -19,8 +19,11 @@ import {
   type OfferImageMap,
 } from "./workspace-images";
 import {
-  boundOwnerNames,
+  formatBoundedOwnerList,
+  CHARS_PER_LINE_SIGNATURE,
+  chunkByEstimatedHeight,
   collectOfferSigners,
+  estimateWrappedLines,
   formatOwnerGreetingNames,
   type OfferOwner,
   type OfferWorkspaceJob,
@@ -38,12 +41,28 @@ const INCLUSIONS_ROWS_PER_PAGE = 12;
 // (the common case, kept byte-identical); beyond that, signatures move onto their
 // own page(s), chunked so blocks never overflow a physical page (PR #124 review).
 const INLINE_SIGNATURE_LIMIT = 4;
-// Blocks per dedicated signature page. Company directors render as "Name,
-// Director of <full company legal name>", which wraps — at 8 the first signature
-// page (which also carries the acceptance paragraph) overflowed A4 with ten
-// company signers, printing a sheet the footer never counted. Verified against
-// real Chromium output; see tests/offer/offer-document-print-pages.test.ts.
-const SIGNATURES_PER_PAGE = 6;
+
+type SignatureBlock = { readonly html: string; readonly lines: number };
+
+// A signature block's height in line units: its fixed chrome (heading, signature
+// rule, date rule, padding) plus however many lines the signer's name wraps to.
+// Counting blocks instead of lines is what let long company names overflow.
+function signatureBlockLines(whoText: string): number {
+  const CHROME_LINES = 4;
+  return (
+    CHROME_LINES + estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE)
+  );
+}
+
+// Line-unit budget for a dedicated signature page, and for the FIRST one, which
+// also carries the acceptance paragraph. Verified against real Chromium output.
+const SIGNATURE_PAGE_BUDGET = 34;
+// Masthead + eyebrow + page title on a signature page.
+const SIGNATURE_PAGE_HEADING_LINES = 4;
+// However tall the acceptance paragraph grows, always leave room for a block.
+const MIN_FIRST_SIGNATURE_PAGE_BUDGET = 10;
+// Room left under the terms page's payment table for inline signature blocks.
+const INLINE_SIGNATURE_BUDGET = 22;
 
 function esc(value: string): string {
   return value
@@ -92,12 +111,7 @@ function ownerNamesCellHtml(job: OfferWorkspaceJob): string {
   // their own signature block, so this fixed cover cell shows a few and counts
   // the rest instead of growing until the cover spills onto a second physical
   // sheet and desyncs "Page N of M" (PR #124 review).
-  const { shown, remaining } = boundOwnerNames(rest);
-  const more =
-    remaining > 0
-      ? `${shown.length > 0 ? "; " : ""}and ${remaining} further owner${remaining === 1 ? "" : "s"}`
-      : "";
-  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${shown.join("; ")}${more}</span>`;
+  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${formatBoundedOwnerList(rest, "; ")}</span>`;
 }
 
 // Build a complete, self-contained HTML document of the building proposal,
@@ -127,12 +141,40 @@ export function buildProposalHtml(
   // "Page 9 of 9" over 10 pages (PR #124 review). Past the inline limit, move the
   // whole set onto its own chunked page(s), each counted so the footer stays true.
   const signatureBlocks = signatureBlocksHtml(job);
-  const inlineSignatures = signatureBlocks.length <= INLINE_SIGNATURE_LIMIT;
-  const signatureChunks: string[][] = [];
+  const signatureLines = signatureBlocks.reduce(
+    (sum, block) => sum + block.lines,
+    0,
+  );
+  // Inline only when the blocks BOTH are few and actually fit under the payment
+  // table — four blocks of long company names are far taller than four of short
+  // individual names, so the count alone never decided this correctly.
+  const inlineSignatures =
+    signatureBlocks.length <= INLINE_SIGNATURE_LIMIT &&
+    signatureLines <= INLINE_SIGNATURE_BUDGET;
+  let signatureChunks: SignatureBlock[][] = [];
   if (!inlineSignatures) {
-    for (let i = 0; i < signatureBlocks.length; i += SIGNATURES_PER_PAGE) {
-      signatureChunks.push(signatureBlocks.slice(i, i + SIGNATURES_PER_PAGE));
-    }
+    // The first signature page also carries the acceptance paragraph, which NAMES
+    // EVERY OWNER and is legal text that cannot be truncated — so its height is
+    // measured and subtracted from that page's budget rather than assumed. Ten
+    // long company names make it many lines tall.
+    const acceptanceLines = estimateWrappedLines(
+      acceptanceLineText(job),
+      CHARS_PER_LINE_SIGNATURE,
+    );
+    const firstBudget = Math.max(
+      MIN_FIRST_SIGNATURE_PAGE_BUDGET,
+      SIGNATURE_PAGE_BUDGET - acceptanceLines - SIGNATURE_PAGE_HEADING_LINES,
+    );
+    const first = chunkByEstimatedHeight(
+      signatureBlocks,
+      firstBudget,
+      (block) => block.lines,
+    )[0] ?? [];
+    const rest = signatureBlocks.slice(first.length);
+    signatureChunks = [
+      first,
+      ...chunkByEstimatedHeight(rest, SIGNATURE_PAGE_BUDGET, (b) => b.lines),
+    ].filter((chunk) => chunk.length > 0);
   }
 
   const totalPages =
@@ -431,28 +473,57 @@ function acceptanceLineHtml(job: OfferWorkspaceJob): string {
   return `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
 }
 
+// Plain-text twin of acceptanceLineHtml, used ONLY to estimate the paragraph's
+// rendered height. Escaping inflates character counts (an "&" becomes "&amp;"),
+// so measuring the HTML would overstate how many lines it wraps to.
+function acceptanceLineText(job: OfferWorkspaceJob): string {
+  const owners = job.owners ?? [];
+  const names =
+    owners.length > 0
+      ? owners
+          .map((owner) => owner.displayName.trim())
+          .filter(Boolean)
+          .join(" and ")
+      : job.clientNames;
+  return `I/We, ${names}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
+}
+
 // The ordered signature blocks: the builder first, then one client block per
 // signer (each individual owner; each company director, labelled with capacity +
 // company). Falls back to the clientNames projection when owners[] is empty.
-function signatureBlocksHtml(job: OfferWorkspaceJob): string[] {
+function signatureBlocksHtml(job: OfferWorkspaceJob): SignatureBlock[] {
   const signers = collectOfferSigners(job.owners ?? []);
-  const clientSigs =
+  const clientSigs: SignatureBlock[] =
     signers.length > 0
       ? signers.map((signer, index) => {
           const heading =
             signers.length > 1
               ? `Client acceptance ${index + 1}`
               : "Client acceptance";
+          // The plain-text form drives the height estimate — a company director
+          // renders as "Name, Director of <full legal name>", which wraps.
+          const whoText = signer.entityName
+            ? `${signer.signatory.name}, ${signer.signatory.capacity} of ${signer.entityName}`
+            : signer.signatory.name;
           const who = signer.entityName
             ? `${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)} of ${esc(signer.entityName)}`
             : esc(signer.signatory.name);
-          return `<div class="sig"><h3>${esc(heading)}</h3><p>Signature: _______________________</p><p>${who}</p><p>Date: ___________________________</p></div>`;
+          return {
+            html: `<div class="sig"><h3>${esc(heading)}</h3><p>Signature: _______________________</p><p>${who}</p><p>Date: ___________________________</p></div>`,
+            lines: signatureBlockLines(whoText),
+          };
         })
       : [
-          `<div class="sig"><h3>Client acceptance</h3><p>Signature: _______________________</p><p>${esc(job.clientNames)}</p><p>Date: ___________________________</p></div>`,
+          {
+            html: `<div class="sig"><h3>Client acceptance</h3><p>Signature: _______________________</p><p>${esc(job.clientNames)}</p><p>Date: ___________________________</p></div>`,
+            lines: signatureBlockLines(job.clientNames),
+          },
         ];
   return [
-    `<div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>`,
+    {
+      html: `<div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>`,
+      lines: signatureBlockLines(job.preparedBy),
+    },
     ...clientSigs,
   ];
 }
@@ -463,7 +534,7 @@ function signatureBlocksHtml(job: OfferWorkspaceJob): string[] {
 function termsPage(
   input: OfferPrintTemplateInput,
   data: ReturnType<typeof buildOfferPrintTemplateData>,
-  inlineBlocks: readonly string[] | null,
+  inlineBlocks: readonly SignatureBlock[] | null,
   foot: string,
 ): string {
   const { job } = input;
@@ -477,7 +548,7 @@ function termsPage(
     ? `<p class="muted" style="margin-top:12px;max-width:155mm;">${acceptanceLineHtml(job)}</p>`
     : "";
   const sigs = inlineBlocks
-    ? `<div class="sigs">${inlineBlocks.join("")}</div>`
+    ? `<div class="sigs">${inlineBlocks.map((b) => b.html).join("")}</div>`
     : `<p class="muted" style="margin-top:12px;max-width:155mm;">Sign the acceptance on the following page to proceed.</p>`;
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
@@ -494,7 +565,7 @@ function termsPage(
 // on the terms page). The acceptance paragraph leads the first such page.
 function signaturePage(
   job: OfferWorkspaceJob,
-  blocks: readonly string[],
+  blocks: readonly SignatureBlock[],
   continued: boolean,
   foot: string,
 ): string {
@@ -506,7 +577,7 @@ function signaturePage(
     <div class="eyebrow">Acceptance</div>
     <h1 class="title">Acceptance &amp; signatures${continued ? " (cont.)" : ""}</h1>
     ${acceptance}
-    <div class="sigs">${blocks.join("")}</div>
+    <div class="sigs">${blocks.map((b) => b.html).join("")}</div>
     ${foot}
   </div>`;
 }

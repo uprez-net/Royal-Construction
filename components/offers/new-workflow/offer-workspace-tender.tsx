@@ -476,13 +476,22 @@ function TenderPreview({
           role="Builder"
           state={state === "signed" ? "signed" : "pending"}
         />
-        {signers.map((signer) => (
+        {/* An offer with no owners yet still has a customer party — show a single
+            generic line rather than a builder-only signature list. */}
+        {signers.length > 0 ? (
+          signers.map((signer) => (
+            <SignatureLine
+              key={`${signer.ownerIndex}-${signer.signerIndex}`}
+              role={`Customer — ${offerSignerLabel(signer)}`}
+              state={state === "signed" ? "signed" : "pending"}
+            />
+          ))
+        ) : (
           <SignatureLine
-            key={`${signer.ownerIndex}-${signer.signerIndex}`}
-            role={`Customer — ${offerSignerLabel(signer)}`}
+            role="Customer"
             state={state === "signed" ? "signed" : "pending"}
           />
-        ))}
+        )}
       </div>
     </article>
   );
