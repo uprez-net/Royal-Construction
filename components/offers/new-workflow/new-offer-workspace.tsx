@@ -68,6 +68,7 @@ import {
   type OfferPrefillResult,
 } from "@/lib/data/offer-prefill";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
+import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
   collectOfferSendBlockers,
   describeOfferExpiry,
@@ -197,6 +198,12 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   // because the pre-transition save reconciled to another tab or failed — without
   // it the button looked like a silent no-op (codex #4).
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  // Per-recipient DocuSign status, loaded with the offer and refreshed whenever
+  // we reload it. The Connect webhook writes these rows; before #121/#123 the
+  // signing tracker ignored them and hard-coded every customer to "awaiting".
+  const [signerStatuses, setSignerStatuses] = useState<
+    readonly OfferSignerStatus[]
+  >([]);
   const [tenderSending, setTenderSending] = useState(false);
   const [tenderSendError, setTenderSendError] = useState<string | null>(null);
   const [contractSending, setContractSending] = useState(false);
@@ -609,6 +616,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
                 offerIdRef.current = loaded.offerId;
                 stateVersionRef.current = loaded.stateVersion;
                 setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+                setSignerStatuses(loaded.signerStatuses ?? []);
                 if (loaded.snapshot) {
                   hydrateSnapshot(loaded.snapshot);
                   lastSavedRef.current = JSON.stringify(loaded.snapshot);
@@ -662,6 +670,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       offerIdRef.current = loaded.offerId;
       stateVersionRef.current = loaded.stateVersion;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+      setSignerStatuses(loaded.signerStatuses ?? []);
       // The customer declined the last envelope — tell the operator why (the
       // reason comes straight from DocuSign) and point them at a new revision.
       if (loaded.declineReason) {
@@ -815,6 +824,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             offerIdRef.current = loaded.offerId;
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+            setSignerStatuses(loaded.signerStatuses ?? []);
             if (loaded.snapshot) {
               hydrateSnapshot(loaded.snapshot);
               lastSavedRef.current = JSON.stringify(loaded.snapshot);
@@ -865,6 +875,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         offerIdRef.current = loaded.offerId;
         stateVersionRef.current = loaded.stateVersion;
         setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+        setSignerStatuses(loaded.signerStatuses ?? []);
         // A forked revision starts with no contract — clear any in-memory
         // particulars so they can't be saved onto the new revision's contract.
         const revisionParticulars =
@@ -946,6 +957,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
               offerIdRef.current = loaded.offerId;
               stateVersionRef.current = loaded.stateVersion;
               setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+              setSignerStatuses(loaded.signerStatuses ?? []);
             } catch {
               // Reload failed — leave the UI as-is; the error message still shows.
             }
@@ -965,6 +977,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             offerIdRef.current = loaded.offerId;
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+            setSignerStatuses(loaded.signerStatuses ?? []);
           } catch {
             // Reload failed too — leave the UI as-is.
           }
@@ -1196,6 +1209,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         sendError={sendError}
         sentInfo={sentInfo}
         transitionError={transitionError}
+        signerStatuses={signerStatuses}
         onGenerateTender={() => transition("tender_draft")}
         onSendTender={sendTender}
         tenderSending={tenderSending}

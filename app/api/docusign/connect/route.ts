@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { put } from "@vercel/blob";
 import {
   EnvelopeDocType,
@@ -8,6 +9,7 @@ import {
   SignerStatus,
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
+import { CACHE_PROFILES } from "@/types/cache";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { verifyConnectSignature } from "@/lib/docusign/connect-signature";
@@ -74,6 +76,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     console.error("[docusign] Connect processing failed:", error);
     // 500 → DocuSign retries with backoff, which is what we want here.
     return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+  }
+
+  // This webhook advances offer status (TENDER_SENT → TENDER_SIGNED, etc.) and
+  // per-signer state, but nothing invalidated the caches keyed on the offer —
+  // every other writer (send/sign actions) does. Cached surfaces could therefore
+  // keep serving a pre-signature view. Best-effort: the work is already
+  // committed, so a revalidation failure must not turn into a 500 and make
+  // DocuSign redeliver an event we have applied.
+  const offerId = envelope.tender?.offerId ?? envelope.contract?.offerId;
+  if (offerId) {
+    try {
+      revalidateTag(`offer-${offerId}`, CACHE_PROFILES.SHORT);
+    } catch (error) {
+      console.error("[docusign] revalidate after Connect sync failed:", error);
+    }
   }
 
   return NextResponse.json({ ok: true });

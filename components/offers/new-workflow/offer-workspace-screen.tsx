@@ -26,6 +26,7 @@ import {
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
+import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import { formatOfferReference } from "./offer-workspace-format";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
@@ -143,6 +144,8 @@ type OfferWorkspaceScreenProps = {
   readonly sendError: string | null;
   readonly sentInfo: string | null;
   readonly transitionError: string | null;
+  // Per-recipient DocuSign status for the signing trackers (#121/#123).
+  readonly signerStatuses: readonly OfferSignerStatus[];
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
   readonly tenderSending?: boolean;
@@ -232,6 +235,7 @@ export function OfferWorkspaceScreen({
   sendError,
   sentInfo,
   transitionError,
+  signerStatuses,
   onGenerateTender,
   onSendTender,
   tenderSending,
@@ -517,6 +521,7 @@ export function OfferWorkspaceScreen({
             unlockHint="Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
           >
             <TenderPanel
+              signerStatuses={signerStatuses}
               customerPrice={customerPrice}
               draft={draft}
               exclusions={exclusions}
@@ -542,6 +547,7 @@ export function OfferWorkspaceScreen({
             unlockHint="Unlocks once the Tender is signed. Generate the Contract from the Tender data and send it via DocuSign for both parties to sign."
           >
             <ContractPanel
+              signerStatuses={signerStatuses}
               customerPrice={customerPrice}
               draft={draft}
               job={job}

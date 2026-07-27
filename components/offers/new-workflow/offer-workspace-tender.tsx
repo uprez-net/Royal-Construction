@@ -8,7 +8,6 @@ import {
 } from "@/lib/offer/workspace-payment-schedule";
 import {
   collectOfferSigners,
-  collectOfferSignerLabels,
   formatOwnerNamesLine,
   offerSignerLabel,
   type OfferDocumentDraft,
@@ -26,11 +25,19 @@ import {
   formatPercent,
 } from "./offer-workspace-format";
 import { PaymentSchedulePanel } from "./offer-workspace-payment-schedule";
+import {
+  builderSignerState,
+  findSignerStatus,
+  signerStateFromStatus,
+  type OfferSignerStatus,
+} from "@/lib/offer/signing-status";
 import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 
 type TenderPanelProps = {
   readonly status: OfferWorkspaceStatus;
   readonly job: OfferWorkspaceJob;
+  // Per-recipient DocuSign status from the Connect webhook (#121/#123).
+  readonly signerStatuses: readonly OfferSignerStatus[];
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
@@ -49,6 +56,7 @@ type TenderPanelProps = {
 export function TenderPanel({
   status,
   job,
+  signerStatuses,
   customerPrice,
   draft,
   exclusions,
@@ -125,7 +133,11 @@ export function TenderPanel({
             isSent={isSent}
             isSigned={isSigned}
             customerName={formatOwnerNamesLine(job.owners ?? []) || job.clientNames}
-            signerLabels={collectOfferSignerLabels(job.owners ?? [])}
+            signers={collectOfferSigners(job.owners ?? []).map((s) => ({
+            label: offerSignerLabel(s),
+            email: s.signatory.email,
+          }))}
+          signerStatuses={signerStatuses}
             contractValueIncGst={customerPrice.selectedContractValueIncGst}
             offerReference={formatOfferReference(job.reference, job.revision)}
             scheduleBalanced={scheduleBalanced}
@@ -205,7 +217,8 @@ function TenderActions({
   isSent,
   isSigned,
   customerName,
-  signerLabels,
+  signers,
+  signerStatuses,
   contractValueIncGst,
   offerReference,
   scheduleBalanced,
@@ -224,8 +237,13 @@ function TenderActions({
   readonly isSigned: boolean;
   readonly customerName: string;
   // Every customer signer (individual owners + company directors), the exact
-  // DocuSign recipient set — replaces the old single hardcoded customer row.
-  readonly signerLabels: readonly string[];
+  // DocuSign recipient set. The email is what joins a row to its persisted
+  // EnvelopeSignature — labels are not unique, emails are (enforced by
+  // collectOwnerIssues).
+  readonly signers: readonly { readonly label: string; readonly email: string }[];
+  // Per-recipient status from the Connect webhook. Empty before the envelope is
+  // sent, in which case rows fall back to their routing-derived state.
+  readonly signerStatuses: readonly OfferSignerStatus[];
   readonly contractValueIncGst: number;
   readonly offerReference: string;
   readonly scheduleBalanced: boolean;
@@ -251,19 +269,35 @@ function TenderActions({
         <SigningTracker
           recipients={[
             // One row per customer signer (all sign in parallel), then the
-            // builder counter-signs — mirroring the real envelope.
-            ...(signerLabels.length > 0
-              ? signerLabels
-              : [customerName || "signs first"]
-            ).map((label) => ({
-              role: "Customer" as const,
-              detail: label,
-              state: "awaiting" as const,
-            })),
+            // builder counter-signs — mirroring the real envelope. Each row's
+            // state is the RECIPIENT'S actual DocuSign status; it was previously
+            // hard-coded to "awaiting", so the tracker still said "Awaiting
+            // signature" after everyone had signed (#121/#123).
+            ...(signers.length > 0
+              ? signers
+              : [{ label: customerName || "signs first", email: "" }]
+            ).map((signer) => {
+              const persisted = findSignerStatus(
+                signerStatuses,
+                "TENDER",
+                signer.email,
+              );
+              return {
+                role: "Customer" as const,
+                detail: signer.label,
+                // No persisted row means the envelope predates this signer (or
+                // has not been sent); the honest state is still "awaiting".
+                state: persisted
+                  ? signerStateFromStatus(persisted.status)
+                  : ("awaiting" as const),
+              };
+            }),
             {
               role: "Builder",
               detail: "Royal Constructions",
-              state: "waiting_for_prior" as const,
+              // The tender routes customer-first, so the builder is queued
+              // behind them until every customer has signed.
+              state: builderSignerState(signerStatuses, "TENDER"),
               waitingLabel: "Signs after the customer",
             },
           ]}
