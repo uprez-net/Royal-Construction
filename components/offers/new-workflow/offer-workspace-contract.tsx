@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import {
   collectOfferSigners,
-  collectOfferSignerLabels,
   formatOwnerNamesLine,
   offerSignerLabel,
   type OfferDocumentDraft,
@@ -36,11 +35,19 @@ import {
   formatOfferReference,
   formatPercent,
 } from "./offer-workspace-format";
+import {
+  builderSignerState,
+  findSignerStatus,
+  signerStateFromStatus,
+  type OfferSignerStatus,
+} from "@/lib/offer/signing-status";
 import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 
 type ContractPanelProps = {
   readonly status: OfferWorkspaceStatus;
   readonly job: OfferWorkspaceJob;
+  // Per-recipient DocuSign status from the Connect webhook (#121/#123).
+  readonly signerStatuses: readonly OfferSignerStatus[];
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
@@ -59,6 +66,7 @@ type ContractPanelProps = {
 export function ContractPanel({
   status,
   job,
+  signerStatuses,
   customerPrice,
   draft,
   paymentSchedule,
@@ -125,7 +133,11 @@ export function ContractPanel({
           isSigned={isSigned}
           isTenderSigned={isTenderSigned}
           customerName={formatOwnerNamesLine(job.owners ?? []) || job.clientNames}
-          signerLabels={collectOfferSignerLabels(job.owners ?? [])}
+          signers={collectOfferSigners(job.owners ?? []).map((s) => ({
+            label: offerSignerLabel(s),
+            email: s.signatory.email,
+          }))}
+          signerStatuses={signerStatuses}
           contractValueIncGst={customerPrice.selectedContractValueIncGst}
           offerReference={formatOfferReference(job.reference, job.revision)}
           particulars={contractParticulars}
@@ -328,7 +340,8 @@ function ContractActions({
   isSent,
   isSigned,
   customerName,
-  signerLabels,
+  signers,
+  signerStatuses,
   contractValueIncGst,
   offerReference,
   particulars,
@@ -347,7 +360,10 @@ function ContractActions({
   readonly customerName: string;
   // Every customer signer (individual owners + company directors) — the exact
   // DocuSign recipient set, replacing the single hardcoded customer row.
-  readonly signerLabels: readonly string[];
+  // Email joins a row to its persisted EnvelopeSignature — labels are not
+  // unique, emails are (enforced by collectOwnerIssues).
+  readonly signers: readonly { readonly label: string; readonly email: string }[];
+  readonly signerStatuses: readonly OfferSignerStatus[];
   readonly contractValueIncGst: number;
   readonly offerReference: string;
   readonly particulars: ContractParticulars;
@@ -375,18 +391,30 @@ function ContractActions({
           recipients={[
             // One row per customer signer (individual owners + company directors);
             // the builder counter-signs — mirroring the real envelope.
-            ...(signerLabels.length > 0
-              ? signerLabels
-              : [customerName || "signs first"]
-            ).map((label) => ({
-              role: "Customer" as const,
-              detail: label,
-              state: "awaiting" as const,
-            })),
+            // Each row's state is the RECIPIENT'S actual DocuSign status; it was
+            // previously hard-coded to "awaiting", so the tracker still said
+            // "Awaiting signature" after everyone had signed (#121/#123).
+            ...(signers.length > 0
+              ? signers
+              : [{ label: customerName || "signs first", email: "" }]
+            ).map((signer) => {
+              const persisted = findSignerStatus(
+                signerStatuses,
+                "CONTRACT",
+                signer.email,
+              );
+              return {
+                role: "Customer" as const,
+                detail: signer.label,
+                state: persisted
+                  ? signerStateFromStatus(persisted.status)
+                  : ("awaiting" as const),
+              };
+            }),
             {
               role: "Builder",
               detail: "Royal Constructions",
-              state: "waiting_for_prior" as const,
+              state: builderSignerState(signerStatuses, "CONTRACT"),
               waitingLabel: "Signs after the customer",
             },
           ]}

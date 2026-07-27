@@ -1,14 +1,22 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, FileSignature, Send, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  FileSignature,
+  Send,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
+import type { SignerState } from "@/lib/offer/signing-status";
 import { formatCurrency } from "./offer-workspace-format";
 
-// Per-signer routing state. We only have envelope-level status today, so the
-// honest states are: the party whose turn it is ("awaiting"), the party queued
-// behind them ("waiting_for_prior"), and — once the Connect webhook can report
-// it per-recipient — "signed". Shared by the Tender and Contract panels.
-export type SignerState = "awaiting" | "waiting_for_prior" | "signed";
+// Per-signer state. Now sourced from real per-recipient DocuSign status written
+// by the Connect webhook (#121/#123) rather than hard-coded: "awaiting" is the
+// party being waited on, "waiting_for_prior" is queued behind them, and
+// "signed"/"declined" are terminal. Defined once in lib/offer/signing-status so
+// the mapping and the UI cannot drift apart.
+export type { SignerState } from "@/lib/offer/signing-status";
 
 export type SigningRecipient = {
   readonly role: string;
@@ -35,6 +43,10 @@ const SIGNER_PILL: Record<
   signed: {
     label: "Signed",
     className: "bg-success-light text-foreground",
+  },
+  declined: {
+    label: "Declined",
+    className: "bg-destructive-light text-destructive",
   },
 };
 
@@ -63,6 +75,11 @@ export function SigningTracker({
               {recipient.state === "signed" ? (
                 <ShieldCheck
                   className="size-4 shrink-0 text-success"
+                  aria-hidden="true"
+                />
+              ) : recipient.state === "declined" ? (
+                <XCircle
+                  className="size-4 shrink-0 text-destructive"
                   aria-hidden="true"
                 />
               ) : (

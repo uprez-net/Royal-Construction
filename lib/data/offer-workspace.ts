@@ -23,6 +23,10 @@ import {
   parseContractParticulars,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
+import type {
+  OfferSignerStatus,
+  OfferSignerStatusValue,
+} from "@/lib/offer/signing-status";
 import { collectOwnerIssues } from "@/lib/offer/workspace-model";
 
 // Allowed lifecycle transitions for the offer WORKSPACE (the legacy
@@ -62,6 +66,12 @@ type LoadedOfferWorkspace = {
   // form. Null when the offer has no contract row yet (nothing entered), in
   // which case the workspace starts from the empty set.
   contractParticulars?: ContractParticulars | null;
+  // Per-recipient DocuSign status for the offer's latest Tender/Contract
+  // envelopes (#121/#123). The Connect webhook has always written these rows;
+  // nothing read them back, so the signing tracker hard-coded every customer to
+  // "Awaiting signature" even after they had signed. Empty until an envelope is
+  // sent.
+  signerStatuses?: readonly OfferSignerStatus[];
 };
 
 type OfferRow = {
@@ -106,6 +116,65 @@ async function attachDeclineReason(
     select: { note: true },
   });
   return { ...loaded, declineReason: event?.note ?? null };
+}
+
+// Attach per-recipient DocuSign status so the signing tracker can show who has
+// actually signed (#121/#123). A document can have SEVERAL envelopes over its
+// life — recalling and re-sending creates a new one — so only the NEWEST
+// envelope per doc type is reported; older ones are superseded and their
+// statuses would be misleading.
+async function attachSignerStatus(
+  loaded: LoadedOfferWorkspace,
+): Promise<LoadedOfferWorkspace> {
+  const envelopes = await prisma.envelope.findMany({
+    where: {
+      OR: [
+        { tender: { offerId: loaded.offerId } },
+        { contract: { offerId: loaded.offerId } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      docType: true,
+      signatures: {
+        select: {
+          recipientRole: true,
+          name: true,
+          email: true,
+          status: true,
+          signedAt: true,
+          routingOrder: true,
+        },
+        orderBy: { routingOrder: "asc" },
+      },
+    },
+  });
+
+  // findMany is ordered newest-first, so the first envelope seen for a doc type
+  // is the live one.
+  const newestPerDocType = new Map<string, (typeof envelopes)[number]>();
+  for (const envelope of envelopes) {
+    if (!newestPerDocType.has(envelope.docType)) {
+      newestPerDocType.set(envelope.docType, envelope);
+    }
+  }
+
+  const signerStatuses: OfferSignerStatus[] = [];
+  for (const envelope of newestPerDocType.values()) {
+    for (const signature of envelope.signatures) {
+      signerStatuses.push({
+        docType: envelope.docType === "TENDER" ? "TENDER" : "CONTRACT",
+        role: signature.recipientRole === "BUILDER" ? "BUILDER" : "CUSTOMER",
+        name: signature.name,
+        email: signature.email,
+        status: signature.status as OfferSignerStatusValue,
+        // ISO string, not a Date — this crosses the server → client boundary.
+        signedAt: signature.signedAt ? signature.signedAt.toISOString() : null,
+        routingOrder: signature.routingOrder,
+      });
+    }
+  }
+  return { ...loaded, signerStatuses };
 }
 
 // Attach the estimator's saved BC4 particulars (issue #98) so the contract-stage
@@ -166,9 +235,13 @@ export async function loadActiveOfferWorkspace(
         });
       });
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
-      return attachContractParticulars(await attachDeclineReason(toLoaded(healed)));
+      return attachSignerStatus(
+        await attachContractParticulars(await attachDeclineReason(toLoaded(healed))),
+      );
     }
-    return attachContractParticulars(await attachDeclineReason(toLoaded(existing)));
+    return attachSignerStatus(
+      await attachContractParticulars(await attachDeclineReason(toLoaded(existing))),
+    );
   }
 
   // First offer for this lead — create it with a freshly minted reference.
