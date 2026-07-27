@@ -9,6 +9,12 @@ import type { DocusignContext } from "./client";
 export interface EnvelopeSignerInput {
   readonly name: string;
   readonly email: string;
+  // Descriptive audit metadata persisted on EnvelopeSignature (ADR 0003) — NOT
+  // sent to DocuSign. capacity is "Owner" (individual) or "Director"; entity*
+  // name the company a director signs for. Optional; the builder omits them.
+  readonly capacity?: string | null;
+  readonly entityName?: string | null;
+  readonly entityAbn?: string | null;
 }
 
 export interface EnvelopeRecipientRecord {
@@ -17,6 +23,9 @@ export interface EnvelopeRecipientRecord {
   readonly email: string;
   readonly routingOrder: number;
   readonly recipientId: string;
+  readonly capacity?: string | null;
+  readonly entityName?: string | null;
+  readonly entityAbn?: string | null;
 }
 
 export interface CreateEnvelopeResult {
@@ -141,6 +150,9 @@ export async function createTenderEnvelope(args: {
         email: owner.email,
         routingOrder: 1,
         recipientId: String(index + 2),
+        capacity: owner.capacity ?? null,
+        entityName: owner.entityName ?? null,
+        entityAbn: owner.entityAbn ?? null,
       })),
     ],
   };

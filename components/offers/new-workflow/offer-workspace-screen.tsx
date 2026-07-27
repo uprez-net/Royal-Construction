@@ -7,6 +7,10 @@ import type {
   OfferWorkspaceScopeItem,
   OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
+import {
+  collectOfferSigners,
+  offerSignerLabel,
+} from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type { ContractParticulars } from "@/lib/offer/contract-particulars";
 import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
@@ -126,6 +130,7 @@ type OfferWorkspaceScreenProps = {
   readonly onMarkSent: () => void;
   readonly canMarkSent: boolean;
   readonly onMarkAgreed: () => void;
+  readonly canMarkAgreed: boolean;
   readonly onMarkRejected: () => void;
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
@@ -137,6 +142,7 @@ type OfferWorkspaceScreenProps = {
   readonly sending: boolean;
   readonly sendError: string | null;
   readonly sentInfo: string | null;
+  readonly transitionError: string | null;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
   readonly tenderSending?: boolean;
@@ -213,6 +219,7 @@ export function OfferWorkspaceScreen({
   onMarkSent,
   canMarkSent,
   onMarkAgreed,
+  canMarkAgreed,
   onMarkRejected,
   onCreateRevision,
   canRevise,
@@ -224,6 +231,7 @@ export function OfferWorkspaceScreen({
   sending,
   sendError,
   sentInfo,
+  transitionError,
   onGenerateTender,
   onSendTender,
   tenderSending,
@@ -474,9 +482,14 @@ export function OfferWorkspaceScreen({
               status={status}
               canRevise={canRevise}
               revising={revising}
-              clientEmail={job.clientEmail}
-              secondaryClientEmail={job.secondaryCustomerEmail}
-              secondaryClientName={job.secondaryCustomerName}
+              // Recipients = every customer signatory (individual owners + company
+              // directors), the SAME set sendOfferDocument emails server-side.
+              // Shown read-only so the confirmed list can't diverge from where the
+              // proposal actually goes (PR #124 review); edit emails in Job setup.
+              recipients={collectOfferSigners(job.owners).map((signer) => ({
+                email: signer.signatory.email.trim(),
+                label: offerSignerLabel(signer),
+              }))}
               contractValueIncGst={customerPrice.selectedContractValueIncGst}
               offerReference={formatOfferReference(job.reference, job.revision)}
               sendBlockers={sendBlockers}
@@ -484,11 +497,13 @@ export function OfferWorkspaceScreen({
               sending={sending}
               sendError={sendError}
               sentInfo={sentInfo}
+              transitionError={transitionError}
               canMarkSent={canMarkSent}
               onSendOffer={onSendOffer}
               onMarkSent={onMarkSent}
               onCreateRevision={onCreateRevision}
               onMarkAgreed={onMarkAgreed}
+              canMarkAgreed={canMarkAgreed}
               onMarkRejected={onMarkRejected}
             />
           </OfferStepSection>

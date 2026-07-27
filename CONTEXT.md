@@ -56,8 +56,32 @@ The **Project-phase** budget tracker — quote (budget) vs actual vs variance pe
 _Avoid_: Internal cost schedule (Offer-phase name), quote spreadsheet (file name only)
 
 **Lead**:
-A prospective client and their project opportunity. A Lead may have **many Offers** over time; exactly one Offer is **active** at a time unless explicitly superseded.
-_Avoid_: One quote per lead (legacy assumption)
+A prospective client and their project opportunity. A Lead may have **many Offers** over time; exactly one Offer is **active** at a time unless explicitly superseded. The Lead stays **lightweight**: it carries a single loose `location` (suburb-grade capture hint), not contract-grade addresses.
+_Avoid_: One quote per lead (legacy assumption); splitting addresses onto the Lead
+
+**Site Location** (decided — issue #109):
+The **construction site** address — where the build happens. Contract-grade, captured on the Offer **Job setup** step (not the Lead), seeded from the Lead's loose `location`. Printed on the Offer document, Tender, and Contract, always labelled **"Site Location"**. Was the single `siteAddress` before the current/site split.
+_Avoid_: Conflating with the client's residential address; capturing it on the Lead
+
+**Current Location** (decided — issue #109):
+The client's **current residential/postal address** — where they live now. Contract-grade, captured on the Offer **Job setup** step. Printed on the Offer document, Tender, and Contract, always labelled **"Current Location"**. Distinct from the **Site Location**. On the BC4 Contract it fills the **`of …`** line under `OWNER(S)`. Supersedes the late, hand-typed Contract-only `ownerAddress` particular as the single source.
+_Avoid_: Owner postal address (Contract-particulars name), site address
+
+**Owner** (decided — issues #103/#111):
+A party on the customer side of the deal. An **Owner** is either an **Individual** (a natural person: name, email, phone, **Current Location**) or a **Company owner**. A job has **one or more** Owners (`owners[]`), replacing the old primary + single-secondary ceiling. The **primary Owner** is first in the list and supplies the single owner address/contact lines on the BC4 Contract face. All Owners are named on the Contract `OWNER(S)` line and each appears in full on the Tender.
+_Avoid_: Client (ambiguous with a single person), the 2-person `secondaryCustomer` model
+
+**Company owner** (decided — issue #103):
+An Owner that is a legal entity (company/trust), carrying **company name**, **ABN/ACN**, and a **registered office** (its Current Location equivalent). It does not sign personally; it is represented by one or more **Director signatories**.
+_Avoid_: Modelling a company as a person name in `clientNames`, splitting "X Pty Ltd" into co-owners
+
+**Director signatory** (decided — issue #103):
+A natural person (name, email, **capacity** e.g. "Director") who signs on behalf of a **Company owner**. A company may require **several** director signatories. Each is a distinct DocuSign recipient with its own tracked link + status.
+_Avoid_: A single nominated signer for a company when multiple directors are required
+
+**Signer** / **Signer capacity** (decided — issues #103/#120):
+Every party that must sign is a **Signer**: each Individual Owner signs personally (capacity **"Owner"**); each Company owner signs through its **Director signatories** (capacity **"Director"**, tagged with the represented company + ABN/ACN). All customer-side Signers sign in **parallel** (routingOrder 1) and the **builder counter-signs last** (routingOrder 2). Each Signer gets its **own tracked link + status**. `SignerRole` stays **BUILDER | CUSTOMER**; capacity + represented entity are recorded as signer metadata, not new roles.
+_Avoid_: A DIRECTOR signer role, one shared owner signing link
 
 **Offer workspace entry** (decided):
 Opening the offer workspace for a Lead **resumes the active Offer** while it is in **pending**, **sent**, or negotiable pre-**agreed** states. **Agreed** (Tender phase), **Tender signed**, **rejected**, and **superseded** Offers open read-only for their phase. **New revision** forks from the current active Offer (copies internal cost schedule and Offer document content).

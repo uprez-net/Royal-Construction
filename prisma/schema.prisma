@@ -190,6 +190,11 @@ model Project {
   startDate        DateTime
   estimatedEndDate DateTime
   requirements     Json?
+  // Full owner party set carried over from the offer at handoff (ADR 0003):
+  // every owner (individual or company + directors), both addresses, and
+  // per-owner contact. The primary owner is also promoted to the Customer row;
+  // this JSON preserves the co-owners the single Customer can't hold.
+  parties          Json?
 
   status    ProjectStatus @default(ACTIVE)
   createdAt DateTime      @default(now())
@@ -462,6 +467,10 @@ model Customer {
   name  String
   email String @unique
   phone String @unique
+  // Primary owner's Current Location (residential/postal address). Populated at
+  // project handoff from the offer's owners[] (ADR 0003). Nullable — legacy
+  // customers have none.
+  address String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -750,6 +759,13 @@ model EnvelopeSignature {
   lastReminderAt      DateTime?
   reminderCount       Int          @default(0)
   docusignRecipientId String?
+  // Signing capacity + represented entity (ADR 0003). capacity is "Owner" for
+  // an individual, "Director" for a company director. entityName/entityAbn name
+  // the company a director signs for (null for individuals). Purely descriptive
+  // audit metadata; recipientRole stays BUILDER|CUSTOMER.
+  capacity            String?
+  entityName          String?
+  entityAbn           String?
 
   @@index([envelopeId])
   @@index([status])

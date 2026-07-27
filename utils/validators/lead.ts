@@ -37,6 +37,19 @@ const nullableTrimmedString = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : null;
 }, z.string().nullable());
 
+// Issue #110: the primary client email is mandatory + valid on creation and
+// cannot be cleared on update (required-when-present). Secondary/owner emails
+// are enforced later at the offer send/sign gates (see lib/offer/offer-review).
+const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// Exported so the data-layer createLead can re-validate at the DB boundary —
+// direct callers (e.g. the consultation-booking route) bypass createLeadSchema
+// and only null-checked truthiness, letting a malformed address through (#110).
+export const requiredLeadEmail = z
+  .string()
+  .trim()
+  .min(1, "Client email is required")
+  .regex(emailPattern, "Enter a valid client email");
+
 const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
 const isoDateTimeInput = z.iso.datetime();
 
@@ -167,7 +180,8 @@ export const updateLeadSchema = z.object({
   name: z.string().trim().min(1).optional(),
 
   phone: nullableTrimmedString.optional(),
-  email: nullableTrimmedString.optional(),
+  // #110: required-when-present on update — a lead's email cannot be cleared.
+  email: requiredLeadEmail.optional(),
   location: nullableTrimmedString.optional(),
 
   secondaryName: nullableTrimmedString.optional(),
@@ -206,7 +220,8 @@ export const createLeadSchema = z.object({
   name: z.string().trim().min(1, "Lead name is required"),
 
   phone: nullableTrimmedString.optional(),
-  email: nullableTrimmedString.optional(),
+  // #110: every client email is mandatory — required + valid at creation.
+  email: requiredLeadEmail,
   location: nullableTrimmedString.optional(),
 
   secondaryName: nullableTrimmedString.optional(),

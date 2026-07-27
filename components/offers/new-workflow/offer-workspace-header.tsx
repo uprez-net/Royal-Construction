@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  formatOwnerNamesLine,
   OFFER_STATUS_LABEL,
   type OfferWorkspaceJob,
   type OfferWorkspaceStatus,
@@ -114,8 +115,12 @@ export function OfferWorkspaceHeader({
             New Offer workspace
           </h1>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            {/* Name every owner, not just the primary — the documents list them
+                all, so the workspace chrome shouldn't imply a single client
+                (PR #124 sweep). */}
             <p className="text-sm text-muted-foreground">
-              {job.clientNames} · {job.siteAddress}
+              {formatOwnerNamesLine(job.owners ?? []) || job.clientNames} ·{" "}
+              {job.siteAddress}
             </p>
             <SaveIndicator state={saveState} />
           </div>

@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
+import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
@@ -616,7 +617,18 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     }
   }
 
-  const normalizedEmail = (input.email ?? "").trim();
+  // Every lead needs a valid primary email (#110). createLeadSchema enforces it
+  // for callers that parse it, but direct data-layer callers (the
+  // consultation-booking route) only null-checked truthiness — a non-empty but
+  // malformed address slipped straight through. Re-validate at the DB boundary
+  // so EVERY path is covered, not just the schema-parsed ones.
+  const emailCheck = requiredLeadEmail.safeParse(input.email);
+  if (!emailCheck.success) {
+    throw new Error(
+      emailCheck.error.issues[0]?.message ?? "Enter a valid client email",
+    );
+  }
+  const normalizedEmail = emailCheck.data;
   const normalizedPhone = (input.phone ?? "").trim();
 
   const orConditions: Prisma.LeadWhereInput[] = [];

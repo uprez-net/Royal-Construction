@@ -9,6 +9,7 @@ import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   defaultOfferValidUntil,
   applyTaskMappingToCostLine,
+  collectOwnerIssues,
   createOfferScopeItem,
   removeOfferScopeItem,
   updateOfferScopeItems,
@@ -81,6 +82,79 @@ import {
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
 import { OfferWorkspaceScreen } from "./offer-workspace-screen";
 
+// Identity fields carrying estimator-entered owner/address data. The lead only
+// ever has individual contacts, so re-running "Pre-fill from lead" over an
+// already-populated offer would wipe a company / directors / Current Location.
+// A manual prefill preserves these and only refreshes the rest (codex #4).
+const PREFILL_IDENTITY_KEYS: readonly (keyof OfferWorkspaceJob)[] = [
+  "owners",
+  "clientNames",
+  "secondaryCustomerName",
+  "clientEmail",
+  "secondaryCustomerEmail",
+  "clientPhone",
+  "currentLocation",
+  "siteAddress",
+  "siteCouncil",
+  "siteState",
+  "sitePostcode",
+];
+
+// True once the estimator has entered any owner/site identity — a brand-new
+// (pristine) offer returns false so auto-prefill fills everything. Inspects
+// EVERY owner-carried field, not just the first owner's name: an estimator who
+// typed only an email, phone, ABN, Current Location, or a director's name before
+// the async prefill resolved must not have that work wiped by the full patch
+// (codex #4). owners is the source of truth, so its deep scan subsumes the flat
+// client* projection; only the site fields live outside it.
+function jobHasEnteredIdentity(job: OfferWorkspaceJob): boolean {
+  const ownerEntered = job.owners.some(
+    (owner) =>
+      // Structural choices count as "entered" too, not just typed text: switching
+      // a pristine owner to a company, or adding a second signatory/director,
+      // configures the party set and must not be wiped by a late prefill (codex
+      // #3). A pristine owner is one blank individual with exactly one signatory.
+      owner.kind === "company" ||
+      owner.signatories.length !== 1 ||
+      owner.displayName.trim().length > 0 ||
+      owner.abn.trim().length > 0 ||
+      owner.currentLocation.trim().length > 0 ||
+      owner.signatories.some(
+        (signatory) =>
+          signatory.name.trim().length > 0 ||
+          signatory.email.trim().length > 0 ||
+          signatory.phone.trim().length > 0,
+      ),
+  );
+  return (
+    ownerEntered ||
+    job.owners.length > 1 ||
+    job.siteAddress.trim().length > 0 ||
+    job.siteCouncil.trim().length > 0 ||
+    job.siteState.trim().length > 0 ||
+    job.sitePostcode.trim().length > 0
+  );
+}
+
+// Apply a lead-prefill patch without destroying identity already entered: a
+// pristine offer takes the full patch; a populated one keeps its owner/address
+// identity and only refreshes non-identity fields (build type, scope, façade).
+function applyPrefillPatch(
+  current: OfferWorkspaceJob,
+  patch: Partial<OfferWorkspaceJob>,
+): OfferWorkspaceJob {
+  if (!jobHasEnteredIdentity(current)) {
+    return { ...current, ...patch };
+  }
+  const preserved: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (!PREFILL_IDENTITY_KEYS.includes(key as keyof OfferWorkspaceJob)) {
+      preserved[key] = value;
+    }
+  }
+  return { ...current, ...(preserved as Partial<OfferWorkspaceJob>) };
+}
+
 // Embed with a leadId to persist to the DB (ADR 0002). The standalone
 // /offers/new-workflow demo route passes none and stays in-memory.
 export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
@@ -119,6 +193,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentInfo, setSentInfo] = useState<string | null>(null);
+  // Surfaced when a lifecycle action (Mark sent/agreed/rejected) can't proceed
+  // because the pre-transition save reconciled to another tab or failed — without
+  // it the button looked like a silent no-op (codex #4).
+  const [transitionError, setTransitionError] = useState<string | null>(null);
   const [tenderSending, setTenderSending] = useState(false);
   const [tenderSendError, setTenderSendError] = useState<string | null>(null);
   const [contractSending, setContractSending] = useState(false);
@@ -197,14 +275,21 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     () => describeOfferExpiry(job.validUntil, now),
     [job.validUntil, now],
   );
+  // Owner completeness (names, Current Location, unique valid signer emails). Any
+  // issue must block not just "Send offer" (server-gated) but also "Mark sent"
+  // and "Mark agreed" — otherwise an incomplete offer can be locked/frozen and
+  // advanced into the legal documents (server transition guards this too).
+  const ownerIssues = useMemo(() => collectOwnerIssues(job.owners), [job.owners]);
+  const ownersComplete = ownerIssues.length === 0;
   const sendBlockers = useMemo(
     () =>
       collectOfferSendBlockers({
         hasLead: leadId !== undefined,
         needsOverrideReason: customerPrice.needsOverrideReason,
         expiryState: offerExpiry?.state ?? "none",
+        ownerIssues,
       }),
-    [leadId, customerPrice.needsOverrideReason, offerExpiry],
+    [leadId, customerPrice.needsOverrideReason, offerExpiry, ownerIssues],
   );
 
   function updateJob(patch: Partial<OfferWorkspaceJob>) {
@@ -461,6 +546,96 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setImages(s.images);
   }, []);
 
+  // Single-flight workspace autosave (fixes the overlapping-save clobber).
+  //
+  // Previously each debounced save fired independently with whatever
+  // stateVersionRef held at dispatch time. stateVersionRef only advances after a
+  // save RESOLVES, so when a save took longer than the 800ms debounce (slow
+  // network / cold server), a second edit dispatched a second save with the SAME
+  // (now stale) version. The server rejected it as `stale`, and the stale-handler
+  // reloaded + hydrated the server copy — discarding the newer edit. Fast
+  // successive edits could therefore be silently reverted.
+  //
+  // Chaining every run behind the previous one (like the contract-particulars
+  // save) guarantees only one save is ever in flight, so our OWN edits can never
+  // race each other. Each run loops on the LATEST snapshot (from snapshotRef), so
+  // an edit made mid-save is persisted on the next iteration rather than dropped.
+  // A `stale`/`superseded` result now only ever means a genuine OTHER writer
+  // (another tab), which still reconciles to the live copy per ADR 0002.
+  type WorkspaceFlushResult = "clean" | "reconciled" | "error";
+  const workspaceSaveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const flushWorkspace = useCallback(
+    (offerId: string): Promise<WorkspaceFlushResult> => {
+      const run = workspaceSaveChainRef.current
+        .catch(() => undefined)
+        .then(async (): Promise<WorkspaceFlushResult> => {
+          if (leadId === undefined) {
+            return "clean";
+          }
+          // Loop until the persisted state matches the latest snapshot, so edits
+          // made while a save is in flight are saved next (never dropped).
+          for (;;) {
+            const snapshot = snapshotRef.current;
+            const currentJson = JSON.stringify(snapshot);
+            if (currentJson === lastSavedRef.current) {
+              return "clean";
+            }
+            setSaveState("saving");
+            let result: Awaited<ReturnType<typeof saveOfferWorkspace>>;
+            try {
+              result = await saveOfferWorkspace({
+                offerId,
+                expectedStateVersion: stateVersionRef.current,
+                snapshot,
+              });
+            } catch (error) {
+              console.error("[offer] autosave failed:", error);
+              setSaveState("error");
+              return "error";
+            }
+            if (result.ok) {
+              stateVersionRef.current = result.stateVersion;
+              lastSavedRef.current = currentJson;
+              setSaveState("saved");
+              continue; // re-check: capture edits made during the save
+            }
+            if (result.reason === "stale" || result.reason === "superseded") {
+              // A different tab moved on (single-flight rules out our own
+              // overlap) — reconcile to the live copy rather than clobber it.
+              // "superseded" means another tab forked a new revision; the same
+              // reload lands us on the live one. See ADR 0002 (no field merge).
+              try {
+                const loaded = await loadActiveOfferWorkspace(leadId);
+                offerIdRef.current = loaded.offerId;
+                stateVersionRef.current = loaded.stateVersion;
+                setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+                if (loaded.snapshot) {
+                  hydrateSnapshot(loaded.snapshot);
+                  lastSavedRef.current = JSON.stringify(loaded.snapshot);
+                }
+              } catch (error) {
+                // The reconciling reload is OUTSIDE the save try above, so an
+                // unguarded failure here (network drop mid-reconcile) rejected
+                // the chained promise unhandled AND left saveState stuck at
+                // "saving" forever, since line-572's "saving" was never cleared
+                // (codex PR #124). Report it as a normal save error instead.
+                console.error("[offer] reconcile reload failed:", error);
+                setSaveState("error");
+                return "error";
+              }
+              setSaveState("error");
+              return "reconciled";
+            }
+            setSaveState("error");
+            return "error";
+          }
+        });
+      workspaceSaveChainRef.current = run;
+      return run;
+    },
+    [leadId, hydrateSnapshot],
+  );
+
   // Load the active offer for the lead on mount.
   useEffect(() => {
     if (leadId === undefined) {
@@ -529,7 +704,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           setPrefillResult(result);
           if (result.ok) {
             if (Object.keys(result.job).length > 0) {
-              setJob((current) => ({ ...current, ...result.job }));
+              setJob((current) => applyPrefillPatch(current, result.job));
             }
             if (Object.keys(result.draft).length > 0) {
               setDraft((current) => ({ ...current, ...result.draft }));
@@ -570,49 +745,14 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     if (currentJson === lastSavedRef.current) {
       return;
     }
+    // Debounce, then hand off to the single-flight flush. The flush reads the
+    // latest snapshot itself and serializes saves, so overlapping timers can
+    // never dispatch competing saves that clobber each other (see flushWorkspace).
     const timer = setTimeout(() => {
-      void (async () => {
-        setSaveState("saving");
-        try {
-          const result = await saveOfferWorkspace({
-            offerId,
-            expectedStateVersion: stateVersionRef.current,
-            snapshot,
-          });
-          if (result.ok) {
-            stateVersionRef.current = result.stateVersion;
-            lastSavedRef.current = currentJson;
-            setSaveState("saved");
-          } else if (
-            result.reason === "stale" ||
-            result.reason === "superseded"
-          ) {
-            // Another writer moved on — reload the server copy. Report it as an
-            // error state so the operator knows their unsaved edits were
-            // reconciled to the newer version (rather than silently clobbered).
-            // "superseded" means this tab was editing a revision that another
-            // tab has since forked; the same reload lands us on the live one.
-            const loaded = await loadActiveOfferWorkspace(leadId);
-            offerIdRef.current = loaded.offerId;
-            stateVersionRef.current = loaded.stateVersion;
-            if (loaded.snapshot) {
-              hydrateSnapshot(loaded.snapshot);
-              lastSavedRef.current = JSON.stringify(loaded.snapshot);
-            }
-            setSaveState("error");
-          } else {
-            setSaveState("error");
-          }
-        } catch (error) {
-          // Network/server failure — previously swallowed. Surface it so the
-          // operator does not assume their work is saved.
-          console.error("[offer] autosave failed:", error);
-          setSaveState("error");
-        }
-      })();
+      void flushWorkspace(offerId);
     }, 800);
     return () => clearTimeout(timer);
-  }, [snapshot, status, leadId, hydrateSnapshot]);
+  }, [snapshot, status, leadId, flushWorkspace]);
 
   // Debounced save of the BC4 particulars (issue #98). Separate from the main
   // autosave, which freezes once the tender is sent — the particulars are edited
@@ -639,35 +779,23 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       if (leadId === undefined || offerId === null) {
         return;
       }
+      setTransitionError(null);
       void (async () => {
         try {
-          const currentJson = JSON.stringify(snapshotRef.current);
-          if (currentJson !== lastSavedRef.current) {
-            const saved = await saveOfferWorkspace({
-              offerId,
-              expectedStateVersion: stateVersionRef.current,
-              snapshot: snapshotRef.current,
-            });
-            if (saved.ok) {
-              stateVersionRef.current = saved.stateVersion;
-              lastSavedRef.current = currentJson;
-            } else if (
-              saved.reason === "stale" ||
-              saved.reason === "superseded"
-            ) {
-              // A concurrent save moved on, or this revision was superseded by
-              // another tab — reload and abort rather than freezing a stale
-              // snapshot at AGREED or transitioning a revision that is history.
-              const loaded = await loadActiveOfferWorkspace(leadId);
-              offerIdRef.current = loaded.offerId;
-              stateVersionRef.current = loaded.stateVersion;
-              setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
-              if (loaded.snapshot) {
-                hydrateSnapshot(loaded.snapshot);
-                lastSavedRef.current = JSON.stringify(loaded.snapshot);
-              }
-              return;
-            }
+          // Flush the latest edits through the single-flight saver first, so
+          // AGREED freezes the correct snapshot and no in-flight autosave races
+          // this transition. If it had to reconcile to another tab's version (or
+          // failed to save), abort rather than transition on stale/unsaved state —
+          // flushWorkspace has already reloaded the UI to the live copy. Tell the
+          // user why nothing happened (codex #4) instead of returning silently.
+          const flush = await flushWorkspace(offerId);
+          if (flush !== "clean") {
+            setTransitionError(
+              flush === "reconciled"
+                ? "Your view was refreshed with a newer saved version — review it and try again."
+                : "Couldn't save your latest changes, so the status wasn't updated. Try again.",
+            );
+            return;
           }
           await transitionOfferStatus({
             offerId,
@@ -677,6 +805,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           setStatus(next);
         } catch (error) {
           console.error("[offer] status transition failed:", error);
+          setTransitionError(
+            `Couldn't update the offer status: ${(error as Error).message}`,
+          );
           // Resync the UI to the server's actual state instead of the
           // optimistic target.
           try {
@@ -694,7 +825,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         }
       })();
     },
-    [leadId, hydrateSnapshot],
+    [leadId, hydrateSnapshot, flushWorkspace],
   );
 
   // Fork a new active revision (supersedes the current one), then reload the
@@ -708,6 +839,20 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setRevisionNotice(null);
     void (async () => {
       try {
+        // Persist pending edits BEFORE forking. createOfferRevision copies the
+        // PERSISTED snapshot, so without this an edit still inside the 800ms
+        // autosave debounce is missing from the new revision — and the debounced
+        // save then lands on the revision we just superseded (PR #124 review).
+        // Every other lifecycle action already flushes first; this one didn't.
+        const flush = await flushWorkspace(offerId);
+        if (flush !== "clean") {
+          setRevisionNotice(
+            flush === "reconciled"
+              ? "Your view was refreshed with a newer saved version — review it and create the revision again."
+              : "Couldn't save your latest changes, so no revision was created. Try again.",
+          );
+          return;
+        }
         const result = await createOfferRevision({ offerId });
         if (!result.ok) {
           // Only reason today is an executed contract.
@@ -748,7 +893,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         setRevising(false);
       }
     })();
-  }, [leadId, hydrateSnapshot]);
+  }, [leadId, hydrateSnapshot, flushWorkspace]);
 
   // Email the proposal PDF to the client. Flushes the latest edits first so the
   // generated PDF matches the workspace, then routes through sendOfferDocument.
@@ -764,17 +909,19 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       setSentInfo(null);
       void (async () => {
         try {
-          const currentJson = JSON.stringify(snapshotRef.current);
-          if (currentJson !== lastSavedRef.current) {
-            const saved = await saveOfferWorkspace({
-              offerId,
-              expectedStateVersion: stateVersionRef.current,
-              snapshot: snapshotRef.current,
-            });
-            if (saved.ok) {
-              stateVersionRef.current = saved.stateVersion;
-              lastSavedRef.current = currentJson;
-            }
+          // Flush the latest edits through the single-flight saver first, so the
+          // emailed PDF matches the workspace. If it couldn't persist (a stale
+          // save reconciled to another writer, or a save error), abort — don't
+          // email an offer built from an older snapshot (flushWorkspace has
+          // already reloaded the UI on a reconcile).
+          const flush = await flushWorkspace(offerId);
+          if (flush !== "clean") {
+            setSendError(
+              flush === "reconciled"
+                ? "Your view was refreshed with a newer saved version — review it and send again."
+                : "Couldn't save your latest changes before sending. Try again.",
+            );
+            return;
           }
           const result = await sendOfferDocument({
             offerId,
@@ -783,12 +930,25 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           });
           if (result.ok) {
             setStatus("sent");
-            const recipientSummary = secondaryRecipientEmail
-              ? `${recipientEmail} and ${secondaryRecipientEmail}`
-              : recipientEmail;
-            setSentInfo(`Sent ${result.reference} to ${recipientSummary}.`);
+            // Report exactly who the server emailed (every signatory), not just
+            // the primary/secondary the dialog passed in.
+            setSentInfo(
+              `Sent ${result.reference} to ${result.recipients.join(", ")}.`,
+            );
           } else {
             setSendError(result.error);
+            // A PARTIAL send fails but still commits: the server flips the offer to
+            // SENT once anyone received it. Resync the status so the UI doesn't sit
+            // at "pending" against an offer that is durably SENT (PR #124 review) —
+            // previously only the throw path below resynced.
+            try {
+              const loaded = await loadActiveOfferWorkspace(leadId);
+              offerIdRef.current = loaded.offerId;
+              stateVersionRef.current = loaded.stateVersion;
+              setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+            } catch {
+              // Reload failed — leave the UI as-is; the error message still shows.
+            }
           }
         } catch (error) {
           // A throw (rather than a returned {ok:false}) used to surface nothing
@@ -813,7 +973,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         }
       })();
     },
-    [leadId],
+    [leadId, flushWorkspace],
   );
 
   // Send the Tender as a runtime DocuSign envelope (anchor-tab AutoPlace).
@@ -829,17 +989,17 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setTenderSendError(null);
     void (async () => {
       try {
-        const currentJson = JSON.stringify(snapshotRef.current);
-        if (currentJson !== lastSavedRef.current) {
-          const saved = await saveOfferWorkspace({
-            offerId,
-            expectedStateVersion: stateVersionRef.current,
-            snapshot: snapshotRef.current,
-          });
-          if (saved.ok) {
-            stateVersionRef.current = saved.stateVersion;
-            lastSavedRef.current = currentJson;
-          }
+        // Flush through the single-flight saver so the generated Tender PDF
+        // matches the workspace; abort if it couldn't persist (stale reconcile or
+        // save error) rather than send an envelope built from an older snapshot.
+        const flush = await flushWorkspace(offerId);
+        if (flush !== "clean") {
+          setTenderSendError(
+            flush === "reconciled"
+              ? "Your view was refreshed with a newer saved version — review it and send again."
+              : "Couldn't save your latest changes before sending. Try again.",
+          );
+          return;
         }
         const result = await sendTenderForSignature({ offerId });
         if (result.ok) {
@@ -856,7 +1016,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         setTenderSending(false);
       }
     })();
-  }, [leadId, transition]);
+  }, [leadId, transition, flushWorkspace]);
 
   // Send the MBA BC4 Contract from the DocuSign template, filled from the
   // signed Tender's snapshot. Without a leadId (in-memory demo) it just
@@ -946,7 +1106,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         setPrefillResult(result);
         if (result.ok) {
           if (Object.keys(result.job).length > 0) {
-            setJob((current) => ({ ...current, ...result.job }));
+            setJob((current) => applyPrefillPatch(current, result.job));
           }
           if (Object.keys(result.draft).length > 0) {
             setDraft((current) => ({ ...current, ...result.draft }));
@@ -1011,8 +1171,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         onWorkspacePricingSettingsChange={updateWorkspacePricingSettings}
         onLineChange={updateLine}
         onMarkSent={() => transition("sent")}
-        canMarkSent={!customerPrice.needsOverrideReason}
+        canMarkSent={!customerPrice.needsOverrideReason && ownersComplete}
         onMarkAgreed={() => transition("agreed")}
+        // Same owner gate as send/mark-sent: the server transition to AGREED
+        // rejects an incomplete party set, so don't leave the button actionable.
+        canMarkAgreed={ownersComplete}
         onMarkRejected={() => transition("rejected")}
         onCreateRevision={createRevision}
         canRevise={
@@ -1024,10 +1187,15 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         revisionNotice={revisionNotice}
         revisionExecuted={status === "contract_signed" || status === "project"}
         onSendOffer={sendOffer}
-        canSend={leadId !== undefined && !customerPrice.needsOverrideReason}
+        canSend={
+          leadId !== undefined &&
+          !customerPrice.needsOverrideReason &&
+          ownersComplete
+        }
         sending={sending}
         sendError={sendError}
         sentInfo={sentInfo}
+        transitionError={transitionError}
         onGenerateTender={() => transition("tender_draft")}
         onSendTender={sendTender}
         tenderSending={tenderSending}

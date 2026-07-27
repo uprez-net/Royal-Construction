@@ -18,16 +18,35 @@ export interface ContractTabValue {
   readonly locked: boolean;
 }
 
+export interface ContractOwnerSigner {
+  readonly name: string;
+  readonly email: string;
+  // Audit metadata (ADR 0003) persisted on EnvelopeSignature — the signer's
+  // capacity ("Owner"/"Director") and the company they sign for.
+  readonly capacity?: string | null;
+  readonly entityName?: string | null;
+  readonly entityAbn?: string | null;
+}
+
 export interface CreateContractEnvelopeArgs {
   readonly context: DocusignContext;
   readonly config: DocusignConfig;
   readonly templateId: string;
   readonly emailSubject: string;
   readonly builder: { readonly name: string; readonly email: string };
-  readonly owner: { readonly name: string; readonly email: string };
-  // All contract data goes on the OWNER role (the first signer, issue #98) so
-  // the customer sees a complete contract on open. The Builder (routingOrder 2)
-  // carries only its signature — no data tabs.
+  // Ordered customer-side signers, primary first (collectOfferSigners order).
+  // The PRIMARY signs the BC4 form's owner line + carries all data tabs. Signers
+  // 2..N sign the appended "Owner Signature Schedule" annexure (annexurePdfBase64)
+  // — the single BC4 owner area only fits ~2 signatures before the Builder block,
+  // so co-owners/directors go on a clean generated page (ADR 0003). N=1 uses the
+  // plain templateRoles path (no annexure).
+  readonly owners: readonly ContractOwnerSigner[];
+  // The "Owner Signature Schedule" PDF (base64) — required when owners.length > 1;
+  // its sigAnnex{k}/dateAnnex{k} anchors receive signers 2..N's signature tabs.
+  readonly annexurePdfBase64?: string | null;
+  // All contract data goes on the primary OWNER (issue #98) so the customer sees
+  // a complete contract on open. The Builder (routingOrder 2) carries only its
+  // signature — no data tabs.
   readonly ownerTextTabs: readonly ContractTabValue[];
   readonly ownerCheckboxTabs: readonly { readonly tabLabel: string; readonly selected: boolean }[];
 }
@@ -41,49 +60,137 @@ export async function createContractEnvelope(
   args: CreateContractEnvelopeArgs,
 ): Promise<CreateContractEnvelopeResult> {
   const { context, config, templateId, emailSubject } = args;
+  const owners = args.owners;
+  const primary = owners[0];
+  // Signers 2..N sign the Owner Signature Schedule (annexure). Without it, their
+  // sigAnnex{k} tabs would anchor to a document that was never attached, silently
+  // orphaning their signatures. Fail before creating the envelope (PR #124).
+  if (owners.length > 1 && !args.annexurePdfBase64) {
+    throw new Error(
+      "The owner signature schedule (annexure) is required when there is more than one signer.",
+    );
+  }
+  if (!primary) {
+    throw new Error("A contract envelope needs at least one owner signer.");
+  }
 
   const textTab = (t: ContractTabValue) => ({
     tabLabel: t.tabLabel,
     value: t.value,
     locked: t.locked ? "true" : "false",
   });
+  // Customer-first (issue #98): the primary Owner (routingOrder 1) carries ALL
+  // data tabs so the customer opens a complete contract; the Builder counter-
+  // signs (routingOrder 2). A recipient always sees its own locked tabs.
+  const ownerTabs = {
+    textTabs: args.ownerTextTabs.map(textTab),
+    checkboxTabs: args.ownerCheckboxTabs.map((c) => ({
+      tabLabel: c.tabLabel,
+      selected: c.selected ? "true" : "false",
+      // Derived contract terms — locked so the customer can't toggle them.
+      locked: "true",
+    })),
+  } as docusign.Tabs;
 
-  const envelopeDefinition: docusign.EnvelopeDefinition = {
-    templateId,
-    emailSubject: emailSubject.slice(0, 100),
-    // Customer-first routing (issue #98). templateRole.routingOrder overrides
-    // the routing baked into the BC4 template, so the Owner signs first
-    // (routingOrder 1) and the Builder counter-signs (routingOrder 2). DocuSign
-    // emails routingOrder 1 the moment the envelope is sent, so the customer
-    // receives the contract immediately. All data tabs are on the Owner role so
-    // the customer sees them (a recipient always sees its own locked tabs); the
-    // Builder role carries only the counter-signature defined in the template.
-    templateRoles: [
-      {
-        roleName: "Builder",
-        name: args.builder.name,
-        email: args.builder.email,
-        routingOrder: "2",
-      },
-      {
-        roleName: "Owner",
-        name: args.owner.name,
-        email: args.owner.email,
-        routingOrder: "1",
-        tabs: {
-          textTabs: args.ownerTextTabs.map(textTab),
-          checkboxTabs: args.ownerCheckboxTabs.map((c) => ({
-            tabLabel: c.tabLabel,
-            selected: c.selected ? "true" : "false",
-            // Derived contract terms (GST inclusive / HBCF included / exclusions)
-            // — locked so the customer can't toggle them before signing.
-            locked: "true",
-          })),
-        } as docusign.Tabs,
-      },
-    ],
-    status: "sent",
+  const builderRole: docusign.Signer = {
+    roleName: "Builder",
+    recipientId: "1",
+    name: args.builder.name,
+    email: args.builder.email,
+    routingOrder: "2",
   };
+  const ownerRole: docusign.Signer = {
+    roleName: "Owner",
+    recipientId: "2",
+    name: primary.name,
+    email: primary.email,
+    routingOrder: "1",
+    tabs: ownerTabs,
+  };
+
+  const envelopeDefinition: docusign.EnvelopeDefinition =
+    owners.length <= 1
+      ? {
+          // Single owner: the known-good templateRoles path (unchanged).
+          templateId,
+          emailSubject: emailSubject.slice(0, 100),
+          templateRoles: [builderRole, ownerRole],
+          status: "sent",
+        }
+      : {
+          // Multiple signers, two composite layers (ADR 0003):
+          //   1) the BC4 server template with Builder + primary Owner (data tabs);
+          //   2) an inline layer that ADDS the Owner Signature Schedule as
+          //      document 2 and signers 2..N, each anchored on the schedule's
+          //      sigAnnex{k}/dateAnnex{k} tokens.
+          // The document must be its own composite layer — a document placed in the
+          // server-template layer's inline template is silently dropped (verified).
+          emailSubject: emailSubject.slice(0, 100),
+          compositeTemplates: [
+            {
+              serverTemplates: [{ sequence: "1", templateId }],
+              inlineTemplates: [
+                { sequence: "2", recipients: { signers: [builderRole, ownerRole] } },
+              ],
+            },
+            {
+              inlineTemplates: [
+                {
+                  sequence: "1",
+                  ...(args.annexurePdfBase64
+                    ? {
+                        documents: [
+                          {
+                            documentBase64: args.annexurePdfBase64,
+                            name: "Owner-Signature-Schedule.pdf",
+                            fileExtension: "pdf",
+                            documentId: "2",
+                          },
+                        ],
+                      }
+                    : {}),
+                  recipients: {
+                    signers: owners.slice(1).map<docusign.Signer>((signer, index) => {
+                      const k = index + 1;
+                      return {
+                        recipientId: String(index + 3),
+                        // roleName lets us map DocuSign's re-numbered recipientId
+                        // back to this signer's capacity/entity on readback.
+                        roleName: `AnnexOwner${k}`,
+                        name: signer.name,
+                        email: signer.email,
+                        routingOrder: "1",
+                        tabs: {
+                          signHereTabs: [
+                            {
+                              anchorString: `sigAnnex${k}`,
+                              anchorUnits: "pixels",
+                              anchorXOffset: "0",
+                              anchorYOffset: "-8",
+                              // Fail loud if the schedule anchor is missing, rather
+                              // than silently leaving a signer with no signature tab.
+                              anchorIgnoreIfNotPresent: "false",
+                            },
+                          ],
+                          dateSignedTabs: [
+                            {
+                              anchorString: `dateAnnex${k}`,
+                              anchorUnits: "pixels",
+                              anchorXOffset: "0",
+                              anchorYOffset: "-3",
+                              anchorIgnoreIfNotPresent: "false",
+                            },
+                          ],
+                        } as docusign.Tabs,
+                      };
+                    }),
+                  },
+                },
+              ],
+            },
+          ],
+          status: "sent",
+        };
 
   if (config.connectWebhookUrl) {
     envelopeDefinition.eventNotification = {
@@ -113,8 +220,10 @@ export async function createContractEnvelope(
     throw new Error("DocuSign did not return an envelope id.");
   }
 
-  // Template roles get recipient ids assigned by DocuSign — fetch them so the
-  // Connect webhook can match signers by id rather than falling back to email.
+  // Composite templates re-number recipientIds, so read the actual recipients
+  // back and map our capacity/entity onto them by roleName (Builder / Owner /
+  // AnnexOwner{k}). The recorded recipientId then matches what the Connect webhook
+  // reports, so per-signer status updates land on the right EnvelopeSignature.
   const recipients: EnvelopeRecipientRecord[] = [];
   try {
     const list = await envelopesApi.listRecipients(
@@ -122,30 +231,93 @@ export async function createContractEnvelope(
       result.envelopeId,
       {},
     );
+    const builderEmail = args.builder.email.trim().toLowerCase();
     for (const signer of list.signers ?? []) {
-      const isBuilder =
-        (signer.email ?? "").toLowerCase() === args.builder.email.toLowerCase();
+      const roleName = (signer.roleName ?? "").toLowerCase();
+      const signerEmail = (signer.email ?? "").trim().toLowerCase();
+      let role: "BUILDER" | "CUSTOMER" = "CUSTOMER";
+      let source: ContractOwnerSigner | undefined;
+      if (roleName === "builder") {
+        role = "BUILDER";
+      } else if (roleName === "owner") {
+        source = owners[0];
+      } else if (roleName.startsWith("annexowner")) {
+        source = owners[Number(roleName.slice("annexowner".length))];
+      } else {
+        // No/unknown roleName: classify by EMAIL rather than defaulting everyone
+        // to CUSTOMER, which recorded the builder as a customer signer and
+        // corrupted the party audit trail (PR #124 review). Owner emails are
+        // unique per signer (collectOwnerIssues enforces it), so this is exact.
+        if (signerEmail && signerEmail === builderEmail) {
+          role = "BUILDER";
+        } else {
+          source = owners.find(
+            (owner) => owner.email.trim().toLowerCase() === signerEmail,
+          );
+        }
+      }
       recipients.push({
-        role: isBuilder ? "BUILDER" : "CUSTOMER",
-        name: signer.name ?? (isBuilder ? args.builder.name : args.owner.name),
-        email: signer.email ?? (isBuilder ? args.builder.email : args.owner.email),
-        // Customer-first: Owner routes at 1, Builder counter-signs at 2.
-        routingOrder: Number(signer.routingOrder ?? (isBuilder ? 2 : 1)),
-        recipientId: signer.recipientId ?? (isBuilder ? "1" : "2"),
+        role,
+        name: signer.name ?? source?.name ?? "",
+        email: signer.email ?? source?.email ?? "",
+        routingOrder: Number(signer.routingOrder ?? (role === "BUILDER" ? 2 : 1)),
+        recipientId: signer.recipientId ?? "",
+        capacity: source?.capacity ?? null,
+        entityName: source?.entityName ?? null,
+        entityAbn: source?.entityAbn ?? null,
       });
     }
   } catch {
-    // Non-fatal: the webhook still matches recipients by email.
+    // Non-fatal: the Connect webhook can still match recipients by email.
   }
-  // A partial listRecipients result (e.g. only one signer resolved, or the
-  // builder email didn't match) must still yield both roles, or the webhook has
-  // no record to match one party against. Restore each missing role's default.
-  if (!recipients.some((recipient) => recipient.role === "BUILDER")) {
-    recipients.push({ role: "BUILDER", name: args.builder.name, email: args.builder.email, routingOrder: 2, recipientId: "1" });
+  // Defensive: record any INTENDED signer the readback did not return, so no
+  // signer is lost from the audit trail. This must handle a PARTIAL list, not
+  // just a completely empty one — DocuSign returning 3 of 11 signers previously
+  // left the other 8 unrecorded, and the completion webhook could then never
+  // correlate their signatures (PR #124 review).
+  //
+  // Do NOT guess recipientIds for a composite envelope: composite templates
+  // renumber recipients, so a guessed id could make the Connect webhook (which
+  // matches by id first) update the WRONG EnvelopeSignature (codex #3). Emit an
+  // empty id (→ persisted as null) so the webhook falls back to email matching,
+  // which is unique per signer (codex #2). The single-owner templateRoles path
+  // keeps its deterministic ids (Builder 1 / Owner 2), which DocuSign does not
+  // renumber — but only trust those when nothing was read back at all, since a
+  // partial readback means the numbering is already not what we assumed.
+  const isComposite = owners.length > 1;
+  const readbackWasEmpty = recipients.length === 0;
+  const deterministicId = (fallback: string) =>
+    isComposite || !readbackWasEmpty ? "" : fallback;
+  const recorded = new Set(
+    recipients.map((recipient) => recipient.email.trim().toLowerCase()),
+  );
+  if (!recorded.has(args.builder.email.trim().toLowerCase())) {
+    recipients.push({
+      role: "BUILDER",
+      name: args.builder.name,
+      email: args.builder.email,
+      routingOrder: 2,
+      recipientId: deterministicId("1"),
+      capacity: null,
+      entityName: null,
+      entityAbn: null,
+    });
   }
-  if (!recipients.some((recipient) => recipient.role === "CUSTOMER")) {
-    recipients.push({ role: "CUSTOMER", name: args.owner.name, email: args.owner.email, routingOrder: 1, recipientId: "2" });
-  }
+  owners.forEach((signer, index) => {
+    if (recorded.has(signer.email.trim().toLowerCase())) {
+      return;
+    }
+    recipients.push({
+      role: "CUSTOMER",
+      name: signer.name,
+      email: signer.email,
+      routingOrder: 1,
+      recipientId: deterministicId(String(index + 2)),
+      capacity: signer.capacity ?? null,
+      entityName: signer.entityName ?? null,
+      entityAbn: signer.entityAbn ?? null,
+    });
+  });
 
   return { envelopeId: result.envelopeId, recipients };
 }
