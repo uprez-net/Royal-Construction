@@ -597,34 +597,70 @@ function TagListField({
 // Section-specific composite blocks
 // ---------------------------------------------------------------------------
 
+/**
+ * Read-only, deliberately.
+ *
+ * ADR 0003 makes `owners[]` on the offer's Job setup step the single source of
+ * truth for the customer side, and persists the full party set to
+ * `Project.parties` at handoff. `requirements.legalAdministration.ownerContacts`
+ * is a *derived projection* of that set, written once by
+ * `offer-project-handoff.ts` — not an independent record.
+ *
+ * This block used to render editable tag lists over that projection. Edits made
+ * here never reached `Project.parties`, so they diverged from what the offer,
+ * tender and contract signing flows actually read, and would be silently
+ * overwritten if the handoff re-ran. With no write path, the projection and the
+ * party set stay consistent by construction.
+ *
+ * Owners are also not three independent lists — they are parties. Pairing them
+ * by index reflects that, and makes a ragged projection visible rather than
+ * quietly misaligning names against the wrong email.
+ */
 function OwnerContactsBlock({
   names,
   emails,
   phones,
-  onChange,
 }: {
   names: string[];
   emails: string[];
   phones: string[];
-  onChange: (field: "names" | "emails" | "phones", values: string[]) => void;
 }) {
+  const ownerCount = Math.max(names.length, emails.length, phones.length);
+
   return (
-    <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-3">
-      <TagListField
-        label="Owner names"
-        values={names}
-        onChange={(v) => onChange("names", v)}
-      />
-      <TagListField
-        label="Owner emails"
-        values={emails}
-        onChange={(v) => onChange("emails", v)}
-      />
-      <TagListField
-        label="Owner phones"
-        values={phones}
-        onChange={(v) => onChange("phones", v)}
-      />
+    <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h4 className="text-sm font-semibold text-foreground">Owners</h4>
+        <p className="text-xs text-muted-foreground">
+          Captured on the offer&rsquo;s Job setup step. Edit them there so the
+          contract and signing flows stay in step.
+        </p>
+      </div>
+
+      {ownerCount === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No owner parties were captured for this project.
+        </p>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {Array.from({ length: ownerCount }, (_, index) => (
+            <li
+              key={index}
+              className="rounded-lg border border-border/70 bg-card p-3"
+            >
+              <p className="text-sm font-medium text-foreground">
+                {names[index]?.trim() || "Name not recorded"}
+              </p>
+              <p className="mt-1 wrap-break-word text-xs text-muted-foreground">
+                {emails[index]?.trim() || "No email recorded"}
+              </p>
+              <p className="mt-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                {phones[index]?.trim() || "No phone recorded"}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -976,28 +1012,9 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
     }));
   };
 
-  const updateOwnerContacts = (
-    field: "names" | "emails" | "phones",
-    values: string[],
-  ) => {
-    editDraft((current) => {
-      const legal = (current.legalAdministration ?? {}) as Record<
-        string,
-        unknown
-      >;
-      const ownerContacts = (legal.ownerContacts as Record<
-        string,
-        unknown
-      >) ?? { names: [], emails: [], phones: [] };
-      return {
-        ...current,
-        legalAdministration: {
-          ...legal,
-          ownerContacts: { ...ownerContacts, [field]: values },
-        } as never,
-      };
-    });
-  };
+  // `updateOwnerContacts` was removed with the editable owner block. Owners are
+  // owned by the offer's Job setup step (ADR 0003) and reach the project as a
+  // read-only projection; a write path here forked them from Project.parties.
 
   const updatePaymentStages = (stages: ProjectPaymentStage[]) => {
     editDraft((current) => ({
@@ -1308,7 +1325,6 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                         names={ownerContacts?.names ?? []}
                         emails={ownerContacts?.emails ?? []}
                         phones={ownerContacts?.phones ?? []}
-                        onChange={updateOwnerContacts}
                       />
                     ) : null}
 
