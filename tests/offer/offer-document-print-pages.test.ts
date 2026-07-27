@@ -7,7 +7,9 @@ import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import {
+  createCompanyOwner,
   createIndividualOwner,
+  createOfferSignatory,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
@@ -93,8 +95,84 @@ function individualOwner(index: number): OfferOwner {
   };
 }
 
+// A company owner renders a header row PLUS one row per director, and carries a
+// long legal name + ABN/ACN — the configuration that broke owner-count-based
+// chunking and the unbounded cover cells.
+function companyOwner(index: number, directors: number): OfferOwner {
+  const base = createCompanyOwner(`company-${index}`);
+  return {
+    ...base,
+    // Realistic worst-case AU legal name length — these cells are unbounded, so
+    // name length is the variable that decides whether a cover overflows.
+    displayName: `Kensington Grove Property Holdings and Investments Number ${index} Pty Ltd`,
+    abn: `12 345 678 ${String(900 + index).slice(0, 3)}`,
+    currentLocation: `Level ${index}, 100 Somewhat Long Street, Sydney NSW 2000`,
+    signatories: Array.from({ length: directors }, (_, d) => ({
+      ...createOfferSignatory(`company-${index}-dir-${d}`, "Director"),
+      name: `Director Number ${d + 1} of Company ${index}`,
+      email: `dir${d + 1}.co${index}@example.com`,
+      phone: "0400 000 000",
+    })),
+  };
+}
+
 const maxOwners = () =>
   Array.from({ length: MAX_OWNER_SIGNERS }, (_, i) => individualOwner(i + 1));
+
+// The exact configurations reported as mis-paginating, plus the ones that were
+// already correct (so a fix cannot regress them). Each is asserted against real
+// Chromium output for BOTH renderers.
+const OWNER_CONFIGURATIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly owners: OfferOwner[];
+}> = [
+  { label: "10 individuals", owners: maxOwners() },
+  {
+    label: "10 companies, one director each",
+    owners: Array.from({ length: 10 }, (_, i) => companyOwner(i + 1, 1)),
+  },
+  { label: "1 company, 10 directors", owners: [companyOwner(1, 10)] },
+  {
+    label: "5 companies, 2 directors each",
+    owners: Array.from({ length: 5 }, (_, i) => companyOwner(i + 1, 2)),
+  },
+  {
+    label: "mixed individuals and companies",
+    owners: [
+      individualOwner(1),
+      companyOwner(2, 3),
+      individualOwner(3),
+      companyOwner(4, 2),
+    ],
+  },
+];
+
+for (const { label, owners } of OWNER_CONFIGURATIONS) {
+  test(`Tender prints what it declares — ${label}`, async () => {
+    const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Tender printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+
+  test(`Proposal prints what it declares — ${label}`, async () => {
+    const html = buildProposalHtml(
+      buildProposalInput(snapshotWithOwners(owners)),
+      EMPTY_OFFER_IMAGES,
+    );
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Proposal printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+}
 
 test("Tender prints exactly the number of pages it declares at max owners", async () => {
   const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(maxOwners())));

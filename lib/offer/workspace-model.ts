@@ -513,6 +513,43 @@ export function withOwnerProjection(job: OfferWorkspaceJob): OfferWorkspaceJob {
   return { ...job, ...deriveOwnerProjection(job.owners) };
 }
 
+// Party-name summary cells (the Proposal cover "Client" cell, the Tender cover
+// "The Owners" block) are fixed-height areas on a page whose other content is
+// already laid out. Joining EVERY owner into them is unbounded: ten companies
+// with real legal names and ABN/ACNs pushed those covers past one physical sheet,
+// so the printed page count no longer matched the declared "Page N of M"
+// (PR #124 review). Bound what the summary shows; the complete party list still
+// appears in full elsewhere in each document (the Tender's Owner Details table,
+// the Proposal's acceptance + signature blocks), so nothing is hidden.
+// Bounding by COUNT alone is not enough: three long Australian company legal
+// names with ABN/ACNs still wrapped far enough to push a cover onto a second
+// sheet. Height is driven by rendered LENGTH, so budget characters as well as
+// count — verified against real Chromium output.
+export const COVER_OWNER_NAMES_MAX = 3;
+export const COVER_OWNER_NAMES_MAX_CHARS = 90;
+
+export function boundOwnerNames(
+  names: readonly string[],
+  maxChars: number = COVER_OWNER_NAMES_MAX_CHARS,
+  maxCount: number = COVER_OWNER_NAMES_MAX,
+): { readonly shown: readonly string[]; readonly remaining: number } {
+  const shown: string[] = [];
+  let used = 0;
+  for (const name of names) {
+    if (shown.length >= maxCount) {
+      break;
+    }
+    // "; " separator once past the first entry.
+    const cost = name.length + (shown.length > 0 ? 2 : 0);
+    if (shown.length > 0 && used + cost > maxChars) {
+      break;
+    }
+    shown.push(name);
+    used += cost;
+  }
+  return { shown, remaining: names.length - shown.length };
+}
+
 // Personal greeting list for the proposal welcome letter ("Dear A, B and C,").
 // Names EVERY owner: the legacy clientNames + secondaryCustomerName pair silently
 // dropped owners 3+, so a three-owner proposal greeted only two of them by name

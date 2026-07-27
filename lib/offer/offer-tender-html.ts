@@ -6,6 +6,7 @@ import {
 } from "./workspace-print-template";
 import { STANDARD_INCLUSIONS_SCHEDULE } from "./workspace-proposal-content";
 import {
+  boundOwnerNames,
   collectOfferSigners,
   type OfferOwner,
   type OfferSignerContext,
@@ -38,7 +39,9 @@ export const SIGNATURE_BLOCKS_PER_PAGE = 4;
 // Owner Details rows that still fit on the cover beneath the masthead, parties
 // block and contract sum; past this the table moves to its own page(s).
 const OWNER_DETAIL_ROWS_INLINE = 4;
-const OWNER_DETAIL_OWNERS_PER_PAGE = 8;
+// Budget in RENDERED ROWS per Owner Details page (a company = header + one row
+// per director), not owners — verified against real Chromium output.
+const OWNER_DETAIL_ROWS_PER_PAGE = 12;
 
 type InclusionRow = (typeof STANDARD_INCLUSIONS_SCHEDULE)[number];
 
@@ -121,18 +124,35 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   // row plus one row per director, so count rendered ROWS, not owners.
   const detailOwners = job.owners ?? [];
   const ownerDetailRows = detailOwners.map(ownerDetailRowsHtml);
+  // A company renders a header row PLUS one row per director, so pages must be
+  // budgeted in rendered ROWS. Chunking by owner count (as this first did) put
+  // eight two-row companies — sixteen rows — on one page and overflowed it.
+  const rowsForOwner = (owner: OfferOwner): number =>
+    owner.kind === "company" ? 1 + owner.signatories.length : 1;
   const ownerDetailRowCount = detailOwners.reduce(
-    (sum: number, owner: OfferOwner) =>
-      sum + (owner.kind === "company" ? 1 + owner.signatories.length : 1),
+    (sum: number, owner: OfferOwner) => sum + rowsForOwner(owner),
     0,
   );
   const inlineOwnerDetails = ownerDetailRowCount <= OWNER_DETAIL_ROWS_INLINE;
   const ownerDetailChunks: string[][] = [];
   if (!inlineOwnerDetails) {
-    for (let i = 0; i < ownerDetailRows.length; i += OWNER_DETAIL_OWNERS_PER_PAGE) {
-      ownerDetailChunks.push(
-        ownerDetailRows.slice(i, i + OWNER_DETAIL_OWNERS_PER_PAGE),
-      );
+    // Pack owners into pages up to the row budget. An owner is ATOMIC — its
+    // header and director rows must not be split across sheets — so an owner
+    // that would exceed the budget starts the next page instead.
+    let current: string[] = [];
+    let currentRows = 0;
+    detailOwners.forEach((owner: OfferOwner, index: number) => {
+      const rows = rowsForOwner(owner);
+      if (current.length > 0 && currentRows + rows > OWNER_DETAIL_ROWS_PER_PAGE) {
+        ownerDetailChunks.push(current);
+        current = [];
+        currentRows = 0;
+      }
+      current.push(ownerDetailRows[index]);
+      currentRows += rows;
+    });
+    if (current.length > 0) {
+      ownerDetailChunks.push(current);
     }
   }
 
@@ -303,7 +323,15 @@ function ownerPartyNamesHtml(job: OfferWorkspaceJob): string {
   const primary = esc(ownerDisplayName(owners[0]));
   const rest = owners.slice(1).map((owner) => esc(ownerDisplayName(owner)));
   if (rest.length === 0) return primary;
-  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${rest.join("; ")}</span>`;
+  // Bounded: the full party list is in the Owner Details table, so this fixed
+  // cover block shows a few names and counts the rest rather than growing
+  // unboundedly and pushing the cover onto a second sheet (PR #124 review).
+  const { shown, remaining } = boundOwnerNames(rest);
+  const more =
+    remaining > 0
+      ? `${shown.length > 0 ? "; " : ""}and ${remaining} further owner${remaining === 1 ? "" : "s"} (see Owner Details)`
+      : "";
+  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${shown.join("; ")}${more}</span>`;
 }
 
 // One or more Owner Details rows: an individual is a single row (name / current

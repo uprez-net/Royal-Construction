@@ -149,6 +149,18 @@ export async function findCustomerByContact(email?: string | null, phone?: strin
 export async function createCustomerForProject(input: { name: string; email: string; phone: string; address?: string | null }, tx?: Prisma.TransactionClient) {
 
     const prismClient = tx ?? prisma;
+    // When running INSIDE a caller's transaction, cache invalidation must not
+    // fire here: the write has not committed yet, so another request could refill
+    // the "customers" cache from pre-commit data and there would be no
+    // post-commit invalidation to correct it (PR #124 review). The caller
+    // revalidates after its transaction commits instead. Standalone calls (no tx)
+    // are already committed by the time they return, so they invalidate here.
+    const deferInvalidation = Boolean(tx);
+    const invalidate = () => {
+        if (!deferInvalidation) {
+            revalidateTag("customers", CACHE_PROFILES.MEDIUM);
+        }
+    };
     const address = input.address?.trim() || null;
     const name = input.name?.trim();
     const email = input.email?.trim();
@@ -185,7 +197,7 @@ export async function createCustomerForProject(input: { name: string; email: str
                 where: { id: existing.id },
                 data: patch,
             });
-            revalidateTag("customers", CACHE_PROFILES.MEDIUM);
+            invalidate();
             return updated;
         }
         return existing;
@@ -200,7 +212,7 @@ export async function createCustomerForProject(input: { name: string; email: str
         },
     });
 
-    revalidateTag("customers", CACHE_PROFILES.MEDIUM);
+    invalidate();
 
     return customer;
 }

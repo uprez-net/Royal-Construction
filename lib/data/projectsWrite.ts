@@ -577,6 +577,13 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       return newProject.id;
     });
 
+    // The customer was created/updated INSIDE the transaction above, so its cache
+    // invalidation is deferred to here — firing it pre-commit let another request
+    // refill the "customers" cache from uncommitted data with nothing to correct
+    // it afterwards (PR #124 review). Runs before the detail read so the tag is
+    // cleared even if that read fails.
+    revalidateTag("customers", CACHE_PROFILES.MEDIUM);
+
     const newProjectDetail = await getCachedProjectById(newProjectId);
     if (!newProjectDetail) {
       throw new Error("PROJECT_DETAIL_NOT_FOUND");

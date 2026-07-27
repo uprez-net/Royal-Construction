@@ -19,6 +19,7 @@ import {
   type OfferImageMap,
 } from "./workspace-images";
 import {
+  boundOwnerNames,
   collectOfferSigners,
   formatOwnerGreetingNames,
   type OfferOwner,
@@ -37,7 +38,12 @@ const INCLUSIONS_ROWS_PER_PAGE = 12;
 // (the common case, kept byte-identical); beyond that, signatures move onto their
 // own page(s), chunked so blocks never overflow a physical page (PR #124 review).
 const INLINE_SIGNATURE_LIMIT = 4;
-const SIGNATURES_PER_PAGE = 8;
+// Blocks per dedicated signature page. Company directors render as "Name,
+// Director of <full company legal name>", which wraps — at 8 the first signature
+// page (which also carries the acceptance paragraph) overflowed A4 with ten
+// company signers, printing a sheet the footer never counted. Verified against
+// real Chromium output; see tests/offer/offer-document-print-pages.test.ts.
+const SIGNATURES_PER_PAGE = 6;
 
 function esc(value: string): string {
   return value
@@ -82,7 +88,16 @@ function ownerNamesCellHtml(job: OfferWorkspaceJob): string {
   if (rest.length === 0) {
     return primary;
   }
-  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${rest.join("; ")}</span>`;
+  // Bounded: every owner is still named in full on the acceptance page and gets
+  // their own signature block, so this fixed cover cell shows a few and counts
+  // the rest instead of growing until the cover spills onto a second physical
+  // sheet and desyncs "Page N of M" (PR #124 review).
+  const { shown, remaining } = boundOwnerNames(rest);
+  const more =
+    remaining > 0
+      ? `${shown.length > 0 ? "; " : ""}and ${remaining} further owner${remaining === 1 ? "" : "s"}`
+      : "";
+  return `${primary}<br /><span style="font-size:11px;color:${MUTED};">and ${shown.join("; ")}${more}</span>`;
 }
 
 // Build a complete, self-contained HTML document of the building proposal,
