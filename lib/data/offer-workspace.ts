@@ -104,34 +104,24 @@ function toLoaded(offer: OfferRow): LoadedOfferWorkspace {
 async function attachDeclineReason(
   loaded: LoadedOfferWorkspace,
 ): Promise<LoadedOfferWorkspace> {
-  if (
-    loaded.status !== OfferStatus.TENDER_DECLINED &&
-    loaded.status !== OfferStatus.CONTRACT_DECLINED
-  ) {
-    return loaded;
-  }
-  const event = await prisma.offerStatusEvent.findFirst({
-    where: { offerId: loaded.offerId, toStatus: loaded.status },
-    orderBy: { at: "desc" },
-    select: { note: true },
-  });
-  return { ...loaded, declineReason: event?.note ?? null };
+  return {
+    ...loaded,
+    declineReason: await loadDeclineReason(loaded.offerId, loaded.status),
+  };
 }
 
-// Attach per-recipient DocuSign status so the signing tracker can show who has
-// actually signed (#121/#123). A document can have SEVERAL envelopes over its
-// life — recalling and re-sending creates a new one — so only the NEWEST
-// envelope per doc type is reported; older ones are superseded and their
-// statuses would be misleading.
-async function attachSignerStatus(
-  loaded: LoadedOfferWorkspace,
-): Promise<LoadedOfferWorkspace> {
+// Per-recipient DocuSign status for an offer's Tender + Contract envelopes, so
+// the signing tracker can show who has actually signed (#121/#123). A document
+// can have SEVERAL envelopes over its life — recalling and re-sending creates a
+// new one — so only the NEWEST envelope per doc type is reported; older ones are
+// superseded and their statuses would be misleading. Shared by the workspace
+// loader and the signing-status poll so they can never diverge.
+async function loadOfferSignerStatuses(
+  offerId: string,
+): Promise<OfferSignerStatus[]> {
   const envelopes = await prisma.envelope.findMany({
     where: {
-      OR: [
-        { tender: { offerId: loaded.offerId } },
-        { contract: { offerId: loaded.offerId } },
-      ],
+      OR: [{ tender: { offerId } }, { contract: { offerId } }],
     },
     orderBy: { createdAt: "desc" },
     select: {
@@ -174,7 +164,36 @@ async function attachSignerStatus(
       });
     }
   }
-  return { ...loaded, signerStatuses };
+  return signerStatuses;
+}
+
+// The most recent decline-event note for a declined offer status, or null.
+// Shared by the loader's decorator and the poll so both surface the same reason.
+async function loadDeclineReason(
+  offerId: string,
+  status: OfferStatus,
+): Promise<string | null> {
+  if (
+    status !== OfferStatus.TENDER_DECLINED &&
+    status !== OfferStatus.CONTRACT_DECLINED
+  ) {
+    return null;
+  }
+  const event = await prisma.offerStatusEvent.findFirst({
+    where: { offerId, toStatus: status },
+    orderBy: { at: "desc" },
+    select: { note: true },
+  });
+  return event?.note ?? null;
+}
+
+async function attachSignerStatus(
+  loaded: LoadedOfferWorkspace,
+): Promise<LoadedOfferWorkspace> {
+  return {
+    ...loaded,
+    signerStatuses: await loadOfferSignerStatuses(loaded.offerId),
+  };
 }
 
 // Attach the estimator's saved BC4 particulars (issue #98) so the contract-stage
@@ -270,6 +289,53 @@ type SaveResult =
   | { ok: true; stateVersion: number }
   | { ok: false; reason: "stale"; currentStateVersion: number | null }
   | { ok: false; reason: "superseded" };
+
+export type OfferSigningStatusPoll =
+  | {
+      ok: true;
+      status: OfferStatus;
+      stateVersion: number;
+      signerStatuses: OfferSignerStatus[];
+      declineReason: string | null;
+    }
+  | { ok: false; error: string };
+
+// Lightweight poll for an offer's live signing progress: only the fields the
+// DocuSign Connect webhook mutates — offer status, per-recipient signer status,
+// and (on a decline) the reason. It deliberately does NOT return the workspace
+// snapshot, so an open tab can refresh a signing envelope's progress without any
+// risk of clobbering local state. Used to keep the signing tracker live while an
+// envelope is out for signature, instead of requiring a manual page refresh
+// (#121/#123 follow-up). allowInactive so a superseded offer still reports its
+// status rather than erroring.
+export async function pollOfferSigningStatus(input: {
+  offerId: string;
+}): Promise<OfferSigningStatusPoll> {
+  const access = await authorizeOfferAccess(input.offerId, {
+    allowInactive: true,
+  });
+  if (!access.ok) {
+    return { ok: false, error: access.error };
+  }
+  const offer = await prisma.offer.findUnique({
+    where: { id: input.offerId },
+    select: { offerStatus: true, stateVersion: true },
+  });
+  if (!offer) {
+    return { ok: false, error: "Offer not found." };
+  }
+  const [signerStatuses, declineReason] = await Promise.all([
+    loadOfferSignerStatuses(input.offerId),
+    loadDeclineReason(input.offerId, offer.offerStatus),
+  ]);
+  return {
+    ok: true,
+    status: offer.offerStatus,
+    stateVersion: offer.stateVersion,
+    signerStatuses,
+    declineReason,
+  };
+}
 
 // Debounced autosave with optimistic concurrency (ADR 0002): the write only
 // lands if the caller's stateVersion still matches; otherwise it is rejected so
