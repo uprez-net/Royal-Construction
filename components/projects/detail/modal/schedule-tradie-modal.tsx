@@ -10,7 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { TradieScheduleRow } from "./schedule-tradie-row";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -52,6 +52,10 @@ const createEmptyRow = (): TradieScheduleInputRow => ({
   durationDays: 1,
 });
 
+const hasRowError = (errors: TradieScheduleRowErrors) =>
+  // `id` is always present, so anything beyond it is a real error.
+  Object.keys(errors).length > 1;
+
 export default function ScheduleTradieModal({
   open,
   onClose,
@@ -64,6 +68,7 @@ export default function ScheduleTradieModal({
     createEmptyRow(),
   ]);
   const [rowErrors, setRowErrors] = useState<TradieScheduleRowErrors[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,18 +138,22 @@ export default function ScheduleTradieModal({
   const addRow = () => {
     const newRow = createEmptyRow();
     setScheduleRows((prev) => [...prev, newRow]);
-    setRowErrors((prev) => [...prev, { id: newRow.id }]);
   };
 
   const updateRow = (index: number, updatedRow: TradieScheduleInputRow) => {
-    // const errors = validateRow(updatedRow);
-    // setRowErrors((prev) => {
-    //   const newErrors = [...prev];
-    //   newErrors[index] = errors;
-    //   return newErrors;
-    // });
     setScheduleRows((prev) =>
       prev.map((row, i) => (i === index ? updatedRow : row)),
+    );
+
+    // Re-validate only rows that are already showing an error, so fixing a
+    // field clears its message instead of leaving it stale until the next
+    // submit — without shouting at a row the user has not submitted yet.
+    setRowErrors((prev) =>
+      prev.map((errors) =>
+        errors.id === updatedRow.id && hasRowError(errors)
+          ? validateRow(updatedRow)
+          : errors,
+      ),
     );
   };
 
@@ -154,21 +163,32 @@ export default function ScheduleTradieModal({
     setRowErrors((prev) => prev.filter((error) => error.id !== id));
   };
 
+  // The single close path. Every dismissal — successful submit, Cancel, Esc,
+  // overlay click — funnels through here so the modal can never reopen holding
+  // the previous booking's rows or its stale validation errors.
+  const closeAndReset = () => {
+    setScheduleRows([createEmptyRow()]);
+    setRowErrors([]);
+    onClose();
+  };
+
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     const errors = scheduleRows.map(validateRow);
 
     setRowErrors(errors);
 
-    const hasErrors = errors.some(
-      (rowError) => Object.keys(rowError).length > 1, // ID would always be present, so we check for other keys
-    );
-
-    if (hasErrors) {
+    if (errors.some(hasRowError)) {
       toast.error("Please fix the highlighted fields.");
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
+      // `.unwrap()` matters: without it a rejected thunk resolves normally and
+      // the modal reported success on a failed save.
       await dispatch(
         createBulkTradieScheduleForProject(
           scheduleRows.map((row) => ({
@@ -180,45 +200,56 @@ export default function ScheduleTradieModal({
             projectId,
           })),
         ),
-      );
-      toast.success("Tradies scheduled successfully!");
-      onClose();
+      ).unwrap();
+
+      toast.success("Tradies scheduled.");
+      closeAndReset();
     } catch (error) {
-      console.error("Error scheduling tradie:", error);
-      toast.error("Failed to schedule tradie. Please try again.");
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Failed to schedule tradies. Please try again.";
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleOpenChange = (open: boolean) => {
-    if (!open) {
-      onClose();
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && !isSubmitting) {
+      closeAndReset();
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-6xl p-0">
+      <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto p-0 shadow-lg">
         <DialogHeader className="border-b px-6 py-5">
-          <DialogTitle>Schedule Tradies</DialogTitle>
+          <DialogTitle>Schedule tradies</DialogTitle>
 
           <DialogDescription>
-            Schedule multiple tradies simultaneously. RFQs and inquiries will be
-            dispatched automatically.
+            Schedule several tradies at once. Requests for quote and enquiries
+            are sent automatically. Fields marked * are required.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 p-6">
-          <div className="max-h-112.5 space-y-3 overflow-y-auto pr-2">
+          <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-2">
             {scheduleRows.map((row, index) => (
               <div
-                key={index}
-                className="rounded-xl border border-dashed bg-muted/20 p-4"
+                key={row.id}
+                className="rounded-xl border border-dashed border-border bg-muted/20 p-4"
               >
                 <TradieScheduleRow
                   row={row}
+                  position={index + 1}
                   milestones={milestones}
                   onChange={(updated) => updateRow(index, updated)}
-                  onRemove={() => removeRow(index)}
+                  onRemove={
+                    scheduleRows.length > 1 ? () => removeRow(index) : undefined
+                  }
                   errors={
                     rowErrors.find((e) => e.id === row.id) ?? { id: row.id }
                   }
@@ -228,17 +259,33 @@ export default function ScheduleTradieModal({
           </div>
 
           <div className="flex items-center justify-between border-t pt-4">
-            <Button variant="outline" onClick={addRow}>
-              <Plus className="mr-2 h-4 w-4" />
-              Schedule More Tradie
+            <Button variant="outline" onClick={addRow} disabled={isSubmitting}>
+              <Plus className="mr-2 size-4" aria-hidden="true" />
+              Add another tradie
             </Button>
 
             <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>
+              <Button
+                variant="outline"
+                onClick={() => handleOpenChange(false)}
+                disabled={isSubmitting}
+              >
                 Cancel
               </Button>
 
-              <Button onClick={handleSubmit}>Schedule</Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <Loader2
+                    className="mr-1.5 size-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
+                ) : null}
+                {isSubmitting ? "Scheduling…" : "Schedule"}
+              </Button>
             </div>
           </div>
         </div>

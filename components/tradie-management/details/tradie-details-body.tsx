@@ -6,13 +6,20 @@ import {
   Phone,
   Star,
 } from "lucide-react";
-import { dateFormat } from "@/utils/formatters";
+import { rateCurrency, dateFormat } from "@/utils/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { Button } from "@/components/ui/button";
-import { RatingStars } from "@/components/common/rating-star";
+import { RatingStars } from "@/components/common/rating-stars";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { TradieRow } from "@/types/tradie";
+
+type DetailItem = {
+  label: string;
+  icon: typeof Phone;
+  /** Rendered value. */
+  content: React.ReactNode;
+};
 
 export function TradieBusinessDetailsCard() {
   const tradieDetails = useAppSelector(
@@ -21,41 +28,64 @@ export function TradieBusinessDetailsCard() {
   if (!tradieDetails) {
     return null;
   }
-  const details = [
+
+  const details: DetailItem[] = [
     {
       label: "Phone",
-      value: tradieDetails.phone,
       icon: Phone,
+      content: (
+        // Calling a tradie is the primary job of this page, so the number is a
+        // real tel: link rather than inert text.
+        <a
+          href={`tel:${tradieDetails.phone.replace(/[^\d+]/g, "")}`}
+          className="font-mono tabular-nums text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          {tradieDetails.phone}
+        </a>
+      ),
     },
     {
       label: "Email",
-      value: tradieDetails.email,
       icon: Mail,
+      content: (
+        <a
+          href={`mailto:${tradieDetails.email}`}
+          className="text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          {tradieDetails.email}
+        </a>
+      ),
     },
     {
       label: "Location",
-      value: tradieDetails.location ?? "—",
       icon: MapPin,
+      content: tradieDetails.location ?? "Not recorded",
     },
     {
       label: "ABN",
-      value: tradieDetails.abn,
       icon: Building2,
+      content: (
+        <span className="font-mono tabular-nums">{tradieDetails.abn}</span>
+      ),
     },
     {
       label: "Joined",
-      value: dateFormat.format(tradieDetails.createdAt),
       icon: CalendarDays,
+      content: (
+        <span className="font-mono tabular-nums">
+          {dateFormat.format(tradieDetails.createdAt)}
+        </span>
+      ),
     },
   ];
 
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Contact & Business Details</CardTitle>
+        <CardTitle as="h2">Contact and business details</CardTitle>
       </CardHeader>
 
-      <CardContent className="space-y-6 mt-4">
+      <CardContent className="mt-4 space-y-6">
         <div className="grid gap-4 sm:grid-cols-2">
           {details.map((item) => {
             const Icon = item.icon;
@@ -63,12 +93,12 @@ export function TradieBusinessDetailsCard() {
             return (
               <div key={item.label}>
                 <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                   {item.label}
                 </div>
 
                 <div className="wrap-break-word text-sm font-medium">
-                  {item.value}
+                  {item.content}
                 </div>
               </div>
             );
@@ -102,6 +132,14 @@ export function TradiePriorityCard() {
   }
 
   const { rating, hourlyRate, jobsCompleted } = tradieDetails;
+  const hourlyRateValue = hourlyRate == null ? null : Number(hourlyRate);
+  // `null` when there is no rate, so the render can keep mono for facts and use
+  // prose for the placeholder. Previously this returned the string "Not set"
+  // into a `font-mono tabular-nums` slot, so a missing value read like data.
+  const hourlyRateLabel =
+    hourlyRateValue == null || Number.isNaN(hourlyRateValue)
+      ? null
+      : `${rateCurrency.format(hourlyRateValue)}/hr`;
 
   const handleRatingChange = () => {
     const tradieRow = {
@@ -126,38 +164,48 @@ export function TradiePriorityCard() {
 
   return (
     <Card className="h-full">
-      <CardContent className="space-y-4 text-center">
+      <CardHeader>
+        <CardTitle as="h2">Performance</CardTitle>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Current Ratings
+          <div className="text-xs font-medium text-muted-foreground">
+            Current rating
           </div>
 
-          <div className="mt-3 flex items-center justify-center gap-1 text-2xl font-bold">
-            <RatingStars rating={parseFloat(rating ?? "0")} />
+          <div className="mt-2 flex items-center gap-1">
+            <RatingStars rating={parseFloat(rating ?? "0")} showOutOf />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg border p-3">
-            <div className="text-xs text-muted-foreground">Hourly Rate</div>
+          <div className="rounded-lg border border-border/70 p-3">
+            <div className="text-xs text-muted-foreground">Hourly rate</div>
 
-            <div className="text-lg font-bold">${hourlyRate}</div>
+            {hourlyRateLabel ? (
+              <div className="font-mono text-lg font-semibold tabular-nums">
+                {hourlyRateLabel}
+              </div>
+            ) : (
+              <div className="text-lg font-semibold text-muted-foreground">
+                Not set
+              </div>
+            )}
           </div>
 
-          <div className="rounded-lg border p-3">
-            <div className="text-xs text-muted-foreground">Total Jobs</div>
+          <div className="rounded-lg border border-border/70 p-3">
+            <div className="text-xs text-muted-foreground">Total jobs</div>
 
-            <div className="text-lg font-bold">{jobsCompleted}</div>
+            <div className="text-lg font-semibold font-mono tabular-nums">
+              {jobsCompleted}
+            </div>
           </div>
         </div>
 
-        <Button
-          className="w-full bg-amber-500 hover:bg-amber-600 text-white"
-          variant="secondary"
-          onClick={handleRatingChange}
-        >
-          <Star className="mr-2 h-4 w-4" />
-          Set Ratings
+        <Button className="w-full" onClick={handleRatingChange}>
+          <Star className="mr-2 h-4 w-4" aria-hidden="true" />
+          Set rating
         </Button>
       </CardContent>
     </Card>

@@ -1,11 +1,14 @@
 import type { ProjectDetail } from "@/types/project";
 import { Button } from "@/components/ui/button";
-import { Plus, User, Bell } from "lucide-react";
+import { Plus, User, ClipboardList } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
-import { dataTimeFormat } from "../../../utils/formatters";
+import Image from "next/image";
+
+import { dataTimeFormat } from "@/utils/formatters";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
-import Image from "next/image";
+
+const VISIBLE_PHOTOS = 4;
 
 export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
   const siteUpdates = project.siteUpdates;
@@ -13,89 +16,128 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
 
   return (
     <SectionCard
-      title="Site Manager Updates"
+      title="Site manager updates"
       action={
         <Button
           size="sm"
-          className="h-8 rounded-md bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700"
+          className="h-8 rounded-md px-3 text-xs font-medium"
           onClick={() =>
             dispatch(openModal({ type: "addUpdate", payload: { project } }))
           }
         >
-          <Plus className="mr-1 size-3.5" />
-          Add Update
+          <Plus className="mr-1 size-3.5" aria-hidden="true" />
+          Add update
         </Button>
       }
     >
-      <div className="space-y-3" key={siteUpdates.length}>
-        {siteUpdates.map((update) => (
-          <div
-            key={update.id}
-            className="relative overflow-hidden rounded-xl border border-border/70 bg-card p-4 transition-all hover:shadow-sm"
-          >
-            <div className="absolute bottom-0 left-0 top-0 w-1 bg-green-600" />
+      {siteUpdates.length === 0 ? (
+        <div className="mx-auto flex max-w-xl flex-col items-center gap-3 py-8 text-center">
+          <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+            <ClipboardList
+              className="size-5 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </div>
 
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold">{update.notes}</h4>
-                <div className="flex items-center gap-3 pt-1 text-xs text-muted-foreground/80">
-                  <span className="flex items-center">
-                    <User className="mr-1 size-3.5" />
-                    {update.author.name} —{" "}
-                    {dataTimeFormat.format(new Date(update.createdAt))}
-                  </span>
-                  <span className="flex items-center">
-                    {update.photoUrls.length} photos
-                  </span>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 shrink-0 px-2 text-[11.5px]"
+          <p className="text-base font-semibold text-foreground">
+            No site updates posted yet
+          </p>
+
+          <p className="text-sm text-muted-foreground">
+            Use Add update to post progress notes and site photos against a
+            milestone.
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {siteUpdates.map((update) => {
+            const photoCount = update.photoUrls.length;
+            const visiblePhotos = update.photoUrls.slice(0, VISIBLE_PHOTOS);
+            const hiddenPhotoCount = photoCount - visiblePhotos.length;
+
+            return (
+              <li
+                key={update.id}
+                className="rounded-xl border border-border/70 bg-card p-4"
               >
-                <Bell className="mr-1.5 size-3" />
-                Notify
-              </Button>
-            </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {update.notes}
+                  </p>
 
-            {update.photoUrls.length > 0 && (
-              <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                {Array.from({
-                  length: Math.min(update.photoUrls.length, 4),
-                }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-48 w-48 group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
-                    onClick={() =>
-                      dispatch(
-                        openModal({
-                          type: "viewPicture",
-                          payload: { imageUrl: update.photoUrls[i] },
-                        }),
-                      )
-                    }
-                  >
-                    <Image
-                      src={update.photoUrls[i]}
-                      alt={`Photo ${i + 1}`}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      loading="lazy"
-                      width={800}
-                      height={600}
-                    />
+                  <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-muted-foreground">
+                    <span className="flex items-center">
+                      <User className="mr-1 size-3.5" aria-hidden="true" />
+                      {update.author.name} —{" "}
+                      <span className="ml-1 font-mono tabular-nums">
+                        {dataTimeFormat.format(new Date(update.createdAt))}
+                      </span>
+                    </span>
+                    <span>
+                      {photoCount === 1 ? "1 photo" : `${photoCount} photos`}
+                    </span>
                   </div>
-                ))}
-                {update.photoUrls.length > 4 && (
-                  <div className="flex aspect-4/3 cursor-pointer items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600">
-                    +{update.photoUrls.length - 4}
+                </div>
+
+                {photoCount > 0 && (
+                  <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                    {visiblePhotos.map((photoUrl, index) => (
+                      <button
+                        key={`${update.id}-photo-${index}`}
+                        type="button"
+                        aria-label={`View photo ${index + 1} of ${photoCount} from this update`}
+                        className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        onClick={() =>
+                          dispatch(
+                            openModal({
+                              type: "viewPicture",
+                              payload: { imageUrl: photoUrl },
+                            }),
+                          )
+                        }
+                      >
+                        <Image
+                          src={photoUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          width={800}
+                          height={600}
+                        />
+                      </button>
+                    ))}
+
+                    {hiddenPhotoCount > 0 && (
+                      // The picture modal shows one image at a time, so this
+                      // opens photo VISIBLE_PHOTOS + 1 rather than a gallery.
+                      // The label has to say that; the visible text is only a
+                      // count of how many photos the grid is hiding.
+                      <button
+                        type="button"
+                        aria-label={`View photo ${visiblePhotos.length + 1} of ${photoCount} from this update (${hiddenPhotoCount} not shown)`}
+                        className="flex aspect-4/3 w-full items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        onClick={() =>
+                          dispatch(
+                            openModal({
+                              type: "viewPicture",
+                              payload: {
+                                imageUrl:
+                                  update.photoUrls[visiblePhotos.length],
+                              },
+                            }),
+                          )
+                        }
+                      >
+                        {hiddenPhotoCount} more
+                      </button>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </SectionCard>
   );
 }

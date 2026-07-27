@@ -89,7 +89,7 @@ export function AppShell({
               height={32}
             />
           </div>
-          <nav className="flex flex-1 flex-col items-center gap-1">
+          <nav aria-label="Main" className="flex flex-1 flex-col items-center gap-1">
             {navigationItems.map((item) => (
               <Link
                 key={item.slug}
@@ -100,9 +100,15 @@ export function AppShell({
                   item.checkAdmin && !isAdmin && "hidden"
                 )}
                 aria-label={item.label}
+                aria-current={item.slug === activeSlug ? "page" : undefined}
               >
                 {item.icon}
-                <span className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-100 shadow-xl group-hover:block">
+                {/* Duplicate of the Link's aria-label; hide it from the a11y
+                    tree so the item is not announced twice. */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-slate-100 shadow-xl group-hover:block"
+                >
                   {item.label}
                 </span>
               </Link>
@@ -144,25 +150,32 @@ export function AppShell({
                       className="rounded-lg border border-[#E2E8F0] bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                       aria-label="Close navigation menu"
                     >
-                      <X className="size-4" />
+                      <X className="size-4" aria-hidden="true" />
                     </Button>
                   </SheetClose>
                 </div>
 
-                <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
+                <nav
+                  aria-label="Main"
+                  className="flex flex-1 flex-col gap-1 px-3 py-4"
+                >
                   {navigationItems.map((item) => (
                     <SheetClose key={item.slug} asChild>
                       <Link
                         onClick={() => setMobileNavOpen(false)}
                         href={`/${item.slug}`}
+                        aria-current={
+                          item.slug === activeSlug ? "page" : undefined
+                        }
                         className={cn(
                           "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-slate-100 hover:text-slate-900",
                           item.slug === activeSlug
                             ? "bg-[#C6923A]/10 text-[#C6923A]"
-                            : "text-slate-600"
+                            : "text-slate-600",
+                          item.checkAdmin && !isAdmin && "hidden"
                         )}
                       >
-                        <span className={cn(
+                        <span aria-hidden="true" className={cn(
                           "grid size-9 place-items-center rounded-lg bg-slate-100 text-slate-500",
                           item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]"
                         )}>
@@ -230,7 +243,7 @@ export function AppShell({
                   onClick={() => setMobileNavOpen(true)}
                   aria-label="Open navigation menu"
                 >
-                  <Menu className="size-4" />
+                  <Menu className="size-4" aria-hidden="true" />
                 </Button>
                 <div>
                   <p className="font-heading text-xl font-semibold tracking-tight text-[#C6923A]">
@@ -240,7 +253,9 @@ export function AppShell({
                     {trail.map((segment, index) => (
                       <div key={segment} className="flex items-center gap-2">
                         {index > 0 ? (
-                          <span className="text-slate-300">/</span>
+                          <span className="text-slate-300" aria-hidden="true">
+                            /
+                          </span>
                         ) : null}
                         <span
                           className={cn(

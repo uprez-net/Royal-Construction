@@ -524,7 +524,6 @@ export function TradiesClient({
 
     <StatusPill
       key={`status-${row.id}`}
-      id={`status-${row.id}`}
       tone={statusToneMap[row.status]}
     >
       {statusLabelMap[row.status]}
@@ -969,10 +968,7 @@ export function TradiesClient({
                           </p>
                         </div>
                       </div>
-                      <StatusPill
-                        id={`card-status-${row.id}`}
-                        tone={statusToneMap[row.status]}
-                      >
+                      <StatusPill tone={statusToneMap[row.status]}>
                         {statusLabelMap[row.status]}
                       </StatusPill>
                     </div>

@@ -10,8 +10,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { dateFormat } from "@/utils/formatters";
+import { dateFormat, formatStatus } from "@/utils/formatters";
 import { useAppSelector } from "@/lib/store/hooks";
+import { cn } from "@/lib/utils";
 
 type IncidentType =
   | "SAFETY"
@@ -21,55 +22,59 @@ type IncidentType =
   | "DAMAGE"
   | "OTHER";
 
+/**
+ * Colour encodes severity — the only dimension here that varies in urgency —
+ * using the three-role status tokens (fill for the dot, `-light` surface plus
+ * `-ink` text for the chip). Incident *type* is carried by its lucide glyph and
+ * its text label, never by colour, so two incidents of different type but equal
+ * severity read as equally urgent.
+ */
 const severityConfig = {
   LOW: {
-    color: "bg-emerald-500",
+    dot: "bg-info",
+    chip: "border-transparent bg-info-light text-info-ink",
   },
   MEDIUM: {
-    color: "bg-amber-500",
+    dot: "bg-warning",
+    chip: "border-transparent bg-warning-light text-warning-ink",
   },
   HIGH: {
-    color: "bg-orange-500",
+    dot: "bg-destructive",
+    chip: "border-transparent bg-destructive-light text-destructive-ink",
   },
   CRITICAL: {
-    color: "bg-red-500",
+    dot: "bg-destructive",
+    chip: "border-transparent bg-destructive text-destructive-foreground",
   },
+} as const;
+
+/**
+ * `TradieIncident.createdAt` is typed `Date`, and both producers keep it one —
+ * the cached server read and the `reportTradieIncident` server action both cross
+ * React's Flight boundary, which preserves `Date`. The type is only as good as
+ * its producers, though, and `Intl.DateTimeFormat.format` throws
+ * `RangeError: Invalid time value` on a string rather than degrading to
+ * "Invalid Date", so a single future JSON hop would take the whole page down via
+ * the error boundary. Coerce here instead, and return `null` for anything
+ * unparseable so the caller can render prose rather than a broken value.
+ */
+const formatReportedDate = (value: Date | string | null | undefined) => {
+  if (value == null) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? null : dateFormat.format(parsed);
 };
 
-const typeConfig: Record<
-  IncidentType,
-  { label: string; icon: LucideIcon; className: string }
-> = {
-  SAFETY: {
-    label: "Safety",
-    icon: ShieldAlert,
-    className: "bg-red-100 text-red-700 border-red-200",
-  },
-  QUALITY: {
-    label: "Quality",
-    icon: AlertCircle,
-    className: "bg-blue-100 text-blue-700 border-blue-200",
-  },
-  BEHAVIOUR: {
-    label: "Behaviour",
-    icon: AlertTriangle,
-    className: "bg-amber-100 text-amber-700 border-amber-200",
-  },
-  ATTENDANCE: {
-    label: "Attendance",
-    icon: CalendarDays,
-    className: "bg-green-100 text-green-700 border-green-200",
-  },
-  DAMAGE: {
-    label: "Damage",
-    icon: Wrench,
-    className: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  },
-  OTHER: {
-    label: "Other",
-    icon: AlertCircle,
-    className: "bg-gray-100 text-gray-700 border-gray-200",
-  },
+const typeConfig: Record<IncidentType, { label: string; icon: LucideIcon }> = {
+  SAFETY: { label: "Safety", icon: ShieldAlert },
+  QUALITY: { label: "Quality", icon: AlertCircle },
+  BEHAVIOUR: { label: "Behaviour", icon: AlertTriangle },
+  ATTENDANCE: { label: "Attendance", icon: CalendarDays },
+  DAMAGE: { label: "Damage", icon: Wrench },
+  OTHER: { label: "Other", icon: AlertCircle },
 };
 
 export function TradieIncidentsCard() {
@@ -81,54 +86,85 @@ export function TradieIncidentsCard() {
     return null;
   }
 
-  const { incidents } = tradieDetails;
+  // Open incidents are what an operator has to act on, so they surface first;
+  // within each group the most recent comes first.
+  const incidents = [...tradieDetails.incidents].sort((a, b) => {
+    const aOpen = a.status === "OPEN" ? 0 : 1;
+    const bOpen = b.status === "OPEN" ? 0 : 1;
+
+    if (aOpen !== bOpen) {
+      return aOpen - bOpen;
+    }
+
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+  const openCount = incidents.filter(
+    (incident) => incident.status === "OPEN",
+  ).length;
 
   return (
-    <Card className="h-100">
+    <Card>
       <CardHeader className="pb-4">
-        <CardTitle>Incidents ({incidents.length})</CardTitle>
+        <CardTitle as="h2">
+          Incidents ({incidents.length}
+          {openCount > 0 ? `, ${openCount} open` : ""})
+        </CardTitle>
       </CardHeader>
 
-      <CardContent className="h-80 p-0">
-        <ScrollArea className="h-full px-6 pb-6">
-          <div className="space-y-4">
-            {incidents.length === 0 ? (
-              <div className="flex flex-col h-80 items-center justify-center text-sm text-muted-foreground gap-3">
-                <ShieldCheckIcon className="size-10" />
-                No incidents reported
-              </div>
-            ) : (
-              incidents.map((incident) => {
+      <CardContent className="p-0">
+        {incidents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 px-6 pb-8 pt-2 text-sm text-muted-foreground">
+            <ShieldCheckIcon className="size-10" aria-hidden="true" />
+            No incidents reported
+          </div>
+        ) : (
+          <ScrollArea className="max-h-100 px-6 pb-6">
+            <div className="space-y-4">
+              {incidents.map((incident) => {
                 const type =
                   typeConfig[incident.type as IncidentType] ?? typeConfig.OTHER;
                 const TypeIcon = type.icon;
+                // Unmapped severities used to throw here and take the whole page
+                // down via the error boundary.
+                const severity =
+                  severityConfig[
+                    incident.severity as keyof typeof severityConfig
+                  ] ?? severityConfig.MEDIUM;
+                const isOpen = incident.status === "OPEN";
+                const reportedOn = formatReportedDate(incident.createdAt);
 
                 return (
-                  <div key={incident.id} className="rounded-lg border p-4">
+                  <div
+                    key={incident.id}
+                    className="rounded-lg border border-border/70 p-4"
+                  >
                     <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className={type.className}>
-                        <TypeIcon className="mr-1 h-3 w-3" />
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-border/70 bg-muted text-foreground"
+                      >
+                        <TypeIcon className="h-3 w-3" aria-hidden="true" />
                         {type.label}
                       </Badge>
 
                       <span
-                        className={`h-2.5 w-2.5 rounded-full ${
-                          severityConfig[incident.severity].color
-                        }`}
-                      />
-
-                      <span className="text-xs font-semibold uppercase">
-                        {incident.severity}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+                          severity.chip,
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            severity.dot,
+                          )}
+                          aria-hidden="true"
+                        />
+                        {formatStatus(incident.severity)} severity
                       </span>
 
-                      <Badge
-                        variant={
-                          incident.status === "OPEN"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                      >
-                        {incident.status}
+                      <Badge variant={isOpen ? "destructive" : "secondary"}>
+                        {formatStatus(incident.status)}
                       </Badge>
                     </div>
 
@@ -136,18 +172,26 @@ export function TradieIncidentsCard() {
                       {incident.description}
                     </p>
 
+                    {/* The mono slot is reserved for a real value; the
+                        placeholder reads as prose. */}
                     <div className="mt-3 text-xs text-muted-foreground">
-                      Reported on{" "}
-                      <span className="font-medium">
-                        {dateFormat.format(incident.createdAt)}
-                      </span>
+                      {reportedOn ? (
+                        <>
+                          Reported on{" "}
+                          <span className="font-mono tabular-nums">
+                            {reportedOn}
+                          </span>
+                        </>
+                      ) : (
+                        "Report date not recorded"
+                      )}
                     </div>
                   </div>
                 );
-              })
-            )}
-          </div>
-        </ScrollArea>
+              })}
+            </div>
+          </ScrollArea>
+        )}
       </CardContent>
     </Card>
   );

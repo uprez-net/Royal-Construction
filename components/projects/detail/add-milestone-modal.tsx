@@ -50,13 +50,23 @@ const initialFormState: MilestoneCreationData = {
 type MilestoneFormErrors = Partial<Record<keyof MilestoneCreationData, string>>;
 
 const inputClassName =
-  "h-10 rounded-[10px] border-border/80 bg-slate-50/40 px-3 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10";
+  "h-10 rounded-[10px] border-border/80 bg-background px-3 text-sm";
 
 const textareaClassName =
-  "min-h-24 rounded-[10px] border-border/80 bg-slate-50/40 px-3 py-2 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10";
+  "min-h-24 rounded-[10px] border-border/80 bg-background px-3 py-2 text-sm";
 
 const selectTriggerClassName =
-  "h-10 w-full rounded-[10px] border-border/80 bg-slate-50/40 px-3 text-[13px] transition-all focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10";
+  "h-10 w-full rounded-[10px] border-border/80 bg-background px-3 text-sm";
+
+const labelClassName = "text-xs font-medium text-foreground";
+
+function RequiredMark() {
+  return (
+    <span className="ml-0.5 text-destructive-ink" aria-hidden="true">
+      *
+    </span>
+  );
+}
 
 export default function AddMilestoneModal({
   projectId,
@@ -130,7 +140,6 @@ export default function AddMilestoneModal({
       await dispatch(
         addProjectMilestone({
           ...validatedData.data,
-          // targetDate: new Date(validatedData.data.targetDate).toISOString(),
           projectId,
         }),
       ).unwrap();
@@ -150,43 +159,50 @@ export default function AddMilestoneModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[18px] border border-border/80 bg-white p-0 shadow-[0_20px_60px_rgba(15,23,42,0.18)] sm:max-w-160">
+      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[18px] border border-border/80 bg-card p-0 shadow-lg sm:max-w-160">
         <DialogHeader className="border-b border-border/70 px-6 py-5">
-          <DialogTitle className="text-[18px] font-semibold tracking-[-0.02em] text-slate-900">
-            Add Milestone
+          <DialogTitle className="text-lg font-semibold text-foreground">
+            Add milestone
           </DialogTitle>
-          <DialogDescription className="text-[13px] text-slate-500">
+          <DialogDescription className="text-sm text-muted-foreground">
             Define the scope, budget, and parent milestone for a new project
-            phase.
+            phase. Fields marked * are required.
           </DialogDescription>
         </DialogHeader>
 
         <form
           className="space-y-5 px-6 pb-6 pt-5"
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
+            if (isPending) return;
             startTransition(async () => await handleSubmit(formState));
           }}
         >
           {submitError ? (
-            <div className="flex items-start gap-2 rounded-[12px] border border-amber-200/80 bg-amber-50 px-3.5 py-3 text-[12.5px] text-amber-900">
-              <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-[12px] border border-destructive/40 bg-destructive-light px-3.5 py-3 text-sm text-destructive-ink"
+            >
+              <AlertCircle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
               <p>{submitError}</p>
             </div>
           ) : null}
 
           <div className="grid gap-4">
             <div className="space-y-1.5">
-              <Label
-                htmlFor="name"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-              >
-                Milestone Name
+              <Label htmlFor="name" className={labelClassName}>
+                Milestone name
+                <RequiredMark />
               </Label>
               <Input
                 id="name"
+                required
                 className={inputClassName}
-                placeholder="Enter milestone name"
+                placeholder="Slab pour"
                 value={formState.name}
                 onChange={(e) => handleFormChange("name", e.target.value)}
                 aria-invalid={Boolean(fieldErrors.name)}
@@ -199,16 +215,13 @@ export default function AddMilestoneModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label
-                htmlFor="description"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-              >
+              <Label htmlFor="description" className={labelClassName}>
                 Description
               </Label>
               <Textarea
                 id="description"
                 className={textareaClassName}
-                placeholder="Enter milestone description"
+                placeholder="What this milestone covers"
                 value={formState.description}
                 onChange={(e) =>
                   handleFormChange("description", e.target.value)
@@ -225,16 +238,15 @@ export default function AddMilestoneModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label
-                htmlFor="targetDate"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-              >
-                Target Date
+              <Label htmlFor="targetDate" className={labelClassName}>
+                Target date
+                <RequiredMark />
               </Label>
               <Input
                 id="targetDate"
                 type="date"
-                className={inputClassName}
+                required
+                className={`${inputClassName} font-mono tabular-nums`}
                 value={formState.targetDate}
                 onChange={(e) => handleFormChange("targetDate", e.target.value)}
                 aria-invalid={Boolean(fieldErrors.targetDate)}
@@ -249,17 +261,17 @@ export default function AddMilestoneModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label
-                htmlFor="budget"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-              >
+              <Label htmlFor="budget" className={labelClassName}>
                 Budget
+                <RequiredMark />
               </Label>
               <Input
                 id="budget"
                 type="text"
-                className={inputClassName}
-                placeholder="Enter milestone budget"
+                inputMode="decimal"
+                required
+                className={`${inputClassName} font-mono tabular-nums`}
+                placeholder="$0"
                 value={
                   formState.budget && formState.budget > 0
                     ? currency.format(formState.budget)
@@ -280,11 +292,9 @@ export default function AddMilestoneModal({
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label
-                htmlFor="parentMilestone"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-              >
+              <Label htmlFor="projectStage" className={labelClassName}>
                 Stage
+                <RequiredMark />
               </Label>
               <Select
                 value={formState.projectStage}
@@ -292,8 +302,11 @@ export default function AddMilestoneModal({
                   handleFormChange("projectStage", value)
                 }
               >
-                <SelectTrigger className={selectTriggerClassName}>
-                  <SelectValue placeholder="Select Project Stage" />
+                <SelectTrigger
+                  id="projectStage"
+                  className={selectTriggerClassName}
+                >
+                  <SelectValue placeholder="Select a project stage" />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.values(ProjectStage).map((stage) => (
@@ -306,11 +319,8 @@ export default function AddMilestoneModal({
             </div>
 
             <div className="space-y-1.5">
-              <Label
-                htmlFor="parentMilestone"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-              >
-                Parent Milestone
+              <Label htmlFor="parentId" className={labelClassName}>
+                Parent milestone
               </Label>
               <Select
                 value={formState.parentId ?? "__none__"}
@@ -321,7 +331,11 @@ export default function AddMilestoneModal({
                   )
                 }
               >
-                <SelectTrigger className={selectTriggerClassName}>
+                <SelectTrigger
+                  id="parentId"
+                  aria-describedby="parentId-hint"
+                  className={selectTriggerClassName}
+                >
                   <SelectValue placeholder="No parent milestone" />
                 </SelectTrigger>
                 <SelectContent>
@@ -339,7 +353,7 @@ export default function AddMilestoneModal({
                     ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-slate-500">
+              <p id="parentId-hint" className="text-xs text-muted-foreground">
                 Use this to nest the milestone under a larger phase.
               </p>
             </div>
@@ -349,22 +363,27 @@ export default function AddMilestoneModal({
             <Button
               type="button"
               variant="outline"
+              disabled={isPending}
               onClick={() => handleOpenChange(false)}
-              className="h-10 rounded-[10px] px-4 text-[12.5px] font-medium transition-all hover:border-teal-600 hover:bg-slate-50 hover:text-teal-600"
+              className="h-10 rounded-[10px] px-4 text-sm font-medium"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isPending}
-              className="h-10 rounded-[10px] bg-[#0D9488] px-4 text-[12.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#0F766E] hover:shadow-[0_6px_14px_rgba(13,148,136,0.26)]"
+              aria-busy={isPending}
+              className="h-10 rounded-[10px] bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               {isPending ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2
+                  className="mr-1.5 size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
               ) : (
-                <Plus className="mr-1.5 size-4" />
+                <Plus className="mr-1.5 size-4" aria-hidden="true" />
               )}
-              Create Milestone
+              {isPending ? "Creating milestone…" : "Create milestone"}
             </Button>
           </div>
         </form>

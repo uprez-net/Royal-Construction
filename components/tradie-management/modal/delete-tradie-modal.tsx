@@ -1,4 +1,4 @@
-import { AlertOctagon, Send, Trash2 } from "lucide-react";
+import { AlertOctagon, Loader2, Send, Trash2 } from "lucide-react";
 
 import { TradieRow } from "@/types/tradie";
 
@@ -58,8 +58,7 @@ export default function DeleteTradieModal({
 
         toast.success("Deletion request submitted successfully.");
 
-        setReason("");
-        onClose();
+        handleOpenChange(false);
       } catch (error) {
         toast.error("Error deleting tradie. Please try again.");
 
@@ -73,28 +72,32 @@ export default function DeleteTradieModal({
       <DialogContent className="sm:max-w-115">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
-            <Trash2 className="h-5 w-5" />
-            Delete Tradie
+            <Trash2 className="h-5 w-5" aria-hidden="true" />
+            Delete {tradie.name}
           </DialogTitle>
 
           <DialogDescription>
-            {tradie.name} • {tradie.trade}
+            {tradie.trade} &middot; requesting permanent removal from the active
+            tradie list.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+          <div className="rounded-lg border border-destructive/20 bg-destructive-light p-4">
             <div className="flex gap-3">
-              <AlertOctagon className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+              <AlertOctagon
+                className="mt-0.5 h-5 w-5 shrink-0 text-destructive-ink"
+                aria-hidden="true"
+              />
 
               <div>
-                <h4 className="mb-1 text-sm font-semibold text-destructive">
+                <h4 className="mb-1 text-sm font-semibold text-destructive-ink">
                   This action requires approval
                 </h4>
 
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  You are requesting to permanently delete this tradie&apos;s profile
-                  from the active list. This request will be submitted for
+                <p className="text-xs leading-relaxed text-foreground/80">
+                  You are requesting to permanently delete {tradie.name}&apos;s
+                  profile from the active list. This request is submitted for
                   review and confirmation before any action is taken.
                 </p>
               </div>
@@ -102,25 +105,38 @@ export default function DeleteTradieModal({
           </div>
 
           <div className="space-y-2">
-            <Label>
-              Reason for Deletion
-              <span className="ml-1 text-destructive">*</span>
+            <Label htmlFor="delete-tradie-reason">
+              Reason for deletion
+              <span className="text-destructive">
+                *<span className="sr-only"> required</span>
+              </span>
             </Label>
 
             <Textarea
+              id="delete-tradie-reason"
               rows={4}
-              placeholder="Explain why this tradie should be removed..."
+              maxLength={500}
+              required
+              placeholder="Explain why this tradie should be removed…"
               value={reason}
+              aria-describedby="delete-tradie-reason-count"
               onChange={(e) => setReason(e.target.value)}
             />
 
-            <p className="text-xs text-muted-foreground">
+            <p
+              id="delete-tradie-reason-count"
+              className="text-xs text-muted-foreground"
+            >
               {reason.length}/500 characters
             </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose} disabled={isPending}>
+            <Button
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
 
@@ -129,9 +145,20 @@ export default function DeleteTradieModal({
               onClick={handleSubmit}
               disabled={isPending || !reason.trim()}
             >
-              <Send className="mr-2 h-4 w-4" />
-
-              {isPending ? "Submitting..." : "Submit for Approval"}
+              {isPending ? (
+                <>
+                  <Loader2
+                    className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Submit for approval
+                </>
+              )}
             </Button>
           </div>
         </div>

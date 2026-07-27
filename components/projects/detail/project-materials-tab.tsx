@@ -6,7 +6,6 @@ import {
   CheckCircle,
   Clock,
   MinusCircle,
-  PenSquare,
   Plus,
   Search,
 } from "lucide-react";
@@ -20,7 +19,6 @@ import { openModal } from "@/lib/store/slices/uiSlice";
 import { ProjectDetail } from "@/types/project";
 import { DataTable } from "@/components/common/data-table";
 import { currency } from "@/utils/formatters";
-import { toast } from "sonner";
 
 interface ProjectMaterialsTabProps {
   project: ProjectDetail;
@@ -29,6 +27,22 @@ interface ProjectMaterialsTabProps {
 export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
   const dispatch = useAppDispatch();
   const [query, setQuery] = useState("");
+  const trimmedQuery = query.trim();
+  const isFiltered = trimmedQuery.length > 0;
+
+  const filteredMaterials = useMemo(() => {
+    if (!trimmedQuery) {
+      return project.materials;
+    }
+
+    const needle = trimmedQuery.toLowerCase();
+    return project.materials.filter((item) =>
+      [item.name, item.category, item.specifications]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(needle)),
+    );
+  }, [project.materials, trimmedQuery]);
+
   const {
     pendingMaterials,
     deliveredMaterials,
@@ -57,7 +71,7 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
     };
   }, [project.materials]);
 
-  const materialRows = project.materials.map((item) => [
+  const materialRows = filteredMaterials.map((item) => [
     <span key={`${item.id}-category`} className="font-medium text-foreground">
       {item.category}
     </span>,
@@ -68,13 +82,18 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
       {item.specifications}
     </span>,
 
-    <span key={`${item.id}-qty`}>{item.quantity}</span>,
+    <span key={`${item.id}-qty`} className="font-mono tabular-nums">
+      {item.quantity}
+    </span>,
 
-    <span key={`${item.id}-unit`}>
+    <span key={`${item.id}-unit`} className="font-mono tabular-nums">
       {currency.format(Number(item.unitCost))}
     </span>,
 
-    <span key={`${item.id}-total`} className="font-semibold text-foreground">
+    <span
+      key={`${item.id}-total`}
+      className="font-mono font-medium tabular-nums text-foreground"
+    >
       {currency.format(Number(item.totalCost))}
     </span>,
 
@@ -93,43 +112,36 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
     >
       {["DELIVERED", "INSTALLED"].includes(item.status) ? "Yes" : "No"}
     </StatusPill>,
-
-    <div key={`${item.id}-actions`} className="flex justify-end">
-      <Button
-        variant="outline"
-        size="icon"
-        className="size-8"
-        onClick={() => {
-          // edit action
-          toast.info("Edit material feature coming soon!");
-        }}
-      >
-        <PenSquare className="size-3.5" />
-      </Button>
-    </div>,
   ]);
 
   return (
-    <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
-      <CardHeader className="border-b border-border/60 pb-4">
+    <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+      <CardHeader className="border-b border-border/70 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
-            Selected Materials from Catalogue
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
+            Selected materials
           </CardTitle>
           <div className="flex gap-2">
-            <div className="relative w-full sm:w-[220px] transition-all focus-within:w-[280px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-[13px] -translate-y-1/2 text-muted-foreground" />
+            <div className="relative w-full sm:w-[220px]">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
               <Input
+                type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search materials..."
-                className="pl-[32px] h-9 text-[12.5px] rounded-lg bg-white"
-                aria-label="Search materials"
+                placeholder="Search materials"
+                className="h-9 rounded-lg bg-card pl-8 text-sm"
+                aria-label="Search materials by name, category or specification"
               />
             </div>
             <Button
               size="sm"
-              className="h-9 rounded-lg bg-teal-600 px-[14px] text-[12.5px] font-semibold text-white hover:bg-teal-700"
+              className="h-9 rounded-lg px-3.5 text-sm font-medium"
               onClick={() =>
                 dispatch(
                   openModal({
@@ -139,69 +151,111 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
                 )
               }
             >
-              <Plus className="mr-1 size-4" />
-              Add Material
+              <Plus className="mr-1 size-4" aria-hidden="true" />
+              Add material
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 pt-0 px-0 pb-5">
-        <div className="mx-4 mt-2 rounded-lg border border-border/60">
+      <CardContent className="space-y-4 px-0 pb-5 pt-0">
+        <p aria-live="polite" className="sr-only">
+          {isFiltered
+            ? `${filteredMaterials.length} of ${project.materials.length} materials match "${trimmedQuery}".`
+            : `${project.materials.length} materials.`}
+        </p>
+
+        {isFiltered && filteredMaterials.length > 0 ? (
+          <div className="mx-4 mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              Showing {filteredMaterials.length} of {project.materials.length}{" "}
+              materials
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setQuery("")}
+            >
+              Clear search
+            </Button>
+          </div>
+        ) : null}
+
+        <div className="mx-4 mt-2">
           <DataTable
-            key={project.materials.length}
+            caption={`Materials selected for ${project.name}, with quantity, unit cost, total cost, order status and delivery status.`}
             headers={[
               "Category",
               "Product",
               "Specification",
               "Qty",
-              "Unit Cost",
+              "Unit cost",
               "Total",
               "Ordered",
               "Delivered",
-              <div key="action-header" className="text-right">
-                Action
-              </div>,
+            ]}
+            align={[
+              "start",
+              "start",
+              "start",
+              "end",
+              "end",
+              "end",
+              "start",
+              "start",
             ]}
             rows={materialRows}
             emptyState={
               <div className="flex flex-col items-center justify-center gap-3">
                 <div className="flex size-12 items-center justify-center">
-                  <Boxes className="size-5 text-muted-foreground" />
+                  <Boxes className="size-5 text-muted-foreground" aria-hidden="true" />
                 </div>
 
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    No materials added
+                  <p className="text-sm font-medium text-foreground">
+                    {isFiltered ? "No matching materials" : "No materials added"}
                   </p>
 
                   <p className="text-xs text-muted-foreground">
-                    Materials for this project will appear here.
+                    {isFiltered
+                      ? `Nothing matches "${trimmedQuery}".`
+                      : "Materials for this project will appear here."}
                   </p>
                 </div>
+
+                {isFiltered ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuery("")}
+                  >
+                    Clear search
+                  </Button>
+                ) : null}
               </div>
             }
           />
         </div>
 
-        <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-4 py-3">
-          <div className="text-[13px]">
-            <b>Total Materials Cost:</b>{" "}
-            <span className="ml-1 text-base font-extrabold text-teal-600">
+        <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted px-4 py-3">
+          <p className="text-sm text-foreground">
+            <span className="font-medium">Total materials cost:</span>{" "}
+            <span className="ml-1 font-mono text-base font-semibold tabular-nums text-foreground">
               {currency.format(totalMaterialCost)}
             </span>
-          </div>
+          </p>
           <div className="flex gap-1.5">
             <StatusPill tone="success">
-              <CheckCircle className="mr-1 size-3" />
-              {deliveredMaterials} Delivered
+              <CheckCircle className="mr-1 size-3" aria-hidden="true" />
+              {deliveredMaterials} delivered
             </StatusPill>
             <StatusPill tone="primary">
-              <Clock className="mr-1 size-3" />
-              {installedMaterials} Installed
+              <Clock className="mr-1 size-3" aria-hidden="true" />
+              {installedMaterials} installed
             </StatusPill>
             <StatusPill tone="neutral">
-              <MinusCircle className="mr-1 size-3" />
-              {pendingMaterials} Pending
+              <MinusCircle className="mr-1 size-3" aria-hidden="true" />
+              {pendingMaterials} pending
             </StatusPill>
           </div>
         </div>

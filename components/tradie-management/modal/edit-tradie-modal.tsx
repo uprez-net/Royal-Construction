@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/common/searchable-select";
 import { AddressSuggestion } from "@/types/data";
 import { fetchJson } from "@/utils/fetch";
+import { cn } from "@/lib/utils";
 
 interface EditTradieModalProps {
   open: boolean;
@@ -144,6 +145,7 @@ export default function EditTradieModal({
       });
 
       setErrors(fieldErrors);
+      toast.error("Please fix the highlighted fields");
       return;
     }
 
@@ -180,15 +182,17 @@ export default function EditTradieModal({
   const fields = [
     {
       key: "email",
-      label: "Email Address",
+      label: "Email address",
       icon: Mail,
       placeholder: "john@smith-electrical.com",
+      mono: false,
     },
     {
       key: "phone",
-      label: "Phone Number",
+      label: "Phone number",
       icon: Phone,
       placeholder: "0412 345 678",
+      mono: true,
     },
   ] as const;
 
@@ -198,46 +202,77 @@ export default function EditTradieModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <div className="rounded-lg bg-primary/10 p-2">
-              <Pencil className="h-5 w-5 text-primary" />
+              <Pencil className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
-            Edit Tradie Details
+            Edit tradie details
           </DialogTitle>
 
           <DialogDescription>
-            Update contact information and internal notes for this tradie.
+            Update contact information and internal notes for {tradie.name}.
+            Fields marked with an asterisk are required.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 pt-2">
           <div className="grid gap-5 md:grid-cols-2">
-            {fields.map(({ key, label, icon: Icon, placeholder }) => (
+            {fields.map(({ key, label, icon: Icon, placeholder, mono }) => (
+              // Add and edit modals can be mounted in the same document, so the
+              // DOM ids are namespaced per modal; bare "email"/"phone" ids would
+              // collide and point a <label for> at the wrong control.
               <div key={key} className="space-y-2">
-                <Label htmlFor={key}>{label}</Label>
+                <Label htmlFor={`tradie-edit-${key}`}>
+                  {label}
+                  <span className="text-destructive">
+                    *<span className="sr-only"> required</span>
+                  </span>
+                </Label>
 
                 <div className="relative">
-                  <Icon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Icon
+                    className="absolute left-3 top-3 h-4 w-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
 
                   <Input
-                    id={key}
-                    className="pl-9"
+                    id={`tradie-edit-${key}`}
+                    required
+                    className={cn("pl-9", mono && "font-mono tabular-nums")}
                     placeholder={placeholder}
                     value={formData[key]}
+                    aria-invalid={Boolean(errors[key])}
+                    aria-describedby={
+                      errors[key] ? `tradie-edit-${key}-error` : undefined
+                    }
                     onChange={(e) => handleInputChange(key, e.target.value)}
                   />
                 </div>
 
                 {errors[key] && (
-                  <p className="text-xs text-destructive">{errors[key]}</p>
+                  <p
+                    id={`tradie-edit-${key}-error`}
+                    className="text-xs text-destructive"
+                  >
+                    {errors[key]}
+                  </p>
                 )}
               </div>
             ))}
 
             <div key="location" className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Tradie Location
-              </Label>
+              {/* The trigger is a Popover button with its own internal search
+                  field, so this visible text is a plain div rather than a
+                  <label>. It is wired to the trigger by id via `labelledById`;
+                  without it the trigger's accessible name fell back to the
+                  placeholder, naming the control after its hint. */}
+              <div
+                id="edit-tradie-location-label"
+                className="flex items-center gap-2 text-sm font-medium"
+              >
+                <MapPin className="h-4 w-4" aria-hidden="true" />
+                Tradie location
+              </div>
               <SearchableSelect
+                labelledById="edit-tradie-location-label"
                 label=""
                 placeholder="Select address..."
                 searchValue={siteAddress}
@@ -256,29 +291,47 @@ export default function EditTradieModal({
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label className="flex items-center gap-2">
-                <StickyNote className="h-4 w-4" />
-                Internal Notes
+              <Label
+                htmlFor="tradie-edit-note"
+                className="flex items-center gap-2"
+              >
+                <StickyNote className="h-4 w-4" aria-hidden="true" />
+                Internal notes
               </Label>
 
               <Textarea
+                id="tradie-edit-note"
                 rows={4}
                 maxLength={500}
                 placeholder="Add notes about reliability, preferences, availability..."
                 value={formData.note}
+                aria-invalid={Boolean(errors.note)}
+                aria-describedby={
+                  errors.note
+                    ? "tradie-edit-note-error"
+                    : "tradie-edit-note-count"
+                }
                 onChange={(e) => handleInputChange("note", e.target.value)}
               />
 
-              <p className="text-right text-xs text-muted-foreground">
-                {formData.note?.length ?? 0}/500
+              <p
+                id="tradie-edit-note-count"
+                className="text-right text-xs text-muted-foreground"
+              >
+                {formData.note?.length ?? 0}/500 characters
               </p>
               {errors.note && (
-                <p className="text-xs text-destructive">{errors.note}</p>
+                <p
+                  id="tradie-edit-note-error"
+                  className="text-xs text-destructive"
+                >
+                  {errors.note}
+                </p>
               )}
             </div>
           </div>
 
-          <div className="flex justify-between border-t pt-4">
+          <div className="flex justify-between border-t border-border/70 pt-4">
             <p className="text-sm text-muted-foreground">
               {hasChanges ? "You have unsaved changes" : "No changes made"}
             </p>
@@ -294,13 +347,16 @@ export default function EditTradieModal({
               >
                 {isPending ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
+                    <Loader2
+                      className="mr-2 h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Updating…
                   </>
                 ) : (
                   <>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Save Changes
+                    <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Save changes
                   </>
                 )}
               </Button>

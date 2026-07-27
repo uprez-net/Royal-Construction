@@ -1,7 +1,7 @@
 import { TRADIE_TYPE_ICONS, TRADIE_TYPES } from "@/constants/tradieTypes";
 import { Square } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { randomColourHexGenerator } from "@/utils/generator";
+import { TRADE_CHIP_CLASS } from "@/constants/tradeChip";
 
 const convertCategoryToTradieType = (
   category: string,
@@ -15,14 +15,11 @@ const convertCategoryToTradieType = (
 
 export function TradieBadge({ trade }: { trade: string }) {
   const Icon = TRADIE_TYPE_ICONS[convertCategoryToTradieType(trade)!] ?? Square;
-  const color = randomColourHexGenerator(trade);
   return (
-    <Badge
-      variant="secondary"
-      className="gap-1"
-      style={{ color, backgroundColor: `${color}15` }}
-    >
-      <Icon className="h-3 w-3" />
+    // Trade identity comes from the icon, not a hashed hue — see
+    // constants/tradeChip.ts.
+    <Badge variant="secondary" className={TRADE_CHIP_CLASS}>
+      <Icon className="size-3" aria-hidden="true" />
       {trade}
     </Badge>
   );

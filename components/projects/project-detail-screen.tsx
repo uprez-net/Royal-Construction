@@ -13,7 +13,10 @@ import { ProjectStatCards } from "./detail/project-stat-cards";
 export function ProjectDetailScreen({ project }: { project: ProjectDetail }) {
   const dispatch = useAppDispatch();
   const activeProject = useAppSelector((state) => state.projects.activeProject);
-  const displayedProject = activeProject?.id === project.id ? activeProject : project;
+  // Prefer the store copy once it has been hydrated for this project so
+  // in-page mutations are reflected; fall back to the server payload.
+  const displayedProject =
+    activeProject && activeProject.id === project.id ? activeProject : project;
 
   useEffect(() => {
     dispatch(setActiveProject(project));

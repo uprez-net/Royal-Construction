@@ -247,7 +247,12 @@ const tradieManagementSlice = createSlice({
             .addCase(addTradie.fulfilled, (state, action) => {
                 state.tradies.push(action.payload);
                 state.kpiData.registeredTradies.total += 1;
-                state.kpiData.registeredTradies.trendDelta += 5; // Example increment, adjust as needed
+                // trendDelta is deliberately NOT touched here. It previously did
+                // `+= 5 // Example increment`, inventing a period-over-period trend
+                // from nothing and feeding it to a TrendBadge the operator reads as
+                // real. The trend is a server-computed figure; adding one tradie
+                // cannot be turned into a delta on the client. It refreshes on the
+                // next load of fetchTradieKPIDataCached.
                 const tradeCategory = convertCategoryToTradieType(action.payload.trade);
                 if (tradeCategory) {
                     state.tradiesByCategory = state.tradiesByCategory.map((cat) => {

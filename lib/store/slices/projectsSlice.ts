@@ -691,13 +691,20 @@ export const selectActiveProjectBudgetSummary = createSelector(selectProjectsSta
 
   const totalBudget = Number(project.totalBudget);
   const spent = Number(project.spent);
-  const remaining = Math.max(totalBudget - spent, 0);
+  // `variance` is the signed truth: negative when spend has exceeded the
+  // contract value. `remaining` stays clamped at zero because it reads as
+  // "budget still available to draw down", which can never be negative —
+  // but clamping alone made an overrun unreachable for any consumer, so the
+  // real figure is exposed alongside it rather than in place of it.
+  const variance = totalBudget - spent;
+  const remaining = Math.max(variance, 0);
   const spentPercent = totalBudget > 0 ? Math.round((spent / totalBudget) * 100) : 0;
 
   return {
     totalBudget,
     spent,
     remaining,
+    variance,
     spentPercent,
   };
 });

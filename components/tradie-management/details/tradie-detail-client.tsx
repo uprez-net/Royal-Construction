@@ -25,15 +25,16 @@ export function TradieDetailClient({ tradie }: { tradie: TradieDetails }) {
 
   return (
     <div className="space-y-4">
-      <Link href="/tradie-management">
-        <Button
-          variant="ghost"
-          className="flex items-center gap-2 text-muted-foreground"
-        >
-          <ArrowLeft className="size-5" />
-          Back to Tradies
-        </Button>
-      </Link>
+      <Button
+        asChild
+        variant="ghost"
+        className="w-fit text-muted-foreground"
+      >
+        <Link href="/tradie-management">
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to tradies
+        </Link>
+      </Button>
       <TradieCard />
       <div className="grid gap-4 lg:grid-cols-12 items-stretch">
         <div className="lg:col-span-8">
