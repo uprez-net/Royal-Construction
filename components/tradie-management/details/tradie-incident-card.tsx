@@ -48,6 +48,26 @@ const severityConfig = {
   },
 } as const;
 
+/**
+ * `TradieIncident.createdAt` is typed `Date`, and both producers keep it one —
+ * the cached server read and the `reportTradieIncident` server action both cross
+ * React's Flight boundary, which preserves `Date`. The type is only as good as
+ * its producers, though, and `Intl.DateTimeFormat.format` throws
+ * `RangeError: Invalid time value` on a string rather than degrading to
+ * "Invalid Date", so a single future JSON hop would take the whole page down via
+ * the error boundary. Coerce here instead, and return `null` for anything
+ * unparseable so the caller can render prose rather than a broken value.
+ */
+const formatReportedDate = (value: Date | string | null | undefined) => {
+  if (value == null) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? null : dateFormat.format(parsed);
+};
+
 const typeConfig: Record<IncidentType, { label: string; icon: LucideIcon }> = {
   SAFETY: { label: "Safety", icon: ShieldAlert },
   QUALITY: { label: "Quality", icon: AlertCircle },
@@ -111,6 +131,7 @@ export function TradieIncidentsCard() {
                     incident.severity as keyof typeof severityConfig
                   ] ?? severityConfig.MEDIUM;
                 const isOpen = incident.status === "OPEN";
+                const reportedOn = formatReportedDate(incident.createdAt);
 
                 return (
                   <div
@@ -151,11 +172,19 @@ export function TradieIncidentsCard() {
                       {incident.description}
                     </p>
 
+                    {/* The mono slot is reserved for a real value; the
+                        placeholder reads as prose. */}
                     <div className="mt-3 text-xs text-muted-foreground">
-                      Reported on{" "}
-                      <span className="font-mono tabular-nums">
-                        {dateFormat.format(incident.createdAt)}
-                      </span>
+                      {reportedOn ? (
+                        <>
+                          Reported on{" "}
+                          <span className="font-mono tabular-nums">
+                            {reportedOn}
+                          </span>
+                        </>
+                      ) : (
+                        "Report date not recorded"
+                      )}
                     </div>
                   </div>
                 );

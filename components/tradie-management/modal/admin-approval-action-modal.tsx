@@ -106,7 +106,14 @@ export function AdminApprovalActionModal({
               been actioned.
             </DialogDescription>
 
-            <p className="text-xs text-muted-foreground">{error.message}</p>
+            {/* `error` is nullable even inside the isError branch, and a thrown
+                value can carry an empty message — neither should render as
+                "undefined" or as a blank line under the description. */}
+            <p className="text-xs text-muted-foreground">
+              {error?.message?.trim()
+                ? error.message
+                : "No further detail was returned."}
+            </p>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={onClose}>

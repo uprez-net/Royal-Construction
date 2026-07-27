@@ -5,9 +5,8 @@ import { ArrowRightCircle, CalendarCheck, MapPin, Phone } from "lucide-react";
 import { ProjectWithStats } from "@/types/project";
 import { compactCurrency, dateFormat } from "@/utils/formatters";
 import { Button } from "../ui/button";
+import type { TabType } from "./project-detail-modal";
 import { formatStatus, projectStatusConfig } from "./project-status";
-
-type TabType = "overview" | "customer" | "milestones" | "financials" | "team";
 
 interface ProjectOverviewTabProps {
   project: ProjectWithStats;

@@ -53,6 +53,7 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
           {siteUpdates.map((update) => {
             const photoCount = update.photoUrls.length;
             const visiblePhotos = update.photoUrls.slice(0, VISIBLE_PHOTOS);
+            const hiddenPhotoCount = photoCount - visiblePhotos.length;
 
             return (
               <li
@@ -106,23 +107,28 @@ export function ProjectSiteUpdatesTab({ project }: { project: ProjectDetail }) {
                       </button>
                     ))}
 
-                    {photoCount > VISIBLE_PHOTOS && (
+                    {hiddenPhotoCount > 0 && (
+                      // The picture modal shows one image at a time, so this
+                      // opens photo VISIBLE_PHOTOS + 1 rather than a gallery.
+                      // The label has to say that; the visible text is only a
+                      // count of how many photos the grid is hiding.
                       <button
                         type="button"
-                        aria-label={`View the remaining ${photoCount - VISIBLE_PHOTOS} photos from this update`}
+                        aria-label={`View photo ${visiblePhotos.length + 1} of ${photoCount} from this update (${hiddenPhotoCount} not shown)`}
                         className="flex aspect-4/3 w-full items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         onClick={() =>
                           dispatch(
                             openModal({
                               type: "viewPicture",
                               payload: {
-                                imageUrl: update.photoUrls[VISIBLE_PHOTOS],
+                                imageUrl:
+                                  update.photoUrls[visiblePhotos.length],
                               },
                             }),
                           )
                         }
                       >
-                        {photoCount - VISIBLE_PHOTOS} more
+                        {hiddenPhotoCount} more
                       </button>
                     )}
                   </div>

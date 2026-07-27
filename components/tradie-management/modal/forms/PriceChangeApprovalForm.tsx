@@ -30,6 +30,22 @@ interface Props {
   onSuccess: () => void;
 }
 
+// A rate reaches this form either as a JSON number in the approval payload or as
+// a serialised Decimal string on the tradie record. Anything absent or
+// unparseable is `null` — the one value that cannot be mistaken for a real rate.
+function parseRate(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+// Every rate render site goes through this, so a missing figure reads as a
+// placeholder instead of "$0.00" or "$NaN".
+const RATE_PLACEHOLDER = "Not recorded";
+const formatRate = (value: number | null) =>
+  value === null ? RATE_PLACEHOLDER : rateCurrency.format(value);
+
 export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   const mutation = useApprovalMutation(onSuccess);
 
@@ -41,35 +57,39 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
   // The stored payload only guarantees `newHourlyRate`; the "current" rate has
   // to fall back to the tradie record, or the comparison renders NaN / "$undefined".
-  const currentRate = Number(
-    data.currentHourlyRate ?? approval.tradie.hourlyRate ?? 0,
-  );
-  const newRate = Number(data.newHourlyRate ?? 0);
-  const hasRates = Number.isFinite(currentRate) && Number.isFinite(newRate);
+  // An absent rate stays `null` rather than being coerced: `Number(null)` is 0,
+  // which would present a missing rate as a real $0.00/hr, and `Number(undefined)`
+  // is NaN, which would poison the difference and the impact sentence.
+  const currentRate = parseRate(data.currentHourlyRate ?? approval.tradie.hourlyRate);
+  const newRate = parseRate(data.newHourlyRate);
+  const hasRates = currentRate !== null && newRate !== null;
 
-  // Every rate render site goes through this so an unparseable payload shows the
-  // placeholder rather than "$NaN".
-  const RATE_PLACEHOLDER = "Not recorded";
-  const formatRate = (value: number) =>
-    hasRates ? rateCurrency.format(value) : RATE_PLACEHOLDER;
+  // The tradie record's own rate, shown alongside the request. Distinct from
+  // `currentRate`, which falls back to this when the request payload omitted a
+  // "current" figure — here we want what is actually on the record, so a
+  // reviewer can see when the two disagree.
+  const storedRate = parseRate(approval.tradie.hourlyRate);
 
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({
       approvalId: approval.id,
       type: TradieApprovalActionType.PRICE_CHANGE,
       resolution,
-      payload: {
-        newHourlyRate: newRate,
-      },
+      // No fabricated zero: with no requested rate there is nothing to write,
+      // and the approve action is disabled in that state anyway.
+      payload: newRate === null ? undefined : { newHourlyRate: newRate },
     });
   };
 
-  const difference = hasRates ? newRate - currentRate : 0;
+  const difference =
+    currentRate !== null && newRate !== null ? newRate - currentRate : 0;
 
   // Zero-denominator guard: a tradie with no stored rate would otherwise give
   // Infinity here.
   const percentageChange =
-    currentRate > 0 ? ((difference / currentRate) * 100).toFixed(1) : null;
+    hasRates && currentRate > 0
+      ? ((difference / currentRate) * 100).toFixed(1)
+      : null;
 
   const isIncrease = difference > 0;
   const isDecrease = difference < 0;
@@ -167,13 +187,13 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 icon={<DollarSign className="size-4" />}
                 label="Current stored rate"
                 value={
-                  approval.tradie.hourlyRate
-                    ? `${rateCurrency.format(Number(approval.tradie.hourlyRate))}/hr`
+                  storedRate !== null
+                    ? `${rateCurrency.format(storedRate)}/hr`
                     : "Not set"
                 }
                 // Mono is reserved for actual figures; the "Not set" placeholder
                 // renders as prose so a missing rate does not read like data.
-                mono={Boolean(approval.tradie.hourlyRate)}
+                mono={storedRate !== null}
               />
             </div>
           </div>
@@ -192,10 +212,12 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">Current rate</p>
 
+                {/* Mono is for real figures only; the placeholder renders as
+                    prose so a missing rate never reads like data. */}
                 <p
                   className={cn(
                     "mt-2 text-2xl font-semibold",
-                    hasRates
+                    currentRate !== null
                       ? "font-mono tabular-nums"
                       : "text-muted-foreground",
                   )}
@@ -219,7 +241,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 <p
                   className={cn(
                     "mt-2 text-2xl font-semibold",
-                    hasRates
+                    newRate !== null
                       ? "font-mono tabular-nums"
                       : "text-muted-foreground",
                   )}
@@ -297,11 +319,17 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
               <p className="mt-1 text-sm text-foreground/80">
                 Approving this request updates the tradie&apos;s hourly rate
                 from{" "}
-                <span className={cn(hasRates && "font-mono tabular-nums")}>
+                <span
+                  className={cn(
+                    currentRate !== null && "font-mono tabular-nums",
+                  )}
+                >
                   {formatRate(currentRate)}
                 </span>{" "}
                 to{" "}
-                <span className={cn(hasRates && "font-mono tabular-nums")}>
+                <span
+                  className={cn(newRate !== null && "font-mono tabular-nums")}
+                >
                   {formatRate(newRate)}
                 </span>
                 . Future estimates, quotations and project calculations use the
@@ -323,7 +351,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
 
           <Button
             onClick={() => submit("approved")}
-            disabled={mutation.isPending || !hasRates || newRate <= 0}
+            disabled={mutation.isPending || newRate === null || newRate <= 0}
           >
             {mutation.isPending ? (
               <>

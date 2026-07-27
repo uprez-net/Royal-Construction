@@ -163,6 +163,15 @@ export default function ScheduleTradieModal({
     setRowErrors((prev) => prev.filter((error) => error.id !== id));
   };
 
+  // The single close path. Every dismissal — successful submit, Cancel, Esc,
+  // overlay click — funnels through here so the modal can never reopen holding
+  // the previous booking's rows or its stale validation errors.
+  const closeAndReset = () => {
+    setScheduleRows([createEmptyRow()]);
+    setRowErrors([]);
+    onClose();
+  };
+
   const handleSubmit = async () => {
     if (isSubmitting) return;
 
@@ -194,7 +203,7 @@ export default function ScheduleTradieModal({
       ).unwrap();
 
       toast.success("Tradies scheduled.");
-      onClose();
+      closeAndReset();
     } catch (error) {
       const message =
         typeof error === "string"
@@ -210,7 +219,7 @@ export default function ScheduleTradieModal({
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && !isSubmitting) {
-      onClose();
+      closeAndReset();
     }
   };
 

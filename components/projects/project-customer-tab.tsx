@@ -35,6 +35,45 @@ function formatDateField(value: string | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? value : dateFormat.format(parsed);
 }
 
+/** Australian country calling code — numbers are stored in national format. */
+const AU_COUNTRY_CODE = "61";
+
+/**
+ * wa.me only accepts a bare international subscriber number: digits only, no
+ * `+`, no separators and no national trunk prefix. Feeding it the stored
+ * national format ("0412 345 678") resolves to an invalid recipient, so the
+ * link is only rendered once the number can be normalised with confidence.
+ */
+function toWhatsAppNumber(value: string): string | null {
+  const trimmed = value.trim();
+  const hasInternationalPrefix = trimmed.startsWith("+");
+  const digits = trimmed.replace(/\D/g, "");
+
+  // "0061…" is the dialled form of "+61…"; drop the international access code.
+  const withoutAccessCode =
+    !hasInternationalPrefix && digits.startsWith("00")
+      ? digits.slice(2)
+      : digits;
+
+  let normalized: string;
+  if (hasInternationalPrefix || withoutAccessCode !== digits) {
+    // Already international — leave the country code alone.
+    normalized = withoutAccessCode;
+  } else if (withoutAccessCode.startsWith("0")) {
+    // National format: swap the trunk "0" for the country code.
+    normalized = `${AU_COUNTRY_CODE}${withoutAccessCode.slice(1)}`;
+  } else if (withoutAccessCode.startsWith(AU_COUNTRY_CODE)) {
+    normalized = withoutAccessCode;
+  } else {
+    // No trunk zero, no country code: guessing one would produce a link to the
+    // wrong person, so drop the affordance instead.
+    return null;
+  }
+
+  // E.164 allows 8–15 digits; outside that it is not a dialable number.
+  return normalized.length >= 8 && normalized.length <= 15 ? normalized : null;
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
@@ -68,9 +107,8 @@ export function CustomerTab({ project }: CustomerTabProps) {
   const phone = project.customer.phone?.trim();
   const email = project.customer.email?.trim();
   const telHref = phone ? `tel:${phone.replace(/\s+/g, "")}` : null;
-  const whatsappHref = phone
-    ? `https://wa.me/${phone.replace(/[^\d]/g, "")}`
-    : null;
+  const whatsappNumber = phone ? toWhatsAppNumber(phone) : null;
+  const whatsappHref = whatsappNumber ? `https://wa.me/${whatsappNumber}` : null;
   const slabPercentage = commercials?.claimStageSlabPercentage;
 
   return (

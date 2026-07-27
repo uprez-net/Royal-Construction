@@ -19,6 +19,45 @@ import { cn } from "@/lib/utils";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 
+/**
+ * `SafeVariation` types `requestedDate`/`approvedDate` as `Date`, but the type
+ * lies for any variation added in-session: `createVariation` POSTs to
+ * `/api/projects/:projectId/variations`, and `NextResponse.json` turns both
+ * fields into ISO strings before the thunk pushes the row onto
+ * `activeProject.variations`. `Intl.DateTimeFormat.format` throws
+ * `RangeError: Invalid time value` on a string — it does not degrade to
+ * "Invalid Date" — so formatting one uncoerced takes the tab down via the error
+ * boundary. Everything that reads these fields goes through the two helpers
+ * below so the sort and the cells agree on the same coercion.
+ */
+const toVariationDate = (value: Date | string | null | undefined) => {
+  if (value == null) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatVariationDate = (value: Date | string | null | undefined) => {
+  const parsed = toVariationDate(value);
+
+  return parsed ? dateFormat.format(parsed) : null;
+};
+
+/**
+ * The mono slot is reserved for real values (DESIGN.md Mono Precision Rule), so
+ * a missing one renders as a plain dash carrying a spoken label — a bare "—" in
+ * a mono cell announces as nothing at all.
+ */
+const NoValueCell = ({ label }: { label: string }) => (
+  <span className="text-muted-foreground">
+    <span aria-hidden="true">&mdash;</span>
+    <span className="sr-only">{label}</span>
+  </span>
+);
+
 const calculateVariationImpact = (
   variations: SafeVariation[],
   startDate: Date,
@@ -159,10 +198,20 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
   // chronologically: V-001 is the first variation raised, and each row's
   // "New total" is the contract total once that variation and every earlier
   // one has been applied — so the last row matches the footer total.
-  const orderedVariations = [...project.variations].sort(
-    (a, b) =>
-      new Date(a.requestedDate).getTime() - new Date(b.requestedDate).getTime(),
-  );
+  // An undated row sorts last rather than poisoning the comparator with NaN,
+  // which would leave the order — and therefore the running "New total" —
+  // dependent on the input sequence.
+  const requestedTime = (variation: SafeVariation) =>
+    toVariationDate(variation.requestedDate)?.getTime() ??
+    Number.POSITIVE_INFINITY;
+
+  const orderedVariations = [...project.variations].sort((a, b) => {
+    const left = requestedTime(a);
+    const right = requestedTime(b);
+
+    // Two undated rows would otherwise compare `Infinity - Infinity` (NaN).
+    return left === right ? 0 : left - right;
+  });
 
   const revisedTotals = orderedVariations.reduce<number[]>(
     (totals, variation) => [
@@ -350,6 +399,12 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
               ]}
               rows={orderedVariations.map((variation, index) => {
                 const variationCost = Number(variation.cost);
+                const requestedLabel = formatVariationDate(
+                  variation.requestedDate,
+                );
+                const approvedLabel = formatVariationDate(
+                  variation.approvedDate,
+                );
 
                 return [
                   <span
@@ -359,30 +414,48 @@ export function ProjectVariationsTab({ project }: { project: ProjectDetail }) {
                     V-{String(index + 1).padStart(3, "0")}
                   </span>,
 
-                  <span
-                    key={`${variation.id}-sent`}
-                    className="font-mono tabular-nums"
-                  >
-                    {dateFormat.format(variation.requestedDate)}
-                  </span>,
+                  requestedLabel ? (
+                    <span
+                      key={`${variation.id}-sent`}
+                      className="font-mono tabular-nums"
+                    >
+                      {requestedLabel}
+                    </span>
+                  ) : (
+                    <NoValueCell
+                      key={`${variation.id}-sent`}
+                      label="No date sent recorded"
+                    />
+                  ),
 
-                  <span
-                    key={`${variation.id}-approved`}
-                    className="font-mono tabular-nums"
-                  >
-                    {variation.approvedDate
-                      ? dateFormat.format(variation.approvedDate)
-                      : "—"}
-                  </span>,
+                  approvedLabel ? (
+                    <span
+                      key={`${variation.id}-approved`}
+                      className="font-mono tabular-nums"
+                    >
+                      {approvedLabel}
+                    </span>
+                  ) : (
+                    <NoValueCell
+                      key={`${variation.id}-approved`}
+                      label="No reply yet"
+                    />
+                  ),
 
-                  <span
-                    key={`${variation.id}-delay`}
-                    className="font-mono tabular-nums"
-                  >
-                    {variation.delayDays
-                      ? `${variation.delayDays} ${variation.delayDays === 1 ? "day" : "days"}`
-                      : "—"}
-                  </span>,
+                  variation.delayDays ? (
+                    <span
+                      key={`${variation.id}-delay`}
+                      className="font-mono tabular-nums"
+                    >
+                      {variation.delayDays}{" "}
+                      {variation.delayDays === 1 ? "day" : "days"}
+                    </span>
+                  ) : (
+                    <NoValueCell
+                      key={`${variation.id}-delay`}
+                      label="No delay"
+                    />
+                  ),
 
                   <span
                     className="block max-w-xs text-pretty"

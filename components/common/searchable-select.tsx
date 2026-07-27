@@ -79,14 +79,24 @@ export function SearchableSelect({
   const triggerId = id ?? `${reactId}-trigger`;
   const ownLabelId = `${reactId}-label`;
   const valueId = `${reactId}-value`;
+  const fallbackLabelId = `${reactId}-fallback-label`;
 
   const hasOwnLabel = label.trim().length > 0;
+  const hasAriaLabel = Boolean(ariaLabel?.trim());
   // A <button> is not a labelable element, so `<label for>` cannot name the
   // Popover trigger — the label has to be referenced with aria-labelledby.
   // The value span is referenced too (rather than the whole trigger) so the
   // selection stays part of the name — "Tradie location, 12 Smith St" — without
   // pulling in the clear control's own label.
-  const nameSource = labelledById ?? (hasOwnLabel ? ownLabelId : undefined);
+  //
+  // With no visible label, no `labelledById` and no `aria-label`, the trigger
+  // would fall back to its own content: the selected value, or the placeholder,
+  // which says what is chosen but never what it chooses. A hidden generic label
+  // keeps the "<name> <value>" shape rather than leaving the control unnamed.
+  const nameSource =
+    labelledById ??
+    (hasOwnLabel ? ownLabelId : hasAriaLabel ? undefined : fallbackLabelId);
+  const usesFallbackLabel = nameSource === fallbackLabelId;
   const triggerLabelledBy = nameSource ? `${nameSource} ${valueId}` : undefined;
   const canClear = Boolean(selectedItem && onClear);
   const clearHintId = `${reactId}-clear-hint`;
@@ -111,6 +121,14 @@ export function SearchableSelect({
         <label id={ownLabelId} className="text-sm font-medium text-foreground">
           {label}
         </label>
+      ) : null}
+
+      {/* Last-resort name for a caller that supplies neither a label nor an
+          `aria-label`. sr-only, so it adds no visible row of its own. */}
+      {usesFallbackLabel ? (
+        <span id={fallbackLabelId} className="sr-only">
+          Select an option
+        </span>
       ) : null}
 
       <Popover open={open} onOpenChange={setOpen}>
