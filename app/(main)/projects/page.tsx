@@ -1,5 +1,6 @@
 import { ProjectsClient } from "@/components/projects/projects-client";
-import { getCachedProjectKPIs, getCachedProjects } from "@/lib/data/projects";
+import { getProjectKPIs, getProjects } from "@/lib/data/projects";
+import { connection } from "next/server";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -10,9 +11,16 @@ export const metadata: Metadata = {
 const projectPageSize = 12;
 
 export default async function ProjectPage() {
+  // Render on demand, never at build. Under Cache Components a `'use cache'`
+  // fetcher is PREFILLED during `next build`, which runs its DB query at build
+  // time -- and CI can't reach Neon, so the build died on ETIMEDOUT. The fix is
+  // two parts: (1) read the UNCACHED fetchers so the query happens at request
+  // time, and (2) `connection()` to defer this page's render off the build.
+  // Mirrors app/(main)/dashboard/page.tsx, which already builds without a DB.
+  await connection();
   const [projectsPage, kpis] = await Promise.all([
-    getCachedProjects({ page: 1, limit: projectPageSize }),
-    getCachedProjectKPIs(),
+    getProjects({ page: 1, limit: projectPageSize }),
+    getProjectKPIs(),
   ]);
 
   return (
