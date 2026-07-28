@@ -128,6 +128,7 @@ type OfferWorkspaceScreenProps = {
     lineId: string,
     patch: Partial<OfferWorkspaceCostLine>,
   ) => void;
+  readonly onIncludeAll: () => void;
   readonly onRemoveLine: (lineId: string) => void;
   readonly onMarkSent: () => void;
   readonly canMarkSent: boolean;
@@ -225,6 +226,7 @@ export function OfferWorkspaceScreen({
   prefillResult,
   onWorkspacePricingSettingsChange,
   onLineChange,
+  onIncludeAll,
   onRemoveLine,
   onMarkSent,
   canMarkSent,
@@ -421,6 +423,7 @@ export function OfferWorkspaceScreen({
               onAddLine={onAddLine}
               onImported={onImported}
               onLineChange={onLineChange}
+              onIncludeAll={onIncludeAll}
               onRemoveLine={onRemoveLine}
             />
           </OfferStepSection>

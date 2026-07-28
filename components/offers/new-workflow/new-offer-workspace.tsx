@@ -458,6 +458,17 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setLines((current) => current.filter((line) => line.id !== lineId));
   }
 
+  // Bulk "Include all": flip every workbook line's contract-inclusion on in one
+  // state update. Already-included lines keep their identity so React skips them,
+  // and per-row exclude via the Included checkbox still works afterwards.
+  function includeAllLines() {
+    setLines((current) =>
+      current.map((line) =>
+        line.includedInContract ? line : { ...line, includedInContract: true },
+      ),
+    );
+  }
+
   // ─── DB persistence (ADR 0002); no-op without a leadId ───
   const snapshot = useMemo<OfferWorkspaceSnapshot>(
     () => ({
@@ -1336,6 +1347,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         prefillResult={prefillResult}
         onWorkspacePricingSettingsChange={updateWorkspacePricingSettings}
         onLineChange={updateLine}
+        onIncludeAll={includeAllLines}
         onMarkSent={() => transition("sent")}
         canMarkSent={!customerPrice.needsOverrideReason && ownersComplete}
         onMarkAgreed={() => transition("agreed")}

@@ -27,6 +27,7 @@ import {
   ChevronRight,
   ClipboardList,
   Link2,
+  ListChecks,
   ListPlus,
   Plus,
   Rows3,
@@ -47,6 +48,7 @@ type CostSchedulePanelProps = {
     patch: Partial<OfferWorkspaceCostLine>,
   ) => void;
   readonly onAddLine: () => void;
+  readonly onIncludeAll: () => void;
   readonly onRemoveLine: (lineId: string) => void;
 };
 
@@ -98,6 +100,7 @@ export function CostSchedulePanel({
   onImported,
   onLineChange,
   onAddLine,
+  onIncludeAll,
   onRemoveLine,
 }: CostSchedulePanelProps) {
   const includedCount = lines.filter((line) => line.includedInContract).length;
@@ -135,10 +138,22 @@ export function CostSchedulePanel({
             title="Calculation workbook"
             titleId="cost-schedule-title"
           />
-          <Button size="sm" type="button" onClick={onAddLine}>
-            <Plus className="size-4" aria-hidden="true" />
-            Add task
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              disabled={lines.length === 0 || includedCount === lines.length}
+              size="sm"
+              type="button"
+              variant="outline"
+              onClick={onIncludeAll}
+            >
+              <ListChecks className="size-4" aria-hidden="true" />
+              Include all
+            </Button>
+            <Button size="sm" type="button" onClick={onAddLine}>
+              <Plus className="size-4" aria-hidden="true" />
+              Add task
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="grid gap-3 pt-4">
