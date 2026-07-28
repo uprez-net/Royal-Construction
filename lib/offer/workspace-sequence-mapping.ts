@@ -108,6 +108,22 @@ export const OFFER_SEQUENCE_MAPPINGS: readonly OfferSequenceMapping[] =
     }),
   );
 
+// The de-duplicated, alphabetically sorted union of every building-sequence step
+// named across the whole task→sequence catalog. This is the "list of available
+// sequences" the Calculation workbook suggests from when an estimator adds a
+// building-sequence step to a task by hand — the task→mapping auto-fill only
+// covers tasks that exist in the catalog, so a manually added task (or any custom
+// step) previously had no source to pick from (issue #112). Sorted case-
+// insensitively so the suggestion list reads predictably; blank entries are
+// dropped defensively.
+export const OFFER_BUILDING_SEQUENCE_STEPS: readonly string[] = Array.from(
+  new Set(
+    OFFER_SEQUENCE_MAPPINGS.flatMap(
+      (mapping) => mapping.buildingSequenceTasks,
+    ).filter((step) => step.trim().length > 0),
+  ),
+).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
 function normalizeTaskName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
