@@ -184,8 +184,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [standardPriceInput, setStandardPriceInput] = useState("");
   const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState("");
   const [status, setStatus] = useState<OfferWorkspaceStatus>("pending");
-  const [areaCalculator, setAreaCalculator] =
-    useState<OfferAreaCalculator>(INITIAL_AREA_CALCULATOR);
+  const [areaCalculator, setAreaCalculator] = useState<OfferAreaCalculator>(
+    INITIAL_AREA_CALCULATOR,
+  );
   const [workspacePricingSettings, setWorkspacePricingSettings] =
     useState<OfferWorkspacePricingSettings>(DEFAULT_WORKSPACE_PRICING_SETTINGS);
   const [importResult, setImportResult] =
@@ -193,8 +194,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [rateCardProduct, setRateCardProduct] =
     useState<RateCardProduct>("DOUBLE_STOREY");
   const [rateCardTier, setRateCardTier] = useState<RateCardTier>("MID");
-  const [paymentSchedule, setPaymentSchedule] =
-    useState<readonly OfferPaymentScheduleRow[]>(INITIAL_PAYMENT_SCHEDULE);
+  const [paymentSchedule, setPaymentSchedule] = useState<
+    readonly OfferPaymentScheduleRow[]
+  >(INITIAL_PAYMENT_SCHEDULE);
   const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
   const [revising, setRevising] = useState(false);
   const [revisionNotice, setRevisionNotice] = useState<string | null>(null);
@@ -217,19 +219,25 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [tenderSending, setTenderSending] = useState(false);
   const [tenderSendError, setTenderSendError] = useState<string | null>(null);
   const [contractSending, setContractSending] = useState(false);
-  const [contractSendError, setContractSendError] = useState<string | null>(null);
+  const [contractSendError, setContractSendError] = useState<string | null>(
+    null,
+  );
   // Estimator's BC4 particulars (issue #98) — captured during the contract draft
   // and sent as locked tabs so the contract routes to the customer first.
   const [contractParticulars, setContractParticulars] =
     useState<ContractParticulars>(EMPTY_CONTRACT_PARTICULARS);
   const [projectCreating, setProjectCreating] = useState(false);
-  const [projectResult, setProjectResult] = useState<ProjectHandoffResult | null>(null);
+  const [projectResult, setProjectResult] =
+    useState<ProjectHandoffResult | null>(null);
   const [prefilling, setPrefilling] = useState(false);
-  const [prefillResult, setPrefillResult] = useState<OfferPrefillResult | null>(null);
+  const [prefillResult, setPrefillResult] = useState<OfferPrefillResult | null>(
+    null,
+  );
   // Autosave chrome: makes the debounced persistence visible and surfaces a
   // failure instead of swallowing it. "idle" until the first save is attempted.
-  const [saveState, setSaveState] =
-    useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   // Clock for offer-expiry rendering. Lazily seeded (same calendar day on the
   // server pass and hydration, so the chip label matches), then ticked each
   // minute so "expires in N days" stays honest without a reload.
@@ -241,6 +249,22 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (saveState !== "saving") return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      // Required for Chrome/Edge/Safari
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [saveState]);
 
   function updateImage(key: OfferImageSlotKey, image: OfferImage | null) {
     setImages((current) => setOfferImage(current, key, image));
@@ -254,11 +278,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const directTotal = useMemo(() => calculateDirectTotal(lines), [lines]);
   const pricing = useMemo(
     () =>
-        calculateOfferWorkspacePricing({
-          directTotal,
-          totalAreaSqm,
-          settings: workspacePricingSettings,
-        }),
+      calculateOfferWorkspacePricing({
+        directTotal,
+        totalAreaSqm,
+        settings: workspacePricingSettings,
+      }),
     [directTotal, totalAreaSqm, workspacePricingSettings],
   );
   const selectedPrice = resolveOptionalPriceInput(selectedPriceInput);
@@ -278,8 +302,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     () =>
       calculateEffectiveMargin({
         costBeforeFee: pricing.costBeforeFee,
-        sellingContractValueIncGst:
-          customerPrice.selectedContractValueIncGst,
+        sellingContractValueIncGst: customerPrice.selectedContractValueIncGst,
         gstRate: workspacePricingSettings.gstRate,
         targetFeePct: resolveTargetMarkupPct(workspacePricingSettings),
       }),
@@ -296,7 +319,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   // issue must block not just "Send offer" (server-gated) but also "Mark sent"
   // and "Mark agreed" — otherwise an incomplete offer can be locked/frozen and
   // advanced into the legal documents (server transition guards this too).
-  const ownerIssues = useMemo(() => collectOwnerIssues(job.owners), [job.owners]);
+  const ownerIssues = useMemo(
+    () => collectOwnerIssues(job.owners),
+    [job.owners],
+  );
   const ownersComplete = ownerIssues.length === 0;
   const sendBlockers = useMemo(
     () =>
@@ -313,10 +339,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     setJob((current) => ({ ...current, ...patch }));
   }
 
-  function updateLine(
-    lineId: string,
-    patch: Partial<OfferWorkspaceCostLine>,
-  ) {
+  function updateLine(lineId: string, patch: Partial<OfferWorkspaceCostLine>) {
     setLines((current) =>
       current.map((line) => {
         if (line.id !== lineId) {
@@ -524,10 +547,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
               }
               return saved;
             } catch (error) {
-              console.error(
-                "[offer] contract particulars save failed:",
-                error,
-              );
+              console.error("[offer] contract particulars save failed:", error);
               setSaveState("error");
               return { ok: false, error: (error as Error).message };
             }
@@ -858,10 +878,16 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   // later, during the contract draft, and persist to their own Contract column.
   useEffect(() => {
     const offerId = offerIdRef.current;
-    if (leadId === undefined || offerId === null || status !== "contract_draft") {
+    if (
+      leadId === undefined ||
+      offerId === null ||
+      status !== "contract_draft"
+    ) {
       return;
     }
-    if (JSON.stringify(contractParticulars) === lastSavedParticularsRef.current) {
+    if (
+      JSON.stringify(contractParticulars) === lastSavedParticularsRef.current
+    ) {
       return;
     }
     const timer = setTimeout(() => {
@@ -1059,9 +1085,7 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           // fails, and a stale "pending" would leave the Offer-build steps
           // editable against an offer that is already SENT.
           console.error("[offer] send failed:", error);
-          setSendError(
-            `Failed to send the offer: ${(error as Error).message}`,
-          );
+          setSendError(`Failed to send the offer: ${(error as Error).message}`);
           try {
             const loaded = await loadActiveOfferWorkspace(leadId);
             offerIdRef.current = loaded.offerId;
