@@ -116,6 +116,7 @@ export function EnvelopeSendConfirm({
   reference,
   sending,
   customerFirst = false,
+  customerOnly = false,
   onConfirm,
   onCancel,
 }: {
@@ -128,6 +129,9 @@ export function EnvelopeSendConfirm({
   // The tender routes to the customer first (issue #89); the contract keeps its
   // builder-first order. Drives the routing sentence below.
   readonly customerFirst?: boolean;
+  // The Offer-document acceptance (ADR 0004) is customer-only — no builder
+  // recipient — so the routing sentence names only the customer.
+  readonly customerOnly?: boolean;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 }) {
@@ -144,9 +148,11 @@ export function EnvelopeSendConfirm({
       <p className="flex items-start gap-2 text-xs text-muted-foreground">
         <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
         Creates a DocuSign envelope and routes it to{" "}
-        {customerFirst
-          ? "the customer, then the builder"
-          : "the builder, then the customer"}
+        {customerOnly
+          ? "the customer to sign as acceptance"
+          : customerFirst
+            ? "the customer, then the builder"
+            : "the builder, then the customer"}
         . The envelope can&apos;t be edited after sending — to change anything
         you&apos;d recall it and regenerate.
       </p>

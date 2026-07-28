@@ -24,6 +24,12 @@ export function activeOfferPhase(
   status: OfferWorkspaceStatus,
 ): OfferWorkflowPhase {
   switch (status) {
+    // Offer-acceptance signing (ADR 0004) stays in the Offer phase — the offer is
+    // not yet agreed, so the Tender phase remains locked below.
+    case "offer_sent":
+    case "offer_signed":
+    case "offer_declined":
+      return "offer";
     case "agreed":
     case "tender_draft":
     case "tender_sent":

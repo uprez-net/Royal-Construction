@@ -245,6 +245,10 @@ const OFFER_TO_LEAD_STATUS_UPDATE_MAP: Record<OfferStatus, LeadStage> = {
     SENT: "NEGOTIATING",
     ACCEPTED: "WON",
     REJECTED: "LOST",
+    // Offer-acceptance signing (ADR 0004) is pre-agreed, so still negotiating.
+    OFFER_SENT: "NEGOTIATING",
+    OFFER_SIGNED: "NEGOTIATING",
+    OFFER_DECLINED: "NEGOTIATING",
     // Once scope + price are agreed the deal is effectively won.
     AGREED: "WON",
     TENDER_DRAFT: "WON",
@@ -270,6 +274,9 @@ const OFFER_STATE_MACHINE: Record<OfferStatus, OfferStatus[]> = {
   SENT: ["ACCEPTED", "REJECTED"],
   ACCEPTED: [],
   REJECTED: ["PENDING"],
+  OFFER_SENT: [],
+  OFFER_SIGNED: [],
+  OFFER_DECLINED: [],
   AGREED: [],
   TENDER_DRAFT: [],
   TENDER_SENT: [],

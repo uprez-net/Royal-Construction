@@ -55,6 +55,10 @@ const WORKFLOW_STEPS: readonly {
 function currentStepLabel(status: OfferWorkspaceStatus): string {
   switch (status) {
     case "sent":
+    // Offer-acceptance signing (ADR 0004) is still the Send & negotiate step.
+    case "offer_sent":
+    case "offer_signed":
+    case "offer_declined":
       return "Send & negotiate";
     case "agreed":
     case "tender_draft":

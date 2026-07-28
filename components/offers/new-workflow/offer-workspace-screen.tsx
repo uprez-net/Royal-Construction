@@ -54,6 +54,7 @@ import type {
   OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
 import { SendNegotiatePanel } from "./offer-workspace-send-negotiate";
+import { OfferWorkspaceActivity } from "./offer-workspace-activity";
 import { buildOfferReview } from "@/lib/offer/offer-review";
 import {
   OfferLockBanner,
@@ -146,6 +147,12 @@ type OfferWorkspaceScreenProps = {
   readonly transitionError: string | null;
   // Per-recipient DocuSign status for the signing trackers (#121/#123).
   readonly signerStatuses: readonly OfferSignerStatus[];
+  // Offer-document acceptance signing (ADR 0004) — customer-only DocuSign send.
+  readonly onSendOfferForSignature: () => void;
+  readonly offerSignSending?: boolean;
+  readonly offerSignError?: string | null;
+  readonly onRecallOffer: () => void;
+  readonly onMarkOfferSigned: () => void;
   readonly onGenerateTender: () => void;
   readonly onSendTender: () => void;
   readonly tenderSending?: boolean;
@@ -236,6 +243,11 @@ export function OfferWorkspaceScreen({
   sentInfo,
   transitionError,
   signerStatuses,
+  onSendOfferForSignature,
+  offerSignSending,
+  offerSignError,
+  onRecallOffer,
+  onMarkOfferSigned,
   onGenerateTender,
   onSendTender,
   tenderSending,
@@ -303,11 +315,17 @@ export function OfferWorkspaceScreen({
       ? { tone: "incomplete", label: "Not sent" }
       : status === "sent"
         ? { tone: "neutral", label: "Sent" }
-        : status === "rejected"
-          ? { tone: "neutral", label: "Rejected" }
-          : status === "superseded"
-            ? { tone: "neutral", label: "Superseded" }
-            : { tone: "complete", label: "Agreed" };
+        : status === "offer_sent"
+          ? { tone: "neutral", label: "Acceptance sent" }
+          : status === "offer_signed"
+            ? { tone: "complete", label: "Accepted" }
+            : status === "offer_declined"
+              ? { tone: "neutral", label: "Acceptance declined" }
+              : status === "rejected"
+                ? { tone: "neutral", label: "Rejected" }
+                : status === "superseded"
+                  ? { tone: "neutral", label: "Superseded" }
+                  : { tone: "complete", label: "Agreed" };
 
   // Once the offer has been issued (Sent or any later/terminal state), the
   // Offer-build steps are locked to preserve the issued record — changes go
@@ -509,7 +527,16 @@ export function OfferWorkspaceScreen({
               onMarkAgreed={onMarkAgreed}
               canMarkAgreed={canMarkAgreed}
               onMarkRejected={onMarkRejected}
+              // Offer-acceptance DocuSign signing (ADR 0004). The recipient set is
+              // the same customer signatories already shown above.
+              signerStatuses={signerStatuses}
+              onSendForSignature={onSendOfferForSignature}
+              offerSignSending={offerSignSending}
+              offerSignError={offerSignError}
+              onRecallOffer={onRecallOffer}
+              onMarkOfferSigned={onMarkOfferSigned}
             />
+            <OfferWorkspaceActivity leadId={leadId} status={status} />
           </OfferStepSection>
 
           <OfferPhaseGate
