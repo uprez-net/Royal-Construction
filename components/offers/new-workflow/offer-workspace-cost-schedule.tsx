@@ -17,7 +17,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
-import { OFFER_SEQUENCE_MAPPINGS } from "@/lib/offer/workspace-sequence-mapping";
+import {
+  OFFER_BUILDING_SEQUENCE_STEPS,
+  OFFER_SEQUENCE_MAPPINGS,
+} from "@/lib/offer/workspace-sequence-mapping";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import {
   ChevronDown,
@@ -48,6 +51,7 @@ type CostSchedulePanelProps = {
 };
 
 const TASK_DATALIST_ID = "offer-calculation-task-options";
+const SEQUENCE_STEP_DATALIST_ID = "offer-calculation-sequence-step-options";
 
 const gridCellControlClass =
   "h-9 rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-royal-gold/40 focus-visible:ring-inset";
@@ -164,6 +168,15 @@ export function CostSchedulePanel({
         <datalist id={TASK_DATALIST_ID}>
           {OFFER_SEQUENCE_MAPPINGS.map((mapping) => (
             <option key={mapping.taskName} value={mapping.taskName} />
+          ))}
+        </datalist>
+        {/* Shared suggestion source for the per-row building-sequence editor
+            below: the deduped catalog of every known sequence step, so a step
+            added by hand can be picked from the existing list instead of typed
+            from scratch (issue #112). One datalist serves every row's input. */}
+        <datalist id={SEQUENCE_STEP_DATALIST_ID}>
+          {OFFER_BUILDING_SEQUENCE_STEPS.map((step) => (
+            <option key={step} value={step} />
           ))}
         </datalist>
         <div className="max-w-full overflow-hidden rounded-lg border border-border bg-card">
@@ -518,9 +531,10 @@ function SequenceStepEditor({
 
       <div className="flex items-center gap-2">
         <Input
-          aria-label={`Add a building sequence step for ${rowLabel}`}
+          aria-label={`Add a building sequence step for ${rowLabel} — pick from the list of sequences or type your own`}
           className="h-9 flex-1 text-[13px]"
-          placeholder="Add a building sequence step"
+          list={SEQUENCE_STEP_DATALIST_ID}
+          placeholder="Pick from the list or type a building sequence step"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleDraftKeyDown}
