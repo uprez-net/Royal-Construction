@@ -7,15 +7,24 @@ import { activeOfferPhase } from "@/lib/offer/workflow";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
 import type { OfferSendBlocker } from "@/lib/offer/offer-readiness";
 import {
+  findSignerStatus,
+  signerStateFromStatus,
+  type OfferSignerStatus,
+} from "@/lib/offer/signing-status";
+import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  FileSignature,
   GitBranch,
   MailCheck,
+  RotateCcw,
   Send,
+  ShieldCheck,
   XCircle,
 } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
+import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 import { formatCurrency } from "./offer-workspace-format";
 
 type SendNegotiatePanelProps = {
@@ -51,6 +60,15 @@ type SendNegotiatePanelProps = {
   // Why a lifecycle action (Mark sent/agreed/rejected) didn't take effect — a
   // stale-save reconcile or a failed save — instead of a silent no-op.
   readonly transitionError: string | null;
+  // Offer-document acceptance signing (ADR 0004) — a customer-only DocuSign send,
+  // distinct from the email negotiation send above. Per-recipient status feeds the
+  // live tracker; the recipient set is the same `recipients` shown for the email.
+  readonly signerStatuses: readonly OfferSignerStatus[];
+  readonly onSendForSignature: () => void;
+  readonly offerSignSending?: boolean;
+  readonly offerSignError?: string | null;
+  readonly onRecallOffer: () => void;
+  readonly onMarkOfferSigned: () => void;
 };
 
 // Scroll a blocker's owning step into view so "fix it" is one click. Mirrors the
@@ -85,17 +103,47 @@ export function SendNegotiatePanel({
   canMarkAgreed,
   onMarkRejected,
   transitionError,
+  signerStatuses,
+  onSendForSignature,
+  offerSignSending,
+  offerSignError,
+  onRecallOffer,
+  onMarkOfferSigned,
 }: SendNegotiatePanelProps) {
   const [confirming, setConfirming] = useState(false);
+  const [signConfirming, setSignConfirming] = useState(false);
   // The server derives recipients from the owners; the primary owner's email is
   // passed only so the legacy/in-memory fallback in sendOfferDocument has a seed.
   const primaryRecipientEmail = recipients[0]?.email ?? "";
   const hasRecipients = recipients.some((r) => r.email.trim().length > 0);
   const isPending = status === "pending";
   const isSent = status === "sent";
+  // Offer-acceptance signing states (ADR 0004), all within the Offer phase.
+  const isOfferSent = status === "offer_sent";
+  const isOfferSigned = status === "offer_signed";
+  const isOfferDeclined = status === "offer_declined";
   const isRejected = status === "rejected";
   const isSuperseded = status === "superseded";
   const isAgreedOrLater = activeOfferPhase(status) !== "offer";
+  // Whether the acceptance-signing block is relevant: offering the send (from
+  // sent), or tracking an out-for-signature / signed / declined acceptance.
+  const showAcceptanceSigning =
+    isSent || isOfferSent || isOfferSigned || isOfferDeclined;
+  // Customer-only tracker rows — no builder row (the builder doesn't sign the
+  // acceptance). Each row's state is the recipient's real DocuSign status; a
+  // signer with no persisted row yet (envelope not sent) reads as "awaiting".
+  const signingRows = recipients
+    .filter((recipient) => recipient.email.trim().length > 0)
+    .map((recipient) => {
+      const persisted = findSignerStatus(signerStatuses, "OFFER", recipient.email);
+      return {
+        role: "Customer" as const,
+        detail: recipient.label,
+        state: persisted
+          ? signerStateFromStatus(persisted.status)
+          : ("awaiting" as const),
+      };
+    });
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -110,6 +158,9 @@ export function SendNegotiatePanel({
       <CardContent className="grid gap-4 pt-4">
         <StatusBanner
           isAgreedOrLater={isAgreedOrLater}
+          isOfferSent={isOfferSent}
+          isOfferSigned={isOfferSigned}
+          isOfferDeclined={isOfferDeclined}
           isPending={isPending}
           isRejected={isRejected}
           isSent={isSent}
@@ -189,6 +240,117 @@ export function SendNegotiatePanel({
           </div>
         ) : null}
 
+        {showAcceptanceSigning ? (
+          <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Customer acceptance (DocuSign)
+            </p>
+
+            {isSent ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Once scope and price are settled, send the offer document for the
+                  customer to sign as a formal acceptance. Customer-only — the
+                  builder doesn&apos;t sign the acceptance.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+                    disabled={
+                      !canSend ||
+                      offerSignSending ||
+                      signConfirming ||
+                      !hasRecipients
+                    }
+                    onClick={() => setSignConfirming(true)}
+                    size="sm"
+                    title={
+                      canSend
+                        ? "Send the offer document to the customer for a DocuSign acceptance signature."
+                        : "Resolve the send items above before sending for signature."
+                    }
+                    type="button"
+                  >
+                    <FileSignature className="size-4" aria-hidden="true" />
+                    {offerSignSending
+                      ? "Sending envelope…"
+                      : "Send for signature"}
+                  </Button>
+                </div>
+                {signConfirming ? (
+                  <EnvelopeSendConfirm
+                    customerOnly
+                    documentName="Offer document"
+                    recipientName={
+                      recipients.map((recipient) => recipient.label).join(", ") ||
+                      "the customer"
+                    }
+                    valueLabel="Fixed price inc GST"
+                    value={contractValueIncGst}
+                    reference={offerReference}
+                    sending={offerSignSending ?? false}
+                    onCancel={() => setSignConfirming(false)}
+                    onConfirm={() => {
+                      onSendForSignature();
+                      setSignConfirming(false);
+                    }}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <>
+                <SigningTracker recipients={signingRows} />
+                {isOfferSent ? (
+                  <div className="flex flex-wrap gap-2">
+                    {/* Local-development testing aid only: the real OFFER_SIGNED
+                        state comes from the DocuSign completion webhook, which
+                        also archives the executed PDF. The server action rejects
+                        this outside development. */}
+                    {process.env.NODE_ENV === "development" ? (
+                      <Button
+                        className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+                        size="sm"
+                        type="button"
+                        onClick={onMarkOfferSigned}
+                      >
+                        <ShieldCheck className="size-4" aria-hidden="true" />
+                        Mark signed (simulate completion)
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={onRecallOffer}
+                    >
+                      <RotateCcw className="size-4" aria-hidden="true" />
+                      Recall envelope
+                    </Button>
+                  </div>
+                ) : null}
+                {isOfferSigned ? (
+                  <p className="text-xs text-muted-foreground">
+                    Accepted by the customer. Mark the offer agreed below to freeze
+                    the snapshot and generate the Tender.
+                  </p>
+                ) : null}
+                {isOfferDeclined ? (
+                  <p className="text-xs font-medium text-destructive">
+                    The customer declined to sign — create a new version to revise
+                    and re-send.
+                  </p>
+                ) : null}
+              </>
+            )}
+
+            {offerSignError ? (
+              <p className="text-xs font-medium text-destructive">
+                {offerSignError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <Button
             disabled={!canRevise || revising}
@@ -207,11 +369,11 @@ export function SendNegotiatePanel({
           </Button>
           <Button
             className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-            disabled={!isSent || !canMarkAgreed}
+            disabled={(!isSent && !isOfferSigned) || !canMarkAgreed}
             size="sm"
             title={
-              !isSent
-                ? "Available once the offer is sent."
+              !isSent && !isOfferSigned
+                ? "Available once the offer is sent (or signed by the customer)."
                 : canMarkAgreed
                   ? "Record the client's acceptance and freeze the internal snapshot."
                   : "Complete the owner details listed above before marking the offer agreed."
@@ -399,12 +561,18 @@ function ConfirmRow({
 
 function StatusBanner({
   isAgreedOrLater,
+  isOfferSent,
+  isOfferSigned,
+  isOfferDeclined,
   isPending,
   isRejected,
   isSent,
   isSuperseded,
 }: {
   readonly isAgreedOrLater: boolean;
+  readonly isOfferSent: boolean;
+  readonly isOfferSigned: boolean;
+  readonly isOfferDeclined: boolean;
   readonly isPending: boolean;
   readonly isRejected: boolean;
   readonly isSent: boolean;
@@ -415,6 +583,29 @@ function StatusBanner({
       <Banner tone="success">
         Agreed — the internal snapshot is frozen and the Tender phase is
         unlocked below.
+      </Banner>
+    );
+  }
+  if (isOfferSent) {
+    return (
+      <Banner tone="active">
+        Sent for signature — awaiting the customer&apos;s DocuSign acceptance.
+        Recall the envelope below to make changes.
+      </Banner>
+    );
+  }
+  if (isOfferSigned) {
+    return (
+      <Banner tone="success">
+        Accepted — the customer signed. Mark the offer agreed to generate the
+        Tender.
+      </Banner>
+    );
+  }
+  if (isOfferDeclined) {
+    return (
+      <Banner tone="danger">
+        Acceptance declined — start a new version to revise and re-send.
       </Banner>
     );
   }

@@ -1,0 +1,303 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  CheckCircle2,
+  Clock,
+  MailOpen,
+  MessageSquarePlus,
+  Reply,
+  Send,
+} from "lucide-react";
+import {
+  loadOfferActivity,
+  logOfferChangeRequest,
+} from "@/lib/data/offer-activity";
+import {
+  CHANGE_REQUEST_PREFIX,
+  type OfferActivityEvent,
+  type OfferActivitySend,
+} from "@/lib/data/offer-activity-types";
+import {
+  OFFER_STATUS_LABEL,
+  type OfferWorkspaceStatus,
+} from "@/lib/offer/workspace-model";
+
+// Negotiation activity for the active offer, on the Send & negotiate step. The
+// offer document is negotiated over email (in the builder's mailbox), so nothing
+// of that back-and-forth was ever visible in-app. This surfaces the telemetry we
+// already capture — each send with its open/reply timestamps — plus the lifecycle
+// events (incl. the DocuSign acceptance) and a place to log the customer's
+// requested changes off the email thread (ADR 0004).
+export function OfferWorkspaceActivity({
+  leadId,
+  status,
+}: {
+  readonly leadId: number | undefined;
+  // Refetch whenever the offer status changes (a send, agree, signing event, or
+  // new revision), so the timeline stays current without a page refresh.
+  readonly status: OfferWorkspaceStatus;
+}) {
+  const [sends, setSends] = useState<readonly OfferActivitySend[]>([]);
+  const [events, setEvents] = useState<readonly OfferActivityEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [note, setNote] = useState("");
+  const [logging, setLogging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const applyResult = useCallback(
+    (result: Awaited<ReturnType<typeof loadOfferActivity>>) => {
+      if (result.ok) {
+        setSends(result.sends);
+        setEvents(result.events);
+        setError(null);
+      } else {
+        setError(result.error);
+      }
+    },
+    [],
+  );
+
+  const refresh = useCallback(async () => {
+    if (leadId === undefined) {
+      return;
+    }
+    setLoading(true);
+    try {
+      applyResult(await loadOfferActivity({ leadId }));
+    } catch (loadError) {
+      setError(`Couldn't load activity: ${(loadError as Error).message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [leadId, applyResult]);
+
+  // Load on mount and whenever the offer status changes. State is only set AFTER
+  // the await, so nothing renders synchronously inside the effect.
+  useEffect(() => {
+    if (leadId === undefined) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await loadOfferActivity({ leadId });
+        if (!cancelled) {
+          applyResult(result);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(`Couldn't load activity: ${(loadError as Error).message}`);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId, status, applyResult]);
+
+  const submitNote = useCallback(() => {
+    if (leadId === undefined || note.trim().length === 0) {
+      return;
+    }
+    setLogging(true);
+    void (async () => {
+      try {
+        const result = await logOfferChangeRequest({ leadId, note });
+        if (result.ok) {
+          setNote("");
+          await refresh();
+        } else {
+          setError(result.error);
+        }
+      } catch (logError) {
+        setError(`Couldn't log the change request: ${(logError as Error).message}`);
+      } finally {
+        setLogging(false);
+      }
+    })();
+  }, [leadId, note, refresh]);
+
+  // In-memory demo (no lead) has no persisted activity to show.
+  if (leadId === undefined) {
+    return null;
+  }
+
+  const items = mergeTimeline(sends, events);
+
+  return (
+    <div className="grid gap-3 rounded-lg border border-border/70 bg-white/95 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Negotiation activity
+        </p>
+        <Button
+          disabled={loading}
+          onClick={() => void refresh()}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          {loading ? "Refreshing…" : "Refresh"}
+        </Button>
+      </div>
+
+      {error ? (
+        <p className="text-xs font-medium text-destructive">{error}</p>
+      ) : null}
+
+      {items.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No activity yet — sends, opens, replies, and status changes will appear
+          here.
+        </p>
+      ) : (
+        <ol className="grid gap-2">
+          {items.map((item) => (
+            <li
+              key={item.key}
+              className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5 text-xs"
+            >
+              <span className="mt-0.5 shrink-0 text-muted-foreground">
+                {item.icon}
+              </span>
+              <span className="flex-1">{item.label}</span>
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                {formatWhen(item.at)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="grid gap-1.5 border-t border-border/60 pt-2">
+        <label
+          className="text-[11px] font-medium text-muted-foreground"
+          htmlFor="offer-change-request"
+        >
+          Log a change request from the customer&apos;s reply
+        </label>
+        <textarea
+          className="min-h-[60px] w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+          id="offer-change-request"
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="e.g. Client asked to drop the pool from exclusions and upgrade the stone benchtop."
+          value={note}
+        />
+        <div>
+          <Button
+            disabled={logging || note.trim().length === 0}
+            onClick={submitNote}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <MessageSquarePlus className="size-4" aria-hidden="true" />
+            {logging ? "Logging…" : "Log change request"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type TimelineItem = {
+  readonly key: string;
+  readonly at: string;
+  readonly icon: React.ReactNode;
+  readonly label: React.ReactNode;
+};
+
+// Merge sends and events into one time-descending list. ISO strings sort
+// lexicographically in chronological order, so a string compare is enough.
+function mergeTimeline(
+  sends: readonly OfferActivitySend[],
+  events: readonly OfferActivityEvent[],
+): TimelineItem[] {
+  const sendItems: TimelineItem[] = sends.map((send, index) => ({
+    key: `send-${index}-${send.sentAt}`,
+    at: send.sentAt,
+    icon: <Send className="size-3.5" aria-hidden="true" />,
+    label: (
+      <span>
+        <span className="font-medium text-foreground">
+          Offer v{send.offerFileVersion}
+        </span>{" "}
+        sent to <span className="font-mono">{send.recipientEmail}</span>
+        {send.openedAt ? (
+          <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground">
+            <MailOpen className="size-3" aria-hidden="true" /> opened
+          </span>
+        ) : null}
+        {send.repliedAt ? (
+          <span className="ml-1 inline-flex items-center gap-1 text-success">
+            <Reply className="size-3" aria-hidden="true" /> replied
+          </span>
+        ) : null}
+      </span>
+    ),
+  }));
+
+  const eventItems: TimelineItem[] = events.map((event, index) => ({
+    key: `event-${index}-${event.at}`,
+    at: event.at,
+    icon: event.note?.startsWith(CHANGE_REQUEST_PREFIX) ? (
+      <MessageSquarePlus className="size-3.5" aria-hidden="true" />
+    ) : event.toStatus.endsWith("SIGNED") ? (
+      <CheckCircle2 className="size-3.5" aria-hidden="true" />
+    ) : (
+      <Clock className="size-3.5" aria-hidden="true" />
+    ),
+    label: describeEvent(event),
+  }));
+
+  return [...sendItems, ...eventItems].sort((a, b) =>
+    a.at < b.at ? 1 : a.at > b.at ? -1 : 0,
+  );
+}
+
+function describeEvent(event: OfferActivityEvent): React.ReactNode {
+  if (event.note?.startsWith(CHANGE_REQUEST_PREFIX)) {
+    return (
+      <span>
+        <span className="font-medium text-foreground">Change request</span> —{" "}
+        {event.note.slice(CHANGE_REQUEST_PREFIX.length).trim()}
+      </span>
+    );
+  }
+  const to = statusLabel(event.toStatus);
+  // A note with fromStatus == toStatus is a plain audit note, not a transition.
+  if (event.fromStatus === null || event.fromStatus === event.toStatus) {
+    return (
+      <span>
+        <span className="font-medium text-foreground">{to}</span>
+        {event.note ? ` — ${event.note}` : ""}
+      </span>
+    );
+  }
+  return (
+    <span>
+      <span className="text-muted-foreground">{statusLabel(event.fromStatus)}</span>{" "}
+      → <span className="font-medium text-foreground">{to}</span>
+      {event.note ? ` — ${event.note}` : ""}
+    </span>
+  );
+}
+
+// Map an uppercase OfferStatus enum value to its human label via the shared
+// workspace-status labels (keyed lowercase). Falls back to the raw value.
+function statusLabel(status: string): string {
+  const key = status.toLowerCase() as OfferWorkspaceStatus;
+  return OFFER_STATUS_LABEL[key] ?? status;
+}
+
+function formatWhen(iso: string): string {
+  const date = new Date(iso);
+  return date.toLocaleString("en-AU", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

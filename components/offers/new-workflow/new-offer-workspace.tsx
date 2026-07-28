@@ -52,6 +52,7 @@ import {
 } from "@/lib/data/offer-workspace";
 import { sendOfferDocument } from "@/lib/data/offer-send";
 import { sendTenderForSignature } from "@/lib/data/offer-tender-sign";
+import { sendOfferForSignature } from "@/lib/data/offer-accept-sign";
 import {
   sendContractForSignature,
   saveContractParticulars,
@@ -200,6 +201,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentInfo, setSentInfo] = useState<string | null>(null);
+  // Offer-acceptance DocuSign send (ADR 0004) — distinct from the email send above.
+  const [offerSignSending, setOfferSignSending] = useState(false);
+  const [offerSignError, setOfferSignError] = useState<string | null>(null);
   // Surfaced when a lifecycle action (Mark sent/agreed/rejected) can't proceed
   // because the pre-transition save reconciled to another tab or failed — without
   // it the button looked like a silent no-op (codex #4).
@@ -750,7 +754,11 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     if (leadId === undefined) {
       return;
     }
-    if (status !== "tender_sent" && status !== "contract_sent") {
+    if (
+      status !== "offer_sent" &&
+      status !== "tender_sent" &&
+      status !== "contract_sent"
+    ) {
       return;
     }
     const offerId = offerIdRef.current;
@@ -1071,6 +1079,45 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     [leadId, flushWorkspace],
   );
 
+  // Send the Offer document for the customer's DocuSign acceptance signature
+  // (ADR 0004) — customer-only, moves the offer SENT → OFFER_SENT. Flushes edits
+  // first so the signed PDF matches the workspace. Without a leadId (in-memory
+  // demo) it is a no-op (transition no-ops without a lead).
+  const sendOfferAccept = useCallback(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null) {
+      return;
+    }
+    setOfferSignSending(true);
+    setOfferSignError(null);
+    void (async () => {
+      try {
+        const flush = await flushWorkspace(offerId);
+        if (flush !== "clean") {
+          setOfferSignError(
+            flush === "reconciled"
+              ? "Your view was refreshed with a newer saved version — review it and send again."
+              : "Couldn't save your latest changes before sending. Try again.",
+          );
+          return;
+        }
+        const result = await sendOfferForSignature({ offerId });
+        if (result.ok) {
+          setStatus("offer_sent");
+        } else {
+          setOfferSignError(result.error);
+        }
+      } catch (error) {
+        console.error("[offer] acceptance send failed:", error);
+        setOfferSignError(
+          `Failed to send the offer for signature: ${(error as Error).message}`,
+        );
+      } finally {
+        setOfferSignSending(false);
+      }
+    })();
+  }, [leadId, flushWorkspace]);
+
   // Send the Tender as a runtime DocuSign envelope (anchor-tab AutoPlace).
   // Flushes edits first so the generated PDF matches the workspace. Without a
   // leadId (in-memory demo) it just advances the local status.
@@ -1292,6 +1339,13 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         sentInfo={sentInfo}
         transitionError={transitionError}
         signerStatuses={signerStatuses}
+        onSendOfferForSignature={sendOfferAccept}
+        offerSignSending={offerSignSending}
+        offerSignError={offerSignError}
+        onRecallOffer={() => transition("sent")}
+        // Dev-only simulate (guarded server-side): the real OFFER_SIGNED comes
+        // from the DocuSign completion webhook.
+        onMarkOfferSigned={() => transition("offer_signed")}
         onGenerateTender={() => transition("tender_draft")}
         onSendTender={sendTender}
         tenderSending={tenderSending}

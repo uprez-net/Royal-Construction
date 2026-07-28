@@ -5,7 +5,7 @@ Royal Constructions moves a **Lead** from qualification through **Offer** negoti
 ## End-to-end workflow (decided direction)
 
 ```text
-Lead → Offer (build → send → negotiate → agreed)
+Lead → Offer (build → send → negotiate → DocuSign accept: customer signs → estimator marks agreed)
      → Tender (payment schedule → generate → DocuSign sign: builder + customer)
      → Contract (generate → DocuSign sign) → Project → Costing report
 ```
@@ -15,7 +15,7 @@ Three workflow **phases** drive the top-card stepper — **Offer**, **Tender**, 
 | Phase | What happens | Primary document | Stepper steps |
 |-------|----------------|------------------|---------------|
 | Lead | Qualification, plans, lead discussion | — | — |
-| **Offer** | Assumptions, internal costing, pricing, inclusions/exclusions; Offer document generated, **sent through the system**, client negotiates, revisions, **agreed** | **Offer document** (summary for negotiation) | Job setup · Cost schedule · Pricing · Scope · Offer document · Send & negotiate |
+| **Offer** | Assumptions, internal costing, pricing, inclusions/exclusions; Offer document generated, **sent through the system**, client negotiates, revisions, optionally **signs to accept** (DocuSign, customer-only), then **agreed** | **Offer document** (customer proposal → signed acceptance) | Job setup · Cost schedule · Pricing · Scope · Offer document · Send & negotiate |
 | **Tender** | After **agreed**: payment schedule decided, fixed-price **Tender** generated and sent via **DocuSign**; signed by **builder and customer** | **Tender** (legal) | Tender |
 | **Contract** | Contract **generated in-app** from Tender data, sent via **DocuSign**; signed by both parties | **Contract** | Contract |
 | Project (handoff) | Created once the **Contract is signed**; job execution, budget vs actual tracked | **Costing report** (SAMPLE QUOTE pattern) | Project |
@@ -28,16 +28,16 @@ _Avoid_: Treating negotiation PDF and signed Tender as the same document; off-sy
 The pre-contract work package on a **Lead** — internal costing, scope decisions, customer negotiation, and revisions — from first draft until the job is ready to issue the legal **Tender**. Not the same as the negotiation **Offer document** PDF alone.
 _Avoid_: Quote, quotation, using Offer to mean the signed legal package
 
-**Offer document** (decided):
-The **customer-facing negotiation output** — a **summary one-pager** (v1): cover (client, site, ref), bullet **inclusions** and **exclusions**, single **contract value (inc GST)**, and validity. **No numbered inclusion table** on the Offer document; that appears on the **Tender** after **Offer agreed**. Sent in **revisions** during negotiation.
-_Avoid_: Tender (legal package), full Tender sections during negotiation
+**Offer document** (decided — customer-signable acceptance; see ADR 0004):
+The **customer-facing proposal** issued during negotiation — a **branded multi-page document**: cover (client, Site/Current Location, fixed price inc GST, reference, validity), personal welcome, project snapshot, investment summary with bullet **inclusions** and **exclusions**, a **standard inclusions schedule**, a **payment schedule**, and an **acceptance** page naming every owner. It does **not** carry the **Tender**'s numbered, per-item **inclusion-status table** — that appears on the Tender after **Offer agreed**. Sent in **revisions** during negotiation (emailed, tracked link) and, once scope and price are settled, **sent to the customer for e-signature via DocuSign** as a formal **Offer acceptance**.
+_Avoid_: Calling it a one-pager; the Tender's numbered inclusion-status table during negotiation; treating the signed acceptance as the legal **Tender**
 
 **Building Proposal** (observed legacy label):
 A customer-facing proposal document title used in existing Dropbox files. In this context it maps to **Offer document** when it is a pre-signature proposal/negotiation output; it is not the signed legal **Tender** unless the document itself contains Tender acceptance/signature evidence.
 _Avoid_: Treating the proposal title as proof of Tender status
 
 **Offer internal work** (decided):
-During **Offer** creation the builder runs the **full internal cost schedule** (stages A–O, contract build-up, margin analysis, inclusion–cost linking) from assumptions and plans. This work is **never shown to the client** on the Offer document. It drives the one-pager total and seeds the **Tender** inclusion table when the Offer is **agreed**.
+During **Offer** creation the builder runs the **full internal cost schedule** (stages A–O, contract build-up, margin analysis, inclusion–cost linking) from assumptions and plans. This work is **never shown to the client** on the Offer document. It drives the Offer document total and seeds the **Tender** inclusion table when the Offer is **agreed**.
 _Avoid_: Skipping internal costing until Tender, exposing margin or trade lines on the Offer document
 
 **Tender** (decided direction):
@@ -107,21 +107,25 @@ _Avoid_: One chat per Lead for all revisions (current code behaviour)
 The main chat panel shows **Offer chat only**. **Lead discussion** is injected as **agent context** (transcript summary and/or messages + files) on every revision; it is not shown as a separate transcript panel in v1.
 _Avoid_: Unified lead+offer timeline, side-by-side lead transcript panel (deferred)
 
-**Offer status** (decided — extended for the Contract phase; see ADR 0001):
-The **Offer** entity tracks the full lifecycle: **pending**, **sent**, **agreed**, **tender_draft**, **tender_sent** (DocuSign out for signature), **tender_signed**, **contract_draft**, **contract_sent** (DocuSign out), **contract_signed**, **rejected**, **superseded**. **Project** is created once **contract_signed** (no deposit or upload gate). Status drives the top-card stepper's active node and phase.
-_Avoid_: Offer status ending at "agreed" or "tender_signed" with no contract states, deposit/upload as a Project gate
+**Offer status** (decided — extended for the Contract phase and Offer acceptance; see ADR 0001, ADR 0004):
+The **Offer** entity tracks the full lifecycle: **pending**, **sent**, **offer_sent** (DocuSign acceptance out for signature), **offer_signed** (customer accepted), **offer_declined**, **agreed**, **tender_draft**, **tender_sent** (DocuSign out for signature), **tender_signed**, **tender_declined**, **contract_draft**, **contract_sent** (DocuSign out), **contract_signed**, **contract_declined**, **rejected**, **superseded**. Acceptance signing is **optional** — an offer may still reach **agreed** directly from **sent**. **Project** is created once **contract_signed** (no deposit or upload gate). Status drives the top-card stepper's active node and phase.
+_Avoid_: Offer status ending at "agreed" or "tender_signed" with no contract states, deposit/upload as a Project gate, treating **offer_signed** as **agreed** (the estimator still marks agreed to generate the Tender)
 
 **Offer handoff** (decided — supersedes the 3-item checklist; see ADR 0001):
 **Create Project** is gated solely on **contract_signed** (Contract executed via DocuSign). The former three-item checklist (signed Tender PDF + uploaded MBA Contract PDF + initial payment) is **dropped**: signing is in-app via DocuSign and the deposit is no longer a handoff precondition (tracked in Project financials instead).
 _Avoid_: Deposit or PDF-upload as a Project precondition, Project before contract_signed
 
 **Marking an Offer sent** (decided):
-**Download Offer document** while pending does not change status. **Send Offer document** emails the one-pager with a **tracked link** (open telemetry) and sets **sent**. The Offer document may be **sent many times** across negotiation; each send is recorded (version + tracked link + open telemetry) for the audit trail. The customer **replies by email**; staff **log the requested changes** and create a **new revision** (v1 has **no customer self-service portal**). Distinct from sending the final **Tender** via DocuSign.
+**Download Offer document** while pending does not change status. **Send Offer document** emails the proposal PDF with a **tracked link** (open **and reply** telemetry) and sets **sent**. The Offer document may be **sent many times** across negotiation; each send is recorded (version + tracked link + open/reply telemetry) for the audit trail, surfaced as a per-revision **activity timeline** on the Send & negotiate step. The customer **replies by email**; staff **log the requested changes** (a free-text note) and create a **new revision** (v1 has **no customer self-service portal**). Distinct from the DocuSign **Offer acceptance** send, which requests an e-signature rather than a reply.
 _Avoid_: Auto-sent on PDF download, customer self-service portal in v1, sending Tender during negotiation
 
+**Offer acceptance** (decided — see ADR 0004):
+Once scope and price are settled, **Send for signature** issues the Offer document to the customer for **e-signature via DocuSign** as a formal acceptance. **Customer-side signers only** (each individual owner; each company director via the shared **Signer** model), all in **parallel** (routingOrder 1) — the **builder does not sign** the acceptance (its binding signature is on the **Tender** and **Contract**). Sending **freezes the offer-document snapshot** being signed and sets **offer_sent**. On completion the executed PDF returns automatically and the status becomes **offer_signed**; a decline sets **offer_declined**. The estimator then **marks agreed** to freeze the internal snapshot and generate the **Tender** — acceptance signing does **not** auto-generate the Tender. A lightweight **authority to proceed**, not the legal fixed-price package.
+_Avoid_: Builder signing the acceptance, offer_signed auto-generating the Tender, treating the signed acceptance as the **Tender** or **Contract**
+
 **Offer agreed** (decided):
-Estimator marks when the client and builder have **settled scope and price** after negotiation. **Freezes** the internal snapshot and **auto-generates** the full **Tender** — numbered inclusion items, statuses, payment schedule, T&C, and acceptance — from internal cost schedule + catalog mapping. Estimator **reviews and edits** Tender before send. Does not mean Tender is signed yet.
-_Avoid_: Using “agreed” to mean Tender signed, manual re-keying of Tender from the one-pager bullets
+Estimator marks when the client and builder have **settled scope and price** after negotiation — directly from **sent**, or after the customer returns a signed **Offer acceptance** (**offer_signed**). **Freezes** the internal snapshot and **auto-generates** the full **Tender** — numbered inclusion items, statuses, payment schedule, T&C, and acceptance — from internal cost schedule + catalog mapping. Estimator **reviews and edits** Tender before send. Does not mean Tender is signed yet.
+_Avoid_: Using “agreed” to mean Tender signed, manual re-keying of Tender from the one-pager bullets, auto-agreeing on the customer's acceptance signature
 
 **Tender generation** (decided):
 On **Offer agreed**, the app builds the **Tender** from internal data (inclusion items, statuses, contract value, metadata). The **Offer document** one-pager bullets may be **auto-summarized** from the same source during negotiation; the generated Tender is the authoritative detailed scope for legal sign-off.
@@ -174,9 +178,9 @@ _Avoid_: Service exclusion (UI label only)
 
 | Phase | Builder-only | Customer-facing |
 |-------|--------------|-----------------|
-| **Offer** | Internal cost schedule + full inclusion/cost linking (A–O, margin) | **Offer document** (one-pager: bullets + total) |
+| **Offer** | Internal cost schedule + full inclusion/cost linking (A–O, margin) | **Offer document** (proposal: scope bullets + fixed price + acceptance) |
 | **Tender** | Same internal schedule (frozen at agree) | **Tender** (full legal + numbered inclusions, Word v3) |
-| **Contract** | — | **MBA Contract** — external portal, upload signed PDF |
+| **Contract** | — | **Contract** — generated in-app, signed via DocuSign (see ADR 0001) |
 | **Project** | **Costing report** (SAMPLE QUOTE pattern) | Progress reports (out of scope here) |
 
 Every **Offer** maintains an **internal cost schedule** during costing and negotiation. It is never sent to the client. It seeds the **Costing report** when the **Project** starts.
@@ -269,8 +273,8 @@ Do not implement pricing policy in the Offer UI until this section is written.
 
 | Topic | Open question |
 |-------|----------------|
-| **Contract template** | **Decided:** MBA via external portal; upload only — no in-app generation |
-| **Project gate** | **Decided:** signed Tender PDF + uploaded Contract PDF + initial payment recorded |
+| **Contract template** | **Decided (ADR 0001):** generated in-app + DocuSign e-signature (supersedes external-portal upload) |
+| **Project gate** | **Decided (ADR 0001):** contract_signed alone — no upload or deposit gate |
 | Legacy Quote in code | Rename to **Offer** over time |
 | Quotation (UI copy) | **Offer document** (negotiation) vs **Tender** (legal) |
 | lineItemTool rows | **Cost lines** on internal cost schedule |
@@ -280,6 +284,6 @@ Do not implement pricing policy in the Offer UI until this section is written.
 **Estimator:** "Internal schedule is costed A–O — margin is on target. Client gets the one-pager only: bullets and $680k inc GST."
 **Estimator:** "Offer document v2 sent — client wants to drop pool from exclusions list and adjust stone."
 **Estimator:** "Revision R3 on the Offer document — client agrees. Marking **Offer agreed**, generating Tender."
-**Client:** "Signed Tender Section 7 — builder countersigned. Tender PDF uploaded."
-**Admin:** "MBA contract uploaded from the portal. Deposit recorded — $8k."
-**Site manager:** "Tender, Contract, and deposit all on file — creating Project."
+**Client:** "Signed the Tender in DocuSign — builder countersigned; the executed PDF filed automatically."
+**Admin:** "Contract generated in-app and signed in DocuSign. Deposit recorded — $8k (tracked, not a gate)."
+**Site manager:** "Contract signed — creating Project."

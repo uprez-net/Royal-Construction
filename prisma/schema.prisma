@@ -104,11 +104,21 @@ enum OfferStatus {
   // is recorded on the matching OfferStatusEvent.
   TENDER_DECLINED
   CONTRACT_DECLINED
+  // Offer-document acceptance signing (ADR 0004). The customer signs the Offer
+  // document via DocuSign as a formal acceptance BEFORE the legal Tender:
+  // OFFER_SENT (out for signature) → OFFER_SIGNED (all customers signed) then the
+  // estimator marks AGREED to generate the Tender; OFFER_DECLINED is revise-ready.
+  // Customer-only — the builder does not sign the acceptance.
+  OFFER_SENT
+  OFFER_SIGNED
+  OFFER_DECLINED
 }
 
 enum EnvelopeDocType {
   TENDER
   CONTRACT
+  // The Offer document signed as a customer acceptance (ADR 0004).
+  OFFER
 }
 
 enum EnvelopeStatus {
@@ -634,16 +644,22 @@ model Offer {
   sentAt     DateTime?
   acceptedAt DateTime?
 
+  // Executed (fully signed) Offer-acceptance PDF, archived to Blob by the
+  // DocuSign Connect webhook when the OFFER envelope completes (ADR 0004).
+  // Parallels Tender.executedPdfUrl / Contract.executedPdfUrl.
+  executedPdfUrl String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offerItems    OfferItem[]
-  offerFiles    OfferFile[]
-  tender        Tender?
-  contract      Contract?
-  documentSends OfferDocumentSend[]
-  statusEvents  OfferStatusEvent[]
-  lead          Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offerItems         OfferItem[]
+  offerFiles         OfferFile[]
+  tender             Tender?
+  contract           Contract?
+  acceptanceEnvelopes Envelope[]         @relation("OfferAcceptanceEnvelopes")
+  documentSends      OfferDocumentSend[]
+  statusEvents       OfferStatusEvent[]
+  lead               Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   // NOTE: one-active-per-lead is enforced via a partial unique index
   // (CREATE UNIQUE INDEX ... WHERE "isActive") added in the migration, since
@@ -724,7 +740,9 @@ model Contract {
   @@index([offerId])
 }
 
-// One row per DocuSign send; re-sends are retained for legal audit.
+// One row per DocuSign send; re-sends are retained for legal audit. An envelope
+// hangs off exactly one parent: a Tender, a Contract, or (for an OFFER-type
+// acceptance envelope, ADR 0004) the Offer directly.
 model Envelope {
   id              String              @id @default(uuid())
   docType         EnvelopeDocType
@@ -732,6 +750,10 @@ model Envelope {
   tender          Tender?             @relation(fields: [tenderId], references: [id], onDelete: Cascade)
   contractId      String?
   contract        Contract?           @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  // Set only for docType OFFER: the acceptance envelope hangs directly off the
+  // Offer (no intermediate Tender/Contract record). ADR 0004.
+  offerId         String?
+  offer           Offer?              @relation("OfferAcceptanceEnvelopes", fields: [offerId], references: [id], onDelete: Cascade)
   docusignId      String?             @unique
   status          EnvelopeStatus      @default(CREATED)
   documentVersion Int
@@ -743,6 +765,7 @@ model Envelope {
 
   @@index([tenderId])
   @@index([contractId])
+  @@index([offerId])
   @@index([status])
 }
 

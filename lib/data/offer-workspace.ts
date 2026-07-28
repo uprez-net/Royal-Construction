@@ -38,6 +38,17 @@ import { collectOwnerIssues } from "@/lib/offer/workspace-model";
 const OFFER_WORKFLOW_TRANSITIONS: Partial<Record<OfferStatus, OfferStatus[]>> = {
   PENDING: [OfferStatus.SENT, OfferStatus.AGREED, OfferStatus.REJECTED],
   SENT: [OfferStatus.AGREED, OfferStatus.REJECTED, OfferStatus.PENDING],
+  // Offer-acceptance signing (ADR 0004). SENT → OFFER_SENT is performed by the
+  // sendOfferForSignature action (atomic claim), not this map. Recall returns an
+  // out-for-signature offer to SENT; OFFER_SIGNED → AGREED is the estimator's
+  // "Mark agreed"; OFFER_SIGNED via transition is a dev-only simulate (guarded
+  // below, like the Tender). A declined acceptance re-opens for a new revision.
+  OFFER_SENT: [OfferStatus.SENT, OfferStatus.OFFER_SIGNED],
+  OFFER_SIGNED: [OfferStatus.AGREED, OfferStatus.SENT],
+  // A declined acceptance only re-opens for renegotiation / a new revision — it
+  // must NOT jump straight to AGREED (that would bypass signature into the Tender
+  // flow). Reaching AGREED requires going back through SENT first.
+  OFFER_DECLINED: [OfferStatus.SENT, OfferStatus.PENDING],
   REJECTED: [OfferStatus.PENDING, OfferStatus.SENT, OfferStatus.AGREED],
   AGREED: [OfferStatus.TENDER_DRAFT, OfferStatus.SENT, OfferStatus.PENDING],
   TENDER_DRAFT: [OfferStatus.TENDER_SENT, OfferStatus.AGREED],
@@ -121,7 +132,9 @@ async function loadOfferSignerStatuses(
 ): Promise<OfferSignerStatus[]> {
   const envelopes = await prisma.envelope.findMany({
     where: {
-      OR: [{ tender: { offerId } }, { contract: { offerId } }],
+      // Tender/Contract envelopes hang off their record; an OFFER acceptance
+      // envelope hangs directly off the Offer (ADR 0004).
+      OR: [{ tender: { offerId } }, { contract: { offerId } }, { offerId }],
     },
     orderBy: { createdAt: "desc" },
     select: {
@@ -153,7 +166,12 @@ async function loadOfferSignerStatuses(
   for (const envelope of newestPerDocType.values()) {
     for (const signature of envelope.signatures) {
       signerStatuses.push({
-        docType: envelope.docType === "TENDER" ? "TENDER" : "CONTRACT",
+        docType:
+          envelope.docType === "TENDER"
+            ? "TENDER"
+            : envelope.docType === "CONTRACT"
+              ? "CONTRACT"
+              : "OFFER",
         role: signature.recipientRole === "BUILDER" ? "BUILDER" : "CUSTOMER",
         name: signature.name,
         email: signature.email,
@@ -174,6 +192,7 @@ async function loadDeclineReason(
   status: OfferStatus,
 ): Promise<string | null> {
   if (
+    status !== OfferStatus.OFFER_DECLINED &&
     status !== OfferStatus.TENDER_DECLINED &&
     status !== OfferStatus.CONTRACT_DECLINED
   ) {
@@ -420,14 +439,15 @@ export async function transitionOfferStatus(input: {
     throw new Error(access.error);
   }
 
-  // The TENDER_SIGNED / CONTRACT_SIGNED states must be reached only through a
-  // genuine DocuSign completion (the Connect webhook advances the offer and
-  // archives the executed PDF — app/api/docusign/connect/route.ts). The
+  // The OFFER_SIGNED / TENDER_SIGNED / CONTRACT_SIGNED states must be reached only
+  // through a genuine DocuSign completion (the Connect webhook advances the offer
+  // and archives the executed PDF — app/api/docusign/connect/route.ts). The
   // "Mark signed (simulate completion)" control routes here and would flip the
   // status without an executed PDF, which then produces an empty project
   // (issue #90). It is a local-development testing aid only, so refuse a manual
   // jump into a signed state anywhere but local dev.
   const isManualSignedJump =
+    input.toStatus === OfferStatus.OFFER_SIGNED ||
     input.toStatus === OfferStatus.TENDER_SIGNED ||
     input.toStatus === OfferStatus.CONTRACT_SIGNED;
   if (isManualSignedJump && process.env.NODE_ENV !== "development") {
@@ -721,6 +741,9 @@ export async function createOfferRevision(input: {
       OR: [
         { tender: { offerId: input.offerId } },
         { contract: { offerId: input.offerId } },
+        // A live OFFER-acceptance envelope (ADR 0004) is voided too, so a new
+        // revision can't be signed against the superseded acceptance.
+        { offerId: input.offerId },
       ],
     },
     select: { id: true, docusignId: true },

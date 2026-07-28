@@ -63,6 +63,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       signatures: true,
       tender: { select: { id: true, offerId: true, executedPdfUrl: true } },
       contract: { select: { id: true, offerId: true, executedPdfUrl: true } },
+      // An OFFER-type acceptance envelope hangs directly off the Offer (ADR 0004).
+      offer: { select: { id: true, executedPdfUrl: true } },
     },
   });
   if (!envelope) {
@@ -84,7 +86,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   // keep serving a pre-signature view. Best-effort: the work is already
   // committed, so a revalidation failure must not turn into a 500 and make
   // DocuSign redeliver an event we have applied.
-  const offerId = envelope.tender?.offerId ?? envelope.contract?.offerId;
+  const offerId =
+    envelope.tender?.offerId ?? envelope.contract?.offerId ?? envelope.offer?.id;
   if (offerId) {
     try {
       revalidateTag(`offer-${offerId}`, CACHE_PROFILES.SHORT);
@@ -193,19 +196,104 @@ function envelopeStatusRank(status: EnvelopeStatus): number {
   }
 }
 
+// The envelope shape the webhook loads. An envelope hangs off exactly one parent:
+// a Tender, a Contract, or — for an OFFER-type acceptance (ADR 0004) — the Offer
+// directly.
+type ConnectEnvelope = {
+  id: string;
+  docusignId: string | null;
+  docType: EnvelopeDocType;
+  status: EnvelopeStatus;
+  tender: { id: string; offerId: string; executedPdfUrl: string | null } | null;
+  contract: { id: string; offerId: string; executedPdfUrl: string | null } | null;
+  offer: { id: string; executedPdfUrl: string | null } | null;
+};
+
+// Everything the completion/decline paths need to treat an envelope's parent
+// uniformly: which Offer it belongs to, where the executed PDF is archived, and
+// which offer-status a completion / decline advances to.
+type EnvelopeTarget = {
+  offerId: string;
+  executedPdfUrl: string | null;
+  archivePrefix: "tender" | "contract" | "offer";
+  signedStatus: OfferStatus;
+  declinedStatus: OfferStatus;
+  expectedFromStatus: OfferStatus;
+  writeExecutedPdf: (url: string) => Promise<unknown>;
+  // Only a fully-executed Contract nudges the admins to create the project.
+  notifyContractSigned: boolean;
+  // Matches this envelope's siblings, so a decline only moves the offer when it
+  // is the CURRENT (latest-sent) envelope for the document.
+  siblingEnvelopeWhere:
+    | { tenderId: string }
+    | { contractId: string }
+    | { offerId: string };
+};
+
+function resolveEnvelopeTarget(envelope: ConnectEnvelope): EnvelopeTarget | null {
+  switch (envelope.docType) {
+    case EnvelopeDocType.TENDER:
+      if (!envelope.tender) return null;
+      return {
+        offerId: envelope.tender.offerId,
+        executedPdfUrl: envelope.tender.executedPdfUrl,
+        archivePrefix: "tender",
+        signedStatus: OfferStatus.TENDER_SIGNED,
+        declinedStatus: OfferStatus.TENDER_DECLINED,
+        expectedFromStatus: OfferStatus.TENDER_SENT,
+        writeExecutedPdf: (url) =>
+          prisma.tender.update({
+            where: { id: envelope.tender!.id },
+            data: { executedPdfUrl: url },
+          }),
+        notifyContractSigned: false,
+        siblingEnvelopeWhere: { tenderId: envelope.tender.id },
+      };
+    case EnvelopeDocType.CONTRACT:
+      if (!envelope.contract) return null;
+      return {
+        offerId: envelope.contract.offerId,
+        executedPdfUrl: envelope.contract.executedPdfUrl,
+        archivePrefix: "contract",
+        signedStatus: OfferStatus.CONTRACT_SIGNED,
+        declinedStatus: OfferStatus.CONTRACT_DECLINED,
+        expectedFromStatus: OfferStatus.CONTRACT_SENT,
+        writeExecutedPdf: (url) =>
+          prisma.contract.update({
+            where: { id: envelope.contract!.id },
+            data: { executedPdfUrl: url },
+          }),
+        notifyContractSigned: true,
+        siblingEnvelopeWhere: { contractId: envelope.contract.id },
+      };
+    case EnvelopeDocType.OFFER:
+      // Offer-acceptance envelope (ADR 0004): the parent IS the Offer, so the
+      // executed PDF is archived onto Offer.executedPdfUrl and completion advances
+      // OFFER_SENT → OFFER_SIGNED (customer accepted). No admin nudge — the
+      // estimator then marks the offer agreed to generate the Tender.
+      if (!envelope.offer) return null;
+      return {
+        offerId: envelope.offer.id,
+        executedPdfUrl: envelope.offer.executedPdfUrl,
+        archivePrefix: "offer",
+        signedStatus: OfferStatus.OFFER_SIGNED,
+        declinedStatus: OfferStatus.OFFER_DECLINED,
+        expectedFromStatus: OfferStatus.OFFER_SENT,
+        writeExecutedPdf: (url) =>
+          prisma.offer.update({
+            where: { id: envelope.offer!.id },
+            data: { executedPdfUrl: url },
+          }),
+        notifyContractSigned: false,
+        siblingEnvelopeWhere: { offerId: envelope.offer.id },
+      };
+    default:
+      return null;
+  }
+}
+
 async function syncEnvelopeStatus(
-  envelope: {
-    id: string;
-    docusignId: string | null;
-    docType: EnvelopeDocType;
-    status: EnvelopeStatus;
-    tender: { id: string; offerId: string; executedPdfUrl: string | null } | null;
-    contract: {
-      id: string;
-      offerId: string;
-      executedPdfUrl: string | null;
-    } | null;
-  },
+  envelope: ConnectEnvelope,
   event: string,
   payload: ConnectPayload,
 ): Promise<void> {
@@ -240,9 +328,8 @@ async function syncEnvelopeStatus(
     return;
   }
 
-  const isTender = envelope.docType === EnvelopeDocType.TENDER;
-  const parent = isTender ? envelope.tender : envelope.contract;
-  if (!parent) {
+  const target = resolveEnvelopeTarget(envelope);
+  if (!target) {
     return;
   }
 
@@ -251,7 +338,7 @@ async function syncEnvelopeStatus(
   // failure still advances the offer instead of short-circuiting on the
   // already-COMPLETED envelope. Archive only if not already archived — a
   // download failure must not block the offer advance (DocuSign retains it).
-  if (envelope.docusignId && !parent.executedPdfUrl) {
+  if (envelope.docusignId && !target.executedPdfUrl) {
     try {
       const context = await createDocusignContext(getDocusignConfig());
       const executed = await downloadCombinedDocument(
@@ -259,7 +346,7 @@ async function syncEnvelopeStatus(
         envelope.docusignId,
       );
       const blob = await put(
-        `offer-signed/${isTender ? "tender" : "contract"}-${envelope.docusignId}.pdf`,
+        `offer-signed/${target.archivePrefix}-${envelope.docusignId}.pdf`,
         executed,
         {
           access: "public",
@@ -268,33 +355,17 @@ async function syncEnvelopeStatus(
           contentType: "application/pdf",
         },
       );
-      if (isTender) {
-        await prisma.tender.update({
-          where: { id: parent.id },
-          data: { executedPdfUrl: blob.url },
-        });
-      } else {
-        await prisma.contract.update({
-          where: { id: parent.id },
-          data: { executedPdfUrl: blob.url },
-        });
-      }
+      await target.writeExecutedPdf(blob.url);
     } catch (error) {
       console.error("[docusign] Failed to archive executed PDF:", error);
     }
   }
 
-  const signedStatus = isTender
-    ? OfferStatus.TENDER_SIGNED
-    : OfferStatus.CONTRACT_SIGNED;
   // Forward-only: transition solely from the matching SENT state so a
   // replayed completion event can't drag an offer that has already moved on
-  // (e.g. to PROJECT) back to the signed state.
-  const expectedFromStatus = isTender
-    ? OfferStatus.TENDER_SENT
-    : OfferStatus.CONTRACT_SENT;
+  // (e.g. to PROJECT, or past OFFER_SIGNED to AGREED) back to the signed state.
   const offer = await prisma.offer.findUnique({
-    where: { id: parent.offerId },
+    where: { id: target.offerId },
     select: {
       id: true,
       offerStatus: true,
@@ -306,17 +377,17 @@ async function syncEnvelopeStatus(
       lead: { select: { name: true } },
     },
   });
-  if (offer && offer.offerStatus === expectedFromStatus) {
+  if (offer && offer.offerStatus === target.expectedFromStatus) {
     await prisma.$transaction([
       prisma.offer.update({
         where: { id: offer.id },
-        data: { offerStatus: signedStatus },
+        data: { offerStatus: target.signedStatus },
       }),
       prisma.offerStatusEvent.create({
         data: {
           offerId: offer.id,
           fromStatus: offer.offerStatus,
-          toStatus: signedStatus,
+          toStatus: target.signedStatus,
           note: `DocuSign envelope ${envelope.docusignId} completed`,
         },
       }),
@@ -325,7 +396,7 @@ async function syncEnvelopeStatus(
     // Contract fully executed → nudge the admins to create the project.
     // Project creation stays a deliberate click (kickoff dates, site manager,
     // and booking warnings need a human), so the nudge is the automation.
-    if (!isTender) {
+    if (target.notifyContractSigned) {
       try {
         const admins = await prisma.user.findMany({
           where: { role: Role.ADMIN },
@@ -353,31 +424,25 @@ async function syncEnvelopeStatus(
 }
 
 // A decline (envelope-declined) moves the offer to a revise-ready stage —
-// TENDER_DECLINED / CONTRACT_DECLINED — and records DocuSign's decline reason on
-// the status event, so the operator sees why and can revise and re-issue via a
-// new revision (issue #89).
+// OFFER_DECLINED / TENDER_DECLINED / CONTRACT_DECLINED — and records DocuSign's
+// decline reason on the status event, so the operator sees why and can revise and
+// re-issue via a new revision (issue #89, ADR 0004).
 async function advanceOfferOnDecline(
-  envelope: {
-    id: string;
-    docType: EnvelopeDocType;
-    tender: { id: string; offerId: string } | null;
-    contract: { id: string; offerId: string } | null;
-  },
+  envelope: ConnectEnvelope,
   payload: ConnectPayload,
 ): Promise<void> {
-  const isTender = envelope.docType === EnvelopeDocType.TENDER;
-  const parent = isTender ? envelope.tender : envelope.contract;
-  if (!parent) {
+  const target = resolveEnvelopeTarget(envelope);
+  if (!target) {
     return;
   }
 
-  // Only the offer's CURRENT envelope may move the offer. A tender/contract can
-  // carry more than one envelope — a recall-then-resend leaves the prior one
-  // live in DocuSign — so a decline on a superseded envelope must be ignored at
-  // the offer level; otherwise a genuinely-signed re-send is stranded in
-  // *_DECLINED. Compare against the most-recently-sent envelope for this parent.
+  // Only the offer's CURRENT envelope may move the offer. A document can carry
+  // more than one envelope — a recall-then-resend leaves the prior one live in
+  // DocuSign — so a decline on a superseded envelope must be ignored at the offer
+  // level; otherwise a genuinely-signed re-send is stranded in *_DECLINED.
+  // Compare against the most-recently-sent envelope for this parent.
   const latest = await prisma.envelope.findFirst({
-    where: isTender ? { tenderId: parent.id } : { contractId: parent.id },
+    where: target.siblingEnvelopeWhere,
     orderBy: { sentAt: "desc" },
     select: { id: true },
   });
@@ -385,16 +450,8 @@ async function advanceOfferOnDecline(
     return;
   }
 
-  const declinedStatus = isTender
-    ? OfferStatus.TENDER_DECLINED
-    : OfferStatus.CONTRACT_DECLINED;
-  const expectedFromStatus = isTender
-    ? OfferStatus.TENDER_SENT
-    : OfferStatus.CONTRACT_SENT;
-
   // DocuSign attaches the decliner's reason to the recipient record; surface it
-  // rather than inventing our own copy. Role-neutral wording: after the tender
-  // flip the builder is routingOrder 2 and can also decline.
+  // rather than inventing our own copy.
   const declineReason = (payload.data?.envelopeSummary?.recipients?.signers ?? [])
     .find((signer) => (signer.status ?? "").toLowerCase() === "declined")
     ?.declinedReason?.trim();
@@ -403,8 +460,8 @@ async function advanceOfferOnDecline(
   // event, so concurrent duplicate webhooks can't write duplicate audit rows,
   // and a replayed decline (or an offer that already advanced) is a no-op.
   const claim = await prisma.offer.updateMany({
-    where: { id: parent.offerId, offerStatus: expectedFromStatus },
-    data: { offerStatus: declinedStatus },
+    where: { id: target.offerId, offerStatus: target.expectedFromStatus },
+    data: { offerStatus: target.declinedStatus },
   });
   if (claim.count === 0) {
     return;
@@ -412,9 +469,9 @@ async function advanceOfferOnDecline(
 
   await prisma.offerStatusEvent.create({
     data: {
-      offerId: parent.offerId,
-      fromStatus: expectedFromStatus,
-      toStatus: declinedStatus,
+      offerId: target.offerId,
+      fromStatus: target.expectedFromStatus,
+      toStatus: target.declinedStatus,
       note: declineReason
         ? `Declined via DocuSign: ${declineReason}`
         : "Declined via DocuSign.",

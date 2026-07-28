@@ -176,6 +176,12 @@ export type OfferDocumentDraft = {
 export type OfferWorkspaceStatus =
   | "pending"
   | "sent"
+  // Offer-document acceptance signing (ADR 0004): out for the customer's
+  // DocuSign signature, signed (accepted), or declined — all still in the Offer
+  // phase, before the estimator marks the offer agreed.
+  | "offer_sent"
+  | "offer_signed"
+  | "offer_declined"
   | "agreed"
   | "tender_draft"
   | "tender_sent"
@@ -193,6 +199,9 @@ export type OfferWorkspaceStatus =
 export const OFFER_STATUS_LABEL: Record<OfferWorkspaceStatus, string> = {
   pending: "Pending",
   sent: "Sent",
+  offer_sent: "Acceptance sent",
+  offer_signed: "Accepted",
+  offer_declined: "Acceptance declined",
   agreed: "Agreed",
   tender_draft: "Tender draft",
   tender_sent: "Tender sent",

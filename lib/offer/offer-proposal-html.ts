@@ -28,6 +28,9 @@ import {
   type OfferOwner,
   type OfferWorkspaceJob,
 } from "./workspace-model";
+// DocuSign anchor emitter, shared with the Tender/Contract HTML so the anchor
+// styling (tiny + grey, present for AutoPlace) can never drift between documents.
+import { anchor } from "./offer-tender-html";
 
 const NAVY = "#1e2b4d";
 const GOLD = "#b8873b";
@@ -66,6 +69,12 @@ const INLINE_SIGNATURE_BUDGET = 22;
 
 function esc(value: string): string {
   return value
+    // Strip backslashes so user-controlled text (client name, address, scope)
+    // cannot smuggle a DocuSign anchor token like \sigOwner1\ into the signed
+    // acceptance PDF and steal a signature/date field via AutoPlace. Harmless for
+    // the emailed copy (real names/addresses carry no backslashes); real anchors
+    // are emitted by anchor(), never through esc(). Mirrors offer-tender-html.esc.
+    .replace(/\\/g, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -117,10 +126,18 @@ function ownerNamesCellHtml(job: OfferWorkspaceJob): string {
 // Build a complete, self-contained HTML document of the building proposal,
 // suitable for headless-Chrome PDF rendering (generatePDF). Mirrors the on-screen
 // print template but with inline CSS so it renders standalone.
+//
+// `forSignature` renders the customer-acceptance blocks with DocuSign anchor
+// tokens (\sigOwner{k}\ / \dateOwner{k}\) instead of blank wet-sign rules, and
+// replaces the builder's wet-sign block with a non-signature "Prepared by"
+// credit — this is the PDF sent as a customer-only DocuSign acceptance envelope
+// (ADR 0004). The default (emailed negotiation copy) keeps the wet-sign rules.
 export function buildProposalHtml(
   input: OfferPrintTemplateInput,
   images: OfferImageMap,
+  options: { readonly forSignature?: boolean } = {},
 ): string {
+  const forSignature = options.forSignature ?? false;
   const data = buildOfferPrintTemplateData(input);
   const { job } = input;
   const galleryImages = getAttachedOfferImageSlots(images).filter(
@@ -140,7 +157,7 @@ export function buildProposalHtml(
   // signer's line across two physical pages and left the footer reading
   // "Page 9 of 9" over 10 pages (PR #124 review). Past the inline limit, move the
   // whole set onto its own chunked page(s), each counted so the footer stays true.
-  const signatureBlocks = signatureBlocksHtml(job);
+  const signatureBlocks = signatureBlocksHtml(job, forSignature);
   const signatureLines = signatureBlocks.reduce(
     (sum, block) => sum + block.lines,
     0,
@@ -488,10 +505,29 @@ function acceptanceLineText(job: OfferWorkspaceJob): string {
   return `I/We, ${names}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
 }
 
-// The ordered signature blocks: the builder first, then one client block per
-// signer (each individual owner; each company director, labelled with capacity +
-// company). Falls back to the clientNames projection when owners[] is empty.
-function signatureBlocksHtml(job: OfferWorkspaceJob): SignatureBlock[] {
+// A wet-sign rule, or — in `forSignature` mode — the DocuSign anchor token that
+// AutoPlaces the matching signature/date tab for customer signer `k` (1-based).
+// The anchor number MUST match the recipient order in lib/docusign/offer-envelope
+// (both walk collectOfferSigners in the same order), so sigOwner{k} maps to
+// recipient k. Only the customer blocks carry anchors — the acceptance is
+// customer-only (ADR 0004).
+function signLine(kind: "sig" | "date", index: number, forSignature: boolean): string {
+  if (!forSignature) {
+    return "_______________________";
+  }
+  return anchor(`${kind === "sig" ? "sigOwner" : "dateOwner"}${index + 1}`);
+}
+
+// The ordered signature blocks: the builder block first, then one client block
+// per signer (each individual owner; each company director, labelled with
+// capacity + company). Falls back to the clientNames projection when owners[] is
+// empty. In `forSignature` mode the client blocks carry DocuSign anchors and the
+// builder block becomes a non-signature "Prepared by" credit (the builder does
+// not sign the acceptance).
+function signatureBlocksHtml(
+  job: OfferWorkspaceJob,
+  forSignature: boolean,
+): SignatureBlock[] {
   const signers = collectOfferSigners(job.owners ?? []);
   const clientSigs: SignatureBlock[] =
     signers.length > 0
@@ -509,23 +545,29 @@ function signatureBlocksHtml(job: OfferWorkspaceJob): SignatureBlock[] {
             ? `${esc(signer.signatory.name)}, ${esc(signer.signatory.capacity)} of ${esc(signer.entityName)}`
             : esc(signer.signatory.name);
           return {
-            html: `<div class="sig"><h3>${esc(heading)}</h3><p>Signature: _______________________</p><p>${who}</p><p>Date: ___________________________</p></div>`,
+            html: `<div class="sig"><h3>${esc(heading)}</h3><p>Signature: ${signLine("sig", index, forSignature)}</p><p>${who}</p><p>Date: ${signLine("date", index, forSignature)}</p></div>`,
             lines: signatureBlockLines(whoText),
           };
         })
       : [
           {
-            html: `<div class="sig"><h3>Client acceptance</h3><p>Signature: _______________________</p><p>${esc(job.clientNames)}</p><p>Date: ___________________________</p></div>`,
+            html: `<div class="sig"><h3>Client acceptance</h3><p>Signature: ${signLine("sig", 0, forSignature)}</p><p>${esc(job.clientNames)}</p><p>Date: ${signLine("date", 0, forSignature)}</p></div>`,
             lines: signatureBlockLines(job.clientNames),
           },
         ];
-  return [
-    {
-      html: `<div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>`,
-      lines: signatureBlockLines(job.preparedBy),
-    },
-    ...clientSigs,
-  ];
+  // Builder block: a wet-sign block on the emailed copy; on the DocuSign copy the
+  // builder does not sign, so show a "Prepared by" credit with no anchor and no
+  // blank signature rule (which would read as an unsigned builder line).
+  const builderBlock: SignatureBlock = forSignature
+    ? {
+        html: `<div class="sig"><h3>Prepared by</h3><p>${esc(job.preparedBy)}</p><p class="muted">Royal Constructions Pty Ltd</p></div>`,
+        lines: signatureBlockLines(job.preparedBy),
+      }
+    : {
+        html: `<div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>`,
+        lines: signatureBlockLines(job.preparedBy),
+      };
+  return [builderBlock, ...clientSigs];
 }
 
 // Terms + payment schedule. When the signatures fit inline (few signers) they are

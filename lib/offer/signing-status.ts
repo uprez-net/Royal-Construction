@@ -13,7 +13,9 @@
 
 export type OfferSignerRole = "BUILDER" | "CUSTOMER";
 
-export type OfferSignerDocType = "TENDER" | "CONTRACT";
+// OFFER is the customer-only Offer-document acceptance (ADR 0004); TENDER and
+// CONTRACT are the builder + customer legal documents.
+export type OfferSignerDocType = "OFFER" | "TENDER" | "CONTRACT";
 
 export type OfferSignerStatusValue =
   | "CREATED"
