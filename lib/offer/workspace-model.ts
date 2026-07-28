@@ -225,6 +225,10 @@ export const DEFAULT_WORKSPACE_PRICING_SETTINGS: OfferWorkspacePricingSettings =
   royalConstructionOverheadPct: 0.1,
   royalConstructionFeePct: 0.1,
   gstRate: 0.1,
+  hbcfTotalContractValue: 0,
+  // Keep in sync with DEFAULT_HBCF_RATE in workspace-pricing.ts (#116) —
+  // icare H01 metro base rate ex GST/stamp (0.966%).
+  hbcfRate: 0.00966,
   homeWarrantyHbcfFixed: 0,
   impactFeeFixed: 0,
 };

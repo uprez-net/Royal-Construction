@@ -4,12 +4,14 @@ import {
   calculateRateCardComparison,
   calculateDirectTotal,
   calculateEffectiveMargin,
+  calculateHbcfPremium,
   calculateStageSubtotals,
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
   getMarginStatus,
   parseNonNegativeNumberInput,
   resolveTargetMarkupPct,
+  withDerivedHbcfPremium,
   type OfferWorkspacePricingSettings,
 } from "../../lib/offer/workspace-pricing";
 
@@ -19,6 +21,8 @@ const SETTINGS: OfferWorkspacePricingSettings = {
   royalConstructionOverheadPct: 0.1,
   royalConstructionFeePct: 0.1,
   gstRate: 0.1,
+  hbcfTotalContractValue: 0,
+  hbcfRate: 0.00966,
   homeWarrantyHbcfFixed: 0,
   impactFeeFixed: 0,
 };
@@ -160,9 +164,9 @@ const withAdditions = calculateOfferWorkspacePricing({
   totalAreaSqm: 232,
   directTotal: 405560,
   settings: {
+    ...SETTINGS,
     royalConstructionOverheadPct: 0,
     royalConstructionFeePct: 0.16,
-    gstRate: 0.1,
     homeWarrantyHbcfFixed: 8500,
     impactFeeFixed: 1500,
   },
@@ -174,9 +178,7 @@ assert.equal(withAdditions.royalConstructionFee, 66489.6);
 // calculateAdditionsTotal now sums ONLY the two kept fixed fields.
 assert.equal(
   calculateAdditionsTotal({
-    royalConstructionOverheadPct: 0.1,
-    royalConstructionFeePct: 0.1,
-    gstRate: 0.1,
+    ...SETTINGS,
     homeWarrantyHbcfFixed: 8500,
     impactFeeFixed: 1500,
   }),
@@ -313,5 +315,40 @@ assert.deepEqual(
     varianceIncGst: 110386,
     hasManualOverride: true,
     needsOverrideReason: false,
+  },
+);
+
+// #116 — HBCF premium matches the official icare calculator
+// (base = TCV × H01 metro rate, + GST 10%, + stamp 9% on base+GST).
+// Verified against portal.hbcf.nsw.gov.au for $650k and $500k.
+assert.equal(calculateHbcfPremium(650000, 0.00966), 7528.52);
+assert.equal(calculateHbcfPremium(500000, 0.00966), 5791.17);
+assert.equal(calculateHbcfPremium(0, 0.00966), 0);
+assert.equal(calculateHbcfPremium(-100, 0.00966), 0);
+assert.deepEqual(
+  withDerivedHbcfPremium({
+    ...SETTINGS,
+    hbcfTotalContractValue: 650000,
+    hbcfRate: 0.00966,
+    homeWarrantyHbcfFixed: 0,
+  }),
+  {
+    ...SETTINGS,
+    hbcfTotalContractValue: 650000,
+    hbcfRate: 0.00966,
+    homeWarrantyHbcfFixed: 7528.52,
+  },
+);
+// Blank TCV clears the premium (TCV is the source of truth).
+assert.deepEqual(
+  withDerivedHbcfPremium({
+    ...SETTINGS,
+    hbcfTotalContractValue: 0,
+    homeWarrantyHbcfFixed: 8500,
+  }),
+  {
+    ...SETTINGS,
+    hbcfTotalContractValue: 0,
+    homeWarrantyHbcfFixed: 0,
   },
 );

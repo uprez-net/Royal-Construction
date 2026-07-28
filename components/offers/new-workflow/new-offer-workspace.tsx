@@ -37,6 +37,7 @@ import {
   calculateOfferWorkspacePricing,
   resolveOptionalPriceInput,
   resolveTargetMarkupPct,
+  withDerivedHbcfPremium,
   type OfferWorkspacePricingSettings,
   type RateCardProduct,
   type RateCardTier,
@@ -415,7 +416,9 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   function updateWorkspacePricingSettings(
     patch: Partial<OfferWorkspacePricingSettings>,
   ) {
-    setWorkspacePricingSettings((current) => ({ ...current, ...patch }));
+    setWorkspacePricingSettings((current) =>
+      withDerivedHbcfPremium({ ...current, ...patch }),
+    );
   }
 
   function importWorkbook(result: OfferWorkbookImportResult) {

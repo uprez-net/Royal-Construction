@@ -98,6 +98,8 @@ assert.deepEqual(result.workspacePricingSettings, {
   royalConstructionFeePct: 0.16,
   royalConstructionOverheadPct: 0,
   gstRate: 0.1,
+  hbcfTotalContractValue: 733875.88,
+  hbcfRate: 0.00966,
   homeWarrantyHbcfFixed: 8500,
   impactFeeFixed: 0,
 });
@@ -204,7 +206,9 @@ assert.deepEqual(v2Result.workspacePricingSettings, {
   royalConstructionFeePct: 0.18,
   royalConstructionOverheadPct: 0,
   gstRate: 0.1,
-  homeWarrantyHbcfFixed: 0.014,
+  hbcfTotalContractValue: 0,
+  hbcfRate: 0.014,
+  homeWarrantyHbcfFixed: 0,
   impactFeeFixed: 0,
 });
 assert.equal(v2Result.areaBasis.groundFloorSqm, 202.2);

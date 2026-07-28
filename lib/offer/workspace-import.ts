@@ -16,6 +16,7 @@ import {
 } from "@/lib/offer/workspace-model";
 import { getOfferSequenceMappingByTask } from "@/lib/offer/workspace-sequence-mapping";
 import type { OfferWorkspacePricingSettings } from "@/lib/offer/workspace-pricing";
+import { reverseHbcfTotalContractValue } from "@/lib/offer/workspace-pricing";
 
 export type OfferWorkbookImportResult = {
   readonly sourceName: string;
@@ -380,6 +381,10 @@ function parseWorkbookBuildup(
   const directTotal = numberValue(getCell(rows, 79, 7)) ?? 0;
   const overhead = numberValue(getCell(rows, 80, 7)) ?? 0;
   const royalConstructionFee = numberValue(getCell(rows, 81, 7)) ?? 0;
+  // SAMPLE QUOTE stores the HBCF dollar premium. Reverse-fill Total Contract
+  // Value so the #116 TCV → premium path stays the single source of truth.
+  const hbcfFixed = numberValue(getCell(rows, 82, 7)) ?? 0;
+  const hbcfRate = DEFAULT_WORKSPACE_PRICING_SETTINGS.hbcfRate;
 
   return {
     ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
@@ -389,7 +394,9 @@ function parseWorkbookBuildup(
       directTotal,
       DEFAULT_WORKSPACE_PRICING_SETTINGS.royalConstructionFeePct,
     ),
-    homeWarrantyHbcfFixed: numberValue(getCell(rows, 82, 7)) ?? 0,
+    hbcfRate,
+    homeWarrantyHbcfFixed: hbcfFixed,
+    hbcfTotalContractValue: reverseHbcfTotalContractValue(hbcfFixed, hbcfRate),
   };
 }
 
@@ -437,6 +444,15 @@ function parsePercentFromText(value: string): number | null {
 function parseWorkspacePricingSettings(
   rows: readonly (readonly unknown[])[],
 ): OfferWorkspacePricingSettings {
+  // SETTINGS row 6 historically stores the HBCF *rate* (e.g. 0.014 = 1.4%),
+  // not a dollar premium. Values in (0, 1] are treated as rates; anything else
+  // is treated as a legacy dollar amount so a mis-labelled workbook still loads.
+  const hbcfCell = firstNumber(
+    [getCell(rows, 6, 1)],
+    DEFAULT_WORKSPACE_PRICING_SETTINGS.hbcfRate,
+  );
+  const hbcfLooksLikeRate = hbcfCell > 0 && hbcfCell <= 1;
+
   return {
     royalConstructionFeePct: firstNumber(
       [getCell(rows, 3, 1)],
@@ -449,10 +465,12 @@ function parseWorkspacePricingSettings(
       [getCell(rows, 5, 1)],
       DEFAULT_WORKSPACE_PRICING_SETTINGS.gstRate,
     ),
-    homeWarrantyHbcfFixed: firstNumber(
-      [getCell(rows, 6, 1)],
-      DEFAULT_WORKSPACE_PRICING_SETTINGS.homeWarrantyHbcfFixed,
-    ),
+    hbcfTotalContractValue:
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.hbcfTotalContractValue,
+    hbcfRate: hbcfLooksLikeRate
+      ? hbcfCell
+      : DEFAULT_WORKSPACE_PRICING_SETTINGS.hbcfRate,
+    homeWarrantyHbcfFixed: hbcfLooksLikeRate ? 0 : hbcfCell,
     impactFeeFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.impactFeeFixed,
   };
 }

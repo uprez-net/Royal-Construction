@@ -29,6 +29,11 @@ export function PriceBuildupPanel({
   pricing,
   onSettingsChange,
 }: PriceBuildupPanelProps) {
+  const hbcfRatePercent = Math.round(settings.hbcfRate * 100000) / 1000;
+  // Effective all-in rate after GST + stamp (matches icare calculator display).
+  const hbcfEffectivePercent =
+    Math.round(settings.hbcfRate * 1.199 * 100000) / 1000;
+
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
@@ -56,10 +61,10 @@ export function PriceBuildupPanel({
             }
           />
           <MoneyField
-            label="Home warranty / HBCF"
-            value={settings.homeWarrantyHbcfFixed}
-            onChange={(homeWarrantyHbcfFixed) =>
-              onSettingsChange({ homeWarrantyHbcfFixed })
+            label="Total Contract Value"
+            value={settings.hbcfTotalContractValue}
+            onChange={(hbcfTotalContractValue) =>
+              onSettingsChange({ hbcfTotalContractValue })
             }
           />
           <MoneyField
@@ -67,6 +72,22 @@ export function PriceBuildupPanel({
             value={settings.impactFeeFixed}
             onChange={(impactFeeFixed) => onSettingsChange({ impactFeeFixed })}
           />
+        </div>
+        <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                HBCF premium
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Auto-calculated from Total Contract Value (H01 metro{" "}
+                {hbcfRatePercent}% + GST + stamp ≈ {hbcfEffectivePercent}%)
+              </p>
+            </div>
+            <p className="font-mono text-sm font-semibold tabular-nums">
+              {formatCurrency(settings.homeWarrantyHbcfFixed)}
+            </p>
+          </div>
         </div>
         <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
           <div className="grid gap-2 text-sm">

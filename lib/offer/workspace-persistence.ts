@@ -8,10 +8,12 @@ import {
   type OfferDocumentDraft,
 } from "./workspace-model";
 import type { OfferAreaCalculator } from "./workspace-area";
-import type {
-  OfferWorkspacePricingSettings,
-  RateCardProduct,
-  RateCardTier,
+import {
+  withDerivedHbcfPremium,
+  reverseHbcfTotalContractValue,
+  type OfferWorkspacePricingSettings,
+  type RateCardProduct,
+  type RateCardTier,
 } from "./workspace-pricing";
 import type { OfferPaymentScheduleRow } from "./workspace-payment-schedule";
 import type { OfferImageMap } from "./workspace-images";
@@ -101,14 +103,43 @@ function hydratePricingSettings(
         ? overheadRaw
         : d.royalConstructionOverheadPct;
 
-  return {
+  const hbcfTotalContractValueRaw =
+    pick(num(pricing.hbcfTotalContractValue)) ?? d.hbcfTotalContractValue;
+  const hbcfRate = (() => {
+    const rateRaw = num(pricing.hbcfRate);
+    if (rateRaw === undefined) return d.hbcfRate;
+    return rateRaw >= 0 && rateRaw <= 1 ? rateRaw : d.hbcfRate;
+  })();
+  const homeWarrantyHbcfFixed =
+    pick(num(pricing.homeWarrantyHbcfFixed), num(l.hbcfInsuranceFixed)) ??
+    d.homeWarrantyHbcfFixed;
+
+  const base = {
     royalConstructionOverheadPct,
     royalConstructionFeePct,
     gstRate: pick(num(pricing.gstRate)) ?? d.gstRate,
-    homeWarrantyHbcfFixed:
-      pick(num(pricing.homeWarrantyHbcfFixed), num(l.hbcfInsuranceFixed)) ??
-      d.homeWarrantyHbcfFixed,
+    hbcfRate,
+    homeWarrantyHbcfFixed,
     impactFeeFixed: pick(num(pricing.impactFeeFixed)) ?? d.impactFeeFixed,
+  };
+
+  // Explicit TCV (post-#116) → derive the premium from it. Legacy offers that
+  // only stored the dollar premium keep that exact figure and reverse-fill TCV
+  // for display — re-deriving would introduce cent-level drift vs the figure
+  // already shown on the saved document/timeline.
+  if (hbcfTotalContractValueRaw > 0) {
+    return withDerivedHbcfPremium({
+      ...base,
+      hbcfTotalContractValue: hbcfTotalContractValueRaw,
+    });
+  }
+
+  return {
+    ...base,
+    hbcfTotalContractValue: reverseHbcfTotalContractValue(
+      homeWarrantyHbcfFixed,
+      hbcfRate,
+    ),
   };
 }
 const parseDollarInput = (input: string): number => {

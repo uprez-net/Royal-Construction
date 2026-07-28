@@ -13,6 +13,20 @@ export type MarginStatus =
   | "acceptable_below_target"
   | "below_minimum";
 
+// Default HBCF *base* rate (ex GST & stamp duty) for H01 New Dwelling,
+// metro — matches icare rates effective 1 Nov 2025. The premium helper below
+// grosses this up with GST 10% + stamp duty 9% on (base+GST), matching the
+// official HBCF premium calculator (portal.hbcf.nsw.gov.au).
+// Verified: $650,000 → $7,528.52; $500,000 → $5,791.17.
+export const DEFAULT_HBCF_RATE = 0.00966;
+export const HBCF_GST_RATE = 0.1;
+export const HBCF_STAMP_DUTY_RATE = 0.09;
+// Compound gross-up used only to reverse-fill Total Contract Value from a
+// known dollar premium (import / legacy hydrate). Equals
+// (1 + GST) × (1 + stamp on base+GST) = 1.1 × 1.09 = 1.199.
+export const HBCF_PREMIUM_GROSS_UP =
+  (1 + HBCF_GST_RATE) * (1 + HBCF_STAMP_DUTY_RATE);
+
 // The Royal quote build-up, verified against real project workbooks:
 //   contract = (direct trade total + fixed additions)
 //              × (1 + overhead% + fee%)   ← two levers, applied additively
@@ -26,9 +40,61 @@ export type OfferWorkspacePricingSettings = {
   readonly royalConstructionOverheadPct: number;
   readonly royalConstructionFeePct: number;
   readonly gstRate: number;
+  // Estimator-entered total contract value used only to derive the HBCF
+  // premium (#116). The premium itself is stored on homeWarrantyHbcfFixed.
+  readonly hbcfTotalContractValue: number;
+  // HBCF *base* rate (ex GST & stamp). Default is icare H01 metro 0.966%.
+  readonly hbcfRate: number;
   readonly homeWarrantyHbcfFixed: number;
   readonly impactFeeFixed: number;
 };
+
+// Derive the HBCF / home-warranty premium the way the official icare calculator
+// does: base = TCV × rate, then + GST 10%, then + stamp duty 9% on (base+GST).
+// Returns 0 when the contract value is absent or non-positive so the build-up
+// can treat a blank TCV as "no HBCF yet" without NaN pollution.
+export function calculateHbcfPremium(
+  totalContractValue: number,
+  rate: number = DEFAULT_HBCF_RATE,
+): number {
+  if (!(totalContractValue > 0) || !(rate >= 0)) {
+    return 0;
+  }
+  const basePremium = roundCurrency(totalContractValue * rate);
+  const gstAmount = roundCurrency(basePremium * HBCF_GST_RATE);
+  const stampDuty = roundCurrency(
+    (basePremium + gstAmount) * HBCF_STAMP_DUTY_RATE,
+  );
+  return roundCurrency(basePremium + gstAmount + stampDuty);
+}
+
+// Reverse of calculateHbcfPremium for import/legacy hydrate: given a known
+// dollar premium, recover the Total Contract Value that produced it.
+export function reverseHbcfTotalContractValue(
+  premium: number,
+  rate: number = DEFAULT_HBCF_RATE,
+): number {
+  if (!(premium > 0) || !(rate > 0)) {
+    return 0;
+  }
+  return roundCurrency(premium / (rate * HBCF_PREMIUM_GROSS_UP));
+}
+
+// Keep homeWarrantyHbcfFixed in sync with the TCV × rate inputs. Total Contract
+// Value is the source of truth (#116): a blank/zero TCV yields a $0 premium so
+// clearing the field clears the addition. Imported dollar premiums reverse-fill
+// TCV on load so they survive the same path.
+export function withDerivedHbcfPremium(
+  settings: OfferWorkspacePricingSettings,
+): OfferWorkspacePricingSettings {
+  const homeWarrantyHbcfFixed = calculateHbcfPremium(
+    settings.hbcfTotalContractValue,
+    settings.hbcfRate,
+  );
+  return homeWarrantyHbcfFixed === settings.homeWarrantyHbcfFixed
+    ? settings
+    : { ...settings, homeWarrantyHbcfFixed };
+}
 
 export type OfferWorkspacePricingInput = {
   readonly directTotal: number;
