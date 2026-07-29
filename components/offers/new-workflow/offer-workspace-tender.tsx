@@ -506,12 +506,7 @@ function TenderPreview({
       </p>
 
       <div className="grid gap-2 border-t border-border/70 pt-3 sm:grid-cols-2">
-        <SignatureLine
-          role="Builder"
-          state={state === "signed" ? "signed" : "pending"}
-        />
-        {/* An offer with no owners yet still has a customer party — show a single
-            generic line rather than a builder-only signature list. */}
+        {/* Customer first, then builder — matches the Tender PDF / DocuSign order. */}
         {signers.length > 0 ? (
           signers.map((signer) => (
             <SignatureLine
@@ -526,6 +521,10 @@ function TenderPreview({
             state={state === "signed" ? "signed" : "pending"}
           />
         )}
+        <SignatureLine
+          role="Builder"
+          state={state === "signed" ? "signed" : "pending"}
+        />
       </div>
     </article>
   );

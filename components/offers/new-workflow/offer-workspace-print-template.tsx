@@ -116,8 +116,8 @@ function offerAcceptanceLine(job: OfferWorkspaceJob): string {
   return `I/We, ${acceptanceNames}, accept this proposal and agree to proceed to a Master Builders Association fixed price home building contract.`;
 }
 
-// Ordered signature blocks: the builder first, then one per customer signer (each
-// individual owner; each company director shown as "Name, Director of Company").
+// Ordered signature blocks: customer signers first (each individual owner; each
+// company director shown as "Name, Director of Company"), then the builder below.
 function offerSignatureBlocks(job: OfferWorkspaceJob): SignatureBlockSpec[] {
   const signers = collectOfferSigners(job.owners ?? []);
   const clientBlocks: SignatureBlockSpec[] =
@@ -140,12 +140,12 @@ function offerSignatureBlocks(job: OfferWorkspaceJob): SignatureBlockSpec[] {
           },
         ];
   return [
+    ...clientBlocks,
     {
       key: "builder",
       label: "For Royal Constructions Pty Ltd",
       name: job.preparedBy,
     },
-    ...clientBlocks,
   ];
 }
 

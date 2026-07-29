@@ -150,13 +150,13 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     );
   }
 
-  // Execution signature blocks (builder + one per signer) are chunked across as
-  // many pages as they need. Previously every block was emitted on ONE page while
-  // the footer counted a single execution page, so the supported 10 signers
-  // overflowed onto physical pages the count never declared and a block could
-  // split mid-signature — on the document that is actually signed (PR #124 review;
-  // the proposal + browser-print renderers were fixed earlier, this legal Tender
-  // renderer is a third, separate one).
+  // Execution signature blocks (customer signers first, then the builder) are
+  // chunked across as many pages as they need. Previously every block was emitted
+  // on ONE page while the footer counted a single execution page, so the
+  // supported 10 signers overflowed onto physical pages the count never declared
+  // and a block could split mid-signature — on the document that is actually
+  // signed (PR #124 review; the proposal + browser-print renderers were fixed
+  // earlier, this legal Tender renderer is a third, separate one).
   const executionBlocks = buildExecutionBlocks(job, signers);
   const executionChunks: string[][] = chunkByEstimatedHeight(
     executionBlocks,
@@ -480,23 +480,16 @@ function ownerDetailsPage(
   </div>`;
 }
 
-// The ordered execution signature blocks: the builder first, then one per signer
-// (each individual owner; each company director). The sigOwner{k}/dateOwner{k}/
-// initOwner{k} anchors use the signer's GLOBAL index, so they stay aligned with
-// the DocuSign recipients built by collectOfferSigners in offer-tender-sign no
-// matter how the blocks are later distributed across pages.
+// The ordered execution signature blocks: one per customer signer first (each
+// individual owner; each company director), then the builder below. The
+// sigOwner{k}/dateOwner{k}/initOwner{k} anchors use the signer's GLOBAL index,
+// so they stay aligned with the DocuSign recipients built by collectOfferSigners
+// in offer-tender-sign no matter how the blocks are later distributed across
+// pages. Visual order matches DocuSign routing (customer, then builder).
 function buildExecutionBlocks(
   job: OfferPrintTemplateInput["job"],
   signers: OfferSignerContext[],
 ): ExecutionBlock[] {
-  const builderBlock = `
-    <div class="sig">
-      <div class="who">The Builder — Royal Constructions Pty Ltd</div>
-      <div class="lines">
-        <div><div class="sigspace">${anchor("sigBuilder")}</div><div class="field">Signature (${esc(job.preparedBy)})</div></div>
-        <div><div class="sigspace">${anchor("dateBuilder")}</div><div class="field">Date</div></div>
-      </div>
-    </div>`;
   const ownerBlocks = signers.map((signer, index) => {
     const k = index + 1;
     // Plain-text twin drives the height estimate (escaping would inflate it).
@@ -517,7 +510,16 @@ function buildExecutionBlocks(
     </div>`;
     return { html, lines: executionBlockLines(whoText, true) };
   });
+  const builderBlock = `
+    <div class="sig">
+      <div class="who">The Builder — Royal Constructions Pty Ltd</div>
+      <div class="lines">
+        <div><div class="sigspace">${anchor("sigBuilder")}</div><div class="field">Signature (${esc(job.preparedBy)})</div></div>
+        <div><div class="sigspace">${anchor("dateBuilder")}</div><div class="field">Date</div></div>
+      </div>
+    </div>`;
   return [
+    ...ownerBlocks,
     {
       html: builderBlock,
       lines: executionBlockLines(
@@ -525,7 +527,6 @@ function buildExecutionBlocks(
         false,
       ),
     },
-    ...ownerBlocks,
   ];
 }
 

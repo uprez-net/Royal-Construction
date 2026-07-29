@@ -151,10 +151,10 @@ export function buildProposalHtml(
     );
   }
 
-  // Signature blocks (builder + one per customer signer). A handful fit under the
-  // terms-page payment table (the common 1–3 signer case, unchanged); more than
-  // that overflowed a single fixed-height page — the 10-signer offer split a
-  // signer's line across two physical pages and left the footer reading
+  // Signature blocks (customer signers first, then the builder). A handful fit
+  // under the terms-page payment table (the common 1–3 signer case, unchanged);
+  // more than that overflowed a single fixed-height page — the 10-signer offer
+  // split a signer's line across two physical pages and left the footer reading
   // "Page 9 of 9" over 10 pages (PR #124 review). Past the inline limit, move the
   // whole set onto its own chunked page(s), each counted so the footer stays true.
   const signatureBlocks = signatureBlocksHtml(job, forSignature);
@@ -518,10 +518,10 @@ function signLine(kind: "sig" | "date", index: number, forSignature: boolean): s
   return anchor(`${kind === "sig" ? "sigOwner" : "dateOwner"}${index + 1}`);
 }
 
-// The ordered signature blocks: the builder block first, then one client block
-// per signer (each individual owner; each company director, labelled with
-// capacity + company). Falls back to the clientNames projection when owners[] is
-// empty. In `forSignature` mode the client blocks carry DocuSign anchors and the
+// The ordered signature blocks: client blocks first (each individual owner;
+// each company director, labelled with capacity + company), then the builder
+// block below. Falls back to the clientNames projection when owners[] is empty.
+// In `forSignature` mode the client blocks carry DocuSign anchors and the
 // builder block becomes a non-signature "Prepared by" credit (the builder does
 // not sign the acceptance).
 function signatureBlocksHtml(
@@ -567,7 +567,7 @@ function signatureBlocksHtml(
         html: `<div class="sig"><h3>For Royal Constructions Pty Ltd</h3><p>Signature: _______________________</p><p>${esc(job.preparedBy)}</p><p>Date: ___________________________</p></div>`,
         lines: signatureBlockLines(job.preparedBy),
       };
-  return [builderBlock, ...clientSigs];
+  return [...clientSigs, builderBlock];
 }
 
 // Terms + payment schedule. When the signatures fit inline (few signers) they are

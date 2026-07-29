@@ -89,6 +89,31 @@ test("the acceptance is customer-only — no builder anchor, a 'Prepared by' cre
   assert.match(html, /Prepared by/, "expected a non-signature builder credit");
 });
 
+test("signature sections list client acceptance before the builder credit", () => {
+  // Scope to the signature <h3>s — "Prepared by" also appears in every page footer.
+  const signed = signHtml([owner(1, "Alice Owner")]);
+  const clientPos = signed.indexOf("<h3>Client acceptance</h3>");
+  const builderPos = signed.indexOf("<h3>Prepared by</h3>");
+  assert.ok(clientPos >= 0, "missing client acceptance block");
+  assert.ok(builderPos >= 0, "missing Prepared by credit");
+  assert.ok(
+    clientPos < builderPos,
+    "client acceptance must appear above the builder credit",
+  );
+
+  const emailed = emailHtml([owner(1, "Alice Owner")]);
+  const emailClient = emailed.indexOf("<h3>Client acceptance</h3>");
+  const emailBuilder = emailed.indexOf(
+    "<h3>For Royal Constructions Pty Ltd</h3>",
+  );
+  assert.ok(emailClient >= 0, "missing client acceptance on email copy");
+  assert.ok(emailBuilder >= 0, "missing builder block on email copy");
+  assert.ok(
+    emailClient < emailBuilder,
+    "client acceptance must appear above the builder on the email copy",
+  );
+});
+
 test("the emailed copy carries NO DocuSign anchors (wet-sign rules stay)", () => {
   const html = emailHtml([owner(1, "Alice Owner")]);
   assert.doesNotMatch(html, /\\sigOwner1\\/, "email copy must not carry anchors");

@@ -264,6 +264,20 @@ test("Tender signature anchors stay globally indexed across pages (PR #124)", ()
   assert.ok(html.includes("sigBuilder"));
 });
 
+test("Tender execution lists owner signatures before the builder", () => {
+  const html = buildTenderHtml(
+    buildProposalInput(snapshotWithOwners([individualOwner(1)])),
+  );
+  const ownerPos = html.indexOf("The Owner —");
+  const builderPos = html.indexOf("The Builder — Royal Constructions Pty Ltd");
+  assert.ok(ownerPos >= 0, "missing owner signature block");
+  assert.ok(builderPos >= 0, "missing builder signature block");
+  assert.ok(
+    ownerPos < builderPos,
+    "owner signature must appear above the builder signature",
+  );
+});
+
 test("a single-signer Tender keeps one execution page", () => {
   const html = buildTenderHtml(
     buildProposalInput(snapshotWithOwners([individualOwner(1)])),
