@@ -20,7 +20,9 @@ import {
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { resolveOfferContractValue } from "@/lib/offer/offer-contract-value";
 import {
+  parseContractParticularOverrides,
   parseContractParticulars,
+  type ContractParticularKey,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 import type {
@@ -77,6 +79,7 @@ type LoadedOfferWorkspace = {
   // form. Null when the offer has no contract row yet (nothing entered), in
   // which case the workspace starts from the empty set.
   contractParticulars?: ContractParticulars | null;
+  contractParticularOverrides?: readonly ContractParticularKey[];
   // Per-recipient DocuSign status for the offer's latest Tender/Contract
   // envelopes (#121/#123). The Connect webhook has always written these rows;
   // nothing read them back, so the signing tracker hard-coded every customer to
@@ -230,6 +233,10 @@ async function attachContractParticulars(
       contract?.particulars == null
         ? null
         : parseContractParticulars(contract.particulars),
+    contractParticularOverrides:
+      contract?.particulars == null
+        ? []
+        : parseContractParticularOverrides(contract.particulars),
   };
 }
 
@@ -702,7 +709,7 @@ export type CreateOfferRevisionResult =
     }
   // An executed Contract can't be revised — a change there is a contract
   // variation, a separate instrument, not a new offer revision.
-  | { ok: false; reason: "executed" };
+  | { ok: false; reason: "locked" };
 
 // Fork a new active revision from the current one, superseding it. The current
 // row is deactivated first so the one-active-per-lead partial index holds. Any
@@ -725,10 +732,14 @@ export async function createOfferRevision(input: {
   // An executed Contract (or a handed-off Project) is binding — revisions stop
   // here; further changes are contract variations, handled separately.
   if (
+    current.offerStatus === OfferStatus.TENDER_SIGNED ||
+    current.offerStatus === OfferStatus.CONTRACT_DRAFT ||
+    current.offerStatus === OfferStatus.CONTRACT_SENT ||
+    current.offerStatus === OfferStatus.CONTRACT_DECLINED ||
     current.offerStatus === OfferStatus.CONTRACT_SIGNED ||
     current.offerStatus === OfferStatus.PROJECT
   ) {
-    return { ok: false, reason: "executed" };
+    return { ok: false, reason: "locked" };
   }
 
   // Pull back any envelope still out for signature so the customer can't sign a
@@ -786,9 +797,25 @@ export async function createOfferRevision(input: {
   }
 
   const created = await prisma.$transaction(async (tx) => {
+    const lockedOffer = await tx.$queryRaw<{ id: string }[]>(
+      Prisma.sql`SELECT "id" FROM "Offer" WHERE "id" = ${input.offerId} FOR UPDATE`,
+    );
+    if (lockedOffer.length === 0) {
+      return null;
+    }
     const currentRow = await tx.offer.findUniqueOrThrow({
       where: { id: input.offerId },
     });
+    if (
+      currentRow.offerStatus === OfferStatus.TENDER_SIGNED ||
+      currentRow.offerStatus === OfferStatus.CONTRACT_DRAFT ||
+      currentRow.offerStatus === OfferStatus.CONTRACT_SENT ||
+      currentRow.offerStatus === OfferStatus.CONTRACT_DECLINED ||
+      currentRow.offerStatus === OfferStatus.CONTRACT_SIGNED ||
+      currentRow.offerStatus === OfferStatus.PROJECT
+    ) {
+      return null;
+    }
 
     if (liveEnvelopes.length > 0) {
       // Only void rows that are still SENT — if a webhook marked one completed
@@ -842,6 +869,9 @@ export async function createOfferRevision(input: {
 
     return next;
   });
+  if (!created) {
+    return { ok: false, reason: "locked" };
+  }
 
   revalidateTag(`offer-lead-${created.leadId}`, CACHE_PROFILES.SHORT);
   return {

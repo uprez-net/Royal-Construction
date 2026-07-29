@@ -59,7 +59,10 @@ import {
   saveContractParticulars,
 } from "@/lib/data/offer-contract-sign";
 import {
+  deriveContractParticularDefaults,
   EMPTY_CONTRACT_PARTICULARS,
+  reconcileContractParticularDefaults,
+  type ContractParticularKey,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 import {
@@ -85,6 +88,17 @@ import {
 } from "@/lib/offer/workspace-images";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
 import { OfferWorkspaceScreen } from "./offer-workspace-screen";
+
+function contractDefaultsFromWorkspace(
+  job: OfferWorkspaceJob,
+  settings: OfferWorkspacePricingSettings,
+): ContractParticulars {
+  return deriveContractParticularDefaults({
+    currentLocation: job.currentLocation,
+    ownerPhone: job.clientPhone,
+    hbcfPremium: settings.homeWarrantyHbcfFixed,
+  });
+}
 
 // How often to re-check signing progress while an envelope is out for signature.
 // The DocuSign Connect webhook drives the truth; this only decides how quickly an
@@ -227,6 +241,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   // and sent as locked tabs so the contract routes to the customer first.
   const [contractParticulars, setContractParticulars] =
     useState<ContractParticulars>(EMPTY_CONTRACT_PARTICULARS);
+  const [contractParticularOverrides, setContractParticularOverrides] =
+    useState<readonly ContractParticularKey[]>([]);
   const [projectCreating, setProjectCreating] = useState(false);
   const [projectResult, setProjectResult] =
     useState<ProjectHandoffResult | null>(null);
@@ -277,6 +293,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     [job],
   );
   const directTotal = useMemo(() => calculateDirectTotal(lines), [lines]);
+  const contractParticularDefaults = useMemo(
+    () => contractDefaultsFromWorkspace(job, workspacePricingSettings),
+    [job, workspacePricingSettings],
+  );
   const pricing = useMemo(
     () =>
       calculateOfferWorkspacePricing({
@@ -337,7 +357,17 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   );
 
   function updateJob(patch: Partial<OfferWorkspaceJob>) {
-    setJob((current) => ({ ...current, ...patch }));
+    const nextJob = { ...job, ...patch };
+    setJob(nextJob);
+    if (status === "contract_draft") {
+      setContractParticulars((current) =>
+        reconcileContractParticularDefaults(
+          current,
+          contractDefaultsFromWorkspace(nextJob, workspacePricingSettings),
+          contractParticularOverrides,
+        ),
+      );
+    }
   }
 
   function updateLine(lineId: string, patch: Partial<OfferWorkspaceCostLine>) {
@@ -405,7 +435,23 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   }
 
   function updateContractParticulars(patch: Partial<ContractParticulars>) {
-    setContractParticulars((current) => ({ ...current, ...patch }));
+    const changedKeys = Object.keys(patch) as ContractParticularKey[];
+    const nextOverrides = [
+      ...new Set([
+        ...contractParticularOverrides.filter(
+          (key) => !changedKeys.includes(key),
+        ),
+        ...changedKeys.filter((key) => (patch[key] ?? "").trim().length > 0),
+      ]),
+    ];
+    setContractParticularOverrides(nextOverrides);
+    setContractParticulars((current) =>
+      reconcileContractParticularDefaults(
+        { ...current, ...patch },
+        contractDefaultsFromWorkspace(job, workspacePricingSettings),
+        nextOverrides,
+      ),
+    );
   }
 
   function updateAreaCalculator(patch: Partial<OfferAreaCalculator>) {
@@ -416,9 +462,20 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   function updateWorkspacePricingSettings(
     patch: Partial<OfferWorkspacePricingSettings>,
   ) {
-    setWorkspacePricingSettings((current) =>
-      withDerivedHbcfPremium({ ...current, ...patch }),
-    );
+    const nextSettings = withDerivedHbcfPremium({
+      ...workspacePricingSettings,
+      ...patch,
+    });
+    setWorkspacePricingSettings(nextSettings);
+    if (status === "contract_draft") {
+      setContractParticulars((current) =>
+        reconcileContractParticularDefaults(
+          current,
+          contractDefaultsFromWorkspace(job, nextSettings),
+          contractParticularOverrides,
+        ),
+      );
+    }
   }
 
   function importWorkbook(result: OfferWorkbookImportResult) {
@@ -518,10 +575,16 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
   const lastSavedParticularsRef = useRef<string | null>(null);
   // Latest particulars for event handlers (the send flush) without stale
   // closures; refs must not be written during render, so sync it in an effect.
-  const contractParticularsRef = useRef(contractParticulars);
+  const contractParticularSaveRef = useRef({
+    particulars: contractParticulars,
+    manualOverrides: contractParticularOverrides,
+  });
   useEffect(() => {
-    contractParticularsRef.current = contractParticulars;
-  }, [contractParticulars]);
+    contractParticularSaveRef.current = {
+      particulars: contractParticulars,
+      manualOverrides: contractParticularOverrides,
+    };
+  }, [contractParticularOverrides, contractParticulars]);
   // Serializes particulars saves so an older, still-in-flight write can never
   // land after a newer one and then be read into the DocuSign envelope. Each run
   // is chained behind the previous and persists the LATEST value (from the ref),
@@ -538,8 +601,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
           async (): Promise<
             Awaited<ReturnType<typeof saveContractParticulars>>
           > => {
-            const particulars = contractParticularsRef.current;
-            const json = JSON.stringify(particulars);
+            const pending = contractParticularSaveRef.current;
+            const json = JSON.stringify(pending);
             if (json === lastSavedParticularsRef.current) {
               return { ok: true };
             }
@@ -547,7 +610,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             try {
               const saved = await saveContractParticulars({
                 offerId,
-                particulars,
+                particulars: pending.particulars,
+                manualOverrides: pending.manualOverrides,
               });
               if (saved.ok) {
                 lastSavedParticularsRef.current = json;
@@ -725,8 +789,25 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       // Hydrate the saved BC4 particulars (issue #98); a fresh contract has none.
       const loadedParticulars =
         loaded.contractParticulars ?? EMPTY_CONTRACT_PARTICULARS;
-      setContractParticulars(loadedParticulars);
-      lastSavedParticularsRef.current = JSON.stringify(loadedParticulars);
+      const loadedParticularOverrides =
+        loaded.contractParticularOverrides ?? [];
+      const hydratedParticulars =
+        loaded.status === OfferStatus.CONTRACT_DRAFT && loaded.snapshot
+          ? reconcileContractParticularDefaults(
+              loadedParticulars,
+              contractDefaultsFromWorkspace(
+                loaded.snapshot.job,
+                loaded.snapshot.workspacePricingSettings,
+              ),
+              loadedParticularOverrides,
+            )
+          : loadedParticulars;
+      setContractParticulars(hydratedParticulars);
+      setContractParticularOverrides(loadedParticularOverrides);
+      lastSavedParticularsRef.current = JSON.stringify({
+        particulars: loadedParticulars,
+        manualOverrides: loadedParticularOverrides,
+      });
       // Show the real minted reference/revision, never the seed default.
       const baseReference = loaded.reference.replace(/-R\d+$/, "");
       const revisionLabel = `R${loaded.revisionNumber}`;
@@ -900,7 +981,10 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       return;
     }
     if (
-      JSON.stringify(contractParticulars) === lastSavedParticularsRef.current
+      JSON.stringify({
+        particulars: contractParticulars,
+        manualOverrides: contractParticularOverrides,
+      }) === lastSavedParticularsRef.current
     ) {
       return;
     }
@@ -908,7 +992,13 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
       void flushContractParticulars(offerId);
     }, 800);
     return () => clearTimeout(timer);
-  }, [contractParticulars, status, leadId, flushContractParticulars]);
+  }, [
+    contractParticularOverrides,
+    contractParticulars,
+    status,
+    leadId,
+    flushContractParticulars,
+  ]);
 
   // Persist a lifecycle transition (flushing the latest state first so AGREED
   // freezes the correct snapshot), then update the UI.
@@ -940,6 +1030,15 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
             offerId,
             toStatus: next.toUpperCase() as OfferStatus,
           });
+          if (next === "contract_draft") {
+            setContractParticulars((current) =>
+              reconcileContractParticularDefaults(
+                current,
+                contractParticularDefaults,
+                contractParticularOverrides,
+              ),
+            );
+          }
           // Only advance the UI once the server transition has committed.
           setStatus(next);
         } catch (error) {
@@ -965,7 +1064,13 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         }
       })();
     },
-    [leadId, hydrateSnapshot, flushWorkspace],
+    [
+      contractParticularDefaults,
+      contractParticularOverrides,
+      leadId,
+      hydrateSnapshot,
+      flushWorkspace,
+    ],
   );
 
   // Fork a new active revision (supersedes the current one), then reload the
@@ -995,9 +1100,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         }
         const result = await createOfferRevision({ offerId });
         if (!result.ok) {
-          // Only reason today is an executed contract.
           setRevisionNotice(
-            "This contract is executed — changes need a contract variation, not a new offer revision.",
+            "This offer is locked — changes need a contract variation, not a new offer revision.",
           );
           return;
         }
@@ -1010,8 +1114,14 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         // particulars so they can't be saved onto the new revision's contract.
         const revisionParticulars =
           loaded.contractParticulars ?? EMPTY_CONTRACT_PARTICULARS;
+        const revisionParticularOverrides =
+          loaded.contractParticularOverrides ?? [];
         setContractParticulars(revisionParticulars);
-        lastSavedParticularsRef.current = JSON.stringify(revisionParticulars);
+        setContractParticularOverrides(revisionParticularOverrides);
+        lastSavedParticularsRef.current = JSON.stringify({
+          particulars: revisionParticulars,
+          manualOverrides: revisionParticularOverrides,
+        });
         if (loaded.snapshot) {
           hydrateSnapshot(loaded.snapshot);
           lastSavedRef.current = JSON.stringify(loaded.snapshot);

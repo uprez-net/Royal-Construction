@@ -5,9 +5,13 @@ import {
   CONTRACT_PARTICULAR_FIELDS,
   EMPTY_CONTRACT_PARTICULARS,
   contractParticularsToLockedTabs,
+  deriveContractParticularDefaults,
   missingRecommendedParticulars,
   normalizeContractParticulars,
+  parseContractParticularOverrides,
   parseContractParticulars,
+  reconcileContractParticularDefaults,
+  serializeContractParticulars,
   type ContractParticulars,
 } from "../../lib/offer/contract-particulars";
 
@@ -21,6 +25,29 @@ test("parseContractParticulars returns the empty set for null/garbage", () => {
     parseContractParticulars("not an object"),
     EMPTY_CONTRACT_PARTICULARS,
   );
+});
+
+test("serialization ignores malformed client values instead of throwing", () => {
+  const malformed = {
+    ...EMPTY_CONTRACT_PARTICULARS,
+    hbcfCost: 7528.52 as never,
+  };
+  const stored = serializeContractParticulars(malformed, ["hbcfCost"]);
+
+  assert.equal(stored.hbcfCost, "");
+  assert.deepEqual(parseContractParticularOverrides(stored), []);
+});
+
+test("serialization keeps valid overrides after malformed entries", () => {
+  const stored = serializeContractParticulars(
+    {
+      ...EMPTY_CONTRACT_PARTICULARS,
+      hbcfCost: "$7,528.52",
+    },
+    ["not-a-field", "hbcfCost"] as never,
+  );
+
+  assert.deepEqual(parseContractParticularOverrides(stored), ["hbcfCost"]);
 });
 
 test("parseContractParticulars keeps known keys and drops unknown ones", () => {
@@ -108,5 +135,82 @@ test("missingRecommendedParticulars flags only blank recommended fields", () => 
     missingRecommendedParticulars(filled as unknown as ContractParticulars)
       .length,
     0,
+  );
+});
+
+test("Step 8 derives corresponding particulars from earlier offer steps", () => {
+  const defaults = deriveContractParticularDefaults({
+    currentLocation: "12 King Street, Parramatta NSW 2150",
+    ownerPhone: "0400 123 456",
+    hbcfPremium: 7528.52,
+  });
+
+  assert.equal(defaults.ownerAddress, "12 King Street, Parramatta NSW 2150");
+  assert.equal(defaults.ownerPhone, "0400 123 456");
+  assert.equal(defaults.hbcfCost, "$7,528.52");
+  assert.equal(
+    defaults.commencementDate,
+    "",
+    "fields without a corresponding earlier-step value stay blank",
+  );
+});
+
+test("Step 8 refreshes derived values without overwriting estimator edits", () => {
+  const previousDefaults = deriveContractParticularDefaults({
+    currentLocation: "12 King Street",
+    ownerPhone: "0400 123 456",
+    hbcfPremium: 7528.52,
+  });
+  const nextDefaults = deriveContractParticularDefaults({
+    currentLocation: "24 Queen Street",
+    ownerPhone: "0400 999 999",
+    hbcfPremium: 8100,
+  });
+
+  const refreshed = reconcileContractParticularDefaults(
+    {
+      ...previousDefaults,
+      ownerPhone: "02 9000 0000",
+      hbcfCost: "",
+    },
+    nextDefaults,
+    ["ownerPhone"],
+  );
+
+  assert.equal(
+    refreshed.ownerAddress,
+    "24 Queen Street",
+    "an unchanged auto-populated value follows its earlier-step source",
+  );
+  assert.equal(
+    refreshed.ownerPhone,
+    "02 9000 0000",
+    "a manual override remains editable and is preserved",
+  );
+  assert.equal(
+    refreshed.hbcfCost,
+    "$8,100.00",
+    "clearing an auto-populated value resets it to the current earlier-step value",
+  );
+});
+
+test("Step 8 persists manual override provenance across reloads", () => {
+  const particulars = {
+    ...EMPTY_CONTRACT_PARTICULARS,
+    ownerAddress: "12 King Street",
+    ownerPhone: "02 9000 0000",
+    hbcfCost: "",
+  };
+  const stored = serializeContractParticulars(particulars, [
+    "ownerPhone",
+    "hbcfCost",
+  ]);
+
+  assert.deepEqual(parseContractParticulars(stored), particulars);
+  assert.deepEqual(parseContractParticularOverrides(stored), ["ownerPhone"]);
+  assert.deepEqual(
+    parseContractParticularOverrides({ hbcfCost: "$1,250.00" }),
+    ["hbcfCost"],
+    "legacy non-blank derived fields remain manual instead of being overwritten",
   );
 });

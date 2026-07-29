@@ -32,9 +32,14 @@ import {
   type ContractTabValue,
 } from "@/lib/docusign/contract-envelope";
 import {
+  CONTRACT_PARTICULAR_FIELDS,
+  CONTRACT_PARTICULAR_MAX_LENGTH,
+  CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH,
   contractParticularsToLockedTabs,
   normalizeContractParticulars,
   parseContractParticulars,
+  serializeContractParticulars,
+  type ContractParticularKey,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 
@@ -76,7 +81,6 @@ export async function sendContractForSignature(input: {
       workspaceState: true,
       agreedSnapshot: true,
       lead: { select: { email: true } },
-      contract: { select: { particulars: true } },
     },
   });
   if (!offer) {
@@ -259,6 +263,34 @@ export async function sendContractForSignature(input: {
       error: `The contract template supports up to 7 payment stages, but this schedule has ${snapshot.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
     };
   }
+
+  const claim = await prisma.$transaction(async (tx) => {
+    const updated = await tx.offer.updateMany({
+      where: {
+        id: offer.id,
+        offerStatus: {
+          in: [OfferStatus.TENDER_SIGNED, OfferStatus.CONTRACT_DRAFT],
+        },
+      },
+      data: { offerStatus: OfferStatus.CONTRACT_SENT },
+    });
+    if (updated.count === 0) {
+      return { claimed: false as const, particulars: null };
+    }
+    const contract = await tx.contract.findUnique({
+      where: { offerId: offer.id },
+      select: { particulars: true },
+    });
+    return { claimed: true as const, particulars: contract?.particulars ?? null };
+  });
+  if (!claim.claimed) {
+    return {
+      ok: false,
+      error: "The Contract is already being sent or has been sent.",
+    };
+  }
+
+  const parsedParticulars = parseContractParticulars(claim.particulars);
   const stageRows = snapshot.paymentSchedule.slice(0, 7);
   const paymentScheduleLine = stageRows
     .map((row, index) => {
@@ -276,9 +308,6 @@ export async function sendContractForSignature(input: {
   // created before Current Location existed. Owner phone comes from the primary
   // signer; the mobile line stays on the particular (the owner model has one
   // phone per signatory).
-  const parsedParticulars = parseContractParticulars(
-    offer.contract?.particulars ?? null,
-  );
   const ownerAddressValue =
     job.currentLocation.trim() || parsedParticulars.ownerAddress.trim();
   const ownerPhoneValue =
@@ -331,24 +360,6 @@ export async function sendContractForSignature(input: {
     ),
     locked("ownerPrintName", primaryOwner),
   ];
-
-  // Atomically claim the send so two concurrent calls can't both create a
-  // DocuSign envelope (double-send); the claim is released on envelope failure.
-  const claim = await prisma.offer.updateMany({
-    where: {
-      id: offer.id,
-      offerStatus: {
-        in: [OfferStatus.TENDER_SIGNED, OfferStatus.CONTRACT_DRAFT],
-      },
-    },
-    data: { offerStatus: OfferStatus.CONTRACT_SENT },
-  });
-  if (claim.count === 0) {
-    return {
-      ok: false,
-      error: "The Contract is already being sent or has been sent.",
-    };
-  }
 
   let envelope;
   try {
@@ -457,14 +468,32 @@ type SaveParticularsResult = { ok: true } | { ok: false; error: string };
 export async function saveContractParticulars(input: {
   offerId: string;
   particulars: ContractParticulars;
+  manualOverrides: readonly ContractParticularKey[];
 }): Promise<SaveParticularsResult> {
   const access = await authorizeOfferAccess(input.offerId);
   if (!access.ok) {
     return { ok: false, error: access.error };
   }
 
-  const particulars = normalizeContractParticulars(
-    input.particulars,
+  const normalizedParticulars = normalizeContractParticulars(input.particulars);
+  const totalLength = CONTRACT_PARTICULAR_FIELDS.reduce(
+    (total, field) => total + normalizedParticulars[field.key].length,
+    0,
+  );
+  if (
+    CONTRACT_PARTICULAR_FIELDS.some(
+      (field) =>
+        normalizedParticulars[field.key].length > CONTRACT_PARTICULAR_MAX_LENGTH,
+    ) || totalLength > CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH
+  ) {
+    return {
+      ok: false,
+      error: "Contract particulars exceed the permitted field or total length.",
+    };
+  }
+  const particulars = serializeContractParticulars(
+    normalizedParticulars,
+    input.manualOverrides,
   ) as unknown as Prisma.InputJsonValue;
 
   // Validate + persist atomically. A separate "is it a draft?" read followed by
@@ -474,6 +503,15 @@ export async function saveContractParticulars(input: {
   // superseded history. Guard the write on the offer's live state so it can only
   // land while the offer is an ACTIVE CONTRACT_DRAFT.
   const result = await prisma.$transaction(async (tx) => {
+    const lockedOffer = await tx.$queryRaw<{ id: string }[]>(
+      Prisma.sql`SELECT "id" FROM "Offer" WHERE "id" = ${input.offerId} FOR UPDATE`,
+    );
+    if (lockedOffer.length === 0) {
+      return {
+        ok: false as const,
+        error: "Offer not found.",
+      };
+    }
     // Common case — the contract row already exists: a single conditional
     // update whose predicate the database evaluates atomically.
     const updated = await tx.contract.updateMany({

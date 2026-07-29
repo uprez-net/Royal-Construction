@@ -45,6 +45,63 @@ export const EMPTY_CONTRACT_PARTICULARS: ContractParticulars = {
   specialConditions: "",
 };
 
+export const CONTRACT_PARTICULAR_MAX_LENGTH = 10_000;
+export const CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH = 50_000;
+
+type ContractParticularDefaultSource = {
+  readonly currentLocation: string;
+  readonly ownerPhone: string;
+  readonly hbcfPremium: number;
+};
+
+const DERIVED_CONTRACT_PARTICULAR_KEYS = [
+  "ownerAddress",
+  "ownerPhone",
+  "hbcfCost",
+] as const satisfies readonly ContractParticularKey[];
+
+const MANUAL_OVERRIDES_KEY = "_manualOverrides";
+
+const AUD_CURRENCY_WITH_CENTS = new Intl.NumberFormat("en-AU", {
+  style: "currency",
+  currency: "AUD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+export function deriveContractParticularDefaults({
+  currentLocation,
+  ownerPhone,
+  hbcfPremium,
+}: ContractParticularDefaultSource): ContractParticulars {
+  return {
+    ...EMPTY_CONTRACT_PARTICULARS,
+    ownerAddress: currentLocation.trim(),
+    ownerPhone: ownerPhone.trim(),
+    hbcfCost:
+      Number.isFinite(hbcfPremium) && hbcfPremium > 0
+        ? AUD_CURRENCY_WITH_CENTS.format(hbcfPremium)
+        : "",
+  };
+}
+
+export function reconcileContractParticularDefaults(
+  particulars: ContractParticulars,
+  nextDefaults: ContractParticulars,
+  manualOverrides: readonly ContractParticularKey[],
+): ContractParticulars {
+  const overridden = new Set(manualOverrides);
+  let next = particulars;
+  for (const key of DERIVED_CONTRACT_PARTICULAR_KEYS) {
+    const hasManualValue =
+      overridden.has(key) && particulars[key].trim().length > 0;
+    if (!hasManualValue && particulars[key] !== nextDefaults[key]) {
+      next = { ...next, [key]: nextDefaults[key] };
+    }
+  }
+  return next;
+}
+
 export type ContractParticularGroup =
   | "owner"
   | "timing"
@@ -104,7 +161,7 @@ export const CONTRACT_PARTICULAR_FIELDS: readonly ContractParticularField[] = [
   {
     key: "hbcfCost",
     label: "HBCF premium",
-    hint: "Home Building Compensation Fund premium for this job — entered per job by the estimator, never defaulted.",
+    hint: "Auto-populated from the HBCF premium in Pricing; editable for this contract.",
     group: "financial",
     recommendedBeforeSend: true,
   },
@@ -155,6 +212,8 @@ export const CONTRACT_PARTICULAR_FIELDS: readonly ContractParticularField[] = [
   },
 ];
 
+const MAX_MANUAL_OVERRIDE_SCAN = CONTRACT_PARTICULAR_FIELDS.length * 2;
+
 // Every particular is an optional free-text string. Unknown keys are dropped and
 // missing keys default to "", so an older/partial persisted blob still parses.
 export const contractParticularsSchema = z
@@ -185,16 +244,76 @@ export function parseContractParticulars(raw: unknown): ContractParticulars {
   return result.success ? result.data : EMPTY_CONTRACT_PARTICULARS;
 }
 
+function isContractParticularKey(
+  value: unknown,
+): value is ContractParticularKey {
+  return (
+    typeof value === "string" &&
+    CONTRACT_PARTICULAR_FIELDS.some((field) => field.key === value)
+  );
+}
+
+export function parseContractParticularOverrides(
+  raw: unknown,
+): readonly ContractParticularKey[] {
+  if (typeof raw !== "object" || raw === null) {
+    return [];
+  }
+  const stored = (raw as Record<string, unknown>)[MANUAL_OVERRIDES_KEY];
+  if (Array.isArray(stored)) {
+    const particulars = parseContractParticulars(raw);
+    return [
+      ...new Set(
+        stored.filter(
+          (key): key is ContractParticularKey =>
+            isContractParticularKey(key) &&
+            particulars[key].trim().length > 0,
+        ),
+      ),
+    ];
+  }
+  const particulars = parseContractParticulars(raw);
+  return DERIVED_CONTRACT_PARTICULAR_KEYS.filter(
+    (key) => particulars[key].trim().length > 0,
+  );
+}
+
 // Normalize for persistence: trim every value. Keeps the stored blob canonical
 // so a whitespace-only entry counts as blank everywhere downstream.
 export function normalizeContractParticulars(
   particulars: ContractParticulars,
 ): ContractParticulars {
   const out = { ...EMPTY_CONTRACT_PARTICULARS } as Record<string, string>;
+  const source =
+    particulars && typeof particulars === "object"
+      ? (particulars as unknown as Record<string, unknown>)
+      : {};
   for (const field of CONTRACT_PARTICULAR_FIELDS) {
-    out[field.key] = (particulars[field.key] ?? "").trim();
+    const value = source[field.key];
+    out[field.key] = typeof value === "string" ? value.trim() : "";
   }
   return out as unknown as ContractParticulars;
+}
+
+export function serializeContractParticulars(
+  particulars: ContractParticulars,
+  manualOverrides: readonly ContractParticularKey[],
+): Record<string, unknown> {
+  const normalized = normalizeContractParticulars(particulars);
+  const overrides = Array.isArray(manualOverrides)
+    ? manualOverrides
+        .slice(0, MAX_MANUAL_OVERRIDE_SCAN)
+        .filter(isContractParticularKey)
+        .slice(0, CONTRACT_PARTICULAR_FIELDS.length)
+    : [];
+  return {
+    ...normalized,
+    [MANUAL_OVERRIDES_KEY]: [
+      ...new Set(
+        overrides.filter((key) => normalized[key].length > 0),
+      ),
+    ],
+  };
 }
 
 // Only FILLED particulars become locked tabs. A blank field is intentionally
