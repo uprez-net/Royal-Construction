@@ -333,6 +333,15 @@ async function syncEnvelopeStatus(
     return;
   }
 
+  const latestEnvelope = await prisma.envelope.findFirst({
+    where: target.siblingEnvelopeWhere,
+    orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true },
+  });
+  if (!latestEnvelope || latestEnvelope.id !== envelope.id) {
+    return;
+  }
+
   // The completion side-effects below run on EVERY completion event (not just
   // the first), each guarded to be idempotent, so a retry after a mid-way
   // failure still advances the offer instead of short-circuiting on the
@@ -379,6 +388,14 @@ async function syncEnvelopeStatus(
   });
   if (offer && offer.offerStatus === target.expectedFromStatus) {
     const claimed = await prisma.$transaction(async (tx) => {
+      const latest = await tx.envelope.findFirst({
+        where: target.siblingEnvelopeWhere,
+        orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+        select: { id: true },
+      });
+      if (!latest || latest.id !== envelope.id) {
+        return false;
+      }
       const updated = await tx.offer.updateMany({
         where: {
           id: offer.id,
@@ -444,20 +461,6 @@ async function advanceOfferOnDecline(
     return;
   }
 
-  // Only the offer's CURRENT envelope may move the offer. A document can carry
-  // more than one envelope — a recall-then-resend leaves the prior one live in
-  // DocuSign — so a decline on a superseded envelope must be ignored at the offer
-  // level; otherwise a genuinely-signed re-send is stranded in *_DECLINED.
-  // Compare against the most-recently-sent envelope for this parent.
-  const latest = await prisma.envelope.findFirst({
-    where: target.siblingEnvelopeWhere,
-    orderBy: { sentAt: "desc" },
-    select: { id: true },
-  });
-  if (!latest || latest.id !== envelope.id) {
-    return;
-  }
-
   // DocuSign attaches the decliner's reason to the recipient record; surface it
   // rather than inventing our own copy.
   const declineReason = (payload.data?.envelopeSummary?.recipients?.signers ?? [])
@@ -467,22 +470,35 @@ async function advanceOfferOnDecline(
   // Atomic claim: only the delivery that flips *_SENT -> *_DECLINED records the
   // event, so concurrent duplicate webhooks can't write duplicate audit rows,
   // and a replayed decline (or an offer that already advanced) is a no-op.
-  const claim = await prisma.offer.updateMany({
-    where: { id: target.offerId, offerStatus: target.expectedFromStatus },
-    data: { offerStatus: target.declinedStatus },
-  });
-  if (claim.count === 0) {
-    return;
-  }
-
-  await prisma.offerStatusEvent.create({
-    data: {
-      offerId: target.offerId,
-      fromStatus: target.expectedFromStatus,
-      toStatus: target.declinedStatus,
-      note: declineReason
-        ? `Declined via DocuSign: ${declineReason}`
-        : "Declined via DocuSign.",
-    },
+  await prisma.$transaction(async (tx) => {
+    const latest = await tx.envelope.findFirst({
+      where: target.siblingEnvelopeWhere,
+      orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
+    });
+    if (!latest || latest.id !== envelope.id) {
+      return;
+    }
+    const claim = await tx.offer.updateMany({
+      where: {
+        id: target.offerId,
+        isActive: true,
+        offerStatus: target.expectedFromStatus,
+      },
+      data: { offerStatus: target.declinedStatus },
+    });
+    if (claim.count === 0) {
+      return;
+    }
+    await tx.offerStatusEvent.create({
+      data: {
+        offerId: target.offerId,
+        fromStatus: target.expectedFromStatus,
+        toStatus: target.declinedStatus,
+        note: declineReason
+          ? `Declined via DocuSign: ${declineReason}`
+          : "Declined via DocuSign.",
+      },
+    });
   });
 }
