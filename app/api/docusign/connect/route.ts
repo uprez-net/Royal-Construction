@@ -378,25 +378,33 @@ async function syncEnvelopeStatus(
     },
   });
   if (offer && offer.offerStatus === target.expectedFromStatus) {
-    await prisma.$transaction([
-      prisma.offer.update({
-        where: { id: offer.id },
+    const claimed = await prisma.$transaction(async (tx) => {
+      const updated = await tx.offer.updateMany({
+        where: {
+          id: offer.id,
+          isActive: true,
+          offerStatus: target.expectedFromStatus,
+        },
         data: { offerStatus: target.signedStatus },
-      }),
-      prisma.offerStatusEvent.create({
+      });
+      if (updated.count === 0) {
+        return false;
+      }
+      await tx.offerStatusEvent.create({
         data: {
           offerId: offer.id,
-          fromStatus: offer.offerStatus,
+          fromStatus: target.expectedFromStatus,
           toStatus: target.signedStatus,
           note: `DocuSign envelope ${envelope.docusignId} completed`,
         },
-      }),
-    ]);
+      });
+      return true;
+    });
 
     // Contract fully executed → nudge the admins to create the project.
     // Project creation stays a deliberate click (kickoff dates, site manager,
     // and booking warnings need a human), so the nudge is the automation.
-    if (target.notifyContractSigned) {
+    if (claimed && target.notifyContractSigned) {
       try {
         const admins = await prisma.user.findMany({
           where: { role: Role.ADMIN },

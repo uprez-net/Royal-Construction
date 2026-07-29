@@ -38,6 +38,18 @@ test("serialization ignores malformed client values instead of throwing", () => 
   assert.deepEqual(parseContractParticularOverrides(stored), []);
 });
 
+test("serialization keeps valid overrides after malformed entries", () => {
+  const stored = serializeContractParticulars(
+    {
+      ...EMPTY_CONTRACT_PARTICULARS,
+      hbcfCost: "$7,528.52",
+    },
+    ["not-a-field", "hbcfCost"] as never,
+  );
+
+  assert.deepEqual(parseContractParticularOverrides(stored), ["hbcfCost"]);
+});
+
 test("parseContractParticulars keeps known keys and drops unknown ones", () => {
   const parsed = parseContractParticulars({
     hbcfCost: "$1,250",

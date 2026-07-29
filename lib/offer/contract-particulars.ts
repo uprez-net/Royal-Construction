@@ -212,6 +212,8 @@ export const CONTRACT_PARTICULAR_FIELDS: readonly ContractParticularField[] = [
   },
 ];
 
+const MAX_MANUAL_OVERRIDE_SCAN = CONTRACT_PARTICULAR_FIELDS.length * 2;
+
 // Every particular is an optional free-text string. Unknown keys are dropped and
 // missing keys default to "", so an older/partial persisted blob still parses.
 export const contractParticularsSchema = z
@@ -299,17 +301,16 @@ export function serializeContractParticulars(
 ): Record<string, unknown> {
   const normalized = normalizeContractParticulars(particulars);
   const overrides = Array.isArray(manualOverrides)
-    ? manualOverrides.slice(0, CONTRACT_PARTICULAR_FIELDS.length)
+    ? manualOverrides
+        .slice(0, MAX_MANUAL_OVERRIDE_SCAN)
+        .filter(isContractParticularKey)
+        .slice(0, CONTRACT_PARTICULAR_FIELDS.length)
     : [];
   return {
     ...normalized,
     [MANUAL_OVERRIDES_KEY]: [
       ...new Set(
-        overrides.filter(
-          (key) =>
-            isContractParticularKey(key) &&
-            normalized[key].length > 0,
-        ),
+        overrides.filter((key) => normalized[key].length > 0),
       ),
     ],
   };
