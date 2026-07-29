@@ -45,6 +45,9 @@ export const EMPTY_CONTRACT_PARTICULARS: ContractParticulars = {
   specialConditions: "",
 };
 
+export const CONTRACT_PARTICULAR_MAX_LENGTH = 10_000;
+export const CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH = 50_000;
+
 type ContractParticularDefaultSource = {
   readonly currentLocation: string;
   readonly ownerPhone: string;
@@ -279,8 +282,12 @@ export function normalizeContractParticulars(
   particulars: ContractParticulars,
 ): ContractParticulars {
   const out = { ...EMPTY_CONTRACT_PARTICULARS } as Record<string, string>;
+  const source =
+    particulars && typeof particulars === "object"
+      ? (particulars as unknown as Record<string, unknown>)
+      : {};
   for (const field of CONTRACT_PARTICULAR_FIELDS) {
-    const value = particulars[field.key];
+    const value = source[field.key];
     out[field.key] = typeof value === "string" ? value.trim() : "";
   }
   return out as unknown as ContractParticulars;

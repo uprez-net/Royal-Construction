@@ -32,7 +32,11 @@ import {
   type ContractTabValue,
 } from "@/lib/docusign/contract-envelope";
 import {
+  CONTRACT_PARTICULAR_FIELDS,
+  CONTRACT_PARTICULAR_MAX_LENGTH,
+  CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH,
   contractParticularsToLockedTabs,
+  normalizeContractParticulars,
   parseContractParticulars,
   serializeContractParticulars,
   type ContractParticularKey,
@@ -471,8 +475,24 @@ export async function saveContractParticulars(input: {
     return { ok: false, error: access.error };
   }
 
+  const normalizedParticulars = normalizeContractParticulars(input.particulars);
+  const totalLength = CONTRACT_PARTICULAR_FIELDS.reduce(
+    (total, field) => total + normalizedParticulars[field.key].length,
+    0,
+  );
+  if (
+    CONTRACT_PARTICULAR_FIELDS.some(
+      (field) =>
+        normalizedParticulars[field.key].length > CONTRACT_PARTICULAR_MAX_LENGTH,
+    ) || totalLength > CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH
+  ) {
+    return {
+      ok: false,
+      error: "Contract particulars exceed the permitted field or total length.",
+    };
+  }
   const particulars = serializeContractParticulars(
-    input.particulars,
+    normalizedParticulars,
     input.manualOverrides,
   ) as unknown as Prisma.InputJsonValue;
 
@@ -483,6 +503,15 @@ export async function saveContractParticulars(input: {
   // superseded history. Guard the write on the offer's live state so it can only
   // land while the offer is an ACTIVE CONTRACT_DRAFT.
   const result = await prisma.$transaction(async (tx) => {
+    const lockedOffer = await tx.$queryRaw<{ id: string }[]>(
+      Prisma.sql`SELECT "id" FROM "Offer" WHERE "id" = ${input.offerId} FOR UPDATE`,
+    );
+    if (lockedOffer.length === 0) {
+      return {
+        ok: false as const,
+        error: "Offer not found.",
+      };
+    }
     // Common case — the contract row already exists: a single conditional
     // update whose predicate the database evaluates atomically.
     const updated = await tx.contract.updateMany({
