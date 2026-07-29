@@ -99,13 +99,16 @@ export const milestoneTemplates: MilestoneTemplate[] = [
   { order: 69, name: "Kitchen & Joinery Installation", parentId: null, projectStage: ProjectStage.Interior_Fit_Out },
   { order: 70, name: "Wardrobes", parentId: null, projectStage: ProjectStage.Interior_Fit_Out },
   { order: 71, name: "Showers", parentId: null, projectStage: ProjectStage.Interior_Fit_Out },
-  { order: 72, name: "Aircon Machine", parentId: null, projectStage: ProjectStage.Interior_Fit_Out },
+  { order: 72, name: "Final Plumbing Fit Out", parentId: null, projectStage: ProjectStage.Interior_Fit_Out },
+  { order: 73, name: "Floor Board (If Applicable)", parentId: null, projectStage: ProjectStage.Interior_Fit_Out },
+  { order: 74, name: "Floor Board Skirting Painting (If Applicable)", parentId: null, projectStage: ProjectStage.Interior_Fit_Out },
+  { order: 75, name: "Aircon Machine", parentId: null, projectStage: ProjectStage.Interior_Fit_Out },
 
 
-  { order: 73, name: "Driveway Steel Reinforcement (Check Gas Installed)", parentId: null, projectStage: ProjectStage.Final },
-  { order: 74, name: "Council Driveway Inspection", parentId: 73, projectStage: ProjectStage.Final },
-  { order: 75, name: "Driveway Gets Poured", parentId: null, projectStage: ProjectStage.Final },
-  { order: 76, name: "Final Survey", parentId: null, projectStage: ProjectStage.Final },
-  { order: 77, name: "Landscaping & Fencing", parentId: null, projectStage: ProjectStage.Final },
-  { order: 78, name: "Final Inspection", parentId: null, projectStage: ProjectStage.Final },
+  { order: 76, name: "Driveway Steel Reinforcement (Check Gas Installed)", parentId: null, projectStage: ProjectStage.Final },
+  { order: 77, name: "Council Driveway Inspection", parentId: 76, projectStage: ProjectStage.Final },
+  { order: 78, name: "Driveway Gets Poured", parentId: null, projectStage: ProjectStage.Final },
+  { order: 79, name: "Final Survey", parentId: null, projectStage: ProjectStage.Final },
+  { order: 80, name: "Landscaping & Fencing", parentId: null, projectStage: ProjectStage.Final },
+  { order: 81, name: "Final Inspection", parentId: null, projectStage: ProjectStage.Final },
 ];
