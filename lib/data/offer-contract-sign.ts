@@ -77,7 +77,6 @@ export async function sendContractForSignature(input: {
       workspaceState: true,
       agreedSnapshot: true,
       lead: { select: { email: true } },
-      contract: { select: { particulars: true } },
     },
   });
   if (!offer) {
@@ -260,6 +259,34 @@ export async function sendContractForSignature(input: {
       error: `The contract template supports up to 7 payment stages, but this schedule has ${snapshot.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
     };
   }
+
+  const claim = await prisma.$transaction(async (tx) => {
+    const updated = await tx.offer.updateMany({
+      where: {
+        id: offer.id,
+        offerStatus: {
+          in: [OfferStatus.TENDER_SIGNED, OfferStatus.CONTRACT_DRAFT],
+        },
+      },
+      data: { offerStatus: OfferStatus.CONTRACT_SENT },
+    });
+    if (updated.count === 0) {
+      return { claimed: false as const, particulars: null };
+    }
+    const contract = await tx.contract.findUnique({
+      where: { offerId: offer.id },
+      select: { particulars: true },
+    });
+    return { claimed: true as const, particulars: contract?.particulars ?? null };
+  });
+  if (!claim.claimed) {
+    return {
+      ok: false,
+      error: "The Contract is already being sent or has been sent.",
+    };
+  }
+
+  const parsedParticulars = parseContractParticulars(claim.particulars);
   const stageRows = snapshot.paymentSchedule.slice(0, 7);
   const paymentScheduleLine = stageRows
     .map((row, index) => {
@@ -277,9 +304,6 @@ export async function sendContractForSignature(input: {
   // created before Current Location existed. Owner phone comes from the primary
   // signer; the mobile line stays on the particular (the owner model has one
   // phone per signatory).
-  const parsedParticulars = parseContractParticulars(
-    offer.contract?.particulars ?? null,
-  );
   const ownerAddressValue =
     job.currentLocation.trim() || parsedParticulars.ownerAddress.trim();
   const ownerPhoneValue =
@@ -332,24 +356,6 @@ export async function sendContractForSignature(input: {
     ),
     locked("ownerPrintName", primaryOwner),
   ];
-
-  // Atomically claim the send so two concurrent calls can't both create a
-  // DocuSign envelope (double-send); the claim is released on envelope failure.
-  const claim = await prisma.offer.updateMany({
-    where: {
-      id: offer.id,
-      offerStatus: {
-        in: [OfferStatus.TENDER_SIGNED, OfferStatus.CONTRACT_DRAFT],
-      },
-    },
-    data: { offerStatus: OfferStatus.CONTRACT_SENT },
-  });
-  if (claim.count === 0) {
-    return {
-      ok: false,
-      error: "The Contract is already being sent or has been sent.",
-    };
-  }
 
   let envelope;
   try {

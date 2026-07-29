@@ -27,6 +27,17 @@ test("parseContractParticulars returns the empty set for null/garbage", () => {
   );
 });
 
+test("serialization ignores malformed client values instead of throwing", () => {
+  const malformed = {
+    ...EMPTY_CONTRACT_PARTICULARS,
+    hbcfCost: 7528.52 as never,
+  };
+  const stored = serializeContractParticulars(malformed, ["hbcfCost"]);
+
+  assert.equal(stored.hbcfCost, "");
+  assert.deepEqual(parseContractParticularOverrides(stored), []);
+});
+
 test("parseContractParticulars keeps known keys and drops unknown ones", () => {
   const parsed = parseContractParticulars({
     hbcfCost: "$1,250",

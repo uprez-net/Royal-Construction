@@ -280,7 +280,8 @@ export function normalizeContractParticulars(
 ): ContractParticulars {
   const out = { ...EMPTY_CONTRACT_PARTICULARS } as Record<string, string>;
   for (const field of CONTRACT_PARTICULAR_FIELDS) {
-    out[field.key] = (particulars[field.key] ?? "").trim();
+    const value = particulars[field.key];
+    out[field.key] = typeof value === "string" ? value.trim() : "";
   }
   return out as unknown as ContractParticulars;
 }
@@ -289,14 +290,16 @@ export function serializeContractParticulars(
   particulars: ContractParticulars,
   manualOverrides: readonly ContractParticularKey[],
 ): Record<string, unknown> {
+  const normalized = normalizeContractParticulars(particulars);
+  const overrides = Array.isArray(manualOverrides) ? manualOverrides : [];
   return {
-    ...normalizeContractParticulars(particulars),
+    ...normalized,
     [MANUAL_OVERRIDES_KEY]: [
       ...new Set(
-        manualOverrides.filter(
+        overrides.filter(
           (key) =>
             isContractParticularKey(key) &&
-            particulars[key].trim().length > 0,
+            normalized[key].length > 0,
         ),
       ),
     ],
