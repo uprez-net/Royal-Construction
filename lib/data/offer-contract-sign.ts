@@ -33,8 +33,9 @@ import {
 } from "@/lib/docusign/contract-envelope";
 import {
   contractParticularsToLockedTabs,
-  normalizeContractParticulars,
   parseContractParticulars,
+  serializeContractParticulars,
+  type ContractParticularKey,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 
@@ -457,14 +458,16 @@ type SaveParticularsResult = { ok: true } | { ok: false; error: string };
 export async function saveContractParticulars(input: {
   offerId: string;
   particulars: ContractParticulars;
+  manualOverrides: readonly ContractParticularKey[];
 }): Promise<SaveParticularsResult> {
   const access = await authorizeOfferAccess(input.offerId);
   if (!access.ok) {
     return { ok: false, error: access.error };
   }
 
-  const particulars = normalizeContractParticulars(
+  const particulars = serializeContractParticulars(
     input.particulars,
+    input.manualOverrides,
   ) as unknown as Prisma.InputJsonValue;
 
   // Validate + persist atomically. A separate "is it a draft?" read followed by

@@ -45,6 +45,60 @@ export const EMPTY_CONTRACT_PARTICULARS: ContractParticulars = {
   specialConditions: "",
 };
 
+type ContractParticularDefaultSource = {
+  readonly currentLocation: string;
+  readonly ownerPhone: string;
+  readonly hbcfPremium: number;
+};
+
+const DERIVED_CONTRACT_PARTICULAR_KEYS = [
+  "ownerAddress",
+  "ownerPhone",
+  "hbcfCost",
+] as const satisfies readonly ContractParticularKey[];
+
+const MANUAL_OVERRIDES_KEY = "_manualOverrides";
+
+const AUD_CURRENCY_WITH_CENTS = new Intl.NumberFormat("en-AU", {
+  style: "currency",
+  currency: "AUD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+export function deriveContractParticularDefaults({
+  currentLocation,
+  ownerPhone,
+  hbcfPremium,
+}: ContractParticularDefaultSource): ContractParticulars {
+  return {
+    ...EMPTY_CONTRACT_PARTICULARS,
+    ownerAddress: currentLocation.trim(),
+    ownerPhone: ownerPhone.trim(),
+    hbcfCost:
+      Number.isFinite(hbcfPremium) && hbcfPremium > 0
+        ? AUD_CURRENCY_WITH_CENTS.format(hbcfPremium)
+        : "",
+  };
+}
+
+export function reconcileContractParticularDefaults(
+  particulars: ContractParticulars,
+  nextDefaults: ContractParticulars,
+  manualOverrides: readonly ContractParticularKey[],
+): ContractParticulars {
+  const overridden = new Set(manualOverrides);
+  let next = particulars;
+  for (const key of DERIVED_CONTRACT_PARTICULAR_KEYS) {
+    const hasManualValue =
+      overridden.has(key) && particulars[key].trim().length > 0;
+    if (!hasManualValue && particulars[key] !== nextDefaults[key]) {
+      next = { ...next, [key]: nextDefaults[key] };
+    }
+  }
+  return next;
+}
+
 export type ContractParticularGroup =
   | "owner"
   | "timing"
@@ -104,7 +158,7 @@ export const CONTRACT_PARTICULAR_FIELDS: readonly ContractParticularField[] = [
   {
     key: "hbcfCost",
     label: "HBCF premium",
-    hint: "Home Building Compensation Fund premium for this job — entered per job by the estimator, never defaulted.",
+    hint: "Auto-populated from the HBCF premium in Pricing; editable for this contract.",
     group: "financial",
     recommendedBeforeSend: true,
   },
@@ -185,6 +239,40 @@ export function parseContractParticulars(raw: unknown): ContractParticulars {
   return result.success ? result.data : EMPTY_CONTRACT_PARTICULARS;
 }
 
+function isContractParticularKey(
+  value: unknown,
+): value is ContractParticularKey {
+  return (
+    typeof value === "string" &&
+    CONTRACT_PARTICULAR_FIELDS.some((field) => field.key === value)
+  );
+}
+
+export function parseContractParticularOverrides(
+  raw: unknown,
+): readonly ContractParticularKey[] {
+  if (typeof raw !== "object" || raw === null) {
+    return [];
+  }
+  const stored = (raw as Record<string, unknown>)[MANUAL_OVERRIDES_KEY];
+  if (Array.isArray(stored)) {
+    const particulars = parseContractParticulars(raw);
+    return [
+      ...new Set(
+        stored.filter(
+          (key): key is ContractParticularKey =>
+            isContractParticularKey(key) &&
+            particulars[key].trim().length > 0,
+        ),
+      ),
+    ];
+  }
+  const particulars = parseContractParticulars(raw);
+  return DERIVED_CONTRACT_PARTICULAR_KEYS.filter(
+    (key) => particulars[key].trim().length > 0,
+  );
+}
+
 // Normalize for persistence: trim every value. Keeps the stored blob canonical
 // so a whitespace-only entry counts as blank everywhere downstream.
 export function normalizeContractParticulars(
@@ -195,6 +283,24 @@ export function normalizeContractParticulars(
     out[field.key] = (particulars[field.key] ?? "").trim();
   }
   return out as unknown as ContractParticulars;
+}
+
+export function serializeContractParticulars(
+  particulars: ContractParticulars,
+  manualOverrides: readonly ContractParticularKey[],
+): Record<string, unknown> {
+  return {
+    ...normalizeContractParticulars(particulars),
+    [MANUAL_OVERRIDES_KEY]: [
+      ...new Set(
+        manualOverrides.filter(
+          (key) =>
+            isContractParticularKey(key) &&
+            particulars[key].trim().length > 0,
+        ),
+      ),
+    ],
+  };
 }
 
 // Only FILLED particulars become locked tabs. A blank field is intentionally

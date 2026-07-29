@@ -20,7 +20,9 @@ import {
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { resolveOfferContractValue } from "@/lib/offer/offer-contract-value";
 import {
+  parseContractParticularOverrides,
   parseContractParticulars,
+  type ContractParticularKey,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 import type {
@@ -77,6 +79,7 @@ type LoadedOfferWorkspace = {
   // form. Null when the offer has no contract row yet (nothing entered), in
   // which case the workspace starts from the empty set.
   contractParticulars?: ContractParticulars | null;
+  contractParticularOverrides?: readonly ContractParticularKey[];
   // Per-recipient DocuSign status for the offer's latest Tender/Contract
   // envelopes (#121/#123). The Connect webhook has always written these rows;
   // nothing read them back, so the signing tracker hard-coded every customer to
@@ -230,6 +233,10 @@ async function attachContractParticulars(
       contract?.particulars == null
         ? null
         : parseContractParticulars(contract.particulars),
+    contractParticularOverrides:
+      contract?.particulars == null
+        ? []
+        : parseContractParticularOverrides(contract.particulars),
   };
 }
 
