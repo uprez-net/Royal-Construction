@@ -1100,9 +1100,8 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
         }
         const result = await createOfferRevision({ offerId });
         if (!result.ok) {
-          // Only reason today is an executed contract.
           setRevisionNotice(
-            "This contract is executed — changes need a contract variation, not a new offer revision.",
+            "This offer is locked — changes need a contract variation, not a new offer revision.",
           );
           return;
         }

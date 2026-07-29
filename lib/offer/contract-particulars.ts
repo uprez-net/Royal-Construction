@@ -298,7 +298,9 @@ export function serializeContractParticulars(
   manualOverrides: readonly ContractParticularKey[],
 ): Record<string, unknown> {
   const normalized = normalizeContractParticulars(particulars);
-  const overrides = Array.isArray(manualOverrides) ? manualOverrides : [];
+  const overrides = Array.isArray(manualOverrides)
+    ? manualOverrides.slice(0, CONTRACT_PARTICULAR_FIELDS.length)
+    : [];
   return {
     ...normalized,
     [MANUAL_OVERRIDES_KEY]: [
