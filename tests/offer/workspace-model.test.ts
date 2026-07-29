@@ -62,7 +62,7 @@ assert.equal(updatedAllowances[1], INITIAL_ALLOWANCES[1]);
 
 // A fresh offer keeps the full cost-schedule structure but starts at $0 — no
 // sample figures (see INITIAL_COST_BY_TASK).
-assert.equal(INITIAL_COST_LINES.length, 74);
+assert.equal(INITIAL_COST_LINES.length, 71);
 assert.equal(
   INITIAL_COST_LINES.filter((line) => line.costExGst > 0).length,
   0,

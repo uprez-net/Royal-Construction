@@ -8,7 +8,7 @@ import {
 const stats = getOfferSequenceMappingStats(OFFER_SEQUENCE_MAPPINGS);
 
 assert.deepEqual(stats, {
-  totalTasks: 74,
+  totalTasks: 71,
   sequenceLinkedTasks: 39,
   projectHandoffTasks: 37,
 });

@@ -86,9 +86,6 @@ const OFFER_SEQUENCE_MAPPING_ROWS = [
   ["BUNNING / MISC", [], "Flexible contingency material purchases and site consumables.", [], []],
   ["WEBSITE / MARKETING", [], "Royal Constructions corporate head-office administrative and marketing costs.", [], []],
   ["TEMPORARY CAMERA", [], "Installation of active on-site mobile security surveillance cameras.", [], []],
-  ["Builder Licence Fees", [], "NSW Builder licensing and regulatory compliance costs.", [], []],
-  ["Adminstrative Costs", [], "Head office administrative processing, contracts development, and project operations.", [], []],
-  ["LABOUR COST", [], "Direct project carpentry and frame erection labour crews.", [], []],
 ] as const satisfies readonly OfferSequenceMappingTuple[];
 
 export const OFFER_SEQUENCE_MAPPINGS: readonly OfferSequenceMapping[] =
