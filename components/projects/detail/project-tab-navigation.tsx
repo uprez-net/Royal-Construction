@@ -95,11 +95,32 @@ const AWAITING_TRADIE_STATUSES = new Set([
   "AWAITING_QUOTE",
 ]);
 
+const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
+  const stageMilestoneMap = new Map<string, { completed: number; total: number }>();
+  for (const milestone of milestones) {
+    const stage = milestone.projectStage;
+    if (!stageMilestoneMap.has(stage)) {
+      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
+    }
+    const stageData = stageMilestoneMap.get(stage)!;
+    stageData.total++;
+    if (milestone.status === "DONE") {
+      stageData.completed++;
+    }
+  }
+  const totalStages = stageMilestoneMap.size;
+  const completedStages = Array.from(stageMilestoneMap.values()).filter((stageData) => stageData.completed === stageData.total).length;
+  return {
+    totalStages,
+    completedStages,
+  };
+};
+
 const generateProjectDetailTabs = (
   project: ProjectDetail,
 ): ProjectDetailTab[] => {
   const now = Date.now();
-
+  const { totalStages: projectStagesCount, completedStages: completedStagesCount } = calcMilestoneOverviewData(project.milestones);
   const openMilestones = project.milestones.filter((m) =>
     OPEN_MILESTONE_STATUSES.has(m.status),
   );
@@ -125,7 +146,7 @@ const generateProjectDetailTabs = (
       ...(openMilestones.length > 0
         ? {
             badge: {
-              count: openMilestones.length.toString(),
+              count: (projectStagesCount - completedStagesCount).toString(),
               // Only a real problem — a missed target date — earns a red badge.
               tone: overdueMilestones > 0 ? "danger" : "neutral",
               description:

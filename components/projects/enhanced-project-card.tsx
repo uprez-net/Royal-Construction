@@ -12,6 +12,27 @@ interface EnhancedProjectCardProps {
   onDetailsClick?: (projectId: string) => void;
 }
 
+const calcMilestoneOverviewData = (milestones: ProjectWithStats["milestones"]) => {
+  const stageMilestoneMap = new Map<string, { completed: number; total: number }>();
+  for (const milestone of milestones) {
+    const stage = milestone.projectStage;
+    if (!stageMilestoneMap.has(stage)) {
+      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
+    }
+    const stageData = stageMilestoneMap.get(stage)!;
+    stageData.total++;
+    if (milestone.status === "DONE") {
+      stageData.completed++;
+    }
+  }
+  const totalStages = stageMilestoneMap.size;
+  const completedStages = Array.from(stageMilestoneMap.values()).filter((stageData) => stageData.completed === stageData.total).length;
+  return {
+    totalStages,
+    completedStages,
+  };
+};
+
 export function EnhancedProjectCard({
   project,
   onDetailsClick,
@@ -24,8 +45,9 @@ export function EnhancedProjectCard({
   const hasBudget = Number.isFinite(budget) && budget > 0;
   const spentPercent = hasBudget ? Math.round((spent / budget) * 100) : null;
   const isOverBudget = spentPercent !== null && spentPercent > 100;
-  const progress = Math.max(0, Math.min(100, project.progressPercent ?? 0));
+  const progress = Math.round(project.progressPercent);
   const progressLabelId = `project-progress-${project.id}`;
+  const { totalStages, completedStages } = calcMilestoneOverviewData(project.milestones);
 
   const openQuickView = () => onDetailsClick?.(project.id);
 
@@ -136,9 +158,9 @@ export function EnhancedProjectCard({
             </p>
           </div>
           <div className="text-right">
-            <p className="font-medium text-muted-foreground">Milestones</p>
+            <p className="font-medium text-muted-foreground">Stages</p>
             <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
-              {project.completedMilestoneCount}/{project.milestoneCount}
+              {completedStages}/{totalStages}
             </p>
           </div>
         </div>

@@ -60,6 +60,40 @@ const convertToVisualMilestone = (
   return rootMilestones;
 };
 
+const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
+  const stageMilestoneMap = new Map<
+    string,
+    { completed: number; inProgress: number; total: number }
+  >();
+  for (const milestone of milestones) {
+    const stage = milestone.projectStage;
+    if (!stageMilestoneMap.has(stage)) {
+      stageMilestoneMap.set(stage, { completed: 0, inProgress: 0, total: 0 });
+    }
+    const stageData = stageMilestoneMap.get(stage)!;
+    stageData.total++;
+    if (milestone.status === "DONE") {
+      stageData.completed++;
+    } else if (milestone.status === "ACTIVE") {
+      stageData.inProgress++;
+    }
+  }
+  const totalStages = stageMilestoneMap.size;
+  const completedStages = Array.from(stageMilestoneMap.values()).filter(
+    (stageData) => stageData.completed === stageData.total,
+  ).length;
+  const inProgressStages = Array.from(stageMilestoneMap.values()).filter(
+    (stageData) =>
+      stageData.completed > 0 ||
+      (stageData.inProgress > 0 && stageData.completed < stageData.total),
+  ).length;
+  return {
+    totalStages,
+    completedStages,
+    inProgressStages: inProgressStages,
+  };
+};
+
 export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   const dispatch = useAppDispatch();
   const visualMilestones = useMemo(
@@ -112,32 +146,30 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   }, [tradieAlerts]);
 
   const milestoneChartData: ProjectMilestoneMix[] = useMemo(() => {
-    return project.milestones.reduce((acc, milestone) => {
-      const statusKey =
-        milestone.status === "DONE"
-          ? "Completed"
-          : milestone.status === "ACTIVE"
-            ? "In Progress"
-            : "Upcoming";
-      const existing = acc.find((item) => item.status === statusKey);
-
-      if (existing) {
-        existing.count += 1;
-      } else {
-        acc.push({
-          status: statusKey,
-          count: 1,
-          color:
-            statusKey === "Completed"
-              ? "var(--chart-2)"
-              : statusKey === "In Progress"
-                ? "var(--chart-3)"
-                : "var(--muted)",
-        });
-      }
-
-      return acc;
-    }, [] as ProjectMilestoneMix[]);
+    const {
+      totalStages: projectStagesCount,
+      completedStages: completedStagesCount,
+      inProgressStages: inProgressStagesCount,
+    } = calcMilestoneOverviewData(project.milestones);
+    const graphData: ProjectMilestoneMix[] = [
+      {
+        status: "Completed",
+        count: completedStagesCount,
+        color: "var(--chart-2)",
+      },
+      {
+        status: "In Progress",
+        count: inProgressStagesCount,
+        color: "var(--chart-3)",
+      },
+      {
+        status: "Upcoming",
+        count:
+          projectStagesCount - completedStagesCount - inProgressStagesCount,
+        color: "var(--muted)",
+      },
+    ];
+    return graphData;
   }, [project.milestones]);
 
   const handleOpenAddUpdateModal = (id: string) => {
@@ -172,7 +204,11 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     dispatch(
       openModal({
         type: "updateMilestoneStatus",
-        payload: { milestoneId, projectId: project.id },
+        payload: {
+          milestoneId,
+          projectId: project.id,
+          newStatus: MilestoneStatus.DONE,
+        },
       }),
     );
   };
@@ -206,9 +242,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   // Grouping by stage yields whatever order the milestones happened to arrive
   // in (they are sorted by `order`, which need not follow the contract stages),
   // so the accordion is driven by the canonical stage sequence instead.
-  const stageGroups = (
-    Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[]
-  )
+  const stageGroups = (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[])
     .filter((stage) => visualMilestonesGroupedByProjectStage[stage]?.length)
     .map(
       (stage) => [stage, visualMilestonesGroupedByProjectStage[stage]] as const,
@@ -223,7 +257,10 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
               as="h2"
               className="flex items-center gap-2 text-base font-semibold text-foreground"
             >
-              <CalendarCheck2 className="size-4 text-muted-foreground" aria-hidden="true" />
+              <CalendarCheck2
+                className="size-4 text-muted-foreground"
+                aria-hidden="true"
+              />
               Project milestones
             </CardTitle>
             <ul className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
@@ -385,7 +422,8 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                       </span>
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Needed for {schedule.milestone?.name ?? "general works"} on{" "}
+                      Needed for {schedule.milestone?.name ?? "general works"}{" "}
+                      on{" "}
                       <span className="font-mono tabular-nums">
                         {dateFormat.format(new Date(schedule.scheduledDate))}
                       </span>

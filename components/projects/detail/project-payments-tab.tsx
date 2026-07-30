@@ -24,13 +24,29 @@ function money(value: string | null | undefined) {
   return Number.isFinite(parsed) ? currency.format(parsed) : "—";
 }
 
+const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
+  const stageMilestoneMap = new Map<string, { completed: number; total: number }>();
+  for (const milestone of milestones) {
+    const stage = milestone.projectStage;
+    if (!stageMilestoneMap.has(stage)) {
+      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
+    }
+    const stageData = stageMilestoneMap.get(stage)!;
+    stageData.total++;
+    if (milestone.status === "DONE") {
+      stageData.completed++;
+    }
+  }
+  const totalStages = stageMilestoneMap.size;
+  const completedStages = Array.from(stageMilestoneMap.values()).filter((stageData) => stageData.completed === stageData.total).length;
+  return {
+    totalStages,
+    completedStages,
+  };
+};
+
 export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
-  const milestoneCount = project.milestones.length;
-  // `Milestone.invoiceId` holds the Xero invoice id. It is the only invoice
-  // signal on the model, so the count is derived from it rather than asserted.
-  const invoicedCount = project.milestones.filter((milestone) =>
-    Boolean(milestone.invoiceId),
-  ).length;
+  const { totalStages: projectStagesCount, completedStages: completedStagesCount } = calcMilestoneOverviewData(project.milestones);
 
   return (
     <section className="space-y-4">
@@ -55,10 +71,10 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
             </div>
             <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
               <dt className="text-sm font-medium text-muted-foreground">
-                Milestones invoiced
+                Stages invoiced
               </dt>
               <dd className="mt-1 font-mono text-xl tabular-nums text-foreground">
-                {invoicedCount} of {milestoneCount}
+                {completedStagesCount} of {projectStagesCount}
               </dd>
             </div>
           </dl>
@@ -72,7 +88,7 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
             </div>
 
             <p className="text-base font-semibold text-foreground">
-              {invoicedCount === 0
+              {completedStagesCount === 0
                 ? "No invoices have been raised for this project"
                 : "Invoice details are held in Xero"}
             </p>
