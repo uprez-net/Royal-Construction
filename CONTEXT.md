@@ -83,9 +83,9 @@ _Avoid_: A single nominated signer for a company when multiple directors are req
 Every party that must sign is a **Signer**: each Individual Owner signs personally (capacity **"Owner"**); each Company owner signs through its **Director signatories** (capacity **"Director"**, tagged with the represented company + ABN/ACN). All customer-side Signers sign in **parallel** (routingOrder 1) and the **builder counter-signs last** (routingOrder 2). Each Signer gets its **own tracked link + status**. `SignerRole` stays **BUILDER | CUSTOMER**; capacity + represented entity are recorded as signer metadata, not new roles.
 _Avoid_: A DIRECTOR signer role, one shared owner signing link
 
-**Offer workspace entry** (decided):
-Opening the offer workspace for a Lead **resumes the active Offer** while it is in **pending**, **sent**, or negotiable pre-**agreed** states. **Agreed** (Tender phase), **Tender signed**, **rejected**, and **superseded** Offers open read-only for their phase. **New revision** forks from the current active Offer (copies internal cost schedule and Offer document content).
-_Avoid_: Always new revision, editing a signed Tender in place
+**Offer workspace entry** (decided — refined for #117; see ADR 0005):
+Opening the offer workspace for a Lead **resumes the active Offer**. A **pending** Offer is fully editable; a **sent** Offer opens with the internal **price inputs** (Job setup, Cost schedule, Pricing) **frozen** but the **customer-facing Offer document + Scope still editable** for negotiation. Once the Offer is **out for its acceptance signature or past it** (**offer_sent**, **offer_signed**, **offer_declined**), **agreed** (Tender phase), **Tender signed**, **rejected**, or **superseded**, it opens **read-only** for its phase — changes then go through a **New revision**, which forks from the current active Offer (copies internal cost schedule and Offer document content).
+_Avoid_: Always new revision, editing a signed Tender in place, freezing the customer-facing document the moment the Offer is sent
 
 **Offer revision** (decided):
 Creating a new Offer for the same Lead starts a new revision during **negotiation and Tender drafting** — while status is before **tender_signed**. Prior Offers become **superseded**. **New revision** may fork from pending, sent, rejected, or pre-sign Tender states. **After tender_signed**, the Offer is **locked**; scope or price changes use **Variations** on the **Project** (or formal contract amendment off-system). Revisions preserve audit history.
@@ -158,9 +158,9 @@ _Avoid_: Treating Tender signed as Contract signed, upload/deposit as an additio
 The staged payment breakdown (deposit, base/frame/lock-up/fixing/completion, etc.) decided in the **Tender** phase after **agreed**, before **Tender generation**. Seeds the Tender's payment schedule and downstream Project milestones.
 _Avoid_: Deciding the schedule on the Offer document during negotiation, treating it as a customer-facing Offer artifact
 
-**Offer editing persistence** (decided):
-While an Offer is in **pending**, **sent**, or pre-**agreed** negotiation, changes to the internal cost schedule and **Offer document** **auto-save** (debounced). Once **agreed**, the agreed snapshot is frozen for Tender generation. Tender, Contract, and superseded Offers are read-only.
-_Avoid_: Save-only with data loss on refresh, editing agreed snapshot in place without new revision
+**Offer editing persistence** (decided — refined for #117; see ADR 0005):
+While an Offer is **pending**, everything is editable and **auto-saves** (debounced). Once the Offer is **issued** (**sent**), the internal **price inputs** — Job setup areas, Cost schedule, Pricing — **freeze** so the quoted price can't drift in place; changing them is a **New revision**. The **customer-facing** parts — the **Offer document** copy and the **Scope** shown on it — stay **editable and auto-save through the `sent` negotiation window**, so the estimator can refine the proposal while negotiating (each subsequent send emails the updated document). The **offer-build** content freezes once the Offer is **out for signature** (**offer_sent** — the signed snapshot must not shift) or **agreed** (the agreed snapshot is frozen to seed the Tender). After **agreed**, the **Tender draft** (payment schedule) stays editable through **tender_draft** and freezes at **tender_sent**. Signed Tender and Contract records, and superseded Offers, are read-only.
+_Avoid_: Save-only with data loss on refresh, editing agreed snapshot in place without new revision, changing the price in place after send instead of a new revision, freezing the whole offer at send
 
 **Offer line item**:
 Legacy name for a priced row. Prefer **Offer price row** (customer summary) or **Cost line** (internal).

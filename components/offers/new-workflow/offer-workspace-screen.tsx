@@ -63,6 +63,11 @@ import {
   type OfferStepStatus,
 } from "./offer-workspace-step-section";
 import { isOfferPhaseUnlocked } from "@/lib/offer/workflow";
+import {
+  isOfferBuildStepEditable,
+  isOfferIssued,
+  offerDocumentStillEditableWhileIssued,
+} from "@/lib/offer/offer-editability";
 import type {
   OfferExpiry,
   OfferSendBlocker,
@@ -329,10 +334,23 @@ export function OfferWorkspaceScreen({
                   ? { tone: "neutral", label: "Superseded" }
                   : { tone: "complete", label: "Agreed" };
 
-  // Once the offer has been issued (Sent or any later/terminal state), the
-  // Offer-build steps are locked to preserve the issued record — changes go
-  // through a new revision. `pending` is the only editable state.
-  const isOfferLocked = status !== "pending";
+  // The Offer-build steps do NOT all freeze at once when the offer is issued
+  // (#117). The customer-facing content — the Offer document copy and the Scope
+  // shown on it — stays editable through the `sent` negotiation window so the
+  // estimator can refine the proposal while negotiating; those edits auto-save.
+  // The internal price inputs (Job setup, Cost schedule, Pricing) freeze the
+  // moment the offer is issued so the quoted price can't drift in place — a price
+  // change after send is a New revision. Everything freezes once the offer is out
+  // for signature / agreed / terminal. See lib/offer/offer-editability + ADR 0005.
+  const offerIssued = isOfferIssued(status);
+  const jobSetupLocked = !isOfferBuildStepEditable("job-setup", status);
+  const costScheduleLocked = !isOfferBuildStepEditable("cost-schedule", status);
+  const pricingLocked = !isOfferBuildStepEditable("pricing", status);
+  const scopeLocked = !isOfferBuildStepEditable("scope", status);
+  const offerDocumentLocked = !isOfferBuildStepEditable("offer-document", status);
+  // In the `sent` window the document + scope are still editable while the price
+  // is frozen — the banner explains this partial lock rather than a full one.
+  const documentsStillEditable = offerDocumentStillEditableWhileIssued(status);
 
   // The header + stepper are pinned (sticky top-0) and their height changes with
   // viewport width as the title/badges/price reflow. Measure it live and expose
@@ -377,11 +395,12 @@ export function OfferWorkspaceScreen({
       </div>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-8">
-          {isOfferLocked ? (
+          {offerIssued ? (
             <OfferLockBanner
               canRevise={canRevise}
               revising={revising}
               executed={revisionExecuted}
+              documentsEditable={documentsStillEditable}
               notice={revisionNotice}
               onCreateRevision={onCreateRevision}
             />
@@ -391,7 +410,7 @@ export function OfferWorkspaceScreen({
             index={1}
             phase="Offer"
             title="Job setup"
-            locked={isOfferLocked}
+            locked={jobSetupLocked}
             status={stepStatusById.get("offer-step-job-setup") ?? null}
           >
             <JobSetupPanel
@@ -409,7 +428,7 @@ export function OfferWorkspaceScreen({
             index={2}
             phase="Offer"
             title="Cost schedule"
-            locked={isOfferLocked}
+            locked={costScheduleLocked}
             status={stepStatusById.get("offer-step-cost-schedule") ?? null}
           >
             <AreaCalculatorPanel
@@ -433,7 +452,7 @@ export function OfferWorkspaceScreen({
             index={3}
             phase="Offer"
             title="Pricing"
-            locked={isOfferLocked}
+            locked={pricingLocked}
             status={stepStatusById.get("offer-step-pricing") ?? null}
           >
             <PriceBuildupPanel
@@ -461,7 +480,7 @@ export function OfferWorkspaceScreen({
             index={4}
             phase="Offer"
             title="Scope"
-            locked={isOfferLocked}
+            locked={scopeLocked}
             status={stepStatusById.get("offer-step-scope") ?? null}
           >
             <ScopePanel
@@ -481,7 +500,7 @@ export function OfferWorkspaceScreen({
             index={5}
             phase="Offer"
             title="Offer document"
-            locked={isOfferLocked}
+            locked={offerDocumentLocked}
             status={stepStatusById.get("offer-step-offer-document") ?? null}
           >
             <div className="space-y-6">

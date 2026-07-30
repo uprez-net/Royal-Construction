@@ -130,14 +130,15 @@ function StepHeader({
   return <div className="mb-3 flex items-center gap-2.5">{inner}</div>;
 }
 
-// Explains why the Offer-build steps are frozen and offers the one sanctioned
-// way to change an issued offer: cut a new revision. Rendered above step 1 once
-// the offer leaves the editable (pending) state.
+// Explains why the Offer-build steps are (partly or fully) frozen and offers the
+// one sanctioned way to change a frozen part: cut a new revision. Rendered above
+// step 1 once the offer leaves the editable (pending) state.
 export function OfferLockBanner({
   onCreateRevision,
   canRevise,
   revising,
   executed = false,
+  documentsEditable = false,
   notice = null,
 }: {
   readonly onCreateRevision: () => void;
@@ -146,10 +147,19 @@ export function OfferLockBanner({
   // An executed contract can't be revised — its terms are binding; a change is
   // a contract variation, not a new revision.
   readonly executed?: boolean;
+  // In the `sent` negotiation window the customer-facing document + scope are
+  // still editable while the price is frozen (#117) — show the partial-lock copy
+  // instead of the full-lock copy. Ignored when `executed`.
+  readonly documentsEditable?: boolean;
   // Outcome message from the last revision attempt (e.g. an envelope-void
   // warning, or the executed-contract explanation).
   readonly notice?: string | null;
 }) {
+  const message = executed
+    ? "This offer's contract is executed. The terms are locked — a change now is a contract variation, a separate document, not a new revision."
+    : documentsEditable
+      ? "This offer has been sent. You can still refine the offer document and scope during negotiation — those edits save automatically. Job setup, cost schedule and pricing are locked so the quoted price can't change in place; to change the price, create a new revision."
+      : "This offer has been issued, so job setup, cost schedule, pricing, scope and the offer document are locked to preserve the issued record. To change any of them, create a new revision.";
   return (
     <div className="grid gap-2 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -158,11 +168,7 @@ export function OfferLockBanner({
             className="mt-0.5 size-4 shrink-0 text-royal-gold-dark"
             aria-hidden="true"
           />
-          <span className="max-w-prose">
-            {executed
-              ? "This offer's contract is executed. The terms are locked — a change now is a contract variation, a separate document, not a new revision."
-              : "This offer has been issued, so job setup, cost schedule, pricing, scope and the offer document are locked to preserve the issued record. To change any of them, create a new revision."}
-          </span>
+          <span className="max-w-prose">{message}</span>
         </p>
         {executed ? null : (
           <Button
