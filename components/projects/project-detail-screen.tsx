@@ -9,8 +9,9 @@ import type { ProjectDetail } from "@/types/project";
 import { ProjectDetailTabs } from "./detail/project-detail-tabs";
 import { ProjectHeader } from "./detail/project-header";
 import { ProjectStatCards } from "./detail/project-stat-cards";
+import type { Role } from "@prisma/client";
 
-export function ProjectDetailScreen({ project }: { project: ProjectDetail }) {
+export function ProjectDetailScreen({ project, role }: { project: ProjectDetail; role: Role }) {
   const dispatch = useAppDispatch();
   const activeProject = useAppSelector((state) => state.projects.activeProject);
   // Prefer the store copy once it has been hydrated for this project so
@@ -30,8 +31,8 @@ export function ProjectDetailScreen({ project }: { project: ProjectDetail }) {
   return (
     <div className="space-y-4 pb-4">
       <ProjectHeader project={displayedProject} />
-      <ProjectStatCards />
-      <ProjectDetailTabs project={displayedProject} />
+      <ProjectStatCards role={role} />
+      <ProjectDetailTabs project={displayedProject} role={role} />
     </div>
   );
 }

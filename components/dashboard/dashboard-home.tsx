@@ -38,9 +38,9 @@ export function DashboardHome({
   return (
     <div className="flex flex-col gap-6 lg:gap-7">
       {dataWarnings.length > 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-[color:var(--warning)] bg-[color:var(--warning-light)] px-4 py-3 text-sm text-foreground">
+        <div className="flex items-start gap-3 rounded-lg border border-warning bg-warning-light px-4 py-3 text-sm text-foreground">
           <AlertTriangle
-            className="mt-0.5 size-4 shrink-0 text-[color:var(--warning)]"
+            className="mt-0.5 size-4 shrink-0 text-warning"
             aria-hidden="true"
           />
           <div>

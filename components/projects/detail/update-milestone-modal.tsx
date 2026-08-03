@@ -41,6 +41,7 @@ interface UpdateMilestoneModalProps {
   status?: MilestoneStatus;
   isOpen: boolean;
   onClose: () => void;
+  isAdmin: boolean;
 }
 
 /** `yyyy-MM-dd` for a nullable date field, or `undefined` when unset. */
@@ -86,6 +87,7 @@ function RequiredMark() {
 }
 
 export default function UpdateMilestoneModal({
+  isAdmin,
   milestoneId,
   projectId,
   status,
@@ -194,7 +196,7 @@ export default function UpdateMilestoneModal({
       setSubmitError(null);
       const validatedData = milestoneUpdateSchema.safeParse({
         ...data,
-        spend: data.spend && data.spend > 0 ? data.spend : undefined,
+        spend: data.spend && data.spend > 0 ? data.spend : status === "DONE" ? 0 : undefined,
       });
       if (!validatedData.success) {
         const nextFieldErrors = validatedData.error.issues.reduce(
@@ -387,49 +389,54 @@ export default function UpdateMilestoneModal({
                     </p>
                   ) : null}
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="spend" className={labelClassName}>
-                    Money spent
-                    <RequiredMark />
-                  </Label>
-                  <Input
-                    id="spend"
-                    type="text"
-                    inputMode="decimal"
-                    required
-                    className={inputClassName}
-                    placeholder="$0"
-                    value={
-                      formState.spend && formState.spend > 0
-                        ? currency.format(formState.spend)
-                        : ""
-                    }
-                    onChange={(e) =>
-                      handleFormChange("spend", parseCurrency(e.target.value))
-                    }
-                    disabled={spend > 0}
-                    aria-invalid={Boolean(fieldErrors.spend)}
-                    aria-describedby={
-                      [
-                        fieldErrors.spend ? "spend-error" : null,
-                        spend > 0 ? "spend-hint" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" ") || undefined
-                    }
-                  />
-                  {spend > 0 ? (
-                    <p id="spend-hint" className="text-xs text-muted-foreground">
-                      Calculated from the tradie schedules booked against this
-                      milestone.
-                    </p>
-                  ) : null}
-                  {fieldErrors.spend ? (
-                    <p id="spend-error" className="text-xs text-destructive">
-                      {fieldErrors.spend}
-                    </p>
-                  ) : null}
-                </div>
+                {isAdmin && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="spend" className={labelClassName}>
+                      Money spent
+                      <RequiredMark />
+                    </Label>
+                    <Input
+                      id="spend"
+                      type="text"
+                      inputMode="decimal"
+                      required
+                      className={inputClassName}
+                      placeholder="$0"
+                      value={
+                        formState.spend && formState.spend > 0
+                          ? currency.format(formState.spend)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        handleFormChange("spend", parseCurrency(e.target.value))
+                      }
+                      disabled={spend > 0}
+                      aria-invalid={Boolean(fieldErrors.spend)}
+                      aria-describedby={
+                        [
+                          fieldErrors.spend ? "spend-error" : null,
+                          spend > 0 ? "spend-hint" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || undefined
+                      }
+                    />
+                    {spend > 0 ? (
+                      <p
+                        id="spend-hint"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Calculated from the tradie schedules booked against this
+                        milestone.
+                      </p>
+                    ) : null}
+                    {fieldErrors.spend ? (
+                      <p id="spend-error" className="text-xs text-destructive">
+                        {fieldErrors.spend}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
             )}
           </div>

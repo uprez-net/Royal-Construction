@@ -42,6 +42,7 @@ import {
   PaginatedProjectsResult,
 } from "@/lib/data/projects";
 import { compactCurrency } from "@/utils/formatters";
+import type { Role } from "@prisma/client";
 
 const TABLE_HEADERS = [
   "Project",
@@ -64,10 +65,12 @@ const TABLE_ALIGN = [
 ] as const;
 
 export function ProjectsClient({
+  role,
   projects,
   pagination,
   kpis,
 }: {
+  role: Role;
   projects: ProjectWithStats[];
   pagination: {
     page: number;
@@ -413,6 +416,7 @@ export function ProjectsClient({
                 {visibleProjects.map((project) => (
                   <EnhancedProjectCard
                     key={project.id}
+                    role={role}
                     project={project}
                     onDetailsClick={(id) => openQuickView(project, id)}
                   />

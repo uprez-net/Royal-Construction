@@ -1,11 +1,19 @@
 "use client";
 
-import { ArrowUpRight, PiggyBank, ReceiptText, TriangleAlert, Users, Wallet2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  PiggyBank,
+  ReceiptText,
+  TriangleAlert,
+  Users,
+  Wallet2,
+} from "lucide-react";
 import { useAppSelector } from "@/lib/store/hooks";
 import { selectActiveProjectBudgetSummary } from "@/lib/store/slices/projectsSlice";
 import { METRIC_TONES } from "@/components/common/metric-card";
 import { currency } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
+import { Role } from "@prisma/client";
 
 /**
  * These cards stay bespoke rather than reusing `MetricCard` because each one
@@ -16,16 +24,17 @@ import { cn } from "@/lib/utils";
  * `MetricCard` uses at its more compact `text-2xl`.
  */
 
-const CARD_SURFACE =
-  "rounded-xl border border-border/70 bg-card p-5 shadow-sm";
+const CARD_SURFACE = "rounded-xl border border-border/70 bg-card p-5 shadow-sm";
 const CARD_VALUE =
   "mt-2 font-heading text-3xl font-semibold leading-tight tracking-tight text-foreground";
 const CARD_LABEL = "mt-1 text-xs text-muted-foreground";
 const ICON_CONTAINER =
   "flex size-11 items-center justify-center rounded-2xl text-white";
-const BADGE = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
+const BADGE =
+  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
 
-export function ProjectStatCards() {
+export function ProjectStatCards({ role }: { role: Role }) {
+  const isAdmin = role === "ADMIN";
   const budgetSummary = useAppSelector(selectActiveProjectBudgetSummary);
 
   // `selectActiveProjectBudgetSummary` returns null for exactly one reason:
@@ -73,109 +82,116 @@ export function ProjectStatCards() {
 
   return (
     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {/* Contract Value */}
-      <div className={CARD_SURFACE}>
-        <div className="mb-2 flex items-start justify-between">
-          <div className={cn(ICON_CONTAINER, METRIC_TONES.primary)}>
-            <Wallet2 className="size-5" aria-hidden="true" />
+      {isAdmin && (
+        <>
+          {/* Contract Value */}
+          <div className={CARD_SURFACE}>
+            <div className="mb-2 flex items-start justify-between">
+              <div className={cn(ICON_CONTAINER, METRIC_TONES.primary)}>
+                <Wallet2 className="size-5" aria-hidden="true" />
+              </div>
+              <span
+                className={cn(
+                  BADGE,
+                  isOverBudget
+                    ? "bg-destructive-light text-destructive-ink"
+                    : "bg-success-light text-success-ink",
+                )}
+              >
+                {isOverBudget ? (
+                  <TriangleAlert className="size-3" aria-hidden="true" />
+                ) : (
+                  <ArrowUpRight className="size-3" aria-hidden="true" />
+                )}
+                {isOverBudget ? "Over budget" : "On budget"}
+              </span>
+            </div>
+            <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
+              {currency.format(budgetSummary.totalBudget)}
+            </div>
+            <div className={CARD_LABEL}>Total contract value</div>
           </div>
-          <span
-            className={cn(
-              BADGE,
-              isOverBudget
-                ? "bg-destructive-light text-destructive-ink"
-                : "bg-success-light text-success-ink",
-            )}
-          >
-            {isOverBudget ? (
-              <TriangleAlert className="size-3" aria-hidden="true" />
-            ) : (
-              <ArrowUpRight className="size-3" aria-hidden="true" />
-            )}
-            {isOverBudget ? "Over budget" : "On budget"}
-          </span>
-        </div>
-        <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
-          {currency.format(budgetSummary.totalBudget)}
-        </div>
-        <div className={CARD_LABEL}>Total contract value</div>
-      </div>
 
-      {/* Spent */}
-      <div className={CARD_SURFACE}>
-        <div className="mb-2 flex items-start justify-between">
-          <div className={cn(ICON_CONTAINER, METRIC_TONES.warning)}>
-            <ReceiptText className="size-5" aria-hidden="true" />
+          {/* Spent */}
+          <div className={CARD_SURFACE}>
+            <div className="mb-2 flex items-start justify-between">
+              <div className={cn(ICON_CONTAINER, METRIC_TONES.warning)}>
+                <ReceiptText className="size-5" aria-hidden="true" />
+              </div>
+              <span
+                className={cn(
+                  BADGE,
+                  isOverBudget
+                    ? "bg-destructive-light text-destructive-ink"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                <span className="font-mono tabular-nums">
+                  {budgetSummary.spentPercent}%
+                </span>
+                <span className="sr-only">of contract value spent</span>
+              </span>
+            </div>
+            <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
+              {currency.format(budgetSummary.spent)}
+            </div>
+            <div className={CARD_LABEL}>Spent to date</div>
           </div>
-          <span
-            className={cn(
-              BADGE,
-              isOverBudget
-                ? "bg-destructive-light text-destructive-ink"
-                : "bg-muted text-muted-foreground",
-            )}
-          >
-            <span className="font-mono tabular-nums">
-              {budgetSummary.spentPercent}%
-            </span>
-            <span className="sr-only">of contract value spent</span>
-          </span>
-        </div>
-        <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
-          {currency.format(budgetSummary.spent)}
-        </div>
-        <div className={CARD_LABEL}>Spent to date</div>
-      </div>
 
-      {/* Remaining — or, once spend passes the contract value, the overrun.
+          {/* Remaining — or, once spend passes the contract value, the overrun.
           Showing a clamped "$0 remaining" on an over-budget project hides the
           one number the site manager needs. */}
-      <div className={CARD_SURFACE}>
-        <div className="mb-2 flex items-start justify-between">
-          <div
-            className={cn(
-              ICON_CONTAINER,
-              isOverBudget ? METRIC_TONES.danger : METRIC_TONES.success,
-            )}
-          >
-            {isOverBudget ? (
-              <TriangleAlert className="size-5" aria-hidden="true" />
-            ) : (
-              <PiggyBank className="size-5" aria-hidden="true" />
-            )}
+          <div className={CARD_SURFACE}>
+            <div className="mb-2 flex items-start justify-between">
+              <div
+                className={cn(
+                  ICON_CONTAINER,
+                  isOverBudget ? METRIC_TONES.danger : METRIC_TONES.success,
+                )}
+              >
+                {isOverBudget ? (
+                  <TriangleAlert className="size-5" aria-hidden="true" />
+                ) : (
+                  <PiggyBank className="size-5" aria-hidden="true" />
+                )}
+              </div>
+              <span
+                className={cn(
+                  BADGE,
+                  isOverBudget
+                    ? "bg-destructive-light text-destructive-ink"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                <span className="font-mono tabular-nums">
+                  {isOverBudget
+                    ? `+${overrunPercent}%`
+                    : `${remainingPercent}%`}
+                </span>
+                <span className="sr-only">
+                  {isOverBudget
+                    ? "over the contract value"
+                    : "of contract value remaining"}
+                </span>
+              </span>
+            </div>
+            <div
+              className={cn(
+                CARD_VALUE,
+                "font-mono tabular-nums",
+                isOverBudget && "text-destructive-ink",
+              )}
+            >
+              {currency.format(
+                isOverBudget ? overrun : budgetSummary.remaining,
+              )}
+            </div>
+            <div className={CARD_LABEL}>
+              {isOverBudget ? "Over budget by" : "Remaining budget"}
+            </div>
           </div>
-          <span
-            className={cn(
-              BADGE,
-              isOverBudget
-                ? "bg-destructive-light text-destructive-ink"
-                : "bg-muted text-muted-foreground",
-            )}
-          >
-            <span className="font-mono tabular-nums">
-              {isOverBudget ? `+${overrunPercent}%` : `${remainingPercent}%`}
-            </span>
-            <span className="sr-only">
-              {isOverBudget
-                ? "over the contract value"
-                : "of contract value remaining"}
-            </span>
-          </span>
-        </div>
-        <div
-          className={cn(
-            CARD_VALUE,
-            "font-mono tabular-nums",
-            isOverBudget && "text-destructive-ink",
-          )}
-        >
-          {currency.format(isOverBudget ? overrun : budgetSummary.remaining)}
-        </div>
-        <div className={CARD_LABEL}>
-          {isOverBudget ? "Over budget by" : "Remaining budget"}
-        </div>
-      </div>
-
+        </>
+      )}
       {/* Workers on site — no attendance source is wired up yet. */}
       <div className={CARD_SURFACE}>
         <div className="mb-2 flex items-start justify-between">
@@ -186,7 +202,10 @@ export function ProjectStatCards() {
             Not enabled
           </span>
         </div>
-        <div className={cn(CARD_VALUE, "text-muted-foreground")} aria-hidden="true">
+        <div
+          className={cn(CARD_VALUE, "text-muted-foreground")}
+          aria-hidden="true"
+        >
           —
         </div>
         <div className={CARD_LABEL}>

@@ -11,6 +11,7 @@ import { connection } from "next/server";
 import type { DashboardKPI } from "@/types/dashboard";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 import type { Metadata } from "next";
+import { getUserByClerkIdCached } from "@/lib/data/user";
 
 const emptyDashboardKPI: DashboardKPI = {
   followUpsCount: 0,
@@ -61,7 +62,7 @@ export const metadata: Metadata = {
 export default async function DashboardPageClient() {
   await connection();
   const [user, projectsResult, kpiResult, followUpsResult, graphResult] = await Promise.all([
-    auth(),
+    auth().then(({ userId }) => (userId ? getUserByClerkIdCached(userId) : null)),
     settleDashboardSection(
       "project list",
       getProjects({
@@ -91,7 +92,7 @@ export default async function DashboardPageClient() {
 
   return (
     <DashboardHome
-      userFirstName={user.sessionClaims?.firstName ?? "User"}
+      userFirstName={user?.name.split(" ")[0] ?? "User"}
       graphData={graphResult.data}
       projectsData={projectsResult.data}
       kpiData={dashboardKPI}

@@ -63,19 +63,17 @@ const convertToVisualMilestone = (
 const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
   const stageMilestoneMap = new Map<
     string,
-    { completed: number; inProgress: number; total: number }
+    { completed: number; total: number }
   >();
   for (const milestone of milestones) {
     const stage = milestone.projectStage;
     if (!stageMilestoneMap.has(stage)) {
-      stageMilestoneMap.set(stage, { completed: 0, inProgress: 0, total: 0 });
+      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
     }
     const stageData = stageMilestoneMap.get(stage)!;
     stageData.total++;
     if (milestone.status === "DONE") {
       stageData.completed++;
-    } else if (milestone.status === "ACTIVE") {
-      stageData.inProgress++;
     }
   }
   const totalStages = stageMilestoneMap.size;
@@ -84,8 +82,7 @@ const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
   ).length;
   const inProgressStages = Array.from(stageMilestoneMap.values()).filter(
     (stageData) =>
-      stageData.completed > 0 ||
-      (stageData.inProgress > 0 && stageData.completed < stageData.total),
+      stageData.completed > 0 && stageData.completed < stageData.total,
   ).length;
   return {
     totalStages,
@@ -94,7 +91,13 @@ const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
   };
 };
 
-export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
+export function ProjectMilestonesTab({
+  project,
+  isAdmin,
+}: {
+  project: ProjectDetail;
+  isAdmin: boolean;
+}) {
   const dispatch = useAppDispatch();
   const visualMilestones = useMemo(
     () => convertToVisualMilestone(project.milestones),
@@ -208,6 +211,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
           milestoneId,
           projectId: project.id,
           newStatus: MilestoneStatus.DONE,
+          isAdmin: isAdmin,
         },
       }),
     );
@@ -329,14 +333,16 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                         {PROJECT_STAGE_LABELS[stage] ?? stage}
                       </h3>
 
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <DollarSign className="size-3.5" aria-hidden="true" />
-                        <span className="font-mono tabular-nums">
-                          {stageBudget === null
-                            ? "—"
-                            : currency.format(stageBudget)}
+                      {isAdmin && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <DollarSign className="size-3.5" aria-hidden="true" />
+                          <span className="font-mono tabular-nums">
+                            {stageBudget === null
+                              ? "—"
+                              : currency.format(stageBudget)}
+                          </span>
                         </span>
-                      </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge
@@ -360,6 +366,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                       {milestones.map((milestone) => (
                         <MilestoneCard
                           key={milestone.id}
+                          isAdmin={isAdmin}
                           prevMilestone={visualMilestones
                             .flatMap((m) => [m, ...m.childrenMilestones])
                             .find((m) => m.order === milestone.order - 1)}

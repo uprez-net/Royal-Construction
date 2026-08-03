@@ -309,10 +309,12 @@ export function ModalManager() {
         milestoneId: updateMilestoneStatusId,
         newStatus,
         projectId: updateMilestoneStatusProjectId,
+        isAdmin,
       } = modal.payload as {
         projectId: string;
         milestoneId: string;
         newStatus: MilestoneStatus;
+        isAdmin: boolean;
       };
       return (
         <UpdateMilestoneModal
@@ -321,6 +323,7 @@ export function ModalManager() {
           status={newStatus}
           isOpen
           onClose={handleClose}
+          isAdmin={isAdmin}
         />
       );
     case "addMilestonePicture":

@@ -6,14 +6,21 @@ import type { ProjectWithStats } from "@/types/project";
 import { Badge } from "@/components/ui/badge";
 import { compactCurrency } from "@/utils/formatters";
 import { formatStatus, projectStatusConfig } from "./project-status";
+import type { Role as UserRoles } from "@prisma/client";
 
 interface EnhancedProjectCardProps {
+  role: UserRoles;
   project: ProjectWithStats;
   onDetailsClick?: (projectId: string) => void;
 }
 
-const calcMilestoneOverviewData = (milestones: ProjectWithStats["milestones"]) => {
-  const stageMilestoneMap = new Map<string, { completed: number; total: number }>();
+const calcMilestoneOverviewData = (
+  milestones: ProjectWithStats["milestones"],
+) => {
+  const stageMilestoneMap = new Map<
+    string,
+    { completed: number; total: number }
+  >();
   for (const milestone of milestones) {
     const stage = milestone.projectStage;
     if (!stageMilestoneMap.has(stage)) {
@@ -26,7 +33,9 @@ const calcMilestoneOverviewData = (milestones: ProjectWithStats["milestones"]) =
     }
   }
   const totalStages = stageMilestoneMap.size;
-  const completedStages = Array.from(stageMilestoneMap.values()).filter((stageData) => stageData.completed === stageData.total).length;
+  const completedStages = Array.from(stageMilestoneMap.values()).filter(
+    (stageData) => stageData.completed === stageData.total,
+  ).length;
   return {
     totalStages,
     completedStages,
@@ -34,9 +43,11 @@ const calcMilestoneOverviewData = (milestones: ProjectWithStats["milestones"]) =
 };
 
 export function EnhancedProjectCard({
+  role,
   project,
   onDetailsClick,
 }: EnhancedProjectCardProps) {
+  const isAdmin = role === "ADMIN";
   const config = projectStatusConfig(project.status);
   const spent = Number(project.spent);
   const budget = Number(project.totalBudget);
@@ -47,7 +58,9 @@ export function EnhancedProjectCard({
   const isOverBudget = spentPercent !== null && spentPercent > 100;
   const progress = Math.round(project.progressPercent);
   const progressLabelId = `project-progress-${project.id}`;
-  const { totalStages, completedStages } = calcMilestoneOverviewData(project.milestones);
+  const { totalStages, completedStages } = calcMilestoneOverviewData(
+    project.milestones,
+  );
 
   const openQuickView = () => onDetailsClick?.(project.id);
 
@@ -138,32 +151,34 @@ export function EnhancedProjectCard({
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-muted/50 px-3 py-3 text-xs">
-          <div>
-            <p className="font-medium text-muted-foreground">Budget</p>
-            <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
-              {hasBudget ? compactCurrency.format(budget) : "—"}
-            </p>
+        {isAdmin && (
+          <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-muted/50 px-3 py-3 text-xs">
+            <div>
+              <p className="font-medium text-muted-foreground">Budget</p>
+              <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                {hasBudget ? compactCurrency.format(budget) : "—"}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="font-medium text-muted-foreground">
+                {isOverBudget ? "Over budget" : "Spent"}
+              </p>
+              <p
+                className={`font-mono text-sm font-semibold tabular-nums ${
+                  isOverBudget ? "text-destructive-ink" : "text-foreground"
+                }`}
+              >
+                {Number.isFinite(spent) ? compactCurrency.format(spent) : "—"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="font-medium text-muted-foreground">Stages</p>
+              <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                {completedStages}/{totalStages}
+              </p>
+            </div>
           </div>
-          <div className="text-center">
-            <p className="font-medium text-muted-foreground">
-              {isOverBudget ? "Over budget" : "Spent"}
-            </p>
-            <p
-              className={`font-mono text-sm font-semibold tabular-nums ${
-                isOverBudget ? "text-destructive-ink" : "text-foreground"
-              }`}
-            >
-              {Number.isFinite(spent) ? compactCurrency.format(spent) : "—"}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="font-medium text-muted-foreground">Stages</p>
-            <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
-              {completedStages}/{totalStages}
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="flex items-center justify-end border-t border-border/40 bg-muted/30 px-5 py-3">

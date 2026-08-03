@@ -24,8 +24,10 @@ import {
 import { ProjectTradiesTab } from "./project-tradies-tab";
 import { ProjectHistoryTabs } from "./project-history-tabs";
 import { ProjectCommunicationTabs } from "./project-communication-tabs";
+import { Role } from "@prisma/client";
 
-export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
+export function ProjectDetailTabs({ project, role }: { project: ProjectDetail; role: Role }) {
+  const isAdmin = role === "ADMIN";
   const dispatch = useAppDispatch();
   const router = useRouter();
   const pathname = usePathname();
@@ -76,6 +78,7 @@ export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
         project={project}
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        isAdmin={isAdmin}
       />
 
       <div
@@ -86,18 +89,18 @@ export function ProjectDetailTabs({ project }: { project: ProjectDetail }) {
         className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         {activeTab === "overview" ? (
-          <ProjectOverviewTab project={project} />
+          <ProjectOverviewTab project={project} isAdmin={isAdmin} />
         ) : null}
         {activeTab === "milestones" ? (
-          <ProjectMilestonesTab project={project} />
+          <ProjectMilestonesTab project={project} isAdmin={isAdmin} />
         ) : null}
-        {activeTab === "payments" ? (
+        {activeTab === "payments" && isAdmin ? (
           <ProjectPaymentsTab project={project} />
         ) : null}
         {activeTab === "tradies" ? (
           <ProjectTradiesTab project={project} />
         ) : null}
-        {activeTab === "docs" ? <ProjectQuotesTab project={project} /> : null}
+        {activeTab === "docs" ? <ProjectQuotesTab project={project} isAdmin={isAdmin} /> : null}
         {activeTab === "history" ? (
           <ProjectHistoryTabs project={project} />
         ) : null}

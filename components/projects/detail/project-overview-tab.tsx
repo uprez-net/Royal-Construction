@@ -76,7 +76,7 @@ interface FieldConfig {
 
 const SECTION_META: Record<
   ProjectFlowSectionKey,
-  { label: string; description: string; icon: React.ElementType }
+  { label: string; description: string; icon: React.ElementType, isAdminOnly?: boolean }
 > = {
   legalAdministration: {
     label: "Legal and administration",
@@ -87,6 +87,7 @@ const SECTION_META: Record<
     label: "Commercials and claims",
     description: "Contract sum, GST and payment schedule",
     icon: Landmark,
+    isAdminOnly: true,
   },
   subStructureAndGround: {
     label: "Sub structure and ground",
@@ -970,7 +971,7 @@ function ConflictRow({ conflict }: { conflict: ProjectConflictResult }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
+export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetail; isAdmin: boolean }) {
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
   const [saving, setSaving] = useState(false);
@@ -1194,7 +1195,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
           />
 
           {/* Source documents */}
-          <div className="grid gap-4 md:grid-cols-2">
+          {isAdmin && <div className="grid gap-4 md:grid-cols-2">
             <SourceDocumentCard
               kind="Tender"
               fileName={tender.fileName ?? ""}
@@ -1211,7 +1212,7 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
                 updateSourceDocument("contract", field, value)
               }
             />
-          </div>
+          </div>}
 
           {/* Automation triggers */}
           <div className="grid gap-3 md:grid-cols-3">
@@ -1266,6 +1267,10 @@ export function ProjectOverviewTab({ project }: { project: ProjectDetail }) {
               const sectionFailCount = sectionValidations.filter(
                 (v) => v.severity === "fail",
               ).length;
+
+              if(!isAdmin && meta.isAdminOnly) {
+                return null;
+              }
 
               return (
                 <AccordionItem

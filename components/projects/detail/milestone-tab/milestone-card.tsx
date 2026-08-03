@@ -74,6 +74,7 @@ function MilestoneMetaLine({
 }
 
 export function MilestoneCard({
+  isAdmin,
   prevMilestone,
   milestone,
   project,
@@ -86,6 +87,7 @@ export function MilestoneCard({
   onSendReminder,
   onOpenViewPicture,
 }: {
+  isAdmin: boolean;
   prevMilestone?: UIMilestone;
   milestone: UIMilestone;
   project: ProjectDetail;
@@ -178,9 +180,7 @@ export function MilestoneCard({
 
             {milestone.actualDate ? (
               <MilestoneMetaLine
-                icon={
-                  <CheckCircle2 className="h-3.5 w-3.5 text-success-ink" />
-                }
+                icon={<CheckCircle2 className="h-3.5 w-3.5 text-success-ink" />}
               >
                 Completed{" "}
                 <span className="font-mono tabular-nums">
@@ -189,15 +189,17 @@ export function MilestoneCard({
               </MilestoneMetaLine>
             ) : null}
 
-            <MilestoneMetaLine icon={<DollarSign className="h-3.5 w-3.5" />}>
-              <span className="font-mono tabular-nums">
-                {currency.format(Number(milestone.budget))}
-              </span>{" "}
-              <span className="font-mono tabular-nums">
-                ({budgetShare.toFixed(1)}%)
-              </span>{" "}
-              of project budget
-            </MilestoneMetaLine>
+            {isAdmin && (
+              <MilestoneMetaLine icon={<DollarSign className="h-3.5 w-3.5" />}>
+                <span className="font-mono tabular-nums">
+                  {currency.format(Number(milestone.budget))}
+                </span>{" "}
+                <span className="font-mono tabular-nums">
+                  ({budgetShare.toFixed(1)}%)
+                </span>{" "}
+                of project budget
+              </MilestoneMetaLine>
+            )}
 
             {milestone.tradieSchedules.length > 0 ? (
               <MilestoneMetaLine icon={<Users className="h-3.5 w-3.5" />}>
@@ -347,6 +349,7 @@ export function MilestoneCard({
                   {milestone.childrenMilestones.map((child) => (
                     <MilestoneCard
                       key={child.id}
+                      isAdmin={isAdmin}
                       prevMilestone={
                         milestone.childrenMilestones
                           .flatMap((m) => [m, ...m.childrenMilestones])

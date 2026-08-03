@@ -78,6 +78,7 @@ type ProjectDetailTab = {
   key: VisibleProjectDetailTabKey;
   label: string;
   badge?: TabBadge;
+  isAdminOnly?: boolean;
 };
 
 const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
@@ -96,7 +97,10 @@ const AWAITING_TRADIE_STATUSES = new Set([
 ]);
 
 const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
-  const stageMilestoneMap = new Map<string, { completed: number; total: number }>();
+  const stageMilestoneMap = new Map<
+    string,
+    { completed: number; total: number }
+  >();
   for (const milestone of milestones) {
     const stage = milestone.projectStage;
     if (!stageMilestoneMap.has(stage)) {
@@ -109,7 +113,9 @@ const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
     }
   }
   const totalStages = stageMilestoneMap.size;
-  const completedStages = Array.from(stageMilestoneMap.values()).filter((stageData) => stageData.completed === stageData.total).length;
+  const completedStages = Array.from(stageMilestoneMap.values()).filter(
+    (stageData) => stageData.completed === stageData.total,
+  ).length;
   return {
     totalStages,
     completedStages,
@@ -120,7 +126,10 @@ const generateProjectDetailTabs = (
   project: ProjectDetail,
 ): ProjectDetailTab[] => {
   const now = Date.now();
-  const { totalStages: projectStagesCount, completedStages: completedStagesCount } = calcMilestoneOverviewData(project.milestones);
+  const {
+    totalStages: projectStagesCount,
+    completedStages: completedStagesCount,
+  } = calcMilestoneOverviewData(project.milestones);
   const openMilestones = project.milestones.filter((m) =>
     OPEN_MILESTONE_STATUSES.has(m.status),
   );
@@ -157,7 +166,7 @@ const generateProjectDetailTabs = (
           }
         : {}),
     },
-    { key: "payments", label: "Payments" },
+    { key: "payments", label: "Payments", isAdminOnly: true },
     {
       key: "tradies",
       label: "Tradies",
@@ -183,10 +192,12 @@ const generateProjectDetailTabs = (
 };
 
 export function ProjectTabNavigation({
+  isAdmin,
   project,
   activeTab,
   onTabChange,
 }: {
+  isAdmin: boolean;
   project: ProjectDetail;
   activeTab: VisibleProjectDetailTabKey;
   onTabChange: (tab: VisibleProjectDetailTabKey) => void;
@@ -253,6 +264,10 @@ export function ProjectTabNavigation({
       {projectDetailTabs.map((tab) => {
         const Icon = TabIcons[tab.key];
         const isActive = activeTab === tab.key;
+        if (tab.isAdminOnly && !isAdmin) {
+          return null;
+        }
+
         return (
           <button
             key={tab.key}

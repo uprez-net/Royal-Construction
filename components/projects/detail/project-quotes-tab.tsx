@@ -19,6 +19,7 @@ import { ProjectDetail } from "@/types/project";
 
 interface ProjectQuotesTabProps {
   project: ProjectDetail;
+  isAdmin: boolean;
 }
 
 /**
@@ -31,9 +32,17 @@ function formatUploadedAt(value: Date | string) {
   return Number.isNaN(parsed.getTime()) ? "—" : dataTimeFormat.format(parsed);
 }
 
-export function ProjectQuotesTab({ project }: ProjectQuotesTabProps) {
+export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
   const dispatch = useAppDispatch();
-  const files = project.files;
+  const files = project.files.filter((file) => {
+    const isAdminOnlyFileType = file.filename.toLowerCase().includes("tender") || file.filename.toLowerCase().includes("contract");
+    if (isAdmin && isAdminOnlyFileType) {
+      return true;
+    } else if (!isAdmin && !isAdminOnlyFileType) {
+      return true;
+    }
+    return false;
+  });
   const [query, setQuery] = useState("");
 
   const trimmedQuery = query.trim().toLowerCase();
