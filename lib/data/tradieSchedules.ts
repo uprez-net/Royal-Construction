@@ -238,8 +238,7 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
         });
         await logAction(activityLogEntry);
         await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
-        // const emailContent = generateTradieOutreachEmail(convertToTradieScheduleListItem(schedule));
-        const emailContent = inputs.find(input => input.tradieId === schedule.tradieId)?.emailContent!;
+        const emailContent = inputs.find(input => input.tradieId === schedule.tradieId)!.emailContent;
         const attachments: { name: string; contentBytes: string }[] = [];
         for (const attachment of emailContent.attachments) {
           const blob = await get(attachment.url, { access: "public" });

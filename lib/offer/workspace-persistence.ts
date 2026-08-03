@@ -197,6 +197,9 @@ const jobSchema = z.object({
   dpNumber: z.string().default(""),
   zoning: z.string().default(""),
   buildScope: z.array(z.string()).default([]),
+  bedrooms: z.number().default(0),
+  bathrooms: z.number().default(0),
+  garageSpaces: z.number().default(0),
 });
 
 const costLineSchema = z.object({

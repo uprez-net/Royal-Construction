@@ -20,10 +20,6 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
         ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
         : `Availability Confirmation Required – ${input.projectName}`;
 
-    const primaryAction = input.requiresQuote
-        ? "Submit Quotation"
-        : "Confirm Availability";
-
     const intro = input.requiresQuote
         ? `
       <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
