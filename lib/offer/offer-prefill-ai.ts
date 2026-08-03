@@ -52,6 +52,27 @@ export const offerPrefillSchema = z.object({
     .describe(
       "One short line stating what was inferred and what is still missing/assumed, so the estimator knows what to verify. Empty string if nothing noteworthy.",
     ),
+  numberOfBedrooms: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "The number of bedrooms the client has discussed. 0 if none are mentioned.",
+    ),
+  numberOfBathrooms: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "The number of bathrooms the client has discussed. 0 if none are mentioned.",
+    ),
+  numberOfGarageSpaces: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "The number of garage spaces the client has discussed. 0 if none are mentioned.",
+    ),
 });
 
 export type OfferPrefillDraft = z.infer<typeof offerPrefillSchema>;

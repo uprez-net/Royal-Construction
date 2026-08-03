@@ -161,6 +161,9 @@ export async function generateOfferPrefillFromLead(input: {
     if (d.introText.trim()) draft.introText = d.introText.trim();
     confidence = d.confidence;
     notes = d.notesForEstimator?.trim() ?? "";
+    job.bedrooms = d.numberOfBedrooms;
+    job.bathrooms = d.numberOfBathrooms;
+    job.garageSpaces = d.numberOfGarageSpaces;
   } else {
     notes = `AI drafting was skipped (${ai.message}). Filled contact details only.`;
   }

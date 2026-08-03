@@ -336,7 +336,9 @@ function coverPage(
         ${particular("Build type", job.buildType)}
         ${job.facade ? particular("Façade", job.facade) : ""}
         ${particular("Total build area", formatArea(totalArea))}
-        ${particular("Build scope", job.buildScope.filter((s) => s.trim()).join("; "))}
+        ${particular("Number of bedrooms", job.bedrooms.toString())}
+        ${particular("Number of bathrooms", job.bathrooms.toString())}
+        ${particular("Garage spaces", job.garageSpaces.toString())}
         ${particular("Prepared by", job.preparedBy)}
       </tbody>
     </table>

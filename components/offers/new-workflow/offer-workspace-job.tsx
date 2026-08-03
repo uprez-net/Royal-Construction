@@ -93,7 +93,9 @@ export function JobSetupPanel({
           <Field label="Build type">
             <Input
               value={job.buildType}
-              onChange={(event) => onJobChange({ buildType: event.target.value })}
+              onChange={(event) =>
+                onJobChange({ buildType: event.target.value })
+              }
             />
           </Field>
           <Field label="Façade">
@@ -142,11 +144,40 @@ export function JobSetupPanel({
               }
             />
           </Field>
+          <Field label="Number of bedrooms">
+            <Input
+              placeholder="Auto-filled from lead requirements"
+              value={job.bedrooms}
+              onChange={(event) =>
+                onJobChange({ bedrooms: parseInt(event.target.value) || 0 })
+              }
+            />
+          </Field>
+          <Field label="Number of bathrooms">
+            <Input
+              placeholder="Auto-filled from lead requirements"
+              value={job.bathrooms}
+              onChange={(event) =>
+                onJobChange({ bathrooms: parseInt(event.target.value) || 0 })
+              }
+            />
+          </Field>
+          <Field label="Garage spaces">
+            <Input
+              placeholder="Auto-filled from lead requirements"
+              value={job.garageSpaces}
+              onChange={(event) =>
+                onJobChange({ garageSpaces: parseInt(event.target.value) || 0 })
+              }
+            />
+          </Field>
           <Field label="Council">
             <Input
               placeholder="Auto-filled from Site Location"
               value={job.siteCouncil}
-              onChange={(event) => onJobChange({ siteCouncil: event.target.value })}
+              onChange={(event) =>
+                onJobChange({ siteCouncil: event.target.value })
+              }
             />
           </Field>
           {/* Site particulars. These print on the proposal snapshot and the
@@ -161,7 +192,9 @@ export function JobSetupPanel({
             <Input
               placeholder="e.g. Lot 12 DP 1234567"
               value={job.dpNumber}
-              onChange={(event) => onJobChange({ dpNumber: event.target.value })}
+              onChange={(event) =>
+                onJobChange({ dpNumber: event.target.value })
+              }
             />
           </Field>
           <Field label="Zoning">
@@ -175,13 +208,17 @@ export function JobSetupPanel({
             <Input
               type="date"
               value={job.validUntil}
-              onChange={(event) => onJobChange({ validUntil: event.target.value })}
+              onChange={(event) =>
+                onJobChange({ validUntil: event.target.value })
+              }
             />
           </Field>
           <Field label="Prepared by">
             <Input
               value={job.preparedBy}
-              onChange={(event) => onJobChange({ preparedBy: event.target.value })}
+              onChange={(event) =>
+                onJobChange({ preparedBy: event.target.value })
+              }
             />
           </Field>
           <Field
@@ -189,7 +226,7 @@ export function JobSetupPanel({
             label="Build scope (one feature per line — shown on the proposal snapshot)"
           >
             <Textarea
-              className="min-h-[76px]"
+              className="min-h-19"
               value={job.buildScope.join("\n")}
               placeholder="4 Bedrooms + Study&#10;Double Garage&#10;Alfresco"
               onChange={(event) =>
@@ -299,7 +336,12 @@ function OwnersSection({
           const directors =
             owner.signatories.length > 0
               ? owner.signatories
-              : [createOfferSignatory(newOwnerId(`${owner.id}-dir`), DIRECTOR_SIGNER_CAPACITY)];
+              : [
+                  createOfferSignatory(
+                    newOwnerId(`${owner.id}-dir`),
+                    DIRECTOR_SIGNER_CAPACITY,
+                  ),
+                ];
           return {
             ...owner,
             kind,
@@ -318,7 +360,10 @@ function OwnersSection({
         // than promote the company name to a person.
         const first =
           owner.signatories[0] ??
-          createOfferSignatory(newOwnerId(`${owner.id}-signer`), OWNER_SIGNER_CAPACITY);
+          createOfferSignatory(
+            newOwnerId(`${owner.id}-signer`),
+            OWNER_SIGNER_CAPACITY,
+          );
         const personName = first.name.trim();
         return {
           ...owner,
@@ -413,7 +458,10 @@ function OwnersSection({
               ...owner,
               signatories: [
                 ...owner.signatories,
-                createOfferSignatory(newOwnerId(`${owner.id}-dir`), DIRECTOR_SIGNER_CAPACITY),
+                createOfferSignatory(
+                  newOwnerId(`${owner.id}-dir`),
+                  DIRECTOR_SIGNER_CAPACITY,
+                ),
               ],
             }
           : owner,
@@ -504,7 +552,9 @@ function OwnersSection({
               <Field label="Owner name">
                 <Input
                   value={owner.displayName}
-                  onChange={(event) => setIndividualName(index, event.target.value)}
+                  onChange={(event) =>
+                    setIndividualName(index, event.target.value)
+                  }
                 />
               </Field>
               <Field label="Email">
@@ -548,7 +598,9 @@ function OwnersSection({
                 <Field label="ABN / ACN">
                   <Input
                     value={owner.abn}
-                    onChange={(event) => updateOwner(index, { abn: event.target.value })}
+                    onChange={(event) =>
+                      updateOwner(index, { abn: event.target.value })
+                    }
                   />
                 </Field>
                 <Field
@@ -575,7 +627,8 @@ function OwnersSection({
                     variant="outline"
                     onClick={() => addDirector(index)}
                   >
-                    <Plus className="size-3.5" aria-hidden="true" /> Add director
+                    <Plus className="size-3.5" aria-hidden="true" /> Add
+                    director
                   </Button>
                 </div>
                 {owner.signatories.map((director, sigIndex) => (
@@ -591,7 +644,9 @@ function OwnersSection({
                       aria-label={`Director ${sigIndex + 1} name`}
                       value={director.name}
                       onChange={(event) =>
-                        updateSignatory(index, sigIndex, { name: event.target.value })
+                        updateSignatory(index, sigIndex, {
+                          name: event.target.value,
+                        })
                       }
                     />
                     <Input
@@ -600,7 +655,9 @@ function OwnersSection({
                       aria-label={`Director ${sigIndex + 1} email`}
                       value={director.email}
                       onChange={(event) =>
-                        updateSignatory(index, sigIndex, { email: event.target.value })
+                        updateSignatory(index, sigIndex, {
+                          email: event.target.value,
+                        })
                       }
                     />
                     <Input
@@ -608,7 +665,9 @@ function OwnersSection({
                       aria-label={`Director ${sigIndex + 1} phone`}
                       value={director.phone}
                       onChange={(event) =>
-                        updateSignatory(index, sigIndex, { phone: event.target.value })
+                        updateSignatory(index, sigIndex, {
+                          phone: event.target.value,
+                        })
                       }
                     />
                     {owner.signatories.length > 1 ? (
@@ -633,7 +692,11 @@ function OwnersSection({
   );
 }
 
-function PrefillBanner({ result }: { readonly result: OfferPrefillResult | null }) {
+function PrefillBanner({
+  result,
+}: {
+  readonly result: OfferPrefillResult | null;
+}) {
   if (!result) {
     return null;
   }
@@ -647,7 +710,10 @@ function PrefillBanner({ result }: { readonly result: OfferPrefillResult | null 
   return (
     <div className="grid gap-1.5 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 p-3 text-xs">
       <p className="flex items-center gap-2 font-medium text-foreground">
-        <Sparkles className="size-3.5 text-royal-gold-dark" aria-hidden="true" />
+        <Sparkles
+          className="size-3.5 text-royal-gold-dark"
+          aria-hidden="true"
+        />
         Drafted from {result.sources.join(", ")}
         {result.confidence ? ` · ${result.confidence} confidence` : ""} — review
         the fields before sending.
