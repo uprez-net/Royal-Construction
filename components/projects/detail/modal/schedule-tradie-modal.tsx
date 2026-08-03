@@ -35,6 +35,11 @@ export interface TradieScheduleInputRow {
   scheduledDate?: string;
   durationDays?: number;
   requiresQuote?: boolean;
+  emailContent?: {
+    subject: string;
+    body: string;
+    attachments: { name: string; url: string }[];
+  }
 }
 
 export interface TradieScheduleRowErrors {
@@ -44,6 +49,7 @@ export interface TradieScheduleRowErrors {
   milestoneId?: string;
   scheduledDate?: string;
   durationDays?: string;
+  emailContent?: string;
 }
 
 const createEmptyRow = (): TradieScheduleInputRow => ({
@@ -132,6 +138,10 @@ export default function ScheduleTradieModal({
       errors.durationDays = "Duration must be at least 1 day";
     }
 
+    if (row.emailContent === undefined) {
+      errors.emailContent = "Email content is required";
+    }
+
     return errors;
   }
 
@@ -198,6 +208,7 @@ export default function ScheduleTradieModal({
             durationDays: row.durationDays ?? 1,
             requiresQuote: row.requiresQuote ?? false,
             projectId,
+            emailContent: row.emailContent!,
           })),
         ),
       ).unwrap();

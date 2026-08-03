@@ -85,6 +85,17 @@ export const createTradieScheduleSchema = z.object({
     .default(1),
 
   requiresQuote: z.boolean().optional().default(false),
+
+  emailContent: z.object({
+    subject: z.string().trim().min(1, "Email subject is required"),
+    body: z.string().trim().min(1, "Email body is required"),
+    attachments: z.array(
+      z.object({
+        name: z.string().trim().min(1, "Attachment name is required"),
+        url: z.string().trim().url("Attachment URL must be a valid URL"),
+      })
+    ).default([]),
+  }),
 });
 
 export type CreateTradieScheduleInput = z.infer<typeof createTradieScheduleSchema>;

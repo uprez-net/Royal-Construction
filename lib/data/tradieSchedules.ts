@@ -17,6 +17,7 @@ import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/ty
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
 import { calculateScheduleTotalCost as calculateTotalCost } from "@/utils/calculations";
+import { get } from "@vercel/blob";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
   tradie: Tradie;
@@ -237,11 +238,39 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
         });
         await logAction(activityLogEntry);
         await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
-        const emailContent = generateTradieOutreachEmail(convertToTradieScheduleListItem(schedule));
+        // const emailContent = generateTradieOutreachEmail(convertToTradieScheduleListItem(schedule));
+        const emailContent = inputs.find(input => input.tradieId === schedule.tradieId)?.emailContent!;
+        const attachments: { name: string; contentBytes: string }[] = [];
+        for (const attachment of emailContent.attachments) {
+          const blob = await get(attachment.url, { access: "public" });
+
+          if (!blob?.stream) continue;
+
+          const reader = blob.stream.getReader();
+          const chunks: Uint8Array[] = [];
+
+          while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) break;
+            if (value) chunks.push(value);
+          }
+
+          const buffer = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+
+          attachments.push({
+            name: attachment.name,
+            contentBytes: buffer.toString("base64"),
+          });
+        }
         await sendEmail({
           to: schedule.tradie.email,
           subject: emailContent.subject,
-          body: emailContent.html,
+          body: emailContent.body,
+          attachments: attachments.length > 0 ? attachments.map(att => ({
+            name: att.name,
+            contentBytes: att.contentBytes,
+          })) : undefined,
         });
       }
 

@@ -18,13 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Check,
-  ChevronsDown,
-  Loader2,
-  Square,
-  Trash2,
-} from "lucide-react";
+import { Check, ChevronsDown, Loader2, Square, Trash2 } from "lucide-react";
 import { TRADIE_TYPE_ICONS, TRADIE_TYPES } from "@/constants/tradieTypes";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -35,8 +29,11 @@ import {
   TradieScheduleRowErrors,
 } from "./schedule-tradie-modal";
 import { useAppSelector } from "@/lib/store/hooks";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
+import { generateTradieOutreachEmail } from "@/utils/generate-email";
+import { format } from "date-fns";
+import { CollapsibleEmailContent } from "../tradie-tab/collapsible-email-content";
 
 interface TradieScheduleRowProps {
   row: TradieScheduleInputRow;
@@ -55,9 +52,7 @@ interface TradieScheduleRowProps {
  * trades, so an unguarded `TRADIE_TYPES[key]` renders `undefined`.
  */
 function categoryLabel(category: string) {
-  return (
-    TRADIE_TYPES[category as keyof typeof TRADIE_TYPES] ?? "Other trades"
-  );
+  return TRADIE_TYPES[category as keyof typeof TRADIE_TYPES] ?? "Other trades";
 }
 
 function categoryIcon(category: string) {
@@ -90,6 +85,7 @@ export function TradieScheduleRow({
   onChange,
   onRemove,
 }: TradieScheduleRowProps) {
+  const { activeProject } = useAppSelector((state) => state.projects);
   const { tradiesByCategory, loading } = useAppSelector(
     (state) => state.tradieManagement,
   );
@@ -127,6 +123,45 @@ export function TradieScheduleRow({
   const selectedTradie = selectedCategoryTradies.find(
     (tradie) => tradie.id === row.tradieId,
   );
+
+  useEffect(() => {
+    const generatedEmail = generateTradieOutreachEmail({
+      id: "",
+      abn: "",
+      tradieId: "",
+      tradieName: selectedTradie?.name ?? "Tradie Name",
+      tradeType: selectedTradie?.trade ?? "Tradie Category",
+      projectId: "",
+      projectName: activeProject?.name ?? "Project Name",
+      taskLabel: milestones.find((m) => m.id === row.milestoneId)?.name ?? "Milestone Name",
+      scheduledDate: row.scheduledDate
+        ? format(new Date(row.scheduledDate), "dd MMM yyyy")
+        : format(new Date(), "dd MMM yyyy"),
+      durationDays: row.durationDays ?? 1,
+      status: "COMPLETED",
+      isFavourite: false,
+      note: null,
+      updatedAt: "",
+      requiresQuote: row.requiresQuote ?? false,
+      contact: {
+        email: "",
+        phone: "",
+      },
+      siteManager: {
+        name: activeProject?.siteManager?.name ?? "",
+        email: activeProject?.siteManager?.email ?? "",
+        phone: activeProject?.siteManager?.phone ?? "",
+      },
+    });
+    onChange({
+      ...row,
+      emailContent: {
+        subject: generatedEmail.subject,
+        body: generatedEmail.html,
+        attachments: [],
+      },
+    });
+  }, [row.durationDays, selectedTradie, activeProject, row.milestoneId, row.scheduledDate, row.requiresQuote, milestones]);
 
   return (
     <fieldset className="space-y-4">
@@ -210,13 +245,18 @@ export function TradieScheduleRow({
                               <div className="flex flex-col gap-1">
                                 <span>{categoryLabel(category)}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {count === 1 ? "1 tradie" : `${count} tradies`}
+                                  {count === 1
+                                    ? "1 tradie"
+                                    : `${count} tradies`}
                                 </span>
                               </div>
                             </div>
 
                             {row.tradeCategory === category && (
-                              <Check className="ml-2 size-4" aria-hidden="true" />
+                              <Check
+                                className="ml-2 size-4"
+                                aria-hidden="true"
+                              />
                             )}
                           </div>
                         </CommandItem>
@@ -315,7 +355,10 @@ export function TradieScheduleRow({
                         </div>
 
                         {row.tradieId === tradie.id && (
-                          <Check className="ml-auto size-4" aria-hidden="true" />
+                          <Check
+                            className="ml-auto size-4"
+                            aria-hidden="true"
+                          />
                         )}
                       </CommandItem>
                     ))}
@@ -466,12 +509,12 @@ export function TradieScheduleRow({
         <RadioGroup
           aria-labelledby={fieldId("pricing-label")}
           value={row.requiresQuote ? "quote" : "fixed"}
-          onValueChange={(value) =>
+          onValueChange={(value) => {
             onChange({
               ...row,
               requiresQuote: value === "quote",
-            })
-          }
+            });
+          }}
           className="flex flex-wrap gap-6"
         >
           <div className="flex items-center gap-2">
@@ -489,6 +532,22 @@ export function TradieScheduleRow({
           </div>
         </RadioGroup>
       </div>
+
+      {row.emailContent && (
+        <div className="rounded-lg bg-background p-3">
+          <CollapsibleEmailContent
+            rowId={row.id}
+            emailContent={row.emailContent}
+            onChange={(emailContent) => {
+              onChange({
+                ...row,
+                emailContent,
+              });
+            }}
+          />
+          <FieldError id={errorId("email")} message={errors.emailContent} />
+        </div>
+      )}
     </fieldset>
   );
 }
