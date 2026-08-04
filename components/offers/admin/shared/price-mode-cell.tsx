@@ -10,6 +10,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { FormulaEditor } from "@/components/shared/formula-editor";
+import type { FormulaValidation } from "@/lib/offer/formula-validation";
 import type {
   CostScheduleRow,
   CostScheduleRowBase,
@@ -19,7 +21,12 @@ import type {
 interface PriceModeCellProps {
   row: CostScheduleRow;
   onChange: (next: CostScheduleRow) => void;
-  formulaVariableKeys: string[];
+  formulaVariableKeys: readonly string[];
+  /** Sample values for the live preview readout, keyed by variable name. */
+  formulaSampleValues?: Record<string, number>;
+  /** Streams each formula row's validation result up to the parent so the
+   * Save button can be disabled while any row is invalid. */
+  onFormulaValidationChange?: (rowId: string, result: FormulaValidation) => void;
 }
 
 function stripBase(row: CostScheduleRow): CostScheduleRowBase {
@@ -46,6 +53,8 @@ export function PriceModeCell({
   row,
   onChange,
   formulaVariableKeys,
+  formulaSampleValues,
+  onFormulaValidationChange,
 }: PriceModeCellProps) {
   const base = stripBase(row);
 
@@ -93,28 +102,23 @@ export function PriceModeCell({
       )}
 
       {row.priceMode === "formula" && (
-        <Input
-          list="formula-variables"
+        <FormulaEditor
           value={row.formula}
-          onChange={(e) =>
+          variables={formulaVariableKeys}
+          sampleValues={formulaSampleValues}
+          onValidationChange={(result) =>
+            onFormulaValidationChange?.(row.id, result)
+          }
+          onChange={(formula) =>
             onChange({
               ...base,
               priceMode: "formula",
-              formula: e.target.value,
+              formula,
             })
           }
-          placeholder="e.g. SLAB_AREA * 95"
-          aria-label="Formula"
-          className="w-56 font-mono text-sm"
+          ariaLabel="Formula"
+          className="w-64"
         />
-      )}
-
-      {row.priceMode === "formula" && formulaVariableKeys.length > 0 && (
-        <datalist id="formula-variables">
-          {formulaVariableKeys.map((key) => (
-            <option key={key} value={key} />
-          ))}
-        </datalist>
       )}
 
       <div className="flex items-center gap-1.5 pl-2">

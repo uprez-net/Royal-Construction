@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   saveCostSchedule,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import type { CostScheduleRow } from "@/types/admin-offer-content";
+import { AREA_MEASUREMENT_KEYS } from "@/lib/offer/formula-variables";
 import {
   OfferCardHeading,
   OfferSummaryBadge,
@@ -51,10 +52,40 @@ export function OfferCostScheduleScreen() {
   const error = useAppSelector((s) => s.adminOfferContent.error.costSchedule);
 
   const { rows, rateConstants } = costSchedule;
-  const formulaKeys = useMemo(
-    () => Object.keys(rateConstants),
+
+  // The editor validates formulas against the union of admin-editable rate
+  // constants AND per-offer area measurements. Rate constants have admin-set
+  // values for the live preview; area measurements are unknown at admin time
+  // (they're entered per-offer) so they only appear as valid tokens, with the
+  // editor falling back to `1` for any token missing a sample value.
+  const allFormulaVariables = useMemo(
+    () => [...Object.keys(rateConstants), ...AREA_MEASUREMENT_KEYS],
     [rateConstants],
   );
+  const formulaSampleValues = useMemo<Record<string, number>>(
+    () => ({ ...rateConstants }),
+    [rateConstants],
+  );
+
+  // Track validity per formula row so the Save button stays disabled until
+  // every formula row parses cleanly and references only known variables/
+  // functions. Keyed by row id; cleared when a row leaves formula mode.
+  const [formulaValidity, setFormulaValidity] = useState<
+    Map<string, boolean>
+  >(() => new Map());
+  const handleFormulaValidation = (rowId: string, valid: boolean) => {
+    setFormulaValidity((prev) => {
+      const next = new Map(prev);
+      next.set(rowId, valid);
+      return next;
+    });
+  };
+  const anyFormulaInvalid = useMemo(() => {
+    for (const [, valid] of formulaValidity) {
+      if (!valid) return true;
+    }
+    return false;
+  }, [formulaValidity]);
 
   const phases = useMemo(() => {
     const order: string[] = [];
@@ -164,10 +195,20 @@ export function OfferCostScheduleScreen() {
                   key={phase}
                   phase={phase}
                   items={items}
-                  formulaKeys={formulaKeys}
+                  formulaVariables={allFormulaVariables}
+                  formulaSampleValues={formulaSampleValues}
+                  onFormulaValidation={handleFormulaValidation}
                   onRenamePhase={(next) => renamePhase(phase, next)}
                   onUpdateRow={updateRow}
-                  onRemoveRow={(id) => dispatch(costScheduleRowRemoved(id))}
+                  onRemoveRow={(id) => {
+                    dispatch(costScheduleRowRemoved(id));
+                    setFormulaValidity((prev) => {
+                      if (!prev.has(id)) return prev;
+                      const next = new Map(prev);
+                      next.delete(id);
+                      return next;
+                    });
+                  }}
                   onAddTask={() =>
                     dispatch(costScheduleRowUpserted(newRow(phase)))
                   }
@@ -194,6 +235,7 @@ export function OfferCostScheduleScreen() {
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
+          disabled={anyFormulaInvalid}
           onSave={() => dispatch(saveCostSchedule())}
         />
       </CardFooter>
@@ -204,7 +246,9 @@ export function OfferCostScheduleScreen() {
 interface PhaseGroupProps {
   phase: string;
   items: CostScheduleRow[];
-  formulaKeys: string[];
+  formulaVariables: readonly string[];
+  formulaSampleValues: Record<string, number>;
+  onFormulaValidation: (rowId: string, valid: boolean) => void;
   onRenamePhase: (next: string) => void;
   onUpdateRow: (row: CostScheduleRow) => void;
   onRemoveRow: (id: string) => void;
@@ -214,7 +258,9 @@ interface PhaseGroupProps {
 function PhaseGroup({
   phase,
   items,
-  formulaKeys,
+  formulaVariables,
+  formulaSampleValues,
+  onFormulaValidation,
   onRenamePhase,
   onUpdateRow,
   onRemoveRow,
@@ -273,7 +319,11 @@ function PhaseGroup({
             <PriceModeCell
               row={row}
               onChange={onUpdateRow}
-              formulaVariableKeys={formulaKeys}
+              formulaVariableKeys={formulaVariables}
+              formulaSampleValues={formulaSampleValues}
+              onFormulaValidationChange={(rowId, result) =>
+                onFormulaValidation(rowId, result.valid)
+              }
             />
           </TableCell>
           <TableCell>
