@@ -73,6 +73,11 @@ import {
   generateOfferPrefillFromLead,
   type OfferPrefillResult,
 } from "@/lib/data/offer-prefill";
+import {
+  reevaluateFormulaCostLines,
+  type AdminOfferPrefill,
+} from "@/lib/offer/admin-offer-prefill";
+import type { RateConstantKey } from "@/lib/offer/formula-variables";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
@@ -180,27 +185,47 @@ function applyPrefillPatch(
 
 // Embed with a leadId to persist to the DB (ADR 0002). The standalone
 // /offers/new-workflow demo route passes none and stays in-memory.
-export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
+export function NewOfferWorkspace({
+  leadId,
+  adminPrefill,
+}: {
+  readonly leadId?: number;
+  readonly adminPrefill?: AdminOfferPrefill;
+}) {
   // Lazy-seed validUntil to now + 30 days (same calendar day on the server pass
   // and hydration, so it matches) so a brand-new offer is never born expired.
   const [job, setJob] = useState<OfferWorkspaceJob>(() => ({
     ...INITIAL_OFFER_JOB,
     validUntil: defaultOfferValidUntil(),
+    ...(adminPrefill?.buildScope.length
+      ? { buildScope: adminPrefill.buildScope }
+      : {}),
   }));
   const [lines, setLines] =
-    useState<readonly OfferWorkspaceCostLine[]>(INITIAL_COST_LINES);
+    useState<readonly OfferWorkspaceCostLine[]>(
+      adminPrefill?.costLines ?? INITIAL_COST_LINES,
+    );
   const [allowances, setAllowances] =
-    useState<readonly OfferWorkspaceScopeItem[]>(INITIAL_ALLOWANCES);
+    useState<readonly OfferWorkspaceScopeItem[]>(
+      adminPrefill?.allowances ?? INITIAL_ALLOWANCES,
+    );
   const [exclusions, setExclusions] =
-    useState<readonly OfferWorkspaceScopeItem[]>(INITIAL_EXCLUSIONS);
-  const [draft, setDraft] = useState<OfferDocumentDraft>(INITIAL_OFFER_DRAFT);
+    useState<readonly OfferWorkspaceScopeItem[]>(
+      adminPrefill?.exclusions ?? INITIAL_EXCLUSIONS,
+    );
+  const [draft, setDraft] = useState<OfferDocumentDraft>(
+    adminPrefill?.draft ?? INITIAL_OFFER_DRAFT,
+  );
+  const rateConstantsRef = useRef<
+    Partial<Record<RateConstantKey, number>>
+  >(adminPrefill?.rateConstants ?? {});
   const [overrideReason, setOverrideReason] = useState("");
   const [selectedPriceInput, setSelectedPriceInput] = useState("");
   const [standardPriceInput, setStandardPriceInput] = useState("");
   const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState("");
   const [status, setStatus] = useState<OfferWorkspaceStatus>("pending");
   const [areaCalculator, setAreaCalculator] = useState<OfferAreaCalculator>(
-    INITIAL_AREA_CALCULATOR,
+    adminPrefill?.areaCalculator ?? INITIAL_AREA_CALCULATOR,
   );
   const [workspacePricingSettings, setWorkspacePricingSettings] =
     useState<OfferWorkspacePricingSettings>(DEFAULT_WORKSPACE_PRICING_SETTINGS);
@@ -266,6 +291,22 @@ export function NewOfferWorkspace({ leadId }: { readonly leadId?: number }) {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Re-evaluate formula-mode cost lines whenever the project measurements (job
+  // floor areas / area calculator lineal metres & tile area) change. Only
+  // touches lines that carry a `formula` string — fixed/none lines are
+  // untouched, so manual edits are never clobbered.
+  useEffect(() => {
+    setLines((prev) => {
+      if (!prev.some((l) => l.formula)) return prev;
+      return reevaluateFormulaCostLines(
+        prev,
+        rateConstantsRef.current,
+        job,
+        areaCalculator,
+      );
+    });
+  }, [job, areaCalculator]);
 
   useEffect(() => {
     if (saveState !== "saving") return;

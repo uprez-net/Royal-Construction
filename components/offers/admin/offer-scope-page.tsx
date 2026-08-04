@@ -20,6 +20,7 @@ import {
 } from "@/lib/store/slices/adminOfferContentSlice";
 import type {
   AllowanceCategory,
+  ExclusionKind,
   OfferAllowance,
   OfferExclusion,
 } from "@/types/admin-offer-content";
@@ -50,6 +51,7 @@ function newExclusion(): OfferExclusion {
     name: "",
     description: "",
     variationRule: "",
+    exclusionKind: "excluded",
   };
 }
 
@@ -278,6 +280,23 @@ function ExclusionRow({
           onChange={(e) => onChange({ ...exclusion, name: e.target.value })}
           aria-label="Exclusion name"
         />
+      </label>
+      <label>
+        <FieldLabel>Kind</FieldLabel>
+        <Select
+          value={exclusion.exclusionKind}
+          onValueChange={(value) =>
+            onChange({ ...exclusion, exclusionKind: value as ExclusionKind })
+          }
+        >
+          <SelectTrigger aria-label="Exclusion kind" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="excluded">Excluded</SelectItem>
+            <SelectItem value="owner_supplied">Owner supplied</SelectItem>
+          </SelectContent>
+        </Select>
       </label>
       <label>
         <FieldLabel>Description</FieldLabel>

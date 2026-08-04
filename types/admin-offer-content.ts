@@ -2,6 +2,8 @@
 // Every consumer (server page, client components, Redux slice, server
 // actions, Zod schemas) imports from here — never redeclare these.
 
+import type { RateConstantKey } from "@/lib/offer/formula-variables";
+
 // ---- Build Scope ----
 // Array of lines that make up the default scope-of-works text block.
 export type BuildScopeLines = string[];
@@ -11,8 +13,9 @@ export type PriceMode = "none" | "fixed" | "formula";
 
 export interface CostScheduleRowBase {
   id: string; // stable client-side id (uuid), NOT the same as mapId
-  phase: string; // e.g. "GENERAL REQUIREMENTS"
-  task: string; // task description
+  taskKey: string; // stable slug joining admin rows to OFFER_SEQUENCE_MAPPINGS
+  phase: string; // admin-only display grouping (no runtime counterpart)
+  task: string; // task description (maps to OfferWorkspaceCostLine.itemName)
   mapId?: number; // optional "MAP #" reference into the pricing/estimation system
   defaultInclude: boolean; // maps to the "Included" toggle
 }
@@ -24,7 +27,11 @@ export type CostScheduleRow =
 
 export interface CostScheduleData {
   rows: CostScheduleRow[];
-  formulaVariables: Record<string, number>; // e.g. { SLAB_AREA: 325, DROP_EDGE_LM: 104, ... }
+  // Admin-editable rate constants (brick price, slab rate, etc.). Seed values
+  // come from DEFAULT_RATE_CONSTANTS in lib/offer/formula-variables. Project
+  // measurements (SLAB_AREA, GROUND_FLOOR_SQM, ...) are NEVER stored here —
+  // they're entered per-offer in Job setup / the Area Calculator.
+  rateConstants: Partial<Record<RateConstantKey, number>>;
 }
 
 // ---- Offer Scope ----
@@ -38,11 +45,17 @@ export interface OfferAllowance {
   variationRule: string;
 }
 
+// Distinguishes a hard exclusion from an owner-supplied item — mirrors the
+// runtime OfferWorkspaceScopeItem.category split ("exclusion" vs
+// "owner_selection"), which drives which bucket an item renders under.
+export type ExclusionKind = "excluded" | "owner_supplied";
+
 export interface OfferExclusion {
   id: string;
   name: string;
   description: string;
   variationRule: string;
+  exclusionKind: ExclusionKind;
 }
 
 export interface OfferScopeData {
@@ -52,6 +65,8 @@ export interface OfferScopeData {
 
 // ---- Offer Content ----
 export interface OfferContentData {
+  headline: string;
+  introText: string;
   inclusions: string[]; // one-pager inclusion bullets
   termsAndConditions: string; // default T&C text
 }
@@ -66,7 +81,12 @@ export interface AdminOfferContent {
 
 export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
   buildScope: [],
-  costSchedule: { rows: [], formulaVariables: {} },
+  costSchedule: { rows: [], rateConstants: {} },
   offerScope: { allowances: [], exclusions: [] },
-  offerContent: { inclusions: [], termsAndConditions: "" },
+  offerContent: {
+    headline: "",
+    introText: "",
+    inclusions: [],
+    termsAndConditions: "",
+  },
 };

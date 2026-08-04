@@ -16,7 +16,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   costScheduleRowUpserted,
   costScheduleRowRemoved,
-  formulaVariableChanged,
+  rateConstantChanged,
   saveCostSchedule,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import type { CostScheduleRow } from "@/types/admin-offer-content";
@@ -32,6 +32,7 @@ import { SaveChangesButton } from "./shared/save-changes-button";
 function newRow(phase: string): CostScheduleRow {
   return {
     id: crypto.randomUUID(),
+    taskKey: `admin-${crypto.randomUUID().slice(0, 8)}`,
     phase,
     task: "",
     mapId: undefined,
@@ -49,10 +50,10 @@ export function OfferCostScheduleScreen() {
   const saving = useAppSelector((s) => s.adminOfferContent.saving.costSchedule);
   const error = useAppSelector((s) => s.adminOfferContent.error.costSchedule);
 
-  const { rows, formulaVariables } = costSchedule;
+  const { rows, rateConstants } = costSchedule;
   const formulaKeys = useMemo(
-    () => Object.keys(formulaVariables),
-    [formulaVariables],
+    () => Object.keys(rateConstants),
+    [rateConstants],
   );
 
   const phases = useMemo(() => {
@@ -177,9 +178,9 @@ export function OfferCostScheduleScreen() {
         </div>
 
         <FormulaVariablesPanel
-          variables={formulaVariables}
+          variables={rateConstants}
           onChange={(key, value) =>
-            dispatch(formulaVariableChanged({ key, value }))
+            dispatch(rateConstantChanged({ key, value }))
           }
         />
 

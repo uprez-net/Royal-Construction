@@ -2,6 +2,7 @@ import type { OfferWorkspacePricingSettings } from "@/lib/offer/workspace-pricin
 import {
   OFFER_SEQUENCE_MAPPINGS,
   getOfferSequenceMappingByTask,
+  slugifyTaskName,
   type OfferSequenceMapping,
 } from "@/lib/offer/workspace-sequence-mapping";
 import {
@@ -140,6 +141,11 @@ export type OfferWorkspaceCostLine = {
   readonly costExGst: number;
   readonly includedInContract: boolean;
   readonly sourceReference?: string;
+  // When the originating admin CostScheduleRow was priceMode:"formula", the
+  // formula string is carried here so the workspace can re-evaluate
+  // costExGst client-side once project measurements are entered. Undefined
+  // for fixed/none rows — they have no formula to re-evaluate.
+  readonly formula?: string;
 };
 
 export type OfferWorkspaceScopeItem = {
@@ -983,11 +989,7 @@ export function getIncludedOfferTenderLineItems(
   );
 }
 
-function slugifyTaskName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
-function inferOfferStageCode(taskName: string): OfferStageCode {
+export function inferOfferStageCode(taskName: string): OfferStageCode {
   const lowerName = taskName.toLowerCase();
 
   if (

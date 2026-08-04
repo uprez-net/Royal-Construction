@@ -2,24 +2,25 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AREA_MEASUREMENT_KEYS } from "@/lib/offer/formula-variables";
 import type { CostScheduleData } from "@/types/admin-offer-content";
 
-interface FormulaVariablesPanelProps {
-  variables: CostScheduleData["formulaVariables"];
+interface RateConstantsPanelProps {
+  variables: CostScheduleData["rateConstants"];
   onChange: (key: string, value: number) => void;
 }
 
 export function FormulaVariablesPanel({
   variables,
   onChange,
-}: FormulaVariablesPanelProps) {
+}: RateConstantsPanelProps) {
   const entries = Object.entries(variables);
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4">
       <div className="mb-3 flex items-center justify-between">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Formula variables
+          Rate constants
         </h4>
         <span className="text-xs text-muted-foreground">
           Referenced by{" "}
@@ -28,7 +29,7 @@ export function FormulaVariablesPanel({
       </div>
       {entries.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-background px-4 py-3 text-center text-sm text-muted-foreground">
-          No formula variables defined yet.
+          No rate constants defined yet.
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -51,6 +52,22 @@ export function FormulaVariablesPanel({
           ))}
         </div>
       )}
+      <div className="mt-3 border-t border-border/70 pt-3">
+        <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+          Area measurements available in formulas (per-offer, not editable
+          here):
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {AREA_MEASUREMENT_KEYS.map((key) => (
+            <code
+              key={key}
+              className="rounded-md border border-dashed border-border bg-background px-2 py-0.5 font-mono text-[11px] text-muted-foreground"
+            >
+              {key}
+            </code>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

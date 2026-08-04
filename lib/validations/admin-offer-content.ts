@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RATE_CONSTANT_KEYS } from "@/lib/offer/formula-variables";
 
 // Mirrors types/admin-offer-content.ts exactly. Used by server actions
 // (validate before writing) and by the data layer (validate what comes
@@ -8,6 +9,7 @@ export const buildScopeSchema = z.array(z.string());
 
 const costScheduleRowBaseSchema = z.object({
   id: z.string().min(1),
+  taskKey: z.string().min(1),
   phase: z.string(),
   task: z.string(),
   mapId: z
@@ -34,7 +36,7 @@ export const costScheduleRowSchema = z.discriminatedUnion("priceMode", [
 
 export const costScheduleDataSchema = z.object({
   rows: z.array(costScheduleRowSchema),
-  formulaVariables: z.record(z.string(), z.number()),
+  rateConstants: z.record(z.enum(RATE_CONSTANT_KEYS), z.number()),
 });
 
 export const allowanceCategorySchema = z.enum([
@@ -52,11 +54,14 @@ export const offerAllowanceSchema = z.object({
   variationRule: z.string(),
 });
 
+export const exclusionKindSchema = z.enum(["excluded", "owner_supplied"]);
+
 export const offerExclusionSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
   description: z.string(),
   variationRule: z.string(),
+  exclusionKind: exclusionKindSchema,
 });
 
 export const offerScopeDataSchema = z.object({
@@ -65,6 +70,8 @@ export const offerScopeDataSchema = z.object({
 });
 
 export const offerContentDataSchema = z.object({
+  headline: z.string(),
+  introText: z.string(),
   inclusions: z.array(z.string()),
   termsAndConditions: z.string(),
 });

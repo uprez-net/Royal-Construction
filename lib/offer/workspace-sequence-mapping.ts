@@ -1,4 +1,5 @@
 export type OfferSequenceMapping = {
+  readonly taskKey: string;
   readonly taskName: string;
   readonly buildingSequenceTasks: readonly string[];
   readonly offerTenderWording: string;
@@ -97,6 +98,7 @@ export const OFFER_SEQUENCE_MAPPINGS: readonly OfferSequenceMapping[] =
       tradesToBook,
       milestoneStages,
     ]) => ({
+      taskKey: slugifyTaskName(taskName),
       taskName,
       buildingSequenceTasks,
       offerTenderWording,
@@ -104,6 +106,14 @@ export const OFFER_SEQUENCE_MAPPINGS: readonly OfferSequenceMapping[] =
       milestoneStages,
     }),
   );
+
+// Stable slug derived from a task name. Used as the join key between admin
+// CostScheduleRow.taskKey and OfferSequenceMapping.taskKey — stable across
+// display-copy edits to taskName. Exported so the seed script and the admin
+// prefill can reference the same key generation.
+export function slugifyTaskName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
 
 // The de-duplicated, alphabetically sorted union of every building-sequence step
 // named across the whole task→sequence catalog. This is the "list of available

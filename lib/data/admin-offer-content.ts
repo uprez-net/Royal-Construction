@@ -62,7 +62,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
 function coerceCostSchedule(value: unknown): CostScheduleData {
   const parsed = costScheduleDataSchema.safeParse(value);
   if (parsed.success) return parsed.data;
-  return { rows: [], formulaVariables: {} };
+  return { rows: [], rateConstants: {} };
 }
 
 function coerceOfferScope(value: unknown): OfferScopeData {
@@ -74,7 +74,7 @@ function coerceOfferScope(value: unknown): OfferScopeData {
 function coerceOfferContent(value: unknown): OfferContentData {
   const parsed = offerContentDataSchema.safeParse(value);
   if (parsed.success) return parsed.data;
-  return { inclusions: [], termsAndConditions: "" };
+  return { headline: "", introText: "", inclusions: [], termsAndConditions: "" };
 }
 
 /**

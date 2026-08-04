@@ -171,12 +171,12 @@ const slice = createSlice({
       state.dirty.costSchedule = true;
       state.error.costSchedule = null;
     },
-    formulaVariableChanged(
+    rateConstantChanged(
       state,
       action: PayloadAction<{ key: string; value: number }>,
     ) {
-      state.data.costSchedule.formulaVariables = {
-        ...state.data.costSchedule.formulaVariables,
+      state.data.costSchedule.rateConstants = {
+        ...state.data.costSchedule.rateConstants,
         [action.payload.key]: action.payload.value,
       };
       state.dirty.costSchedule = true;
@@ -214,6 +214,16 @@ const slice = createSlice({
     },
     inclusionsChanged(state, action: PayloadAction<string[]>) {
       state.data.offerContent.inclusions = action.payload;
+      state.dirty.offerContent = true;
+      state.error.offerContent = null;
+    },
+    headlineChanged(state, action: PayloadAction<string>) {
+      state.data.offerContent.headline = action.payload;
+      state.dirty.offerContent = true;
+      state.error.offerContent = null;
+    },
+    introTextChanged(state, action: PayloadAction<string>) {
+      state.data.offerContent.introText = action.payload;
       state.dirty.offerContent = true;
       state.error.offerContent = null;
     },
@@ -269,12 +279,14 @@ export const {
   buildScopeChanged,
   costScheduleRowUpserted,
   costScheduleRowRemoved,
-  formulaVariableChanged,
+  rateConstantChanged,
   allowanceUpserted,
   allowanceRemoved,
   exclusionUpserted,
   exclusionRemoved,
   inclusionsChanged,
+  headlineChanged,
+  introTextChanged,
   termsAndConditionsChanged,
   resetSectionError,
 } = slice.actions;
