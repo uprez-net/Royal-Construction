@@ -890,3 +890,13 @@ model LeadEmails {
   @@index([leadId, sentAt(sort: Desc)])
   @@index([sentAt(sort: Desc)])
 }
+
+model AdminOfferContent {
+  id             String   @id @default(uuid())
+  buildScope     String[]
+  costSchedule   Json
+  offerScope     Json
+  offerContent   Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

@@ -3,10 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
-import { Plus } from "lucide-react";
+import { LucidePencilLine, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-export function OfferHeader() {
+export function OfferHeader({ isAdmin }: { isAdmin: boolean }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
 
   return (
     <Card className="overflow-hidden border-teal-100 bg-linear-to-br from-teal-50 via-emerald-50 to-green-100 shadow-sm">
@@ -24,6 +26,12 @@ export function OfferHeader() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {isAdmin && (
+              <Button variant="outline" onClick={() => router.push("/offers/admin")}>
+                <LucidePencilLine className="mr-2 size-4" />
+                Edit Offer Pre-Fill Content
+              </Button>
+            )}
             <Button
               onClick={() => dispatch(openModal({ type: "createOfferFile" }))}
             >

@@ -8,6 +8,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import OfferPageSkeleton from "./loading";
 import type { Metadata } from "next";
+import { getUserByClerkIdCached } from "@/lib/data/user";
+import { auth } from "@clerk/nextjs/server";
 
 export const metadata: Metadata = {
   title: "Offers Management",
@@ -18,14 +20,15 @@ export const metadata: Metadata = {
 async function OfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.
   await connection();
-  const [offerKPIs, offers] = await Promise.all([
+  const [offerKPIs, offers, user] = await Promise.all([
     getOfferKPIsCached(),
     getOffersCached(1, 10),
+    auth().then(({ userId }) => userId ? getUserByClerkIdCached(userId) : null),
   ]);
 
   return (
     <div className="space-y-6">
-      <OfferHeader />
+      <OfferHeader isAdmin={user?.role === "ADMIN"} />
       <OfferKPI
         activeOffers={{
           total: offerKPIs.allOffers.total,
