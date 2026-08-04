@@ -17,8 +17,8 @@ import {
 import { cn } from "@/lib/utils";
 import { ClientPayload } from "@/utils/validators/files";
 import { upload } from "@vercel/blob/client";
-import { ChevronDown, Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { ChevronDown, Info, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface EmailContent {
@@ -44,9 +44,89 @@ export function CollapsibleEmailContent({
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
+  const [iframeSize, setIframeSize] = useState<{
+    contentW: number;
+    contentH: number;
+    scale: number;
+  } | null>(null);
 
   const emailRenderIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
+  const iframeObserverRef = useRef<MutationObserver | null>(null);
+
+  const MAX_PREVIEW_HEIGHT = 560;
+  const MIN_SCALE = 0.70;
+
+  /** Scale the iframe down so the entire email is visible without scrolling
+   * inside the frame. The email is laid out at its natural width inside the
+   * iframe (so nothing wraps/overflows horizontally), then the iframe is
+   * visually shrunk via `transform: scale()` to fit the available panel width
+   * and the max preview height. The wrapper reserves only the scaled
+   * footprint so the rest of the modal layout stays compact. */
+  const syncIframeFit = useCallback(() => {
+    const iframe = emailRenderIframeRef.current;
+    const container = previewContainerRef.current;
+    const doc = iframe?.contentDocument;
+    if (!iframe || !container || !doc) return;
+
+    const contentW = Math.max(
+      doc.documentElement.scrollWidth,
+      doc.body.scrollWidth,
+      0,
+    );
+    const contentH = Math.max(
+      doc.documentElement.scrollHeight,
+      doc.body.scrollHeight,
+      0,
+    );
+    if (contentW <= 0 || contentH <= 0) return;
+
+    // Render the iframe at its natural content width so the email's own
+    // layout is respected, then scale it down visually.
+    iframe.style.width = `${contentW}px`;
+    iframe.style.height = `${contentH}px`;
+
+    const availW = container.clientWidth;
+    const scale = Math.min(
+      availW / contentW,
+      MAX_PREVIEW_HEIGHT / contentH,
+      1,
+    );
+
+    const clamped = Math.max(scale, MIN_SCALE);
+    setIframeSize({ contentW, contentH, scale: clamped });
+  }, []);
+
+  const handleIframeLoad = useCallback(() => {
+    const doc = emailRenderIframeRef.current?.contentDocument;
+    if (!doc) return;
+
+    syncIframeFit();
+
+    iframeObserverRef.current?.disconnect();
+    const observer = new MutationObserver(syncIframeFit);
+    iframeObserverRef.current = observer;
+    observer.observe(doc.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+    });
+  }, [syncIframeFit]);
+
+  // Recompute the fit when the panel itself resizes (modal width changes,
+  // viewport resize, etc.).
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => syncIframeFit());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [syncIframeFit]);
+
+  useEffect(() => () => iframeObserverRef.current?.disconnect(), []);
 
   const {
     files: queuedFiles,
@@ -161,6 +241,10 @@ export function CollapsibleEmailContent({
     );
     uploadControllersRef.current = {};
 
+    iframeObserverRef.current?.disconnect();
+    iframeObserverRef.current = null;
+    setIframeSize(null);
+
     resetQueue();
     setIframeKey((key) => key + 1); // force iframe remount to discard in-place edits
   };
@@ -196,10 +280,10 @@ export function CollapsibleEmailContent({
       </CollapsibleTrigger>
 
       <CollapsibleContent className="space-y-3 border-t px-3 py-3">
-        <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
           <Label
             htmlFor={`subject-${rowId}`}
-            className="text-xs text-muted-foreground"
+            className="shrink-0 text-xs text-muted-foreground"
           >
             Subject
           </Label>
@@ -212,34 +296,66 @@ export function CollapsibleEmailContent({
           />
         </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Body</Label>
-          <iframe
-            key={iframeKey}
-            ref={emailRenderIframeRef}
-            srcDoc={emailContent.body}
-            title="Email Preview"
-            sandbox="allow-same-origin allow-scripts"
-            className="w-3xl h-240 rounded-md border bg-background no-scrollbar"
-          />
-        </div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_18rem]">
+          {/* Email preview — primary panel */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-xs text-muted-foreground">Email preview</Label>
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80">
+                <Info className="size-3" aria-hidden="true" />
+                Click to edit — changes are saved when you collapse or save.
+              </span>
+            </div>
+            <div
+              ref={previewContainerRef}
+              className="relative w-full overflow-hidden rounded-md border bg-background"
+              style={{
+                height: iframeSize
+                  ? Math.ceil(iframeSize.contentH * iframeSize.scale)
+                  : MAX_PREVIEW_HEIGHT,
+              }}
+            >
+              <iframe
+                key={iframeKey}
+                ref={emailRenderIframeRef}
+                srcDoc={emailContent.body}
+                title="Email Preview"
+                sandbox="allow-same-origin allow-scripts"
+                onLoad={handleIframeLoad}
+                style={{
+                  transformOrigin: "top center",
+                  transform: iframeSize
+                    ? `scale(${iframeSize.scale})`
+                    : undefined,
+                }}
+                className="block border-0 bg-background"
+              />
+            </div>
+          </div>
 
-        <UploadDropzone
-          label="Attach Files"
-          summary={
-            queuedFiles.length > 0
-              ? `${queuedFiles.length} file${queuedFiles.length === 1 ? "" : "s"} selected (${completedUploadCount} uploaded)`
-              : `Select files to upload (max ${maxFiles})`
-          }
-          helperText="Files upload directly from the browser and stay visible below while they sync."
-          files={queuedFiles}
-          accept="image/*"
-          maxFiles={maxFiles}
-          disabled={isSubmitting}
-          isLoading={isSubmitting}
-          onFilesSelected={addFiles}
-          removeFile={removeFile}
-        />
+          {/* Attachments — compact supporting panel */}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Attachments</Label>
+            <UploadDropzone
+              label=""
+              summary={
+                queuedFiles.length > 0
+                  ? `${queuedFiles.length} file${queuedFiles.length === 1 ? "" : "s"} · ${completedUploadCount} uploaded`
+                  : `Drag or click · max ${maxFiles}`
+              }
+              files={queuedFiles}
+              accept="image/*"
+              maxFiles={maxFiles}
+              disabled={isSubmitting}
+              isLoading={isSubmitting}
+              onFilesSelected={addFiles}
+              removeFile={removeFile}
+              dropzoneClassName="p-3"
+              listClassName="p-2 space-y-1.5"
+              itemClassName="p-2"
+            />
+          </div>
+        </div>
 
         <div className="flex items-center justify-end gap-2 pt-1">
           <Button
