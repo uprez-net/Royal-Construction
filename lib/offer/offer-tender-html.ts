@@ -293,6 +293,53 @@ export function legalDocShell(body: string): string {
   .sig .lines { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 22px; }
   .sig .field { border-top: 1px solid #333; padding-top: 4px; font-size: 9px; color: ${MUTED}; text-transform: uppercase; letter-spacing: 1px; }
   .sigspace { height: 46px; }
+  .build-scope {
+    border: 1px solid #8d7b57;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 13px;
+  }
+
+  .build-scope .top {
+    background: #d8b15b;
+    color: #000;
+    text-align: center;
+    font-weight: bold;
+    padding: 6px 10px;
+    border-bottom: 1px solid #8d7b57;
+  }
+
+  .build-scope .amt {
+    background: #f4edd6;
+    padding: 10px 14px;
+  }
+
+  .scope-list {
+    margin: 0;
+    padding-left: 18px;
+
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    column-gap: 32px;
+    row-gap: 4px;
+
+    position: relative;
+  }
+
+  .scope-list::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -10px;
+    bottom: -10px;
+    width: 1px;
+    background: #c7b68c;
+    transform: translateX(-50%);
+  }
+
+  .scope-list li {
+    line-height: 1.35;
+    break-inside: avoid;
+  }
 </style></head><body>${body}</body></html>`;
 }
 
@@ -319,6 +366,16 @@ function coverPage(
       <div class="party"><div class="role">The ${ownerLabel}</div><div class="who">${ownerWho}</div><div style="color:${MUTED};font-size:10px;margin-top:4px;">Site Location: ${esc(job.siteAddress)}</div></div>
     </div>
     <div class="sum"><div class="top">Contract Sum (including GST)</div><div class="amt">${money(customerPrice.selectedContractValueIncGst)}</div></div>
+    <div class="build-scope">
+      <div class="top">Build Scope</div>
+      <div class="amt">
+        <ul class="scope-list">
+          ${job.buildScope
+            .map(item => `<li>${esc(item.trim())}</li>`)
+            .join("")}
+        </ul>
+      </div>
+    </div>
     ${inlineOwnerDetailRows && inlineOwnerDetailRows.length > 0
       ? `<h2>Owner Details</h2>
     <table><thead><tr><th>Owner</th><th>Current Location</th><th>Email</th><th>Phone</th></tr></thead><tbody>${inlineOwnerDetailRows.join("")}</tbody></table>`
@@ -336,9 +393,6 @@ function coverPage(
         ${particular("Build type", job.buildType)}
         ${job.facade ? particular("Façade", job.facade) : ""}
         ${particular("Total build area", formatArea(totalArea))}
-        ${particular("Number of bedrooms", job.bedrooms.toString())}
-        ${particular("Number of bathrooms", job.bathrooms.toString())}
-        ${particular("Garage spaces", job.garageSpaces.toString())}
         ${particular("Prepared by", job.preparedBy)}
       </tbody>
     </table>
