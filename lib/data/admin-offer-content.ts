@@ -58,6 +58,46 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
     offerContent: coerceOfferContent(row.offerContent),
   };
 }
+/**
+ * Read the application-wide singleton AdminOfferContent row, creating it with
+ * defaults on first access if none exists. The only place that casts Prisma's
+ * Json fields into the typed shapes — and it validates before trusting.
+ *
+ * This version does not use caching, so it can be used in scripts that seed or
+ * update the row without risk of reading stale data from a cache.
+ *
+ * @returns The singleton AdminOfferContent row, with Json fields coerced to
+ * their typed shapes.
+ */
+export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent> {
+  const row = await prisma.adminOfferContent.findFirst({
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!row) {
+    const created = await prisma.adminOfferContent.create({
+      data: {
+        buildScope: EMPTY_ADMIN_OFFER_CONTENT.buildScope,
+        costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
+        offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
+        offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return {
+      buildScope: created.buildScope,
+      costSchedule: coerceCostSchedule(created.costSchedule),
+      offerScope: coerceOfferScope(created.offerScope),
+      offerContent: coerceOfferContent(created.offerContent),
+    };
+  }
+
+  return {
+    buildScope: row.buildScope,
+    costSchedule: coerceCostSchedule(row.costSchedule),
+    offerScope: coerceOfferScope(row.offerScope),
+    offerContent: coerceOfferContent(row.offerContent),
+  };
+}
 
 function coerceCostSchedule(value: unknown): CostScheduleData {
   const parsed = costScheduleDataSchema.safeParse(value);

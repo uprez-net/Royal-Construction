@@ -28,11 +28,11 @@ import type {
   OfferExclusion,
 } from "@/types/admin-offer-content";
 import {
-  getAdminOfferContent,
   updateBuildScope,
   updateCostSchedule,
   updateOfferScope,
   updateOfferContent,
+  getAdminOfferContentNonCache,
 } from "@/lib/data/admin-offer-content";
 
 async function seed() {
@@ -114,7 +114,7 @@ async function seed() {
   // Ensure the singleton row exists, then write each section via the Phase 1
   // update helpers so the payload goes through the same Zod validation as any
   // admin-authored save.
-  await getAdminOfferContent();
+  await getAdminOfferContentNonCache();
   await updateBuildScope(payload.buildScope);
   await updateCostSchedule(payload.costSchedule);
   await updateOfferScope(payload.offerScope);
