@@ -6,6 +6,7 @@ import {
 import { Metadata } from "next";
 import { Suspense } from "react";
 import ApprovalDashboardSkeleton from "./loading";
+import { connection } from "next/server";
 
 export const metadata: Metadata = {
   title: "Admin Tradie Approvals",
@@ -24,11 +25,14 @@ export const metadata: Metadata = {
 // touches the DB. Always-fresh approval data is the right behaviour for this
 // screen anyway.
 async function AdminApprovalsRender() {
-  const kpiData = await fetchApprovalKPI();
-  const approvalsData = await fetchTradieApprovals({
-    page: 1,
-    pageSize: 10,
-  });
+  await connection();
+  const [kpiData, approvalsData] = await Promise.all([
+    fetchApprovalKPI(),
+    fetchTradieApprovals({
+      page: 1,
+      pageSize: 10,
+    })
+  ]);
 
   return (
     <TradieApprovalClient kpiData={kpiData} approvalsData={approvalsData} />
