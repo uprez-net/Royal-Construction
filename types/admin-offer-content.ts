@@ -4,6 +4,9 @@
 
 import type { RateConstantKey } from "@/lib/offer/formula-variables";
 
+// Singleton cache tag shared by every read/write of this row, so any save
+// invalidates the cached read used by the server page.
+export const ADMIN_OFFER_CONTENT_TAG = "admin-offer-content";
 // ---- Build Scope ----
 // Array of lines that make up the default scope-of-works text block.
 export type BuildScopeLines = string[];

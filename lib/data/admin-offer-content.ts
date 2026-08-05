@@ -1,3 +1,4 @@
+'use server';
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
@@ -7,6 +8,7 @@ import {
   type CostScheduleData,
   type OfferContentData,
   type OfferScopeData,
+  ADMIN_OFFER_CONTENT_TAG,
   EMPTY_ADMIN_OFFER_CONTENT,
 } from "@/types/admin-offer-content";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -15,10 +17,6 @@ import {
   offerScopeDataSchema,
   offerContentDataSchema,
 } from "@/lib/validations/admin-offer-content";
-
-// Singleton cache tag shared by every read/write of this row, so any save
-// invalidates the cached read used by the server page.
-export const ADMIN_OFFER_CONTENT_TAG = "admin-offer-content";
 
 /**
  * Read the application-wide singleton AdminOfferContent row, creating it with

@@ -7,6 +7,7 @@ import {
   type CostScheduleData,
   type OfferScopeData,
   type OfferContentData,
+  ADMIN_OFFER_CONTENT_TAG,
 } from "@/types/admin-offer-content";
 import {
   buildScopeSchema,
@@ -15,7 +16,6 @@ import {
   offerContentDataSchema,
 } from "@/lib/validations/admin-offer-content";
 import {
-  ADMIN_OFFER_CONTENT_TAG,
   updateBuildScope,
   updateCostSchedule,
   updateOfferScope,
