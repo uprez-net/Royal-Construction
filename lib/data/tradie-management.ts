@@ -25,8 +25,7 @@ import { calculateTrend, dateFormat } from "@/utils/formatters";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
 import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
-
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
+import { getAllAdminUsersIds } from "./user";
 
 /**
  * Creates a new tradie record and returns a mapped tradie row.
@@ -210,7 +209,7 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
                 priceChangeDate: dateFormat.format(new Date()),
             });
 
-            await triggerNotification([ADMIN_USER_ID], notificationPayload);
+            await triggerNotification(await getAllAdminUsersIds(), notificationPayload);
         })
     } catch (error) {
         console.error("Error updating tradie price:", error);
@@ -267,7 +266,7 @@ export async function deleteTradie(input: DeleteInput) {
                 tradiePhone: tradie.phone,
                 requestedBy: user.name,
             });
-            await triggerNotification([ADMIN_USER_ID], notificationPayload);
+            await triggerNotification(await getAllAdminUsersIds(), notificationPayload);
         });
     } catch (error) {
         console.error("Error deleting tradie:", error);
@@ -424,7 +423,7 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
                 incidentDate: new Date().toISOString(),
             });
 
-            await triggerNotification([ADMIN_USER_ID], notificationPayload);
+            await triggerNotification(await getAllAdminUsersIds(), notificationPayload);
         });
 
         return incident;

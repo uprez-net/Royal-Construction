@@ -10,7 +10,7 @@ import { currency, dateFormat } from "@/utils/formatters";
 import { after } from "next/server"
 import { TradieScheduleListItem } from "@/types/project";
 import { auth } from "@clerk/nextjs/server";
-import { getUserByClerkIdCached } from "./user";
+import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
 import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
@@ -24,8 +24,6 @@ interface TradieScheduleWithRelations extends TradieSchedule {
   project: Project & { siteManager: User | null };
   milestone: Milestone | null;
 }
-
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
 
 /**
  * Converts a Prisma tradie schedule with its related entities into a
@@ -93,7 +91,7 @@ const userHasAccessToSchedule = async (projectId: string) => {
   if (!project) {
     throw new Error("Project not found");
   }
-  if (project.siteManagerId !== user.id && user.id !== ADMIN_USER_ID) {
+  if (project.siteManagerId !== user.id && user.role !== "ADMIN") {
     throw new Error("User does not have access to this schedule");
   }
 
@@ -374,7 +372,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
         await logAction(activityLogEntry);
-        await triggerNotification([ADMIN_USER_ID], notificationPayload);
+        await triggerNotification(await getAllAdminUsersIds(), notificationPayload);
       }
       else if (updates.status === TradieScheduleStatus.QUOTE_RECEIVED) {
         const activityLogEntry = createActivityLogEntry("tradieScheduleQuoted", {

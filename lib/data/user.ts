@@ -239,3 +239,16 @@ export async function resolveUserIdsToClerkIds(userIds: Array<string | null | un
         throw error;
     }
 }
+
+export async function getAllAdminUsersIds(): Promise<string[]> {
+    try {
+        const adminUsers = await prisma.user.findMany({
+            where: { role: Role.ADMIN },
+            select: { id: true },
+        });
+        return adminUsers.map(user => user.id);
+    } catch (error) {
+        console.error("Error fetching all admin user Clerk IDs:", error);
+        throw error;
+    }
+}
