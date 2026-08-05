@@ -104,7 +104,7 @@ export function EmailLeadContextSummary({
         {details.map(([label, value]) => (
           <DetailRow key={label} label={label} value={value} />
         ))}
-        {notes && (
+        {/* {notes && (
           <Section
             style={{
               borderTop: details.length ? '1px solid #E2E8F0' : undefined,
@@ -137,7 +137,7 @@ export function EmailLeadContextSummary({
               {notes}
             </Text>
           </Section>
-        )}
+        )} */}
       </Section>
     </Section>
   );
