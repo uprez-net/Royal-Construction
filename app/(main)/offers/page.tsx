@@ -20,15 +20,14 @@ export const metadata: Metadata = {
 async function OfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.
   await connection();
-  const [offerKPIs, offers, user] = await Promise.all([
+  const [offerKPIs, offers] = await Promise.all([
     getOfferKPIsCached(),
     getOffersCached(1, 10),
-    auth().then(({ userId }) => userId ? getUserByClerkIdCached(userId) : null),
   ]);
 
   return (
     <div className="space-y-6">
-      <OfferHeader isAdmin={user?.role === "ADMIN"} />
+      <OfferHeader />
       <OfferKPI
         activeOffers={{
           total: offerKPIs.allOffers.total,

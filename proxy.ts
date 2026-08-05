@@ -28,7 +28,7 @@ const isPublicRoute = createRouteMatcher([
 ])
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
-const isAdminRoute = createRouteMatcher(["/admin-approvals(.*)"])
+const isAdminRoute = createRouteMatcher(["/admin(.*)"])
 
 export default clerkMiddleware(async (auth, request) => {
   // Dev auth routes always pass through — they create the session
