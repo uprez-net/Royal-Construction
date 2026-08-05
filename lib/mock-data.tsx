@@ -88,12 +88,6 @@ export const navigationItems: NavItem[] = [
   //   icon: <MessagesSquare className="size-4" />,
   // },
   {
-    slug: "team",
-    label: "Team Management",
-    icon: <Users className="size-4" />,
-    checkAdmin: true,
-  },
-  {
     slug: "admin",
     label: "Admin",
     icon: <UserCog className="size-4" />,

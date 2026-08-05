@@ -7,6 +7,7 @@ import {
   LucideIcon,
   PenLine,
   Sparkles,
+  Users,
 } from "lucide-react";
 import type { Metadata } from "next";
 
@@ -38,6 +39,13 @@ export default function AdminPage() {
       href: "/admin/admin-approvals",
       accent: "emerald",
     },
+    {
+      label: "Manage Team Members",
+      description: "Add, remove, and manage team members and their roles.",
+      icon: Users,
+      href: "/admin/manage-team",
+      accent: "green",
+    }
   ];
 
   const accentStyles: Record<
@@ -53,6 +61,11 @@ export default function AdminPage() {
       icon: "bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white",
       ring: "group-hover:border-emerald-300",
       glow: "bg-emerald-500/10",
+    },
+    green: {
+      icon: "bg-green-100 text-green-700 group-hover:bg-green-600 group-hover:text-white",
+      ring: "group-hover:border-green-300",
+      glow: "bg-green-500/10",
     },
   };
 
