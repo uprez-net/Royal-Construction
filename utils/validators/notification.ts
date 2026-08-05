@@ -32,6 +32,21 @@ export const notificationSchemas = {
         assignedTo: z.string(),
     }),
 
+    leadFollowupDue: z.object({
+        leadId: z.string(),
+        customerName: z.string(),
+        followupDate: z.string().optional(),
+        followupTime: z.string().optional(),
+    }),
+
+    leadMeetingReview: z.object({
+        leadId: z.string(),
+        customerName: z.string(),
+        meetingDate: z.string().optional(),
+        meetingTime: z.string().optional(),
+        meetingMode: z.string().optional(),
+    }),
+
     projectCreated: z.object({
         projectId: z.string(),
         projectName: z.string(),

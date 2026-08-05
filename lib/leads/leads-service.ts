@@ -1,7 +1,7 @@
 "use client";
 import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadsStats, LeadStage } from './types';
 import { fetchJson } from '@/utils/fetch';
-import { findLeadById, getAllLeads, getAnalyticsData, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
+import { findLeadById, getAllLeads, getAnalyticsData, getFollowupStats, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
 import { sendCampaignEmail } from '../data/email-ad-hock';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
@@ -63,6 +63,10 @@ export async function fetchLead(id: number): Promise<Lead | null> {
 
 export async function fetchLeadsStats(): Promise<LeadsStats> {
   return getLeadsStats();
+}
+
+export async function fetchFollowupStats() {
+  return getFollowupStats();
 }
 
 // export async function FollowupCalendarCreation(leadName: string, leadEmail: string, followupDate: string, followupTime: string): Promise<string | null> {

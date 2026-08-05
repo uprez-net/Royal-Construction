@@ -14,6 +14,10 @@
       "schedule": "0 22 * * *"
     },
     {
+      "path": "/api/cron/meeting-review-reminder",
+      "schedule": "0 22 * * *"
+    },
+    {
       "path": "/api/cron/blob-storage-cleanup",
       "schedule": "0 22 * * 0"
     }

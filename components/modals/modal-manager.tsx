@@ -38,6 +38,9 @@ import AddMilestoneModal from "../projects/detail/add-milestone-modal";
 import AddMilestonePictureModal from "../projects/detail/add-milestone-picture";
 import { CreateOfferFileModal } from "../offers/create-offer-modal";
 import { AddLeadModal } from "../leads/modal-ui/add-lead-modal";
+import { FollowupPromptModal } from "../leads/modal-ui/followup-prompt-modal";
+import { MeetingReviewModal } from "../leads/modal-ui/meeting-review-modal";
+import { LeadStatsDrilldownModal } from "../leads/modal-ui/lead-stats-drilldown-modal";
 import AddTradieModal from "../tradie-management/modal/add-tradie-modal";
 import { SafeTradieApproval, TradieDetails, TradieRow } from "@/types/tradie";
 import DeleteTradieModal from "../tradie-management/modal/delete-tradie-modal";
@@ -52,6 +55,7 @@ import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal"
 import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
 import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
 import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
+import { LeadStage } from "../leads";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -364,6 +368,26 @@ export function ModalManager() {
           }}
         />
       );
+    case "followUpPrompt": {
+      const leadId = Number(modal.payload?.leadId ?? 0);
+      if (!leadId) return null;
+      return <FollowupPromptModal leadId={leadId} onClose={handleClose} />;
+    }
+    case "meetingReview": {
+      const leadId = Number(modal.payload?.leadId ?? 0);
+      if (!leadId) return null;
+      return <MeetingReviewModal leadId={leadId} onClose={handleClose} />;
+    }
+    case "leadStatsDrilldown": {
+      const title = String(modal.payload?.title ?? "Lead details");
+      const stage = Array.isArray(modal.payload?.stage)
+        ? (modal.payload?.stage as LeadStage[])
+        : typeof modal.payload?.stage === "string"
+          ? [String(modal.payload.stage) as LeadStage]
+          : undefined;
+      const filterTiming = typeof modal.payload?.filterTiming === "string" ? modal.payload.filterTiming : undefined;
+      return <LeadStatsDrilldownModal title={title} stage={stage} filterTiming={filterTiming} onClose={handleClose} />;
+    }
     case "addTradie":
       return <AddTradieModal open onClose={handleClose} />;
     case "rateTradie":

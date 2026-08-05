@@ -508,6 +508,7 @@ model User {
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
   assignedLeads       Lead[]           @relation("LeadAssignee")
+  leadHistories       LeadHistory[]    @relation("LeadHistoryAuthor")
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
   createdOffers       Offer[]          @relation("OfferCreatedBy")
@@ -554,6 +555,11 @@ model Lead {
   followupDate  DateTime?
   followupTime  String?
   followupNotes String?   @db.Text
+  meetingDate   DateTime?
+  meetingTime   String?
+  meetingMode   String?
+  followupReminderSentAt DateTime?
+  meetingReminderSentAt  DateTime?
 
   lostReason String?
 
@@ -602,6 +608,9 @@ model LeadHistory {
   leadId Int
   lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
+  authorId String?
+  author   User? @relation("LeadHistoryAuthor", fields: [authorId], references: [id])
+
   action String
   detail String @db.Text
 
@@ -612,6 +621,7 @@ model LeadHistory {
   createdAt DateTime @default(now())
 
   @@index([leadId])
+  @@index([authorId])
   @@index([type])
 }
 

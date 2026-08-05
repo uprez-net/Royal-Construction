@@ -18,6 +18,10 @@ const isAdminApprovalNotification = (url: string): boolean => {
   return false;
 };
 
+const isLeadActionNotification = (url: string): boolean => {
+  return url.includes("action=followup") || url.includes("action=meetingReview");
+};
+
 const getApprovalIdAndTypeFromUrl = (
   url: string,
 ): { approvalId: string; approvalType: string } => {
@@ -30,6 +34,22 @@ const getApprovalIdAndTypeFromUrl = (
   return {
     approvalId: params.get("approvalId")!,
     approvalType: params.get("approvalType")!,
+  };
+};
+
+const getLeadActionFromUrl = (
+  url: string,
+): { leadId: string; action: "followup" | "meetingReview" } => {
+  const queryString = (url.startsWith("/") ? url.slice(1) : url).replaceAll(
+    "&amp;",
+    "&",
+  );
+
+  const params = new URLSearchParams(queryString);
+  const action = params.get("action") === "meetingReview" ? "meetingReview" : "followup";
+  return {
+    leadId: params.get("leadId")!,
+    action,
   };
 };
 
@@ -63,6 +83,7 @@ export function NotificationItem({
   const createdAt = n.createdAt ? new Date(n.createdAt) : null;
   const isBusy = busyId === n.id;
   const isAdminApproval = url ? isAdminApprovalNotification(url) : false;
+  const isLeadAction = url ? isLeadActionNotification(url) : false;
 
   const handleAdminApprovalAction = () => {
     if (isAdminApproval) {
@@ -77,6 +98,17 @@ export function NotificationItem({
         }),
       );
     }
+  };
+
+  const handleLeadAction = () => {
+    if (!url) return;
+    const { leadId, action } = getLeadActionFromUrl(url);
+    dispatch(
+      openModal({
+        type: action === "followup" ? "followUpPrompt" : "meetingReview",
+        payload: { leadId },
+      }),
+    );
   };
 
   return (
@@ -204,6 +236,20 @@ export function NotificationItem({
                   >
                     <SquareArrowOutUpRight />
                     Details
+                  </Button>
+                )}
+                {isLeadAction && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-sm border-[#C6923A] text-[#C6923A] hover:bg-[#F7F4EE] hover:text-[#8B6420] flex items-center gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLeadAction();
+                    }}
+                  >
+                    <SquareArrowOutUpRight />
+                    Open
                   </Button>
                 )}
               </div>

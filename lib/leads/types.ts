@@ -44,6 +44,11 @@ export interface HistoryItem {
   action: string;
   detail: string;
   type: 'system' | 'call' | 'email' | 'referral';
+  author?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
 }
 
 export interface LeadRichTextDocument {
@@ -103,9 +108,14 @@ export interface Lead {
   notes: string;
   notesDoc?: LeadRichTextDocument | null;
   noteAnnotations?: LeadNoteAnnotation[];
+  meetingDate?: string | null;
+  meetingTime?: string | null;
+  meetingMode?: string | null;
   followupDate: string | null;
   followupTime: string | null;
   followupNotes: string;
+  followupReminderSentAt?: string | null;
+  meetingReminderSentAt?: string | null;
   lostReason?: string;
   history: HistoryItem[];
   created: string;

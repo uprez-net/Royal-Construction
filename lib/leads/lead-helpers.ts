@@ -317,6 +317,64 @@ export function buildFollowupHistoryEntry(
   };
 }
 
+export function buildFollowupConfirmedHistoryEntry(): HistoryItem {
+  const now = new Date();
+  return {
+    action: "Follow-up confirmed",
+    detail: "The follow-up was completed and acknowledged.",
+    type: "system",
+    date: now.toISOString().slice(0, 10),
+    time: now.toTimeString().slice(0, 5),
+  };
+}
+
+export function buildFollowupRescheduledHistoryEntry(nextDate: string, nextTime: string): HistoryItem {
+  return {
+    action: "Follow-up rescheduled",
+    detail: `Follow-up moved to ${nextDate} ${nextTime}`,
+    type: "system",
+    date: nextDate,
+    time: nextTime,
+  };
+}
+
+export function buildFollowupNotRequiredHistoryEntry(): HistoryItem {
+  const now = new Date();
+  return {
+    action: "Follow-up not required",
+    detail: "No additional follow-up is required for this lead.",
+    type: "system",
+    date: now.toISOString().slice(0, 10),
+    time: now.toTimeString().slice(0, 5),
+  };
+}
+
+export function buildMeetingDidNotTakePlaceHistoryEntry(): HistoryItem {
+  const now = new Date();
+  return {
+    action: "Meeting did not take place",
+    detail: "The scheduled meeting did not occur and needs rescheduling.",
+    type: "system",
+    date: now.toISOString().slice(0, 10),
+    time: now.toTimeString().slice(0, 5),
+  };
+}
+
+export function buildMeetingReviewedHistoryEntry(input: {
+  meetingMode: string;
+  discussionNotes: string;
+  buildScope: string;
+}): HistoryItem {
+  const now = new Date();
+  return {
+    action: "Meeting reviewed",
+    detail: `Mode: ${input.meetingMode}. Discussion: ${input.discussionNotes || "No discussion notes"}. Scope: ${input.buildScope || "No build scope"}.`,
+    type: "system",
+    date: now.toISOString().slice(0, 10),
+    time: now.toTimeString().slice(0, 5),
+  };
+}
+
 /* ── Stage helpers ────────────────────────────────────── */
 
 export function isLostStage(stage: LeadStage): boolean {

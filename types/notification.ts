@@ -82,6 +82,18 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/leads?query=${encodeURIComponent(data.customerName)}`,
   }),
 
+  leadFollowupDue: (data) => ({
+    title: `Follow-up Due: LED-#${data.leadId} - ${data.customerName}`,
+    message: `Follow-up is due for ${data.customerName}`,
+    url: `/leads?leadId=${data.leadId}&action=followup`,
+  }),
+
+  leadMeetingReview: (data) => ({
+    title: `Meeting Review: LED-#${data.leadId} - ${data.customerName}`,
+    message: `Review the meeting outcome for ${data.customerName}`,
+    url: `/leads?leadId=${data.leadId}&action=meetingReview`,
+  }),
+
   projectCreated: (data) => ({
     title: `Project Created: ${data.projectName}`,
     message: `${data.projectName} has been created`,

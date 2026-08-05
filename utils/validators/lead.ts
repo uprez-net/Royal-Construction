@@ -198,10 +198,23 @@ export const updateLeadSchema = z.object({
   notesDoc: leadRichTextDocumentSchema.nullable().optional(),
   annotationsToCreate: z.array(leadNoteAnnotationInputSchema).optional(),
 
+  meetingDate: nullableDateInput.describe("Meeting date").optional(),
+  meetingTime: nullableTrimmedString.optional(),
+  meetingMode: nullableTrimmedString.optional(),
+  
+  followupReminderSentAt: z.iso.datetime().optional(),
+  meetingReminderSentAt: z.iso.datetime().optional(),
+
   followupDate: nullableDateInput.describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
   followupNotes: nullableTrimmedString.optional(),
+
+  followupResponseOutcome: z.enum(["yes", "reschedule", "notRequired"]).optional(),
+
+  meetingReviewOutcome: z.enum(["yes", "no"]).optional(),
+  discussionNotes: nullableTrimmedString.optional(),
+  buildScope: nullableTrimmedString.optional(),
 
   lostReason: nullableTrimmedString.optional(),
 
@@ -239,6 +252,13 @@ export const createLeadSchema = z.object({
   type: typeArraySchema.optional(),
 
   notes: nullableTrimmedString.optional(),
+
+  meetingDate: nullableDateInput.describe("Meeting date").optional(),
+  meetingTime: nullableTrimmedString.optional(),
+  meetingMode: nullableTrimmedString.optional(),
+
+  followupReminderSentAt: z.iso.datetime().optional(),
+  meetingReminderSentAt: z.iso.datetime().optional(),
 
   followupDate: nullableDateInput.describe("Follow-up date").optional(),
 

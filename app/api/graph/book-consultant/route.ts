@@ -155,7 +155,14 @@ async function upsertBookingNotes({
   if (existingLead) {
     const updatedHistory = upsertNoteHistory(existingLead.history, noteEntry);
     const updatedNotes = notes.length > 0 ? notes : existingLead.notes;
-    await updateLead(existingLead.id, { notes: updatedNotes, stage: 'Meeting Scheduled', history: updatedHistory });
+    await updateLead(existingLead.id, {
+      notes: updatedNotes,
+      stage: 'Meeting Scheduled',
+      meetingDate: now.toISOString(),
+      meetingTime: toTimeOnly(now),
+      meetingMode: 'Online',
+      history: updatedHistory,
+    });
     return;
   }
 
@@ -171,6 +178,9 @@ async function upsertBookingNotes({
       budget: 'Not Discussed',
       type: ['Not Specified'],
       notes,
+      meetingDate: now.toISOString(),
+      meetingTime: toTimeOnly(now),
+      meetingMode: 'Online',
       followupNotes: '',
       urgent: false,
       history: [

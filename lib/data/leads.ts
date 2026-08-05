@@ -35,6 +35,13 @@ import { getUserByClerkIdCached } from "./user";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import { getAllEmailThreads } from "@/utils/email-parser";
 import { EMAIL_FOOTER_HTML, EMAIL_HEADER_HTML } from '@/constants/email-artifacts';
+import {
+  buildFollowupConfirmedHistoryEntry,
+  buildFollowupNotRequiredHistoryEntry,
+  buildFollowupRescheduledHistoryEntry,
+  buildMeetingDidNotTakePlaceHistoryEntry,
+  buildMeetingReviewedHistoryEntry,
+} from "@/lib/leads/lead-helpers";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
@@ -210,12 +217,33 @@ function normalizeSearch(search?: string) {
   return search?.trim() ?? "";
 }
 
+async function resolveActingUserId(): Promise<string | null> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return null;
+
+    const user = await getUserByClerkIdCached(userId);
+    return user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface PaginatedLeadsResult {
   items: UiLead[];
   page: number;
   limit: number;
   totalCount: number;
   totalPages: number;
+}
+
+export interface FollowupStats {
+  totalFollowUps: number;
+  pendingFollowUps: number;
+  upcomingFollowUps: number;
+  totalMeetings: number;
+  pendingMeetings: number;
+  upcomingMeetings: number;
 }
 
 /**
@@ -229,7 +257,7 @@ export async function getAllLeads(): Promise<UiLead[]> {
   try {
     const leads = await prisma.lead.findMany({
       include: {
-        history: { orderBy: { actionDate: "asc" } },
+        history: { orderBy: { actionDate: "asc" }, include: { author: true } },
         chatSessions: true,
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
@@ -359,7 +387,7 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
     const leads = await prisma.lead.findMany({
       where: finalWhere,
       include: {
-        history: { orderBy: { actionDate: "asc" } },
+        history: { orderBy: { actionDate: "asc" }, include: { author: true } },
         chatSessions: true,
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
@@ -411,7 +439,8 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
     where: { id },
     include: {
       history: {
-        orderBy: { actionDate: "asc" }
+        orderBy: { actionDate: "asc" },
+        include: { author: true }
       },
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
@@ -439,7 +468,7 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
   const lead = await prisma.lead.findUnique({
     where: { id },
     include: {
-      history: { orderBy: { actionDate: "asc" } },
+      history: { orderBy: { actionDate: "asc" }, include: { author: true } },
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
@@ -593,6 +622,7 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
+  const actingUserId = await resolveActingUserId();
 
   const historyInput = input.history ?? [];
   const historyCreate = historyInput.map((entry) => {
@@ -606,14 +636,15 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       detail,
       type,
       actionDate,
+      ...(actingUserId ? { authorId: actingUserId } : {}),
     };
   });
 
   if (historyCreate.length === 0) {
     if (input.stage !== 'In Follow-up') {
-      historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date() });
+      historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date(), ...(actingUserId ? { authorId: actingUserId } : {}) });
     } else {
-      historyCreate.push({ action: "Lead created with Follow-up set", detail: "Lead manually created and Also Assign the Follow-up Stage", type: "SYSTEM", actionDate: new Date() });
+      historyCreate.push({ action: "Lead created with Follow-up set", detail: "Lead manually created and Also Assign the Follow-up Stage", type: "SYSTEM", actionDate: new Date(), ...(actingUserId ? { authorId: actingUserId } : {}) });
     }
   }
 
@@ -645,7 +676,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   }
 
   const duplicateLeadInclude = {
-    history: { orderBy: { actionDate: "asc" } },
+    history: { orderBy: { actionDate: "asc" }, include: { author: true } },
     chatSessions: true,
     assignedUser: { select: { id: true, name: true, email: true } },
     noteAnnotations: { orderBy: { createdAt: "desc" } },
@@ -684,9 +715,14 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         budget: input.budget,
         type: input.type ?? [],
         notes: input.notes,
+        meetingDate: input.meetingDate,
+        meetingTime: input.meetingTime,
+        meetingMode: input.meetingMode,
         followupDate: input.followupDate,
         followupTime: input.followupTime,
         followupNotes: input.followupNotes,
+        followupReminderSentAt: input.followupReminderSentAt,
+        meetingReminderSentAt: input.meetingReminderSentAt,
         lostReason: input.lostReason,
         urgent: input.urgent ?? false,
         history: { create: historyCreate },
@@ -786,6 +822,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
 export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
   const mappedStage = input.stage ? stageToPrismaMap[input.stage] : undefined;
   const updateData: Prisma.LeadUpdateInput = {};
+  const actingUserId = await resolveActingUserId();
 
   if (input.name !== undefined) updateData.name = String(input.name);
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
@@ -807,9 +844,14 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
   if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
+  if (input.meetingDate !== undefined) updateData.meetingDate = input.meetingDate;
+  if (input.meetingTime !== undefined) updateData.meetingTime = input.meetingTime;
+  if (input.meetingMode !== undefined) updateData.meetingMode = input.meetingMode;
   if (input.followupDate !== undefined) updateData.followupDate = input.followupDate;
   if (input.followupTime !== undefined) updateData.followupTime = input.followupTime;
   if (input.followupNotes !== undefined) updateData.followupNotes = input.followupNotes;
+  if (input.followupReminderSentAt !== undefined) updateData.followupReminderSentAt = input.followupReminderSentAt;
+  if (input.meetingReminderSentAt !== undefined) updateData.meetingReminderSentAt = input.meetingReminderSentAt;
   if (input.lostReason !== undefined) updateData.lostReason = input.lostReason;
   if (input.urgent !== undefined) updateData.urgent = Boolean(input.urgent);
 
@@ -824,7 +866,60 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     };
   }
 
-  if ((input.history?.length ?? 0) > 0 || annotationInputs.length > 0) {
+  const existingLead = await prisma.lead.findUnique({ where: { id } });
+
+  if (input.followupResponseOutcome === "yes") {
+    updateData.followupDate = null;
+    updateData.followupTime = null;
+    updateData.followupReminderSentAt = new Date();
+    if (existingLead?.stage === "IN_FOLLOW_UP") {
+      updateData.stage = "CONTACTED";
+    }
+  } else if (input.followupResponseOutcome === "notRequired") {
+    updateData.followupDate = null;
+    updateData.followupTime = null;
+    updateData.followupReminderSentAt = new Date();
+    if (existingLead?.stage === "IN_FOLLOW_UP") {
+      updateData.stage = "CONTACTED";
+    }
+  } else if (input.followupResponseOutcome === "reschedule") {
+    const nextFollowupDate = new Date();
+    nextFollowupDate.setDate(nextFollowupDate.getDate() + 1);
+    updateData.followupDate = nextFollowupDate;
+    updateData.followupTime = input.followupTime ?? existingLead?.followupTime ?? null;
+    updateData.followupReminderSentAt = null;
+    updateData.stage = "IN_FOLLOW_UP";
+  }
+
+  if (input.meetingReviewOutcome === "no") {
+    updateData.meetingReminderSentAt = new Date();
+  } else if (input.meetingReviewOutcome === "yes") {
+    updateData.meetingMode = input.meetingMode ?? existingLead?.meetingMode ?? null;
+    updateData.meetingReminderSentAt = new Date();
+  }
+
+  if ((input.history?.length ?? 0) > 0 || annotationInputs.length > 0 || input.followupResponseOutcome || input.meetingReviewOutcome) {
+    const responseHistory = input.followupResponseOutcome === "yes"
+      ? [buildFollowupConfirmedHistoryEntry()]
+      : input.followupResponseOutcome === "notRequired"
+        ? [buildFollowupNotRequiredHistoryEntry()]
+        : input.followupResponseOutcome === "reschedule"
+          ? [buildFollowupRescheduledHistoryEntry(
+            (updateData.followupDate as Date | null | undefined)?.toISOString().slice(0, 10) ?? existingLead?.followupDate?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+            String(updateData.followupTime ?? existingLead?.followupTime ?? ""),
+          )]
+          : [];
+
+    const meetingHistory = input.meetingReviewOutcome === "no"
+      ? [buildMeetingDidNotTakePlaceHistoryEntry()]
+      : input.meetingReviewOutcome === "yes"
+        ? [buildMeetingReviewedHistoryEntry({
+          meetingMode: String(updateData.meetingMode ?? existingLead?.meetingMode ?? input.meetingMode ?? "Unknown"),
+          discussionNotes: String(input.discussionNotes ?? ""),
+          buildScope: String(input.buildScope ?? ""),
+        })]
+        : [];
+
     const annotationHistory = annotationInputs.map((annotation) => {
       const now = new Date();
       return {
@@ -837,22 +932,22 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     });
 
     updateData.history = {
-      create: [...(input.history ?? []), ...annotationHistory].map((h) => ({
+      create: [...(input.history ?? []), ...responseHistory, ...meetingHistory, ...annotationHistory].map((h) => ({
         action: h.action,
         detail: h.detail || "",
         type: h.type ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL") : "SYSTEM",
         actionDate: new Date(`${h.date}T${h.time || '00:00'}`),
+        ...(actingUserId ? { authorId: actingUserId } : {}),
       })),
     };
   }
   // console.log('checking the Input Data', input);
   // console.log('222Updating lead with data:', updateData);
-  const existingLead = await prisma.lead.findUnique({ where: { id } });
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
     include: {
-      history: { orderBy: { actionDate: "asc" } },
+      history: { orderBy: { actionDate: "asc" }, include: { author: true } },
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
@@ -961,6 +1056,47 @@ export async function getLeadsStats(): Promise<LeadsStats> {
     conversion: Number(stats?.won ?? 0),
     pendingFollowup: Number(stats?.pendingFollowup ?? 0),
     lost: Number(stats?.lost ?? 0),
+  };
+}
+
+export async function getFollowupStats(): Promise<FollowupStats> {
+  const timeZone = "Australia/Sydney";
+  const sydneyNow = toZonedTime(new Date(), timeZone);
+  const todayStart = startOfDay(sydneyNow);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+  const todayUTC = fromZonedTime(todayStart, timeZone);
+  const tomorrowUTC = fromZonedTime(tomorrowStart, timeZone);
+
+  const [stats] = await prisma.$queryRaw<
+    {
+      totalFollowUps: bigint;
+      pendingFollowUps: bigint;
+      upcomingFollowUps: bigint;
+      totalMeetings: bigint;
+      pendingMeetings: bigint;
+      upcomingMeetings: bigint;
+    }[]
+  >`
+    SELECT
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP') AS "totalFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED') AS "totalMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
+    FROM "Lead"
+    WHERE "isArchived" = false
+  `;
+
+  return {
+    totalFollowUps: Number(stats?.totalFollowUps ?? 0),
+    pendingFollowUps: Number(stats?.pendingFollowUps ?? 0),
+    upcomingFollowUps: Number(stats?.upcomingFollowUps ?? 0),
+    totalMeetings: Number(stats?.totalMeetings ?? 0),
+    pendingMeetings: Number(stats?.pendingMeetings ?? 0),
+    upcomingMeetings: Number(stats?.upcomingMeetings ?? 0),
   };
 }
 

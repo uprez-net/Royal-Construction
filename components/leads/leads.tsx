@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/select";
 import { useSearchParams } from "next/navigation";
 import TableView from "./views/table-view";
-import FollowupsView from "./views/followups-view";
+import { FollowupsView } from "./views";
 import AnalyticsView from "./views/analytics-view";
 import { useUser } from "@clerk/nextjs";
 
@@ -54,6 +54,7 @@ export default function Leads() {
   const {
     leads,
     stats,
+    followupStats,
     analyticsData,
     pageInfo,
     loading,
@@ -167,14 +168,8 @@ export default function Leads() {
         page: 1,
         limit: 50,
         status: [
-          "New",
-          "Contacted",
-          "Qualified",
-          "Quoted",
-          "Negotiating",
           "Meeting Scheduled",
           "In Follow-up",
-          "No Response",
         ].join(","),
       });
     } else if (tab === "table") {
@@ -511,6 +506,7 @@ export default function Leads() {
                 <FollowupsView
                   loading={loadingLeads}
                   leads={leads}
+                  followupStats={followupStats}
                   onLeadUpdate={updateLeadInList}
                   onLeadDelete={removeLeadFromList}
                   showToast={showToast}
