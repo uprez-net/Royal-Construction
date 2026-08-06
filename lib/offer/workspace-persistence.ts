@@ -200,6 +200,7 @@ const jobSchema = z.object({
   bedrooms: z.number().default(0),
   bathrooms: z.number().default(0),
   garageSpaces: z.number().default(0),
+  balcony: z.number().default(0),
 });
 
 const costLineSchema = z.object({

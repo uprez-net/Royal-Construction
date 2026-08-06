@@ -31,16 +31,26 @@ export function FollowupPromptModal({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    fetchLead(leadId)
-      .then((result) => {
-        if (!cancelled) setLead(result);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+
+    const timeout = setTimeout(() => {
+      setLoading(true);
+
+      fetchLead(leadId)
+        .then((result) => {
+          if (!cancelled) {
+            setLead(result);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        });
+    }, 0);
+
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
     };
   }, [leadId]);
 

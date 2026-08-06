@@ -8,14 +8,11 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import OfferPageSkeleton from "./loading";
 import type { Metadata } from "next";
-import { getUserByClerkIdCached } from "@/lib/data/user";
-import { auth } from "@clerk/nextjs/server";
 
 export const metadata: Metadata = {
   title: "Offers Management",
   description: "Manage and track your construction project offers effectively.",
 };
-
 
 async function OfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.
@@ -66,7 +63,7 @@ async function OfferPageClient() {
 export default function OfferPage() {
   return (
     <Suspense fallback={<OfferPageSkeleton />}>
-          <OfferPageClient />
+      <OfferPageClient />
     </Suspense>
   );
 }

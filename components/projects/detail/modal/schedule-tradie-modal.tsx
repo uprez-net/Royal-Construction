@@ -1,6 +1,6 @@
 import { useAppDispatch } from "@/lib/store/hooks";
 import { createBulkTradieScheduleForProject } from "@/lib/store/slices/projectsSlice";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -39,7 +39,7 @@ export interface TradieScheduleInputRow {
     subject: string;
     body: string;
     attachments: { name: string; url: string }[];
-  }
+  };
 }
 
 export interface TradieScheduleRowErrors {
@@ -150,22 +150,25 @@ export default function ScheduleTradieModal({
     setScheduleRows((prev) => [...prev, newRow]);
   };
 
-  const updateRow = (index: number, updatedRow: TradieScheduleInputRow) => {
-    setScheduleRows((prev) =>
-      prev.map((row, i) => (i === index ? updatedRow : row)),
-    );
+  const updateRow = useCallback(
+    (index: number, updatedRow: TradieScheduleInputRow) => {
+      setScheduleRows((prev) =>
+        prev.map((row, i) => (i === index ? updatedRow : row)),
+      );
 
-    // Re-validate only rows that are already showing an error, so fixing a
-    // field clears its message instead of leaving it stale until the next
-    // submit — without shouting at a row the user has not submitted yet.
-    setRowErrors((prev) =>
-      prev.map((errors) =>
-        errors.id === updatedRow.id && hasRowError(errors)
-          ? validateRow(updatedRow)
-          : errors,
-      ),
-    );
-  };
+      // Re-validate only rows that are already showing an error, so fixing a
+      // field clears its message instead of leaving it stale until the next
+      // submit, without shouting at a row the user has not submitted yet.
+      setRowErrors((prev) =>
+        prev.map((errors) =>
+          errors.id === updatedRow.id && hasRowError(errors)
+            ? validateRow(updatedRow)
+            : errors,
+        ),
+      );
+    },
+    [],
+  );
 
   const removeRow = (index: number) => {
     const id = scheduleRows[index].id;
@@ -257,7 +260,9 @@ export default function ScheduleTradieModal({
                   row={row}
                   position={index + 1}
                   milestones={milestones}
-                  onChange={(updated) => updateRow(index, updated)}
+                  onChange={(updated) =>
+                    updateRow(index, { ...row, ...updated })
+                  }
                   onRemove={
                     scheduleRows.length > 1 ? () => removeRow(index) : undefined
                   }

@@ -233,7 +233,7 @@ function FollowupsView({
   leads,
   followupStats,
   onLeadUpdate,
-  onLeadDelete,
+  // onLeadDelete,
   showToast,
 }: FollowupsViewProps) {
   const dispatch = useAppDispatch();
