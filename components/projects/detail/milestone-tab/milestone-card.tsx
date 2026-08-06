@@ -25,7 +25,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MilestoneActionGroup } from "./milestone-action-button";
 
 function getMilestoneTone(status: string) {
@@ -106,9 +105,7 @@ export function MilestoneCard({
   const tone = getMilestoneTone(milestone.status);
   const hasChildren = milestone.childrenMilestones.length > 0;
   const isCompact = depth > 0;
-  const milestonePictures = !isCompact
-    ? milestone.files.filter((file) => file.fileType.startsWith("image/"))
-    : [];
+  const milestonePictures = milestone.files.filter((file) => file.fileType.startsWith("image/"))
   const nextTradies = tradieAlertsByMilestone[milestone.id] ?? [];
   const budgetShare = Number(project.totalBudget)
     ? (Number(milestone.budget) / Number(project.totalBudget)) * 100
@@ -157,7 +154,7 @@ export function MilestoneCard({
               </span>
             ) : null}
 
-            {!isCompact && milestonePictures.length > 0 ? (
+            {milestonePictures.length > 0 ? (
               <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 {milestonePictures.length} photo
                 {milestonePictures.length === 1 ? "" : "s"}
@@ -224,7 +221,7 @@ export function MilestoneCard({
         />
       </div>
 
-      {!isCompact && milestonePictures.length > 0 ? (
+      {milestonePictures.length > 0 ? (
         <ul className="mt-3 grid list-none grid-cols-2 gap-1.5 sm:grid-cols-4">
           {milestonePictures.slice(0, 4).map((picture, i) => (
             <li key={picture.id}>
@@ -344,7 +341,7 @@ export function MilestoneCard({
             </CollapsibleTrigger>
 
             <CollapsibleContent>
-              <ScrollArea className="mt-3 max-h-80 pr-2">
+              <div className="mt-3 overflow-y-auto no-scrollbar max-h-80 pr-2">
                 <div className="space-y-2">
                   {milestone.childrenMilestones.map((child) => (
                     <MilestoneCard
@@ -368,7 +365,7 @@ export function MilestoneCard({
                     />
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             </CollapsibleContent>
           </div>
         </Collapsible>
