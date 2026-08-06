@@ -120,8 +120,9 @@ export function TradieScheduleRow({
     );
   }, [tradieSearchQuery, selectedCategoryTradies]);
 
-  const selectedTradie = selectedCategoryTradies.find(
-    (tradie) => tradie.id === row.tradieId,
+  const selectedTradie = useMemo(
+    () => selectedCategoryTradies.find((tradie) => tradie.id === row.tradieId),
+    [selectedCategoryTradies, row.tradieId],
   );
 
   useEffect(() => {
@@ -164,17 +165,12 @@ export function TradieScheduleRow({
     });
   }, [
     milestones,
-    onChange,
     row.durationDays,
     row.milestoneId,
     row.requiresQuote,
     row.scheduledDate,
     selectedTradie?.name,
     selectedTradie?.trade,
-    activeProject?.name,
-    activeProject?.siteManager?.email,
-    activeProject?.siteManager?.name,
-    activeProject?.siteManager?.phone,
   ]);
 
   return (
