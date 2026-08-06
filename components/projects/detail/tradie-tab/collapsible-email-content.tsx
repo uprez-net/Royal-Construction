@@ -56,7 +56,7 @@ export function CollapsibleEmailContent({
   const iframeObserverRef = useRef<MutationObserver | null>(null);
 
   const MAX_PREVIEW_HEIGHT = 560;
-  const MIN_SCALE = 0.70;
+  const MIN_SCALE = 0.7;
 
   /** Scale the iframe down so the entire email is visible without scrolling
    * inside the frame. The email is laid out at its natural width inside the
@@ -88,11 +88,7 @@ export function CollapsibleEmailContent({
     iframe.style.height = `${contentH}px`;
 
     const availW = container.clientWidth;
-    const scale = Math.min(
-      availW / contentW,
-      MAX_PREVIEW_HEIGHT / contentH,
-      1,
-    );
+    const scale = Math.min(availW / contentW, MAX_PREVIEW_HEIGHT / contentH, 1);
 
     const clamped = Math.max(scale, MIN_SCALE);
     setIframeSize({ contentW, contentH, scale: clamped });
@@ -290,71 +286,72 @@ export function CollapsibleEmailContent({
           <Input
             id={`subject-${rowId}`}
             value={emailContent.subject}
-            onChange={(e) => onChange({ ...emailContent, subject: e.target.value })}
+            onChange={(e) =>
+              onChange({ ...emailContent, subject: e.target.value })
+            }
             disabled={isSubmitting}
             className="h-8 text-sm"
           />
         </div>
-
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_18rem]">
-          {/* Email preview — primary panel */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-xs text-muted-foreground">Email preview</Label>
-              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80">
-                <Info className="size-3" aria-hidden="true" />
-                Click to edit — changes are saved when you collapse or save.
-              </span>
-            </div>
-            <div
-              ref={previewContainerRef}
-              className="relative w-full overflow-hidden rounded-md border bg-background"
-              style={{
-                height: iframeSize
-                  ? Math.ceil(iframeSize.contentH * iframeSize.scale)
-                  : MAX_PREVIEW_HEIGHT,
-              }}
-            >
-              <iframe
-                key={iframeKey}
-                ref={emailRenderIframeRef}
-                srcDoc={emailContent.body}
-                title="Email Preview"
-                sandbox="allow-same-origin allow-scripts"
-                onLoad={handleIframeLoad}
-                style={{
-                  transformOrigin: "top center",
-                  transform: iframeSize
-                    ? `scale(${iframeSize.scale})`
-                    : undefined,
-                }}
-                className="block border-0 bg-background"
-              />
-            </div>
+        {/* Email preview — primary panel */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs text-muted-foreground">
+              Email preview
+            </Label>
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/80">
+              <Info className="size-3" aria-hidden="true" />
+              Click to edit — changes are saved when you collapse or save.
+            </span>
           </div>
-
-          {/* Attachments — compact supporting panel */}
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Attachments</Label>
-            <UploadDropzone
-              label=""
-              summary={
-                queuedFiles.length > 0
-                  ? `${queuedFiles.length} file${queuedFiles.length === 1 ? "" : "s"} · ${completedUploadCount} uploaded`
-                  : `Drag or click · max ${maxFiles}`
-              }
-              files={queuedFiles}
-              accept="image/*"
-              maxFiles={maxFiles}
-              disabled={isSubmitting}
-              isLoading={isSubmitting}
-              onFilesSelected={addFiles}
-              removeFile={removeFile}
-              dropzoneClassName="p-3"
-              listClassName="p-2 space-y-1.5"
-              itemClassName="p-2"
+          <div
+            ref={previewContainerRef}
+            className="relative w-full overflow-hidden rounded-md border bg-transparent"
+            style={{
+              height: iframeSize
+                ? Math.ceil(iframeSize.contentH * iframeSize.scale)
+                : MAX_PREVIEW_HEIGHT,
+            }}
+          >
+            <iframe
+              key={iframeKey}
+              ref={emailRenderIframeRef}
+              srcDoc={emailContent.body}
+              title="Email Preview"
+              sandbox="allow-same-origin allow-scripts"
+              onLoad={handleIframeLoad}
+              style={{
+                transformOrigin: "top center",
+                transform: iframeSize
+                  ? `scale(${iframeSize.scale})`
+                  : undefined,
+              }}
+              className="block border-0 bg-background"
             />
           </div>
+        </div>
+
+        {/* Attachments — compact supporting panel */}
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Attachments</Label>
+          <UploadDropzone
+            label=""
+            summary={
+              queuedFiles.length > 0
+                ? `${queuedFiles.length} file${queuedFiles.length === 1 ? "" : "s"} · ${completedUploadCount} uploaded`
+                : `Drag or click · max ${maxFiles}`
+            }
+            files={queuedFiles}
+            accept="image/*"
+            maxFiles={maxFiles}
+            disabled={isSubmitting}
+            isLoading={isSubmitting}
+            onFilesSelected={addFiles}
+            removeFile={removeFile}
+            dropzoneClassName="p-3"
+            listClassName="p-2 space-y-1.5"
+            itemClassName="p-2"
+          />
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-1">

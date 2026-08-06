@@ -171,6 +171,15 @@ export function JobSetupPanel({
               }
             />
           </Field>
+          <Field label="Number of balconies">
+            <Input
+              placeholder="Auto-filled from lead requirements"
+              value={job.balcony}
+              onChange={(event) =>
+                onJobChange({ balcony: parseInt(event.target.value) || 0 })
+              }
+            />
+          </Field>
           <Field label="Council">
             <Input
               placeholder="Auto-filled from Site Location"

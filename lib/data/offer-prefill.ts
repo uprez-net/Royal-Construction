@@ -164,6 +164,7 @@ export async function generateOfferPrefillFromLead(input: {
     job.bedrooms = d.numberOfBedrooms;
     job.bathrooms = d.numberOfBathrooms;
     job.garageSpaces = d.numberOfGarageSpaces;
+    job.balcony = d.numberOfBalconies;
   } else {
     notes = `AI drafting was skipped (${ai.message}). Filled contact details only.`;
   }
