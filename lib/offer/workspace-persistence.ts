@@ -191,6 +191,7 @@ const jobSchema = z.object({
   alfrescoPorchSqm: z.number(),
   porchSqm: z.number(),
   grannyFlatSqm: z.number(),
+  balconySqm: z.number(),
   validUntil: z.string(),
   preparedBy: z.string(),
   lotAreaSqm: z.number().default(0),
@@ -200,7 +201,6 @@ const jobSchema = z.object({
   bedrooms: z.number().default(0),
   bathrooms: z.number().default(0),
   garageSpaces: z.number().default(0),
-  balcony: z.number().default(0),
 });
 
 const costLineSchema = z.object({

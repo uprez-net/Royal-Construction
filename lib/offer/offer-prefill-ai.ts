@@ -73,13 +73,6 @@ export const offerPrefillSchema = z.object({
     .describe(
       "The number of garage spaces the client has discussed. 0 if none are mentioned.",
     ),
-  numberOfBalconies: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe(
-      "The number of balconies the client has discussed. 0 if none are mentioned.",
-    ),
 });
 
 export type OfferPrefillDraft = z.infer<typeof offerPrefillSchema>;

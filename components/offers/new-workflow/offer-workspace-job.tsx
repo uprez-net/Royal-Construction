@@ -54,7 +54,8 @@ export function JobSetupPanel({
     job.garageSqm +
     job.alfrescoPorchSqm +
     job.porchSqm +
-    job.grannyFlatSqm;
+    job.grannyFlatSqm +
+    job.balconySqm;
 
   const owners = job.owners ?? [];
   // owners[] is the source of truth; emit the derived flat client* projection in
@@ -171,15 +172,6 @@ export function JobSetupPanel({
               }
             />
           </Field>
-          <Field label="Number of balconies">
-            <Input
-              placeholder="Auto-filled from lead requirements"
-              value={job.balcony}
-              onChange={(event) =>
-                onJobChange({ balcony: parseInt(event.target.value) || 0 })
-              }
-            />
-          </Field>
           <Field label="Council">
             <Input
               placeholder="Auto-filled from Site Location"
@@ -272,6 +264,11 @@ export function JobSetupPanel({
             label="Granny flat sqm"
             value={job.grannyFlatSqm}
             onChange={(grannyFlatSqm) => onJobChange({ grannyFlatSqm })}
+          />
+          <AreaField
+            label="Balcony sqm"
+            value={job.balconySqm}
+            onChange={(balconySqm) => onJobChange({ balconySqm })}
           />
           <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

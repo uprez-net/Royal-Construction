@@ -118,6 +118,7 @@ export type OfferWorkspaceJob = {
   readonly alfrescoPorchSqm: number;
   readonly porchSqm: number;
   readonly grannyFlatSqm: number;
+  readonly balconySqm: number;
   readonly validUntil: string;
   readonly preparedBy: string;
   // Project snapshot (site particulars shown on the proposal snapshot page).
@@ -127,7 +128,6 @@ export type OfferWorkspaceJob = {
   readonly bedrooms: number;
   readonly bathrooms: number;
   readonly garageSpaces: number;
-  readonly balcony: number;
   readonly buildScope: readonly string[];
 };
 
@@ -807,10 +807,10 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   alfrescoPorchSqm: 0,
   porchSqm: 0,
   grannyFlatSqm: 0,
+  balconySqm: 0,
   bedrooms: 0,
   bathrooms: 0,
   garageSpaces: 0,
-  balcony: 0,
   // Seeded per-offer at runtime via defaultOfferValidUntil(); empty here so a
   // stale constant can't ship an already-expired date.
   validUntil: "",
