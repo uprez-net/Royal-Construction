@@ -151,9 +151,10 @@ export default function ScheduleTradieModal({
   };
 
   const updateRow = useCallback(
-    (index: number, updatedRow: TradieScheduleInputRow) => {
+    (index: number, updatedRow: Partial<TradieScheduleInputRow>) => {
+      const prevRow = scheduleRows[index];
       setScheduleRows((prev) =>
-        prev.map((row, i) => (i === index ? updatedRow : row)),
+        prev.map((row, i) => (i === index ? { ...row, ...updatedRow } : row)),
       );
 
       // Re-validate only rows that are already showing an error, so fixing a
@@ -162,7 +163,7 @@ export default function ScheduleTradieModal({
       setRowErrors((prev) =>
         prev.map((errors) =>
           errors.id === updatedRow.id && hasRowError(errors)
-            ? validateRow(updatedRow)
+            ? validateRow({ ...prevRow, ...updatedRow })
             : errors,
         ),
       );
@@ -260,9 +261,7 @@ export default function ScheduleTradieModal({
                   row={row}
                   position={index + 1}
                   milestones={milestones}
-                  onChange={(updated) =>
-                    updateRow(index, { ...row, ...updated })
-                  }
+                  onChange={updateRow}
                   onRemove={
                     scheduleRows.length > 1 ? () => removeRow(index) : undefined
                   }

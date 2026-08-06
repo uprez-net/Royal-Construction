@@ -41,7 +41,7 @@ interface TradieScheduleRowProps {
   milestones: { id: string; name: string }[];
   /** 1-based position, used for the row's accessible group name. */
   position: number;
-  onChange: (updatedRow: Partial<TradieScheduleInputRow>) => void;
+  onChange: (index: number, updatedRow: Partial<TradieScheduleInputRow>) => void;
   /** Omitted for the last remaining row, which cannot be removed. */
   onRemove?: () => void;
 }
@@ -85,6 +85,7 @@ export function TradieScheduleRow({
   onChange,
   onRemove,
 }: TradieScheduleRowProps) {
+  const index = position - 1;
   const { activeProject } = useAppSelector((state) => state.projects);
   const { tradiesByCategory, loading } = useAppSelector(
     (state) => state.tradieManagement,
@@ -146,6 +147,7 @@ export function TradieScheduleRow({
       note: null,
       updatedAt: "",
       requiresQuote: row.requiresQuote ?? false,
+      hourlyRate: selectedTradie?.hourlyRate ?? undefined,
       contact: {
         email: "",
         phone: "",
@@ -156,7 +158,7 @@ export function TradieScheduleRow({
         phone: activeProject?.siteManager?.phone ?? "",
       },
     });
-    onChange({
+    onChange(index, {
       emailContent: {
         subject: generatedEmail.subject,
         body: generatedEmail.html,
@@ -164,13 +166,20 @@ export function TradieScheduleRow({
       },
     });
   }, [
+    onChange,
+    index,
     milestones,
-    row.durationDays,
     row.milestoneId,
-    row.requiresQuote,
     row.scheduledDate,
+    row.durationDays,
+    row.requiresQuote,
     selectedTradie?.name,
     selectedTradie?.trade,
+    selectedTradie?.hourlyRate,
+    activeProject?.name,
+    activeProject?.siteManager?.name,
+    activeProject?.siteManager?.email,
+    activeProject?.siteManager?.phone,
   ]);
 
   return (
@@ -242,7 +251,7 @@ export function TradieScheduleRow({
                           key={category}
                           value={categoryLabel(category)}
                           onSelect={() => {
-                            onChange({
+                            onChange(index, {
                               tradeCategory: category,
                               tradieId: "",
                             });
@@ -343,7 +352,7 @@ export function TradieScheduleRow({
                         key={tradie.id}
                         value={tradie.name}
                         onSelect={() =>
-                          onChange({
+                          onChange(index, {
                             tradieId: tradie.id,
                           })
                         }
@@ -389,7 +398,7 @@ export function TradieScheduleRow({
           <Select
             value={row.milestoneId}
             onValueChange={(value) =>
-              onChange({
+              onChange(index, {
                 milestoneId: value,
               })
             }
@@ -429,7 +438,7 @@ export function TradieScheduleRow({
             aria-invalid={Boolean(errors.scheduledDate)}
             aria-describedby={describedBy("date", errors.scheduledDate)}
             onChange={(event) =>
-              onChange({
+              onChange(index, {
                 scheduledDate: event.target.value,
               })
             }
@@ -458,7 +467,7 @@ export function TradieScheduleRow({
 
               // allow clearing input
               if (value === "") {
-                onChange({
+                onChange(index, {
                   durationDays: 0,
                 });
                 return;
@@ -466,7 +475,7 @@ export function TradieScheduleRow({
 
               // only positive integers
               if (/^[1-9]\d*$/.test(value)) {
-                onChange({
+                onChange(index, {
                   durationDays: Number(value),
                 });
               }
@@ -474,7 +483,7 @@ export function TradieScheduleRow({
             onBlur={() => {
               // restore minimum value after editing
               if (!row.durationDays || row.durationDays < 1) {
-                onChange({
+                onChange(index, {
                   durationDays: 1,
                 });
               }
@@ -513,7 +522,7 @@ export function TradieScheduleRow({
           aria-labelledby={fieldId("pricing-label")}
           value={row.requiresQuote ? "quote" : "fixed"}
           onValueChange={(value) => {
-            onChange({
+            onChange(index, {
               requiresQuote: value === "quote",
             });
           }}
@@ -541,7 +550,7 @@ export function TradieScheduleRow({
             rowId={row.id}
             emailContent={row.emailContent}
             onChange={(emailContent) => {
-              onChange({
+              onChange(index, {
                 emailContent,
               });
             }}
