@@ -339,10 +339,11 @@ export function CollapsibleEmailContent({
             summary={
               queuedFiles.length > 0
                 ? `${queuedFiles.length} file${queuedFiles.length === 1 ? "" : "s"} · ${completedUploadCount} uploaded`
-                : `Drag or click · max ${maxFiles}`
+                : `Drop files here or browse • Up to ${maxFiles} files`
             }
+            helperText="Files upload directly from the browser and stay visible below while they sync."
             files={queuedFiles}
-            accept="image/*"
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
             maxFiles={maxFiles}
             disabled={isSubmitting}
             isLoading={isSubmitting}

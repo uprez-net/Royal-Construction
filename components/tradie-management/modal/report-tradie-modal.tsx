@@ -347,12 +347,12 @@ export default function ReportTradieModal({
               label="Attach Photos"
               summary={
                 queuedFiles.length > 0
-                  ? `${queuedFiles.length} photo${queuedFiles.length === 1 ? "" : "s"} selected (${completedUploadCount} uploaded)`
-                  : "Click to upload photos (max 5)"
+                  ? `${queuedFiles.length} file${queuedFiles.length === 1 ? "" : "s"} selected (${completedUploadCount} uploaded)`
+                  : "Click to upload files (max 5)"
               }
-              helperText="Images upload directly from the browser and stay visible below while they sync."
+              helperText="Files upload directly from the browser and stay visible below while they sync."
               files={queuedFiles}
-              accept="image/*"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
               maxFiles={maxFiles}
               disabled={isPending}
               isLoading={isPending}

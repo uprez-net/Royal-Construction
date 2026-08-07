@@ -199,8 +199,8 @@ export function ProjectMilestonesTab({
     );
   };
 
-  const handleOpenViewPicture = (imageUrl: string) => {
-    dispatch(openModal({ type: "viewPicture", payload: { imageUrl } }));
+  const handleOpenViewPicture = (imageUrls: string[], selectedIndex: number) => {
+    dispatch(openModal({ type: "viewPicture", payload: { imageUrls, selectedIndex } }));
   };
 
   const handleStatusUpdate = (milestoneId: string) => {

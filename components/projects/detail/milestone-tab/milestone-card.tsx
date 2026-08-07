@@ -100,12 +100,15 @@ export function MilestoneCard({
   onStartMilestone: (id: string) => void;
   onMarkasNotRequired: (id: string) => void;
   onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
-  onOpenViewPicture: (imageUrl: string) => void;
+  onOpenViewPicture: (imageUrls: string[], selectedIndex: number) => void;
 }) {
   const tone = getMilestoneTone(milestone.status);
   const hasChildren = milestone.childrenMilestones.length > 0;
   const isCompact = depth > 0;
-  const milestonePictures = milestone.files.filter((file) => file.fileType.startsWith("image/"))
+  const milestonePictures = milestone.files.filter((file) =>
+    file.fileType.startsWith("image/"),
+  );
+  const imageUrls = milestonePictures.map((file) => file.url);
   const nextTradies = tradieAlertsByMilestone[milestone.id] ?? [];
   const budgetShare = Number(project.totalBudget)
     ? (Number(milestone.budget) / Number(project.totalBudget)) * 100
@@ -223,13 +226,13 @@ export function MilestoneCard({
 
       {milestonePictures.length > 0 ? (
         <ul className="mt-3 grid list-none grid-cols-2 gap-1.5 sm:grid-cols-4">
-          {milestonePictures.slice(0, 4).map((picture, i) => (
+          {milestonePictures.slice(0, 3).map((picture, i) => (
             <li key={picture.id}>
               <button
                 type="button"
                 aria-label={`View progress photo ${i + 1} of ${milestone.name}`}
                 className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded-md border border-border/70 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                onClick={() => onOpenViewPicture(picture.url)}
+                onClick={() => onOpenViewPicture(imageUrls, i)}
               >
                 <Image
                   src={picture.url}
@@ -242,9 +245,12 @@ export function MilestoneCard({
               </button>
             </li>
           ))}
-          {milestonePictures.length > 4 ? (
-            <li className="flex aspect-4/3 items-center justify-center rounded-md border border-border/70 bg-muted/50 text-xs font-medium text-muted-foreground">
-              +{milestonePictures.length - 4} more
+          {milestonePictures.length > 3 ? (
+            <li
+              className="flex aspect-4/3 items-center justify-center rounded-md border border-border/70 bg-muted/50 text-xs font-medium text-muted-foreground"
+              onClick={() => onOpenViewPicture(imageUrls, 3)}
+            >
+              +{milestonePictures.length - 3} more
             </li>
           ) : null}
         </ul>

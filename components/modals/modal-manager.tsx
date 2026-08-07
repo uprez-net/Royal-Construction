@@ -292,11 +292,12 @@ export function ModalManager() {
           onClose={handleClose}
         />
       );
-    case "viewPicture":
-      const { imageUrl } = modal.payload as { imageUrl: string };
+    case "viewPicture": {
+      const { imageUrls, selectedIndex } = modal.payload as { imageUrls: string[], selectedIndex: number };
       return (
-        <PreviewPictureModal open onClose={handleClose} imageUrl={imageUrl} />
+        <PreviewPictureModal open onClose={handleClose} imageUrls={imageUrls} selectedIndex={selectedIndex} />
       );
+    }
     case "addMilestone":
       const { projectId: addMilestoneProjectId } = modal.payload as {
         projectId: string;
