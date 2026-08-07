@@ -565,9 +565,16 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       await logAction(activityLogEntry, tx);
       await tx.file.updateMany({
         where: {
-          url: {
-            in: [sourceDocuments.tender.url, sourceDocuments.contract.url]
-          }
+          OR: [
+            {
+              url: {
+                in: [sourceDocuments.tender.url, sourceDocuments.contract.url]
+              }
+            },
+            {
+              leadId: lead.id
+            }
+          ]
         },
         data: {
           projectId: newProject.id

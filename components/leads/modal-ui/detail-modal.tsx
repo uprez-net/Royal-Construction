@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Lead, LeadSource, LeadStage, HistoryItem } from "@/lib/leads/types";
 import { updateLead } from "@/lib/leads/leads-service";
 import {
@@ -17,6 +17,19 @@ import {
   createLeadNotesDocument,
   extractMentionedUserIds,
 } from "@/lib/rich-text/lead-notes";
+import { UploadDropzone } from "@/components/common/upload-dropzone";
+import { QueuedUploadFile, useUploadQueue } from "@/hooks/use-upload-queue";
+import {
+  completeProjectUpload,
+  registerProjectUpload,
+  updateProjectUploadProgress,
+} from "@/lib/store/slices/projectsSlice";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { upload } from "@vercel/blob/client";
+import { ClientPayload } from "@/utils/validators/files";
+import { Button } from "@/components/ui/button";
+import { ExternalLink, FileText, Loader2, Upload } from "lucide-react";
+import { buildBlobPath, formatFileSize } from "@/utils/formatters";
 
 interface DetailModalProps {
   lead: Lead;
@@ -35,9 +48,26 @@ export function DetailModal({
   showToast,
   availableUsers,
 }: DetailModalProps) {
+  const maxFiles = 5;
+  const {
+    files: queuedFiles,
+    completedCount: completedUploadCount,
+    addFiles,
+    removeFile,
+    resetQueue,
+    markUploading,
+    updateProgress,
+    markUploaded,
+  } = useUploadQueue({ maxFiles });
+  const dispatch = useAppDispatch();
+  const uploadControllersRef = useRef<Record<string, AbortController>>({});
   const [form, setForm] = useState<LeadDetailFormData>(() =>
     leadToFormData(lead),
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<
+    { id: string; name: string; url: string; size: number }[]
+  >(lead.uploadedFiles);
   const baseline = useMemo(() => leadToFormData(lead), [lead]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
@@ -68,6 +98,68 @@ export function DetailModal({
 
   const patch = (updates: Partial<LeadDetailFormData>) =>
     setForm((prev) => (prev ? { ...prev, ...updates } : prev));
+
+  const uploadQueuedFile = async (queuedFile: QueuedUploadFile) => {
+    const controller = new AbortController();
+    uploadControllersRef.current[queuedFile.id] = controller;
+
+    dispatch(
+      registerProjectUpload({
+        projectId: `lead-${lead.id}`,
+        fileId: queuedFile.id,
+        fileName: queuedFile.file.name,
+        fileSize: queuedFile.file.size,
+      }),
+    );
+
+    markUploading(queuedFile.id);
+
+    try {
+      const blob = await upload(
+        buildBlobPath({
+          leadId: lead.id.toString(),
+          fileId: queuedFile.id,
+          fileName: queuedFile.file.name,
+        }),
+        queuedFile.file,
+        {
+          access: "public",
+          handleUploadUrl: "/api/upload",
+          clientPayload: JSON.stringify({
+            leadId: lead.id.toString(),
+            fileId: queuedFile.id,
+            fileName: queuedFile.file.name,
+            fileSize: queuedFile.file.size,
+            isOfferFile: false,
+          } satisfies ClientPayload),
+          abortSignal: controller.signal,
+          onUploadProgress: ({ percentage }) => {
+            dispatch(
+              updateProjectUploadProgress({
+                projectId: `lead-${lead.id}`,
+                fileId: queuedFile.id,
+                progress: percentage,
+              }),
+            );
+            updateProgress(queuedFile.id, percentage);
+          },
+        },
+      );
+
+      dispatch(
+        completeProjectUpload({
+          projectId: `lead-${lead.id}`,
+          fileId: queuedFile.id,
+          url: blob.url,
+        }),
+      );
+
+      markUploaded(queuedFile.id, blob.url);
+      return blob.url;
+    } finally {
+      delete uploadControllersRef.current[queuedFile.id];
+    }
+  };
 
   const buildNoteMentionAnnotations = () => {
     const newMentionedUserIds = mentionedUserIds.filter(
@@ -202,7 +294,10 @@ export function DetailModal({
   return (
     <ModalShell
       open
-      onClose={onClose}
+      onClose={() => {
+        resetQueue();
+        onClose();
+      }}
       title={lead.name}
       subtitle={`${lead.location} | ${lead.phone}`}
       maxWidthClass="max-w-[860px]"
@@ -428,6 +523,141 @@ export function DetailModal({
             />
           </div>
         </div>
+
+        {/* Upload Supporting Documents */}
+        <div className="space-y-1.5">
+          <div className="flex flex-1 justify-between items-center">
+            <span id={notesLabelId} className={labelCls}>
+              Upload Supporting Documents
+            </span>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex items-center gap-1 text-xs"
+              disabled={isSubmitting}
+              onClick={async () => {
+                if (queuedFiles.length === 0) {
+                  showToast("No files to upload", "info");
+                  return;
+                }
+                setIsSubmitting(true);
+                try {
+                  const uploadedFiles = await Promise.all(
+                    queuedFiles.map(async (file) => {
+                      if (file.status === "uploaded" && file.url) {
+                        return {
+                          id: file.id,
+                          name: file.file.name,
+                          url: file.url,
+                          size: file.file.size,
+                        };
+                      }
+                      if (
+                        file.status === "queued" ||
+                        file.status === "uploading"
+                      ) {
+                        const url = await uploadQueuedFile(file);
+                        return {
+                          id: file.id,
+                          name: file.file.name,
+                          url,
+                          size: file.file.size,
+                        };
+                      }
+                      throw new Error(`"${file.file.name}" failed to upload.`);
+                    }),
+                  );
+                  setUploadedFiles((prev) => [...prev, ...uploadedFiles]);
+                  resetQueue();
+                  showToast("Files uploaded successfully", "success");
+                } catch (error) {
+                  console.error("Failed to upload files", error);
+                  showToast("Failed to upload files", "info");
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-3 w-3" />
+                  Upload{" "}
+                  {queuedFiles.length > 0
+                    ? `(${queuedFiles.length}) file${queuedFiles.length === 1 ? "" : "s"}`
+                    : ""}
+                </>
+              )}
+            </Button>
+          </div>
+          <UploadDropzone
+            label=""
+            summary={
+              queuedFiles.length > 0
+                ? `${queuedFiles.length} file${queuedFiles.length === 1 ? "" : "s"} · ${completedUploadCount} uploaded`
+                : `Drop files here or browse • Up to ${maxFiles} files`
+            }
+            helperText="Files upload directly from the browser and stay visible below while they sync."
+            files={queuedFiles}
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+            maxFiles={maxFiles}
+            disabled={isSubmitting}
+            isLoading={isSubmitting}
+            onFilesSelected={addFiles}
+            removeFile={removeFile}
+            dropzoneClassName="p-3"
+            listClassName="p-2 space-y-1.5"
+            itemClassName="p-2"
+          />
+        </div>
+
+        {/* Uploaded Files */}
+        {uploadedFiles.length > 0 && (
+          <div className="space-y-3">
+            <h5 className={labelCls}>Uploaded Files</h5>
+
+            <div className="space-y-2">
+              {uploadedFiles.map((file, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between rounded-md border bg-card px-3 py-2 transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
+                      <FileText className="h-5 w-5 text-primary" />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {file.name}
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(file.size)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button asChild size="sm" variant="ghost">
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="mr-1 h-4 w-4" />
+                      Open
+                    </a>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Notes */}
         <div>

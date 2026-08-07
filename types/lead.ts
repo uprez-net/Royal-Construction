@@ -6,6 +6,7 @@ import type {
   LeadStage as PrismaLeadStage,
   LeadEmails,
   User,
+  File,
 } from "@prisma/client";
 import type { HistoryItem, Lead as UiLead, LeadStage } from "@/lib/leads/types";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
@@ -100,6 +101,7 @@ export function mapLead(
       resolvedAt: Date | null;
     }>;
     emails: LeadEmails[];
+    files: File[];
   }
 ): UiLead {
   const assignedUserFromRelation = lead.assignedUser ?? null;
@@ -149,6 +151,12 @@ export function mapLead(
     runStatus: lead.runStatus,
     emails: lead.emails,
     isArchived: lead.isArchived,
+    uploadedFiles: lead.files.map((file) => ({
+      id: file.id,
+      name: file.filename,
+      size: file.filesize,
+      url: file.url,
+    }))
   };
 }
 

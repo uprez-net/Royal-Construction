@@ -262,6 +262,7 @@ export async function getAllLeads(): Promise<UiLead[]> {
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
+        files: true
       },
     });
     return leads.map((lead) => mapLead(lead));
@@ -433,6 +434,7 @@ export async function getLeads(
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
+        files: true
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -487,6 +489,7 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
       emails: { orderBy: { createdAt: "desc" } },
+      files: true
     }
   });
   if (!lead) return null;
@@ -514,6 +517,7 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
       emails: { orderBy: { createdAt: "desc" } },
+      files: true
     }
   });
   if (!lead) return null;
@@ -722,6 +726,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     assignedUser: { select: { id: true, name: true, email: true } },
     noteAnnotations: { orderBy: { createdAt: "desc" } },
     emails: { orderBy: { createdAt: "desc" } },
+    files: true
   } satisfies Prisma.LeadInclude;
 
   const leadCreateResult = await prisma.$transaction(async (tx) => {
@@ -992,7 +997,8 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
-      emails: { orderBy: { createdAt: "desc" } }
+      emails: { orderBy: { createdAt: "desc" } },
+      files: true
     },
   });
 
