@@ -51,7 +51,7 @@ export function LeadStatsDrilldownModal({
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [stage, upcomingFollowUps, pendingFollowUps]);
+  }, [stage, upcomingFollowUps, pendingFollowUps, pendingMeetings, upcomingMeetings]);
 
   return (
     <ModalShell

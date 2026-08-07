@@ -141,7 +141,7 @@ export function MeetingReviewModal({
                 onClick={() => setTookPlace(false)}
               >
                 <XCircle className="mr-2 h-4 w-4" />
-                No, Didn't Happen
+                No, Didn&apos;t Happen
               </Button>
             </div>
           </div>

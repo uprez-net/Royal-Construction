@@ -42,15 +42,6 @@ export function PreviewPictureModal({
 
   const hasMultipleImages = imageUrls.length > 1;
 
-  // Sync internal index whenever the modal is (re)opened on a different image
-  useEffect(() => {
-    if (open) {
-      setCurrentIndex(selectedIndex);
-      setScale(1);
-      setPosition({ x: 0, y: 0 });
-    }
-  }, [open, selectedIndex]);
-
   const resetView = useCallback(() => {
     setScale(1);
     setPosition({ x: 0, y: 0 });
