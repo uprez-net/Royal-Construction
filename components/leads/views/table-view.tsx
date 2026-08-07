@@ -69,7 +69,7 @@ export default function TableView({
     if (!activeMetric) return ["all"];
     if (activeMetric.includes("total")) return ["all"];
     if (activeMetric.includes("converted")) return ["Won", "Converted"];
-    if (activeMetric.includes("pendingFollowup")) return ["In Follow-up"];
+    if (activeMetric.includes("pendingFollowup")) return ["In Follow-up", "Meeting Scheduled"];
     if (activeMetric.includes("lost"))
       return ["Lost", "Cancelled", "Disqualified"];
     return activeMetric.split(",").map((s) => s.trim());

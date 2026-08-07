@@ -292,7 +292,18 @@ export async function getAllLeads(): Promise<UiLead[]> {
  * @param filterLeadsWithoutProject - Optional flag to filter leads that do not have an associated project.
  * @returns Paginated lead collection.
  */
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string, filterLeadsWithoutProject?: boolean, isArchived?: boolean): Promise<PaginatedLeadsResult> {
+export async function getLeads(
+  page = 1,
+  limit = defaultLookupPageSize,
+  query?: string,
+  status?: LeadStage[],
+  filterTiming?: string,
+  filterLeadsWithoutProject?: boolean,
+  isArchived?: boolean,
+  pendingFollowUps?: boolean,
+  upcomingFollowUps?: boolean,
+  pendingMeetings?: boolean,
+  upcomingMeetings?: boolean): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
   const search = normalizeSearch(query);
@@ -300,12 +311,13 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
   // 1. Determine if a timing filter should be active (skip if undefined or 'all')
   const hasTimingFilter = filterTiming && filterTiming !== 'all';
   let timingFilter = {};
+  const timeZone = "Australia/Sydney";
+
+  // Current date in Sydney
+  const sydneyNow = toZonedTime(new Date(), timeZone);
+  const isMeetingScheduledFilterActive = pendingMeetings !== undefined || upcomingMeetings !== undefined || (status?.includes('MEETING_SCHEDULED') && status?.length === 1);
 
   if (hasTimingFilter) {
-    const timeZone = "Australia/Sydney";
-
-    // Current date in Sydney
-    const sydneyNow = toZonedTime(new Date(), timeZone);
 
     let startSydney: Date;
     let endSydney: Date;
@@ -383,6 +395,35 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
         ? { stage: { in: statusCleaned } }
         : {}),
       isArchived: isArchived ?? false,
+      ...(pendingFollowUps !== undefined && {
+        followupDate: {
+          not: null,
+          lte: fromZonedTime(startOfDay(sydneyNow), timeZone)
+        }
+      }),
+      ...(upcomingFollowUps !== undefined && {
+        followupDate: {
+          not: null,
+          gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
+        }
+      }),
+      ...(isMeetingScheduledFilterActive && {
+        meetingDate: {
+          not: null,
+        }
+      }),
+      ...(pendingMeetings !== undefined && {
+        meetingDate: {
+          not: null,
+          lte: fromZonedTime(startOfDay(sydneyNow), timeZone)
+        }
+      }),
+      ...(upcomingMeetings !== undefined && {
+        meetingDate: {
+          not: null,
+          gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
+        }
+      }),
     }
     const leads = await prisma.lead.findMany({
       where: finalWhere,
@@ -1042,7 +1083,7 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
       COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      COUNT(*) FILTER (WHERE stage = 'IN_FOLLOW_UP') AS "pendingFollowup"
+      COUNT(*) FILTER (WHERE stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED')) AS "pendingFollowup"
     FROM "Lead"
     WHERE "isArchived" = false
   `;

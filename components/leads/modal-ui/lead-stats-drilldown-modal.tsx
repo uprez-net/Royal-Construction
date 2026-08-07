@@ -9,14 +9,20 @@ import { formatFollowup } from "@/lib/leads/lead-helpers";
 interface LeadStatsDrilldownModalProps {
   title: string;
   stage?: LeadStage[];
-  filterTiming?: string;
+  upcomingFollowUps?: boolean;
+  pendingFollowUps?: boolean;
+  pendingMeetings?: boolean;
+  upcomingMeetings?: boolean;
   onClose: () => void;
 }
 
 export function LeadStatsDrilldownModal({
   title,
   stage,
-  filterTiming,
+  upcomingFollowUps,
+  pendingFollowUps,
+  pendingMeetings,
+  upcomingMeetings,
   onClose,
 }: LeadStatsDrilldownModalProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -28,7 +34,7 @@ export function LeadStatsDrilldownModal({
     const timeout = setTimeout(() => {
       setLoading(true);
 
-      fetchLeads({ page: 1, limit: 25, status: stage, filterTiming })
+      fetchLeads({ page: 1, limit: 25, status: stage, upcomingFollowUps, pendingFollowUps, pendingMeetings, upcomingMeetings })
         .then((result) => {
           if (!cancelled) {
             setLeads(result.items);
@@ -45,7 +51,7 @@ export function LeadStatsDrilldownModal({
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [stage, filterTiming]);
+  }, [stage, upcomingFollowUps, pendingFollowUps]);
 
   return (
     <ModalShell

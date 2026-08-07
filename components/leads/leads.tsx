@@ -178,6 +178,7 @@ export default function Leads() {
   };
 
   const handleMetricClick = (metric: string | null) => {
+    setActiveTab("table");
     setActiveMetric(metric);
     const cleanedMetric =
       metric

@@ -13,6 +13,10 @@ import {
   CalendarDays,
   CalendarRange,
   TimerReset,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Clock3,
 } from "lucide-react";
 import { Lead, LeadStage } from "@/lib/leads/types";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
@@ -20,6 +24,20 @@ import { dialablePhone } from "@/lib/leads/lead-helpers";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import {
+  addDays,
+  format,
+  parseISO,
+  isAfter,
+  isBefore,
+  isEqual,
+  isSameDay,
+  differenceInCalendarDays,
+} from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 interface FollowupsViewProps {
   loading: boolean;
@@ -86,37 +104,50 @@ function getStageConfig(stage: string) {
   );
 }
 
-function getAustralianDateString(offsetDays = 0): string {
-  const date = new Date();
-  if (offsetDays !== 0) {
-    date.setDate(date.getDate() + offsetDays);
-  }
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Australia/Sydney",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-
-  const year = parts.find((p) => p.type === "year")!.value;
-  const month = parts.find((p) => p.type === "month")!.value;
-  const day = parts.find((p) => p.type === "day")!.value;
-  return `${year}-${month}-${day}`;
+function getAustralianDate(offsetDays = 0): Date {
+  return addDays(toZonedTime(new Date(), "Australia/Sydney"), offsetDays);
 }
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
-  const date = new Date(dateStr + "T00:00:00");
-  const todayStr = getAustralianDateString(0);
-  const tomorrowStr = getAustralianDateString(1);
-  if (dateStr === todayStr) return "Today";
-  if (dateStr === tomorrowStr) return "Tomorrow";
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    weekday: "short",
-  });
+  const date = parseISO(dateStr);
+  if (isSameDay(date, getAustralianDate())) {
+    return "Today";
+  }
+  if (isSameDay(date, getAustralianDate(1))) {
+    return "Tomorrow";
+  }
+
+  return format(date, "EEE, MMM d");
 }
+
+const getDateStatus = (date: string | null) => {
+  const today = getAustralianDate();
+  if (!date) {
+    return {
+      scheduledDate: "",
+      status: "",
+    };
+  }
+
+  const target = parseISO(date);
+  const diff = differenceInCalendarDays(target, today);
+
+  let status: string;
+
+  if (diff < 0) {
+    status = `${Math.abs(diff)} day${Math.abs(diff) === 1 ? "" : "s"} overdue`;
+  } else if (diff === 0) {
+    status = "Due today";
+  } else {
+    status = `${diff} day${diff === 1 ? "" : "s"} left`;
+  }
+
+  return {
+    scheduledDate: formatDate(date),
+    status,
+  };
+};
 
 interface FollowupItemProps {
   lead: Lead;
@@ -138,8 +169,8 @@ function FollowupItem({
   };
 
   const stageConfig = getStageConfig(lead.stage);
-  const todayStr = getAustralianDateString(0);
-  const isToday = lead.followupDate === todayStr;
+  const todayStr = getAustralianDate(0);
+  const isToday = isSameDay(parseISO(lead.followupDate || ""), todayStr);
 
   return (
     <div className={`fu-item ${isToday ? "fu-item-today" : ""}`}>
@@ -237,6 +268,7 @@ function FollowupsView({
   showToast,
 }: FollowupsViewProps) {
   const dispatch = useAppDispatch();
+  const [updatesCollapsed, setUpdatesCollapsed] = useState(false);
 
   const relevantLeads = useMemo(
     () =>
@@ -247,96 +279,180 @@ function FollowupsView({
     [leads],
   );
 
+  console.log(relevantLeads, "leads in followups view");
+  const today = getAustralianDate();
+
   const pendingFollowups = useMemo(() => {
-    const today = getAustralianDateString(0);
     return relevantLeads.filter(
       (lead) =>
         lead.stage === "In Follow-up" &&
         lead.followupDate &&
-        lead.followupDate <= today,
+        (isBefore(parseISO(lead.followupDate), today) ||
+          isEqual(parseISO(lead.followupDate), today)),
     );
-  }, [relevantLeads]);
+  }, [relevantLeads, today]);
 
   const upcomingFollowups = useMemo(() => {
-    const today = getAustralianDateString(0);
     return relevantLeads
       .filter(
         (lead) =>
           lead.stage === "In Follow-up" &&
           lead.followupDate &&
-          lead.followupDate > today,
+          isAfter(parseISO(lead.followupDate), today),
       )
-      .sort((a, b) =>
-        (a.followupDate || "").localeCompare(b.followupDate || ""),
+      .sort(
+        (a, b) =>
+          parseISO(a.followupDate!).getTime() -
+          parseISO(b.followupDate!).getTime(),
       );
-  }, [relevantLeads]);
+  }, [relevantLeads, today]);
 
-  const pendingMeetings = useMemo(
-    () =>
-      relevantLeads.filter(
-        (lead) =>
-          lead.stage === "Meeting Scheduled" &&
-          lead.meetingDate &&
-          lead.meetingDate < getAustralianDateString(0),
-      ),
-    [relevantLeads],
-  );
+  const pendingMeetings = useMemo(() => {
+    return relevantLeads.filter(
+      (lead) =>
+        lead.stage === "Meeting Scheduled" &&
+        lead.meetingDate &&
+        (isBefore(parseISO(lead.meetingDate), today) ||
+          isEqual(parseISO(lead.meetingDate), today)),
+    );
+  }, [relevantLeads, today]);
+
+  const upcomingMeetings = useMemo(() => {
+    return relevantLeads.filter(
+      (lead) =>
+        lead.stage === "Meeting Scheduled" &&
+        lead.meetingDate &&
+        isAfter(parseISO(lead.meetingDate), today),
+    );
+  }, [relevantLeads, today]);
 
   const stats = followupStats ?? {
     totalFollowUps: pendingFollowups.length + upcomingFollowups.length,
     pendingFollowUps: pendingFollowups.length,
     upcomingFollowUps: upcomingFollowups.length,
-    totalMeetings: pendingMeetings.length,
+    totalMeetings: pendingMeetings.length + upcomingMeetings.length,
     pendingMeetings: pendingMeetings.length,
-    upcomingMeetings: 0,
+    upcomingMeetings: upcomingMeetings.length,
   };
 
   const notificationItems = [
-    ...pendingFollowups.map((lead) => ({
-      key: `followup-${lead.id}`,
-      label: `Follow-up due for ${lead.name} — was it completed?`,
-      action: () =>
-        dispatch(
-          openModal({ type: "followUpPrompt", payload: { leadId: lead.id } }),
-        ),
-    })),
-    ...pendingMeetings.map((lead) => ({
-      key: `meeting-${lead.id}`,
-      label: `Meeting review needed for ${lead.name}`,
-      action: () =>
-        dispatch(
-          openModal({ type: "meetingReview", payload: { leadId: lead.id } }),
-        ),
-    })),
+    ...pendingFollowups.map((lead) => {
+      const { scheduledDate, status } = getDateStatus(lead.followupDate);
+
+      return {
+        key: `followup-${lead.id}`,
+        label: `Follow-up due for ${lead.name} — was it completed?`,
+        scheduledDate,
+        status,
+        action: () =>
+          dispatch(
+            openModal({
+              type: "followUpPrompt",
+              payload: { leadId: lead.id },
+            }),
+          ),
+      };
+    }),
+
+    ...pendingMeetings.map((lead) => {
+      const { scheduledDate, status } = getDateStatus(lead.meetingDate!);
+
+      return {
+        key: `meeting-${lead.id}`,
+        label: `Meeting review needed for ${lead.name}`,
+        scheduledDate,
+        status,
+        action: () =>
+          dispatch(
+            openModal({
+              type: "meetingReview",
+              payload: { leadId: lead.id },
+            }),
+          ),
+      };
+    }),
   ];
 
   return (
     <div className="followups-view">
       <div className="followups-grid">
         <div className="followups-main">
-          {notificationItems.length > 0 && (
-            <div className="fu-card mb-4 border border-(--royal-gold)/20 bg-(--royal-gold-light)/30">
-              <div className="fu-card-header">
-                <div className="fu-card-header-left">
-                  <Bell size={16} className="fu-card-header-icon" />
-                  <h3 className="fu-card-title">Action items</h3>
-                </div>
+          <Card className="border-border/70 bg-white/95 shadow-sm">
+            <CardHeader className="border-b border-border/70 pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base font-semibold">
+                  Follow Up and Meeting Scheduled Updates
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setUpdatesCollapsed((prev) => !prev)}
+                >
+                  {updatesCollapsed ? (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                    </>
+                  ) : (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
               </div>
-              <div className="space-y-2 px-4 pb-4">
-                {notificationItems.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-lg border border-border bg-white px-3 py-2 text-left text-sm transition hover:border-royal-gold"
-                    onClick={item.action}
+            </CardHeader>
+
+            {!updatesCollapsed && (
+              <CardContent className="pt-4">
+                {notificationItems.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+                    No pending follow up or meeting updates.
+                  </div>
+                ) : (
+                  <div
+                    className={cn(
+                      "space-y-2",
+                      notificationItems.length > 2 &&
+                        "max-h-42.5 overflow-y-auto pr-2 no-scrollbar",
+                    )}
                   >
-                    <span>{item.label}</span>
-                    <span className="text-xs text-muted-foreground">Open</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+                    {notificationItems.map((item) => (
+                      <div
+                        key={item.key}
+                        className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"
+                      >
+                        <div className="flex-1">
+                          <p className="font-semibold text-slate-900">
+                            {item.label}
+                          </p>
+
+                          <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                            <div className="flex items-center gap-1">
+                              <CalendarDays className="h-4 w-4" />
+                              <span>Scheduled At: {item.scheduledDate}</span>
+                            </div>
+
+                            <div className="flex items-center gap-1 font-medium text-amber-700">
+                              <Clock3 className="h-4 w-4" />
+                              <span>{item.status}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={item.action}
+                        >
+                          <Eye className="mr-1 h-4 w-4" />
+                          Review
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
 
           <div className="fu-card">
             <div className="fu-card-header">
@@ -454,7 +570,6 @@ function FollowupsView({
                       payload: {
                         title: "Total Follow-ups",
                         stage: ["In Follow-up"] as LeadStage[],
-                        filterTiming: "all",
                       },
                     }),
                   )
@@ -473,7 +588,7 @@ function FollowupsView({
                       payload: {
                         title: "Pending Follow-ups",
                         stage: ["In Follow-up"] as LeadStage[],
-                        filterTiming: "today",
+                        pendingFollowUps: true,
                       },
                     }),
                   )
@@ -492,7 +607,7 @@ function FollowupsView({
                       payload: {
                         title: "Upcoming Follow-ups",
                         stage: ["In Follow-up"] as LeadStage[],
-                        filterTiming: "this_week",
+                        upcomingFollowUps: true,
                       },
                     }),
                   )
@@ -511,7 +626,6 @@ function FollowupsView({
                       payload: {
                         title: "Total Meetings",
                         stage: ["Meeting Scheduled"] as LeadStage[],
-                        filterTiming: "all",
                       },
                     }),
                   )
@@ -530,7 +644,7 @@ function FollowupsView({
                       payload: {
                         title: "Pending Meetings",
                         stage: ["Meeting Scheduled"] as LeadStage[],
-                        filterTiming: "today",
+                        pendingMeetings: true,
                       },
                     }),
                   )
@@ -549,7 +663,7 @@ function FollowupsView({
                       payload: {
                         title: "Upcoming Meetings",
                         stage: ["Meeting Scheduled"] as LeadStage[],
-                        filterTiming: "this_week",
+                        upcomingMeetings: true,
                       },
                     }),
                   )

@@ -21,7 +21,7 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
   if (!status) return undefined;
   if (status === "total") return [];
   if (status === "converted") return ["Won", "Converted"];
-  if (status === "pendingFollowup") return ["In Follow-up"];
+  if (status === "pendingFollowup") return ["In Follow-up", "Meeting Scheduled"];
   if (status === "lost") return ["Lost", "Cancelled", "Disqualified"];
   return status.split(",") as LeadStage[];
 }

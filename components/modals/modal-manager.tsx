@@ -385,8 +385,23 @@ export function ModalManager() {
         : typeof modal.payload?.stage === "string"
           ? [String(modal.payload.stage) as LeadStage]
           : undefined;
-      const filterTiming = typeof modal.payload?.filterTiming === "string" ? modal.payload.filterTiming : undefined;
-      return <LeadStatsDrilldownModal title={title} stage={stage} filterTiming={filterTiming} onClose={handleClose} />;
+      const upcomingFollowUps =
+        typeof modal.payload?.upcomingFollowUps === "boolean"
+          ? modal.payload.upcomingFollowUps
+          : undefined;
+      const pendingFollowUps =
+        typeof modal.payload?.pendingFollowUps === "boolean"
+          ? modal.payload.pendingFollowUps
+          : undefined;
+      return (
+        <LeadStatsDrilldownModal
+          title={title}
+          stage={stage}
+          upcomingFollowUps={upcomingFollowUps}
+          pendingFollowUps={pendingFollowUps}
+          onClose={handleClose}
+        />
+      );
     }
     case "addTradie":
       return <AddTradieModal open onClose={handleClose} />;
@@ -472,13 +487,7 @@ export function ModalManager() {
       const { tradie } = modal.payload as {
         tradie: TradieDetails;
       };
-      return (
-        <EditTradieModal
-          open
-          onClose={handleClose}
-          tradie={tradie}
-        />
-      );
+      return <EditTradieModal open onClose={handleClose} tradie={tradie} />;
     }
     default:
       return null;
