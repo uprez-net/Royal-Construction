@@ -10,6 +10,15 @@ interface RateConstantsPanelProps {
   onChange: (key: string, value: number) => void;
 }
 
+export function humanizeConstant(text: string): string {
+  return text
+    .toLowerCase()
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 export function FormulaVariablesPanel({
   variables,
   onChange,
@@ -39,7 +48,7 @@ export function FormulaVariablesPanel({
                 htmlFor={`fv-${key}`}
                 className="font-mono text-xs text-muted-foreground"
               >
-                {key}
+                {humanizeConstant(key)}
               </Label>
               <Input
                 id={`fv-${key}`}

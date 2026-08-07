@@ -19,6 +19,8 @@ import { Check, Download, Loader2 } from "lucide-react";
 import { formatCurrency, formatOfferReference } from "./offer-workspace-format";
 import { OfferVersionsMenu } from "./offer-workspace-versions";
 import type { OfferExpiry } from "@/lib/offer/offer-readiness";
+import { UploadButton } from "@/components/common/upload-button";
+import { File } from "@prisma/client";
 
 type OfferSaveState = "idle" | "saving" | "saved" | "error";
 
@@ -41,10 +43,18 @@ const WORKFLOW_STEPS: readonly {
   readonly target: string | null;
 }[] = [
   { label: "Job setup", phase: "offer", target: "offer-step-job-setup" },
-  { label: "Cost schedule", phase: "offer", target: "offer-step-cost-schedule" },
+  {
+    label: "Cost schedule",
+    phase: "offer",
+    target: "offer-step-cost-schedule",
+  },
   { label: "Pricing", phase: "offer", target: "offer-step-pricing" },
   { label: "Scope", phase: "offer", target: "offer-step-scope" },
-  { label: "Offer document", phase: "offer", target: "offer-step-offer-document" },
+  {
+    label: "Offer document",
+    phase: "offer",
+    target: "offer-step-offer-document",
+  },
   { label: "Send & negotiate", phase: "offer", target: "offer-step-send" },
   { label: "Tender", phase: "tender", target: "offer-step-tender" },
   { label: "Contract", phase: "contract", target: "offer-step-contract" },
@@ -138,6 +148,15 @@ export function OfferWorkspaceHeader({
               {formatCurrency(customerPrice.selectedContractValueIncGst)}
             </p>
           </div>
+          <UploadButton
+            leadId={leadId?.toString()}
+            maxFiles={5}
+            accept=".pdf,.doc,.docx,.xls,.xlsx, image/*"
+            onUpload={(files: File[]) => {
+              // Handle the uploaded files here
+              console.log("Uploaded files:", files);
+            }}
+          />
           <Button type="button" variant="outline" onClick={onDownloadPreview}>
             <Download className="size-4" aria-hidden="true" />
             Download offer
@@ -243,7 +262,7 @@ export function OfferWorkflowSteps({
       className="max-w-full overflow-x-auto rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
     >
       {/* Phase bands: Offer / Tender / Contract, with Project set apart as handoff */}
-      <ol aria-hidden="true" className="flex min-w-[920px]">
+      <ol aria-hidden="true" className="flex min-w-230">
         {WORKFLOW_PHASES.map((phase) => {
           const count = WORKFLOW_STEPS.filter(
             (step) => step.phase === phase.id,
@@ -275,7 +294,7 @@ export function OfferWorkflowSteps({
       </ol>
 
       {/* Node rail */}
-      <ol className="flex min-w-[920px] pt-3">
+      <ol className="flex min-w-230 pt-3">
         {WORKFLOW_STEPS.map((step, index) => {
           const isFirst = index === 0;
           const isLast = index === WORKFLOW_STEPS.length - 1;

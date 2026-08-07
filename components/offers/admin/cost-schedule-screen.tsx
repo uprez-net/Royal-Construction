@@ -25,7 +25,7 @@ import {
   OfferCardHeading,
   OfferSummaryBadge,
 } from "@/components/offers/new-workflow/offer-workspace-card-heading";
-import { Calculator, Plus, Trash2 } from "lucide-react";
+import { Calculator, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { PriceModeCell } from "./shared/price-mode-cell";
 import { FormulaVariablesPanel } from "./shared/formula-variables-panel";
 import { SaveChangesButton } from "./shared/save-changes-button";
@@ -156,11 +156,11 @@ export function OfferCostScheduleScreen() {
         </div>
 
         <div className="max-w-full overflow-x-auto rounded-lg border border-border bg-card">
-          <Table className="min-w-[920px] table-fixed border-separate border-spacing-0 text-[13px]">
+          <Table className="min-w-230 table-fixed border-separate border-spacing-0 text-[13px]">
             <colgroup>
               <col className="w-20" />
               <col className="w-72" />
-              <col className="w-[32rem]" />
+              <col className="w-lg" />
               <col className="w-12" />
             </colgroup>
             <TableHeader className="bg-muted/60">
@@ -266,22 +266,43 @@ function PhaseGroup({
   onRemoveRow,
   onAddTask,
 }: PhaseGroupProps) {
+  const [expanded, setExpanded] = useState(true);
+
   return (
     <>
       <TableRow className="bg-muted/40 hover:bg-muted/40">
         <TableCell colSpan={4} className="py-2">
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label={expanded ? "Collapse phase" : "Expand phase"}
+              aria-expanded={expanded}
+              onClick={() => setExpanded((prev) => !prev)}
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted"
+            >
+              <ChevronDown
+                className={
+                  "size-4 transition-transform " +
+                  (expanded ? "rotate-0" : "-rotate-90")
+                }
+                aria-hidden="true"
+              />
+            </button>
             <Input
               value={phase}
               onChange={(e) => onRenamePhase(e.target.value)}
               aria-label="Phase name"
               className="h-7 max-w-72 font-semibold uppercase tracking-wide"
             />
+            <span className="text-xs font-normal text-muted-foreground">
+              {items.length} {items.length === 1 ? "task" : "tasks"}
+            </span>
             <Button
               type="button"
               variant="ghost"
               size="xs"
               onClick={onAddTask}
+              className="ml-auto"
             >
               <Plus className="size-3.5" />
               Add task
@@ -289,55 +310,56 @@ function PhaseGroup({
           </div>
         </TableCell>
       </TableRow>
-      {items.map((row) => (
-        <TableRow key={row.id}>
-          <TableCell className="border-r border-border/70">
-            <Input
-              value={row.mapId === undefined ? "" : String(row.mapId)}
-              onChange={(e) => {
-                const v = e.target.value;
-                onUpdateRow({
-                  ...row,
-                  mapId: v === "" ? undefined : Number(v),
-                });
-              }}
-              placeholder="—"
-              inputMode="numeric"
-              aria-label="Map number"
-              className="h-8 w-16"
-            />
-          </TableCell>
-          <TableCell className="border-r border-border/70">
-            <Input
-              value={row.task}
-              onChange={(e) => onUpdateRow({ ...row, task: e.target.value })}
-              aria-label="Task description"
-              className="h-8"
-            />
-          </TableCell>
-          <TableCell className="border-r border-border/70">
-            <PriceModeCell
-              row={row}
-              onChange={onUpdateRow}
-              formulaVariableKeys={formulaVariables}
-              formulaSampleValues={formulaSampleValues}
-              onFormulaValidationChange={(rowId, result) =>
-                onFormulaValidation(rowId, result.valid)
-              }
-            />
-          </TableCell>
-          <TableCell>
-            <button
-              type="button"
-              aria-label="Remove task"
-              onClick={() => onRemoveRow(row.id)}
-              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
-            >
-              <Trash2 className="size-4" aria-hidden="true" />
-            </button>
-          </TableCell>
-        </TableRow>
-      ))}
+      {expanded &&
+        items.map((row) => (
+          <TableRow key={row.id}>
+            <TableCell className="border-r border-border/70">
+              <Input
+                value={row.mapId === undefined ? "" : String(row.mapId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  onUpdateRow({
+                    ...row,
+                    mapId: v === "" ? undefined : Number(v),
+                  });
+                }}
+                placeholder="—"
+                inputMode="numeric"
+                aria-label="Map number"
+                className="h-8 w-16"
+              />
+            </TableCell>
+            <TableCell className="border-r border-border/70">
+              <Input
+                value={row.task}
+                onChange={(e) => onUpdateRow({ ...row, task: e.target.value })}
+                aria-label="Task description"
+                className="h-8"
+              />
+            </TableCell>
+            <TableCell className="border-r border-border/70">
+              <PriceModeCell
+                row={row}
+                onChange={onUpdateRow}
+                formulaVariableKeys={formulaVariables}
+                formulaSampleValues={formulaSampleValues}
+                onFormulaValidationChange={(rowId, result) =>
+                  onFormulaValidation(rowId, result.valid)
+                }
+              />
+            </TableCell>
+            <TableCell>
+              <button
+                type="button"
+                aria-label="Remove task"
+                onClick={() => onRemoveRow(row.id)}
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+              </button>
+            </TableCell>
+          </TableRow>
+        ))}
     </>
   );
 }

@@ -37,6 +37,7 @@ export function AreaCalculatorPanel({
     ["Alfresco", basis.alfrescoSqm],
     ["Porch", basis.porchSqm],
     ["Granny flat", basis.grannyFlatSqm],
+    ["Balcony", basis.balconySqm],
   ] as const;
 
   return (

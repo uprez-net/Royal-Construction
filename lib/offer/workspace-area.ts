@@ -12,6 +12,7 @@ export type OfferAreaBasis = {
   readonly alfrescoSqm: number;
   readonly porchSqm: number;
   readonly grannyFlatSqm: number;
+  readonly balconySqm: number;
 };
 
 // The estimator's rate/allowance config plus the secondary measurements the job
@@ -64,6 +65,7 @@ export const EMPTY_AREA_BASIS: OfferAreaBasis = {
   alfrescoSqm: 0,
   porchSqm: 0,
   grannyFlatSqm: 0,
+  balconySqm: 0,
 };
 
 // Fresh-offer defaults: the RATES and standard allowances remain as estimator
@@ -102,6 +104,7 @@ export function offerAreaBasisFromJob(
     | "alfrescoPorchSqm"
     | "porchSqm"
     | "grannyFlatSqm"
+    | "balconySqm"
   >,
 ): OfferAreaBasis {
   return {
@@ -111,6 +114,7 @@ export function offerAreaBasisFromJob(
     alfrescoSqm: job.alfrescoPorchSqm,
     porchSqm: job.porchSqm,
     grannyFlatSqm: job.grannyFlatSqm,
+    balconySqm: job.balconySqm,
   };
 }
 
