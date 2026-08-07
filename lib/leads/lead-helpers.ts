@@ -328,32 +328,43 @@ export function buildFollowupConfirmedHistoryEntry(): HistoryItem {
   };
 }
 
-export function buildFollowupRescheduledHistoryEntry(nextDate: string, nextTime: string): HistoryItem {
+export function buildFollowupRescheduledHistoryEntry(nextDate: string, nextTime: string, note?: string): HistoryItem {
   return {
     action: "Follow-up rescheduled",
-    detail: `Follow-up moved to ${nextDate} ${nextTime}`,
+    detail: `Follow-up moved to ${nextDate} ${nextTime}${note ? ` \nNOTE: (${note})` : ""}`,
     type: "system",
     date: nextDate,
     time: nextTime,
   };
 }
 
-export function buildFollowupNotRequiredHistoryEntry(): HistoryItem {
+export function buildFollowupNotRequiredHistoryEntry(note?: string): HistoryItem {
   const now = new Date();
   return {
     action: "Follow-up not required",
-    detail: "No additional follow-up is required for this lead.",
+    detail: `No additional follow-up is required for this lead.${note ? ` \nNOTE: (${note})` : ""}`,
     type: "system",
     date: now.toISOString().slice(0, 10),
     time: now.toTimeString().slice(0, 5),
   };
 }
 
-export function buildMeetingDidNotTakePlaceHistoryEntry(): HistoryItem {
+export function buildFollowupCompletedHistoryEntry(note?: string): HistoryItem {
+  const now = new Date();
+  return {
+    action: "Follow-up completed",
+    detail: `The follow-up was completed and acknowledged.${note ? ` \nNOTE: (${note})` : ""}`,
+    type: "system",
+    date: now.toISOString().slice(0, 10),
+    time: now.toTimeString().slice(0, 5),
+  };
+}
+
+export function buildMeetingDidNotTakePlaceHistoryEntry(reason?: string): HistoryItem {
   const now = new Date();
   return {
     action: "Meeting did not take place",
-    detail: "The scheduled meeting did not occur and needs rescheduling.",
+    detail: `The scheduled meeting did not occur and needs rescheduling.${reason ? ` \nREASON: (${reason})` : ""}`,
     type: "system",
     date: now.toISOString().slice(0, 10),
     time: now.toTimeString().slice(0, 5),

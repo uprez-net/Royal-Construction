@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Clock3, MessageSquareText, XCircle } from "lucide-react";
+
 import { ModalShell } from "@/components/common/modal-shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
 import { Lead } from "@/lib/leads/types";
 import { fetchLead, updateLead } from "@/lib/leads/leads-service";
-import { useRouter } from "next/navigation";
 import {
+  buildFollowupCompletedHistoryEntry,
   buildFollowupNotRequiredHistoryEntry,
   buildFollowupRescheduledHistoryEntry,
 } from "@/lib/leads/lead-helpers";
@@ -21,12 +29,16 @@ export function FollowupPromptModal({
 }: FollowupPromptModalProps) {
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
+
   const [choice, setChoice] = useState<
     "yes" | "reschedule" | "notRequired" | null
   >(null);
+
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -64,6 +76,7 @@ export function FollowupPromptModal({
     if (choice === "reschedule" && !date) return;
 
     setSaving(true);
+
     try {
       const updated = await updateLead(lead.id, {
         followupDate: choice === "reschedule" ? date : null,
@@ -71,10 +84,10 @@ export function FollowupPromptModal({
         stage: choice === "reschedule" ? "In Follow-up" : lead.stage,
         history:
           choice === "reschedule"
-            ? [buildFollowupRescheduledHistoryEntry(date, time)]
+            ? [buildFollowupRescheduledHistoryEntry(date, time, note)]
             : choice === "notRequired"
-              ? [buildFollowupNotRequiredHistoryEntry()]
-              : [],
+              ? [buildFollowupNotRequiredHistoryEntry(note)]
+              : [buildFollowupCompletedHistoryEntry(note)],
       });
 
       if (updated) {
@@ -92,59 +105,67 @@ export function FollowupPromptModal({
       onClose={onClose}
       title={title}
       subtitle={lead ? `Lead #${lead.id}` : undefined}
-      maxWidthClass="max-w-[520px]"
+      maxWidthClass="max-w-[560px]"
     >
       {loading || !lead ? (
-        <div className="text-sm text-muted-foreground">Loading lead...</div>
+        <div className="py-8 text-center text-sm text-muted-foreground">
+          Loading lead...
+        </div>
       ) : (
-        <div className="space-y-4">
-          <p className="text-sm font-medium text-foreground">
-            Was the follow-up completed?
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={`rounded-full border px-4 py-2 text-sm ${choice === "yes" ? "border-royal-gold bg-royal-gold-light" : "border-border"}`}
-              onClick={() => setChoice("yes")}
-            >
-              Yes
-            </button>
-            <button
-              type="button"
-              className={`rounded-full border px-4 py-2 text-sm ${choice === "reschedule" ? "border-royal-gold bg-royal-gold-light" : "border-border"}`}
-              onClick={() => setChoice("reschedule")}
-            >
-              Reschedule
-            </button>
-            <button
-              type="button"
-              className={`rounded-full border px-4 py-2 text-sm ${choice === "notRequired" ? "border-royal-gold bg-royal-gold-light" : "border-border"}`}
-              onClick={() => setChoice("notRequired")}
-            >
-              Not Required
-            </button>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <Label>Was the follow-up completed?</Label>
+
+            <div className="grid gap-2 sm:grid-cols-3">
+              <Button
+                type="button"
+                variant={choice === "yes" ? "default" : "outline"}
+                className="justify-start rounded-md"
+                onClick={() => setChoice("yes")}
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Completed
+              </Button>
+
+              <Button
+                type="button"
+                variant={choice === "reschedule" ? "default" : "outline"}
+                className="justify-start rounded-md"
+                onClick={() => setChoice("reschedule")}
+              >
+                <Clock3 className="mr-2 h-4 w-4" />
+                Reschedule
+              </Button>
+
+              <Button
+                type="button"
+                variant={choice === "notRequired" ? "default" : "outline"}
+                className="justify-start rounded-md"
+                onClick={() => setChoice("notRequired")}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Not Required
+              </Button>
+            </div>
           </div>
 
           {choice === "reschedule" && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
-                  Date
-                </label>
-                <input
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Date</Label>
+
+                <Input
                   type="date"
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
                   value={date}
                   onChange={(event) => setDate(event.target.value)}
                 />
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
-                  Time
-                </label>
-                <input
+
+              <div className="space-y-2">
+                <Label>Time</Label>
+
+                <Input
                   type="time"
-                  className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
                   value={time}
                   onChange={(event) => setTime(event.target.value)}
                 />
@@ -152,22 +173,39 @@ export function FollowupPromptModal({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full bg-royal-gold px-4 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <MessageSquareText className="h-4 w-4" />
+              Notes
+            </Label>
+
+            <Textarea
+              rows={4}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder={
+                choice === "yes"
+                  ? "Add any notes about the completed follow-up..."
+                  : choice === "reschedule"
+                    ? "Why is the follow-up being rescheduled?"
+                    : choice === "notRequired"
+                      ? "Why is a follow-up no longer required?"
+                      : "Add an optional note..."
+              }
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 border-t pt-4">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+
+            <Button
               onClick={handleSubmit}
               disabled={!choice || saving || (choice === "reschedule" && !date)}
             >
-              {saving ? "Saving..." : "Submit"}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
+              {saving ? "Saving..." : "Save Update"}
+            </Button>
           </div>
         </div>
       )}

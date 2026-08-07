@@ -2,9 +2,7 @@ import React, { useState } from "react";
 import { ModalShell } from "@/components/common/modal-shell";
 import { Lead } from "@/lib/leads/types";
 import { updateLead } from "@/lib/leads/leads-service";
-import {
-  buildFollowupHistoryEntry,
-} from "@/lib/leads/lead-helpers";
+import { buildFollowupHistoryEntry } from "@/lib/leads/lead-helpers";
 
 interface FollowupModalProps {
   lead: Lead;
@@ -74,10 +72,7 @@ export function FollowupModal({
     >
       <div className="space-y-4">
         <div>
-          <label
-            htmlFor={dateId}
-            className={labelCls}
-          >
+          <label htmlFor={dateId} className={labelCls}>
             Date
           </label>
           <input
@@ -90,16 +85,16 @@ export function FollowupModal({
             aria-describedby={!date ? dateHelperId : undefined}
           />
           {!date && (
-            <p id={dateHelperId} className="mt-1.5 text-xs text-muted-foreground">
+            <p
+              id={dateHelperId}
+              className="mt-1.5 text-xs text-muted-foreground"
+            >
               Choose a follow-up date before saving.
             </p>
           )}
         </div>
         <div>
-          <label
-            htmlFor={timeId}
-            className={labelCls}
-          >
+          <label htmlFor={timeId} className={labelCls}>
             Time
           </label>
           <input
@@ -113,7 +108,7 @@ export function FollowupModal({
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
-            className={`inline-flex items-center justify-center gap-2 rounded-full bg-[color:var(--royal-gold)] px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-[color:var(--royal-gold-dark)] ${date ? "" : "cursor-not-allowed opacity-50"}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-full bg-royal-gold px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-royal-gold-dark ${date ? "" : "cursor-not-allowed opacity-50"}`}
             onClick={handleSave}
             disabled={!date || saving}
             aria-describedby={!date ? dateHelperId : undefined}
@@ -129,7 +124,7 @@ export function FollowupModal({
           </button>
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition hover:border-[color:var(--royal-gold)] hover:bg-muted"
+            className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground transition hover:border-royal-gold hover:bg-muted"
             onClick={onClose}
           >
             Cancel

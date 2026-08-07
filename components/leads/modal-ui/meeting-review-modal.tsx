@@ -1,14 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  CheckCircle2,
+  Globe,
+  Laptop,
+  MessageSquareText,
+  MonitorSmartphone,
+  StickyNote,
+  XCircle,
+} from "lucide-react";
+
 import { ModalShell } from "@/components/common/modal-shell";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
 import { Lead } from "@/lib/leads/types";
 import { fetchLead, updateLead } from "@/lib/leads/leads-service";
 import {
   buildMeetingDidNotTakePlaceHistoryEntry,
   buildMeetingReviewedHistoryEntry,
 } from "@/lib/leads/lead-helpers";
-import { useRouter } from "next/navigation";
 
 interface MeetingReviewModalProps {
   leadId: number;
@@ -21,13 +35,17 @@ export function MeetingReviewModal({
 }: MeetingReviewModalProps) {
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
+
   const [tookPlace, setTookPlace] = useState<boolean | null>(null);
   const [meetingMode, setMeetingMode] = useState<"Online" | "Offline">(
     "Online",
   );
+
   const [discussionNotes, setDiscussionNotes] = useState("");
   const [buildScope, setBuildScope] = useState("");
+
   const [saving, setSaving] = useState(false);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -38,10 +56,14 @@ export function MeetingReviewModal({
 
       fetchLead(leadId)
         .then((result) => {
-          if (!cancelled) setLead(result);
+          if (!cancelled) {
+            setLead(result);
+          }
         })
         .finally(() => {
-          if (!cancelled) setLoading(false);
+          if (!cancelled) {
+            setLoading(false);
+          }
         });
     }, 0);
 
@@ -53,7 +75,9 @@ export function MeetingReviewModal({
 
   const handleSubmit = async () => {
     if (!lead || tookPlace === null) return;
+
     setSaving(true);
+
     try {
       const updated = await updateLead(
         lead.id,
@@ -69,7 +93,7 @@ export function MeetingReviewModal({
               ],
             }
           : {
-              history: [buildMeetingDidNotTakePlaceHistoryEntry()],
+              history: [buildMeetingDidNotTakePlaceHistoryEntry(discussionNotes)],
             },
       );
 
@@ -86,95 +110,130 @@ export function MeetingReviewModal({
     <ModalShell
       open
       onClose={onClose}
-      title={lead ? `Meeting review for ${lead.name}` : "Meeting review"}
+      title={lead ? `Meeting review for ${lead.name}` : "Meeting Review"}
+      subtitle={lead ? `Lead #${lead.id}` : undefined}
       maxWidthClass="max-w-[560px]"
     >
       {loading || !lead ? (
-        <div className="text-sm text-muted-foreground">Loading lead...</div>
+        <div className="py-8 text-center text-sm text-muted-foreground">
+          Loading meeting...
+        </div>
       ) : (
-        <div className="space-y-4">
-          <p className="text-sm font-medium text-foreground">
-            Did the meeting take place?
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={`rounded-full border px-4 py-2 text-sm ${tookPlace === true ? "border-royal-gold bg-royal-gold-light" : "border-border"}`}
-              onClick={() => setTookPlace(true)}
-            >
-              Yes
-            </button>
-            <button
-              type="button"
-              className={`rounded-full border px-4 py-2 text-sm ${tookPlace === false ? "border-royal-gold bg-royal-gold-light" : "border-border"}`}
-              onClick={() => setTookPlace(false)}
-            >
-              No
-            </button>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <Label>Did the meeting take place?</Label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={tookPlace === true ? "default" : "outline"}
+                className="justify-start rounded-md"
+                onClick={() => setTookPlace(true)}
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Yes, Completed
+              </Button>
+
+              <Button
+                type="button"
+                variant={tookPlace === false ? "default" : "outline"}
+                className="justify-start rounded-md"
+                onClick={() => setTookPlace(false)}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                No, Didn't Happen
+              </Button>
+            </div>
           </div>
 
           {tookPlace === true && (
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
-                  Mode
-                </label>
-                <div className="mt-1 flex gap-2">
-                  <button
+            <>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Meeting Mode
+                </Label>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
                     type="button"
-                    className={`rounded-full border px-4 py-2 text-sm ${meetingMode === "Online" ? "border-royal-gold bg-royal-gold-light" : "border-border"}`}
+                    variant={meetingMode === "Online" ? "default" : "outline"}
+                    className="justify-start rounded-md"
                     onClick={() => setMeetingMode("Online")}
                   >
+                    <MonitorSmartphone className="mr-2 h-4 w-4" />
                     Online
-                  </button>
-                  <button
+                  </Button>
+
+                  <Button
                     type="button"
-                    className={`rounded-full border px-4 py-2 text-sm ${meetingMode === "Offline" ? "border-royal-gold bg-royal-gold-light" : "border-border"}`}
+                    variant={meetingMode === "Offline" ? "default" : "outline"}
+                    className="justify-start rounded-md"
                     onClick={() => setMeetingMode("Offline")}
                   >
+                    <Laptop className="mr-2 h-4 w-4" />
                     Offline
-                  </button>
+                  </Button>
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MessageSquareText className="h-4 w-4" />
                   Discussion Notes
-                </label>
-                <textarea
-                  className="mt-1 min-h-24 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                </Label>
+
+                <Textarea
+                  rows={4}
                   value={discussionNotes}
                   onChange={(event) => setDiscussionNotes(event.target.value)}
+                  placeholder="Summarise what was discussed during the meeting..."
                 />
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <StickyNote className="h-4 w-4" />
                   Build Scope
-                </label>
-                <textarea
-                  className="mt-1 min-h-24 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                </Label>
+
+                <Textarea
+                  rows={4}
                   value={buildScope}
                   onChange={(event) => setBuildScope(event.target.value)}
+                  placeholder="Describe the requested work, features, budget or scope..."
                 />
               </div>
+            </>
+          )}
+
+          {tookPlace === false && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <MessageSquareText className="h-4 w-4" />
+                Reason (Optional)
+              </Label>
+
+              <Textarea
+                rows={4}
+                value={discussionNotes}
+                onChange={(event) => setDiscussionNotes(event.target.value)}
+                placeholder="Why didn't the meeting take place?"
+              />
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full bg-royal-gold px-4 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+          <div className="flex justify-end gap-2 border-t pt-4">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+
+            <Button
               onClick={handleSubmit}
               disabled={tookPlace === null || saving}
             >
-              {saving ? "Saving..." : "Submit"}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-xs font-medium text-muted-foreground"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
+              {saving ? "Saving..." : "Save Review"}
+            </Button>
           </div>
         </div>
       )}
