@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/popover";
 
 import { AddressSuggestion } from "@/types/data";
+import { Role } from "@prisma/client";
 
 export interface LookupOption {
   id: string;
@@ -26,6 +27,7 @@ export interface LookupOption {
   location?: string;
   email?: string;
   phone?: string;
+  role?: string;
   company?: string;
   tradeType?: string;
   description?: string;
@@ -35,6 +37,21 @@ type SearchableItem = LookupOption | AddressSuggestion;
 
 function isLookupOption(item: SearchableItem): item is LookupOption {
   return "name" in item;
+}
+
+function roleLabelConverter(role: Role | undefined): string {
+  switch (role) {
+    case "ADMIN":
+      return "Admin";
+    case "SITE_MANAGER":
+      return "Site Manager";
+    case "GUEST":
+      return "Guest";
+    case "CUSTOMER":
+      return "Customer";
+    default:
+      return role ?? "";
+  }
 }
 
 export function SearchableSelect({
@@ -215,6 +232,7 @@ export function SearchableSelect({
                       [
                         item.email ? `Email: ${item.email}\n` : null,
                         item.phone ? `Phone: ${item.phone}\n` : null,
+                        item.role ? `Role: ${roleLabelConverter(item.role as Role)}\n` : null,
                         item.company ? `Company: ${item.company}\n` : null,
                         item.tradeType ? `Trade: ${item.tradeType}\n` : null,
                         item.location ? `Location: ${item.location}\n` : null,
@@ -254,7 +272,7 @@ export function SearchableSelect({
                                   </span>
                                 )}
 
-                                <span className="break-words">{part}</span>
+                                <span className="wrap-break-word">{part}</span>
                               </Fragment>
                             ))
                           ) : (
