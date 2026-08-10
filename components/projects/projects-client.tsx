@@ -214,11 +214,11 @@ export function ProjectsClient({
   ]);
 
   const openQuickView = useCallback(
-    (project: ProjectWithStats, id?: string) => {
+    (project: ProjectWithStats, isAdmin: boolean) => {
       dispatch(
         openModal({
           type: "projectDetail",
-          payload: id ? { project, id } : { project },
+          payload: { project, isAdmin },
         }),
       );
     },
@@ -418,7 +418,7 @@ export function ProjectsClient({
                     key={project.id}
                     role={role}
                     project={project}
-                    onDetailsClick={(id) => openQuickView(project, id)}
+                    onDetailsClick={(id) => openQuickView(project, role === "ADMIN")}
                   />
                 ))}
               </div>
@@ -503,7 +503,7 @@ export function ProjectsClient({
                 })}
                 onRowClick={(rowIndex) => {
                   const project = visibleProjects[rowIndex];
-                  if (project) openQuickView(project);
+                  if (project) openQuickView(project, role === "ADMIN");
                 }}
               />
             )}
