@@ -14,6 +14,7 @@ import {
   offerPhaseIndex,
   type OfferWorkflowPhase,
 } from "@/lib/offer/workflow";
+import type { TenderGateStatus } from "@/lib/offer/workspace-persistence";
 import { cn } from "@/lib/utils";
 import { Check, Download, Loader2 } from "lucide-react";
 import { formatCurrency, formatOfferReference } from "./offer-workspace-format";
@@ -56,13 +57,25 @@ const WORKFLOW_STEPS: readonly {
     target: "offer-step-offer-document",
   },
   { label: "Send & negotiate", phase: "offer", target: "offer-step-send" },
+  {
+    label: "Tender access",
+    phase: "tender",
+    target: "offer-step-tender-gate",
+  },
   { label: "Tender", phase: "tender", target: "offer-step-tender" },
   { label: "Contract", phase: "contract", target: "offer-step-contract" },
   { label: "Project", phase: "handoff", target: "offer-step-project" },
 ];
 
 // Current node label per status; the active phase comes from activeOfferPhase.
-function currentStepLabel(status: OfferWorkspaceStatus): string {
+// The Tender access gate sits between Send & negotiate and Tender: while the
+// offer is AGREED but the gate is unresolved, the active node is "Tender
+// access"; once the gate unlocks (or the offer moves to tender_draft+) it
+// becomes "Tender".
+function currentStepLabel(
+  status: OfferWorkspaceStatus,
+  tenderGateStatus: TenderGateStatus,
+): string {
   switch (status) {
     case "sent":
     // Offer-acceptance signing (ADR 0004) is still the Send & negotiate step.
@@ -71,6 +84,7 @@ function currentStepLabel(status: OfferWorkspaceStatus): string {
     case "offer_declined":
       return "Send & negotiate";
     case "agreed":
+      return tenderGateStatus === "unlocked" ? "Tender" : "Tender access";
     case "tender_draft":
     case "tender_sent":
     case "tender_declined":
@@ -247,10 +261,12 @@ function scrollToWorkflowStep(target: string) {
 
 export function OfferWorkflowSteps({
   status,
+  tenderGateStatus,
 }: {
   readonly status: OfferWorkspaceStatus;
+  readonly tenderGateStatus: TenderGateStatus;
 }) {
-  const currentLabel = currentStepLabel(status);
+  const currentLabel = currentStepLabel(status, tenderGateStatus);
   const activeIndex = offerPhaseIndex(activeOfferPhase(status));
   const currentIndex = WORKFLOW_STEPS.findIndex(
     (step) => step.label === currentLabel,

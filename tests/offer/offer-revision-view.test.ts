@@ -18,6 +18,7 @@ import {
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import {
   deserializeWorkspace,
+  INITIAL_TENDER_GATE,
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
@@ -44,6 +45,7 @@ const SNAPSHOT: OfferWorkspaceSnapshot = {
   standardPriceInput: "",
   priceAdjustmentLabel: "",
   images: EMPTY_OFFER_IMAGES,
+  tenderGate: INITIAL_TENDER_GATE,
 };
 
 const proposalInput = buildProposalInput(SNAPSHOT);

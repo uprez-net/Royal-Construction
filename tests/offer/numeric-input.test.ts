@@ -3,6 +3,7 @@ import { numberInputValue } from "../../components/offers/new-workflow/offer-wor
 import { parseNonNegativeNumberInput } from "../../lib/offer/workspace-pricing";
 import {
   deserializeWorkspace,
+  INITIAL_TENDER_GATE,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
@@ -56,6 +57,7 @@ const snapshot: OfferWorkspaceSnapshot = {
   standardPriceInput: "",
   priceAdjustmentLabel: "",
   images: EMPTY_OFFER_IMAGES,
+  tenderGate: INITIAL_TENDER_GATE
 };
 
 const blankRoundTrip = deserializeWorkspace(serializeWorkspace(snapshot));

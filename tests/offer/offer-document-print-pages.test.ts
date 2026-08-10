@@ -25,7 +25,7 @@ import {
   type OfferOwner,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import type { OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
 
 // Counting `<div class="page">` in the HTML only proves what the document
@@ -70,6 +70,7 @@ function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     allowances: INITIAL_ALLOWANCES,
     exclusions: INITIAL_EXCLUSIONS,
     draft: INITIAL_OFFER_DRAFT,
+    tenderGate: INITIAL_TENDER_GATE,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,

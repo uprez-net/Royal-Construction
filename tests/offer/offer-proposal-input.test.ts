@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import {
   deserializeWorkspace,
+  INITIAL_TENDER_GATE,
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
@@ -53,6 +54,7 @@ function makeSnapshot(
     allowances: [],
     exclusions: [],
     draft: INITIAL_OFFER_DRAFT,
+    tenderGate: INITIAL_TENDER_GATE,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,

@@ -23,7 +23,7 @@ import {
   type OfferOwner,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import type { OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
 
 function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
@@ -43,6 +43,7 @@ function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     standardPriceInput: "",
     priceAdjustmentLabel: "",
     images: EMPTY_OFFER_IMAGES,
+    tenderGate: INITIAL_TENDER_GATE,
   };
 }
 

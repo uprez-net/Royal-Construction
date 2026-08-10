@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { resolveOfferContractValue } from "../../lib/offer/offer-contract-value";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import {
+  INITIAL_TENDER_GATE,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
@@ -63,6 +64,7 @@ function makeSnapshot(
     standardPriceInput: "",
     priceAdjustmentLabel: "",
     images: EMPTY_OFFER_IMAGES,
+    tenderGate: INITIAL_TENDER_GATE,
     ...overrides,
   };
 }

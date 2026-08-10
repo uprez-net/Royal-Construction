@@ -27,6 +27,10 @@ import {
 } from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
+import {
+  deriveTenderGateStatus,
+  type TenderGateState,
+} from "@/lib/offer/workspace-persistence";
 import { formatOfferReference } from "./offer-workspace-format";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
@@ -54,6 +58,7 @@ import type {
   OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
 import { SendNegotiatePanel } from "./offer-workspace-send-negotiate";
+import { TenderGatePanel } from "./offer-workspace-tender-gate";
 import { OfferWorkspaceActivity } from "./offer-workspace-activity";
 import { buildOfferReview } from "@/lib/offer/offer-review";
 import {
@@ -100,6 +105,8 @@ type OfferWorkspaceScreenProps = {
   readonly offerExpiry: OfferExpiry | null;
   readonly saveState: OfferSaveState;
   readonly sendBlockers: readonly OfferSendBlocker[];
+  readonly tenderGate: TenderGateState;
+  readonly onTenderGateChange: (patch: Partial<TenderGateState>) => void;
   readonly onAddLine: () => void;
   readonly onAllowanceChange: (
     itemId: string,
@@ -212,6 +219,8 @@ export function OfferWorkspaceScreen({
   offerExpiry,
   saveState,
   sendBlockers,
+  tenderGate,
+  onTenderGateChange,
   onAddLine,
   onAllowanceChange,
   onAddAllowance,
@@ -359,6 +368,15 @@ export function OfferWorkspaceScreen({
   // relying on hardcoded guesses that leave content tucked behind the header.
   const stickyRef = useRef<HTMLDivElement>(null);
   const [stickyOffset, setStickyOffset] = useState(288);
+
+  // Tender access gate (Step 7). The gate only holds the Tender panel while
+  // the offer is at AGREED — once a Tender is generated (tender_draft+) the
+  // gate is moot and the panel stays reachable.
+  const tenderGateStatus = deriveTenderGateStatus(tenderGate);
+  const gateUnlocked = tenderGateStatus === "unlocked";
+  const tenderPanelUnlocked =
+    isOfferPhaseUnlocked(status, "tender") &&
+    (status !== "agreed" || gateUnlocked);
   useEffect(() => {
     const el = stickyRef.current;
     if (!el) {
@@ -391,7 +409,7 @@ export function OfferWorkspaceScreen({
           saveState={saveState}
           onDownloadPreview={onDownloadOffer}
         />
-        <OfferWorkflowSteps status={status} />
+        <OfferWorkflowSteps status={status} tenderGateStatus={tenderGateStatus} />
       </div>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-8">
@@ -562,12 +580,35 @@ export function OfferWorkspaceScreen({
           </OfferStepSection>
 
           <OfferPhaseGate
-            id="offer-step-tender"
+            id="offer-step-tender-gate"
             index={7}
             phase="Tender"
-            title="Tender"
+            title="Tender access"
             unlocked={isOfferPhaseUnlocked(status, "tender")}
-            unlockHint="Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
+            unlockHint="Unlocks once the Offer is agreed. Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."
+          >
+            <TenderGatePanel
+              status={status}
+              tenderGate={tenderGate}
+              leadId={leadId}
+              onTenderGateChange={onTenderGateChange}
+              onCreateRevision={onCreateRevision}
+              canRevise={canRevise}
+              revising={revising}
+            />
+          </OfferPhaseGate>
+
+          <OfferPhaseGate
+            id="offer-step-tender"
+            index={8}
+            phase="Tender"
+            title="Tender"
+            unlocked={tenderPanelUnlocked}
+            unlockHint={
+              gateUnlocked
+                ? "Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
+                : "Complete the Tender access step above to unlock the Tender."
+            }
           >
             <TenderPanel
               signerStatuses={signerStatuses}
@@ -589,7 +630,7 @@ export function OfferWorkspaceScreen({
 
           <OfferPhaseGate
             id="offer-step-contract"
-            index={8}
+            index={9}
             phase="Contract"
             title="Contract"
             unlocked={isOfferPhaseUnlocked(status, "contract")}
@@ -615,7 +656,7 @@ export function OfferWorkspaceScreen({
 
           <OfferPhaseGate
             id="offer-step-project"
-            index={9}
+            index={10}
             phase="Handoff"
             title="Project"
             unlocked={isOfferPhaseUnlocked(status, "handoff")}

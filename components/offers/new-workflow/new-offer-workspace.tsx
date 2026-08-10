@@ -78,7 +78,11 @@ import {
   type AdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
 import type { RateConstantKey } from "@/lib/offer/formula-variables";
-import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
+import type {
+  OfferWorkspaceSnapshot,
+  TenderGateState,
+} from "@/lib/offer/workspace-persistence";
+import { INITIAL_TENDER_GATE } from "@/lib/offer/workspace-persistence";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
   collectOfferSendBlockers,
@@ -238,6 +242,9 @@ export function NewOfferWorkspace({
     readonly OfferPaymentScheduleRow[]
   >(INITIAL_PAYMENT_SCHEDULE);
   const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
+  const [tenderGate, setTenderGate] = useState<TenderGateState>(
+    INITIAL_TENDER_GATE,
+  );
   const [revising, setRevising] = useState(false);
   const [revisionNotice, setRevisionNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -475,6 +482,10 @@ export function NewOfferWorkspace({
     setDraft((current) => ({ ...current, ...patch }));
   }
 
+  function updateTenderGate(patch: Partial<TenderGateState>) {
+    setTenderGate((current) => ({ ...current, ...patch }));
+  }
+
   function updateContractParticulars(patch: Partial<ContractParticulars>) {
     const changedKeys = Object.keys(patch) as ContractParticularKey[];
     const nextOverrides = [
@@ -588,6 +599,7 @@ export function NewOfferWorkspace({
       standardPriceInput,
       priceAdjustmentLabel,
       images,
+      tenderGate,
     }),
     [
       job,
@@ -605,6 +617,7 @@ export function NewOfferWorkspace({
       standardPriceInput,
       priceAdjustmentLabel,
       images,
+      tenderGate,
     ],
   );
 
@@ -700,6 +713,7 @@ export function NewOfferWorkspace({
     setStandardPriceInput(s.standardPriceInput);
     setPriceAdjustmentLabel(s.priceAdjustmentLabel);
     setImages(s.images);
+    setTenderGate(s.tenderGate);
   }, []);
 
   // Single-flight workspace autosave (fixes the overlapping-save clobber).
@@ -1482,6 +1496,8 @@ export function NewOfferWorkspace({
         offerExpiry={offerExpiry}
         saveState={saveState}
         sendBlockers={sendBlockers}
+        tenderGate={tenderGate}
+        onTenderGateChange={updateTenderGate}
         onAddLine={addLine}
         onAllowanceChange={updateAllowance}
         onAddAllowance={addAllowance}

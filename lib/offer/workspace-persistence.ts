@@ -40,7 +40,60 @@ export type OfferWorkspaceSnapshot = {
   readonly standardPriceInput: string;
   readonly priceAdjustmentLabel: string;
   readonly images: OfferImageMap;
+  // Step 7 — Tender access gate (Option B: UI-only, layered on the AGREED
+  // status). Persisted in the snapshot so a refresh resumes mid-gate without
+  // re-asking answered questions or re-unlocking a blocked state.
+  readonly tenderGate: TenderGateState;
 };
+
+// Architectural-plan file reference captured at the Tender access gate. Only
+// the identifying fields the workspace needs to show a success confirmation
+// are persisted — the file itself lives in the File table, linked to the lead
+// via UploadButton's leadId metadata so it carries forward at project handoff.
+export type TenderGateArchitecturalPlanFile = {
+  readonly fileId: string;
+  readonly fileName: string;
+  readonly fileSize: number;
+};
+
+export type TenderGateState = {
+  // null = Q1 unanswered.
+  readonly needsArchitecturalPlan: boolean | null;
+  readonly architecturalPlanFeeCollected: boolean;
+  readonly architecturalPlanUploaded: TenderGateArchitecturalPlanFile | null;
+  // null = Q3 unanswered (only reachable once a plan is uploaded).
+  readonly architecturalPlanDesignChanges: boolean | null;
+};
+
+// Derived, not persisted — recomputed from the flags above so the cached
+// status can never drift from the answers that produce it.
+export type TenderGateStatus =
+  | "unanswered"
+  | "unlocked"
+  | "pending-fee"
+  | "pending-upload"
+  | "pending-design-check"
+  | "blocked-revision";
+
+export const INITIAL_TENDER_GATE: TenderGateState = {
+  needsArchitecturalPlan: null,
+  architecturalPlanFeeCollected: false,
+  architecturalPlanUploaded: null,
+  architecturalPlanDesignChanges: null,
+};
+
+export function deriveTenderGateStatus(
+  gate: TenderGateState,
+): TenderGateStatus {
+  if (gate.needsArchitecturalPlan === null) return "unanswered";
+  if (gate.needsArchitecturalPlan === false) return "unlocked";
+  if (!gate.architecturalPlanFeeCollected) return "pending-fee";
+  if (gate.architecturalPlanUploaded === null) return "pending-upload";
+  if (gate.architecturalPlanDesignChanges === null)
+    return "pending-design-check";
+  if (gate.architecturalPlanDesignChanges === true) return "blocked-revision";
+  return "unlocked";
+}
 
 export const CURRENT_WORKSPACE_SCHEMA_VERSION = 2 as const;
 
@@ -269,6 +322,29 @@ const rateCardTierSchema = z
   )
   .catch("MID");
 
+// Tender access gate (Step 7). Every field defaults so older snapshots (which
+// predate the gate) hydrate to the initial unanswered state without a schema
+// version bump or explicit migration.
+const tenderGateFileSchema = z.object({
+  fileId: z.string(),
+  fileName: z.string(),
+  fileSize: z.number(),
+});
+
+const tenderGateSchema = z
+  .object({
+    needsArchitecturalPlan: z.boolean().nullable().default(null),
+    architecturalPlanFeeCollected: z.boolean().default(false),
+    architecturalPlanUploaded: tenderGateFileSchema.nullable().default(null),
+    architecturalPlanDesignChanges: z.boolean().nullable().default(null),
+  })
+  .default({
+    needsArchitecturalPlan: null,
+    architecturalPlanFeeCollected: false,
+    architecturalPlanUploaded: null,
+    architecturalPlanDesignChanges: null,
+  });
+
 const workspaceStateV1Schema = z.object({
   schemaVersion: z.literal(2),
   job: jobSchema,
@@ -297,6 +373,7 @@ const workspaceStateV1Schema = z.object({
       }),
     ),
   ),
+  tenderGate: tenderGateSchema,
 });
 
 // Coerce persisted image values to the {url, source} shape. Older offers stored
@@ -439,6 +516,7 @@ export function serializeWorkspace(
       parseDollarInput(snapshot.standardPriceInput),
     ),
     images: { ...snapshot.images },
+    tenderGate: { ...snapshot.tenderGate },
   };
 }
 
@@ -495,6 +573,7 @@ export function deserializeWorkspace(
     standardPriceInput: optionalPriceInput(persisted.standardPriceCents),
     priceAdjustmentLabel: persisted.priceAdjustmentLabel,
     images: persisted.images as OfferImageMap,
+    tenderGate: persisted.tenderGate,
   };
 }
 
