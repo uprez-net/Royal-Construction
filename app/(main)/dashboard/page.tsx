@@ -92,6 +92,7 @@ export default async function DashboardPageClient() {
 
   return (
     <DashboardHome
+      isAdmin={user?.role === "ADMIN"}
       userFirstName={user?.name.split(" ")[0] ?? "User"}
       graphData={graphResult.data}
       projectsData={projectsResult.data}

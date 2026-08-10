@@ -273,17 +273,20 @@ export function ModalManager() {
           onUpdateStatus={handleUpdateRowStatus}
         />
       );
-    case "projectDetail":
-      const { project: statProject } = modal.payload as {
+    case "projectDetail": {
+      const { project: statProject, isAdmin } = modal.payload as {
         project: ProjectWithStats;
+        isAdmin: boolean;
       };
       return (
         <ProjectDetailModal
+          isAdmin={isAdmin}
           project={statProject}
           isOpen
           onClose={handleClose}
         />
       );
+    }
     case "addMaterial":
       return (
         <AddMaterialModal
@@ -293,9 +296,17 @@ export function ModalManager() {
         />
       );
     case "viewPicture": {
-      const { imageUrls, selectedIndex } = modal.payload as { imageUrls: string[], selectedIndex: number };
+      const { imageUrls, selectedIndex } = modal.payload as {
+        imageUrls: string[];
+        selectedIndex: number;
+      };
       return (
-        <PreviewPictureModal open onClose={handleClose} imageUrls={imageUrls} selectedIndex={selectedIndex} />
+        <PreviewPictureModal
+          open
+          onClose={handleClose}
+          imageUrls={imageUrls}
+          selectedIndex={selectedIndex}
+        />
       );
     }
     case "addMilestone":

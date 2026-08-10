@@ -9,6 +9,7 @@ import type { TabType } from "./project-detail-modal";
 import { formatStatus, projectStatusConfig } from "./project-status";
 
 interface ProjectOverviewTabProps {
+  isAdmin: boolean;
   project: ProjectWithStats;
   setActiveTab: (tab: TabType) => void;
   onClose: () => void;
@@ -24,6 +25,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export function OverviewTab({
+  isAdmin,
   project,
   setActiveTab,
   onClose,
@@ -61,47 +63,51 @@ export function OverviewTab({
   return (
     <div className="space-y-6">
       {/* Budget summary */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg bg-muted p-4">
-          <p className="text-xs font-medium text-muted-foreground">Budget</p>
-          <p className="mt-1 font-mono text-lg font-semibold text-foreground tabular-nums">
-            {budget !== null ? compactCurrency.format(budget) : "—"}
-          </p>
-        </div>
+      {isAdmin && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg bg-muted p-4">
+            <p className="text-xs font-medium text-muted-foreground">Budget</p>
+            <p className="mt-1 font-mono text-lg font-semibold text-foreground tabular-nums">
+              {budget !== null ? compactCurrency.format(budget) : "—"}
+            </p>
+          </div>
 
-        <div className="rounded-lg bg-muted p-4">
-          <p className="text-xs font-medium text-muted-foreground">
-            {spentPercent === null ? "Spent" : `Spent (${spentPercent}%)`}
-          </p>
-          <p
-            className={`mt-1 font-mono text-lg font-semibold tabular-nums ${
-              isOverBudget ? "text-destructive-ink" : "text-foreground"
-            }`}
-          >
-            {spent !== null ? compactCurrency.format(spent) : "—"}
-          </p>
-        </div>
+          <div className="rounded-lg bg-muted p-4">
+            <p className="text-xs font-medium text-muted-foreground">
+              {spentPercent === null ? "Spent" : `Spent (${spentPercent}%)`}
+            </p>
+            <p
+              className={`mt-1 font-mono text-lg font-semibold tabular-nums ${
+                isOverBudget ? "text-destructive-ink" : "text-foreground"
+              }`}
+            >
+              {spent !== null ? compactCurrency.format(spent) : "—"}
+            </p>
+          </div>
 
-        <div className="rounded-lg bg-muted p-4">
-          <p className="text-xs font-medium text-muted-foreground">
-            {isOverBudget ? "Over budget" : "Remaining"}
-          </p>
-          <p
-            className={`mt-1 font-mono text-lg font-semibold tabular-nums ${
-              isOverBudget ? "text-destructive-ink" : "text-success-ink"
-            }`}
-          >
-            {remaining !== null
-              ? compactCurrency.format(Math.abs(remaining))
-              : "—"}
-          </p>
+          <div className="rounded-lg bg-muted p-4">
+            <p className="text-xs font-medium text-muted-foreground">
+              {isOverBudget ? "Over budget" : "Remaining"}
+            </p>
+            <p
+              className={`mt-1 font-mono text-lg font-semibold tabular-nums ${
+                isOverBudget ? "text-destructive-ink" : "text-success-ink"
+              }`}
+            >
+              {remaining !== null
+                ? compactCurrency.format(Math.abs(remaining))
+                : "—"}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Progress */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-medium text-foreground">Overall progress</p>
+          <p className="text-sm font-medium text-foreground">
+            Overall progress
+          </p>
           <p className="font-mono text-sm font-medium text-primary tabular-nums">
             {progressPercent}%
           </p>

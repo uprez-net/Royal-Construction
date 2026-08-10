@@ -13,6 +13,7 @@ import { DashboardGraphCards } from "./dashboard-graph-cards";
 import type { DashboardGraphData } from "@/lib/data/dashboard";
 
 interface DashboardHomeProps {
+  isAdmin: boolean;
   userFirstName: string;
   newLeadsCount: number;
   newProjectsCount: number;
@@ -25,6 +26,7 @@ interface DashboardHomeProps {
 }
 
 export function DashboardHome({
+  isAdmin,
   userFirstName,
   newLeadsCount,
   newProjectsCount,
@@ -77,6 +79,7 @@ export function DashboardHome({
       <DashboardGraphCards data={graphData} />
 
       <DashboardProjectTable
+        isAdmin={isAdmin}
         projects={projectsData.items}
         pageInfo={{
           totalCount: projectsData.totalCount,

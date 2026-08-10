@@ -8,6 +8,7 @@ import { Button } from "../ui/button";
 
 interface CustomerTabProps {
   project: ProjectWithStats;
+  isAdmin: boolean;
 }
 
 const NOT_RECORDED = "Not recorded";
@@ -83,7 +84,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function DetailRow({ label, children }: { label: string; children: ReactNode }) {
+function DetailRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex flex-wrap gap-x-1.5">
       <dt className="font-medium text-muted-foreground">{label}</dt>
@@ -92,7 +99,7 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-export function CustomerTab({ project }: CustomerTabProps) {
+export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
   const requirements = (project.requirements ??
     {}) as ProjectRequirementsPayload;
   const ownerContacts = requirements.legalAdministration?.ownerContacts;
@@ -108,7 +115,9 @@ export function CustomerTab({ project }: CustomerTabProps) {
   const email = project.customer.email?.trim();
   const telHref = phone ? `tel:${phone.replace(/\s+/g, "")}` : null;
   const whatsappNumber = phone ? toWhatsAppNumber(phone) : null;
-  const whatsappHref = whatsappNumber ? `https://wa.me/${whatsappNumber}` : null;
+  const whatsappHref = whatsappNumber
+    ? `https://wa.me/${whatsappNumber}`
+    : null;
   const slabPercentage = commercials?.claimStageSlabPercentage;
 
   return (
@@ -157,11 +166,13 @@ export function CustomerTab({ project }: CustomerTabProps) {
           {requirements.legalAdministration?.siteAddress || project.location}
         </Field>
 
-        <Field label="Project value">
-          <span className="font-mono tabular-nums">
-            {formatMoneyField(Number(project.totalBudget))}
-          </span>
-        </Field>
+        {isAdmin && (
+          <Field label="Project value">
+            <span className="font-mono tabular-nums">
+              {formatMoneyField(Number(project.totalBudget))}
+            </span>
+          </Field>
+        )}
 
         <Field label="Signed date">
           <span className="font-mono tabular-nums">
@@ -196,35 +207,37 @@ export function CustomerTab({ project }: CustomerTabProps) {
           </dl>
         </div>
 
-        <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
-          <h3 className="text-base font-semibold text-foreground">
-            Commercial snapshot
-          </h3>
-          <dl className="mt-3 space-y-2 text-sm">
-            <DetailRow label="Contract price">
-              <span className="font-mono tabular-nums">
-                {formatMoneyField(commercials?.contractPrice)}
-              </span>
-            </DetailRow>
-            <DetailRow label="Deposit">
-              <span className="font-mono tabular-nums">
-                {formatMoneyField(commercials?.depositValue)}
-              </span>
-            </DetailRow>
-            <DetailRow label="GST amount">
-              <span className="font-mono tabular-nums">
-                {formatMoneyField(commercials?.gstAmount)}
-              </span>
-            </DetailRow>
-            <DetailRow label="Slab claim stage">
-              <span className="font-mono tabular-nums">
-                {typeof slabPercentage === "number"
-                  ? `${slabPercentage}%`
-                  : NOT_RECORDED}
-              </span>
-            </DetailRow>
-          </dl>
-        </div>
+        {isAdmin && (
+          <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+            <h3 className="text-base font-semibold text-foreground">
+              Commercial snapshot
+            </h3>
+            <dl className="mt-3 space-y-2 text-sm">
+              <DetailRow label="Contract price">
+                <span className="font-mono tabular-nums">
+                  {formatMoneyField(commercials?.contractPrice)}
+                </span>
+              </DetailRow>
+              <DetailRow label="Deposit">
+                <span className="font-mono tabular-nums">
+                  {formatMoneyField(commercials?.depositValue)}
+                </span>
+              </DetailRow>
+              <DetailRow label="GST amount">
+                <span className="font-mono tabular-nums">
+                  {formatMoneyField(commercials?.gstAmount)}
+                </span>
+              </DetailRow>
+              <DetailRow label="Slab claim stage">
+                <span className="font-mono tabular-nums">
+                  {typeof slabPercentage === "number"
+                    ? `${slabPercentage}%`
+                    : NOT_RECORDED}
+                </span>
+              </DetailRow>
+            </dl>
+          </div>
+        )}
       </div>
 
       <div>

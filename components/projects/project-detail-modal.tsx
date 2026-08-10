@@ -16,6 +16,7 @@ import { OverviewTab } from "./project-overview-tab";
 import { FinancialTab } from "./project-financial-tab";
 
 interface ProjectDetailModalProps {
+  isAdmin: boolean;
   project: ProjectWithStats | null;
   isOpen: boolean;
   onClose: () => void;
@@ -28,15 +29,16 @@ export type TabType =
   | "financials"
   | "team";
 
-const TABS: { id: TabType; label: string }[] = [
+const TABS: { id: TabType; label: string; requiresAdmin?: boolean }[] = [
   { id: "overview", label: "Overview" },
   { id: "customer", label: "Customer" },
   { id: "milestones", label: "Milestones" },
-  { id: "financials", label: "Financials" },
+  { id: "financials", label: "Financials", requiresAdmin: true },
   { id: "team", label: "Team" },
 ];
 
 export function ProjectDetailModal({
+  isAdmin,
   project,
   isOpen,
   onClose,
@@ -102,6 +104,10 @@ export function ProjectDetailModal({
             {TABS.map((tab, index) => {
               const isActive = activeTab === tab.id;
 
+              if(tab.requiresAdmin && !isAdmin) {
+                return null;
+              }
+
               return (
                 <button
                   key={tab.id}
@@ -138,13 +144,14 @@ export function ProjectDetailModal({
         >
           {activeTab === "overview" && (
             <OverviewTab
+              isAdmin={isAdmin}
               project={project}
               setActiveTab={setActiveTab}
               onClose={onClose}
             />
           )}
 
-          {activeTab === "customer" && <CustomerTab project={project} />}
+          {activeTab === "customer" && <CustomerTab project={project} isAdmin={isAdmin} />}
 
           {activeTab === "milestones" && <MilestoneTab project={project} />}
 

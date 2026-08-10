@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -14,6 +14,11 @@ import {
   Download,
   Sparkles,
   FileText,
+  ChevronDown,
+  ChevronUp,
+  CalendarDays,
+  Clock3,
+  Eye,
 } from "lucide-react";
 import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
@@ -41,6 +46,7 @@ import TableView from "./views/table-view";
 import { FollowupsView } from "./views";
 import AnalyticsView from "./views/analytics-view";
 import { useUser } from "@clerk/nextjs";
+import { LeadNotificationCard } from "./lead-notification-card";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -167,10 +173,7 @@ export default function Leads() {
       refreshLeadsData({
         page: 1,
         limit: 50,
-        status: [
-          "Meeting Scheduled",
-          "In Follow-up",
-        ].join(","),
+        status: ["Meeting Scheduled", "In Follow-up"].join(","),
       });
     } else if (tab === "table") {
       refreshLeadsData({ page: 1, limit: 10 });
@@ -355,62 +358,66 @@ export default function Leads() {
 
       {/* Metric cards */}
       {stats && !loading && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3">
-          <LeadMetricCard
-            label="Total Leads"
-            value={String(stats.total)}
-            note="All leads in the pipeline"
-            tone="primary"
-            icon={UserPlus}
-            onClick={() => handleMetricClick("total")}
-            active={activeMetric === "total"}
-          />
-          <LeadMetricCard
-            label="New & Contacted"
-            value={String((stats.new || 0) + (stats.contacted || 0))}
-            note="Fresh and contacted leads"
-            tone="info"
-            icon={Sparkles}
-            onClick={() => handleMetricClick("New,Contacted")}
-            active={activeMetric === "New,Contacted"}
-          />
-          <LeadMetricCard
-            label="Quoted"
-            value={String(stats.quoted || 0)}
-            note="Leads with active quotations"
-            tone="badge"
-            icon={FileText}
-            onClick={() => handleMetricClick("Quoted")}
-            active={activeMetric === "Quoted"}
-          />
-          <LeadMetricCard
-            label={`Converted (${conversionRate}%)`}
-            value={String(stats.conversion)}
-            note="Won and converted leads"
-            tone="success"
-            icon={CircleCheckBig}
-            onClick={() => handleMetricClick("converted")}
-            active={activeMetric === "converted"}
-          />
-          <LeadMetricCard
-            label="Pending Follow-up"
-            value={String(stats.pendingFollowup)}
-            note="Leads awaiting next action"
-            tone="warning"
-            icon={Clock}
-            onClick={() => handleMetricClick("pendingFollowup")}
-            active={activeMetric === "pendingFollowup"}
-          />
-          <LeadMetricCard
-            label="Lost Leads"
-            value={String(stats.lost)}
-            note="Lost, cancelled or disqualified"
-            tone="danger"
-            icon={CircleX}
-            onClick={() => handleMetricClick("lost")}
-            active={activeMetric === "lost"}
-          />
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3">
+            <LeadMetricCard
+              label="Total Leads"
+              value={String(stats.total)}
+              note="All leads in the pipeline"
+              tone="primary"
+              icon={UserPlus}
+              onClick={() => handleMetricClick("total")}
+              active={activeMetric === "total"}
+            />
+            <LeadMetricCard
+              label="New & Contacted"
+              value={String((stats.new || 0) + (stats.contacted || 0))}
+              note="Fresh and contacted leads"
+              tone="info"
+              icon={Sparkles}
+              onClick={() => handleMetricClick("New,Contacted")}
+              active={activeMetric === "New,Contacted"}
+            />
+            <LeadMetricCard
+              label="Quoted"
+              value={String(stats.quoted || 0)}
+              note="Leads with active quotations"
+              tone="badge"
+              icon={FileText}
+              onClick={() => handleMetricClick("Quoted")}
+              active={activeMetric === "Quoted"}
+            />
+            <LeadMetricCard
+              label={`Converted (${conversionRate}%)`}
+              value={String(stats.conversion)}
+              note="Won and converted leads"
+              tone="success"
+              icon={CircleCheckBig}
+              onClick={() => handleMetricClick("converted")}
+              active={activeMetric === "converted"}
+            />
+            <LeadMetricCard
+              label="Pending Follow-up"
+              value={String(stats.pendingFollowup)}
+              note="Leads awaiting next action"
+              tone="warning"
+              icon={Clock}
+              onClick={() => handleMetricClick("pendingFollowup")}
+              active={activeMetric === "pendingFollowup"}
+            />
+            <LeadMetricCard
+              label="Lost Leads"
+              value={String(stats.lost)}
+              note="Lost, cancelled or disqualified"
+              tone="danger"
+              icon={CircleX}
+              onClick={() => handleMetricClick("lost")}
+              active={activeMetric === "lost"}
+            />
+          </div>
+
+          <LeadNotificationCard />
+        </>
       )}
 
       {/* Main card */}

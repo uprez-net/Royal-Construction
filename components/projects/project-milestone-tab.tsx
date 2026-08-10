@@ -2,14 +2,22 @@ import {
   Ban,
   CalendarDays,
   Check,
+  ChevronsDown,
   Hammer,
+  ListChecks,
   LucideIcon,
   Minus,
   Play,
 } from "lucide-react";
-
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { ProjectWithStats } from "@/types/project";
 import { dateFormat } from "@/utils/formatters";
+import { ProjectStage } from "@prisma/client";
+import { Badge } from "../ui/badge";
 
 interface MilestoneTabProps {
   project: ProjectWithStats;
@@ -86,6 +94,26 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
         )
       : 0;
 
+  const milestonesMappedToStage = project.milestones.reduce<
+    Record<ProjectStage, ProjectWithStats["milestones"]>
+  >(
+    (acc, milestone) => {
+      if (!acc[milestone.projectStage]) {
+        acc[milestone.projectStage] = [];
+      }
+
+      acc[milestone.projectStage].push(milestone);
+
+      return acc;
+    },
+    {} as Record<ProjectStage, ProjectWithStats["milestones"]>,
+  );
+
+  const stages = Object.entries(milestonesMappedToStage) as [
+    ProjectStage,
+    ProjectWithStats["milestones"],
+  ][];
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
@@ -113,71 +141,121 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
         />
       </div>
 
-      {project.milestones.length > 0 ? (
-        <ol className="mt-4">
-          {project.milestones.map((m, i) => {
-            const isLast = i === project.milestones.length - 1;
-            const config = milestoneStatusConfig(m.status);
-            const StatusIcon = config.icon;
-            const tradies = m.tradies ?? [];
-            const extraTradies = tradies.length - 1;
+      {stages.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {stages.map(([stage, milestones]) => {
+            const hasActiveMilestone = milestones.some(
+              (milestone) => milestone.status === "ACTIVE",
+            );
 
             return (
-              <li
-                key={m.id}
-                className={`flex items-start justify-between gap-4 py-4 ${
-                  isLast ? "" : "border-b border-border"
-                }`}
+              <Collapsible
+                key={stage}
+                defaultOpen={hasActiveMilestone}
+                className="rounded-lg border border-border/70 bg-card"
               >
-                <div className="flex min-w-0 flex-1 gap-3">
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${config.dotClass}`}
-                  >
-                    <StatusIcon aria-hidden="true" className="h-4 w-4" />
+                <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {stage}
+                    </h3>
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`text-sm font-medium ${config.titleClass}`}
-                      >
-                        {m.name}
-                      </span>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="secondary"
+                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+                    >
+                      <ListChecks className="size-3.5" aria-hidden="true" />
+                      {milestones.length} milestone
+                      {milestones.length === 1 ? "" : "s"}
+                    </Badge>
 
-                      {/* Text label, so status never rides on colour alone. */}
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${config.badgeClass}`}
-                      >
-                        {config.label}
-                      </span>
-                    </div>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <CalendarDays aria-hidden="true" className="h-3 w-3" />
-                        <span className="font-mono tabular-nums">
-                          {dateFormat.format(new Date(m.targetDate))}
-                        </span>
-                      </span>
-
-                      {tradies.length > 0 ? (
-                        <span className="flex items-center gap-1">
-                          <Hammer aria-hidden="true" className="h-3 w-3" />
-                          <span>
-                            {tradies[0].name}
-                            {extraTradies > 0
-                              ? ` +${extraTradies} more`
-                              : ""}
-                          </span>
-                        </span>
-                      ) : null}
-                    </div>
+                    <ChevronsDown
+                      className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+                      aria-hidden="true"
+                    />
                   </div>
-                </div>
-              </li>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent>
+                  <div className="space-y-2 border-t border-border/70 p-3">
+                    {milestones.map((milestone) => {
+                      const config = milestoneStatusConfig(milestone.status);
+
+                      const StatusIcon = config.icon;
+                      const tradies = milestone.tradies ?? [];
+                      const extraTradies = tradies.length - 1;
+
+                      return (
+                        <div
+                          key={milestone.id}
+                          className="flex items-start gap-3 rounded-md border border-border/60 bg-background p-3"
+                        >
+                          <div
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${config.dotClass}`}
+                          >
+                            <StatusIcon
+                              aria-hidden="true"
+                              className="h-4 w-4"
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`text-sm font-medium ${config.titleClass}`}
+                              >
+                                {milestone.name}
+                              </span>
+
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${config.badgeClass}`}
+                              >
+                                {config.label}
+                              </span>
+                            </div>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <CalendarDays
+                                  aria-hidden="true"
+                                  className="h-3 w-3"
+                                />
+
+                                <span className="font-mono tabular-nums">
+                                  {dateFormat.format(
+                                    new Date(milestone.targetDate),
+                                  )}
+                                </span>
+                              </span>
+
+                              {tradies.length > 0 ? (
+                                <span className="flex items-center gap-1">
+                                  <Hammer
+                                    aria-hidden="true"
+                                    className="h-3 w-3"
+                                  />
+
+                                  <span>
+                                    {tradies[0].name}
+                                    {extraTradies > 0
+                                      ? ` +${extraTradies} more`
+                                      : ""}
+                                  </span>
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             );
           })}
-        </ol>
+        </div>
       ) : (
         <p className="mt-4 rounded-lg border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
           No milestones have been set up for this project yet.

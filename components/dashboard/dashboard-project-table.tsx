@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/pagination";
 
 interface DashboardProjectTableProps {
+  isAdmin: boolean;
   projects: ProjectWithStats[];
   pageInfo: {
     totalCount: number;
@@ -45,6 +46,7 @@ const statusConfig: Record<string, { bg: string; text: string }> = {
 };
 
 export function DashboardProjectTable({
+  isAdmin,
   projects,
   pageInfo,
   onPageChange,
@@ -174,7 +176,7 @@ export function DashboardProjectTable({
               dispatch(
                 openModal({
                   type: "projectDetail",
-                  payload: { project },
+                  payload: { project, isAdmin: isAdmin },
                 }),
               );
             }
