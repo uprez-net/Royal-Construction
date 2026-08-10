@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -14,11 +14,6 @@ import {
   Download,
   Sparkles,
   FileText,
-  ChevronDown,
-  ChevronUp,
-  CalendarDays,
-  Clock3,
-  Eye,
 } from "lucide-react";
 import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";

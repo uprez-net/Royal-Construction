@@ -83,7 +83,7 @@ export function LeadNotificationCard() {
               lead.stage === "Meeting Scheduled" ||
               lead.stage === "In Follow-up",
           ),
-    [leads.length, loadingLeads],
+    [leads, loadingLeads],
   );
 
   const today = getAustralianDate();
@@ -152,7 +152,7 @@ export function LeadNotificationCard() {
       limit: 50,
       status: ["Meeting Scheduled", "In Follow-up"].join(","),
     });
-  }, []);
+  }, [refreshLeadsData]);
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
