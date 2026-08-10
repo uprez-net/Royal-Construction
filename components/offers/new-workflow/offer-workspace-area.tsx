@@ -82,7 +82,7 @@ export function AreaCalculatorPanel({
             ))}
           </dl>
         </section>
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid gap-4 xl:grid-cols-4">
           <HelperSection title="Slab and drop edge">
             <NumberField
               label="Slab rate / sqm"
@@ -92,7 +92,9 @@ export function AreaCalculatorPanel({
             <NumberField
               label="Drop edge lm"
               value={area.dropEdgeLinealMeters}
-              onChange={(value) => onAreaChange({ dropEdgeLinealMeters: value })}
+              onChange={(value) =>
+                onAreaChange({ dropEdgeLinealMeters: value })
+              }
             />
             <NumberField
               label="Drop edge rate"
@@ -112,12 +114,16 @@ export function AreaCalculatorPanel({
             <NumberField
               label="GF frame rate"
               value={area.frameGroundRatePerSqm}
-              onChange={(value) => onAreaChange({ frameGroundRatePerSqm: value })}
+              onChange={(value) =>
+                onAreaChange({ frameGroundRatePerSqm: value })
+              }
             />
             <NumberField
               label="FF frame rate"
               value={area.frameFirstRatePerSqm}
-              onChange={(value) => onAreaChange({ frameFirstRatePerSqm: value })}
+              onChange={(value) =>
+                onAreaChange({ frameFirstRatePerSqm: value })
+              }
             />
             <NumberField
               label="Steel allowance"
@@ -127,7 +133,9 @@ export function AreaCalculatorPanel({
             <NumberField
               label="Install allowance"
               value={area.frameInstallAllowance}
-              onChange={(value) => onAreaChange({ frameInstallAllowance: value })}
+              onChange={(value) =>
+                onAreaChange({ frameInstallAllowance: value })
+              }
             />
             <ResultRows
               rows={[
@@ -137,12 +145,49 @@ export function AreaCalculatorPanel({
               ]}
             />
           </HelperSection>
-          <HelperSection title="Brick and tile">
+          <HelperSection title="Bricks">
             <NumberField
               label="Brick ground lm"
               value={area.brickGroundLinealMeters}
-              onChange={(value) => onAreaChange({ brickGroundLinealMeters: value })}
+              onChange={(value) =>
+                onAreaChange({ brickGroundLinealMeters: value })
+              }
             />
+
+            <NumberField
+              label="Brick first lm"
+              value={area.brickFirstLinealMeters}
+              onChange={(value) =>
+                onAreaChange({ brickFirstLinealMeters: value })
+              }
+            />
+
+            <NumberField
+              label="Brick Ground height"
+              value={area.brickGroundHeight}
+              onChange={(value) => onAreaChange({ brickGroundHeight: value })}
+            />
+
+            <NumberField
+              label="Brick First height"
+              value={area.brickFirstHeight}
+              onChange={(value) => onAreaChange({ brickFirstHeight: value })}
+            />
+
+            <ResultRows
+              rows={[
+                ["Brick ground sqm", `${calculation.brickGroundSqm} sqm`],
+                ["Brick first sqm", `${calculation.brickFirstSqm} sqm`],
+                ["Total bricks count", String(Math.round(calculation.brickCount))],
+                ["Sand for bricks", formatCurrency(calculation.brickSandCost)],
+                [
+                  "Cement for bricks",
+                  formatCurrency(calculation.brickCementCost),
+                ],
+              ]}
+            />
+          </HelperSection>
+          <HelperSection title="Tiles">
             <NumberField
               label="Tile area sqm"
               value={area.tileAreaSqm}
@@ -151,7 +196,9 @@ export function AreaCalculatorPanel({
             <NumberField
               label="Tile supply rate"
               value={area.tileSupplyRatePerSqm}
-              onChange={(value) => onAreaChange({ tileSupplyRatePerSqm: value })}
+              onChange={(value) =>
+                onAreaChange({ tileSupplyRatePerSqm: value })
+              }
             />
             <NumberField
               label="Tiler rate"
@@ -160,13 +207,8 @@ export function AreaCalculatorPanel({
             />
             <ResultRows
               rows={[
-                ["Brick count", String(Math.round(calculation.brickCount))],
-                [
-                  "Sand/cement",
-                  formatCurrency(
-                    calculation.brickSandCost + calculation.brickCementCost,
-                  ),
-                ],
+                ["Tile area", `${area.tileAreaSqm} sqm`],
+                ["Tile waste (10%)", `${calculation.tileWasteThreshold} sqm`],
                 ["Tile supply", formatCurrency(calculation.tileSupplyCost)],
                 ["Tiler", formatCurrency(calculation.tilerCost)],
                 ["Tile package", formatCurrency(calculation.tilePackageTotal)],

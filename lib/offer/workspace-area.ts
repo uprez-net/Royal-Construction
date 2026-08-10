@@ -56,6 +56,7 @@ export type OfferAreaCalculation = {
   readonly tileSupplyCost: number;
   readonly tilerCost: number;
   readonly tilePackageTotal: number;
+  readonly tileWasteThreshold: number;
 };
 
 export const EMPTY_AREA_BASIS: OfferAreaBasis = {
@@ -121,11 +122,11 @@ export function offerAreaBasisFromJob(
 export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
   return roundCurrency(
     basis.groundFloorSqm +
-      basis.firstFloorSqm +
-      basis.alfrescoSqm +
-      basis.porchSqm +
-      basis.garageSqm +
-      basis.grannyFlatSqm,
+    basis.firstFloorSqm +
+    basis.alfrescoSqm +
+    basis.porchSqm +
+    basis.garageSqm +
+    basis.grannyFlatSqm,
   );
 }
 
@@ -135,10 +136,10 @@ export function calculateOfferArea(
 ): OfferAreaCalculation {
   const slabAreaSqm = roundCurrency(
     basis.groundFloorSqm +
-      basis.alfrescoSqm +
-      basis.porchSqm +
-      basis.garageSqm +
-      basis.grannyFlatSqm,
+    basis.alfrescoSqm +
+    basis.porchSqm +
+    basis.garageSqm +
+    basis.grannyFlatSqm,
   );
   const slabCost = roundCurrency(slabAreaSqm * area.slabRatePerSqm);
   const dropEdgeBeamCost = roundCurrency(
@@ -155,9 +156,9 @@ export function calculateOfferArea(
   );
   const framePackageTotal = roundCurrency(
     frameGroundFloorCost +
-      frameFirstFloorCost +
-      area.steelAllowance +
-      area.frameInstallAllowance,
+    frameFirstFloorCost +
+    area.steelAllowance +
+    area.frameInstallAllowance,
   );
   const brickGroundSqm = roundCurrency(
     area.brickGroundLinealMeters * area.brickGroundHeight,
@@ -174,8 +175,9 @@ export function calculateOfferArea(
   const brickCementCost = roundCurrency(
     (brickCount / 100) * area.cementRatePerHundredBricks,
   );
+  const tileWasteThreshold = roundCurrency(area.tileAreaSqm * 0.10);
   const tileSupplyCost = roundCurrency(
-    area.tileAreaSqm * area.tileSupplyRatePerSqm,
+    (area.tileAreaSqm + tileWasteThreshold) * area.tileSupplyRatePerSqm,
   );
   const tilerCost = roundCurrency(area.tileAreaSqm * area.tilerRatePerSqm);
 
@@ -193,6 +195,7 @@ export function calculateOfferArea(
     brickSandCost,
     brickCementCost,
     tileSupplyCost,
+    tileWasteThreshold,
     tilerCost,
     tilePackageTotal: roundCurrency(
       tileSupplyCost + tilerCost + area.tileAnglesAllowance,
