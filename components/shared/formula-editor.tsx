@@ -56,7 +56,12 @@ const OPERATOR_SUGGESTIONS: readonly Suggestion[] = [
   { label: "/ (divide)", kind: "operator", insertText: " / " },
   { label: "% (modulo)", kind: "operator", insertText: " % " },
   { label: "^ (power)", kind: "operator", insertText: " ^ " },
-  { label: "( ) (group)", kind: "operator", insertText: "()", placeCursorBeforeEnd: true },
+  {
+    label: "( ) (group)",
+    kind: "operator",
+    insertText: "()",
+    placeCursorBeforeEnd: true,
+  },
   { label: ", (separator)", kind: "operator", insertText: ", " },
 ];
 
@@ -159,13 +164,19 @@ export function FormulaEditor({
 
     // Variables first, then functions, then operators — matches the natural
     // authoring flow (insert a variable, then an operator, then another).
-    return [...variableSuggestions, ...functionSuggestions, ...operatorSuggestions];
+    return [
+      ...variableSuggestions,
+      ...functionSuggestions,
+      ...operatorSuggestions,
+    ];
   }, [open, trigger, query, variables, recent]);
 
   // Keep the highlighted index inside the (possibly filtered) list — clamped
   // at render time so no setState-in-effect is needed.
   const clampedActiveIndex =
-    suggestions.length === 0 ? 0 : Math.min(activeIndex, suggestions.length - 1);
+    suggestions.length === 0
+      ? 0
+      : Math.min(activeIndex, suggestions.length - 1);
 
   // --- Autocomplete open/close + caret anchoring ---------------------------
 
@@ -254,39 +265,40 @@ export function FormulaEditor({
     (s: Suggestion) => {
       const input = inputRef.current;
       if (!input) return;
-      const pos = input.selectionStart ?? value.length;
-      const end = input.selectionEnd ?? value.length;
+
+      // Find the partial identifier (if any) surrounding the caret — this is
+      // what needs to be replaced, whether the menu was opened via "@" (in
+      // which case there may be no partial word) or via prefix-matching while
+      // the user was mid-typing a variable/function name.
+      const { start: wordStart, end: wordEnd } = currentWordBounds(input);
+
+      let start = wordStart;
+      // Defensive: if a stray "@" is still sitting immediately before the word
+      // (e.g. it hasn't been stripped by handleChange yet), consume it too.
+      if (value[start - 1] === "@") start -= 1;
+      const end = wordEnd;
 
       const insertText = s.insertText;
-      // Strip a leading `@` if it's still at the caret (the trigger char that
-      // opened the menu).
-      let start = pos;
-      if (value[start - 1] === "@") start -= 1;
-
       const before = value.slice(0, start);
       const after = value.slice(end);
       const next = before + insertText + after;
 
       onChange(next);
 
-      // Track recency for variables.
       if (s.kind === "variable") {
         setRecent((prev) =>
           [...prev.filter((r) => r !== s.label), s.label].slice(-8),
         );
       }
 
-      // Place the caret. For function/operator insertions that end in `)`,
-      // position the cursor one char back so the user lands inside the parens.
       const cursorTarget =
         s.placeCursorBeforeEnd && insertText.endsWith(")")
           ? before.length + insertText.length - 1
           : before.length + insertText.length;
-      // Defer focus/selection to after React commits the new value.
+
       requestAnimationFrame(() => {
         input.focus();
         input.setSelectionRange(cursorTarget, cursorTarget);
-        // Re-anchor the dropdown for the new caret position if still open.
         if (open) {
           const rect = input.getBoundingClientRect();
           const wrapperRect = wrapperRef.current?.getBoundingClientRect();
@@ -299,7 +311,7 @@ export function FormulaEditor({
 
       closeMenu();
     },
-    [value, onChange, open, closeMenu],
+    [value, onChange, open, closeMenu, currentWordBounds],
   );
 
   const onKeyDown = useCallback(
@@ -344,7 +356,15 @@ export function FormulaEditor({
         insertSuggestion(suggestions[clampedActiveIndex]);
       }
     },
-    [open, suggestions, clampedActiveIndex, insertSuggestion, closeMenu, currentWordBounds, openMenu],
+    [
+      open,
+      suggestions,
+      clampedActiveIndex,
+      insertSuggestion,
+      closeMenu,
+      currentWordBounds,
+      openMenu,
+    ],
   );
 
   // Close the dropdown on outside click.
@@ -358,9 +378,10 @@ export function FormulaEditor({
   }, [open, closeMenu]);
 
   const hasError = !validation.valid && value.trim().length > 0;
-  const preview = validation.valid && validation.preview !== null
-    ? formatNumber(validation.preview)
-    : null;
+  const preview =
+    validation.valid && validation.preview !== null
+      ? formatNumber(validation.preview)
+      : null;
 
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>
@@ -421,7 +442,12 @@ export function FormulaEditor({
               )}
             >
               <SuggestionIcon kind={s.kind} />
-              <span className={cn("flex-1 truncate", s.kind === "function" && "font-mono")}>
+              <span
+                className={cn(
+                  "flex-1 truncate",
+                  s.kind === "function" && "font-mono",
+                )}
+              >
                 {s.label}
               </span>
               {i === clampedActiveIndex && (
@@ -441,7 +467,7 @@ export function FormulaEditor({
       )}
 
       {/* Inline validation + preview row */}
-      <div className="mt-1 min-h-4 text-xs">
+      <div className="mt-1 min-h-4 text-xs text-wrap max-w-50">
         {hasError ? (
           <span role="alert" className="text-destructive">
             {validation.error}
@@ -459,7 +485,12 @@ export function FormulaEditor({
 
 function SuggestionIcon({ kind }: { kind: SuggestionKind }) {
   if (kind === "variable") {
-    return <VariableIcon className="size-3.5 shrink-0 text-royal-gold" aria-hidden="true" />;
+    return (
+      <VariableIcon
+        className="size-3.5 shrink-0 text-royal-gold"
+        aria-hidden="true"
+      />
+    );
   }
   if (kind === "function") {
     return (
