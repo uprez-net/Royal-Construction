@@ -12,6 +12,7 @@ const basis: OfferAreaBasis = {
   porchSqm: 3,
   garageSqm: 20,
   grannyFlatSqm: 0,
+  balconySqm: 0,
 };
 
 const calculation = calculateOfferArea(basis, {

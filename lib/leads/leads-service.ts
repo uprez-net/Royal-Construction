@@ -14,7 +14,7 @@ export interface FetchLeadsParams {
   q?: string;
 }
 
-export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer' | 'runId' | 'runStatus' | 'emails' | 'isArchived'> & {
+export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer' | 'runId' | 'runStatus' | 'emails' | 'isArchived' | 'uploadedFiles'> & {
   type?: string | string[];
   history?: LeadHistoryInput[];
 };
