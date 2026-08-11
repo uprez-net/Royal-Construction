@@ -16,7 +16,6 @@ import {
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
 } from "@/lib/offer/workspace-model";
-import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import {
   DEFAULT_RATE_CONSTANTS,
   type RateConstantKey,
@@ -50,23 +49,12 @@ async function seed() {
     priceMode: "none",
   }));
 
-  // Rate constants — merge the INITIAL_AREA_CALCULATOR rate fields with the
-  // DEFAULT_RATE_CONSTANTS seed values (which include the five new ones).
+  // Rate constants — the 11 admin-editable defaults from
+  // DEFAULT_RATE_CONSTANTS. The old calculator-embedded rates (slabRatePerSqm,
+  // dropEdgeRate, steelAllowance, etc.) have been replaced by the new
+  // constants and estimator-input model.
   const rateConstants: Partial<Record<RateConstantKey, number>> = {
     ...DEFAULT_RATE_CONSTANTS,
-    SLAB_RATE_PER_SQM: INITIAL_AREA_CALCULATOR.slabRatePerSqm,
-    DROP_EDGE_RATE: INITIAL_AREA_CALCULATOR.dropEdgeRate,
-    FRAME_GROUND_RATE_PER_SQM: INITIAL_AREA_CALCULATOR.frameGroundRatePerSqm,
-    FRAME_FIRST_RATE_PER_SQM: INITIAL_AREA_CALCULATOR.frameFirstRatePerSqm,
-    STEEL_ALLOWANCE: INITIAL_AREA_CALCULATOR.steelAllowance,
-    FRAME_INSTALL_ALLOWANCE: INITIAL_AREA_CALCULATOR.frameInstallAllowance,
-    BRICKS_PER_SQM: INITIAL_AREA_CALCULATOR.bricksPerSqm,
-    SAND_RATE_PER_THOUSAND_BRICKS:
-      INITIAL_AREA_CALCULATOR.sandRatePerThousandBricks,
-    CEMENT_RATE_PER_HUNDRED_BRICKS:
-      INITIAL_AREA_CALCULATOR.cementRatePerHundredBricks,
-    TILE_SUPPLY_RATE_PER_SQM: INITIAL_AREA_CALCULATOR.tileSupplyRatePerSqm,
-    TILER_RATE_PER_SQM: INITIAL_AREA_CALCULATOR.tilerRatePerSqm,
   };
 
   // Allowances — map INITIAL_ALLOWANCES to admin OfferAllowance shape.

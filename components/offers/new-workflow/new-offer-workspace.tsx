@@ -75,6 +75,7 @@ import {
 } from "@/lib/data/offer-prefill";
 import {
   reevaluateFormulaCostLines,
+  resolveAreaRateConstants,
   type AdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
 import type { RateConstantKey } from "@/lib/offer/formula-variables";
@@ -339,6 +340,13 @@ export function NewOfferWorkspace({
   const totalAreaSqm = useMemo(
     () => getAreaBasisTotalSqm(offerAreaBasisFromJob(job)),
     [job],
+  );
+  // Resolve admin rate constants (defaults + overrides) into the typed shape
+  // the Area Calculator panel needs. Set once from the admin prefill and never
+  // changes during the session.
+  const resolvedRateConstants = useMemo(
+    () => resolveAreaRateConstants(rateConstantsRef.current),
+    [],
   );
   const directTotal = useMemo(() => calculateDirectTotal(lines), [lines]);
   const contractParticularDefaults = useMemo(
@@ -1474,6 +1482,7 @@ export function NewOfferWorkspace({
       <OfferWorkspaceScreen
         allowances={allowances}
         areaCalculator={areaCalculator}
+        rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}
         draft={draft}

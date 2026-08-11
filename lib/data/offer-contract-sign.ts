@@ -16,8 +16,8 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
-import { generatePDF } from "@/lib/utils/generatePDF";
-import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
+// import { generatePDF } from "@/lib/utils/generatePDF";
+// import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
 import {
   collectOfferSigners,
   collectOwnerIssues,

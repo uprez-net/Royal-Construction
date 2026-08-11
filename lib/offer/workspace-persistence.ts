@@ -7,7 +7,7 @@ import {
   type OfferWorkspaceScopeItem,
   type OfferDocumentDraft,
 } from "./workspace-model";
-import type { OfferAreaCalculator } from "./workspace-area";
+import { INITIAL_AREA_CALCULATOR, type OfferAreaCalculator } from "./workspace-area";
 import {
   withDerivedHbcfPremium,
   reverseHbcfTotalContractValue,
@@ -556,7 +556,14 @@ export function deserializeWorkspace(
     allowances: persisted.allowances.map(deserializeScopeItem),
     exclusions: persisted.exclusions.map(deserializeScopeItem),
     draft: persisted.draft,
-    areaCalculator: persisted.areaCalculator as unknown as OfferAreaCalculator,
+    // Merge defaults so old offers persisted with retired calculator fields
+    // (slabRatePerSqm, dropEdgeLinealMeters, etc.) hydrate with zero defaults
+    // for the new field names. Extra old fields are harmless — the calculation
+    // functions only read the current fields.
+    areaCalculator: {
+      ...INITIAL_AREA_CALCULATOR,
+      ...(persisted.areaCalculator as Record<string, number>),
+    } as unknown as OfferAreaCalculator,
     workspacePricingSettings: hydratePricingSettings(
       persisted.pricingSettings,
       persisted.legacyPricingSettings,

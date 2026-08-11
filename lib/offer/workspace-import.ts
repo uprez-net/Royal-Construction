@@ -507,25 +507,11 @@ function parseCoverArea(rows: readonly (readonly unknown[])[]): ParsedArea {
 function parseAreaCalculator(
   rows: readonly (readonly unknown[])[],
 ): ParsedArea {
-  const slabArea = firstNumber([getCell(rows, 7, 2)], EMPTY_AREA_BASIS.groundFloorSqm);
-  const slabCost = numberValue(getCell(rows, 9, 2));
-  const dropEdgeCost = numberValue(getCell(rows, 10, 2));
-  const dropEdgeRate = firstNumber([getCell(rows, 10, 1)], INITIAL_AREA_CALCULATOR.dropEdgeRate);
-  const frameGroundCost = numberValue(getCell(rows, 9, 5));
-  const frameFirstCost = numberValue(getCell(rows, 10, 5));
-  const tileArea = firstNumber(
-    [getCell(rows, 34, 5), getCell(rows, 34, 6)],
-    INITIAL_AREA_CALCULATOR.tileAreaSqm,
-  );
-  const tileSupplyCost = firstNumber(
-    [getCell(rows, 35, 5), getCell(rows, 35, 6)],
-    INITIAL_AREA_CALCULATOR.tileAreaSqm * INITIAL_AREA_CALCULATOR.tileSupplyRatePerSqm,
-  );
-  const tilerCost = firstNumber(
-    [getCell(rows, 36, 5), getCell(rows, 36, 6)],
-    INITIAL_AREA_CALCULATOR.tileAreaSqm * INITIAL_AREA_CALCULATOR.tilerRatePerSqm,
-  );
-
+  // The workbook's "area" sheet predates the current Area Calculator model.
+  // Only a few cells map cleanly to the new estimator-input fields; the rest
+  // default to 0 (the estimator fills them in after import). Rate constants
+  // are no longer parsed from the workbook — they come from the admin cost-
+  // schedule configuration.
   return {
     areaBasis: {
       groundFloorSqm: firstNumber([getCell(rows, 2, 2)], EMPTY_AREA_BASIS.groundFloorSqm),
@@ -534,48 +520,13 @@ function parseAreaCalculator(
       porchSqm: firstNumber([getCell(rows, 4, 2)], EMPTY_AREA_BASIS.porchSqm),
       garageSqm: firstNumber([getCell(rows, 5, 2)], EMPTY_AREA_BASIS.garageSqm),
       grannyFlatSqm: firstNumber([getCell(rows, 6, 2)], EMPTY_AREA_BASIS.grannyFlatSqm),
-      balconySqm: firstNumber([getCell(rows, 7, 5)], EMPTY_AREA_BASIS.balconySqm)
+      balconySqm: firstNumber([getCell(rows, 7, 5)], EMPTY_AREA_BASIS.balconySqm),
     },
     areaCalculator: {
-    ...INITIAL_AREA_CALCULATOR,
-    slabRatePerSqm:
-      slabCost !== null && slabArea > 0 ? slabCost / slabArea : INITIAL_AREA_CALCULATOR.slabRatePerSqm,
-    dropEdgeRate,
-    dropEdgeLinealMeters:
-      dropEdgeCost !== null && dropEdgeRate > 0
-        ? dropEdgeCost / dropEdgeRate
-        : INITIAL_AREA_CALCULATOR.dropEdgeLinealMeters,
-    frameGroundRatePerSqm:
-      frameGroundCost !== null && slabArea > 0
-        ? frameGroundCost / slabArea
-        : INITIAL_AREA_CALCULATOR.frameGroundRatePerSqm,
-    frameFirstRatePerSqm:
-      frameFirstCost !== null && firstNumber([getCell(rows, 2, 5)], 0) > 0
-        ? frameFirstCost / firstNumber([getCell(rows, 2, 5)], 1)
-        : INITIAL_AREA_CALCULATOR.frameFirstRatePerSqm,
-    steelAllowance: firstNumber([getCell(rows, 11, 5)], INITIAL_AREA_CALCULATOR.steelAllowance),
-    frameInstallAllowance: firstNumber(
-      [getCell(rows, 12, 5)],
-      INITIAL_AREA_CALCULATOR.frameInstallAllowance,
-    ),
-    extraTruckCost: firstNumber([getCell(rows, 13, 2)], INITIAL_AREA_CALCULATOR.extraTruckCost),
-    brickGroundLinealMeters: firstNumber(
-      [getCell(rows, 8, 10)],
-      INITIAL_AREA_CALCULATOR.brickGroundLinealMeters,
-    ),
-    brickFirstLinealMeters: firstNumber(
-      [getCell(rows, 9, 14)],
-      INITIAL_AREA_CALCULATOR.brickFirstLinealMeters,
-    ),
-    brickGroundHeight: firstNumber([getCell(rows, 9, 10)], INITIAL_AREA_CALCULATOR.brickGroundHeight),
-    brickFirstHeight: firstNumber([getCell(rows, 10, 14)], INITIAL_AREA_CALCULATOR.brickFirstHeight),
-    tileAreaSqm: tileArea,
-    tileSupplyRatePerSqm: tileArea > 0 ? tileSupplyCost / tileArea : INITIAL_AREA_CALCULATOR.tileSupplyRatePerSqm,
-    tilerRatePerSqm: tileArea > 0 ? tilerCost / tileArea : INITIAL_AREA_CALCULATOR.tilerRatePerSqm,
-    tileAnglesAllowance: firstNumber(
-      [getCell(rows, 37, 5), getCell(rows, 37, 6)],
-      INITIAL_AREA_CALCULATOR.tileAnglesAllowance,
-    ),
+      ...INITIAL_AREA_CALCULATOR,
+      slabCost: numberValue(getCell(rows, 9, 2)) ?? 0,
+      steel: firstNumber([getCell(rows, 11, 5)], 0),
+      installer: firstNumber([getCell(rows, 12, 5)], 0),
     },
   };
 }

@@ -15,7 +15,7 @@ export function buildFormulaScope(
   return { ...rateConstants, ...measurements };
 }
 
-// Evaluate a formula string like "SLAB_AREA * SLAB_RATE_PER_SQM" against the
+// Evaluate a formula string like "TOTAL_SLAB_COST - TOTAL_DROP_EDGE_BEAM_COST"
 // given scope. Returns 0 on failure (never throws — a broken formula must not
 // brick the offer total; the estimator sees the $0 and fixes the formula).
 export function evaluateCostFormula(

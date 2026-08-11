@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type {
+  AreaRateConstants,
   OfferAreaBasis,
   OfferAreaCalculator,
 } from "@/lib/offer/workspace-area";
@@ -17,35 +18,26 @@ import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 
 type AreaCalculatorPanelProps = {
-  // Floor areas come from Job setup — the single source of truth — never
-  // re-entered here.
   readonly basis: OfferAreaBasis;
   readonly area: OfferAreaCalculator;
+  readonly rateConstants: AreaRateConstants;
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
 };
 
 export function AreaCalculatorPanel({
   basis,
   area,
+  rateConstants,
   onAreaChange,
 }: AreaCalculatorPanelProps) {
-  const calculation = calculateOfferArea(basis, area);
-  const basisFields = [
-    ["Ground floor", basis.groundFloorSqm],
-    ["First floor", basis.firstFloorSqm],
-    ["Garage", basis.garageSqm],
-    ["Alfresco", basis.alfrescoSqm],
-    ["Porch", basis.porchSqm],
-    ["Granny flat", basis.grannyFlatSqm],
-    ["Balcony", basis.balconySqm],
-  ] as const;
+  const calc = calculateOfferArea(basis, area, rateConstants);
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <OfferCardHeading
-            description="A first-principles estimate from the Job setup floor areas — set the rates and lineal measurements to size each slab, frame, brick and tile package."
+            description="Enter the estimator inputs for each section. Calculated fields update automatically from the admin rate constants."
             icon={<Layers className="size-4" aria-hidden="true" />}
             singleLineDescription
             title="Slab, frame, brick & tile packages"
@@ -57,13 +49,6 @@ export function AreaCalculatorPanel({
         </div>
       </CardHeader>
       <CardContent className="grid gap-5 pt-4">
-        <p className="flex items-start gap-2 text-xs text-muted-foreground">
-          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          For understanding only — these package figures help you sanity-check
-          size and cost. They are not added to the quote; the actual price comes
-          from the Cost schedule line items, which may or may not line up with
-          these estimates.
-        </p>
         <section className="grid gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -73,145 +58,174 @@ export function AreaCalculatorPanel({
               {getAreaBasisTotalSqm(basis)} sqm total
             </span>
           </div>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
-            {basisFields.map(([label, value]) => (
-              <div key={label} className="flex justify-between gap-2 text-sm">
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="font-mono">{value} sqm</dd>
-              </div>
-            ))}
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
+            <BasisRow label="Ground floor" value={basis.groundFloorSqm} />
+            <BasisRow label="First floor" value={basis.firstFloorSqm} />
+            <BasisRow label="Garage" value={basis.garageSqm} />
+            <BasisRow label="Alfresco" value={basis.alfrescoSqm} />
+            <BasisRow label="Porch" value={basis.porchSqm} />
+            <BasisRow label="Granny flat" value={basis.grannyFlatSqm} />
+            <BasisRow label="Balcony" value={basis.balconySqm} />
           </dl>
         </section>
         <div className="grid gap-4 xl:grid-cols-4">
-          <HelperSection title="Slab and drop edge">
-            <NumberField
-              label="Slab rate / sqm"
-              value={area.slabRatePerSqm}
-              onChange={(value) => onAreaChange({ slabRatePerSqm: value })}
-            />
-            <NumberField
-              label="Drop edge lm"
-              value={area.dropEdgeLinealMeters}
-              onChange={(value) =>
-                onAreaChange({ dropEdgeLinealMeters: value })
-              }
-            />
-            <NumberField
-              label="Drop edge rate"
-              value={area.dropEdgeRate}
-              onChange={(value) => onAreaChange({ dropEdgeRate: value })}
-            />
+          <HelperSection title="Slab">
+            <div className="flex flex-col gap-2 space-x-3 mb-auto">
+              <NumberField
+                label="Slab Cost / SQM"
+                value={area.slabCost}
+                onChange={(value) => onAreaChange({ slabCost: value })}
+              />
+              <NumberField
+                label="Drop edge beam surface area"
+                value={area.dropEdgeBeamSurfaceArea}
+                onChange={(value) =>
+                  onAreaChange({ dropEdgeBeamSurfaceArea: value })
+                }
+              />
+              <NumberField
+                label="No of truck required"
+                value={area.numberOfTrucks}
+                onChange={(value) => onAreaChange({ numberOfTrucks: value })}
+              />
+            </div>
             <ResultRows
               rows={[
-                ["Slab area", `${calculation.slabAreaSqm} sqm`],
-                ["Slab cost", formatCurrency(calculation.slabCost)],
-                ["Drop edge", formatCurrency(calculation.dropEdgeBeamCost)],
-                ["Package", formatCurrency(calculation.slabPackageTotal)],
+                [
+                  "Total Drop edge beam cost",
+                  formatCurrency(calc.totalDropEdgeBeamCost),
+                ],
+                ["Total Truck price", formatCurrency(calc.totalTruckPrice)],
+                ["Total slab cost", formatCurrency(calc.totalSlabCost)],
               ]}
             />
           </HelperSection>
+
           <HelperSection title="Frame">
-            <NumberField
-              label="GF frame rate"
-              value={area.frameGroundRatePerSqm}
-              onChange={(value) =>
-                onAreaChange({ frameGroundRatePerSqm: value })
-              }
-            />
-            <NumberField
-              label="FF frame rate"
-              value={area.frameFirstRatePerSqm}
-              onChange={(value) =>
-                onAreaChange({ frameFirstRatePerSqm: value })
-              }
-            />
-            <NumberField
-              label="Steel allowance"
-              value={area.steelAllowance}
-              onChange={(value) => onAreaChange({ steelAllowance: value })}
-            />
-            <NumberField
-              label="Install allowance"
-              value={area.frameInstallAllowance}
-              onChange={(value) =>
-                onAreaChange({ frameInstallAllowance: value })
-              }
+            <div className="flex flex-col gap-2 space-x-3 mb-auto">
+              <NumberField
+                label="Steel Cost / SQM"
+                value={area.steel}
+                onChange={(value) => onAreaChange({ steel: value })}
+              />
+              <NumberField
+                label="Installer Cost / SQM"
+                value={area.installer}
+                onChange={(value) => onAreaChange({ installer: value })}
+              />
+              <NumberField
+                label="Eaves Cost / SQM"
+                value={area.eaves}
+                onChange={(value) => onAreaChange({ eaves: value })}
+              />
+            </div>
+            <ResultRows
+              rows={[
+                ["Total Ground floor area", `${calc.totalGroundFloorArea.toFixed(2)} sqm`],
+                ["Total Ground floor frame cost", formatCurrency(calc.totalGroundFloorFrameCost)],
+              ]}
             />
             <ResultRows
               rows={[
-                ["GF frame", formatCurrency(calculation.frameGroundFloorCost)],
-                ["FF frame", formatCurrency(calculation.frameFirstFloorCost)],
-                ["Package", formatCurrency(calculation.framePackageTotal)],
+                ["Total First floor area", `${calc.totalFirstFloorArea.toFixed(2)} sqm`],
+                ["Total First floor frame cost", formatCurrency(calc.totalFirstFloorFrameCost)],
+              ]}
+            />
+            <ResultRows
+              rows={[
+                ["Total Frame cost", formatCurrency(calc.totalFrameCost)],
               ]}
             />
           </HelperSection>
+
           <HelperSection title="Bricks">
             <NumberField
-              label="Brick ground lm"
-              value={area.brickGroundLinealMeters}
-              onChange={(value) =>
-                onAreaChange({ brickGroundLinealMeters: value })
-              }
+              label="Bricks required for Ground floor"
+              value={area.bricksGroundFloor}
+              onChange={(value) => onAreaChange({ bricksGroundFloor: value })}
             />
-
             <NumberField
-              label="Brick first lm"
-              value={area.brickFirstLinealMeters}
-              onChange={(value) =>
-                onAreaChange({ brickFirstLinealMeters: value })
-              }
+              label="Bricks required for first floor"
+              value={area.bricksFirstFloor}
+              onChange={(value) => onAreaChange({ bricksFirstFloor: value })}
             />
-
             <NumberField
-              label="Brick Ground height"
-              value={area.brickGroundHeight}
-              onChange={(value) => onAreaChange({ brickGroundHeight: value })}
+              label="Bricks required for pillar"
+              value={area.bricksPillar}
+              onChange={(value) => onAreaChange({ bricksPillar: value })}
             />
-
             <NumberField
-              label="Brick First height"
-              value={area.brickFirstHeight}
-              onChange={(value) => onAreaChange({ brickFirstHeight: value })}
+              label="Tie cost"
+              value={area.tieCost}
+              onChange={(value) => onAreaChange({ tieCost: value })}
             />
-
             <ResultRows
               rows={[
-                ["Brick ground sqm", `${calculation.brickGroundSqm} sqm`],
-                ["Brick first sqm", `${calculation.brickFirstSqm} sqm`],
-                ["Total bricks count", String(Math.round(calculation.brickCount))],
-                ["Sand for bricks", formatCurrency(calculation.brickSandCost)],
                 [
-                  "Cement for bricks",
-                  formatCurrency(calculation.brickCementCost),
+                  "Total bricks required",
+                  String(Math.round(calc.totalBricksRequired)),
+                ],
+              ]}
+            />
+            <ResultRows
+              rows={[
+                [
+                  "Sand required for bricks",
+                  String(Math.round(calc.sandRequiredForBricks)),
+                ],
+                [
+                  "Total cost of sand required",
+                  formatCurrency(calc.totalSandCost),
+                ],
+              ]}
+            />
+            <ResultRows
+              rows={[
+                [
+                  "Cement required for bricks",
+                  String(Math.round(calc.cementRequiredForBricks)),
+                ],
+                [
+                  "Total cost of cement required",
+                  formatCurrency(calc.totalCementCost),
+                ],
+              ]}
+            />
+            <ResultRows
+              rows={[
+                [
+                  "Total cost of materials for brick laying",
+                  formatCurrency(calc.totalBrickMaterialCost),
                 ],
               ]}
             />
           </HelperSection>
+
           <HelperSection title="Tiles">
-            <NumberField
-              label="Tile area sqm"
-              value={area.tileAreaSqm}
-              onChange={(value) => onAreaChange({ tileAreaSqm: value })}
-            />
-            <NumberField
-              label="Tile supply rate"
-              value={area.tileSupplyRatePerSqm}
-              onChange={(value) =>
-                onAreaChange({ tileSupplyRatePerSqm: value })
-              }
-            />
-            <NumberField
-              label="Tiler rate"
-              value={area.tilerRatePerSqm}
-              onChange={(value) => onAreaChange({ tilerRatePerSqm: value })}
-            />
+            <div className="flex flex-col gap-2 space-x-3 mb-auto">
+              <NumberField
+                label="Tiles required for Ground floor"
+                value={area.tilesGroundFloor}
+                onChange={(value) => onAreaChange({ tilesGroundFloor: value })}
+              />
+              <NumberField
+                label="Tiles required for all bathroom"
+                value={area.tilesBathroom}
+                onChange={(value) => onAreaChange({ tilesBathroom: value })}
+              />
+              <NumberField
+                label="Tiles required for steps"
+                value={area.tilesSteps}
+                onChange={(value) => onAreaChange({ tilesSteps: value })}
+              />
+            </div>
             <ResultRows
               rows={[
-                ["Tile area", `${area.tileAreaSqm} sqm`],
-                ["Tile waste (10%)", `${calculation.tileWasteThreshold} sqm`],
-                ["Tile supply", formatCurrency(calculation.tileSupplyCost)],
-                ["Tiler", formatCurrency(calculation.tilerCost)],
-                ["Tile package", formatCurrency(calculation.tilePackageTotal)],
+                ["Tiles wasted (10%)", String(Math.round(calc.tilesWasted))],
+                [
+                  "Total tiles required",
+                  String(Math.round(calc.totalTilesRequired)),
+                ],
               ]}
             />
           </HelperSection>
@@ -221,12 +235,27 @@ export function AreaCalculatorPanel({
   );
 }
 
+function BasisRow({
+  label,
+  value,
+}: {
+  readonly label: string;
+  readonly value: number;
+}) {
+  return (
+    <div className="flex justify-between gap-2 text-sm">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-mono">{value} sqm</dd>
+    </div>
+  );
+}
+
 function HelperSection({
   children,
   title,
 }: PropsWithChildren<{ readonly title: string }>) {
   return (
-    <section className="grid gap-3 rounded-lg border border-border bg-background/70 p-3">
+    <section className="flex flex-col gap-3 rounded-lg border border-border bg-background/70 p-3">
       <h3 className="text-sm font-semibold">{title}</h3>
       {children}
     </section>
@@ -273,7 +302,7 @@ function ResultRows({
       {rows.map(([label, value]) => (
         <div key={label} className="flex justify-between gap-3">
           <span className="text-muted-foreground">{label}</span>
-          <span className="font-mono">{value}</span>
+          <span className="font-mono font-medium">{value}</span>
         </div>
       ))}
     </div>

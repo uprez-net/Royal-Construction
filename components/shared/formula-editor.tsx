@@ -76,7 +76,7 @@ export function FormulaEditor({
   variables,
   sampleValues,
   onValidationChange,
-  placeholder = "e.g. SLAB_AREA * SLAB_RATE_PER_SQM",
+  placeholder = "e.g. TOTAL_BRICKS_REQUIRED * BRICK_PRICE_PER_BRICK",
   ariaLabel,
   className,
 }: FormulaEditorProps) {
@@ -475,7 +475,7 @@ export function FormulaEditor({
         ) : preview !== null ? (
           <span className="flex items-center gap-1 text-muted-foreground">
             <Check className="size-3 text-success" aria-hidden="true" />
-            <span className="font-mono">= {preview}</span>
+            <span className="font-mono">Valid</span>
           </span>
         ) : null}
       </div>

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { RATE_CONSTANT_KEYS } from "@/lib/offer/formula-variables";
 
 // Mirrors types/admin-offer-content.ts exactly. Used by server actions
 // (validate before writing) and by the data layer (validate what comes
@@ -36,7 +35,10 @@ export const costScheduleRowSchema = z.discriminatedUnion("priceMode", [
 
 export const costScheduleDataSchema = z.object({
   rows: z.array(costScheduleRowSchema),
-  rateConstants: z.record(z.enum(RATE_CONSTANT_KEYS), z.number()),
+  // Accept any string key so old DB content with retired rate-constant keys
+  // (e.g. SLAB_RATE_PER_SQM) doesn't fail parsing and wipe the entire cost
+  // schedule. Unknown keys are filtered out in the application layer.
+  rateConstants: z.record(z.string(), z.number()),
 });
 
 export const allowanceCategorySchema = z.enum([

@@ -2,7 +2,11 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AREA_MEASUREMENT_KEYS } from "@/lib/offer/formula-variables";
+import {
+  AREA_MEASUREMENT_KEYS,
+  DEFAULT_RATE_CONSTANTS,
+  RATE_CONSTANT_KEYS,
+} from "@/lib/offer/formula-variables";
 import type { CostScheduleData } from "@/types/admin-offer-content";
 
 interface RateConstantsPanelProps {
@@ -23,7 +27,13 @@ export function FormulaVariablesPanel({
   variables,
   onChange,
 }: RateConstantsPanelProps) {
-  const entries = Object.entries(variables);
+  // Merge defaults with admin overrides, filtering out any retired keys that
+  // may still linger in the DB from a previous schema. This guarantees all
+  // 11 current constants are always visible, even before the admin saves.
+  const entries = RATE_CONSTANT_KEYS.map((key) => [
+    key,
+    variables[key] ?? DEFAULT_RATE_CONSTANTS[key],
+  ]) as readonly [string, number][];
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4">

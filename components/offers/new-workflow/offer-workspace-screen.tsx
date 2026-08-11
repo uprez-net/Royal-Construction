@@ -13,7 +13,7 @@ import {
 } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type { ContractParticulars } from "@/lib/offer/contract-particulars";
-import type { OfferAreaCalculator } from "@/lib/offer/workspace-area";
+import type { OfferAreaCalculator, AreaRateConstants } from "@/lib/offer/workspace-area";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import type {
   EffectiveMargin,
@@ -83,6 +83,7 @@ export type OfferSaveState = "idle" | "saving" | "saved" | "error";
 type OfferWorkspaceScreenProps = {
   readonly allowances: readonly OfferWorkspaceScopeItem[];
   readonly areaCalculator: OfferAreaCalculator;
+  readonly rateConstants: AreaRateConstants;
   readonly customerPrice: OfferCustomerPrice;
   readonly directTotal: number;
   readonly draft: OfferDocumentDraft;
@@ -197,6 +198,7 @@ type OfferWorkspaceScreenProps = {
 export function OfferWorkspaceScreen({
   allowances,
   areaCalculator,
+  rateConstants,
   customerPrice,
   directTotal,
   draft,
@@ -452,6 +454,7 @@ export function OfferWorkspaceScreen({
             <AreaCalculatorPanel
               basis={areaBasis}
               area={areaCalculator}
+              rateConstants={rateConstants}
               onAreaChange={onAreaChange}
             />
             <CostSchedulePanel

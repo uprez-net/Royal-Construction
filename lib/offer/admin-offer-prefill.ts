@@ -12,6 +12,9 @@ import {
 } from "@/lib/offer/workspace-sequence-mapping";
 import {
   INITIAL_AREA_CALCULATOR,
+  calculateOfferArea,
+  offerAreaBasisFromJob,
+  type AreaRateConstants,
   type OfferAreaCalculator,
 } from "@/lib/offer/workspace-area";
 import {
@@ -156,64 +159,75 @@ function resolveDraft(
     headline: c.headline,
     introText: c.introText,
     inclusionBullets: c.inclusions,
-    // exclusionBullets is a separate flat list — left empty here because the
-    // admin's structured exclusions drive the scope panel, not the draft's
-    // flat bullets. The estimator can author flat exclusion copy in the offer
-    // document editor if needed.
     exclusionBullets: [],
     termsSummary: c.termsAndConditions,
   };
 }
 
-// Merge admin rate constants over the INITIAL_AREA_CALCULATOR defaults. Admin
-// overrides win for any key present; the static defaults fill the rest so the
-// area calculator panel always has real numbers.
-function resolveAreaCalculator(
-  adminContent: AdminOfferContent,
-): OfferAreaCalculator {
-  const rc = adminContent.costSchedule.rateConstants;
+// The area calculator now contains only project-specific estimator inputs (no
+// rate constants). Rate constants flow separately through the `rateConstants`
+// field. A new offer starts with all-zero inputs.
+function resolveAreaCalculator(): OfferAreaCalculator {
+  return { ...INITIAL_AREA_CALCULATOR };
+}
+
+// Resolve the admin rate constants (with defaults) into the typed
+// AreaRateConstants shape needed by the area calculation functions.
+export function resolveAreaRateConstants(
+  rateConstants: Partial<Record<RateConstantKey, number>>,
+): AreaRateConstants {
+  const rc = { ...DEFAULT_RATE_CONSTANTS, ...rateConstants };
   return {
-    ...INITIAL_AREA_CALCULATOR,
-    ...(rc.SLAB_RATE_PER_SQM !== undefined && { slabRatePerSqm: rc.SLAB_RATE_PER_SQM }),
-    ...(rc.DROP_EDGE_RATE !== undefined && { dropEdgeRate: rc.DROP_EDGE_RATE }),
-    ...(rc.FRAME_GROUND_RATE_PER_SQM !== undefined && { frameGroundRatePerSqm: rc.FRAME_GROUND_RATE_PER_SQM }),
-    ...(rc.FRAME_FIRST_RATE_PER_SQM !== undefined && { frameFirstRatePerSqm: rc.FRAME_FIRST_RATE_PER_SQM }),
-    ...(rc.STEEL_ALLOWANCE !== undefined && { steelAllowance: rc.STEEL_ALLOWANCE }),
-    ...(rc.FRAME_INSTALL_ALLOWANCE !== undefined && { frameInstallAllowance: rc.FRAME_INSTALL_ALLOWANCE }),
-    ...(rc.BRICKS_PER_SQM !== undefined && { bricksPerSqm: rc.BRICKS_PER_SQM }),
-    ...(rc.SAND_RATE_PER_THOUSAND_BRICKS !== undefined && { sandRatePerThousandBricks: rc.SAND_RATE_PER_THOUSAND_BRICKS }),
-    ...(rc.CEMENT_RATE_PER_HUNDRED_BRICKS !== undefined && { cementRatePerHundredBricks: rc.CEMENT_RATE_PER_HUNDRED_BRICKS }),
-    ...(rc.TILE_SUPPLY_RATE_PER_SQM !== undefined && { tileSupplyRatePerSqm: rc.TILE_SUPPLY_RATE_PER_SQM }),
-    ...(rc.TILER_RATE_PER_SQM !== undefined && { tilerRatePerSqm: rc.TILER_RATE_PER_SQM }),
+    dropEdgeBeamCostPerSurfaceArea: rc.DROP_EDGE_BEAM_COST_PER_SURFACE_AREA,
+    priceOfEachTruck: rc.PRICE_OF_EACH_TRUCK,
+    groundFloorFramePricePerSqm: rc.FRAME_GROUND_RATE_PER_SQM,
+    firstFloorFramePricePerSqm: rc.FRAME_FIRST_RATE_PER_SQM,
+    sandRatePerThousandBricks: rc.SAND_RATE_PER_THOUSAND_BRICKS,
+    cementRatePerHundredBricks: rc.CEMENT_RATE_PER_HUNDRED_BRICKS,
   };
 }
 
 // Re-evaluate every formula-mode cost line once project measurements are
 // known. Called client-side from new-offer-workspace.tsx whenever the job's
-// floor areas or the area calculator's measurements change.
+// floor areas or the area calculator's inputs change. The formula scope
+// includes Phase 1 calculated values (totals from the area calculator) so
+// admin formulas can reference them directly.
 export function reevaluateFormulaCostLines(
   costLines: readonly OfferWorkspaceCostLine[],
   rateConstants: Partial<Record<RateConstantKey, number>>,
-  job: Pick<OfferWorkspaceJob, "groundFloorSqm" | "firstFloorSqm" | "garageSqm" | "alfrescoPorchSqm" | "porchSqm" | "grannyFlatSqm">,
+  job: Pick<
+    OfferWorkspaceJob,
+    | "groundFloorSqm"
+    | "firstFloorSqm"
+    | "garageSqm"
+    | "alfrescoPorchSqm"
+    | "porchSqm"
+    | "grannyFlatSqm"
+    | "balconySqm"
+  >,
   area: OfferAreaCalculator,
 ): readonly OfferWorkspaceCostLine[] {
+  const resolvedRates = resolveAreaRateConstants(rateConstants);
+  const basis = offerAreaBasisFromJob(job);
+  const calc = calculateOfferArea(basis, area, resolvedRates);
+
   const measurements: Partial<Record<AreaMeasurementKey, number>> = {
-    SLAB_AREA:
-      job.groundFloorSqm +
-      job.alfrescoPorchSqm +
-      job.porchSqm +
-      job.garageSqm +
-      job.grannyFlatSqm,
-    DROP_EDGE_LM: area.dropEdgeLinealMeters,
-    GROUND_FLOOR_SQM: job.groundFloorSqm,
-    FIRST_FLOOR_SQM: job.firstFloorSqm,
-    TILE_AREA_SQM: area.tileAreaSqm,
-    BRICK_GROUND_LM: area.brickGroundLinealMeters,
-    BRICK_FIRST_LM: area.brickFirstLinealMeters,
-    BRICK_GROUND_HEIGHT: area.brickGroundHeight,
-    BRICK_FIRST_HEIGHT: area.brickFirstHeight,
-    EXTRA_TRUCK_COST: area.extraTruckCost,
+    TOTAL_SLAB_COST: calc.totalSlabCost,
+    TOTAL_DROP_EDGE_BEAM_COST: calc.totalDropEdgeBeamCost,
+    TOTAL_TRUCK_PRICE: calc.totalTruckPrice,
+    TOTAL_GROUND_FLOOR_FRAME_COST: calc.totalGroundFloorFrameCost,
+    TOTAL_FIRST_FLOOR_FRAME_COST: calc.totalFirstFloorFrameCost,
+    TOTAL_GROUND_FLOOR_AREA: calc.totalGroundFloorArea,
+    STEEL: area.steel,
+    INSTALLER: area.installer,
+    EAVES: area.eaves,
+    TOTAL_BRICKS_REQUIRED: calc.totalBricksRequired,
+    TOTAL_SAND_COST: calc.totalSandCost,
+    TOTAL_CEMENT_COST: calc.totalCementCost,
+    TIE_COST: area.tieCost,
+    TOTAL_TILES_REQUIRED: calc.totalTilesRequired,
   };
+
   const scope = buildFormulaScope(rateConstants, measurements);
   return costLines.map((line) =>
     line.formula
@@ -235,7 +249,7 @@ export async function buildAdminOfferPrefill(): Promise<AdminOfferPrefill> {
     allowances: resolveAllowances(adminContent),
     exclusions: resolveExclusions(adminContent),
     draft: resolveDraft(adminContent),
-    areaCalculator: resolveAreaCalculator(adminContent),
+    areaCalculator: resolveAreaCalculator(),
     rateConstants: { ...DEFAULT_RATE_CONSTANTS, ...adminContent.costSchedule.rateConstants },
   };
 }

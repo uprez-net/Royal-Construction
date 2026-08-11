@@ -1,7 +1,7 @@
 import { roundCurrency } from "@/lib/offer/pricing";
 import type { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
 
-// The floor-area geometry that feeds the package calculations. This is NOT
+// The floor-area geometry that feeds the Frame calculations. This is NOT
 // owned here — it is the single source of truth captured in Job setup and
 // derived from the job via offerAreaBasisFromJob(). The helper never lets the
 // estimator re-type these; that duplication is exactly what drifted before.
@@ -15,48 +15,67 @@ export type OfferAreaBasis = {
   readonly balconySqm: number;
 };
 
-// The estimator's rate/allowance config plus the secondary measurements the job
-// does not capture (lineal metres, tile area). Combined with an OfferAreaBasis
-// it produces the slab / frame / brick / tile cost packages.
+// The estimator's project-specific inputs for the slab / frame / brick / tile
+// sections. Combined with an OfferAreaBasis (floor areas from Job setup) and
+// a set of admin rate constants it produces the area cost packages.
+//
+// Rate constants (drop edge beam cost per surface area, truck price, frame
+// rates, sand/cement rates) are NOT stored here — they come from the admin
+// cost-schedule configuration (see formula-variables.ts).
 export type OfferAreaCalculator = {
-  readonly slabRatePerSqm: number;
-  readonly dropEdgeLinealMeters: number;
-  readonly dropEdgeRate: number;
-  readonly frameGroundRatePerSqm: number;
-  readonly frameFirstRatePerSqm: number;
-  readonly steelAllowance: number;
-  readonly frameInstallAllowance: number;
-  readonly extraTruckCost: number;
-  readonly brickGroundLinealMeters: number;
-  readonly brickFirstLinealMeters: number;
-  readonly brickGroundHeight: number;
-  readonly brickFirstHeight: number;
-  readonly bricksPerSqm: number;
-  readonly sandRatePerThousandBricks: number;
-  readonly cementRatePerHundredBricks: number;
-  readonly tileAreaSqm: number;
-  readonly tileSupplyRatePerSqm: number;
-  readonly tilerRatePerSqm: number;
-  readonly tileAnglesAllowance: number;
+  // ── Slab inputs ──
+  readonly slabCost: number;
+  readonly dropEdgeBeamSurfaceArea: number;
+  readonly numberOfTrucks: number;
+  // ── Frame inputs ──
+  readonly steel: number;
+  readonly installer: number;
+  readonly eaves: number;
+  // ── Brick inputs ──
+  readonly bricksGroundFloor: number;
+  readonly bricksFirstFloor: number;
+  readonly bricksPillar: number;
+  readonly tieCost: number;
+  // ── Tile inputs ──
+  readonly tilesGroundFloor: number;
+  readonly tilesBathroom: number;
+  readonly tilesSteps: number;
 };
 
+// Calculated results per section. Every value is derived from the calculator
+// inputs + floor-area basis + admin rate constants — never user-editable.
 export type OfferAreaCalculation = {
-  readonly slabAreaSqm: number;
-  readonly slabCost: number;
-  readonly dropEdgeBeamCost: number;
-  readonly slabPackageTotal: number;
-  readonly frameGroundFloorCost: number;
-  readonly frameFirstFloorCost: number;
-  readonly framePackageTotal: number;
-  readonly brickGroundSqm: number;
-  readonly brickFirstSqm: number;
-  readonly brickCount: number;
-  readonly brickSandCost: number;
-  readonly brickCementCost: number;
-  readonly tileSupplyCost: number;
-  readonly tilerCost: number;
-  readonly tilePackageTotal: number;
-  readonly tileWasteThreshold: number;
+  // ── Slab ──
+  readonly totalDropEdgeBeamCost: number;
+  readonly totalTruckPrice: number;
+  readonly totalSlabCost: number;
+  // ── Frame ──
+  readonly totalGroundFloorArea: number;
+  readonly totalGroundFloorFrameCost: number;
+  readonly totalFirstFloorArea: number;
+  readonly totalFirstFloorFrameCost: number;
+  readonly totalFrameCost: number;
+  // ── Bricks ──
+  readonly totalBricksRequired: number;
+  readonly sandRequiredForBricks: number;
+  readonly totalSandCost: number;
+  readonly cementRequiredForBricks: number;
+  readonly totalCementCost: number;
+  readonly totalBrickMaterialCost: number;
+  // ── Tiles ──
+  readonly tilesWasted: number;
+  readonly totalTilesRequired: number;
+};
+
+// Rate constants needed by the area calculations. Resolved from the admin
+// cost-schedule configuration (DEFAULT_RATE_CONSTANTS + admin overrides).
+export type AreaRateConstants = {
+  readonly dropEdgeBeamCostPerSurfaceArea: number;
+  readonly priceOfEachTruck: number;
+  readonly groundFloorFramePricePerSqm: number;
+  readonly firstFloorFramePricePerSqm: number;
+  readonly sandRatePerThousandBricks: number;
+  readonly cementRatePerHundredBricks: number;
 };
 
 export const EMPTY_AREA_BASIS: OfferAreaBasis = {
@@ -69,29 +88,22 @@ export const EMPTY_AREA_BASIS: OfferAreaBasis = {
   balconySqm: 0,
 };
 
-// Fresh-offer defaults: the RATES and standard allowances remain as estimator
-// config so the helper produces real numbers once the job floor areas and the
-// secondary measurements are entered/imported.
+// Fresh-offer defaults: every estimator input starts at zero. Rate constants
+// are resolved separately from the admin configuration.
 export const INITIAL_AREA_CALCULATOR: OfferAreaCalculator = {
-  slabRatePerSqm: 220,
-  dropEdgeLinealMeters: 0,
-  dropEdgeRate: 280,
-  frameGroundRatePerSqm: 125,
-  frameFirstRatePerSqm: 135,
-  steelAllowance: 10000,
-  frameInstallAllowance: 15000,
-  extraTruckCost: 0,
-  brickGroundLinealMeters: 0,
-  brickFirstLinealMeters: 0,
-  brickGroundHeight: 3,
-  brickFirstHeight: 3.3,
-  bricksPerSqm: 50,
-  sandRatePerThousandBricks: 100,
-  cementRatePerHundredBricks: 15,
-  tileAreaSqm: 0,
-  tileSupplyRatePerSqm: 30,
-  tilerRatePerSqm: 70,
-  tileAnglesAllowance: 0,
+  slabCost: 0,
+  dropEdgeBeamSurfaceArea: 0,
+  numberOfTrucks: 0,
+  steel: 0,
+  installer: 0,
+  eaves: 0,
+  bricksGroundFloor: 0,
+  bricksFirstFloor: 0,
+  bricksPillar: 0,
+  tieCost: 0,
+  tilesGroundFloor: 0,
+  tilesBathroom: 0,
+  tilesSteps: 0,
 };
 
 // Job setup owns the floor areas; the helper reads them through this adapter.
@@ -130,75 +142,134 @@ export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
   );
 }
 
-export function calculateOfferArea(
+// ─── Pure per-section calculation functions (unit-testable) ───
+
+export function calculateSlab(
+  area: Pick<OfferAreaCalculator, "slabCost" | "dropEdgeBeamSurfaceArea" | "numberOfTrucks">,
+  rates: Pick<AreaRateConstants, "dropEdgeBeamCostPerSurfaceArea" | "priceOfEachTruck">,
+): {
+  readonly totalDropEdgeBeamCost: number;
+  readonly totalTruckPrice: number;
+  readonly totalSlabCost: number;
+} {
+  const totalDropEdgeBeamCost = roundCurrency(
+    area.dropEdgeBeamSurfaceArea * rates.dropEdgeBeamCostPerSurfaceArea,
+  );
+  const totalTruckPrice = roundCurrency(
+    area.numberOfTrucks * rates.priceOfEachTruck,
+  );
+  const totalSlabCost = roundCurrency(
+    area.slabCost + totalDropEdgeBeamCost + totalTruckPrice,
+  );
+  return { totalDropEdgeBeamCost, totalTruckPrice, totalSlabCost };
+}
+
+export function calculateFrame(
   basis: OfferAreaBasis,
-  area: OfferAreaCalculator,
-): OfferAreaCalculation {
-  const slabAreaSqm = roundCurrency(
+  area: Pick<OfferAreaCalculator, "steel" | "installer" | "eaves">,
+  rates: Pick<AreaRateConstants, "groundFloorFramePricePerSqm" | "firstFloorFramePricePerSqm">,
+): {
+  readonly totalGroundFloorArea: number;
+  readonly totalGroundFloorFrameCost: number;
+  readonly totalFirstFloorArea: number;
+  readonly totalFirstFloorFrameCost: number;
+  readonly totalFrameCost: number;
+} {
+  const totalGroundFloorArea = roundCurrency(
     basis.groundFloorSqm +
     basis.alfrescoSqm +
     basis.porchSqm +
     basis.garageSqm +
     basis.grannyFlatSqm,
   );
-  const slabCost = roundCurrency(slabAreaSqm * area.slabRatePerSqm);
-  const dropEdgeBeamCost = roundCurrency(
-    area.dropEdgeLinealMeters * area.dropEdgeRate,
+  const totalGroundFloorFrameCost = roundCurrency(
+    totalGroundFloorArea * rates.groundFloorFramePricePerSqm,
   );
-  const slabPackageTotal = roundCurrency(
-    slabCost + dropEdgeBeamCost + area.extraTruckCost,
+  const totalFirstFloorArea = roundCurrency(
+    basis.firstFloorSqm + basis.balconySqm,
   );
-  const frameGroundFloorCost = roundCurrency(
-    slabAreaSqm * area.frameGroundRatePerSqm,
+  const totalFirstFloorFrameCost = roundCurrency(
+    totalFirstFloorArea * rates.firstFloorFramePricePerSqm,
   );
-  const frameFirstFloorCost = roundCurrency(
-    basis.firstFloorSqm * area.frameFirstRatePerSqm,
+  const totalFrameCost = roundCurrency(
+    totalGroundFloorFrameCost +
+    totalFirstFloorFrameCost +
+    area.steel +
+    area.installer +
+    area.eaves,
   );
-  const framePackageTotal = roundCurrency(
-    frameGroundFloorCost +
-    frameFirstFloorCost +
-    area.steelAllowance +
-    area.frameInstallAllowance,
+  return {
+    totalGroundFloorArea,
+    totalGroundFloorFrameCost,
+    totalFirstFloorArea,
+    totalFirstFloorFrameCost,
+    totalFrameCost,
+  };
+}
+
+export function calculateBricks(
+  area: Pick<OfferAreaCalculator, "bricksGroundFloor" | "bricksFirstFloor" | "bricksPillar" | "tieCost">,
+  rates: Pick<AreaRateConstants, "sandRatePerThousandBricks" | "cementRatePerHundredBricks">,
+): {
+  readonly totalBricksRequired: number;
+  readonly sandRequiredForBricks: number;
+  readonly totalSandCost: number;
+  readonly cementRequiredForBricks: number;
+  readonly totalCementCost: number;
+  readonly totalBrickMaterialCost: number;
+} {
+  const totalBricksRequired = roundCurrency(
+    area.bricksGroundFloor + area.bricksFirstFloor + area.bricksPillar,
   );
-  const brickGroundSqm = roundCurrency(
-    area.brickGroundLinealMeters * area.brickGroundHeight,
+  const sandRequiredForBricks = roundCurrency(totalBricksRequired / 1000);
+  const totalSandCost = roundCurrency(
+    sandRequiredForBricks * rates.sandRatePerThousandBricks,
   );
-  const brickFirstSqm = roundCurrency(
-    area.brickFirstLinealMeters * area.brickFirstHeight,
+  const cementRequiredForBricks = roundCurrency(totalBricksRequired / 100);
+  const totalCementCost = roundCurrency(
+    cementRequiredForBricks * rates.cementRatePerHundredBricks,
   );
-  const brickCount = roundCurrency(
-    (brickGroundSqm + brickFirstSqm) * area.bricksPerSqm,
+  const totalBrickMaterialCost = roundCurrency(
+    totalSandCost + totalCementCost + area.tieCost,
   );
-  const brickSandCost = roundCurrency(
-    (brickCount / 1000) * area.sandRatePerThousandBricks,
+  return {
+    totalBricksRequired,
+    sandRequiredForBricks,
+    totalSandCost,
+    cementRequiredForBricks,
+    totalCementCost,
+    totalBrickMaterialCost,
+  };
+}
+
+export function calculateTiles(
+  area: Pick<OfferAreaCalculator, "tilesGroundFloor" | "tilesBathroom" | "tilesSteps">,
+): {
+  readonly tilesWasted: number;
+  readonly totalTilesRequired: number;
+} {
+  const baseTiles = roundCurrency(
+    area.tilesGroundFloor + area.tilesBathroom + area.tilesSteps,
   );
-  const brickCementCost = roundCurrency(
-    (brickCount / 100) * area.cementRatePerHundredBricks,
-  );
-  const tileWasteThreshold = roundCurrency(area.tileAreaSqm * 0.10);
-  const tileSupplyCost = roundCurrency(
-    (area.tileAreaSqm + tileWasteThreshold) * area.tileSupplyRatePerSqm,
-  );
-  const tilerCost = roundCurrency(area.tileAreaSqm * area.tilerRatePerSqm);
+  const tilesWasted = roundCurrency(baseTiles * 0.10);
+  const totalTilesRequired = roundCurrency(baseTiles + tilesWasted);
+  return { tilesWasted, totalTilesRequired };
+}
+
+export function calculateOfferArea(
+  basis: OfferAreaBasis,
+  area: OfferAreaCalculator,
+  rates: AreaRateConstants,
+): OfferAreaCalculation {
+  const slab = calculateSlab(area, rates);
+  const frame = calculateFrame(basis, area, rates);
+  const bricks = calculateBricks(area, rates);
+  const tiles = calculateTiles(area);
 
   return {
-    slabAreaSqm,
-    slabCost,
-    dropEdgeBeamCost,
-    slabPackageTotal,
-    frameGroundFloorCost,
-    frameFirstFloorCost,
-    framePackageTotal,
-    brickGroundSqm,
-    brickFirstSqm,
-    brickCount,
-    brickSandCost,
-    brickCementCost,
-    tileSupplyCost,
-    tileWasteThreshold,
-    tilerCost,
-    tilePackageTotal: roundCurrency(
-      tileSupplyCost + tilerCost + area.tileAnglesAllowance,
-    ),
+    ...slab,
+    ...frame,
+    ...bricks,
+    ...tiles,
   };
 }

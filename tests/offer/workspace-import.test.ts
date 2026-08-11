@@ -105,8 +105,9 @@ assert.deepEqual(result.workspacePricingSettings, {
 });
 assert.equal(result.areaBasis.groundFloorSqm, 110);
 assert.equal(result.areaBasis.firstFloorSqm, 90);
-assert.equal(result.areaCalculator.slabRatePerSqm, 220);
-assert.equal(result.areaCalculator.dropEdgeLinealMeters, 10);
+assert.equal(result.areaCalculator.slabCost, 31020);
+assert.equal(result.areaCalculator.steel, 10000);
+assert.equal(result.areaCalculator.installer, 15000);
 assert.ok(
   result.validationMessages.some((message) =>
     message.includes("SAMPLE QUOTE J83 has #REF!"),
