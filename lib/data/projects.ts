@@ -49,6 +49,7 @@ const projectInclude = {
       id: true,
       name: true,
       status: true,
+      projectStage: true,
       targetDate: true,
       actualDate: true,
       tradies: {

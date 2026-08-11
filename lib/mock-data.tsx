@@ -12,12 +12,12 @@ import {
   // MessagesSquare,
   // PencilRuler,
   ReceiptText,
+  UserCog,
   // ShieldCheck,
   // ShoppingCart,
   Users,
-  CheckSquare,
 } from "lucide-react";
-import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, ProjectPaymentItem, QuoteRequestItem, WorkerAttendanceItem } from "@/types/ui";
+import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, QuoteRequestItem } from "@/types/ui";
 import { SiteManagerPerformance } from "@/components/dashboard/dashboard-site-manager-table";
 
 export const navigationItems: NavItem[] = [
@@ -88,14 +88,9 @@ export const navigationItems: NavItem[] = [
   //   icon: <MessagesSquare className="size-4" />,
   // },
   {
-    slug: "team",
-    label: "Team Management",
-    icon: <Users className="size-4" />,
-  },
-  {
-    slug: "admin-approvals",
-    label: "Approvals",
-    icon: <CheckSquare className="size-4" />,
+    slug: "admin",
+    label: "Admin",
+    icon: <UserCog className="size-4" />,
     checkAdmin: true,
   }
 ];
@@ -304,105 +299,6 @@ export const projectBudgetBurndownMock: ProjectBudgetPoint[] = [
   { month: "Dec", planned: 460, actual: 312, contract: 485 },
   { month: "Jan", planned: 485, actual: 312, contract: 485 },
 ];
-
-export const projectPaymentsMock = {
-  summary: {
-    totalBilled: 312400,
-    cleared: 159050,
-    outstanding: 153350,
-    remainingContract: 172600,
-  },
-  invoices: [
-    {
-      id: "pay-1",
-      invoiceNumber: "INV-001",
-      milestone: "Deposit",
-      amount: 24250,
-      gst: 2425,
-      sentOn: "15 Sep 2025",
-      paidOn: "16 Sep 2025",
-      status: "Cleared",
-    },
-    {
-      id: "pay-2",
-      invoiceNumber: "INV-002",
-      milestone: "Slab Down",
-      amount: 48500,
-      gst: 4850,
-      sentOn: "12 Oct 2025",
-      paidOn: "14 Oct 2025",
-      status: "Cleared",
-    },
-    {
-      id: "pay-3",
-      invoiceNumber: "INV-004",
-      milestone: "Frame Stage",
-      amount: 97000,
-      gst: 9700,
-      sentOn: "-",
-      status: "Pending",
-    },
-  ] as ProjectPaymentItem[],
-};
-
-export const workerAttendanceMock = {
-  qrId: "QR-PROJ-001-PENRITH",
-  qrSiteLabel: "42 Railway St, Penrith",
-  qrCreatedOn: "10 Feb 2025",
-  summary: {
-    checkedIn: 8,
-    checkedOut: 6,
-    stillOnSite: 2,
-    totalHours: 63,
-    dailyLabourEstimate: 1890,
-  },
-  workers: [
-    {
-      id: "wrk-1",
-      name: "Gurmeet Singh",
-      trade: "Carpenter",
-      gpsActive: true,
-      checkIn: "6:45 AM",
-      checkOut: "2:45 PM",
-      hours: 8,
-      hourlyRate: 35,
-      status: "Completed",
-    },
-    {
-      id: "wrk-2",
-      name: "Kulwinder Dhillon",
-      trade: "Electrician",
-      gpsActive: true,
-      checkIn: "7:00 AM",
-      checkOut: "3:00 PM",
-      hours: 8,
-      hourlyRate: 45,
-      status: "Completed",
-    },
-    {
-      id: "wrk-3",
-      name: "Jatinder Sidhu",
-      trade: "Electrician",
-      gpsActive: true,
-      checkIn: "7:05 AM",
-      checkOut: "-",
-      hours: 7.5,
-      hourlyRate: 45,
-      status: "On Site",
-    },
-    {
-      id: "wrk-4",
-      name: "Sukhwinder Sandhu",
-      trade: "Labourer",
-      gpsActive: true,
-      checkIn: "6:35 AM",
-      checkOut: "-",
-      hours: 7.5,
-      hourlyRate: 28,
-      status: "On Site",
-    },
-  ] as WorkerAttendanceItem[],
-};
 
 export const quoteRequestsMock: QuoteRequestItem[] = [
   {

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useAppSelector } from "@/lib/store/hooks";
 import type { UIMilestone } from "@/types/project";
-import { BanIcon, Camera, Download, FilePenLine, Play } from "lucide-react";
+import { BanIcon, Camera, FilePenLine, Play } from "lucide-react";
 import { useMemo } from "react";
 
 export function MilestoneActionGroup({
@@ -10,7 +10,6 @@ export function MilestoneActionGroup({
   onOpenAddUpdateModal,
   onStatusUpdate,
   onStartMilestone,
-  onSendInvoice,
   onMarkasNotRequired,
 }: {
   prevMilestone?: UIMilestone;
@@ -18,7 +17,6 @@ export function MilestoneActionGroup({
   onOpenAddUpdateModal: (id: string) => void;
   onStatusUpdate: (id: string) => void;
   onStartMilestone: (id: string) => void;
-  onSendInvoice: () => void;
   onMarkasNotRequired: (id: string) => void;
 }) {
   const project = useAppSelector((state) => state.projects.activeProject);
@@ -48,32 +46,24 @@ export function MilestoneActionGroup({
       prevMilestoneToParent?.status === "NOT_REQUIRED") &&
       isFirstChildOfMilestone);
 
-  console.log("isUnlocked", isUnlocked, {
-    name: milestone.name,
-    order: milestone.order,
-    prevMilestone: prevMilestone?.name,
-    prevMilestoneOrder: prevMilestone?.order,
-    isFirstMilestone,
-    isChildOfFirstMilestone,
-    prevMilestoneStatus: prevMilestone?.status,
-    prevMilestoneChildren: prevMilestone?.childrenMilestones.length,
-    prevMilestoneToParentStatus: prevMilestoneToParent?.status,
-  });
-
   const canStart = isPending && hasNoChildren && isUnlocked;
 
   const isActive = milestone.status === "ACTIVE";
-  const isDone = milestone.status === "DONE";
 
   if (canStart) {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <Button size="sm" onClick={() => onStartMilestone(milestone.id)}>
-          <Play className="mr-1 h-4 w-4" />
-          Start Milestone
+          <Play className="mr-1 h-4 w-4" aria-hidden="true" />
+          Start milestone
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => onMarkasNotRequired(milestone.id)}>
-          <BanIcon className="mr-1 h-4 w-4" />
+        <Button
+          size="sm"
+          variant="secondary"
+          aria-label={`Mark ${milestone.name} as not required`}
+          onClick={() => onMarkasNotRequired(milestone.id)}
+        >
+          <BanIcon className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
     );
@@ -83,26 +73,17 @@ export function MilestoneActionGroup({
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <Button size="sm" onClick={() => onOpenAddUpdateModal(milestone.id)}>
-          <Camera className="mr-1 h-4 w-4" />
-          Add Photo
+          <Camera className="mr-1 h-4 w-4" aria-hidden="true" />
+          Add photo
         </Button>
 
         {!hasChildren && (
           <Button size="sm" onClick={() => onStatusUpdate(milestone.id)}>
-            <FilePenLine className="mr-1 h-4 w-4" />
-            Update Status
+            <FilePenLine className="mr-1 h-4 w-4" aria-hidden="true" />
+            Finish milestone
           </Button>
         )}
       </div>
-    );
-  }
-
-  if (isDone) {
-    return (
-      <Button variant="outline" size="sm" onClick={onSendInvoice}>
-        <Download className="mr-1 h-4 w-4" />
-        Invoice
-      </Button>
     );
   }
 

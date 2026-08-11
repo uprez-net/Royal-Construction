@@ -35,9 +35,14 @@ export default function RateTradieModal({
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
 
-  const [rating, setRating] = useState(
-    tradie.rating ? parseFloat(tradie.rating) : 0,
-  );
+  // Rating this tradie is a new judgement, not an edit of the stored average.
+  // The average is a decimal (4.5) and the input only offers whole stars, so
+  // seeding it meant the control displayed one value while state held another —
+  // and `rating !== 0` let that untouched, averaged value be submitted as a
+  // deliberate rating. The current average stays visible as read-only context
+  // below, so the input starts empty and submit stays gated until the operator
+  // actually picks a star.
+  const [rating, setRating] = useState(0);
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -63,7 +68,7 @@ export default function RateTradieModal({
 
         toast.success("Rating submitted successfully.");
 
-        onClose();
+        handleOpenChange(false);
       } catch (error) {
         toast.error("Error rating tradie. Please try again.");
 
@@ -77,21 +82,24 @@ export default function RateTradieModal({
       <DialogContent className="sm:max-w-106.25">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-amber-500 fill-amber-500" />
-            Rate Tradie
+            <Star
+              className="h-5 w-5 fill-warning text-warning"
+              aria-hidden="true"
+            />
+            Rate tradie
           </DialogTitle>
 
           <DialogDescription>
-            {tradie.name} • {tradie.trade}
+            {tradie.name} &middot; {tradie.trade}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Current Rating */}
+          {/* Current rating */}
 
-          <div className="rounded-lg border bg-muted/40 p-4">
+          <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
             <div className="mb-2 text-xs font-medium text-muted-foreground">
-              Current Rating
+              Current rating
             </div>
 
             <div className="flex items-center gap-3">
@@ -102,25 +110,37 @@ export default function RateTradieModal({
             </div>
           </div>
 
-          {/* New Rating */}
+          {/* New rating */}
 
           <div className="space-y-2">
-            <div className="text-sm font-medium">New Rating</div>
+            <div id="new-rating-label" className="text-sm font-medium">
+              New rating
+              <span className="text-destructive">
+                *<span className="sr-only"> required</span>
+              </span>
+            </div>
 
-            <div className="rounded-lg border p-4">
-              <StarRatingInput value={rating} onChange={setRating} />
+            <div className="rounded-lg border border-border/70 p-4">
+              <StarRatingInput
+                value={rating}
+                onChange={setRating}
+                labelledById="new-rating-label"
+              />
             </div>
           </div>
 
           {/* Info */}
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="rounded-lg bg-info-light p-3">
             <div className="flex gap-3">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-info-ink"
+                aria-hidden="true"
+              />
 
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Updating a tradie&apos;s rating affects their overall performance
-                score and visibility throughout the platform.
+              <p className="text-xs leading-relaxed text-foreground/80">
+                Updating a tradie&apos;s rating affects their overall
+                performance score and visibility throughout the platform.
               </p>
             </div>
           </div>
@@ -128,14 +148,18 @@ export default function RateTradieModal({
           {/* Footer */}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose} disabled={isPending}>
+            <Button
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
 
             <Button onClick={handleSubmit} disabled={isPending || rating === 0}>
-              <Star className="mr-2 h-4 w-4" />
+              <Star className="mr-2 h-4 w-4" aria-hidden="true" />
 
-              {isPending ? "Submitting..." : "Submit Rating"}
+              {isPending ? "Submitting…" : "Submit rating"}
             </Button>
           </div>
         </div>

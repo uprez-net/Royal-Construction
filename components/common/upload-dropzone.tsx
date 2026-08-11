@@ -103,7 +103,7 @@ export function UploadDropzone({
 
   return (
     <div className={cn("space-y-1.5", className)}>
-      <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <label className="block text-xs font-medium text-muted-foreground">
         {label}
       </label>
 
@@ -136,30 +136,35 @@ export function UploadDropzone({
           }
         }}
         className={cn(
-          "group cursor-pointer rounded-[16px] border-2 border-dashed border-border/80 bg-slate-50/50 p-6 text-center transition-all outline-none",
-          "hover:border-teal-600 hover:bg-teal-50/40 focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10",
-          isDragging &&
-            "border-teal-600 bg-teal-50/60 shadow-[0_0_0_4px_rgba(13,148,136,0.08)]",
+          "group cursor-pointer rounded-xl border-2 border-dashed border-border/80 bg-muted/40 p-6 text-center transition-colors outline-none",
+          "hover:border-primary hover:bg-primary/5 focus-visible:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+          isDragging && "border-primary bg-primary/5",
           isDisabled && "cursor-not-allowed opacity-70",
           dropzoneClassName,
         )}
       >
-        <CloudUpload className="mx-auto mb-2 size-8 text-muted-foreground transition-colors group-hover:text-teal-600" />
+        <CloudUpload
+          className="mx-auto mb-2 size-8 text-muted-foreground transition-colors group-hover:text-primary"
+          aria-hidden="true"
+        />
 
         <div className="space-y-1">
-          <p className="text-sm font-medium text-slate-700 transition-colors group-hover:text-teal-700">
+          <p className="text-sm font-medium text-foreground transition-colors group-hover:text-primary">
             {summary}
           </p>
 
           {helperText ? (
-            <p className="text-xs text-slate-500">{helperText}</p>
+            <p className="text-xs text-muted-foreground">{helperText}</p>
           ) : null}
         </div>
 
         {isLoading ? (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-sm">
-            <Loader2 className="size-3.5 animate-spin text-teal-600" />
-            Uploading...
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm">
+            <Loader2
+              className="size-3.5 animate-spin text-primary motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+            Uploading…
           </div>
         ) : null}
       </div>
@@ -176,7 +181,7 @@ export function UploadDropzone({
       {files.length > 0 ? (
         <div
           className={cn(
-            "space-y-2 rounded-[14px] border border-border/70 bg-slate-50/60 p-3.5",
+            "space-y-2 rounded-xl border border-border/70 bg-muted/40 p-3.5",
             listClassName,
           )}
         >
@@ -184,7 +189,7 @@ export function UploadDropzone({
             <div
               key={file.id}
               className={cn(
-                "rounded-[12px] border border-border/70 bg-white p-3 shadow-sm",
+                "rounded-lg border border-border/70 bg-card p-3 shadow-sm",
                 itemClassName,
               )}
             >
@@ -207,15 +212,24 @@ export function UploadDropzone({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <div className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      <div className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                         {file.status === "uploading" ? (
-                          <Loader2 className="size-3.5 animate-spin text-teal-600" />
+                          <Loader2
+                            className="size-3.5 animate-spin text-primary motion-reduce:animate-none"
+                            aria-hidden="true"
+                          />
                         ) : null}
                         {file.status === "uploaded" ? (
-                          <CheckCircle2 className="size-3.5 text-emerald-600" />
+                          <CheckCircle2
+                            className="size-3.5 text-success-ink"
+                            aria-hidden="true"
+                          />
                         ) : null}
                         {file.status === "failed" ? (
-                          <AlertCircle className="size-3.5 text-destructive" />
+                          <AlertCircle
+                            className="size-3.5 text-destructive-ink"
+                            aria-hidden="true"
+                          />
                         ) : null}
                         {file.status}
                       </div>
@@ -223,19 +237,27 @@ export function UploadDropzone({
                       {file.status === "queued" && (
                         <button
                           type="button"
-                          className="text-muted-foreground hover:text-foreground"
+                          aria-label={`Remove ${file.file.name}`}
+                          className="rounded-md p-1 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                           onClick={() => removeFile(file.id)}
                         >
-                          <X className="size-4" />
+                          <X className="size-4" aria-hidden="true" />
                         </button>
                       )}
                     </div>
                   </div>
 
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-valuenow={Math.round(file.progress)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`Upload progress for ${file.file.name}`}
+                  >
                     <div
                       className={cn(
-                        "h-full rounded-full bg-teal-600 transition-all",
+                        "h-full rounded-full bg-primary transition-[width] duration-200 ease-out motion-reduce:transition-none",
                         file.status === "failed" && "bg-destructive",
                       )}
                       style={{ width: `${file.progress}%` }}
@@ -253,13 +275,16 @@ export function UploadDropzone({
           ))}
         </div>
       ) : emptyState ? (
-        <div className="rounded-[14px] border border-border/70 bg-slate-50/60 px-4 py-3 text-xs text-slate-500">
+        <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
           {emptyState}
         </div>
       ) : null}
 
       {errorMessage ? (
-        <div className="rounded-[12px] border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive-light px-3 py-2 text-sm text-destructive-ink"
+        >
           {errorMessage}
         </div>
       ) : null}

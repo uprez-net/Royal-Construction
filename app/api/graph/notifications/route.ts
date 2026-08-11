@@ -8,6 +8,7 @@ import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedul
 import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 import { evaluateEmail } from '@/utils/spam-detector';
+import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
 
 // export const runtime = 'nodejs';
 
@@ -242,6 +243,28 @@ export async function POST(request: Request): Promise<Response> {
             console.log(
               `  body(${contentType}): ${content || '[no body]'}`,
             );
+
+            // Offer proposal reply: the subject carries [RCOFR-…]. Correlate it
+            // back to the send and stop — it is not a lead/tradie message.
+            const offerReplyToken = extractOfferReplyToken(message.subject);
+            if (offerReplyToken) {
+              const outcome = await recordOfferReply(offerReplyToken, message);
+              // Log the negatives too. An "auto-generated" line here is a
+              // bounce or an out-of-office arriving, and today this is the only
+              // trace of it — it is what a bounce classifier gets tuned against
+              // before one is built.
+              console.log(
+                `  Offer ${offerReplyToken}: ${outcome}`,
+                JSON.stringify({
+                  from: message.from,
+                  subject: message.subject,
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  returnPath: message.headers.returnPath ?? null,
+                  contentType: message.headers.contentType ?? null,
+                }),
+              );
+              continue;
+            }
 
             // Check if this message was already processed before calling the LLM extraction
             if (message.id && await isMessageAlreadyProcessed(message.id)) {

@@ -1,10 +1,12 @@
 import { useState, useCallback } from "react";
 import { Lead, LeadStage, LeadsStats } from "@/lib/leads/types";
 import { LeadAnalyticsData } from "@/types/lead";
+import type { FollowupStats } from "@/lib/data/leads";
 import {
   fetchLeads,
   fetchLeadsStats,
   fetchLeadAnalyticsData,
+  fetchFollowupStats,
 } from "@/lib/leads/leads-service";
 import type { LeadEmails } from "@prisma/client";
 
@@ -19,7 +21,7 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
   if (!status) return undefined;
   if (status === "total") return [];
   if (status === "converted") return ["Won", "Converted"];
-  if (status === "pendingFollowup") return ["In Follow-up"];
+  if (status === "pendingFollowup") return ["In Follow-up", "Meeting Scheduled"];
   if (status === "lost") return ["Lost", "Cancelled", "Disqualified"];
   return status.split(",") as LeadStage[];
 }
@@ -27,6 +29,7 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
 export function useLeadsData() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);
+  const [followupStats, setFollowupStats] = useState<FollowupStats | null>(null);
   const [analyticsData, setAnalyticsData] = useState<LeadAnalyticsData>({
     sourceData: [],
     conversionData: [],
@@ -45,12 +48,14 @@ export function useLeadsData() {
 
   /* ── Stats ── */
   const refreshStats = useCallback(async () => {
-    const [statsData, analytics] = await Promise.all([
+    const [statsData, analytics, followup] = await Promise.all([
       fetchLeadsStats(),
       fetchLeadAnalyticsData(),
+      fetchFollowupStats(),
     ]);
     setStats(statsData);
     setAnalyticsData(analytics);
+    setFollowupStats(followup);
   }, []);
 
   /* ── Paginated leads ── */
@@ -61,6 +66,7 @@ export function useLeadsData() {
       query?: string;
       status?: string;
       filterTiming?: string;
+      isArchived?: boolean;
     }) => {
       try {
         setLoadingLeads(true);
@@ -70,6 +76,7 @@ export function useLeadsData() {
           q: params.query?.trim() || undefined,
           status: resolveStatusFilter(params.status),
           filterTiming: params.filterTiming,
+          isArchived: params.isArchived,
         });
         setLeads(leadsData.items);
         setPageInfo({
@@ -93,7 +100,7 @@ export function useLeadsData() {
     async (params: { query?: string; status?: string } = {}) => {
       try {
         setLoading(true);
-        const [leadsData, statsData, analytics] = await Promise.all([
+        const [leadsData, statsData, analytics, followup] = await Promise.all([
           fetchLeads({
             page: 1,
             limit: 10,
@@ -102,6 +109,7 @@ export function useLeadsData() {
           }),
           fetchLeadsStats(),
           fetchLeadAnalyticsData(),
+          fetchFollowupStats(),
         ]);
         setLeads(leadsData.items);
         setPageInfo({
@@ -112,6 +120,7 @@ export function useLeadsData() {
         });
         setStats(statsData);
         setAnalyticsData(analytics);
+        setFollowupStats(followup);
         setError(null);
       } catch (err) {
         setError("Failed to load leads data");
@@ -175,6 +184,7 @@ export function useLeadsData() {
   return {
     leads,
     stats,
+    followupStats,
     analyticsData,
     pageInfo,
     loading,

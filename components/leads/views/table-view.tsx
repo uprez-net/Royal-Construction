@@ -6,9 +6,9 @@ import {
   UserPlus,
   Search,
   RefreshCw,
-  Trash2,
   CalendarCheck,
   MessageSquare,
+  Archive,
 } from "lucide-react";
 import { Lead } from "@/lib/leads/types";
 import { useAvailableUsers } from "@/hooks/use-available-users";
@@ -26,6 +26,7 @@ import { AssignedModal } from "@/components/leads/modal-ui/assigned-modal";
 import { ToastContainer, useToast } from "@/components/common/use-toast";
 import type { LeadEmails } from "@prisma/client";
 import LeadCommModal from "../modal-ui/lead-comm-modal";
+import { cn } from "@/lib/utils";
 
 interface TableViewProps {
   loading: boolean;
@@ -68,7 +69,7 @@ export default function TableView({
     if (!activeMetric) return ["all"];
     if (activeMetric.includes("total")) return ["all"];
     if (activeMetric.includes("converted")) return ["Won", "Converted"];
-    if (activeMetric.includes("pendingFollowup")) return ["In Follow-up"];
+    if (activeMetric.includes("pendingFollowup")) return ["In Follow-up", "Meeting Scheduled"];
     if (activeMetric.includes("lost"))
       return ["Lost", "Cancelled", "Disqualified"];
     return activeMetric.split(",").map((s) => s.trim());
@@ -120,6 +121,7 @@ export default function TableView({
                   //"Cancelled",
                   "Disqualified",
                   "Lost",
+                  "Archived",
                 ].map((stage) => (
                   <button
                     key={stage}
@@ -160,9 +162,10 @@ export default function TableView({
                     {leads.map((lead) => (
                       <tr
                         key={lead.id}
-                        className={
-                          lead.urgent ? "urgent-row bg-rose-50/50" : ""
-                        }
+                        className={cn(
+                          lead.urgent && "urgent-row bg-rose-50/50",
+                          lead.isArchived && "opacity-50",
+                        )}
                         onClick={() => setDetailLead(lead)}
                       >
                         <td className="col-lead">
@@ -173,6 +176,12 @@ export default function TableView({
                             <div className="cell-name-text">
                               <strong>{lead.name}</strong>
                               <small>{lead.email}</small>
+                              {lead.secondaryName ? (
+                                <small className="text-muted-foreground/80">
+                                  + {lead.secondaryName}
+                                  {lead.secondaryEmail ? ` · ${lead.secondaryEmail}` : ""}
+                                </small>
+                              ) : null}
                             </div>
                           </div>
                         </td>
@@ -197,6 +206,7 @@ export default function TableView({
                                 e.stopPropagation();
                                 setFollowupLead(lead);
                               }}
+                              disabled={lead.isArchived}
                               title="Set Follow-up"
                             >
                               <Calendar size={12} />
@@ -227,6 +237,7 @@ export default function TableView({
                                 setAssignedLead(lead);
                               }}
                               title="Assign Lead"
+                              disabled={lead.isArchived}
                             >
                               <UserPlus size={12} />
                               <span>Assign</span>
@@ -255,6 +266,7 @@ export default function TableView({
                                   e.stopPropagation();
                                   handleCall(lead);
                                 }}
+                                disabled={lead.isArchived}
                               >
                                 <Phone size={15} />
                               </button>
@@ -270,6 +282,7 @@ export default function TableView({
                                     e.stopPropagation();
                                     setEmailLead(lead);
                                   }}
+                                  disabled={lead.isArchived}
                                 >
                                   <Mail size={15} />
                                 </button>
@@ -282,6 +295,7 @@ export default function TableView({
                                     e.stopPropagation();
                                     setCommLead(lead.id.toString());
                                   }}
+                                  disabled={lead.isArchived}
                                 >
                                   <MessageSquare size={15} />
                                 </button>
@@ -291,14 +305,15 @@ export default function TableView({
                               <button
                                 type="button"
                                 className="action-btn-icon"
-                                title={`Delete ${lead.name}`}
-                                aria-label={`Delete ${lead.name}`}
+                                title={`Archive ${lead.name}`}
+                                aria-label={`Archive ${lead.name}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setLeadToDelete(lead);
                                 }}
+                                disabled={lead.isArchived}
                               >
-                                <Trash2 size={15} />
+                                <Archive size={15} />
                               </button>
                             )}
                             <button
@@ -310,6 +325,7 @@ export default function TableView({
                                 e.stopPropagation();
                                 redirectToScheduleMeeting(lead);
                               }}
+                              disabled={lead.isArchived}
                             >
                               <CalendarCheck size={15} />
                             </button>
@@ -345,7 +361,11 @@ export default function TableView({
               {leads.map((lead) => (
                 <article
                   key={lead.id}
-                  className={`mobile-lead-card ${lead.urgent ? "urgent" : ""}`}
+                  className={cn(
+                    "mobile-lead-card",
+                    lead.urgent && "urgent",
+                    lead.isArchived && "opacity-50",
+                  )}
                 >
                   <button
                     type="button"
@@ -369,6 +389,12 @@ export default function TableView({
                     <span className="mobile-lead-email">
                       {lead.email || lead.phone || "No contact saved"}
                     </span>
+                    {lead.secondaryName ? (
+                      <span className="mobile-lead-email text-muted-foreground/80">
+                        + {lead.secondaryName}
+                        {lead.secondaryEmail ? ` · ${lead.secondaryEmail}` : ""}
+                      </span>
+                    ) : null}
                   </button>
 
                   <dl className="mobile-lead-meta">
@@ -418,6 +444,7 @@ export default function TableView({
                         className="mobile-action-btn"
                         onClick={() => handleCall(lead)}
                         aria-label={`Call ${lead.name}`}
+                        disabled={lead.isArchived}
                       >
                         <Phone size={15} />
                         Call
@@ -429,9 +456,25 @@ export default function TableView({
                         className="mobile-action-btn"
                         onClick={() => setEmailLead(lead)}
                         aria-label={`Send follow-up email to ${lead.name}`}
+                        disabled={lead.isArchived}
                       >
                         <Mail size={15} />
                         Email
+                      </button>
+                    )}
+                    {isTerminalStage(lead.stage) && (
+                      <button
+                        type="button"
+                        className="mobile-action-btn"
+                        title={`Archive ${lead.name}`}
+                        aria-label={`Archive ${lead.name}`}
+                        onClick={() => {
+                          setLeadToDelete(lead);
+                        }}
+                        disabled={lead.isArchived}
+                      >
+                        <Archive size={15} />
+                        Archive
                       </button>
                     )}
                     <button
@@ -439,6 +482,7 @@ export default function TableView({
                       className="mobile-action-btn"
                       onClick={() => setCommLead(lead.id.toString())}
                       aria-label={`Communicate with ${lead.name}`}
+                      disabled={lead.isArchived}
                     >
                       <MessageSquare size={15} />
                       Text
@@ -448,6 +492,7 @@ export default function TableView({
                       className="mobile-action-btn"
                       onClick={() => redirectToScheduleMeeting(lead)}
                       aria-label={`Meeting Schedule for ${lead.name}`}
+                      disabled={lead.isArchived}
                     >
                       <CalendarCheck size={15} />
                       Actions

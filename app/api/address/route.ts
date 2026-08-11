@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import { AddressSuggestion } from "@/types/data";
 import { successResponse, errorResponse } from "@/utils/validators";
 
@@ -227,6 +227,7 @@ async function fetchPlaceDetails(placeId: string, apiKey: string) {
 }
 
 export async function GET(request: Request) {
+    await connection();
     try {
         const url = new URL(request.url);
         const query = url.searchParams.get("query")?.trim() ?? "";

@@ -37,6 +37,19 @@ const nullableTrimmedString = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : null;
 }, z.string().nullable());
 
+// Issue #110: the primary client email is mandatory + valid on creation and
+// cannot be cleared on update (required-when-present). Secondary/owner emails
+// are enforced later at the offer send/sign gates (see lib/offer/offer-review).
+const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// Exported so the data-layer createLead can re-validate at the DB boundary —
+// direct callers (e.g. the consultation-booking route) bypass createLeadSchema
+// and only null-checked truthiness, letting a malformed address through (#110).
+export const requiredLeadEmail = z
+  .string()
+  .trim()
+  .min(1, "Client email is required")
+  .regex(emailPattern, "Enter a valid client email");
+
 const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
 const isoDateTimeInput = z.iso.datetime();
 
@@ -167,8 +180,13 @@ export const updateLeadSchema = z.object({
   name: z.string().trim().min(1).optional(),
 
   phone: nullableTrimmedString.optional(),
-  email: nullableTrimmedString.optional(),
+  // #110: required-when-present on update — a lead's email cannot be cleared.
+  email: requiredLeadEmail.optional(),
   location: nullableTrimmedString.optional(),
+
+  secondaryName: nullableTrimmedString.optional(),
+  secondaryEmail: nullableTrimmedString.optional(),
+  secondaryPhone: nullableTrimmedString.optional(),
 
   source: nullableTrimmedString.optional(),
   sourceDetail: nullableTrimmedString.optional(),
@@ -180,10 +198,23 @@ export const updateLeadSchema = z.object({
   notesDoc: leadRichTextDocumentSchema.nullable().optional(),
   annotationsToCreate: z.array(leadNoteAnnotationInputSchema).optional(),
 
+  meetingDate: nullableDateInput.describe("Meeting date").optional(),
+  meetingTime: nullableTrimmedString.optional(),
+  meetingMode: nullableTrimmedString.optional(),
+  
+  followupReminderSentAt: z.iso.datetime().optional(),
+  meetingReminderSentAt: z.iso.datetime().optional(),
+
   followupDate: nullableDateInput.describe("Follow-up date").optional(),
 
   followupTime: nullableTrimmedString.optional(),
   followupNotes: nullableTrimmedString.optional(),
+
+  followupResponseOutcome: z.enum(["yes", "reschedule", "notRequired"]).optional(),
+
+  meetingReviewOutcome: z.enum(["yes", "no"]).optional(),
+  discussionNotes: nullableTrimmedString.optional(),
+  buildScope: nullableTrimmedString.optional(),
 
   lostReason: nullableTrimmedString.optional(),
 
@@ -202,8 +233,13 @@ export const createLeadSchema = z.object({
   name: z.string().trim().min(1, "Lead name is required"),
 
   phone: nullableTrimmedString.optional(),
-  email: nullableTrimmedString.optional(),
+  // #110: every client email is mandatory — required + valid at creation.
+  email: requiredLeadEmail,
   location: nullableTrimmedString.optional(),
+
+  secondaryName: nullableTrimmedString.optional(),
+  secondaryEmail: nullableTrimmedString.optional(),
+  secondaryPhone: nullableTrimmedString.optional(),
 
   source: z.enum(leadSources).nullable().optional(),
 
@@ -216,6 +252,13 @@ export const createLeadSchema = z.object({
   type: typeArraySchema.optional(),
 
   notes: nullableTrimmedString.optional(),
+
+  meetingDate: nullableDateInput.describe("Meeting date").optional(),
+  meetingTime: nullableTrimmedString.optional(),
+  meetingMode: nullableTrimmedString.optional(),
+
+  followupReminderSentAt: z.iso.datetime().optional(),
+  meetingReminderSentAt: z.iso.datetime().optional(),
 
   followupDate: nullableDateInput.describe("Follow-up date").optional(),
 
@@ -262,6 +305,11 @@ export const leadLookupParamSchema = z.object({
   status: z.string().optional(),
   filterTiming: z.string().optional(),
   filterLeadsWithoutProject: z.string().optional(),
+  isArchived: z.string().optional(),
+  pendingFollowUps: z.string().optional(),
+  upcomingFollowUps: z.string().optional(),
+  pendingMeetings: z.string().optional(),
+  upcomingMeetings: z.string().optional(),
 })
 
 export const leadStatusSchema = z.enum(leadStages);

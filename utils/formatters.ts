@@ -14,6 +14,25 @@ export const currency = new Intl.NumberFormat("en-AU", {
 });
 
 /**
+ * Formats hourly and unit rates as Australian Dollars (AUD), always with cents.
+ *
+ * Use this — not {@link currency} — for any figure a person could quote with
+ * cents: hourly rates, day rates, per-unit prices. {@link currency} rounds to
+ * whole dollars, which is right for budgets and contract values but turns a
+ * tradie on $85.50/hr into "$86".
+ *
+ * Example:
+ * - 85.5 → "$85.50"
+ * - 120 → "$120.00"
+ */
+export const rateCurrency = new Intl.NumberFormat("en-AU", {
+  style: "currency",
+  currency: "AUD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
  * Formats numeric values as compact Australian Dollars (AUD).
  *
  * Example:
@@ -129,19 +148,30 @@ export function formatFileType(fileType: string): string {
 }
 
 /**
- * Converts enum-style status values into human-readable labels.
+ * Turns a `SCREAMING_SNAKE_CASE` enum value into a display label.
+ *
+ * Sentence case, not title case. This used to title-case every word
+ * ("Needs Attention") while a second, identically-named `formatStatus` in
+ * `components/projects/project-status.ts` sentence-cased — two same-named
+ * formatters with divergent output, which is exactly the drift this pass exists
+ * to remove. Sentence case is the rule for labels, so it won here and the
+ * duplicate now re-exports this one.
  *
  * @param status - Status string in SCREAMING_SNAKE_CASE.
  * @returns Formatted status label.
  *
  * @example
  * formatStatus("NEEDS_ATTENTION")
- * // "Needs Attention"
+ * // "Needs attention"
  */
 export function formatStatus(status: string) {
   return status
     .split("_")
-    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .map((part, index) =>
+      index === 0
+        ? part.charAt(0) + part.slice(1).toLowerCase()
+        : part.toLowerCase(),
+    )
     .join(" ");
 }
 
@@ -527,7 +557,8 @@ export function stripHtml(html: string): string {
  *
  * Cleans email content before displaying it in a chat/message interface by
  * removing transport metadata, quoted replies, forwarding blocks, greetings,
- * signature blocks, MIME artifacts, and common email client footers.
+ * signature blocks, marketing footers, MIME artifacts, and common email
+ * client footers.
  *
  * Handles:
  * - HTML tags and entities.
@@ -536,10 +567,15 @@ export function stripHtml(html: string): string {
  * - Forwarded message blocks.
  * - Previous conversation threads.
  * - Leading greetings ("Hi Name,").
- * - Trailing signature blocks: sign-off words ("Regards", "Thanks", ...),
- *   and any trailing paragraph containing an email address, a name, a
- *   job title, or a company/team name — even when no sign-off word is
- *   present.
+ * - Trailing signature / footer blocks: sign-off words ("Regards",
+ *   "Thanks", ...), contact-info blocks (name/email/phone/title/company
+ *   with no sign-off word), and marketing-footer furniture (social media
+ *   rows, "Unsubscribe", "Privacy Policy", "Accredited By", copyright
+ *   lines, standalone "Office"/"Contact" labels). Once the start of the
+ *   signature/footer is found, everything from that point to the end of
+ *   the email is dropped, even if the individual paragraphs after it don't
+ *   themselves look like a signature (e.g. a marketing tagline or an
+ *   address block).
  * - Mobile signatures ("Sent from my iPhone", etc.).
  *
  * @param body - Raw email body received from the email provider.
@@ -549,25 +585,25 @@ export function stripHtml(html: string): string {
  * @example
  * ```ts
  * stripEmailBody(`
- * Hi Khushi Singh,
+ * Hi Gurbeer Singh Brar,
  *
- * Price Change Discussion Required
+ * hi how are you doing
  *
- * Khushi Singh
- * khushisingh2104@gmail.com
- * Royal Constructions Team
+ * Thanks & Regards,
+ * Dhrubajyoti Biswas
+ * Royal Constructions.
+ *
+ * Royal Constructions — Building exceptional homes across NSW...
+ *
+ * Facebook
+ * ·
+ * Instagram
+ *
+ * Office
+ * ...
+ * Accredited By
  * `)
- * // "Price Change Discussion Required"
- *
- * stripEmailBody(`
- * Hi Khushi
- *
- * I am ready for discussion please book an appointment with guri and let me know.
- *
- * Regards
- * Khushi
- * `)
- * // "I am ready for discussion please book an appointment with guri and let me know."
+ * // "hi how are you doing"
  * ```
  */
 export function stripEmailBody(body: string): string {
@@ -631,35 +667,94 @@ export function stripEmailBody(body: string): string {
 
   cleaned = cleaned.trim();
 
-  // Split into paragraphs (blocks separated by one or more blank lines) and
-  // strip trailing paragraphs that look like a signature block: a sign-off
-  // word ("Regards", "Thanks", ...), or a short block containing an email
-  // address / phone number, since real sentences don't look like that.
-  const SIGNOFF_WORD =
-    /^(regards|best regards|kind regards|warm regards|many thanks|thanks|thank you|cheers|sincerely|best|yours( truly| sincerely)?)\b/i;
+  // ---------------------------------------------------------------------
+  // Footer / signature block removal.
+  //
+  // Rather than requiring every paragraph from the END of the message to
+  // individually "look like" part of a signature (which breaks the moment
+  // a footer contains an unrelated-looking paragraph, e.g. "Accredited By"),
+  // we scan FORWARD for the first paragraph that looks like the *start* of
+  // a signature/footer block, and drop it plus everything after it. Real
+  // marketing footers are a grab-bag of paragraph shapes (tagline, social
+  // links, office address, unsubscribe line, etc.) that individually don't
+  // all "look like" a signature — but once we know where the footer begins,
+  // we don't need to classify each one that follows.
+  // ---------------------------------------------------------------------
+
+  // Sign-off words. Matched against the FIRST LINE of a paragraph only,
+  // requiring nothing but trailing punctuation after the word/phrase, so
+  // real sentences that happen to start with "Thanks" ("Thanks for
+  // confirming, I'll proceed...") are never mistaken for a signature.
+  const SIGNOFF_LINE_RE =
+    /^(regards|best regards|kind regards|warm regards|many thanks|thanks(\s*(&|and)\s*regards)?|thank you|cheers|sincerely|best(\s+wishes)?|yours(\s+(truly|sincerely))?)[\s,.!]*$/i;
+
   const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
   const PHONE_RE = /(\+?\d[\d .-]{7,}\d)/;
 
-  const isSignatureParagraph = (p: string): boolean => {
-    const trimmed = p.trim();
-    if (!trimmed) return true;
-    if (SIGNOFF_WORD.test(trimmed)) return true;
-    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
-    // Short block (<=4 lines) with no normal sentence punctuation, and
-    // containing contact info (email/phone) -> treat as a signature block
-    // (name, title, company, contact details).
-    const looksLikeContactBlock =
-      lines.length <= 4 &&
-      (EMAIL_RE.test(trimmed) || PHONE_RE.test(trimmed)) &&
-      !/[.?!]\s*$/.test(lines[lines.length - 1] || "");
-    return looksLikeContactBlock;
+  const SOCIAL_PLATFORM =
+    "(facebook|instagram|linkedin|twitter|youtube|tiktok|pinterest|whatsapp)";
+  const SOCIAL_ROW_RE = new RegExp(
+    `^${SOCIAL_PLATFORM}(\\s*[·•|,/-]\\s*${SOCIAL_PLATFORM})*$`,
+    "i"
+  );
+
+  const FOOTER_KEYWORD_RE =
+    /^(unsubscribe|privacy policy|terms (of|&) (service|use)|view (this|in) (browser|email)|manage (your\s+)?(subscription|preferences)|update (your\s+)?preferences|accredited by|©|\(c\)\s|all rights reserved)/i;
+
+  const STANDALONE_LABEL_RE =
+    /^(office|contact|address|follow us|connect with us)$/i;
+
+  // A paragraph that opens with a sign-off word ("Regards," / "Thanks &
+  // Regards," / "Best,") on its own line, followed only by a short name /
+  // title / company block.
+  const isSignoffParagraph = (p: string): boolean => {
+    const lines = p.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0 || lines.length > 5) return false;
+    return SIGNOFF_LINE_RE.test(lines[0]);
   };
 
+  // A short block with no sentence-ending punctuation that contains an
+  // email address or phone number — i.e. a name/title/company/contact
+  // block, even without a preceding sign-off word.
+  const isContactBlock = (p: string): boolean => {
+    const trimmed = p.trim();
+    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0 || lines.length > 4) return false;
+    const hasContactInfo = EMAIL_RE.test(trimmed) || PHONE_RE.test(trimmed);
+    const endsLikeSentence = /[.?!]\s*$/.test(lines[lines.length - 1] || "");
+    return hasContactInfo && !endsLikeSentence;
+  };
+
+  // Common marketing-footer furniture: unsubscribe/privacy links, social
+  // media rows, copyright lines, one-word section labels ("Office",
+  // "Contact").
+  const isFooterKeywordParagraph = (p: string): boolean => {
+    const trimmed = p.trim();
+    if (FOOTER_KEYWORD_RE.test(trimmed)) return true;
+    if (STANDALONE_LABEL_RE.test(trimmed)) return true;
+    if (SOCIAL_ROW_RE.test(trimmed.replace(/\n/g, " ").trim())) return true;
+    return false;
+  };
+
+  const isSignatureStart = (p: string): boolean =>
+    isSignoffParagraph(p) || isContactBlock(p) || isFooterKeywordParagraph(p);
+
   const paragraphs = cleaned.split(/\n\s*\n/).filter((p) => p.trim() !== "");
-  while (paragraphs.length > 1 && isSignatureParagraph(paragraphs[paragraphs.length - 1])) {
-    paragraphs.pop();
+
+  // Find the first paragraph, starting from index 1, that looks like the
+  // start of a signature/footer block, then discard it and everything
+  // after it. We never cut into paragraph 0: a lone message should never
+  // be fully wiped out on a single false-positive match.
+  let cutIndex = -1;
+  for (let i = 1; i < paragraphs.length; i++) {
+    if (isSignatureStart(paragraphs[i])) {
+      cutIndex = i;
+      break;
+    }
   }
-  cleaned = paragraphs.join("\n\n");
+
+  const kept = cutIndex === -1 ? paragraphs : paragraphs.slice(0, cutIndex);
+  cleaned = kept.join("\n\n");
 
   // Normalize whitespace
   cleaned = cleaned

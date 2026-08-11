@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   description: "Manage and track your construction project offers effectively.",
 };
 
-
 async function OfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.
   await connection();
@@ -64,7 +63,7 @@ async function OfferPageClient() {
 export default function OfferPage() {
   return (
     <Suspense fallback={<OfferPageSkeleton />}>
-          <OfferPageClient />
+      <OfferPageClient />
     </Suspense>
   );
 }

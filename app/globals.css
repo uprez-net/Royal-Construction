@@ -44,11 +44,16 @@
   --color-royal-orange-light: var(--royal-orange-light);
   --color-success: var(--success);
   --color-success-light: var(--success-light);
+  --color-success-ink: var(--success-ink);
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
+  --color-warning-ink: var(--warning-ink);
   --color-info: var(--info);
   --color-info-light: var(--info-light);
+  --color-info-ink: var(--info-ink);
   --color-destructive-light: var(--destructive-light);
+  --color-destructive-ink: var(--destructive-ink);
+  --color-royal-gold-ink: var(--royal-gold-ink);
   --color-accent-purple: var(--accent-purple);
   --color-accent-purple-light: var(--accent-purple-light);
   --color-popover-foreground: var(--popover-foreground);
@@ -72,8 +77,10 @@
   --card-foreground: oklch(0.232 0.032 253.7);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.232 0.032 253.7);
-  --primary: oklch(0.584 0.118 183.6);
-  --primary-foreground: oklch(0.985 0 0);
+  /* Darkened from oklch(0.584 …) so text-on-primary and primary-on-surface both
+     clear WCAG AA 4.5:1. Hue and chroma are unchanged: same Site Teal, deeper. */
+  --primary: oklch(0.516 0.118 183.6);
+  --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.964 0.012 246.3);
   --secondary-foreground: oklch(0.232 0.032 253.7);
   --muted: oklch(0.964 0.012 246.3);
@@ -83,7 +90,7 @@
   --destructive: oklch(0.592 0.23 28.5);
   --border: oklch(0.905 0.02 248.7);
   --input: oklch(0.905 0.02 248.7);
-  --ring: oklch(0.584 0.118 183.6);
+  --ring: oklch(0.516 0.118 183.6);
   --chart-1: oklch(0.584 0.118 183.6);
   --chart-2: oklch(0.642 0.173 149.2);
   --chart-3: oklch(0.726 0.165 54.6);
@@ -106,16 +113,29 @@
   --royal-orange: oklch(0.68 0.172 51.9);
   --royal-orange-light: oklch(0.969 0.028 79.5);
 
-  /* Semantic status scale */
+  /* Semantic status scale.
+     Three roles per status, and they are not interchangeable:
+       --x          fill only  — dots, bars, icon containers, chart series
+       --x-light    surface    — tinted badge/callout backgrounds
+       --x-ink      text only  — label text, icon strokes, on white/-light/muted
+     The base fills are too light to carry text (--warning is 2.14:1 on white),
+     so never use --warning/--success/--info as a text colour. Use -ink.
+     Every -ink value clears 4.55:1 against white, --background, --muted and its
+     own -light surface. */
   --success: oklch(0.627 0.17 149.2);
   --success-light: oklch(0.962 0.043 156.7);
+  --success-ink: oklch(0.513 0.17 149.2);
   --warning: oklch(0.769 0.165 70.1);
   --warning-light: oklch(0.973 0.069 103.2);
+  --warning-ink: oklch(0.546 0.165 70.1);
   --info: oklch(0.546 0.215 262.9);
   --info-light: oklch(0.932 0.032 255.6);
+  --info-ink: oklch(0.526 0.215 262.9);
   --accent-purple: oklch(0.541 0.247 293);
   --accent-purple-light: oklch(0.943 0.028 294.6);
   --destructive-light: oklch(0.936 0.031 17.7);
+  --destructive-ink: oklch(0.534 0.23 28.5);
+  --royal-gold-ink: oklch(0.530 0.12 77.3);
 }
 
 .dark {
@@ -150,6 +170,15 @@
   --sidebar-accent-foreground: oklch(0.97 0.01 247.6);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.693 0.13 183.2);
+
+  /* Dark-mode ink variants. DESIGN.md commits to a light-only system, so these
+     exist only so text-*-ink utilities never resolve to an undefined var if the
+     .dark class is ever applied. Each clears 4.55:1 on --card/--background/--muted. */
+  --success-ink: oklch(0.597 0.14 149.2);
+  --warning-ink: oklch(0.620 0.14 70.1);
+  --info-ink: oklch(0.616 0.16 262.9);
+  --destructive-ink: oklch(0.632 0.16 28.5);
+  --royal-gold-ink: oklch(0.616 0.1 77.3);
 }
 
 @layer base {
@@ -200,6 +229,130 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: white !important;
+  }
+
+  /* These rules promote the live offer's hidden print template into THE printed
+     document. They are switched off whenever the read-only revision viewer is
+     open, keyed on the [data-offer-revision-viewer] marker the viewer's dialog
+     carries in EVERY open state (loading, error, empty and loaded alike). That
+     matters: the "screen" print template only exists once a revision has
+     loaded, so guarding on it would leave the live offer printing while the
+     viewer is still loading or showing an error — the operator would file the
+     wrong document with no sign of it. Guarding on the always-present marker
+     closes that window: while the viewer is open the live offer never prints,
+     and the branch below prints the on-screen revision when it has loaded (or
+     nothing when it has not). With no viewer open the :not() always holds, so
+     the live print path is unchanged. */
+  body:has([data-offer-print-template="true"]):not(
+      :has([data-offer-revision-viewer])
+    )
+    :has([data-offer-print-template="true"]) {
+    background: white !important;
+    display: block !important;
+    height: auto !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  body:has([data-offer-print-template="true"]):not(
+      :has([data-offer-revision-viewer])
+    )
+    :has([data-offer-print-template="true"])
+    > :not(:has([data-offer-print-template="true"])):not([data-offer-print-template="true"]) {
+    display: none !important;
+  }
+
+  body:has([data-offer-print-template="true"]):not(
+      :has([data-offer-revision-viewer])
+    )
+    [data-offer-print-template="true"] {
+    display: block !important;
+  }
+
+  /* Printing the revision viewer (issue #93). When the read-only viewer is
+     open it renders a second template marked "screen" inside a DialogContent
+     that is portalled to <body>, position: fixed, transform: translate(...),
+     max-height: 90vh and overflow: hidden (components/ui/dialog.tsx). These
+     rules are the counterpart to the live-offer unwrap above: they promote
+     the "screen" copy instead, so printing emits the revision on screen
+     rather than the live offer. The live rules above switch off whenever the
+     [data-offer-revision-viewer] marker is present, so one and only one
+     document ever prints.
+
+     Two things differ from the live path. First, the live "true" template
+     sits in the app's normal flow, a separate <body> branch from the portal;
+     rule (a) hides that whole branch (app chrome + the live template + the
+     scrim), keeping only the portal branch that holds the viewer. Second, the
+     unwrap must additionally reset `position`, `transform` and `max-height`
+     (rule b) or the fixed, transformed, height-capped dialog prints as a
+     single clipped page no matter how many A4 pages are inside it.
+
+     Fail-safe when the viewer is open but no revision has loaded (loading,
+     load error, or an empty/unreadable snapshot — states where no "screen"
+     template exists): rule (a) still hides the whole app (it is keyed on the
+     marker), the live rules above are off (marker present), and rules (b)-(d)
+     are inert (no "screen" node), so the only surviving branch is the
+     DialogContent — which carries print:hidden — and nothing prints. Rules b
+     and d override that print:hidden with !important only on the path that is
+     actually promoted once a revision has loaded. */
+
+  /* (a) Keep only the <body> branch that holds the viewer. This hides the
+     entire app — including the live "true" template — and the dialog scrim.
+     Keyed on the viewer marker (present in EVERY open state), not on the
+     "screen" template (present only once a revision has loaded): so while the
+     viewer is open but still loading or showing an error, the live offer is
+     suppressed here too and cannot print as the wrong document. When no
+     revision has loaded, rules (b)-(d) below are inert and the DialogContent's
+     own print:hidden leaves nothing to print — the safe outcome. */
+  body:has([data-offer-revision-viewer])
+    > :not(:has([data-offer-revision-viewer])) {
+    display: none !important;
+  }
+
+  /* (b) Flatten every ancestor of the viewer's template into page flow,
+     including the fixed / transformed / height-capped dialog chrome. */
+  body:has([data-offer-print-template="screen"])
+    :has([data-offer-print-template="screen"]) {
+    background: white !important;
+    display: block !important;
+    height: auto !important;
+    margin: 0 !important;
+    max-height: none !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    position: static !important;
+    transform: none !important;
+  }
+
+  /* (c) Drop everything off the path to the template: the dialog header,
+     the close button and the overlay. */
+  body:has([data-offer-print-template="screen"])
+    :has([data-offer-print-template="screen"])
+    > :not(:has([data-offer-print-template="screen"])):not([data-offer-print-template="screen"]) {
+    display: none !important;
+  }
+
+  /* (d) Promote the viewer's template itself (overrides its print:hidden). */
+  body:has([data-offer-print-template="screen"])
+    [data-offer-print-template="screen"] {
+    display: block !important;
   }
 }
 

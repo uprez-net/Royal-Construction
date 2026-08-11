@@ -20,10 +20,6 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
         ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
         : `Availability Confirmation Required – ${input.projectName}`;
 
-    const primaryAction = input.requiresQuote
-        ? "Submit Quotation"
-        : "Confirm Availability";
-
     const intro = input.requiresQuote
         ? `
       <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
@@ -81,7 +77,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             <title>${subject}</title>
             </head>
 
-            <body style="margin:0;padding:0;background:${RC_COLORS.dark};font-family:Arial,sans-serif;">
+            <body style="margin:0;padding:0;background:${RC_COLORS.dark};font-family:Arial,sans-serif;" contenteditable="true">
 
             <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${RC_COLORS.dark};padding:40px 20px;">
             <tr>
@@ -220,28 +216,6 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             </p>
 
             </div>
-
-            <table cellpadding="0" cellspacing="0" align="center">
-            <tr>
-            <td
-            style="
-            background:${RC_COLORS.gold};
-            border-radius:6px;
-            padding:14px 34px;">
-
-            <a
-            href="${RC_URLS.bookConsultation}"
-            style="
-            color:${RC_COLORS.dark};
-            text-decoration:none;
-            font-size:16px;
-            font-weight:bold;">
-            ${primaryAction}
-            </a>
-
-            </td>
-            </tr>
-            </table>
 
             <p style="
             margin:40px 0 0;

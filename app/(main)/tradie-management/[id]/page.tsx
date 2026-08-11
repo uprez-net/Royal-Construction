@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Metadata } from "next";
 import TradieDetailsSkeleton from "./loading";
+import { rateCurrency } from "@/utils/formatters";
 
 interface TradieDetailPageProps {
   params: Promise<{
@@ -19,7 +20,7 @@ export async function generateMetadata({
 
   if (!tradie) {
     return {
-      title: "Tradie Not Found",
+      title: "Tradie not found",
       description: "The requested tradie could not be found.",
     };
   }
@@ -27,6 +28,10 @@ export async function generateMetadata({
   const rating = tradie.rating
     ? `${Number(tradie.rating).toFixed(1)}/5`
     : "No rating";
+  const hourlyRate =
+    tradie.hourlyRate != null && !Number.isNaN(Number(tradie.hourlyRate))
+      ? rateCurrency.format(Number(tradie.hourlyRate))
+      : null;
 
   return {
     title: `${tradie.name} • ${tradie.trade}`,
@@ -38,7 +43,7 @@ export async function generateMetadata({
       tradie.incidents.length > 0
         ? `${tradie.incidents.length} incident${tradie.incidents.length > 1 ? "s" : ""} recorded.`
         : "No recorded incidents.",
-      tradie.hourlyRate ? `Hourly rate: $${tradie.hourlyRate}.` : null,
+      hourlyRate ? `Hourly rate: ${hourlyRate} per hour.` : null,
     ]
       .filter(Boolean)
       .join(" "),

@@ -1,84 +1,216 @@
-import { ArrowUpRight, PiggyBank, ReceiptText, Users, Wallet2 } from "lucide-react";
+"use client";
+
+import {
+  ArrowUpRight,
+  PiggyBank,
+  ReceiptText,
+  TriangleAlert,
+  Users,
+  Wallet2,
+} from "lucide-react";
 import { useAppSelector } from "@/lib/store/hooks";
 import { selectActiveProjectBudgetSummary } from "@/lib/store/slices/projectsSlice";
-import { projectKpiMock } from "@/lib/mock-data";
+import { METRIC_TONES } from "@/components/common/metric-card";
 import { currency } from "@/utils/formatters";
+import { cn } from "@/lib/utils";
+import { Role } from "@prisma/client";
 
-export function ProjectStatCards() {
+/**
+ * These cards stay bespoke rather than reusing `MetricCard` because each one
+ * carries a derived badge in the top-right slot (budget health, burn percent,
+ * data availability) that `MetricCard` has no room for — its third grid column
+ * is reserved for `TrendBadge`. Typography follows DESIGN.md §5 Metric Cards
+ * (`font-heading text-3xl font-semibold`), which is the same scale family
+ * `MetricCard` uses at its more compact `text-2xl`.
+ */
+
+const CARD_SURFACE = "rounded-xl border border-border/70 bg-card p-5 shadow-sm";
+const CARD_VALUE =
+  "mt-2 font-heading text-3xl font-semibold leading-tight tracking-tight text-foreground";
+const CARD_LABEL = "mt-1 text-xs text-muted-foreground";
+const ICON_CONTAINER =
+  "flex size-11 items-center justify-center rounded-2xl text-white";
+const BADGE =
+  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
+
+export function ProjectStatCards({ role }: { role: Role }) {
+  const isAdmin = role === "ADMIN";
   const budgetSummary = useAppSelector(selectActiveProjectBudgetSummary);
-  const isNewProject = useAppSelector((state) => state.projects.activeProject?.milestones.length === 0);
 
+  // `selectActiveProjectBudgetSummary` returns null for exactly one reason:
+  // `activeProject` is not in the store yet. It never returns null for a missing
+  // contract value — a project with totalBudget 0 still yields a summary. So this
+  // branch is the unhydrated state, and the old copy ("no contract value recorded
+  // yet") asserted a fact about the project that the data did not support.
   if (!budgetSummary) {
-    return null;
+    return (
+      <section className={CARD_SURFACE} aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading budget summary</span>
+        <p className="text-base font-semibold text-foreground">
+          Budget summary
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Loading this project&rsquo;s contract, spend and remaining figures.
+        </p>
+      </section>
+    );
   }
+
+  // A contract value of zero is a real, loaded state — not a missing one. It is
+  // where the "nothing recorded" message actually belongs, and the percentage
+  // figures below are meaningless without a denominator.
+  if (budgetSummary.totalBudget <= 0) {
+    return (
+      <section className={CARD_SURFACE}>
+        <p className="text-base font-semibold text-foreground">
+          No contract value recorded
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Spend and remaining figures are calculated against the contract value,
+          so they cannot be shown until one is set on this project.
+        </p>
+      </section>
+    );
+  }
+
+  // `variance` is signed, so it — not the clamped `remaining` — is what tells
+  // us whether spend has passed the contract value and by how much.
+  const isOverBudget = budgetSummary.variance < 0;
+  const overrun = isOverBudget ? Math.abs(budgetSummary.variance) : 0;
+  const remainingPercent = Math.max(100 - budgetSummary.spentPercent, 0);
+  const overrunPercent = Math.max(budgetSummary.spentPercent - 100, 0);
 
   return (
     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {/* Contract Value */}
-      <div className="rounded-xl border border-border/70 bg-white p-5 shadow-sm transition-all hover:shadow-md">
-        <div className="mb-2 flex items-start justify-between">
-          <div className="flex size-11 items-center justify-center rounded-xl bg-teal-600 text-xl text-white">
-            <Wallet2 className="size-5" />
+      {isAdmin && (
+        <>
+          {/* Contract Value */}
+          <div className={CARD_SURFACE}>
+            <div className="mb-2 flex items-start justify-between">
+              <div className={cn(ICON_CONTAINER, METRIC_TONES.primary)}>
+                <Wallet2 className="size-5" aria-hidden="true" />
+              </div>
+              <span
+                className={cn(
+                  BADGE,
+                  isOverBudget
+                    ? "bg-destructive-light text-destructive-ink"
+                    : "bg-success-light text-success-ink",
+                )}
+              >
+                {isOverBudget ? (
+                  <TriangleAlert className="size-3" aria-hidden="true" />
+                ) : (
+                  <ArrowUpRight className="size-3" aria-hidden="true" />
+                )}
+                {isOverBudget ? "Over budget" : "On budget"}
+              </span>
+            </div>
+            <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
+              {currency.format(budgetSummary.totalBudget)}
+            </div>
+            <div className={CARD_LABEL}>Total contract value</div>
           </div>
-          <div className="inline-flex items-center gap-1 rounded-md bg-green-600/10 px-2 py-0.5 text-[10.5px] font-bold text-green-700">
-            <ArrowUpRight className="size-3" />
-            On Budget
-          </div>
-        </div>
-        <div className="mt-2 text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
-          {currency.format(budgetSummary.totalBudget)}
-        </div>
-        <div className="mt-1 text-[11.5px] text-muted-foreground">Total Contract Value</div>
-      </div>
 
-      {/* Spent */}
-      <div className="rounded-xl border border-border/70 bg-white p-5 shadow-sm transition-all hover:shadow-md">
-        <div className="mb-2 flex items-start justify-between">
-          <div className="flex size-11 items-center justify-center rounded-xl bg-[#E8730C] text-xl text-white">
-            <ReceiptText className="size-5" />
+          {/* Spent */}
+          <div className={CARD_SURFACE}>
+            <div className="mb-2 flex items-start justify-between">
+              <div className={cn(ICON_CONTAINER, METRIC_TONES.warning)}>
+                <ReceiptText className="size-5" aria-hidden="true" />
+              </div>
+              <span
+                className={cn(
+                  BADGE,
+                  isOverBudget
+                    ? "bg-destructive-light text-destructive-ink"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                <span className="font-mono tabular-nums">
+                  {budgetSummary.spentPercent}%
+                </span>
+                <span className="sr-only">of contract value spent</span>
+              </span>
+            </div>
+            <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
+              {currency.format(budgetSummary.spent)}
+            </div>
+            <div className={CARD_LABEL}>Spent to date</div>
           </div>
-          <div className="text-[11px] font-bold text-muted-foreground">
-            {budgetSummary.spentPercent}%
-          </div>
-        </div>
-        <div className="mt-2 text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
-          {currency.format(budgetSummary.spent)}
-        </div>
-        <div className="mt-1 text-[11.5px] text-muted-foreground">Spent to Date</div>
-      </div>
 
-      {/* Remaining */}
-      <div className="rounded-xl border border-border/70 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+          {/* Remaining — or, once spend passes the contract value, the overrun.
+          Showing a clamped "$0 remaining" on an over-budget project hides the
+          one number the site manager needs. */}
+          <div className={CARD_SURFACE}>
+            <div className="mb-2 flex items-start justify-between">
+              <div
+                className={cn(
+                  ICON_CONTAINER,
+                  isOverBudget ? METRIC_TONES.danger : METRIC_TONES.success,
+                )}
+              >
+                {isOverBudget ? (
+                  <TriangleAlert className="size-5" aria-hidden="true" />
+                ) : (
+                  <PiggyBank className="size-5" aria-hidden="true" />
+                )}
+              </div>
+              <span
+                className={cn(
+                  BADGE,
+                  isOverBudget
+                    ? "bg-destructive-light text-destructive-ink"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                <span className="font-mono tabular-nums">
+                  {isOverBudget
+                    ? `+${overrunPercent}%`
+                    : `${remainingPercent}%`}
+                </span>
+                <span className="sr-only">
+                  {isOverBudget
+                    ? "over the contract value"
+                    : "of contract value remaining"}
+                </span>
+              </span>
+            </div>
+            <div
+              className={cn(
+                CARD_VALUE,
+                "font-mono tabular-nums",
+                isOverBudget && "text-destructive-ink",
+              )}
+            >
+              {currency.format(
+                isOverBudget ? overrun : budgetSummary.remaining,
+              )}
+            </div>
+            <div className={CARD_LABEL}>
+              {isOverBudget ? "Over budget by" : "Remaining budget"}
+            </div>
+          </div>
+        </>
+      )}
+      {/* Workers on site — no attendance source is wired up yet. */}
+      <div className={CARD_SURFACE}>
         <div className="mb-2 flex items-start justify-between">
-          <div className="flex size-11 items-center justify-center rounded-xl bg-green-600 text-xl text-white">
-            <PiggyBank className="size-5" />
+          <div className={cn(ICON_CONTAINER, METRIC_TONES.neutral)}>
+            <Users className="size-5" aria-hidden="true" />
           </div>
-        </div>
-        <div className="mt-2 text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
-          {currency.format(budgetSummary.remaining)}
-        </div>
-        <div className="mt-1 text-[11.5px] text-muted-foreground">Remaining Budget</div>
-      </div>
-
-      {/* Workers */}
-      <div className="rounded-xl border border-border/70 bg-white p-5 shadow-sm transition-all hover:shadow-md">
-        <div className="mb-2 flex items-start justify-between">
-          <div className="flex size-11 items-center justify-center rounded-xl bg-blue-600 text-xl text-white">
-            <Users className="size-5" />
-          </div>
-          <div className="inline-flex items-center rounded-full bg-green-600/10 px-2 py-0.5 text-[9px] font-bold text-green-700">
-            Live
-          </div>
-        </div>
-        <div className="mt-2 text-[26px] font-extrabold leading-tight tracking-tight text-slate-900">
-          {isNewProject ? "0" : projectKpiMock[3].value}
-        </div>
-        <div className="mt-1 flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-          Workers On Site Now
-          <span className="flex items-center text-[10px] font-semibold text-green-600">
-            <span className="mr-1 inline-block size-1.5 rounded-full bg-green-600" />
-            GPS Active
+          <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
+            Not enabled
           </span>
+        </div>
+        <div
+          className={cn(CARD_VALUE, "text-muted-foreground")}
+          aria-hidden="true"
+        >
+          —
+        </div>
+        <div className={CARD_LABEL}>
+          Site attendance tracking is not enabled for this project, so there is
+          no live worker count.
         </div>
       </div>
     </section>

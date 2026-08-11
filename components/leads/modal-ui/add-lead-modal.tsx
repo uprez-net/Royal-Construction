@@ -37,6 +37,9 @@ interface AddLeadFormData {
   phone: string;
   email: string;
   location: string;
+  secondaryName: string;
+  secondaryEmail: string;
+  secondaryPhone: string;
   sourceDetail: LeadSource;
   stage: LeadStage;
   assignedId: string;
@@ -69,6 +72,9 @@ export function AddLeadModal({
     phone: "",
     email: "",
     location: "",
+    secondaryName: "",
+    secondaryEmail: "",
+    secondaryPhone: "",
     sourceDetail: "Personal",
     stage: "New",
     assignedId: "",
@@ -131,7 +137,7 @@ export function AddLeadModal({
     form.assignedId.trim() &&
     form.email.trim();
   const missingRequiredFields = [
-    !form.name.trim() && "full name",
+    !form.name.trim() && "primary client name",
     !form.phone.trim() && "phone",
     !form.email.trim() && "email",
     !form.location.trim() && "location",
@@ -174,6 +180,9 @@ export function AddLeadModal({
         phone: form.phone,
         email: form.email,
         location: form.location,
+        secondaryName: form.secondaryName || null,
+        secondaryEmail: form.secondaryEmail || null,
+        secondaryPhone: form.secondaryPhone || null,
         source: form.sourceDetail as LeadSource,
         sourceDetail: form.sourceDetail,
         stage,
@@ -246,7 +255,7 @@ export function AddLeadModal({
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label htmlFor={fieldId("name")} className={itemLbl}>
-              Full Name *
+              Primary Client *
             </label>
             <input
               id={fieldId("name")}
@@ -297,6 +306,51 @@ export function AddLeadModal({
               required
             />
           </div>
+        </div>
+
+        {/* Row 1.5: Secondary client (optional) */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label htmlFor={fieldId("secondary-name")} className={itemLbl}>
+              Secondary Client
+            </label>
+            <input
+              id={fieldId("secondary-name")}
+              className={fieldCls}
+              placeholder="e.g. Harpreet Kaur"
+              value={form.secondaryName}
+              onChange={(e) => updateField("secondaryName", e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor={fieldId("secondary-phone")} className={itemLbl}>
+              Secondary Phone
+            </label>
+            <input
+              id={fieldId("secondary-phone")}
+              className={fieldCls}
+              placeholder="e.g. 0412 345 678"
+              value={form.secondaryPhone}
+              onChange={(e) => updateField("secondaryPhone", e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor={fieldId("secondary-email")} className={itemLbl}>
+              Secondary Email
+            </label>
+            <input
+              id={fieldId("secondary-email")}
+              className={fieldCls}
+              placeholder="e.g. name@email.com"
+              type="email"
+              value={form.secondaryEmail}
+              onChange={(e) => updateField("secondaryEmail", e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Row 2: Source + Assignment + Budget */}
+        <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label htmlFor={fieldId("source-detail")} className={itemLbl}>
               Source Detail

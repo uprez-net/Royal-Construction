@@ -1,95 +1,32 @@
-import { OfferClient } from "@/components/offers/offer/offer-client";
-import { getChatByLeadId } from "@/lib/data/chat";
-import { getOfferByLeadIdCached } from "@/lib/data/offers";
-import { convertToUIMessage } from "@/utils/chat";
-import { Suspense } from "react";
-import OfferDetailsPageSkeleton from "./loading";
-import { CreatingOfferClient } from "@/components/offers/offer/creating-offer";
 import { notFound } from "next/navigation";
+import { NewOfferWorkspace } from "@/components/offers/new-workflow/new-offer-workspace";
+import { buildAdminOfferPrefill } from "@/lib/offer/admin-offer-prefill";
 import type { Metadata } from "next";
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ leadId: string }>;
-}): Promise<Metadata> {
-  const { leadId } = await params;
-  const parsedLeadId = Number(leadId);
-  if (!Number.isInteger(parsedLeadId) || parsedLeadId <= 0) {
-    return {
-      title: "Invalid Lead ID",
-      description: "The provided lead ID is invalid.",
-    };
-  }
-  
-  const offerData = await getOfferByLeadIdCached(parsedLeadId);
-  if (offerData) {
-    return {
-      title: `Lead: #${leadId} Offer Details`,
-      description: `Details and management for offer related to lead #${leadId}, ${offerData.lead.name}.`,
-    };
-  } else {
-    return {
-      title: `Lead: #${leadId} Creating Offer`,
-      description: `Creating offer for lead #${leadId}.`,
-    };
-  }
-}
+export const metadata: Metadata = {
+  title: "Offer Workspace",
+  description:
+    "Costing, pricing, tender and contract workspace for a lead's building offer.",
+};
 
-async function OfferCreationContent({
+// The offer experience for a lead IS the new-workflow workspace (ADR 0002).
+// The workspace self-provisions its Offer row via loadActiveOfferWorkspace, so
+// no offer needs to exist beforehand. Admin pre-fill content (cost schedule,
+// allowances, exclusions, document copy) is fetched server-side and passed as
+// the initial state seed; if a saved offer already exists it overrides these
+// defaults on load.
+export default async function OfferWorkspacePage({
   params,
 }: {
   params: Promise<{ leadId: string }>;
 }) {
   const { leadId } = await params;
   const parsedLeadId = Number(leadId);
-
   if (!Number.isInteger(parsedLeadId) || parsedLeadId <= 0) {
     notFound();
   }
 
-  const [chatData, offerData] = await Promise.all([
-    getChatByLeadId(parsedLeadId),
-    getOfferByLeadIdCached(parsedLeadId),
-  ]);
+  const adminPrefill = await buildAdminOfferPrefill();
 
-  const { chatSession: chat, files, leadInfo } = chatData;
-
-  if (!chat || !offerData || leadInfo.runStatus !== "COMPLETED") {
-    return (
-      <CreatingOfferClient
-        runId={leadInfo.runId}
-        leadId={parsedLeadId}
-        updatedAt={leadInfo.updatedAt}
-        runStatus={leadInfo.runStatus}
-      />
-    );
-  }
-
-  return (
-    <OfferClient
-      leadId={leadId}
-      chatId={chat?.id}
-      initialMessages={
-        chat?.messages ? [...convertToUIMessage(chat.messages)] : []
-      }
-      files={files}
-      leadInfo={leadInfo}
-      initialVersion={offerData?.version ?? 0}
-      initialItemRecord={offerData?.items ?? {}}
-      initialOfferFileRecord={offerData?.files ?? {}}
-    />
-  );
-}
-
-export default function OfferCreationPage({
-  params,
-}: {
-  params: Promise<{ leadId: string }>;
-}) {
-  return (
-    <Suspense fallback={<OfferDetailsPageSkeleton />}>
-      <OfferCreationContent params={params} />
-    </Suspense>
-  );
+  return <NewOfferWorkspace leadId={parsedLeadId} adminPrefill={adminPrefill} />;
 }

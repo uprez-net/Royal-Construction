@@ -592,6 +592,7 @@ ${EXTRACTION_CONTRACT}
   <rule>Use Tender sections for scope, inclusions, exclusions, allowances, payment schedule, and acceptance language.</rule>
   <rule>Use Contract sections for signature date, contract administration metadata, and any MBA-specific reference information.</rule>
   <rule>Use Lead Information for any missing site, client, or contact details.</rule>
+  <rule>Lead Information may include a secondary client (secondaryName/secondaryEmail/secondaryPhone) when the lead has a co-owner; record the secondary client in the relevant owner arrays alongside the primary client only when the tender/contract does not state otherwise.</rule>
   <rule>If a field appears in both documents, prefer the signed Contract for post-signature administrative facts and the Tender for scope/legal package content.</rule>
   <rule>If a field is not found, leave it blank rather than fabricating something plausible.</rule>
 </general_rules>

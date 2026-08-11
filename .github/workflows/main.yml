@@ -50,7 +50,17 @@ jobs:
 
     env:
       NODE_ENV: "test"
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Guardrail: the quality-checks build must NOT depend on the database.
+      # Under Next 16 Cache Components a `'use cache'` fetcher called in a page
+      # body is prefilled during `next build`, which runs its DB query at build
+      # time -- and CI can't reliably reach Neon, so these builds flaked on
+      # ETIMEDOUT. An unreachable host makes any build-time DB access fail the PR
+      # here (fast + deterministic) instead of resurfacing on staging. DB reads
+      # belong at request time (connection() / <Suspense>). Do NOT restore a real
+      # DATABASE_URL to "fix" a build failure -- fix the page instead. `prisma
+      # generate` only needs the var to be set, not reachable; the deploy jobs
+      # below use the real secret for `prisma migrate deploy`.
+      DATABASE_URL: "postgresql://build:noconnect@127.0.0.1:1/noop"
 
     steps:
       - name: Checkout repository
@@ -90,7 +100,7 @@ jobs:
       - name: Run typecheck
         run: pnpm typecheck
 
-      - name: Build project
+      - name: Build project (must not query the DB)
         run: pnpm build
 
   vercel-deploy-production:

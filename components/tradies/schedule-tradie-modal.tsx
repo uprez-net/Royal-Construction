@@ -156,6 +156,47 @@ export function ScheduleTradieModal({
             scheduledDate,
             durationDays: Number(durationDays),
             requiresQuote: false,
+            emailContent: {
+              subject: `Availability Confirmation Required – ${selectedProject.name}`,
+              body: `
+                <p style="margin:0 0 16px;color:#000;font-size:16px;line-height:26px;">
+                  Dear ${selectedTradie.name},
+                </p>
+                <p style="margin:0 0 16px;color:#000;font-size:16px;line-height:26px;">
+                  You have been scheduled for a new job on the project <strong>${selectedProject.name}</strong>.
+                </p>
+                <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Milestone</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${milestones.find((m) => m.id === milestoneId)?.name || "N/A"}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Scheduled Date</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${scheduledDate}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Duration (Days)</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${durationDays}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Task Description</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${taskDescription}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Notes</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${note}</td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 16px;color:#000;font-size:16px;line-height:26px;">
+                  Please confirm your availability for this job by replying to this email.
+                </p>
+                <p style="margin:0 0 16px;color:#000;font-size:16px;line-height:26px;">
+                  Thank you,<br>
+                  The Royal Construction Team
+                </p>
+              `,
+              attachments: [],
+            },
           }),
         )
           .unwrap()
@@ -178,6 +219,47 @@ export function ScheduleTradieModal({
             scheduledDate,
             durationDays: Number(durationDays),
             requiresQuote: false,
+            emailContent: {
+              subject: `Availability Confirmation Required – ${selectedProject.name}`,
+              body: `
+                <p style="margin:0 0 16px;color:#000;font-size:16px;line-height:26px;">
+                  Dear ${selectedTradie.name},
+                </p>
+                <p style="margin:0 0 16px;color:#000;font-size:16px;line-height:26px;">
+                  You have been scheduled for a new job on the project <strong>${selectedProject.name}</strong>.
+                </p>
+                <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Milestone</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${milestones.find((m) => m.id === milestoneId)?.name || "N/A"}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Scheduled Date</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${scheduledDate}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Duration (Days)</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${durationDays}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Task Description</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${taskDescription}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:8px;border:1px solid #ccc;"><strong>Notes</strong></td>
+                    <td style="padding:8px;border:1px solid #ccc;">${note}</td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 16px;color:#000;font-size:16px;line-height:26px;">
+                  Please confirm your availability for this job by replying to this email.
+                </p>
+                <p style="margin:0 0 16px;color:#000;font-size:16px;line-height:26px;">
+                  Thank you,<br>
+                  The Royal Construction Team
+                </p>
+              `,
+              attachments: [],
+            },
           }),
         )
           .unwrap()

@@ -12,7 +12,12 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-4 overflow-hidden rounded-lg bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
+        // Edge is a real border, not `ring-1 ring-foreground/10`. Tailwind v4
+        // preflight sets `border-width: 0` globally, so the `border-border/70`
+        // that ~75 call sites (and DESIGN.md §6, "Do use border-border/70 on
+        // cards") pass was setting a colour on a zero-width border — a silent
+        // no-op. With a width set here, those call sites finally apply.
+        "group/card flex flex-col gap-4 overflow-hidden rounded-lg border border-border/70 bg-card py-4 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
         className
       )}
       {...props}
@@ -33,9 +38,25 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * Card title. Renders a <div> by default, which is why no card title in the app
+ * has ever been part of the document outline — screen-reader users get no
+ * heading structure inside cards (WCAG 1.3.1).
+ *
+ * Pass `as` to make it a real heading at the level the surrounding page calls
+ * for, e.g. `as="h2"` for a top-level section card beneath the page <h1>.
+ * The default stays "div" so existing call sites keep their current semantics
+ * rather than silently introducing heading-level skips.
+ */
+function CardTitle({
+  className,
+  as: Component = "div",
+  ...props
+}: React.ComponentProps<"div"> & {
+  as?: "div" | "h2" | "h3" | "h4" | "h5" | "h6"
+}) {
   return (
-    <div
+    <Component
       data-slot="card-title"
       className={cn(
         "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",

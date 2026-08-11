@@ -29,7 +29,7 @@ export const milestoneUpdateSchema = z
             .number({
                 message: "Spend must be a number",
             })
-            .positive("Spend must be greater than 0")
+            .nonnegative("Spend cannot be negative")
             .optional(),
     })
     .superRefine((data, ctx) => {
@@ -69,7 +69,7 @@ export const milestoneUpdateSchema = z
                 ctx.addIssue({
                     code: z.ZodIssueCode.custom,
                     path: ["spend"],
-                    message: "A milestone with zero expenditure cannot be marked as completed. Please enter the actual spend.",
+                    message: "Spend is required when a milestone is completed",
                 });
             }
 

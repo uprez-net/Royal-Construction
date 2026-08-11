@@ -9,14 +9,17 @@
     "build": "next build",
     "build:webpack": "next build --webpack",
     "start": "next start",
-    "test:offer": "tsx tests/offer/*.test.ts",
+    "test:offer": "tsx --test tests/offer/*.test.ts",
+    "test:graph": "tsx --test tests/graph/*.test.ts",
+    "test": "tsx --test tests/*/*.test.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "prisma:seed": "prisma db seed",
     "prisma:generate": "prisma generate",
     "prisma:migrate-deploy": "prisma migrate deploy",
     "seed:projects": "tsx prisma/seed-projects.ts",
-    "seed:tradies": "tsx prisma/seed-tradie.ts"
+    "seed:tradies": "tsx prisma/seed-tradie.ts",
+    "seed:admin-offer-content": "tsx scripts/seed-admin-offer-content.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.73",
@@ -58,6 +61,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
+    "docusign-esign": "^9.0.0",
     "dompurify": "^3.4.9",
     "dotenv": "^17.4.2",
     "embla-carousel-react": "^8.6.0",
@@ -66,6 +70,7 @@
     "libphonenumber-js": "^1.13.1",
     "limiter": "^3.0.0",
     "lucide-react": "^1.14.0",
+    "mathjs": "^15.2.0",
     "mcp-handler": "^1.1.0",
     "next": "16.2.6",
     "next-themes": "^0.4.6",
@@ -100,6 +105,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/docusign-esign": "^5.19.9",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",

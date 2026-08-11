@@ -23,7 +23,6 @@ import { currency, dateFormat } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
-import { toast } from "sonner";
 import { MilestoneStatus, ProjectStage } from "@prisma/client";
 import { useMemo } from "react";
 import { MilestoneCard } from "./milestone-tab/milestone-card";
@@ -61,7 +60,44 @@ const convertToVisualMilestone = (
   return rootMilestones;
 };
 
-export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
+const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
+  const stageMilestoneMap = new Map<
+    string,
+    { completed: number; total: number }
+  >();
+  for (const milestone of milestones) {
+    const stage = milestone.projectStage;
+    if (!stageMilestoneMap.has(stage)) {
+      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
+    }
+    const stageData = stageMilestoneMap.get(stage)!;
+    stageData.total++;
+    if (milestone.status === "DONE") {
+      stageData.completed++;
+    }
+  }
+  const totalStages = stageMilestoneMap.size;
+  const completedStages = Array.from(stageMilestoneMap.values()).filter(
+    (stageData) => stageData.completed === stageData.total,
+  ).length;
+  const inProgressStages = Array.from(stageMilestoneMap.values()).filter(
+    (stageData) =>
+      stageData.completed > 0 && stageData.completed < stageData.total,
+  ).length;
+  return {
+    totalStages,
+    completedStages,
+    inProgressStages: inProgressStages,
+  };
+};
+
+export function ProjectMilestonesTab({
+  project,
+  isAdmin,
+}: {
+  project: ProjectDetail;
+  isAdmin: boolean;
+}) {
   const dispatch = useAppDispatch();
   const visualMilestones = useMemo(
     () => convertToVisualMilestone(project.milestones),
@@ -84,11 +120,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     const nextWeek = addWeeks(now, 1);
 
     return project.tradieSchedules.filter((schedule) => {
-      const hasAlertStatus =
-        // schedule.status === "PENDING_RESPONSE" ||
-        schedule.status === "CONFIRMED";
-      // schedule.status === "NO_RESPONSE" ||
-      // schedule.status === "DECLINED";
+      const hasAlertStatus = schedule.status === "CONFIRMED";
 
       const targetDate = schedule.milestone?.targetDate;
       const isMilestoneDueSoon =
@@ -117,32 +149,30 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
   }, [tradieAlerts]);
 
   const milestoneChartData: ProjectMilestoneMix[] = useMemo(() => {
-    return project.milestones.reduce((acc, milestone) => {
-      const statusKey =
-        milestone.status === "DONE"
-          ? "Completed"
-          : milestone.status === "ACTIVE"
-            ? "In Progress"
-            : "Upcoming";
-      const existing = acc.find((item) => item.status === statusKey);
-
-      if (existing) {
-        existing.count += 1;
-      } else {
-        acc.push({
-          status: statusKey,
-          count: 1,
-          color:
-            statusKey === "Completed"
-              ? "var(--chart-2)"
-              : statusKey === "In Progress"
-                ? "var(--chart-3)"
-                : "var(--muted)",
-        });
-      }
-
-      return acc;
-    }, [] as ProjectMilestoneMix[]);
+    const {
+      totalStages: projectStagesCount,
+      completedStages: completedStagesCount,
+      inProgressStages: inProgressStagesCount,
+    } = calcMilestoneOverviewData(project.milestones);
+    const graphData: ProjectMilestoneMix[] = [
+      {
+        status: "Completed",
+        count: completedStagesCount,
+        color: "var(--chart-2)",
+      },
+      {
+        status: "In Progress",
+        count: inProgressStagesCount,
+        color: "var(--chart-3)",
+      },
+      {
+        status: "Upcoming",
+        count:
+          projectStagesCount - completedStagesCount - inProgressStagesCount,
+        color: "var(--muted)",
+      },
+    ];
+    return graphData;
   }, [project.milestones]);
 
   const handleOpenAddUpdateModal = (id: string) => {
@@ -152,11 +182,6 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
         payload: { milestoneId: id, projectId: project.id },
       }),
     );
-  };
-
-  const handleSendInvoice = () => {
-    toast.info("Sending invoice to customer...");
-    // dispatch(openModal({ type: "sendInvoice", payload: { project } }));
   };
 
   const handleSendReminder = (tradieReminder: TradieScheduleListItem) => {
@@ -174,15 +199,20 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
     );
   };
 
-  const handleOpenViewPicture = (imageUrl: string) => {
-    dispatch(openModal({ type: "viewPicture", payload: { imageUrl } }));
+  const handleOpenViewPicture = (imageUrls: string[], selectedIndex: number) => {
+    dispatch(openModal({ type: "viewPicture", payload: { imageUrls, selectedIndex } }));
   };
 
   const handleStatusUpdate = (milestoneId: string) => {
     dispatch(
       openModal({
         type: "updateMilestoneStatus",
-        payload: { milestoneId, projectId: project.id },
+        payload: {
+          milestoneId,
+          projectId: project.id,
+          newStatus: MilestoneStatus.DONE,
+          isAdmin: isAdmin,
+        },
       }),
     );
   };
@@ -211,145 +241,199 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
         },
       }),
     );
-  }
+  };
+
+  // Grouping by stage yields whatever order the milestones happened to arrive
+  // in (they are sorted by `order`, which need not follow the contract stages),
+  // so the accordion is driven by the canonical stage sequence instead.
+  const stageGroups = (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[])
+    .filter((stage) => visualMilestonesGroupedByProjectStage[stage]?.length)
+    .map(
+      (stage) => [stage, visualMilestonesGroupedByProjectStage[stage]] as const,
+    );
 
   return (
     <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-      <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
-        <CardHeader className="border-b border-border/60 pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground flex items-center gap-2">
-              <CalendarCheck2 className="size-4" />
-              Project Milestones
+      <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+        <CardHeader className="border-b border-border/70 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle
+              as="h2"
+              className="flex items-center gap-2 text-base font-semibold text-foreground"
+            >
+              <CalendarCheck2
+                className="size-4 text-muted-foreground"
+                aria-hidden="true"
+              />
+              Project milestones
             </CardTitle>
-            <div className="flex items-center gap-3 text-[11px] font-medium text-muted-foreground">
-              <span className="flex items-center">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-green-500"></span>
+            <ul className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
+              <li className="flex items-center">
+                <span
+                  className="mr-1.5 inline-block size-2 rounded-full bg-success"
+                  aria-hidden="true"
+                />
                 Done
-              </span>
-              <span className="flex items-center">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-amber-500"></span>
+              </li>
+              <li className="flex items-center">
+                <span
+                  className="mr-1.5 inline-block size-2 rounded-full bg-warning"
+                  aria-hidden="true"
+                />
                 Active
-              </span>
-              <span className="flex items-center">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-slate-300"></span>
+              </li>
+              <li className="flex items-center">
+                <span
+                  className="mr-1.5 inline-block size-2 rounded-full bg-muted-foreground"
+                  aria-hidden="true"
+                />
                 Upcoming
-              </span>
-            </div>
+              </li>
+            </ul>
           </div>
-          <div className="flex items-center justify-end gap-2 mt-6">
-            <Button size="sm" onClick={() => handleAddMilestone()}>
-              <Plus className="mr-1 h-4 w-4" />
-              Add Milestone
+          <div className="mt-6 flex items-center justify-end gap-2">
+            <Button size="sm" onClick={handleAddMilestone}>
+              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
+              Add milestone
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-5">
-          {Object.entries(visualMilestonesGroupedByProjectStage).map(
-            ([stage, milestones]) => (
-              <Collapsible
-                key={stage}
-                defaultOpen={
-                  milestones
-                    .flatMap((m) => [m, ...m.childrenMilestones])
-                    .some((m) => m.status === "ACTIVE") || stage === "Deposit"
-                }
-                className="rounded-lg border bg-card"
-              >
-                <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-muted-foreground">
-                      {PROJECT_STAGE_LABELS[stage as ProjectStage]}
-                    </h3>
+          {stageGroups.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/70 px-4 py-12 text-center">
+              <p className="text-sm font-medium text-foreground">
+                No milestones yet
+              </p>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                Add the first milestone to break this project into stages with
+                target dates and budgets.
+              </p>
+            </div>
+          ) : (
+            stageGroups.map(([stage, milestones]) => {
+              const stagePercentage = PROJECT_STAGE_PERCENTAGE[stage] ?? 0;
+              const projectBudget = Number(project.totalBudget);
+              const stageBudget = Number.isFinite(projectBudget)
+                ? stagePercentage * projectBudget
+                : null;
 
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <DollarSign className="size-3.5" />
+              return (
+                <Collapsible
+                  key={stage}
+                  defaultOpen={
+                    milestones
+                      .flatMap((m) => [m, ...m.childrenMilestones])
+                      .some((m) => m.status === "ACTIVE") || stage === "Deposit"
+                  }
+                  className="rounded-lg border border-border/70 bg-card"
+                >
+                  <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {PROJECT_STAGE_LABELS[stage] ?? stage}
+                      </h3>
 
-                      {currency.format(
-                        PROJECT_STAGE_PERCENTAGE[stage as ProjectStage] *
-                          Number(project.totalBudget),
+                      {isAdmin && (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <DollarSign className="size-3.5" aria-hidden="true" />
+                          <span className="font-mono tabular-nums">
+                            {stageBudget === null
+                              ? "—"
+                              : currency.format(stageBudget)}
+                          </span>
+                        </span>
                       )}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="secondary"
-                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-                    >
-                      <ListChecks className="size-3.5" />
-                      {milestones.length} Milestones
-                    </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+                      >
+                        <ListChecks className="size-3.5" aria-hidden="true" />
+                        {milestones.length} milestone
+                        {milestones.length === 1 ? "" : "s"}
+                      </Badge>
 
-                    <ChevronsDown
-                      className="
-                      size-4 text-muted-foreground
-                      transition-transform duration-200
-                      group-data-[state=open]:rotate-180
-                    "
-                    />
-                  </div>
-                </CollapsibleTrigger>
-
-                <CollapsibleContent>
-                  <div className="space-y-2 border-t p-3">
-                    {milestones.map((milestone, index) => (
-                      <MilestoneCard
-                        key={`milestone-${milestone.id}-${index}-${milestone.status}`}
-                        prevMilestone={visualMilestones
-                          .flatMap((m) => [m, ...m.childrenMilestones])
-                          .find((m) => m.order === milestone.order - 1)}
-                        milestone={milestone}
-                        project={project}
-                        tradieAlertsByMilestone={tradieAlertsByMilestone}
-                        onOpenAddUpdateModal={handleOpenAddUpdateModal}
-                        onStatusUpdate={handleStatusUpdate}
-                        onStartMilestone={handleStartMilestone}
-                        onSendReminder={handleSendReminder}
-                        onSendInvoice={handleSendInvoice}
-                        onOpenViewPicture={handleOpenViewPicture}
-                        onMarkasNotRequired={handleMarkAsNotRequired}
+                      <ChevronsDown
+                        className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+                        aria-hidden="true"
                       />
-                    ))}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            ),
+                    </div>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <div className="space-y-2 border-t border-border/70 p-3">
+                      {milestones.map((milestone) => (
+                        <MilestoneCard
+                          key={milestone.id}
+                          isAdmin={isAdmin}
+                          prevMilestone={visualMilestones
+                            .flatMap((m) => [m, ...m.childrenMilestones])
+                            .find((m) => m.order === milestone.order - 1)}
+                          milestone={milestone}
+                          project={project}
+                          tradieAlertsByMilestone={tradieAlertsByMilestone}
+                          onOpenAddUpdateModal={handleOpenAddUpdateModal}
+                          onStatusUpdate={handleStatusUpdate}
+                          onStartMilestone={handleStartMilestone}
+                          onSendReminder={handleSendReminder}
+                          onOpenViewPicture={handleOpenViewPicture}
+                          onMarkasNotRequired={handleMarkAsNotRequired}
+                        />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })
           )}
         </CardContent>
       </Card>
 
       <div className="space-y-4">
-        <Card className="border-amber-200/60 bg-linear-to-br from-[#FEF9C3] to-[#FFF3E0] shadow-sm rounded-xl">
-          <CardHeader className="border-b border-amber-200/60 pb-4">
-            <CardTitle className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.06em] text-[#D97706]">
-              <Bell className="size-4" />
-              Upcoming Tradie Alerts
+        <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+          <CardHeader className="border-b border-border/70 pb-4">
+            <CardTitle
+              as="h2"
+              className="flex items-center gap-2 text-base font-semibold text-foreground"
+            >
+              <Bell className="size-4 text-warning-ink" aria-hidden="true" />
+              Upcoming tradie alerts
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 pt-5">
             {tradieAlerts.length === 0 ? (
-              <p className="text-sm text-amber-700">
-                All tradie schedules are confirmed.
+              <p className="text-sm text-muted-foreground">
+                {project.tradieSchedules.length === 0
+                  ? "No tradies are scheduled on this project yet."
+                  : "No tradie schedules need attention in the next week."}
               </p>
             ) : (
               tradieAlerts.slice(0, 4).map((schedule) => (
                 <article
                   key={schedule.id}
-                  className="rounded-[10px] border border-amber-200/80 bg-white/60 p-3.5 flex items-center gap-3"
+                  className="flex items-center gap-3 rounded-[10px] border border-border/70 bg-card p-3.5"
                 >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
-                    <Wrench className="size-5" />
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-warning-light text-warning-ink">
+                    <Wrench className="size-5" aria-hidden="true" />
                   </div>
 
-                  <div>
-                    <p className="text-[13px] font-bold text-slate-900">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">
                       {schedule.tradie.trade} • {schedule.tradie.name}
-                      {" - "}
-                      {schedule.tradie.abn}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Needed for: {schedule.milestone?.name ?? "General"} —{" "}
-                      {dateFormat.format(new Date(schedule.scheduledDate))}
+                      ABN{" "}
+                      <span className="font-mono tabular-nums">
+                        {schedule.tradie.abn}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Needed for {schedule.milestone?.name ?? "general works"}{" "}
+                      on{" "}
+                      <span className="font-mono tabular-nums">
+                        {dateFormat.format(new Date(schedule.scheduledDate))}
+                      </span>
                     </p>
                   </div>
 
@@ -357,7 +441,8 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                     <Button
                       variant="outline"
                       size="icon"
-                      className="size-8"
+                      className="size-9"
+                      aria-label={`Send reminder to ${schedule.tradie.name}`}
                       onClick={() =>
                         handleSendReminder({
                           id: schedule.id,
@@ -395,7 +480,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
                         } satisfies TradieScheduleListItem)
                       }
                     >
-                      <Bell className="size-3.5" />
+                      <Bell className="size-3.5" aria-hidden="true" />
                     </Button>
                   </div>
                 </article>
@@ -405,7 +490,7 @@ export function ProjectMilestonesTab({ project }: { project: ProjectDetail }) {
         </Card>
 
         <DonutChartCard
-          title="Milestone Summary"
+          title="Milestone summary"
           subtitle="Progress distribution across phases"
           data={milestoneChartData}
           labelKey="status"

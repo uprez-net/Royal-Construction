@@ -15,7 +15,13 @@ export interface GraphConfig {
   webhookNotificationUrl?: string;
   webhookSubscriptionResource?: string;
   webhookSubscriptionMinutes: number;
-  adminToken: string;
+  /**
+   * Undefined when GRAPH_ADMIN_TOKEN is unset. requireAdminToken fails closed
+   * on that, so an unconfigured environment rejects admin routes rather than
+   * exposing them. Deliberately not defaulted — a fallback value committed to
+   * a public repository is not a secret.
+   */
+  adminToken?: string;
 }
 
 function requireEnv(name: string): string {
@@ -71,6 +77,6 @@ export function getGraphConfig(): GraphConfig {
       process.env.GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES,
       60,
     ),
-    adminToken: process.env.GRAPH_ADMIN_TOKEN ?? "test-admin-token",
+    adminToken: process.env.GRAPH_ADMIN_TOKEN || undefined,
   };
 }

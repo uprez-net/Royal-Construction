@@ -1,14 +1,23 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { ZoomIn, ZoomOut, RotateCcw, X } from "lucide-react";
+import {
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface PreviewPictureModalProps {
   open: boolean;
   onClose: () => void;
-  imageUrl: string;
+  imageUrls: string[];
+  selectedIndex: number;
 }
 
 const MIN_SCALE = 1;
@@ -18,34 +27,24 @@ const ZOOM_STEP = 0.25;
 export function PreviewPictureModal({
   open,
   onClose,
-  imageUrl,
+  imageUrls,
+  selectedIndex,
 }: PreviewPictureModalProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  const [currentIndex, setCurrentIndex] = useState(selectedIndex);
   const [scale, setScale] = useState(1);
-  const [position, setPosition] = useState({
-    x: 0,
-    y: 0,
-  });
-
+  const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
 
-  const dragStartRef = useRef({
-    x: 0,
-    y: 0,
-  });
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const imageStartRef = useRef({ x: 0, y: 0 });
 
-  const imageStartRef = useRef({
-    x: 0,
-    y: 0,
-  });
+  const hasMultipleImages = imageUrls.length > 1;
 
   const resetView = useCallback(() => {
     setScale(1);
-    setPosition({
-      x: 0,
-      y: 0,
-    });
+    setPosition({ x: 0, y: 0 });
   }, []);
 
   const clampScale = (value: number) => {
@@ -60,46 +59,69 @@ export function PreviewPictureModal({
     setScale((prev) => clampScale(prev - ZOOM_STEP));
   };
 
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+  const goToPrevious = useCallback(() => {
+    if (!hasMultipleImages) return;
+    resetView();
+    setCurrentIndex((prev) => (prev === 0 ? imageUrls.length - 1 : prev - 1));
+  }, [hasMultipleImages, imageUrls.length, resetView]);
+
+  const goToNext = useCallback(() => {
+    if (!hasMultipleImages) return;
+    resetView();
+    setCurrentIndex((prev) => (prev === imageUrls.length - 1 ? 0 : prev + 1));
+  }, [hasMultipleImages, imageUrls.length, resetView]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        goToPrevious();
+      } else if (event.key === "ArrowRight") {
+        goToNext();
+      } else if (event.key === "+" || event.key === "=") {
+        zoomIn();
+      } else if (event.key === "-") {
+        zoomOut();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, goToPrevious, goToNext]);
+
+  const handleWheel = (event: React.WheelEvent) => {
     event.preventDefault();
-
     const delta = event.deltaY;
-
     setScale((prev) => {
       if (delta > 0) {
         return clampScale(prev - ZOOM_STEP);
       }
-
       return clampScale(prev + ZOOM_STEP);
     });
   };
 
-  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseDown = (event: React.MouseEvent) => {
     if (scale <= 1) {
       return;
     }
-
     setIsDragging(true);
-
     dragStartRef.current = {
       x: event.clientX,
       y: event.clientY,
     };
-
     imageStartRef.current = {
       ...position,
     };
   };
 
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (event: React.MouseEvent) => {
     if (!isDragging) {
       return;
     }
-
     const deltaX = event.clientX - dragStartRef.current.x;
-
     const deltaY = event.clientY - dragStartRef.current.y;
-
     setPosition({
       x: imageStartRef.current.x + deltaX,
       y: imageStartRef.current.y + deltaY,
@@ -117,14 +139,15 @@ export function PreviewPictureModal({
     }
   };
 
+  const currentImageUrl = imageUrls[currentIndex];
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="border-none bg-transparent p-0 shadow-none sm:max-w-[100vw]"
         showCloseButton={false}
+        className="h-screen w-screen max-w-none border-none bg-transparent p-0 backdrop-blur-2xl"
       >
         <DialogTitle className="sr-only">Image Preview</DialogTitle>
-
         <div
           ref={containerRef}
           className="relative h-screen w-full overflow-hidden bg-transparent"
@@ -138,21 +161,22 @@ export function PreviewPictureModal({
             onMouseDown={handleMouseDown}
           >
             <div
-              className={`relative h-[90vh] w-[90vw] select-none transition-transform duration-100 ${
+              className={cn(
+                "relative h-[90vh] w-[90vw] select-none transition-transform duration-100",
                 isDragging
                   ? "cursor-grabbing"
                   : scale > 1
                     ? "cursor-grab"
-                    : "cursor-default"
-              }`}
+                    : "cursor-default",
+              )}
               style={{
                 transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
                 willChange: "transform",
               }}
             >
               <Image
-                src={imageUrl}
-                alt="Preview image"
+                src={currentImageUrl}
+                alt={`Preview image ${currentIndex + 1} of ${imageUrls.length}`}
                 fill
                 priority
                 draggable={false}
@@ -162,45 +186,106 @@ export function PreviewPictureModal({
             </div>
           </div>
 
+          {/* Previous / Next Navigation */}
+          {hasMultipleImages && (
+            <>
+              <button
+                type="button"
+                onClick={goToPrevious}
+                aria-label="Previous image"
+                className="absolute left-4 top-1/2 z-50 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={goToNext}
+                aria-label="Next image"
+                className="absolute right-4 top-1/2 z-50 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </>
+          )}
+
           {/* Floating Controls */}
           <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-3">
             <button
               type="button"
               onClick={zoomIn}
+              aria-label="Zoom in"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
             >
               <ZoomIn className="h-5 w-5" />
             </button>
-
             <button
               type="button"
               onClick={zoomOut}
+              aria-label="Zoom out"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
             >
               <ZoomOut className="h-5 w-5" />
             </button>
-
             <button
               type="button"
               onClick={resetView}
+              aria-label="Reset zoom"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
             >
               <RotateCcw className="h-5 w-5" />
             </button>
-
             <button
               type="button"
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md"
+              aria-label="Close preview"
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white backdrop-blur-md transition hover:scale-105 hover:bg-black/80"
               onClick={onClose}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          {/* Zoom Indicator */}
-          <div className="absolute left-6 top-6 rounded-full border border-white/10 bg-black/60 px-4 py-2 text-sm font-medium text-white backdrop-blur-md">
-            {Math.round(scale * 100)}%
+          {/* Zoom + Image Counter Indicator */}
+          <div className="absolute left-6 top-6 flex items-center gap-3">
+            <div className="rounded-full border border-white/10 bg-black/60 px-4 py-2 text-sm font-medium text-white backdrop-blur-md">
+              {Math.round(scale * 100)}%
+            </div>
+            {hasMultipleImages && (
+              <div className="rounded-full border border-white/10 bg-black/60 px-4 py-2 text-sm font-medium text-white backdrop-blur-md">
+                {currentIndex + 1} / {imageUrls.length}
+              </div>
+            )}
           </div>
+
+          {/* Thumbnail Strip */}
+          {hasMultipleImages && (
+            <div className="absolute bottom-6 left-1/2 z-50 flex max-w-[80vw] -translate-x-1/2 gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-black/60 p-2 backdrop-blur-md">
+              {imageUrls.map((url, index) => (
+                <button
+                  key={url + index}
+                  type="button"
+                  onClick={() => {
+                    resetView();
+                    setCurrentIndex(index);
+                  }}
+                  aria-label={`Go to image ${index + 1}`}
+                  className={cn(
+                    "relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border transition",
+                    index === currentIndex
+                      ? "border-white opacity-100"
+                      : "border-white/10 opacity-50 hover:opacity-80",
+                  )}
+                >
+                  <Image
+                    src={url}
+                    alt={`Thumbnail ${index + 1}`}
+                    fill
+                    className="object-cover"
+                    sizes="56px"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

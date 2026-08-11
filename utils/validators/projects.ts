@@ -392,18 +392,23 @@ export const milestoneParamSchema = projectParamSchema.extend({
 export type MilestoneParam = z.infer<typeof milestoneParamSchema>;
 
 
+/**
+ * The project detail tabs that actually exist.
+ *
+ * This previously also accepted "materials", "updates", "workers" and
+ * "variations" — tabs whose nav entries and render branches have both been
+ * removed. Because the validator was the gate for the `?activeTab=` URL param,
+ * `?activeTab=variations` validated successfully and put the store into a state
+ * with no panel to render and no tab to navigate back from. Narrowed to reality.
+ */
 export const projectTabsValidator = z.enum([
-     "overview",
-   "milestones",
-   "materials",
-   "payments",
-   "updates",
-   "tradies",
-   "workers",
-   "docs",
-   "history",
-   "communications",
-   "variations"
+  "overview",
+  "milestones",
+  "payments",
+  "tradies",
+  "docs",
+  "history",
+  "communications",
 ]);
 
 export type ProjectDetailTabKey = z.infer<typeof projectTabsValidator>;

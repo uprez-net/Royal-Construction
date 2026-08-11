@@ -1,198 +1,111 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusPill } from "@/components/common/status-pill";
-import { projectPaymentsMock } from "@/lib/mock-data";
-import { Button } from "@/components/ui/button";
-import { Download, Send, Eye, Bell, ReceiptText } from "lucide-react";
-import { currency } from "@/utils/formatters";
-import { DataTable } from "@/components/common/data-table";
-import { ProjectDetail } from "@/types/project";
+import { ReceiptText } from "lucide-react";
 
-function paymentTone(status: "Cleared" | "Pending" | "Overdue") {
-  if (status === "Cleared") return "success" as const;
-  if (status === "Overdue") return "danger" as const;
-  return "warning" as const;
-}
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { currency } from "@/utils/formatters";
+import { ProjectDetail } from "@/types/project";
 
 interface ProjectPaymentsTabProps {
   project: ProjectDetail;
 }
 
+/**
+ * Formats a Prisma Decimal-as-string money value, falling back to an em dash
+ * rather than rendering a bare "$" or "$NaN" when the value is missing.
+ */
+function money(value: string | null | undefined) {
+  // `Number(null)` and `Number("")` are both 0, so a missing value would
+  // otherwise render as "$0" — a figure the project does not actually hold.
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? currency.format(parsed) : "—";
+}
+
+const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
+  const stageMilestoneMap = new Map<string, { completed: number; total: number }>();
+  for (const milestone of milestones) {
+    const stage = milestone.projectStage;
+    if (!stageMilestoneMap.has(stage)) {
+      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
+    }
+    const stageData = stageMilestoneMap.get(stage)!;
+    stageData.total++;
+    if (milestone.status === "DONE") {
+      stageData.completed++;
+    }
+  }
+  const totalStages = stageMilestoneMap.size;
+  const completedStages = Array.from(stageMilestoneMap.values()).filter((stageData) => stageData.completed === stageData.total).length;
+  return {
+    totalStages,
+    completedStages,
+  };
+};
+
 export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
-  const newProject = project.milestones.length === 0;
-  const summary = newProject
-    ? projectPaymentsMock.summary
-    : {
-        totalBilled: 0,
-        cleared: 0,
-        outstanding: 0,
-        remainingContract: 0,
-      };
-  const invoices = newProject ? projectPaymentsMock.invoices : [];
+  const { totalStages: projectStagesCount, completedStages: completedStagesCount } = calcMilestoneOverviewData(project.milestones);
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Total Billed" value={summary.totalBilled} />
-        <Metric label="Cleared" value={summary.cleared} tone="text-green-600" />
-        <Metric
-          label="Outstanding"
-          value={summary.outstanding}
-          tone="text-red-600"
-        />
-        <Metric label="Remaining Contract" value={summary.remainingContract} />
-      </div>
-
-      <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
-        <CardHeader className="border-b border-border/60 pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
-              Invoice History
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                className="h-9 rounded-lg bg-teal-600 px-3.5 text-[12.5px] font-semibold text-white hover:bg-teal-700"
-              >
-                <Send className="mr-1 size-4" />
-                Send Invoice
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 rounded-lg px-3.5 text-[12.5px] font-semibold"
-              >
-                <Download className="mr-1 size-4" />
-                Export
-              </Button>
-            </div>
-          </div>
+      <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+        <CardHeader className="border-b border-border/70 pb-4">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
+            Invoices
+          </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0 px-0 pb-0">
-          <div className="overflow-x-auto">
-            <DataTable
-              headers={[
-                "Invoice",
-                "Milestone",
-                "Amount",
-                "GST",
-                "Total",
-                "Date Sent",
-                "Date Paid",
-                "Status",
-                <div key="action" className="text-right">
-                  Action
-                </div>,
-              ]}
-              rows={invoices.map((invoice) => [
-                <span
-                  key={`${invoice.id}-invoice`}
-                  className="font-semibold text-slate-900"
-                >
-                  {invoice.invoiceNumber}
-                </span>,
+        <CardContent className="pt-5">
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
+              <dt className="text-sm font-medium text-muted-foreground">
+                Project budget
+              </dt>
+              <dd className="mt-1 font-mono text-xl tabular-nums text-foreground">
+                {money(project.totalBudget)}
+              </dd>
+            </div>
+            <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
+              <dt className="text-sm font-medium text-muted-foreground">
+                Stages invoiced
+              </dt>
+              <dd className="mt-1 font-mono text-xl tabular-nums text-foreground">
+                {completedStagesCount} of {projectStagesCount}
+              </dd>
+            </div>
+          </dl>
 
-                <span key={`${invoice.id}-milestone`}>
-                  {invoice.milestone}
-                </span>,
+          <div className="mx-auto mt-6 flex max-w-xl flex-col items-center gap-3 py-8 text-center">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+              <ReceiptText
+                className="size-5 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </div>
 
-                <span key={`${invoice.id}-amount`}>
-                  {currency.format(invoice.amount)}
-                </span>,
+            <p className="text-base font-semibold text-foreground">
+              {completedStagesCount === 0
+                ? "No invoices have been raised for this project"
+                : "Invoice details are held in Xero"}
+            </p>
 
-                <span key={`${invoice.id}-gst`}>
-                  {currency.format(invoice.gst)}
-                </span>,
+            <p className="text-sm text-muted-foreground">
+              Progress claims are raised as Xero invoices against a milestone.
+              Amounts, sent and paid dates and payment status are not stored in
+              BuildPro, so an invoice history cannot be shown here.
+            </p>
 
-                <span
-                  key={`${invoice.id}-total`}
-                  className="font-medium text-slate-900"
-                >
-                  {currency.format(invoice.amount + invoice.gst)}
-                </span>,
-
-                <span key={`${invoice.id}-sent`}>{invoice.sentOn}</span>,
-
-                <span key={`${invoice.id}-paid`}>{invoice.paidOn ?? "-"}</span>,
-
-                <StatusPill
-                  key={`${invoice.id}-status`}
-                  tone={paymentTone(invoice.status)}
-                >
-                  {invoice.status}
-                </StatusPill>,
-
-                <div
-                  key={`${invoice.id}-actions`}
-                  className="flex justify-end gap-1.5"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {invoice.status !== "Cleared" && (
-                    <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-[#D97706] hover:bg-amber-50 hover:text-[#D97706]">
-                      <Bell className="size-3.5" />
-                    </button>
-                  )}
-
-                  <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600">
-                    <Eye className="size-3.5" />
-                  </button>
-
-                  <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600">
-                    <Download className="size-3.5" />
-                  </button>
-                </div>,
-              ])}
-              onRowClick={(rowIndex) => {
-                const invoice = invoices[rowIndex];
-
-                // handle row click
-                console.log(invoice);
-              }}
-              emptyState={
-                <div className="flex flex-col items-center justify-center gap-3">
-                  <div className="flex size-12 items-center justify-center">
-                    <ReceiptText className="size-5 text-muted-foreground" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      No Invoices available yet.
-                    </p>
-
-                    <p className="text-xs text-muted-foreground">
-                      Your Invoice details will appear here.
-                    </p>
-                  </div>
-                </div>
-              }
-            />
+            <p className="text-sm text-muted-foreground">
+              Milestone budgets and the contract stage schedule are on the
+              Milestones tab.
+            </p>
           </div>
         </CardContent>
       </Card>
     </section>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: string;
-}) {
-  return (
-    <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
-      <CardContent className="p-5 flex flex-col items-center justify-center">
-        <p className="text-[11.5px] font-medium text-muted-foreground mb-1">
-          {label}
-        </p>
-        <p
-          className={`text-[22px] font-extrabold leading-tight tracking-tight text-slate-900 ${tone ?? ""}`}
-        >
-          {currency.format(value)}
-        </p>
-      </CardContent>
-    </Card>
   );
 }

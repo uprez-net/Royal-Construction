@@ -7,36 +7,36 @@ export function TradieKPI() {
   const { kpiData } = useAppSelector((state) => state.tradieManagement);
   const allKPIs: KPIListItem[] = [
     {
-      title: "Registered Tradies",
+      title: "Registered tradies",
       dataPoint: kpiData.registeredTradies,
       Icon: Users,
-      iconTone: "bg-teal-600",
+      tone: "primary",
     },
     {
-      title: "Incidents Lodged",
+      title: "Incidents lodged",
       dataPoint: kpiData.incidentLodged,
       Icon: TriangleAlert,
-      iconTone: "bg-red-600",
+      tone: "danger",
       isInverse: true,
     },
     {
-      title: "Favourite Tradies",
+      title: "Favourite tradies",
       dataPoint: kpiData.favouriteTradies,
       Icon: Star,
-      iconTone: "bg-orange-600",
+      tone: "accent",
     },
   ];
 
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {allKPIs.map((kpi, index) => (
+      {allKPIs.map((kpi) => (
         <MetricCard
-          key={index}
+          key={kpi.title}
           title={kpi.title}
           value={kpi.dataPoint.total}
           trendDelta={kpi.dataPoint.trendDelta}
           Icon={kpi.Icon}
-          iconTone={kpi.iconTone}
+          tone={kpi.tone}
           isInverse={kpi.isInverse}
         />
       ))}

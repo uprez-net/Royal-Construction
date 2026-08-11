@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 
-export type SiteManagerDropdownItem = Pick<User, "id" | "name" | "email" | "phone" | "createdAt">;
+export type SiteManagerDropdownItem = Pick<User, "id" | "name" | "email" | "phone" | "createdAt" | "role">;
 
 export type PaginatedLookupResult<T> = {
     items: T[];
@@ -32,7 +32,11 @@ async function getSiteManagersDropdownPage(
     const search = normalizeQuery(query);
 
     const where = {
-        role: Role.SITE_MANAGER,
+        role: {
+            not: {
+                in: [Role.GUEST, Role.CUSTOMER],
+            }
+        },
         ...(search
             ? {
                 OR: [
@@ -56,6 +60,7 @@ async function getSiteManagersDropdownPage(
                 email: true,
                 phone: true,
                 createdAt: true,
+                role: true,
             },
         }),
         prisma.user.count({ where }),
@@ -92,7 +97,11 @@ export async function getSiteManagerById(siteManagerId: string) {
     return prisma.user.findFirst({
         where: {
             id: siteManagerId,
-            role: Role.SITE_MANAGER,
+            role: {
+                not: {
+                    in: [Role.GUEST, Role.CUSTOMER],
+                }
+            },
         },
     });
 }

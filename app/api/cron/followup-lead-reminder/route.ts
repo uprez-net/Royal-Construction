@@ -5,6 +5,8 @@ import { successResponse, errorResponse } from "@/utils/validators";
 import { toDateOnly } from "@/types/lead";
 import FollowUpReminderEmail from "@/lib/graph/Email/follow-up-remainder";
 import { render } from "@react-email/components";
+import { createNotification } from "@/types/notification";
+import { triggerNotification } from "@/lib/notification/novu";
 
 // Helper to get today's date in Australia/Sydney timezone
 function getSydneyTodayDateString(): string {
@@ -52,12 +54,9 @@ export async function GET(request: Request) {
     const leads = await prisma.lead.findMany({
       where: {
         stage: "IN_FOLLOW_UP",
-        followupDate: {
-          not: null,
-        },
-        assignedId: {
-          not: null,
-        },
+        followupDate: { not: null, lte: new Date(`${todaySydneyStr}T23:59:59.999Z`) },
+        assignedId: { not: null },
+        followupReminderSentAt: null,
       },
       include: {
         assignedUser: {
@@ -103,6 +102,15 @@ export async function GET(request: Request) {
         continue;
       }
 
+      const notificationPayload = createNotification("leadFollowupDue", {
+        leadId: lead.id.toString(),
+        customerName: lead.name,
+        followupDate: lead.followupDate ? toDateOnly(lead.followupDate) ?? undefined : undefined,
+        followupTime: lead.followupTime ?? undefined,
+      });
+
+      await triggerNotification([assignee.id], notificationPayload);
+
       const emailSubject = `[Follow-up Reminder] Today's Follow-up for ${lead.name}`;
       const crmUrl = `${baseUrl}/leads`;
 
@@ -126,6 +134,10 @@ export async function GET(request: Request) {
           body: emailHtml,
         });
         console.log(`[CRON] Email reminder successfully sent to ${assignee.email} for Lead ID ${lead.id}`);
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { followupReminderSentAt: new Date() },
+        });
         results.push({ id: lead.id, name: lead.name, status: "sent", email: assignee.email });
       } catch (err) {
         console.error(`[CRON] Failed to send email reminder for Lead ID ${lead.id} to ${assignee.email}:`, err);

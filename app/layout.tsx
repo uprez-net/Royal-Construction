@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Fraunces, IBM_Plex_Mono, Manrope } from "next/font/google";
 
+import { SandboxBanner } from "@/components/common/sandbox-banner";
 import { ModalManager } from "@/components/modals/modal-manager";
 import { ReduxProvider } from "@/components/providers/redux-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -35,12 +36,25 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  // Set only on the Vercel staging environment. When present it both renders the
+  // sandbox banner and publishes its height so full-viewport shells can subtract
+  // it via calc(); unset everywhere else, so production is untouched.
+  const isStaging = process.env.APP_ENV === "staging";
+
   return (
     <html
       lang="en"
       className={`${sans.variable} ${heading.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-background text-foreground">
+      <body
+        className="min-h-full bg-background text-foreground"
+        style={
+          isStaging
+            ? ({ "--sandbox-banner-height": "2rem" } as CSSProperties)
+            : undefined
+        }
+      >
+          <SandboxBanner />
           <ClerkProvider>
             <ReduxProvider>
               {children}

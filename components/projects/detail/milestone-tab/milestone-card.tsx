@@ -25,33 +25,32 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MilestoneActionGroup } from "./milestone-action-button";
 
 function getMilestoneTone(status: string) {
   if (status === "DONE") {
     return {
-      className: "border-green-200/70 bg-green-50/60",
+      className: "border-border/70 bg-success-light",
       pill: "success" as const,
     };
   }
 
   if (status === "ACTIVE") {
     return {
-      className: "border-amber-200/70 bg-amber-50/50",
+      className: "border-border/70 bg-warning-light",
       pill: "warning" as const,
     };
   }
 
-  if(status === "NOT_REQUIRED") {
+  if (status === "NOT_REQUIRED") {
     return {
-      className: "border-slate-200/70 bg-slate-50/50",
+      className: "border-border/70 bg-muted",
       pill: "secondary" as const,
     };
   }
 
   return {
-    className: "border-border/70 bg-slate-50/70",
+    className: "border-border/70 bg-muted/50",
     pill: "neutral" as const,
   };
 }
@@ -64,14 +63,17 @@ function MilestoneMetaLine({
   children: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-      <span className="shrink-0">{icon}</span>
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="shrink-0" aria-hidden="true">
+        {icon}
+      </span>
       <span className="truncate">{children}</span>
     </div>
   );
 }
 
 export function MilestoneCard({
+  isAdmin,
   prevMilestone,
   milestone,
   project,
@@ -82,9 +84,9 @@ export function MilestoneCard({
   onMarkasNotRequired,
   onStartMilestone,
   onSendReminder,
-  onSendInvoice,
   onOpenViewPicture,
 }: {
+  isAdmin: boolean;
   prevMilestone?: UIMilestone;
   milestone: UIMilestone;
   project: ProjectDetail;
@@ -98,15 +100,15 @@ export function MilestoneCard({
   onStartMilestone: (id: string) => void;
   onMarkasNotRequired: (id: string) => void;
   onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
-  onSendInvoice: () => void;
-  onOpenViewPicture: (imageUrl: string) => void;
+  onOpenViewPicture: (imageUrls: string[], selectedIndex: number) => void;
 }) {
   const tone = getMilestoneTone(milestone.status);
   const hasChildren = milestone.childrenMilestones.length > 0;
   const isCompact = depth > 0;
-  const milestonePictures = !isCompact
-    ? milestone.files.filter((file) => file.fileType.startsWith("image/"))
-    : [];
+  const milestonePictures = milestone.files.filter((file) =>
+    file.fileType.startsWith("image/"),
+  );
+  const imageUrls = milestonePictures.map((file) => file.url);
   const nextTradies = tradieAlertsByMilestone[milestone.id] ?? [];
   const budgetShare = Number(project.totalBudget)
     ? (Number(milestone.budget) / Number(project.totalBudget)) * 100
@@ -115,15 +117,18 @@ export function MilestoneCard({
   return (
     <article
       className={cn(
-        "group relative overflow-hidden rounded-[12px] border p-4 transition-all hover:shadow-sm",
+        "group relative overflow-hidden rounded-[12px] border p-4",
         tone.className,
         isCompact && "p-3",
-        depth > 0 && "ml-4 border-l-[3px]",
+        depth > 0 && "ml-4",
         milestone.status === "NOT_REQUIRED" && "opacity-70 line-through",
       )}
     >
       {depth > 0 ? (
-        <span className="absolute -left-2.5 top-5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
+        <span
+          className="absolute -left-2.5 top-5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary"
+          aria-hidden="true"
+        />
       ) : null}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -131,27 +136,29 @@ export function MilestoneCard({
           <div className="flex flex-wrap items-center gap-2">
             <p
               className={cn(
-                "font-bold text-slate-900",
-                isCompact ? "text-[13px]" : "text-[14px]",
+                "font-heading font-semibold text-foreground",
+                isCompact ? "text-sm" : "text-base",
               )}
             >
               {milestone.name}
             </p>
 
             <StatusPill tone={tone.pill}>
-              {milestone.status === "NOT_REQUIRED" && <BanIcon className="mr-1 h-4 w-4" />}
+              {milestone.status === "NOT_REQUIRED" && (
+                <BanIcon className="mr-1 h-4 w-4" aria-hidden="true" />
+              )}
               {formatStatus(milestone.status)}
             </StatusPill>
 
             {hasChildren ? (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-slate-600">
-                {milestone.childrenMilestones.length} sub
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {milestone.childrenMilestones.length} sub-milestone
                 {milestone.childrenMilestones.length === 1 ? "" : "s"}
               </span>
             ) : null}
 
-            {!isCompact && milestonePictures.length > 0 ? (
-              <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-teal-700">
+            {milestonePictures.length > 0 ? (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 {milestonePictures.length} photo
                 {milestonePictures.length === 1 ? "" : "s"}
               </span>
@@ -165,21 +172,34 @@ export function MilestoneCard({
             )}
           >
             <MilestoneMetaLine icon={<Calendar className="h-3.5 w-3.5" />}>
-              Target: {dateFormat.format(new Date(milestone.targetDate))}
+              Target{" "}
+              <span className="font-mono tabular-nums">
+                {dateFormat.format(new Date(milestone.targetDate))}
+              </span>
             </MilestoneMetaLine>
 
             {milestone.actualDate ? (
               <MilestoneMetaLine
-                icon={<CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                icon={<CheckCircle2 className="h-3.5 w-3.5 text-success-ink" />}
               >
-                Actual: {dateFormat.format(new Date(milestone.actualDate))}
+                Completed{" "}
+                <span className="font-mono tabular-nums">
+                  {dateFormat.format(new Date(milestone.actualDate))}
+                </span>
               </MilestoneMetaLine>
             ) : null}
 
-            <MilestoneMetaLine icon={<DollarSign className="h-3.5 w-3.5" />}>
-              {currency.format(Number(milestone.budget))} (
-              {budgetShare.toFixed(2)}%)
-            </MilestoneMetaLine>
+            {isAdmin && (
+              <MilestoneMetaLine icon={<DollarSign className="h-3.5 w-3.5" />}>
+                <span className="font-mono tabular-nums">
+                  {currency.format(Number(milestone.budget))}
+                </span>{" "}
+                <span className="font-mono tabular-nums">
+                  ({budgetShare.toFixed(1)}%)
+                </span>{" "}
+                of project budget
+              </MilestoneMetaLine>
+            )}
 
             {milestone.tradieSchedules.length > 0 ? (
               <MilestoneMetaLine icon={<Users className="h-3.5 w-3.5" />}>
@@ -195,43 +215,45 @@ export function MilestoneCard({
         </div>
 
         <MilestoneActionGroup
-          key={`milestone-action-group-${milestone.id}`}
           prevMilestone={prevMilestone}
           milestone={milestone}
           onOpenAddUpdateModal={onOpenAddUpdateModal}
           onStatusUpdate={onStatusUpdate}
           onStartMilestone={onStartMilestone}
-          onSendInvoice={onSendInvoice}
           onMarkasNotRequired={onMarkasNotRequired}
         />
       </div>
 
-      {!isCompact && milestonePictures.length > 0 ? (
-        <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          {Array.from({ length: Math.min(milestonePictures.length, 4) }).map(
-            (_, i) => (
-              <div
-                key={i}
-                className="group relative flex aspect-4/3 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600"
-                onClick={() => onOpenViewPicture(milestonePictures[i].url)}
+      {milestonePictures.length > 0 ? (
+        <ul className="mt-3 grid list-none grid-cols-2 gap-1.5 sm:grid-cols-4">
+          {milestonePictures.slice(0, 3).map((picture, i) => (
+            <li key={picture.id}>
+              <button
+                type="button"
+                aria-label={`View progress photo ${i + 1} of ${milestone.name}`}
+                className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded-md border border-border/70 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                onClick={() => onOpenViewPicture(imageUrls, i)}
               >
                 <Image
-                  src={milestonePictures[i].url}
-                  alt={`Photo ${i + 1}`}
-                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  src={picture.url}
+                  alt=""
+                  className="h-full w-full object-cover"
                   loading="lazy"
                   width={800}
                   height={600}
                 />
-              </div>
-            ),
-          )}
-          {milestonePictures.length > 4 ? (
-            <div className="flex aspect-4/3 cursor-pointer items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs font-medium text-muted-foreground transition-colors hover:border-teal-600 hover:text-teal-600">
-              +{milestonePictures.length - 4}
-            </div>
+              </button>
+            </li>
+          ))}
+          {milestonePictures.length > 3 ? (
+            <li
+              className="flex aspect-4/3 items-center justify-center rounded-md border border-border/70 bg-muted/50 text-xs font-medium text-muted-foreground"
+              onClick={() => onOpenViewPicture(imageUrls, 3)}
+            >
+              +{milestonePictures.length - 3} more
+            </li>
           ) : null}
-        </div>
+        </ul>
       ) : null}
 
       {!isCompact && nextTradies.length > 0 ? (
@@ -239,27 +261,32 @@ export function MilestoneCard({
           {nextTradies.map((t) => (
             <div
               key={`tradie-alert-${t.id}`}
-              className="flex items-center gap-3 rounded-xl border border-amber-200/50 bg-amber-50 p-3.5 dark:border-amber-900/40 dark:bg-amber-950/20"
+              className="flex items-center gap-3 rounded-xl border border-border/70 bg-card p-3.5"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                <Wrench className="h-4 w-4" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-warning-light text-warning-ink">
+                <Wrench className="h-4 w-4" aria-hidden="true" />
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold">
-                  Next: {t.tradie.name} ({t.tradie.trade})
+                <div className="text-sm font-medium text-foreground">
+                  Next up: {t.tradie.name} ({t.tradie.trade})
                 </div>
 
-                <div className="text-[11px] text-muted-foreground">
-                  Scheduled {dateFormat.format(new Date(t.scheduledDate))}{" "}
-                  {!["CONFIRMED", "COMPLETED"].includes(t.status) &&
-                    "— Not confirmed!"}
+                <div className="text-xs text-muted-foreground">
+                  Scheduled{" "}
+                  <span className="font-mono tabular-nums">
+                    {dateFormat.format(new Date(t.scheduledDate))}
+                  </span>
+                  {!["CONFIRMED", "COMPLETED"].includes(t.status)
+                    ? " — not confirmed"
+                    : null}
                 </div>
               </div>
 
               <Button
                 variant="outline"
                 size="sm"
+                aria-label={`Send reminder to ${t.tradie.name}`}
                 onClick={() =>
                   onSendReminder({
                     id: t.id,
@@ -292,7 +319,7 @@ export function MilestoneCard({
                   } satisfies TradieScheduleListItem)
                 }
               >
-                <Bell className="mr-1 h-4 w-4" />
+                <Bell className="mr-1 h-4 w-4" aria-hidden="true" />
                 Remind
               </Button>
             </div>
@@ -302,28 +329,30 @@ export function MilestoneCard({
 
       {hasChildren ? (
         <Collapsible defaultOpen={milestone.childrenMilestones.length <= 3}>
-          <div className="mt-4 rounded-[14px] border border-dashed border-border/70 bg-white/60 px-3 py-2.5">
+          <div className="mt-4 rounded-[14px] border border-dashed border-border/70 bg-card px-3 py-2.5">
             <CollapsibleTrigger asChild>
-              <button className="group flex w-full items-center justify-between gap-3 text-left text-[12px] font-semibold text-slate-700 transition-colors hover:text-teal-700">
-                <span className="flex items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-600">
-                    Children
-                  </span>
-                  <span>
-                    {milestone.childrenMilestones.length} milestone
-                    {milestone.childrenMilestones.length === 1 ? "" : "s"}
-                  </span>
+              <button
+                type="button"
+                className="group flex w-full items-center justify-between gap-3 text-left text-sm font-medium text-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                <span>
+                  {milestone.childrenMilestones.length} sub-milestone
+                  {milestone.childrenMilestones.length === 1 ? "" : "s"}
                 </span>
-                <ChevronDown className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                <ChevronDown
+                  className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+                  aria-hidden="true"
+                />
               </button>
             </CollapsibleTrigger>
 
             <CollapsibleContent>
-              <ScrollArea className="mt-3 max-h-80 pr-2">
+              <div className="mt-3 overflow-y-auto no-scrollbar max-h-80 pr-2">
                 <div className="space-y-2">
-                  {milestone.childrenMilestones.map((child, index) => (
+                  {milestone.childrenMilestones.map((child) => (
                     <MilestoneCard
-                      key={`milestone-${child.id}-${index}-${child.status}`}
+                      key={child.id}
+                      isAdmin={isAdmin}
                       prevMilestone={
                         milestone.childrenMilestones
                           .flatMap((m) => [m, ...m.childrenMilestones])
@@ -337,13 +366,12 @@ export function MilestoneCard({
                       onStatusUpdate={onStatusUpdate}
                       onStartMilestone={onStartMilestone}
                       onSendReminder={onSendReminder}
-                      onSendInvoice={onSendInvoice}
                       onOpenViewPicture={onOpenViewPicture}
                       onMarkasNotRequired={onMarkasNotRequired}
                     />
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             </CollapsibleContent>
           </div>
         </Collapsible>

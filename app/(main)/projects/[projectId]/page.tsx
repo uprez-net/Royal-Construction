@@ -5,6 +5,8 @@ import { ProjectDetailScreen } from "@/components/projects/project-detail-screen
 import { getProjectById } from "@/lib/data/projects";
 import ProjectDetailLoading from "./loading";
 import type { Metadata } from "next";
+import { getUserByClerkIdCached } from "@/lib/data/user";
+import { auth } from "@clerk/nextjs/server";
 
 export async function generateMetadata({
   params,
@@ -17,11 +19,11 @@ export async function generateMetadata({
   if (project) {
     return {
       title: `${project.name}, ${project.location}`,
-      description: `Details for project #${project.name}, ${project.location}.`,
+      description: `Project details for ${project.name}, ${project.location}.`,
     };
   } else {
     return {
-      title: `Project Not Found`,
+      title: `Project not found`,
       description: `The requested project could not be found.`,
     };
   }
@@ -33,13 +35,16 @@ async function ProjectDetailContent({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const project = await getProjectById(projectId);
+  const [project, user] = await Promise.all([
+    getProjectById(projectId),
+    auth().then(({ userId }) => (userId ? getUserByClerkIdCached(userId) : null)),
+  ]);
 
   if (!project) {
     notFound();
   }
 
-  return <ProjectDetailScreen project={project} />;
+  return <ProjectDetailScreen project={project} role={user!.role} />;
 }
 
 export default function ProjectDetailPage({

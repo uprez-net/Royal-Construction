@@ -12,8 +12,6 @@ import { Prisma } from "@prisma/client";
 import pLimit from "p-limit";
 import { updateTradieSchedule } from "./tradieSchedules";
 
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
-
 /**
  * Ensures the currently authenticated user is authorized to perform
  * administrative approval actions.
@@ -21,7 +19,7 @@ const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d
  * Validates that:
  * - A user is authenticated via Clerk.
  * - The authenticated user exists in the application database.
- * - The user matches the configured admin user ID.
+ * - The user has the "ADMIN" role.
  *
  * @throws {Error} If the user is not authenticated.
  * @throws {Error} If the user is not authorized to perform the action.
@@ -34,7 +32,7 @@ const authorisedForApproval = async () => {
         throw new Error("User not authenticated");
     }
     const user = await getUserByClerkIdCached(userId);
-    if (!user || user.id !== ADMIN_USER_ID) {
+    if (!user || user.role !== "ADMIN") {
         throw new Error("User not authorised for this action");
     }
 }

@@ -82,6 +82,18 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/leads?query=${encodeURIComponent(data.customerName)}`,
   }),
 
+  leadFollowupDue: (data) => ({
+    title: `Follow-up Due: LED-#${data.leadId} - ${data.customerName}`,
+    message: `Follow-up is due for ${data.customerName}`,
+    url: `/leads?leadId=${data.leadId}&action=followup`,
+  }),
+
+  leadMeetingReview: (data) => ({
+    title: `Meeting Review: LED-#${data.leadId} - ${data.customerName}`,
+    message: `Review the meeting outcome for ${data.customerName}`,
+    url: `/leads?leadId=${data.leadId}&action=meetingReview`,
+  }),
+
   projectCreated: (data) => ({
     title: `Project Created: ${data.projectName}`,
     message: `${data.projectName} has been created`,
@@ -164,6 +176,12 @@ export const notificationTemplates: NotificationTemplateFactory = {
     title: `Schedule Rejected: ${data.tradieName} (${data.trade}) for ${data.projectName}`,
     message: `The schedule for ${data.tradieName} (${data.trade}) for project ${data.projectName} on ${data.scheduledDate} has been rejected`,
     url: `/projects/${data.projectId}?activeTab=milestones`,
+  }),
+
+  contractSigned: (data) => ({
+    title: `Contract Signed: ${data.offerReference} — ${data.customerName}`,
+    message: `The building contract for ${data.siteAddress || "the project site"} is fully executed. Open the offer workspace to create the project.`,
+    url: `/offers/${data.leadId}`,
   }),
 
   milestoneStatusChanged: (data) => ({

@@ -15,6 +15,7 @@ import { updateTradiePriceThunk } from "@/lib/store/slices/tradieManagementSlice
 import { TradieRow } from "@/types/tradie";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { rateCurrency } from "@/utils/formatters";
 
 interface PriceChangeTradieModalProps {
   open: boolean;
@@ -30,22 +31,45 @@ export default function PriceChangeTradieModal({
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
 
+  const currentRate = Number(tradie.hourlyRate ?? 0);
+  const hasCurrentRate =
+    tradie.hourlyRate != null && !Number.isNaN(currentRate);
+
   const [formData, setFormData] = useState({
-    newHourlyRate: Number(tradie.hourlyRate ?? 0),
+    newHourlyRate: currentRate,
     reason: "",
   });
+
+  const isRateValid =
+    Number.isFinite(formData.newHourlyRate) && formData.newHourlyRate > 0;
+  const isRateChanged = formData.newHourlyRate !== currentRate;
+  const canSubmit =
+    !isPending &&
+    isRateValid &&
+    isRateChanged &&
+    Boolean(formData.reason.trim());
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       onClose();
       setFormData({
-        newHourlyRate: 0,
+        newHourlyRate: currentRate,
         reason: "",
       });
     }
   };
 
   const handleSubmit = async () => {
+    if (!isRateValid) {
+      toast.error("Enter a proposed rate greater than zero.");
+      return;
+    }
+
+    if (!isRateChanged) {
+      toast.error("The proposed rate matches the current rate.");
+      return;
+    }
+
     if (!formData.reason.trim()) {
       toast.error("Please provide a reason for the price change.");
       return;
@@ -60,8 +84,8 @@ export default function PriceChangeTradieModal({
         }),
       ).unwrap();
 
-      toast.success("Price change submitted successfully!");
-      onClose();
+      toast.success("Price change submitted for approval.");
+      handleOpenChange(false);
     } catch (error) {
       toast.error("Error submitting price change. Please try again.");
       console.error(error);
@@ -73,41 +97,63 @@ export default function PriceChangeTradieModal({
       <DialogContent className="sm:max-w-120">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BadgeDollarSign className="h-5 w-5 text-blue-600" />
-            Request Price Change
+            <BadgeDollarSign
+              className="h-5 w-5 text-info-ink"
+              aria-hidden="true"
+            />
+            Request price change
           </DialogTitle>
 
           <DialogDescription>
-            {tradie.name} • {tradie.trade}
+            {tradie.name} &middot; {tradie.trade}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Current Rate */}
-          <div className="rounded-lg border bg-muted/40 p-4">
+          {/* Current rate */}
+          <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
             <div className="text-xs font-medium text-muted-foreground">
-              Current Hourly Rate
+              Current hourly rate
             </div>
 
-            <div className="mt-1 text-3xl font-extrabold text-primary">
-              ${tradie.hourlyRate ?? 0}
-              <span className="ml-1 text-sm font-medium text-muted-foreground">
-                /hr
-              </span>
+            {/* Mono is reserved for actual figures; the placeholder renders as
+                prose so a missing rate does not read like recorded data. */}
+            <div
+              className={
+                hasCurrentRate
+                  ? "mt-1 font-mono text-3xl font-semibold tabular-nums text-foreground"
+                  : "mt-1 text-3xl font-semibold text-muted-foreground"
+              }
+            >
+              {hasCurrentRate ? rateCurrency.format(currentRate) : "Not set"}
+              {hasCurrentRate && (
+                <span className="ml-1 font-sans text-sm font-medium text-muted-foreground">
+                  /hr
+                </span>
+              )}
             </div>
           </div>
 
-          {/* New Rate */}
+          {/* New rate */}
           <div className="space-y-2">
-            <Label htmlFor="new-rate">Proposed New Rate ($/hr)</Label>
+            <Label htmlFor="new-rate">
+              Proposed new rate ($/hr)
+              <span className="text-destructive">
+                *<span className="sr-only"> required</span>
+              </span>
+            </Label>
 
             <Input
               id="new-rate"
               type="number"
               min={0}
               step={1}
+              required
+              className="font-mono tabular-nums"
               placeholder="e.g. 90"
               value={formData.newHourlyRate}
+              aria-invalid={!isRateValid}
+              aria-describedby="new-rate-hint"
               onChange={(e) =>
                 setFormData((prev) => ({
                   ...prev,
@@ -115,19 +161,31 @@ export default function PriceChangeTradieModal({
                 }))
               }
             />
+
+            <p id="new-rate-hint" className="text-xs text-muted-foreground">
+              {!isRateValid
+                ? "Enter a rate greater than zero."
+                : !isRateChanged
+                  ? "The proposed rate matches the current rate."
+                  : "Ready to submit for approval."}
+            </p>
           </div>
 
           {/* Reason */}
           <div className="space-y-2">
             <Label htmlFor="reason">
-              Reason for Change
-              <span className="ml-1 text-destructive">*</span>
+              Reason for change
+              <span className="text-destructive">
+                *<span className="sr-only"> required</span>
+              </span>
             </Label>
 
             <Textarea
               id="reason"
               rows={4}
-              placeholder="Explain why this price change is needed..."
+              maxLength={500}
+              required
+              placeholder="Explain why this price change is needed…"
               value={formData.reason}
               onChange={(e) =>
                 setFormData((prev) => ({
@@ -138,28 +196,37 @@ export default function PriceChangeTradieModal({
             />
           </div>
 
-          {/* Info Box */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          {/* Info box */}
+          <div className="rounded-lg bg-info-light p-3">
             <div className="flex gap-3">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-info-ink"
+                aria-hidden="true"
+              />
 
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                This request will be submitted for approval. The hourly rate
-                will only be updated once the request has been reviewed and
-                approved.
+              <p className="text-xs leading-relaxed text-foreground/80">
+                This request is submitted for approval. The hourly rate is only
+                updated once the request has been reviewed and approved.
               </p>
             </div>
           </div>
 
           {/* Footer */}
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={isPending}
+            >
               Cancel
             </Button>
 
-            <Button onClick={() => startTransition(handleSubmit)} disabled={isPending}>
-              <Send className="mr-2 h-4 w-4" />
-              Submit for Approval
+            <Button
+              onClick={() => startTransition(handleSubmit)}
+              disabled={!canSubmit}
+            >
+              <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+              {isPending ? "Submitting…" : "Submit for approval"}
             </Button>
           </div>
         </div>

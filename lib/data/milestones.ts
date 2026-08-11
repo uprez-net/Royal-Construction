@@ -16,9 +16,7 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import { createNotification } from "@/types/notification";
 import { logAction } from "./actionLog";
 import { triggerNotification } from "../notification/novu";
-
-
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
+import { getAllAdminUsersIds } from "./user";
 
 /**
  * Retrieves all milestones for a project ordered by their display order.
@@ -192,8 +190,8 @@ export async function createMilestone(projectId: string, data: MilestoneCreation
 
     await triggerNotification(
       projectName?.siteManagerId
-        ? [projectName.siteManagerId, ADMIN_USER_ID]
-        : [ADMIN_USER_ID],
+        ? [projectName.siteManagerId, ...(await getAllAdminUsersIds())]
+        : await getAllAdminUsersIds(),
       notificationPayload,
     );
 
@@ -244,7 +242,11 @@ export async function addPhotosToMilestone(projectId: string, milestoneId: strin
       fileCount: addedFiles.length,
     });
     await logAction(activityPayload);
-    await triggerNotification(projectName?.siteManagerId ? [projectName.siteManagerId, ADMIN_USER_ID] : [ADMIN_USER_ID], notificationPayload);
+    await triggerNotification(
+      projectName?.siteManagerId ?
+        [projectName.siteManagerId, ...(await getAllAdminUsersIds())] :
+        await getAllAdminUsersIds(), notificationPayload
+    );
 
     revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
   })
@@ -388,7 +390,11 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
       newStatus: normalizedUpdateData.status,
     });
     await logAction(activityPayload);
-    await triggerNotification(projectUpdate.siteManagerId ? [projectUpdate.siteManagerId, ADMIN_USER_ID] : [ADMIN_USER_ID], notificationPayload);
+    await triggerNotification(
+      projectUpdate.siteManagerId ?
+        [projectUpdate.siteManagerId, ...(await getAllAdminUsersIds())]
+        : await getAllAdminUsersIds(), notificationPayload
+    );
     revalidateTag(`project-${updated.projectId}`, CACHE_PROFILES.MEDIUM);
   })
 

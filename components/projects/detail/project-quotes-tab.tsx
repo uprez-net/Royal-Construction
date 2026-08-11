@@ -1,44 +1,106 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, Send, Download, Search, Files } from "lucide-react";
-import { StatusPill } from "@/components/common/status-pill";
+"use client";
 
+import { useMemo, useState } from "react";
+import { ExternalLink, Files, Search } from "lucide-react";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { DataTable } from "@/components/common/data-table";
+import { UploadButton } from "@/components/common/upload-button";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
 import {
   dataTimeFormat,
   formatFileSize,
   formatFileType,
 } from "@/utils/formatters";
 import { ProjectDetail } from "@/types/project";
-import { DataTable } from "@/components/common/data-table";
-import { Input } from "@/components/ui/input";
-import { useState } from "react";
-import { UploadButton } from "@/components/common/upload-button";
-import { useAppDispatch } from "@/lib/store/hooks";
-import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
 
 interface ProjectQuotesTabProps {
   project: ProjectDetail;
+  isAdmin: boolean;
 }
 
-export function ProjectQuotesTab({ project }: ProjectQuotesTabProps) {
+/**
+ * Formats an upload timestamp, tolerating both Date objects and the serialized
+ * strings that reach the client, and never rendering "Invalid Date".
+ */
+function formatUploadedAt(value: Date | string) {
+  const parsed = value instanceof Date ? value : new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? "—" : dataTimeFormat.format(parsed);
+}
+
+export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
   const dispatch = useAppDispatch();
-  const files = project.files;
+  const files = project.files.filter((file) => {
+    const isAdminOnlyFileType = file.filename.toLowerCase().includes("tender") || file.filename.toLowerCase().includes("contract");
+    if (isAdmin && isAdminOnlyFileType) {
+      return true;
+    } else if (!isAdmin && !isAdminOnlyFileType) {
+      return true;
+    }
+    return false;
+  });
   const [query, setQuery] = useState("");
 
+  const trimmedQuery = query.trim().toLowerCase();
+  const isFiltered = trimmedQuery.length > 0;
+
+  // The search box previously held state that nothing read, so typing in it did
+  // nothing. It now filters on the two fields the user can actually see.
+  const visibleFiles = useMemo(() => {
+    if (!trimmedQuery) return files;
+
+    return files.filter((file) =>
+      `${file.filename} ${formatFileType(file.fileType)}`
+        .toLowerCase()
+        .includes(trimmedQuery),
+    );
+  }, [files, trimmedQuery]);
+
+  const milestoneName = (milestoneId: string | null) => {
+    if (!milestoneId) return "—";
+
+    return (
+      project.milestones.find((milestone) => milestone.id === milestoneId)
+        ?.name ?? "—"
+    );
+  };
+
   return (
-    <Card className="border-border/80 bg-white shadow-sm transition-all hover:shadow-md rounded-xl">
-      <CardHeader className="border-b border-border/60 pb-4">
+    <Card className="rounded-xl border-border/70 bg-card shadow-sm">
+      <CardHeader className="border-b border-border/70 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-[12px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
-            Project Documents
-          </CardTitle>
-          <div className="flex gap-2">
-            <div className="relative w-full sm:w-55 transition-all focus-within:w-70">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.25 -translate-y-1/2 text-muted-foreground" />
+          <div className="space-y-1">
+            <CardTitle
+              as="h2"
+              className="text-base font-semibold text-foreground"
+            >
+              Project documents
+            </CardTitle>
+            <p
+              className="text-sm text-muted-foreground tabular-nums"
+              aria-live="polite"
+            >
+              {isFiltered
+                ? `${visibleFiles.length} of ${files.length} matching`
+                : `${files.length} ${files.length === 1 ? "document" : "documents"}`}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <Search
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
               <Input
+                type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search documents..."
-                className="pl-8 h-9 text-[12.5px] rounded-lg bg-white"
+                placeholder="Search by name or file type"
+                className="h-9 rounded-lg pl-9 text-sm"
                 aria-label="Search documents"
               />
             </div>
@@ -59,87 +121,88 @@ export function ProjectQuotesTab({ project }: ProjectQuotesTabProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-0 px-0 pb-0">
-        <div className="overflow-x-auto">
-          <DataTable
-            headers={[
-              "Document #",
-              "Name",
-              "Size",
-              "Type",
-              "Milestone",
-              "Uploaded At",
-              <div key="action" className="text-right">
-                Action
-              </div>,
-            ]}
-            rows={files.map((file, index) => [
-              <span
-                key={`${file.id}-number`}
-                className="font-semibold text-slate-900"
-              >
-                {index + 1}
-              </span>,
-              <span key={`${file.id}-name`}>{file.filename}</span>,
-              <span key={`${file.id}-size`}>
-                {formatFileSize(file.filesize)}
-              </span>,
-              <StatusPill key={`${file.id}-type`} tone={"primary"}>
-                {formatFileType(file.fileType)}
-              </StatusPill>,
-              <span key={`${file.id}-milestone`}>
-                {file.milestoneId
-                  ? project.milestones.find((m) => m.id === file.milestoneId)
-                      ?.name
-                  : "—"}
-              </span>,
-              <span key={`${file.id}-uploadedAt`}>
-                {dataTimeFormat.format(new Date(file.createdAt))}
-              </span>,
+      <CardContent className="p-4">
+        <DataTable
+          caption="Documents uploaded to this project, with size, type, linked milestone and upload time."
+          headers={["#", "Name", "Size", "Type", "Milestone", "Uploaded"]}
+          align={["end", "start", "end", "start", "start", "start"]}
+          rows={visibleFiles.map((file, index) => [
+            <span
+              key={`${file.id}-number`}
+              className="font-mono text-muted-foreground tabular-nums"
+            >
+              {index + 1}
+            </span>,
 
-              <div
-                key={`${file.id}-actions`}
-                className="flex justify-end gap-1.5"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600">
-                  <Eye className="size-3.5" />
-                </button>
+            <a
+              key={`${file.id}-name`}
+              href={file.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {file.filename}
+              <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>,
 
-                <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600">
-                  <Send className="size-3.5" />
-                </button>
+            <span
+              key={`${file.id}-size`}
+              className="font-mono text-foreground tabular-nums"
+            >
+              {formatFileSize(file.filesize)}
+            </span>,
 
-                <button className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition-all hover:border-teal-600 hover:bg-teal-50 hover:text-teal-600">
-                  <Download className="size-3.5" />
-                </button>
-              </div>,
-            ])}
-            onRowClick={(rowIndex) => {
-              const file = files[rowIndex];
+            <span
+              key={`${file.id}-type`}
+              className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground"
+            >
+              {formatFileType(file.fileType)}
+            </span>,
 
-              // handle file click
-              console.log(file);
-            }}
-            emptyState={
-              <div className="flex flex-col items-center justify-center gap-3">
-                <div className="flex size-12 items-center justify-center">
-                  <Files className="size-5 text-muted-foreground" />
-                </div>
+            <span key={`${file.id}-milestone`}>
+              {milestoneName(file.milestoneId)}
+            </span>,
 
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    No Document available yet.
-                  </p>
-
-                  <p className="text-xs text-muted-foreground">
-                    Your Project related documents will appear here.
-                  </p>
-                </div>
+            <span key={`${file.id}-uploadedAt`} className="font-mono text-sm">
+              {formatUploadedAt(file.createdAt)}
+            </span>,
+          ])}
+          emptyState={
+            <div className="mx-auto flex max-w-md flex-col items-center gap-3">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
+                <Files
+                  className="size-5 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </div>
-            }
-          />
-        </div>
+
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">
+                  {isFiltered
+                    ? "No documents match your search"
+                    : "No documents yet"}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  {isFiltered
+                    ? `Nothing matches “${query.trim()}”. Clear the search to see all ${files.length} documents.`
+                    : "Plans, quotes, permits and contracts uploaded to this project appear here."}
+                </p>
+              </div>
+
+              {isFiltered ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setQuery("")}
+                >
+                  Clear search
+                </Button>
+              ) : null}
+            </div>
+          }
+        />
       </CardContent>
     </Card>
   );

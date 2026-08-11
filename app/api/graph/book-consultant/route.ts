@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ClientSecretCredential } from '@azure/identity';
+import { fromZonedTime } from 'date-fns-tz';
 import { getGraphConfig } from '@/lib/graph/config';
 import { createLead, findLeadByEmail, updateLead } from '@/lib/data/leads';
 import type { HistoryItem } from '@/lib/leads/types';
@@ -8,6 +9,113 @@ import { render } from '@react-email/components';
 
 const NOTE_ACTION = 'NOTE';
 const NOTE_SOURCE_DETAIL = 'Book consultation form';
+
+const BOOKING_TIMEZONE = 'Australia/Sydney';
+const SLOT_DURATION_MS = 60 * 60 * 1000;
+
+// calendarView's boundary behaviour is not documented, so the window is padded
+// and the overlap decided here. A day of padding catches long and all-day
+// events that begin before the slot and run into it.
+const CONFLICT_WINDOW_PAD_MS = 24 * 60 * 60 * 1000;
+
+// showAs values that mean the calendar owner is genuinely unavailable. 'free'
+// and 'workingElsewhere' deliberately do not block.
+const BLOCKING_SHOW_AS = new Set(['busy', 'oof', 'tentative']);
+
+interface GraphDateTime {
+  dateTime?: string;
+  timeZone?: string;
+}
+
+interface CalendarViewEvent {
+  subject?: string;
+  start?: GraphDateTime;
+  end?: GraphDateTime;
+  isCancelled?: boolean;
+  showAs?: string;
+}
+
+interface CalendarViewPage {
+  value?: CalendarViewEvent[];
+  '@odata.nextLink'?: string;
+}
+
+// Graph hands back a naive wall clock plus a separate timeZone field. Passing
+// that straight to new Date() reinterprets it as server-local — on a UTC host
+// that silently shifts every Sydney event by 10-11 hours.
+function parseGraphDateTime(value?: GraphDateTime): Date | null {
+  const dateTime = value?.dateTime;
+  if (!dateTime) return null;
+
+  const parsed = /(?:Z|[+-]\d{2}:?\d{2})$/.test(dateTime)
+    ? new Date(dateTime)
+    : fromZonedTime(dateTime, value?.timeZone || 'UTC');
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+// Returns the subject of the first event overlapping the slot, or null if the
+// slot is free. Throws if availability cannot be established — the caller must
+// treat that as "do not book".
+async function findConflictingEvent(
+  accessToken: string,
+  senderUpn: string,
+  slotStart: Date,
+  slotEnd: Date,
+): Promise<string | null> {
+  const windowStart = new Date(slotStart.getTime() - CONFLICT_WINDOW_PAD_MS);
+  const windowEnd = new Date(slotEnd.getTime() + CONFLICT_WINDOW_PAD_MS);
+
+  // No Prefer: outlook.timezone here, deliberately. The header never affects how
+  // the window parameters are read (they carry their own offset via toISOString),
+  // and omitting it makes Graph return start/end in UTC, which parses without
+  // ambiguity. $filter is undocumented on calendarView, so cancelled and
+  // non-blocking events are filtered below rather than in the query.
+  let nextUrl: string | undefined =
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(senderUpn)}/calendar/calendarView` +
+    `?startDateTime=${encodeURIComponent(windowStart.toISOString())}` +
+    `&endDateTime=${encodeURIComponent(windowEnd.toISOString())}` +
+    `&$select=subject,start,end,isCancelled,showAs&$top=1000`;
+
+  let pagesFetched = 0;
+
+  while (nextUrl && pagesFetched < 10) {
+    const response = await fetch(nextUrl, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`calendarView returned ${response.status}: ${await response.text()}`);
+    }
+
+    const page = (await response.json()) as CalendarViewPage;
+
+    for (const event of page.value ?? []) {
+      if (event.isCancelled) continue;
+      if (event.showAs && !BLOCKING_SHOW_AS.has(event.showAs)) continue;
+
+      const eventStart = parseGraphDateTime(event.start);
+      const eventEnd = parseGraphDateTime(event.end);
+      if (!eventStart || !eventEnd) continue;
+
+      // Half-open overlap: a 10:00-11:00 event must not block an 11:00 booking.
+      if (eventStart < slotEnd && eventEnd > slotStart) {
+        return event.subject || '(untitled event)';
+      }
+    }
+
+    nextUrl = page['@odata.nextLink'];
+    pagesFetched += 1;
+  }
+
+  if (nextUrl) {
+    throw new Error('calendarView paging did not terminate; availability is unverified.');
+  }
+
+  return null;
+}
 
 const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
 const toTimeOnly = (date: Date) => date.toTimeString().slice(0, 5);
@@ -47,7 +155,14 @@ async function upsertBookingNotes({
   if (existingLead) {
     const updatedHistory = upsertNoteHistory(existingLead.history, noteEntry);
     const updatedNotes = notes.length > 0 ? notes : existingLead.notes;
-    await updateLead(existingLead.id, { notes: updatedNotes, stage: 'Meeting Scheduled', history: updatedHistory });
+    await updateLead(existingLead.id, {
+      notes: updatedNotes,
+      stage: 'Meeting Scheduled',
+      meetingDate: now.toISOString(),
+      meetingTime: toTimeOnly(now),
+      meetingMode: 'Online',
+      history: updatedHistory,
+    });
     return;
   }
 
@@ -63,6 +178,9 @@ async function upsertBookingNotes({
       budget: 'Not Discussed',
       type: ['Not Specified'],
       notes,
+      meetingDate: now.toISOString(),
+      meetingTime: toTimeOnly(now),
+      meetingMode: 'Online',
       followupNotes: '',
       urgent: false,
       history: [
@@ -111,6 +229,36 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     const graphStartStr = formatToGraphDateTime(start);
     const graphEndStr = formatToGraphDateTime(endDateTimeObj);
+
+    // The event below is created as a wall-clock time in Australia/Sydney, so
+    // the conflict check has to compare the same instant — not the server-local
+    // reading of the incoming string.
+    const slotStart = fromZonedTime(graphStartStr, BOOKING_TIMEZONE);
+    const slotEnd = new Date(slotStart.getTime() + SLOT_DURATION_MS);
+
+    // The booking UI is not a reliable guard: it can only reflect what it was
+    // able to load. This is the check that actually prevents a double booking,
+    // so an unverifiable calendar refuses the booking rather than risking one.
+    let conflict: string | null;
+    try {
+      conflict = await findConflictingEvent(accessToken, config.senderUpn, slotStart, slotEnd);
+    } catch (availabilityError) {
+      console.error('Could not verify calendar availability:', availabilityError);
+      return NextResponse.json(
+        { error: 'We could not confirm that time is still free. Please try again.' },
+        { status: 503 }
+      );
+    }
+
+    if (conflict) {
+      // Deliberately not logging the conflicting event's subject — meeting
+      // titles carry client names and other personal detail.
+      console.warn(`Rejected booking at ${slotStart.toISOString()}; slot already occupied.`);
+      return NextResponse.json(
+        { error: 'That time has just been taken. Please choose another slot.' },
+        { status: 409 }
+      );
+    }
 
 
     // Helper: Format Date object to requested email display strings

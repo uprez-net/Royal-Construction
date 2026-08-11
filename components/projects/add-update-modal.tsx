@@ -3,14 +3,12 @@
 import {
   SubmitEvent,
   useEffect,
+  useId,
   useRef,
   useState,
   useTransition,
 } from "react";
-import {
-  Loader2,
-  Send,
-} from "lucide-react";
+import { AlertCircle, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { upload } from "@vercel/blob/client";
 
@@ -23,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -45,6 +44,14 @@ import { ClientPayload } from "@/utils/validators";
 import { buildBlobPath } from "@/utils/formatters";
 
 const maxFiles = 5;
+
+function RequiredMark() {
+  return (
+    <span className="ml-0.5 text-destructive-ink" aria-hidden="true">
+      *
+    </span>
+  );
+}
 
 export function AddUpdateModal({
   projectId,
@@ -84,6 +91,10 @@ export function AddUpdateModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isTransitioning, startTransition] = useTransition();
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
+  const fieldPrefix = useId();
+  const milestoneFieldId = `${fieldPrefix}-milestone`;
+  const notesFieldId = `${fieldPrefix}-notes`;
+  const errorId = `${fieldPrefix}-error`;
 
   const isSubmitting =
     mutation.status === "pending" || uploading || isTransitioning;
@@ -247,7 +258,7 @@ export function AddUpdateModal({
       });
     } finally {
       setUploading(false);
-      if(success) {        
+      if (success) {
         resetForm();
         onOpenChange(false);
       }
@@ -256,29 +267,49 @@ export function AddUpdateModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[60vh] overflow-y-auto rounded-[14px] border-border bg-white p-0 shadow-lg sm:max-w-150">
-        <DialogHeader className="flex flex-row items-center justify-between border-b border-border px-6 pb-4 pt-5">
-          <div>
-            <DialogTitle className="text-base font-bold">
-              Add Site Update
-            </DialogTitle>
-            <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
-              Uploads happen directly from the browser and publish immediately
-              after the files finish.
-            </DialogDescription>
-          </div>
+      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-[14px] border-border bg-card p-0 shadow-lg sm:max-w-150">
+        <DialogHeader className="border-b border-border px-6 pb-4 pt-5">
+          <DialogTitle className="text-lg font-semibold text-foreground">
+            Add site update
+          </DialogTitle>
+          <DialogDescription className="mt-0.5 text-sm text-muted-foreground">
+            Photos upload directly from the browser and publish with the update.
+            Fields marked * are required.
+          </DialogDescription>
         </DialogHeader>
 
         <form
           className="space-y-4 px-6 pb-6 pt-5"
-          onSubmit={(data) =>
-            startTransition(async () => await handleSubmit(data))
-          }
+          noValidate
+          onSubmit={(data) => {
+            if (isSubmitting) {
+              data.preventDefault();
+              return;
+            }
+            startTransition(async () => await handleSubmit(data));
+          }}
         >
+          {errorMessage ? (
+            <div
+              id={errorId}
+              role="alert"
+              className="flex items-start gap-2 rounded-[12px] border border-destructive/40 bg-destructive-light px-3.5 py-3 text-sm text-destructive-ink"
+            >
+              <AlertCircle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
+              <p>{errorMessage}</p>
+            </div>
+          ) : null}
+
           <div className="space-y-1.5">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Label
+              htmlFor={milestoneFieldId}
+              className="text-xs font-medium text-foreground"
+            >
               Milestone
-            </label>
+            </Label>
             <Select
               disabled={initialMilestoneId !== undefined}
               value={milestoneId ?? "__none__"}
@@ -286,8 +317,11 @@ export function AddUpdateModal({
                 setMilestoneId(value === "__none__" ? undefined : value)
               }
             >
-              <SelectTrigger className="h-9 w-full rounded-[7px] bg-white px-3 py-2 text-[13px] transition-all focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10">
-                <SelectValue placeholder="Optional" />
+              <SelectTrigger
+                id={milestoneFieldId}
+                className="h-9 w-full rounded-[7px] bg-background px-3 py-2 text-sm"
+              >
+                <SelectValue placeholder="No milestone" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">No milestone</SelectItem>
@@ -301,26 +335,33 @@ export function AddUpdateModal({
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Label
+              htmlFor={notesFieldId}
+              className="text-xs font-medium text-foreground"
+            >
               Description
-            </label>
+              <RequiredMark />
+            </Label>
             <Textarea
+              id={notesFieldId}
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="Describe the progress, issues, next steps..."
+              placeholder="Slab poured, waiting on the plumber to sign off"
               rows={4}
               required
-              className="min-h-24 resize-y rounded-[7px] bg-white px-3 py-2 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10"
+              aria-invalid={Boolean(errorMessage) && !notes.trim()}
+              aria-describedby={errorMessage ? errorId : undefined}
+              className="min-h-24 resize-y rounded-[7px] bg-background px-3 py-2 text-sm"
             />
           </div>
 
           <div className="space-y-1.5">
             <UploadDropzone
-              label="Attach Photos"
+              label="Attach photos"
               summary={
                 queuedFiles.length > 0
                   ? `${queuedFiles.length} photo${queuedFiles.length === 1 ? "" : "s"} selected (${completedUploadCount} uploaded)`
-                  : "Click to upload photos (max 5)"
+                  : `Select photos to upload (max ${maxFiles})`
               }
               helperText="Images upload directly from the browser and stay visible below while they sync."
               files={queuedFiles}
@@ -333,32 +374,31 @@ export function AddUpdateModal({
             />
           </div>
 
-          {errorMessage ? (
-            <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {errorMessage}
-            </div>
-          ) : null}
-
           <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
             <Button
               type="button"
               variant="outline"
+              disabled={isSubmitting}
               onClick={() => handleOpenChange(false)}
-              className="h-9 rounded-[7px] px-3.5 text-[12.5px] font-medium transition-all hover:border-teal-600 hover:bg-slate-50 hover:text-teal-600"
+              className="h-9 rounded-[7px] px-3.5 text-sm font-medium"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting || !notes.trim()}
-              className="h-9 rounded-[7px] bg-[#0D9488] px-3.5 text-[12.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#0F766E] hover:shadow-[0_4px_12px_rgba(13,148,136,0.3)]"
+              aria-busy={isSubmitting}
+              className="h-9 rounded-[7px] bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               {isSubmitting ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2
+                  className="mr-1.5 size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
               ) : (
-                <Send className="mr-1.5 size-4" />
+                <Send className="mr-1.5 size-4" aria-hidden="true" />
               )}
-              Post Update & Notify
+              {isSubmitting ? "Posting update…" : "Post update"}
             </Button>
           </div>
         </form>

@@ -11,15 +11,19 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Square, Star } from "lucide-react";
-import { currency } from "@/utils/formatters";
-import { randomColourHexGenerator } from "@/utils/generator";
+import { rateCurrency } from "@/utils/formatters";
+import {
+  TRADE_AVATAR_CLASS,
+  TRADE_ICON_TILE_CLASS,
+} from "@/constants/tradeChip";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TradieActionsDropdown } from "../tradie-actions";
 import {
   convertCategoryToTradieType,
   type TradieType,
 } from "@/utils/normalize-tradie-type";
-import Link from "next/link";
 
 export function TradieList({
   filteredTradies,
@@ -55,11 +59,11 @@ export function TradieList({
         return (
           <TradieCategoryAccordion
             key={category.category}
-            icon={<Icon className="h-5 w-5" />}
-            color={randomColourHexGenerator(
-              TRADIE_TYPES[category.category as TradieType],
-            )}
-            name={TRADIE_TYPES[category.category as TradieType]}
+            icon={<Icon className="size-5" aria-hidden="true" />}
+            name={
+              TRADIE_TYPES[category.category as TradieType] ??
+              category.category
+            }
             tradieCount={category.tradies.length}
             tradies={category.tradies}
           />
@@ -71,7 +75,6 @@ export function TradieList({
 
 interface CategoryCardProps {
   icon: React.ReactNode;
-  color: string; // hex color code
   name: string;
   tradieCount: number;
   tradies: TradieRow[];
@@ -79,38 +82,31 @@ interface CategoryCardProps {
 
 function TradieCategoryAccordion({
   icon,
-  color,
   name,
   tradieCount,
   tradies,
 }: CategoryCardProps) {
   return (
-    <AccordionItem value={name} className="rounded-xl border px-4" id={name}>
-      <Link href={`#${name}`}>
-        <AccordionTrigger className="hover:no-underline">
-          <div className="flex w-full items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-lg"
-              style={{
-                color,
-                backgroundColor: `${color}15`,
-              }}
-            >
-              {icon}
-            </div>
-            <span className="font-semibold">{name}</span>
+    <AccordionItem
+      value={name}
+      className="rounded-lg border border-border/70 bg-card px-4 shadow-sm"
+    >
+      <AccordionTrigger className="hover:no-underline">
+        <div className="flex w-full items-center gap-3">
+          {/* Icon carries trade identity; see constants/tradeChip.ts. */}
+          <div className={cn(TRADE_ICON_TILE_CLASS, "size-10")}>{icon}</div>
+          <span className="font-medium text-foreground">{name}</span>
 
-            <Badge variant="secondary" className="ml-auto mr-4">
-              {tradieCount} tradies
-            </Badge>
-          </div>
-        </AccordionTrigger>
-      </Link>
+          <Badge variant="secondary" className="ml-auto mr-4">
+            {tradieCount} tradie{tradieCount === 1 ? "" : "s"}
+          </Badge>
+        </div>
+      </AccordionTrigger>
 
       <AccordionContent>
         <div className="space-y-2 pb-2">
           {tradies.map((tradie) => (
-            <TradieListItem key={tradie.id} tradie={tradie} color={color} />
+            <TradieListItem key={tradie.id} tradie={tradie} />
           ))}
         </div>
       </AccordionContent>
@@ -118,13 +114,7 @@ function TradieCategoryAccordion({
   );
 }
 
-function TradieListItem({
-  tradie,
-  color,
-}: {
-  tradie: TradieRow;
-  color: string;
-}) {
+function TradieListItem({ tradie }: { tradie: TradieRow }) {
   const router = useRouter();
   const initials = tradie.name
     .split(" ")
@@ -133,32 +123,43 @@ function TradieListItem({
     .slice(0, 2)
     .toUpperCase();
 
+  const rate =
+    tradie.hourlyRate !== null && Number.isFinite(parseFloat(tradie.hourlyRate))
+      ? rateCurrency.format(parseFloat(tradie.hourlyRate))
+      : "—";
+
+  // The row also holds an actions menu, so the wrapper must not be a button
+  // (spec §3): the keyboard path is the name link, and the row click is a
+  // mouse-only convenience over the same destination.
   const handleClick = () => {
     router.push(`/tradie-management/${tradie.id}`);
   };
 
   return (
     <Card
-      className="p-3 transition-colors hover:border-primary cursor-pointer"
+      className="cursor-pointer p-3 transition-colors hover:bg-muted/40"
       onClick={handleClick}
     >
       <div className="flex items-center gap-4">
-        <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-          style={{
-            color,
-            backgroundColor: `${color}15`,
-          }}
-        >
+        <div className={cn(TRADE_AVATAR_CLASS, "size-10 text-sm")}>
           {initials}
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate font-medium">{tradie.name}</p>
+            <Link
+              href={`/tradie-management/${tradie.id}`}
+              className="truncate font-medium text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {tradie.name}
+            </Link>
 
             {tradie.isFavourite && (
-              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+              <Star
+                className="size-4 shrink-0 fill-warning text-warning"
+                role="img"
+                aria-label="Favourite"
+              />
             )}
           </div>
 
@@ -166,19 +167,21 @@ function TradieListItem({
         </div>
 
         <div className="hidden min-w-20 text-center sm:block">
-          <p className="font-semibold">
-            {tradie.hourlyRate
-              ? currency.format(parseFloat(tradie.hourlyRate))
-              : "-"}
+          <p className="font-mono text-sm font-medium tabular-nums text-foreground">
+            {rate}
           </p>
           <p className="text-xs text-muted-foreground">/hr</p>
         </div>
 
         <div className="hidden min-w-15 text-center md:block">
-          <p className="font-semibold">{tradie.jobsCompleted}</p>
+          <p className="text-sm font-medium tabular-nums text-foreground">
+            {tradie.jobsCompleted}
+          </p>
           <p className="text-xs text-muted-foreground">jobs</p>
         </div>
 
+        {/* The dropdown stops propagation on its own trigger and renders its
+            menu in a portal, so opening it never triggers the row click. */}
         <TradieActionsDropdown tradieRow={tradie} />
       </div>
     </Card>

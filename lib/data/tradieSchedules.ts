@@ -10,21 +10,20 @@ import { currency, dateFormat } from "@/utils/formatters";
 import { after } from "next/server"
 import { TradieScheduleListItem } from "@/types/project";
 import { auth } from "@clerk/nextjs/server";
-import { getUserByClerkIdCached } from "./user";
+import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
 import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
 import { calculateScheduleTotalCost as calculateTotalCost } from "@/utils/calculations";
+import { get } from "@vercel/blob";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
   tradie: Tradie;
   project: Project & { siteManager: User | null };
   milestone: Milestone | null;
 }
-
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "196994eb-5059-4fe8-ac4e-7c6d9934bbcf";
 
 /**
  * Converts a Prisma tradie schedule with its related entities into a
@@ -92,7 +91,7 @@ const userHasAccessToSchedule = async (projectId: string) => {
   if (!project) {
     throw new Error("Project not found");
   }
-  if (project.siteManagerId !== user.id && user.id !== ADMIN_USER_ID) {
+  if (project.siteManagerId !== user.id && user.role !== "ADMIN") {
     throw new Error("User does not have access to this schedule");
   }
 
@@ -237,11 +236,38 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
         });
         await logAction(activityLogEntry);
         await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
-        const emailContent = generateTradieOutreachEmail(convertToTradieScheduleListItem(schedule));
+        const emailContent = inputs.find(input => input.tradieId === schedule.tradieId)!.emailContent;
+        const attachments: { name: string; contentBytes: string }[] = [];
+        for (const attachment of emailContent.attachments) {
+          const blob = await get(attachment.url, { access: "public" });
+
+          if (!blob?.stream) continue;
+
+          const reader = blob.stream.getReader();
+          const chunks: Uint8Array[] = [];
+
+          while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) break;
+            if (value) chunks.push(value);
+          }
+
+          const buffer = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+
+          attachments.push({
+            name: attachment.name,
+            contentBytes: buffer.toString("base64"),
+          });
+        }
         await sendEmail({
           to: schedule.tradie.email,
           subject: emailContent.subject,
-          body: emailContent.html,
+          body: emailContent.body,
+          attachments: attachments.length > 0 ? attachments.map(att => ({
+            name: att.name,
+            contentBytes: att.contentBytes,
+          })) : undefined,
         });
       }
 
@@ -346,7 +372,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
         await logAction(activityLogEntry);
-        await triggerNotification([ADMIN_USER_ID], notificationPayload);
+        await triggerNotification(await getAllAdminUsersIds(), notificationPayload);
       }
       else if (updates.status === TradieScheduleStatus.QUOTE_RECEIVED) {
         const activityLogEntry = createActivityLogEntry("tradieScheduleQuoted", {

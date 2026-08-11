@@ -18,7 +18,14 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { updateProjectMilestoneStatus } from "@/lib/store/slices/projectsSlice";
 import { MilestoneUpdateData, milestoneUpdateSchema } from "@/utils/validators";
 import type { MilestoneStatus } from "@prisma/client";
-import { useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,14 +41,18 @@ interface UpdateMilestoneModalProps {
   status?: MilestoneStatus;
   isOpen: boolean;
   onClose: () => void;
+  isAdmin: boolean;
 }
 
-const initialFormState: MilestoneUpdateData = {
-  status: "PENDING",
-  startDate: undefined,
-  actualDate: undefined,
-  spend: undefined,
-};
+/** `yyyy-MM-dd` for a nullable date field, or `undefined` when unset. */
+function toDateInputValue(value: Date | string | null | undefined) {
+  if (!value) return undefined;
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? undefined
+    : format(parsed, "yyyy-MM-dd");
+}
 
 const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Pending", value: "PENDING" },
@@ -60,12 +71,23 @@ const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
 type MilestoneUpdateErrors = Partial<Record<keyof MilestoneUpdateData, string>>;
 
 const inputClassName =
-  "h-10 rounded-[10px] border-border/80 bg-slate-50/40 px-3 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10";
+  "h-10 rounded-[10px] border-border/80 bg-background px-3 font-mono text-sm tabular-nums";
 
 const selectTriggerClassName =
-  "h-10 w-full rounded-[10px] border-border/80 bg-slate-50/40 px-3 text-[13px] transition-all focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10";
+  "h-10 w-full rounded-[10px] border-border/80 bg-background px-3 text-sm";
+
+const labelClassName = "text-xs font-medium text-foreground";
+
+function RequiredMark() {
+  return (
+    <span className="ml-0.5 text-destructive-ink" aria-hidden="true">
+      *
+    </span>
+  );
+}
 
 export default function UpdateMilestoneModal({
+  isAdmin,
   milestoneId,
   projectId,
   status,
@@ -98,23 +120,55 @@ export default function UpdateMilestoneModal({
     return totalSpend;
   }, [project, milestoneId]);
   const [isPending, startTransition] = useTransition();
-  const [formState, setFormState] = useState<MilestoneUpdateData>({
-    ...initialFormState,
-    status: status ?? "PENDING",
-    startDate: milestone?.startDate
-      ? format(milestone.startDate, "yyyy-MM-dd")
-      : undefined,
-    spend: spend,
-  });
+
+  // Derived from the milestone as it stands right now, so reopening the dialog
+  // never shows the previous session's dates or spend.
+  const buildFormState = useCallback((): MilestoneUpdateData => {
+    const currentStatus = status ?? milestone?.status ?? "PENDING";
+
+    return {
+      status: currentStatus,
+      startDate: toDateInputValue(milestone?.startDate),
+      actualDate:
+        toDateInputValue(milestone?.actualDate) ??
+        (currentStatus === "DONE"
+          ? format(new Date(), "yyyy-MM-dd")
+          : undefined),
+      spend: spend > 0 ? spend : undefined,
+    };
+  }, [milestone, spend, status]);
+
+  const [formState, setFormState] =
+    useState<MilestoneUpdateData>(buildFormState);
   const [fieldErrors, setFieldErrors] = useState<MilestoneUpdateErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Re-seed on open, on a milestone switch, and once the milestone arrives in
+  // the store (the first render can happen before `activeProject` is loaded,
+  // which is how an empty start date and a zero spend used to stick). Keyed so
+  // later store updates cannot wipe out edits made while the dialog is open.
+  const hydrationKey = isOpen
+    ? `${milestoneId}|${milestone ? "loaded" : "pending"}`
+    : null;
+  const hydratedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (hydrationKey === null) {
+      hydratedKeyRef.current = null;
+      return;
+    }
+
+    if (hydratedKeyRef.current === hydrationKey) return;
+
+    hydratedKeyRef.current = hydrationKey;
+    setFormState(buildFormState());
+    setFieldErrors({});
+    setSubmitError(null);
+  }, [buildFormState, hydrationKey]);
+
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      setFormState({
-        ...initialFormState,
-        status: status ?? milestone?.status ?? "PENDING",
-      });
+      setFormState(buildFormState());
       setFieldErrors({});
       setSubmitError(null);
       onClose();
@@ -142,7 +196,7 @@ export default function UpdateMilestoneModal({
       setSubmitError(null);
       const validatedData = milestoneUpdateSchema.safeParse({
         ...data,
-        spend: data.spend && data.spend > 0 ? data.spend : undefined,
+        spend: data.spend && data.spend > 0 ? data.spend : status === "DONE" ? 0 : undefined,
       });
       if (!validatedData.success) {
         const nextFieldErrors = validatedData.error.issues.reduce(
@@ -159,7 +213,6 @@ export default function UpdateMilestoneModal({
           },
           {} as MilestoneUpdateErrors,
         );
-        console.log("Validation errors:", nextFieldErrors);
         setFieldErrors(nextFieldErrors);
         setSubmitError("Review the highlighted fields and try again.");
         return;
@@ -193,48 +246,63 @@ export default function UpdateMilestoneModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[18px] border border-border/80 bg-white p-0 shadow-[0_20px_60px_rgba(15,23,42,0.18)] sm:max-w-156">
+      <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[18px] border border-border/80 bg-card p-0 shadow-lg sm:max-w-156">
         <DialogHeader className="border-b border-border/70 px-6 py-5">
-          <DialogTitle className="text-[18px] font-semibold tracking-[-0.02em] text-slate-900">
-            Update Milestone Status
+          <DialogTitle className="text-lg font-semibold text-foreground">
+            Update milestone status
           </DialogTitle>
-          <DialogDescription className="text-[13px] text-slate-500">
+          <DialogDescription className="text-sm text-muted-foreground">
             Move the milestone forward with the dates and spend required for its
-            status.
+            status. Fields marked * are required.
           </DialogDescription>
         </DialogHeader>
 
         <form
           className="space-y-5 px-6 pb-6 pt-5"
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
+            if (isPending) return;
             startTransition(async () => await handleSubmit(formState));
           }}
         >
           {submitError ? (
-            <div className="flex items-start gap-2 rounded-[12px] border border-amber-200/80 bg-amber-50 px-3.5 py-3 text-[12.5px] text-amber-900">
-              <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-[12px] border border-destructive/40 bg-destructive-light px-3.5 py-3 text-sm text-destructive-ink"
+            >
+              <AlertCircle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
               <p>{submitError}</p>
             </div>
           ) : null}
 
           <div className="grid gap-4">
             <div className="space-y-1.5">
-              <Label
-                htmlFor="status"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-              >
+              <Label htmlFor="status" className={labelClassName}>
                 Status
+                <RequiredMark />
               </Label>
               <Select
                 disabled={status === "ACTIVE" || status === "NOT_REQUIRED"}
                 value={formState.status}
                 onValueChange={(value) => {
-                  handleFormChange("status", value)
-                  if(value === "DONE") handleFormChange("actualDate", format(new Date(), "yyyy-MM-dd"))
+                  handleFormChange("status", value);
+                  if (value === "DONE") {
+                    handleFormChange(
+                      "actualDate",
+                      format(new Date(), "yyyy-MM-dd"),
+                    );
+                  }
                 }}
               >
-                <SelectTrigger className={selectTriggerClassName}>
+                <SelectTrigger
+                  id="status"
+                  aria-describedby="status-hint"
+                  className={selectTriggerClassName}
+                >
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -253,22 +321,21 @@ export default function UpdateMilestoneModal({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-slate-500">
-                Select the next status for the milestone
+              <p id="status-hint" className="text-xs text-muted-foreground">
+                Only the statuses this milestone can move to are selectable.
               </p>
             </div>
 
             {(formState.status === "ACTIVE" || formState.status === "DONE") && (
               <div className="space-y-1.5">
-                <Label
-                  htmlFor="startDate"
-                  className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-                >
-                  Start Date
+                <Label htmlFor="startDate" className={labelClassName}>
+                  Start date
+                  <RequiredMark />
                 </Label>
                 <Input
                   id="startDate"
                   type="date"
+                  required
                   className={inputClassName}
                   value={formState.startDate || ""}
                   disabled={formState.status === "DONE"}
@@ -288,28 +355,31 @@ export default function UpdateMilestoneModal({
               </div>
             )}
             {formState.status === "DONE" && (
-              <div className="space-y-4 rounded-[14px] border border-border/70 bg-slate-50/50 p-4">
+              <div className="space-y-4 rounded-[14px] border border-border/70 bg-muted/50 p-4">
                 <div className="space-y-1.5">
-                  <Label
-                    htmlFor="actualDate"
-                    className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-                  >
-                    Completed On
+                  <Label htmlFor="actualDate" className={labelClassName}>
+                    Completed on
                   </Label>
                   <Input
                     id="actualDate"
                     type="date"
                     disabled
+                    readOnly
                     className={inputClassName}
                     value={formState.actualDate || ""}
-                    onChange={(e) =>
-                      handleFormChange("actualDate", e.target.value)
+                    aria-describedby={
+                      fieldErrors.actualDate
+                        ? "actualDate-error actualDate-hint"
+                        : "actualDate-hint"
                     }
                     aria-invalid={Boolean(fieldErrors.actualDate)}
-                    aria-describedby={
-                      fieldErrors.actualDate ? "actualDate-error" : undefined
-                    }
                   />
+                  <p
+                    id="actualDate-hint"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Set to today automatically when a milestone is completed.
+                  </p>
                   {fieldErrors.actualDate ? (
                     <p
                       id="actualDate-error"
@@ -319,38 +389,54 @@ export default function UpdateMilestoneModal({
                     </p>
                   ) : null}
                 </div>
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="spend"
-                    className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-                  >
-                    Money Spent
-                  </Label>
-                  <Input
-                    id="spend"
-                    type="text"
-                    className={inputClassName}
-                    placeholder="Enter amount spent"
-                    value={
-                      formState.spend && formState.spend > 0
-                        ? currency.format(formState.spend)
-                        : ""
-                    }
-                    onChange={(e) =>
-                      handleFormChange("spend", parseCurrency(e.target.value))
-                    }
-                    disabled={spend > 0}
-                    aria-invalid={Boolean(fieldErrors.spend)}
-                    aria-describedby={
-                      fieldErrors.spend ? "spend-error" : undefined
-                    }
-                  />
-                  {fieldErrors.spend ? (
-                    <p id="spend-error" className="text-xs text-destructive">
-                      {fieldErrors.spend}
-                    </p>
-                  ) : null}
-                </div>
+                {isAdmin && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="spend" className={labelClassName}>
+                      Money spent
+                      <RequiredMark />
+                    </Label>
+                    <Input
+                      id="spend"
+                      type="text"
+                      inputMode="decimal"
+                      required
+                      className={inputClassName}
+                      placeholder="$0"
+                      value={
+                        formState.spend && formState.spend > 0
+                          ? currency.format(formState.spend)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        handleFormChange("spend", parseCurrency(e.target.value))
+                      }
+                      disabled={spend > 0}
+                      aria-invalid={Boolean(fieldErrors.spend)}
+                      aria-describedby={
+                        [
+                          fieldErrors.spend ? "spend-error" : null,
+                          spend > 0 ? "spend-hint" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || undefined
+                      }
+                    />
+                    {spend > 0 ? (
+                      <p
+                        id="spend-hint"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Calculated from the tradie schedules booked against this
+                        milestone.
+                      </p>
+                    ) : null}
+                    {fieldErrors.spend ? (
+                      <p id="spend-error" className="text-xs text-destructive">
+                        {fieldErrors.spend}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -359,22 +445,27 @@ export default function UpdateMilestoneModal({
             <Button
               type="button"
               variant="outline"
+              disabled={isPending}
               onClick={() => handleOpenChange(false)}
-              className="h-10 rounded-[10px] px-4 text-[12.5px] font-medium transition-all hover:border-teal-600 hover:bg-slate-50 hover:text-teal-600"
+              className="h-10 rounded-[10px] px-4 text-sm font-medium"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isPending}
-              className="h-10 rounded-[10px] bg-[#0D9488] px-4 text-[12.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#0F766E] hover:shadow-[0_6px_14px_rgba(13,148,136,0.26)]"
+              aria-busy={isPending}
+              className="h-10 rounded-[10px] bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               {isPending ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2
+                  className="mr-1.5 size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
               ) : (
-                <Edit className="mr-1.5 size-4" />
+                <Edit className="mr-1.5 size-4" aria-hidden="true" />
               )}
-              Update Milestone
+              {isPending ? "Updating milestone…" : "Update milestone"}
             </Button>
           </div>
         </form>

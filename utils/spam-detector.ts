@@ -211,6 +211,18 @@ export interface EmailHeaders {
   from?: string;
   replyTo?: string;
   listUnsubscribe?: string;
+  /**
+   * RFC 3834. "auto-replied" / "auto-generated" marks machine-sent mail —
+   * bounces and out-of-office notices both set it. Absent on human mail.
+   */
+  autoSubmitted?: string;
+  /**
+   * RFC 3464 requires a delivery status notification to carry an empty
+   * return path ("<>"), so this is the strongest single bounce signal.
+   */
+  returnPath?: string;
+  /** "multipart/report; report-type=delivery-status" on a bounce. */
+  contentType?: string;
 }
 
 /**

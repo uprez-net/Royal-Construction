@@ -82,10 +82,65 @@ enum AnnotationStatus {
 }
 
 enum OfferStatus {
+  // Original values kept in place so the migration only ADDs new members.
+  // ACCEPTED is legacy — existing rows are migrated to AGREED; the value is
+  // retained to avoid an enum-value drop, remove it in a later migration.
   SENT
   PENDING
   ACCEPTED
   REJECTED
+  // New lifecycle members (ADR 0002)
+  AGREED
+  TENDER_DRAFT
+  TENDER_SENT
+  TENDER_SIGNED
+  CONTRACT_DRAFT
+  CONTRACT_SENT
+  CONTRACT_SIGNED
+  PROJECT
+  SUPERSEDED
+  // Customer declined the DocuSign envelope — a revise-ready stage the operator
+  // clears by creating a new revision (issue #89). The DocuSign decline reason
+  // is recorded on the matching OfferStatusEvent.
+  TENDER_DECLINED
+  CONTRACT_DECLINED
+  // Offer-document acceptance signing (ADR 0004). The customer signs the Offer
+  // document via DocuSign as a formal acceptance BEFORE the legal Tender:
+  // OFFER_SENT (out for signature) → OFFER_SIGNED (all customers signed) then the
+  // estimator marks AGREED to generate the Tender; OFFER_DECLINED is revise-ready.
+  // Customer-only — the builder does not sign the acceptance.
+  OFFER_SENT
+  OFFER_SIGNED
+  OFFER_DECLINED
+}
+
+enum EnvelopeDocType {
+  TENDER
+  CONTRACT
+  // The Offer document signed as a customer acceptance (ADR 0004).
+  OFFER
+}
+
+enum EnvelopeStatus {
+  CREATED
+  SENT
+  DELIVERED
+  COMPLETED
+  VOIDED
+  DECLINED
+}
+
+enum SignerRole {
+  BUILDER
+  CUSTOMER
+}
+
+enum SignerStatus {
+  CREATED
+  SENT
+  DELIVERED
+  SIGNED
+  DECLINED
 }
 
 enum RunStatus {
@@ -145,6 +200,11 @@ model Project {
   startDate        DateTime
   estimatedEndDate DateTime
   requirements     Json?
+  // Full owner party set carried over from the offer at handoff (ADR 0003):
+  // every owner (individual or company + directors), both addresses, and
+  // per-owner contact. The primary owner is also promoted to the Customer row;
+  // this JSON preserves the co-owners the single Customer can't hold.
+  parties          Json?
 
   status    ProjectStatus @default(ACTIVE)
   createdAt DateTime      @default(now())
@@ -417,6 +477,10 @@ model Customer {
   name  String
   email String @unique
   phone String @unique
+  // Primary owner's Current Location (residential/postal address). Populated at
+  // project handoff from the offer's owners[] (ADR 0003). Nullable — legacy
+  // customers have none.
+  address String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -444,8 +508,10 @@ model User {
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
   assignedLeads       Lead[]           @relation("LeadAssignee")
+  leadHistories       LeadHistory[]    @relation("LeadHistoryAuthor")
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
+  createdOffers       Offer[]          @relation("OfferCreatedBy")
 
   @@index([email])
   @@index([phone])
@@ -461,12 +527,20 @@ model Lead {
   email    String @default("")
   location String @default("")
 
+  // Secondary client — optional second person on the same lead.
+  // Nullable ADD COLUMN, no data loss; primary name/phone/email remain the
+  // canonical client.
+  secondaryName  String?
+  secondaryEmail  String?
+  secondaryPhone  String?
+
   source       String?
   sourceDetail String?
 
-  stage     LeadStage  @default(NEW)
-  runId     String?
-  runStatus RunStatus?
+  stage      LeadStage  @default(NEW)
+  isArchived Boolean    @default(false)
+  runId      String?
+  runStatus  RunStatus?
 
   assignedId String? // <-- THE NEW FOREIGN KEY
 
@@ -481,6 +555,11 @@ model Lead {
   followupDate  DateTime?
   followupTime  String?
   followupNotes String?   @db.Text
+  meetingDate   DateTime?
+  meetingTime   String?
+  meetingMode   String?
+  followupReminderSentAt DateTime?
+  meetingReminderSentAt  DateTime?
 
   lostReason String?
 
@@ -529,6 +608,9 @@ model LeadHistory {
   leadId Int
   lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
+  authorId String?
+  author   User? @relation("LeadHistoryAuthor", fields: [authorId], references: [id])
+
   action String
   detail String @db.Text
 
@@ -539,6 +621,7 @@ model LeadHistory {
   createdAt DateTime @default(now())
 
   @@index([leadId])
+  @@index([authorId])
   @@index([type])
 }
 
@@ -547,22 +630,53 @@ model Offer {
   leadId      Int
   offerStatus OfferStatus @default(PENDING)
 
-  amount      Decimal @db.Decimal(12, 2)
-  gstAmount   Decimal @db.Decimal(12, 2)
-  totalAmount Decimal @db.Decimal(12, 2)
+  // Revision family — many offers per lead, one active. See ADR 0002.
+  baseReference  String  @default("")
+  revisionNumber Int     @default(1)
+  isActive       Boolean @default(true)
+  supersededById String?
+  supersededBy   Offer?  @relation("OfferRevisions", fields: [supersededById], references: [id], onDelete: SetNull)
+  revisions      Offer[] @relation("OfferRevisions")
+
+  createdById String?
+  createdBy   User?   @relation("OfferCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  amount              Decimal  @db.Decimal(12, 2)
+  gstAmount           Decimal  @db.Decimal(12, 2)
+  totalAmount         Decimal  @db.Decimal(12, 2)
+  contractValueIncGst Decimal? @db.Decimal(12, 2)
+
+  // Hybrid working-state: integer cents + schemaVersion; frozen at agreed.
+  stateVersion   Int   @default(0) // optimistic concurrency
+  workspaceState Json?
+  agreedSnapshot Json?
 
   sentAt     DateTime?
   acceptedAt DateTime?
 
+  // Executed (fully signed) Offer-acceptance PDF, archived to Blob by the
+  // DocuSign Connect webhook when the OFFER envelope completes (ADR 0004).
+  // Parallels Tender.executedPdfUrl / Contract.executedPdfUrl.
+  executedPdfUrl String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offerItems OfferItem[]
-  offerFiles OfferFile[]
-  lead       Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offerItems         OfferItem[]
+  offerFiles         OfferFile[]
+  tender             Tender?
+  contract           Contract?
+  acceptanceEnvelopes Envelope[]         @relation("OfferAcceptanceEnvelopes")
+  documentSends      OfferDocumentSend[]
+  statusEvents       OfferStatusEvent[]
+  lead               Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  @@unique([leadId])
+  // NOTE: one-active-per-lead is enforced via a partial unique index
+  // (CREATE UNIQUE INDEX ... WHERE "isActive") added in the migration, since
+  // Prisma cannot express a filtered unique in the schema.
   @@index([leadId])
+  @@index([isActive])
+  @@index([baseReference])
 }
 
 model OfferItem {
@@ -600,6 +714,133 @@ model OfferFile {
 
   @@unique([offerId, version])
   @@index([offerId])
+}
+
+// ─── Offer workflow: Tender / Contract / DocuSign envelopes (ADR 0002) ───
+
+model Tender {
+  id             String     @id @default(uuid())
+  offerId        String     @unique
+  offer          Offer      @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  version        Int        @default(1)
+  documentData   Json
+  executedPdfUrl String?
+  envelopes      Envelope[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([offerId])
+}
+
+model Contract {
+  id             String     @id @default(uuid())
+  offerId        String     @unique
+  offer          Offer      @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  version        Int        @default(1)
+  documentData   Json
+  // Estimator-entered BC4 particulars (issue #98) captured during CONTRACT_DRAFT
+  // and sent as locked tabs, so the contract routes to the customer first with
+  // the builder's fields already complete. Shape: lib/offer/contract-particulars.
+  particulars    Json?
+  executedPdfUrl String?
+  envelopes      Envelope[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([offerId])
+}
+
+// One row per DocuSign send; re-sends are retained for legal audit. An envelope
+// hangs off exactly one parent: a Tender, a Contract, or (for an OFFER-type
+// acceptance envelope, ADR 0004) the Offer directly.
+model Envelope {
+  id              String              @id @default(uuid())
+  docType         EnvelopeDocType
+  tenderId        String?
+  tender          Tender?             @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  contractId      String?
+  contract        Contract?           @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  // Set only for docType OFFER: the acceptance envelope hangs directly off the
+  // Offer (no intermediate Tender/Contract record). ADR 0004.
+  offerId         String?
+  offer           Offer?              @relation("OfferAcceptanceEnvelopes", fields: [offerId], references: [id], onDelete: Cascade)
+  docusignId      String?             @unique
+  status          EnvelopeStatus      @default(CREATED)
+  documentVersion Int
+  sentAt          DateTime?
+  completedAt     DateTime?
+  voidedAt        DateTime?
+  signatures      EnvelopeSignature[]
+  createdAt       DateTime            @default(now())
+
+  @@index([tenderId])
+  @@index([contractId])
+  @@index([offerId])
+  @@index([status])
+}
+
+model EnvelopeSignature {
+  id                  String       @id @default(uuid())
+  envelopeId          String
+  envelope            Envelope     @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  recipientRole       SignerRole
+  name                String
+  email               String
+  routingOrder        Int
+  status              SignerStatus @default(CREATED)
+  signedAt            DateTime?
+  lastReminderAt      DateTime?
+  reminderCount       Int          @default(0)
+  docusignRecipientId String?
+  // Signing capacity + represented entity (ADR 0003). capacity is "Owner" for
+  // an individual, "Director" for a company director. entityName/entityAbn name
+  // the company a director signs for (null for individuals). Purely descriptive
+  // audit metadata; recipientRole stays BUILDER|CUSTOMER.
+  capacity            String?
+  entityName          String?
+  entityAbn           String?
+
+  @@index([envelopeId])
+  @@index([status])
+}
+
+// Each send of the negotiation Offer document, with tracked link + open telemetry.
+model OfferDocumentSend {
+  id               String    @id @default(uuid())
+  offerId          String
+  offer            Offer     @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offerFileVersion Int
+  recipientEmail   String
+  trackedLinkToken String    @unique
+  sentAt           DateTime  @default(now())
+  openedAt         DateTime?
+  // Reply tracking: the subject carries [RCOFR-…] so inbound replies correlate
+  // back to this send (see lib/graph/offer-reply-tracker).
+  repliedAt        DateTime?
+  lastReplyAt      DateTime?
+
+  @@index([offerId])
+}
+
+// One row per lifecycle transition, for accountability + legal trail.
+model OfferStatusEvent {
+  id         String       @id @default(uuid())
+  offerId    String
+  offer      Offer        @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  fromStatus OfferStatus?
+  toStatus   OfferStatus
+  actorId    String?
+  note       String?
+  at         DateTime     @default(now())
+
+  @@index([offerId])
+  @@index([at])
+}
+
+// Global per-year sequence for base offer references (RC-Q-YYYY-NNN).
+model OfferReferenceCounter {
+  year    Int @id
+  lastSeq Int @default(0)
 }
 
 model ChatSession {
@@ -658,4 +899,14 @@ model LeadEmails {
   @@index([emailFrom])
   @@index([leadId, sentAt(sort: Desc)])
   @@index([sentAt(sort: Desc)])
+}
+
+model AdminOfferContent {
+  id             String   @id @default(uuid())
+  buildScope     String[]
+  costSchedule   Json
+  offerScope     Json
+  offerContent   Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

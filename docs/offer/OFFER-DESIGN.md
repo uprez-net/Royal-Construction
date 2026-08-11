@@ -24,7 +24,7 @@ Royal Construction uses this file **during execution**, not only at quote time. 
 | `QUOTE` (A–O staged lines) | `SAMPLE QUOTE` col D (flat ~69 trade rows) | Cost lines |
 | — | `costing report` | Granular vendor lines, **Quote / Actual / Difference**, invoice no, GST columns |
 | `COVER` building size | `area ` | m² calculators (slab, frame, bricks, tiles) |
-| `SETTINGS` + `MARGIN ANALYSIS` | Footer on `SAMPLE QUOTE` (Royal Construction Fee 20%, HWI, licence, admin, labour) | Mark-up (simpler chain than v2) |
+| `SETTINGS` + `MARGIN ANALYSIS` | Footer on `SAMPLE QUOTE` (legacy Excel still carries Fee 20%, HWI, licence, admin, labour) | App model (#115): **Overhead 10% + Fee 10%** on the cost base, plus HBCF + impact fee; licence/admin/labour/engineering/legal dropped (covered once in the direct-cost lines) |
 | `ALLOWANCES` | Optional lines (pool, landscaping, fence, PC items, etc.) | Scope flags |
 
 ### What SAMPLE adds beyond v2
@@ -59,9 +59,10 @@ flowchart LR
 
 ### Canonical build-up (decision)
 
-- **Offer contract value** in app: replicate **v2** chain (direct cost → HBCF → admin → PM → contingency → margin → GST 10%).
+- **Offer contract value** in app (superseded by #115 — see "Shipped app build-up" below): the earlier v2 chain (direct cost → HBCF → admin → PM → contingency → margin → GST 10%) was aspirational and never matched the shipped code.
 - **SAMPLE footer** (20% fee on direct sum + HWI + licence + admin + labour): treat as **legacy Excel rollup** for import/export mapping, not the source of truth for Tender pricing.
-- On import from SAMPLE, map footer lines into v2 SETTINGS/overhead rows where possible; flag unmapped lines for estimator review.
+- **Shipped app build-up (#115):** `(direct cost + HBCF + impact fee) × (1 + Overhead 10% + Fee 10%) × (1 + GST 10%)`. Overhead and Fee are two additive levers on the same cost base; licence/admin/labour/engineering/legal are no longer fixed additions (they live in the direct-cost lines).
+- On import from SAMPLE, the footer's fee is kept as the single Royal Construction Fee and the overhead lever is left at 0 (no verified overhead cell in the workbook); the admin/labour/engineering footer rows are dropped (#115).
 
 ### Crosswalk catalog (implement once)
 
@@ -217,8 +218,8 @@ A — General Requirements · B — Site Preparation · C — Footings & Slab ·
 
 ```
 directCost = sum(stage subtotals)
-+ hbcf + admin + pm + contingency → costBase
-+ builderMargin → subtotalExGst
++ hbcf + impactFee → costBase
+× (1 + overhead 0.10 + fee 0.10) → subtotalExGst   # two additive levers on costBase (#115)
 + gst (10%) → contractValueIncGst
 ```
 

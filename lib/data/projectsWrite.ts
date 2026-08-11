@@ -128,6 +128,16 @@ export interface CreateProjectWithLeadInput {
   address: string;
   council: string;
   siteManagerId: string;
+  // Primary owner identity, promoted to the Customer at handoff so Project
+  // screens/notifications show the legal owner, not the original lead contact
+  // (ADR 0003; codex #7). Each falls back to the lead value when absent.
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  // Primary owner's Current Location, promoted to Customer.address (ADR 0003).
+  customerAddress?: string | null;
+  // Full owner party set (owners[]) preserved on Project.parties (ADR 0003).
+  parties?: Prisma.InputJsonValue | null;
   extraction?: ProjectRequirementsPayload | ProjectExtractionData | null;
   sourceDocuments: {
     tender: ProjectSourceDocumentReference;
@@ -352,7 +362,7 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
  * Re-throws any database, AI inference, milestone generation, notification,
  * or transaction errors encountered during execution.
  */
-export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName, extraction, sourceDocuments }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName, customerName, customerEmail, customerPhone, customerAddress, parties, extraction, sourceDocuments }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
@@ -513,9 +523,10 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
     const newProjectId = await prisma.$transaction(async (tx) => {
       // Create customer first, then reference by customerId to satisfy Prisma types
       const customer = await createCustomerForProject({
-        name: lead.name,
-        email: lead.email,
-        phone: lead.phone,
+        name: customerName?.trim() || lead.name,
+        email: customerEmail?.trim() || lead.email,
+        phone: customerPhone?.trim() || lead.phone,
+        address: customerAddress ?? null,
       }, tx);
 
       const normalisedStartDate = new Date(startDate);
@@ -535,6 +546,7 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
           estimatedEndDate: normalisedEstimatedEndDate,
           siteManagerId: siteManagerId,
           requirements: projectRequirements as unknown as Prisma.InputJsonValue,
+          ...(parties ? { parties } : {}),
           customerId: customer.id,
         }
       });
@@ -553,9 +565,16 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
       await logAction(activityLogEntry, tx);
       await tx.file.updateMany({
         where: {
-          url: {
-            in: [sourceDocuments.tender.url, sourceDocuments.contract.url]
-          }
+          OR: [
+            {
+              url: {
+                in: [sourceDocuments.tender.url, sourceDocuments.contract.url]
+              }
+            },
+            {
+              leadId: lead.id
+            }
+          ]
         },
         data: {
           projectId: newProject.id
@@ -564,6 +583,13 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
 
       return newProject.id;
     });
+
+    // The customer was created/updated INSIDE the transaction above, so its cache
+    // invalidation is deferred to here — firing it pre-commit let another request
+    // refill the "customers" cache from uncommitted data with nothing to correct
+    // it afterwards (PR #124 review). Runs before the detail read so the tag is
+    // cleared even if that read fails.
+    revalidateTag("customers", CACHE_PROFILES.MEDIUM);
 
     const newProjectDetail = await getCachedProjectById(newProjectId);
     if (!newProjectDetail) {

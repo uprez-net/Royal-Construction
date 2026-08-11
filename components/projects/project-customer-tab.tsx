@@ -1,232 +1,312 @@
+import type { ReactNode } from "react";
+import { AlertTriangle, Check, Mail, MessageCircle, Phone } from "lucide-react";
+
 import { ProjectWithStats } from "@/types/project";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
 import { currency, dateFormat } from "@/utils/formatters";
-import {
-  Check,
-  FileText,
-  Info,
-  Mail,
-  MessageCircle,
-  Phone,
-} from "lucide-react";
 import { Button } from "../ui/button";
-import { toast } from "sonner";
 
 interface CustomerTabProps {
   project: ProjectWithStats;
+  isAdmin: boolean;
 }
+
+const NOT_RECORDED = "Not recorded";
 
 function formatList(values?: string[]) {
   if (!values || values.length === 0) {
-    return "—";
+    return NOT_RECORDED;
   }
 
   return values.join(", ");
 }
 
-export function CustomerTab({ project }: CustomerTabProps) {
+/** Formats a nullable money field, never emitting a bare "$" or a raw number. */
+function formatMoneyField(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? currency.format(value)
+    : NOT_RECORDED;
+}
+
+/** Formats a nullable date string, falling back to the raw value if unparseable. */
+function formatDateField(value: string | null | undefined) {
+  if (!value) return NOT_RECORDED;
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : dateFormat.format(parsed);
+}
+
+/** Australian country calling code — numbers are stored in national format. */
+const AU_COUNTRY_CODE = "61";
+
+/**
+ * wa.me only accepts a bare international subscriber number: digits only, no
+ * `+`, no separators and no national trunk prefix. Feeding it the stored
+ * national format ("0412 345 678") resolves to an invalid recipient, so the
+ * link is only rendered once the number can be normalised with confidence.
+ */
+function toWhatsAppNumber(value: string): string | null {
+  const trimmed = value.trim();
+  const hasInternationalPrefix = trimmed.startsWith("+");
+  const digits = trimmed.replace(/\D/g, "");
+
+  // "0061…" is the dialled form of "+61…"; drop the international access code.
+  const withoutAccessCode =
+    !hasInternationalPrefix && digits.startsWith("00")
+      ? digits.slice(2)
+      : digits;
+
+  let normalized: string;
+  if (hasInternationalPrefix || withoutAccessCode !== digits) {
+    // Already international — leave the country code alone.
+    normalized = withoutAccessCode;
+  } else if (withoutAccessCode.startsWith("0")) {
+    // National format: swap the trunk "0" for the country code.
+    normalized = `${AU_COUNTRY_CODE}${withoutAccessCode.slice(1)}`;
+  } else if (withoutAccessCode.startsWith(AU_COUNTRY_CODE)) {
+    normalized = withoutAccessCode;
+  } else {
+    // No trunk zero, no country code: guessing one would produce a link to the
+    // wrong person, so drop the affordance instead.
+    return null;
+  }
+
+  // E.164 allows 8–15 digits; outside that it is not a dialable number.
+  return normalized.length >= 8 && normalized.length <= 15 ? normalized : null;
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-sm font-medium text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap gap-x-1.5">
+      <dt className="font-medium text-muted-foreground">{label}</dt>
+      <dd className="text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
   const requirements = (project.requirements ??
     {}) as ProjectRequirementsPayload;
   const ownerContacts = requirements.legalAdministration?.ownerContacts;
+  const commercials = requirements.commercialsAndClaims;
   const ownerResponsibilities =
     requirements.exclusionsAndRisks?.ownerResponsibility ?? [];
   const variationRisks =
     requirements.exclusionsAndRisks?.variationRequired ?? [];
+  const hasRequirementFlags =
+    ownerResponsibilities.length > 0 || variationRisks.length > 0;
+
+  const phone = project.customer.phone?.trim();
+  const email = project.customer.email?.trim();
+  const telHref = phone ? `tel:${phone.replace(/\s+/g, "")}` : null;
+  const whatsappNumber = phone ? toWhatsAppNumber(phone) : null;
+  const whatsappHref = whatsappNumber
+    ? `https://wa.me/${whatsappNumber}`
+    : null;
+  const slabPercentage = commercials?.claimStageSlabPercentage;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="rounded-lg bg-muted p-4">
-        <p className="mb-2 text-sm font-semibold text-foreground">
+        <p className="text-base font-semibold text-foreground">
           {project.customer.name}
         </p>
-        <p className="text-xs text-muted-foreground">
-          Client since {dateFormat.format(new Date(project.customer.createdAt))}{" "}
-          - {project.buildingType}
+        <p className="mt-1 text-xs text-muted-foreground">
+          Client since{" "}
+          <span className="font-mono tabular-nums">
+            {dateFormat.format(new Date(project.customer.createdAt))}
+          </span>{" "}
+          · {project.buildingType}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">Phone</p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {project.customer.phone || "—"}
-          </p>
-        </div>
+      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Phone">
+          {phone && telHref ? (
+            <a
+              href={telHref}
+              className="font-mono tabular-nums underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {phone}
+            </a>
+          ) : (
+            <span className="text-muted-foreground">{NOT_RECORDED}</span>
+          )}
+        </Field>
 
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">Email</p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {project.customer.email || "—"}
-          </p>
-        </div>
+        <Field label="Email">
+          {email ? (
+            <a
+              href={`mailto:${email}`}
+              className="break-all underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {email}
+            </a>
+          ) : (
+            <span className="text-muted-foreground">{NOT_RECORDED}</span>
+          )}
+        </Field>
 
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">
-            Site Address
-          </p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {requirements.legalAdministration?.siteAddress || project.location}
-          </p>
-        </div>
+        <Field label="Site address">
+          {requirements.legalAdministration?.siteAddress || project.location}
+        </Field>
 
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">
-            Project Value
-          </p>
-          <p className="mt-1 text-sm font-semibold text-emerald-600">
-            {currency.format(Number(project.totalBudget))}
-          </p>
-        </div>
+        {isAdmin && (
+          <Field label="Project value">
+            <span className="font-mono tabular-nums">
+              {formatMoneyField(Number(project.totalBudget))}
+            </span>
+          </Field>
+        )}
 
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">
-            Signed Date
-          </p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {requirements.legalAdministration?.signedDate || "—"}
-          </p>
-        </div>
+        <Field label="Signed date">
+          <span className="font-mono tabular-nums">
+            {formatDateField(requirements.legalAdministration?.signedDate)}
+          </span>
+        </Field>
 
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">
-            PCA Inspector
-          </p>
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {requirements.legalAdministration?.pcaInspector || "—"}
-          </p>
-        </div>
-      </div>
+        <Field label="PCA inspector">
+          {requirements.legalAdministration?.pcaInspector || (
+            <span className="text-muted-foreground">{NOT_RECORDED}</span>
+          )}
+        </Field>
+      </dl>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-border/70 bg-white p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
-            Owner Contacts
-          </p>
-          <div className="mt-3 space-y-2 text-sm text-foreground">
-            <div>
-              <span className="font-semibold">Names: </span>
+        <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+          <h3 className="text-base font-semibold text-foreground">
+            Contract owner contacts
+          </h3>
+          <dl className="mt-3 space-y-2 text-sm">
+            <DetailRow label="Names">
               {formatList(ownerContacts?.names)}
-            </div>
-            <div>
-              <span className="font-semibold">Emails: </span>
+            </DetailRow>
+            <DetailRow label="Emails">
               {formatList(ownerContacts?.emails)}
-            </div>
-            <div>
-              <span className="font-semibold">Phones: </span>
-              {formatList(ownerContacts?.phones)}
-            </div>
-          </div>
+            </DetailRow>
+            <DetailRow label="Phones">
+              <span className="font-mono tabular-nums">
+                {formatList(ownerContacts?.phones)}
+              </span>
+            </DetailRow>
+          </dl>
         </div>
 
-        <div className="rounded-lg border border-border/70 bg-white p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
-            Commercial Snapshot
+        {isAdmin && (
+          <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+            <h3 className="text-base font-semibold text-foreground">
+              Commercial snapshot
+            </h3>
+            <dl className="mt-3 space-y-2 text-sm">
+              <DetailRow label="Contract price">
+                <span className="font-mono tabular-nums">
+                  {formatMoneyField(commercials?.contractPrice)}
+                </span>
+              </DetailRow>
+              <DetailRow label="Deposit">
+                <span className="font-mono tabular-nums">
+                  {formatMoneyField(commercials?.depositValue)}
+                </span>
+              </DetailRow>
+              <DetailRow label="GST amount">
+                <span className="font-mono tabular-nums">
+                  {formatMoneyField(commercials?.gstAmount)}
+                </span>
+              </DetailRow>
+              <DetailRow label="Slab claim stage">
+                <span className="font-mono tabular-nums">
+                  {typeof slabPercentage === "number"
+                    ? `${slabPercentage}%`
+                    : NOT_RECORDED}
+                </span>
+              </DetailRow>
+            </dl>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-base font-semibold text-foreground">
+          Requirement flags
+        </h3>
+
+        {hasRequirementFlags ? (
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {ownerResponsibilities.map((item) => (
+              <li
+                key={`owner-${item}`}
+                className="inline-flex items-start gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground"
+              >
+                <Check
+                  aria-hidden="true"
+                  className="mt-0.5 h-3 w-3 shrink-0 text-success-ink"
+                />
+                Owner responsibility: {item}
+              </li>
+            ))}
+            {variationRisks.map((item) => (
+              <li
+                key={`variation-${item}`}
+                className="inline-flex items-start gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground"
+              >
+                <AlertTriangle
+                  aria-hidden="true"
+                  className="mt-0.5 h-3 w-3 shrink-0 text-warning-ink"
+                />
+                Variation risk: {item}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">
+            No owner responsibilities or variation risks have been captured from
+            the contract yet.
           </p>
-          <div className="mt-3 space-y-2 text-sm text-foreground">
-            <div>
-              <span className="font-semibold">Contract Price: </span>
-              {requirements.commercialsAndClaims?.contractPrice ?? "—"}
-            </div>
-            <div>
-              <span className="font-semibold">Deposit: </span>
-              {requirements.commercialsAndClaims?.depositValue ?? "—"}
-            </div>
-            <div>
-              <span className="font-semibold">GST Amount: </span>
-              {requirements.commercialsAndClaims?.gstAmount ?? "—"}
-            </div>
-            <div>
-              <span className="font-semibold">Claim Stage Slab: </span>
-              {requirements.commercialsAndClaims?.claimStageSlabPercentage ??
-                "—"}
-              %
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <p className="text-xs font-medium text-muted-foreground">
-          Customer Requirements
-        </p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {ownerResponsibilities.length > 0 || variationRisks.length > 0 ? (
-            <>
-              {ownerResponsibilities.map((item) => (
-                <span
-                  key={item}
-                  className="inline-flex items-center gap-2 rounded-lg bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
-                >
-                  <Check className="h-3 w-3 text-green-500" />
-                  Owner responsibility: {item}
-                </span>
-              ))}
-              {variationRisks.map((item) => (
-                <span
-                  key={item}
-                  className="inline-flex items-center gap-2 rounded-lg bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
-                >
-                  <Check className="h-3 w-3 text-amber-500" />
-                  Variation risk: {item}
-                </span>
-              ))}
-            </>
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              No structured requirement flags captured yet.
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="mb-4 rounded-lg border border-teal-600/10 bg-emerald-50 px-4 py-3.5">
-        <div className="mb-1.5 flex items-center gap-1 text-xs font-bold text-emerald-700">
-          <Info className="h-3.5 w-3.5" />
-          <span>Portfolio Notes</span>
-        </div>
-
-        <p className="m-0 text-[13px] leading-6 text-(--text-secondary)">
-          Client has been provided the Royal Constructions platform link for
-          requirement submission. All selections from catalogue have been
-          recorded.
-        </p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          onClick={() => toast.info("Opening email composer...")}
-          className="gap-1.5"
-        >
-          <Mail className="h-4 w-4" />
-          Send Email
-        </Button>
+        {email ? (
+          <Button asChild size="lg">
+            <a href={`mailto:${email}`}>
+              <Mail aria-hidden="true" />
+              Email {project.customer.name}
+            </a>
+          </Button>
+        ) : null}
 
-        <Button
-          variant="outline"
-          onClick={() => toast.info(`Calling ${project.customer.phone}...`)}
-          className="gap-1.5"
-        >
-          <Phone className="h-4 w-4" />
-          Call Now
-        </Button>
+        {telHref ? (
+          <Button asChild variant="outline" size="lg">
+            <a href={telHref}>
+              <Phone aria-hidden="true" />
+              Call
+            </a>
+          </Button>
+        ) : null}
 
-        <Button
-          variant="outline"
-          onClick={() => toast.success("Opening WhatsApp...")}
-          className="gap-1.5"
-        >
-          <MessageCircle className="h-4 w-4" />
-          WhatsApp
-        </Button>
-
-        <Button
-          variant="outline"
-          onClick={() => toast.info("Generating portfolio PDF...")}
-          className="gap-1.5"
-        >
-          <FileText className="h-4 w-4" />
-          Export Portfolio
-        </Button>
+        {whatsappHref ? (
+          <Button asChild variant="outline" size="lg">
+            <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+              <MessageCircle aria-hidden="true" />
+              WhatsApp
+            </a>
+          </Button>
+        ) : null}
       </div>
     </div>
   );

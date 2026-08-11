@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
+import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
@@ -33,6 +34,14 @@ import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import { getAllEmailThreads } from "@/utils/email-parser";
+import { EMAIL_FOOTER_HTML, EMAIL_HEADER_HTML } from '@/constants/email-artifacts';
+import {
+  buildFollowupConfirmedHistoryEntry,
+  buildFollowupNotRequiredHistoryEntry,
+  buildFollowupRescheduledHistoryEntry,
+  buildMeetingDidNotTakePlaceHistoryEntry,
+  buildMeetingReviewedHistoryEntry,
+} from "@/lib/leads/lead-helpers";
 
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
@@ -64,13 +73,13 @@ function markdownToHtml(value: string) {
     .join("");
 }
 
-function buildLeadEmailHtml(body: string) {
+function buildLeadEmailHtml(body: string, name: string) {
   const normalizedBody = normalizeEmailBody(body);
   const bodyHtml = hasHtmlMarkup(normalizedBody)
     ? sanitizeLeadNotesHtml(normalizedBody)
     : markdownToHtml(normalizedBody);
 
-  return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards,<br>Royal Constructions team.</p>`;
+  return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards, <br>${escapeEmailHtml(name)} <br>Royal Constructions.</p>`;
 }
 
 
@@ -208,12 +217,33 @@ function normalizeSearch(search?: string) {
   return search?.trim() ?? "";
 }
 
+async function resolveActingUserId(): Promise<string | null> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return null;
+
+    const user = await getUserByClerkIdCached(userId);
+    return user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface PaginatedLeadsResult {
   items: UiLead[];
   page: number;
   limit: number;
   totalCount: number;
   totalPages: number;
+}
+
+export interface FollowupStats {
+  totalFollowUps: number;
+  pendingFollowUps: number;
+  upcomingFollowUps: number;
+  totalMeetings: number;
+  pendingMeetings: number;
+  upcomingMeetings: number;
 }
 
 /**
@@ -227,11 +257,12 @@ export async function getAllLeads(): Promise<UiLead[]> {
   try {
     const leads = await prisma.lead.findMany({
       include: {
-        history: { orderBy: { actionDate: "asc" } },
+        history: { orderBy: { actionDate: "asc" }, include: { author: true } },
         chatSessions: true,
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
+        files: true
       },
     });
     return leads.map((lead) => mapLead(lead));
@@ -262,7 +293,18 @@ export async function getAllLeads(): Promise<UiLead[]> {
  * @param filterLeadsWithoutProject - Optional flag to filter leads that do not have an associated project.
  * @returns Paginated lead collection.
  */
-export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: string, status?: LeadStage[], filterTiming?: string, filterLeadsWithoutProject?: boolean): Promise<PaginatedLeadsResult> {
+export async function getLeads(
+  page = 1,
+  limit = defaultLookupPageSize,
+  query?: string,
+  status?: LeadStage[],
+  filterTiming?: string,
+  filterLeadsWithoutProject?: boolean,
+  isArchived?: boolean,
+  pendingFollowUps?: boolean,
+  upcomingFollowUps?: boolean,
+  pendingMeetings?: boolean,
+  upcomingMeetings?: boolean): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
   const search = normalizeSearch(query);
@@ -270,12 +312,13 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
   // 1. Determine if a timing filter should be active (skip if undefined or 'all')
   const hasTimingFilter = filterTiming && filterTiming !== 'all';
   let timingFilter = {};
+  const timeZone = "Australia/Sydney";
+
+  // Current date in Sydney
+  const sydneyNow = toZonedTime(new Date(), timeZone);
+  const isMeetingScheduledFilterActive = pendingMeetings !== undefined || upcomingMeetings !== undefined || (status?.includes('MEETING_SCHEDULED') && status?.length === 1);
 
   if (hasTimingFilter) {
-    const timeZone = "Australia/Sydney";
-
-    // Current date in Sydney
-    const sydneyNow = toZonedTime(new Date(), timeZone);
 
     let startSydney: Date;
     let endSydney: Date;
@@ -333,42 +376,72 @@ export async function getLeads(page = 1, limit = defaultLookupPageSize, query?: 
         { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
         { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
         { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { secondaryName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { secondaryEmail: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { secondaryPhone: { contains: search, mode: Prisma.QueryMode.insensitive } },
       ],
     }
     : undefined;
   try {
+    const statusCleaned = status?.filter(s => undefined !== s && s !== null) ?? null;
+    const finalWhere: Prisma.LeadWhereInput = {
+      ...where,
+      ...(filterLeadsWithoutProject && {
+        project: {
+          is: null,
+        },
+      }),
+      ...timingFilter,
+      ...(statusCleaned && statusCleaned.length > 0
+        ? { stage: { in: statusCleaned } }
+        : {}),
+      isArchived: isArchived ?? false,
+      ...(pendingFollowUps !== undefined && {
+        followupDate: {
+          not: null,
+          lte: fromZonedTime(startOfDay(sydneyNow), timeZone)
+        }
+      }),
+      ...(upcomingFollowUps !== undefined && {
+        followupDate: {
+          not: null,
+          gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
+        }
+      }),
+      ...(isMeetingScheduledFilterActive && {
+        meetingDate: {
+          not: null,
+        }
+      }),
+      ...(pendingMeetings !== undefined && {
+        meetingDate: {
+          not: null,
+          lte: fromZonedTime(startOfDay(sydneyNow), timeZone)
+        }
+      }),
+      ...(upcomingMeetings !== undefined && {
+        meetingDate: {
+          not: null,
+          gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
+        }
+      }),
+    }
     const leads = await prisma.lead.findMany({
-      where: {
-        ...where,
-        ...(filterLeadsWithoutProject && {
-          project: {
-            is: null,
-          },
-        }),
-        ...timingFilter,
-        ...(status && status.length > 0
-          ? { stage: { in: status } }
-          : {}),
-      },
+      where: finalWhere,
       include: {
-        history: { orderBy: { actionDate: "asc" } },
+        history: { orderBy: { actionDate: "asc" }, include: { author: true } },
         chatSessions: true,
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
+        files: true
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
       take: safeLimit,
     });
     const totalCount = await prisma.lead.count({
-      where: {
-        ...where,
-        ...timingFilter,
-        ...(status && status.length > 0
-          ? { stage: { in: status } }
-          : {}),
-      }
+      where: finalWhere,
     });
 
     const items = leads.map((lead) => mapLead(lead));
@@ -409,12 +482,14 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
     where: { id },
     include: {
       history: {
-        orderBy: { actionDate: "asc" }
+        orderBy: { actionDate: "asc" },
+        include: { author: true }
       },
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
       emails: { orderBy: { createdAt: "desc" } },
+      files: true
     }
   });
   if (!lead) return null;
@@ -437,11 +512,12 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
   const lead = await prisma.lead.findUnique({
     where: { id },
     include: {
-      history: { orderBy: { actionDate: "asc" } },
+      history: { orderBy: { actionDate: "asc" }, include: { author: true } },
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
       emails: { orderBy: { createdAt: "desc" } },
+      files: true
     }
   });
   if (!lead) return null;
@@ -591,6 +667,7 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
+  const actingUserId = await resolveActingUserId();
 
   const historyInput = input.history ?? [];
   const historyCreate = historyInput.map((entry) => {
@@ -604,18 +681,30 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       detail,
       type,
       actionDate,
+      ...(actingUserId ? { authorId: actingUserId } : {}),
     };
   });
 
   if (historyCreate.length === 0) {
     if (input.stage !== 'In Follow-up') {
-      historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date() });
+      historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date(), ...(actingUserId ? { authorId: actingUserId } : {}) });
     } else {
-      historyCreate.push({ action: "Lead created with Follow-up set", detail: "Lead manually created and Also Assign the Follow-up Stage", type: "SYSTEM", actionDate: new Date() });
+      historyCreate.push({ action: "Lead created with Follow-up set", detail: "Lead manually created and Also Assign the Follow-up Stage", type: "SYSTEM", actionDate: new Date(), ...(actingUserId ? { authorId: actingUserId } : {}) });
     }
   }
 
-  const normalizedEmail = (input.email ?? "").trim();
+  // Every lead needs a valid primary email (#110). createLeadSchema enforces it
+  // for callers that parse it, but direct data-layer callers (the
+  // consultation-booking route) only null-checked truthiness — a non-empty but
+  // malformed address slipped straight through. Re-validate at the DB boundary
+  // so EVERY path is covered, not just the schema-parsed ones.
+  const emailCheck = requiredLeadEmail.safeParse(input.email);
+  if (!emailCheck.success) {
+    throw new Error(
+      emailCheck.error.issues[0]?.message ?? "Enter a valid client email",
+    );
+  }
+  const normalizedEmail = emailCheck.data;
   const normalizedPhone = (input.phone ?? "").trim();
 
   const orConditions: Prisma.LeadWhereInput[] = [];
@@ -632,11 +721,12 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   }
 
   const duplicateLeadInclude = {
-    history: { orderBy: { actionDate: "asc" } },
+    history: { orderBy: { actionDate: "asc" }, include: { author: true } },
     chatSessions: true,
     assignedUser: { select: { id: true, name: true, email: true } },
     noteAnnotations: { orderBy: { createdAt: "desc" } },
     emails: { orderBy: { createdAt: "desc" } },
+    files: true
   } satisfies Prisma.LeadInclude;
 
   const leadCreateResult = await prisma.$transaction(async (tx) => {
@@ -661,6 +751,9 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         phone: normalizedPhone,
         email: normalizedEmail,
         location: input.location ?? "",
+        secondaryName: input.secondaryName,
+        secondaryEmail: input.secondaryEmail,
+        secondaryPhone: input.secondaryPhone,
         source: input.source,
         sourceDetail: input.sourceDetail,
         stage: mappedStage,
@@ -668,9 +761,14 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         budget: input.budget,
         type: input.type ?? [],
         notes: input.notes,
+        meetingDate: input.meetingDate,
+        meetingTime: input.meetingTime,
+        meetingMode: input.meetingMode,
         followupDate: input.followupDate,
         followupTime: input.followupTime,
         followupNotes: input.followupNotes,
+        followupReminderSentAt: input.followupReminderSentAt,
+        meetingReminderSentAt: input.meetingReminderSentAt,
         lostReason: input.lostReason,
         urgent: input.urgent ?? false,
         history: { create: historyCreate },
@@ -770,11 +868,15 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
 export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
   const mappedStage = input.stage ? stageToPrismaMap[input.stage] : undefined;
   const updateData: Prisma.LeadUpdateInput = {};
+  const actingUserId = await resolveActingUserId();
 
   if (input.name !== undefined) updateData.name = String(input.name);
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
   if (input.email !== undefined) updateData.email = input.email ?? "";
   if (input.location !== undefined) updateData.location = input.location ?? "";
+  if (input.secondaryName !== undefined) updateData.secondaryName = input.secondaryName;
+  if (input.secondaryEmail !== undefined) updateData.secondaryEmail = input.secondaryEmail;
+  if (input.secondaryPhone !== undefined) updateData.secondaryPhone = input.secondaryPhone;
   if (input.source !== undefined) updateData.source = input.source;
   if (input.sourceDetail !== undefined) updateData.sourceDetail = input.sourceDetail;
   if (input.stage !== undefined) updateData.stage = mappedStage;
@@ -788,9 +890,14 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
   if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
+  if (input.meetingDate !== undefined) updateData.meetingDate = input.meetingDate;
+  if (input.meetingTime !== undefined) updateData.meetingTime = input.meetingTime;
+  if (input.meetingMode !== undefined) updateData.meetingMode = input.meetingMode;
   if (input.followupDate !== undefined) updateData.followupDate = input.followupDate;
   if (input.followupTime !== undefined) updateData.followupTime = input.followupTime;
   if (input.followupNotes !== undefined) updateData.followupNotes = input.followupNotes;
+  if (input.followupReminderSentAt !== undefined) updateData.followupReminderSentAt = input.followupReminderSentAt;
+  if (input.meetingReminderSentAt !== undefined) updateData.meetingReminderSentAt = input.meetingReminderSentAt;
   if (input.lostReason !== undefined) updateData.lostReason = input.lostReason;
   if (input.urgent !== undefined) updateData.urgent = Boolean(input.urgent);
 
@@ -805,7 +912,60 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     };
   }
 
-  if ((input.history?.length ?? 0) > 0 || annotationInputs.length > 0) {
+  const existingLead = await prisma.lead.findUnique({ where: { id } });
+
+  if (input.followupResponseOutcome === "yes") {
+    updateData.followupDate = null;
+    updateData.followupTime = null;
+    updateData.followupReminderSentAt = new Date();
+    if (existingLead?.stage === "IN_FOLLOW_UP") {
+      updateData.stage = "CONTACTED";
+    }
+  } else if (input.followupResponseOutcome === "notRequired") {
+    updateData.followupDate = null;
+    updateData.followupTime = null;
+    updateData.followupReminderSentAt = new Date();
+    if (existingLead?.stage === "IN_FOLLOW_UP") {
+      updateData.stage = "CONTACTED";
+    }
+  } else if (input.followupResponseOutcome === "reschedule") {
+    const nextFollowupDate = new Date();
+    nextFollowupDate.setDate(nextFollowupDate.getDate() + 1);
+    updateData.followupDate = nextFollowupDate;
+    updateData.followupTime = input.followupTime ?? existingLead?.followupTime ?? null;
+    updateData.followupReminderSentAt = null;
+    updateData.stage = "IN_FOLLOW_UP";
+  }
+
+  if (input.meetingReviewOutcome === "no") {
+    updateData.meetingReminderSentAt = new Date();
+  } else if (input.meetingReviewOutcome === "yes") {
+    updateData.meetingMode = input.meetingMode ?? existingLead?.meetingMode ?? null;
+    updateData.meetingReminderSentAt = new Date();
+  }
+
+  if ((input.history?.length ?? 0) > 0 || annotationInputs.length > 0 || input.followupResponseOutcome || input.meetingReviewOutcome) {
+    const responseHistory = input.followupResponseOutcome === "yes"
+      ? [buildFollowupConfirmedHistoryEntry()]
+      : input.followupResponseOutcome === "notRequired"
+        ? [buildFollowupNotRequiredHistoryEntry()]
+        : input.followupResponseOutcome === "reschedule"
+          ? [buildFollowupRescheduledHistoryEntry(
+            (updateData.followupDate as Date | null | undefined)?.toISOString().slice(0, 10) ?? existingLead?.followupDate?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+            String(updateData.followupTime ?? existingLead?.followupTime ?? ""),
+          )]
+          : [];
+
+    const meetingHistory = input.meetingReviewOutcome === "no"
+      ? [buildMeetingDidNotTakePlaceHistoryEntry()]
+      : input.meetingReviewOutcome === "yes"
+        ? [buildMeetingReviewedHistoryEntry({
+          meetingMode: String(updateData.meetingMode ?? existingLead?.meetingMode ?? input.meetingMode ?? "Unknown"),
+          discussionNotes: String(input.discussionNotes ?? ""),
+          buildScope: String(input.buildScope ?? ""),
+        })]
+        : [];
+
     const annotationHistory = annotationInputs.map((annotation) => {
       const now = new Date();
       return {
@@ -818,26 +978,27 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     });
 
     updateData.history = {
-      create: [...(input.history ?? []), ...annotationHistory].map((h) => ({
+      create: [...(input.history ?? []), ...responseHistory, ...meetingHistory, ...annotationHistory].map((h) => ({
         action: h.action,
         detail: h.detail || "",
         type: h.type ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL") : "SYSTEM",
         actionDate: new Date(`${h.date}T${h.time || '00:00'}`),
+        ...(actingUserId ? { authorId: actingUserId } : {}),
       })),
     };
   }
   // console.log('checking the Input Data', input);
   // console.log('222Updating lead with data:', updateData);
-  const existingLead = await prisma.lead.findUnique({ where: { id } });
   const updated = await prisma.lead.update({
     where: { id },
     data: updateData,
     include: {
-      history: { orderBy: { actionDate: "asc" } },
+      history: { orderBy: { actionDate: "asc" }, include: { author: true } },
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
-      emails: { orderBy: { createdAt: "desc" } }
+      emails: { orderBy: { createdAt: "desc" } },
+      files: true
     },
   });
 
@@ -887,15 +1048,15 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
 }
 
 /**
- * Permanently deletes a lead.
- *
- * Related entities configured with cascading deletes are automatically removed.
+ * Soft-deletes a lead by marking it as archived.
+ * 
+ * This allows for potential recovery or auditing of leads without permanently removing them from the database.
  *
  * @param id - Lead identifier.
  * @returns Success status.
  */
 export async function deleteLead(id: number) {
-  await prisma.lead.delete({ where: { id } });
+  await prisma.lead.update({ where: { id }, data: { isArchived: true } });
   return { success: true };
 }
 
@@ -928,8 +1089,9 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
       COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      COUNT(*) FILTER (WHERE stage = 'IN_FOLLOW_UP') AS "pendingFollowup"
+      COUNT(*) FILTER (WHERE stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED')) AS "pendingFollowup"
     FROM "Lead"
+    WHERE "isArchived" = false
   `;
 
   return {
@@ -941,6 +1103,47 @@ export async function getLeadsStats(): Promise<LeadsStats> {
     conversion: Number(stats?.won ?? 0),
     pendingFollowup: Number(stats?.pendingFollowup ?? 0),
     lost: Number(stats?.lost ?? 0),
+  };
+}
+
+export async function getFollowupStats(): Promise<FollowupStats> {
+  const timeZone = "Australia/Sydney";
+  const sydneyNow = toZonedTime(new Date(), timeZone);
+  const todayStart = startOfDay(sydneyNow);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+  const todayUTC = fromZonedTime(todayStart, timeZone);
+  const tomorrowUTC = fromZonedTime(tomorrowStart, timeZone);
+
+  const [stats] = await prisma.$queryRaw<
+    {
+      totalFollowUps: bigint;
+      pendingFollowUps: bigint;
+      upcomingFollowUps: bigint;
+      totalMeetings: bigint;
+      pendingMeetings: bigint;
+      upcomingMeetings: bigint;
+    }[]
+  >`
+    SELECT
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP') AS "totalFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED') AS "totalMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
+    FROM "Lead"
+    WHERE "isArchived" = false
+  `;
+
+  return {
+    totalFollowUps: Number(stats?.totalFollowUps ?? 0),
+    pendingFollowUps: Number(stats?.pendingFollowUps ?? 0),
+    upcomingFollowUps: Number(stats?.upcomingFollowUps ?? 0),
+    totalMeetings: Number(stats?.totalMeetings ?? 0),
+    pendingMeetings: Number(stats?.pendingMeetings ?? 0),
+    upcomingMeetings: Number(stats?.upcomingMeetings ?? 0),
   };
 }
 
@@ -1089,15 +1292,62 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
     }
 
     const signedBody = `
+    <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin: 0; padding: 0; outline: none; }
+    .rc-hover-toolbar {
+      position: absolute;
+      background: rgba(12,24,41,0.95);
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 9999;
+      display: none;
+      pointer-events: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      max-width: 90%;
+      align-items: center;
+      gap: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .rc-hover-toolbar span { font-weight: 600; white-space: nowrap; }
+    .rc-hover-toolbar input {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      font-size: 12px;
+      width: 300px;
+      max-width: 55vw;
+      padding: 3px 8px;
+      border-radius: 4px;
+      outline: none;
+      font-family: monospace;
+    }
+    .rc-hover-toolbar input:focus {
+      border-color: #c6923a;
+      background: rgba(255,255,255,0.15);
+    }
+  </style>
+</head>
+<body>
+  <div style="background-color:#f7f6f2;margin:0;padding:0">
+    ${EMAIL_HEADER_HTML}
     <p>Hi ${escapeEmailHtml(existingLead.name)},</p>
-    ${buildLeadEmailHtml(body)}
+    ${buildLeadEmailHtml(body, user.name)}
+    ${EMAIL_FOOTER_HTML}
+  </div>
+</body>
+</html>
     `;
 
     // Generate a subject line using AI for the body
-    const aiSubject = replyingToEmail ? `Re: ${replyingToEmail.subject}` : await generateEmailSubject(signedBody);
+    const aiSubject = replyingToEmail ? `Re: ${replyingToEmail.subject}` : await generateEmailSubject(escapeEmailHtml(signedBody));
     await sendEmail({
       to,
-      subject: replyingToEmail ? aiSubject :`${aiSubject} - ${location}`,
+      subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,
       body: signedBody,
     });
     const strippedEmailBody = getAllEmailThreads(signedBody, {
@@ -1107,7 +1357,7 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
       sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
     });
     let recordedEmail: LeadEmails | null = null;
-    for(const thread of strippedEmailBody) {
+    for (const thread of strippedEmailBody) {
       const checksum = await generateEmailChecksum(
         thread.subject,
         thread.body,
@@ -1129,7 +1379,7 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
       recordedEmail = emailRecord;
     }
 
-    if(!recordedEmail) {
+    if (!recordedEmail) {
       throw new Error("Failed to record email");
     }
 

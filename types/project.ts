@@ -61,6 +61,7 @@ export interface ProjectWithStats extends SafeProject {
     name: string;
     targetDate: Date;
     actualDate: Date | null;
+    projectStage: Milestone["projectStage"];
     status: Milestone["status"];
     tradies: {
       name: string;

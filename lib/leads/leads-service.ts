@@ -1,7 +1,7 @@
 "use client";
 import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadsStats, LeadStage } from './types';
 import { fetchJson } from '@/utils/fetch';
-import { findLeadById, getAllLeads, getAnalyticsData, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
+import { findLeadById, getAllLeads, getAnalyticsData, getFollowupStats, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
 import { sendCampaignEmail } from '../data/email-ad-hock';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {
@@ -14,7 +14,7 @@ export interface FetchLeadsParams {
   q?: string;
 }
 
-export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer' | 'runId' | 'runStatus' | 'emails'> & {
+export type LeadCreatePayload = Omit<Lead, 'id' | 'created' | 'history' | 'type' | 'creatingOffer' | 'runId' | 'runStatus' | 'emails' | 'isArchived' | 'uploadedFiles'> & {
   type?: string | string[];
   history?: LeadHistoryInput[];
 };
@@ -35,13 +35,30 @@ export async function fetchAllLeads(): Promise<Lead[]> {
   return data;
 }
 
-export async function fetchLeads(params: { q?: string; limit?: number; page?: number; status?: LeadStage[] , filterTiming?: string }): Promise<PaginatedLeadsResult> {
+export async function fetchLeads(params:
+  {
+    q?: string;
+    limit?: number;
+    page?: number;
+    status?: LeadStage[];
+    filterTiming?: string;
+    isArchived?: boolean;
+    pendingFollowUps?: boolean;
+    upcomingFollowUps?: boolean;
+    pendingMeetings?: boolean;
+    upcomingMeetings?: boolean;
+  }): Promise<PaginatedLeadsResult> {
   const query = new URLSearchParams();
   if (params.q?.trim()) query.append('q', params.q.trim());
   if (params.limit) query.append('limit', params.limit.toString());
   if (params.page) query.append('page', params.page.toString());
   if (params.status) query.append('status', params.status.join(','));
-  if(params.filterTiming) query.append('filterTiming', params.filterTiming);
+  if (params.filterTiming) query.append('filterTiming', params.filterTiming);
+  if (params.isArchived !== undefined) query.append('isArchived', params.isArchived.toString());
+  if (params.pendingFollowUps !== undefined) query.append('pendingFollowUps', params.pendingFollowUps.toString());
+  if (params.upcomingFollowUps !== undefined) query.append('upcomingFollowUps', params.upcomingFollowUps.toString());
+  if (params.pendingMeetings !== undefined) query.append('pendingMeetings', params.pendingMeetings.toString());
+  if (params.upcomingMeetings !== undefined) query.append('upcomingMeetings', params.upcomingMeetings.toString());
   const data = await fetchJson<PaginatedLeadsResult>(
     `/api/leads?${query.toString()}`,
     { method: "GET", cache: 'no-store' },
@@ -62,6 +79,10 @@ export async function fetchLead(id: number): Promise<Lead | null> {
 
 export async function fetchLeadsStats(): Promise<LeadsStats> {
   return getLeadsStats();
+}
+
+export async function fetchFollowupStats() {
+  return getFollowupStats();
 }
 
 // export async function FollowupCalendarCreation(leadName: string, leadEmail: string, followupDate: string, followupTime: string): Promise<string | null> {

@@ -1,7 +1,7 @@
 "use client";
 
 import { type SubmitEvent, useState, useTransition } from "react";
-import { FilePlus2, Loader2, Info } from "lucide-react";
+import { AlertCircle, FilePlus2, Loader2, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,34 +12,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { createVariation } from "@/lib/store/slices/projectsSlice";
 
-type VariationReason =
-  | "CLIENT_REQUEST"
-  | "SITE_CONDITION"
-  | "DESIGN_CHANGE"
-  | "COUNCIL_REQUIREMENT"
-  | "MATERIAL_UNAVAILABILITY"
-  | "OTHER";
+const fieldClassName = "h-9 rounded-[7px] bg-background px-3 py-2 text-sm";
+const labelClassName = "text-xs font-medium text-foreground";
 
-const ReasonLabels: Record<VariationReason, string> = {
-  CLIENT_REQUEST: "Client Request",
-  SITE_CONDITION: "Site Condition",
-  DESIGN_CHANGE: "Design Change",
-  COUNCIL_REQUIREMENT: "Council Requirement",
-  MATERIAL_UNAVAILABILITY: "Material Unavailability",
-  OTHER: "Other",
-};
+function RequiredMark() {
+  return (
+    <span className="ml-0.5 text-destructive-ink" aria-hidden="true">
+      *
+    </span>
+  );
+}
 
 export function CreateVariationModal({
   projectId,
@@ -53,19 +41,23 @@ export function CreateVariationModal({
   onSuccess: () => void;
 }) {
   const dispatch = useAppDispatch();
-  const [reason, setReason] = useState<VariationReason>("CLIENT_REQUEST");
   const [description, setDescription] = useState("");
   const [cost, setCost] = useState("");
-  const [notes, setNotes] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const mutation = useAppSelector(
     (state) => state.projects.mutations.createVariation,
   );
 
+  const resetForm = () => {
+    setDescription("");
+    setCost("");
+    setSubmitError(null);
+  };
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
-      setDescription("");
-      setCost("");
+      resetForm();
     }
 
     onOpenChange(nextOpen);
@@ -76,15 +68,16 @@ export function CreateVariationModal({
 
     const trimmedDescription = description.trim();
     const parsedCost = Number(cost);
+    const isCostValid = Number.isFinite(parsedCost) && parsedCost > 0;
 
-    if (
-      !trimmedDescription ||
-      !Number.isFinite(parsedCost) ||
-      parsedCost <= 0
-    ) {
-      toast.error("Enter a variation description and a valid cost impact.");
+    if (!trimmedDescription || !isCostValid) {
+      const message = "Enter a variation description and a cost impact above 0.";
+      setSubmitError(message);
+      toast.error(message);
       return;
     }
+
+    setSubmitError(null);
 
     try {
       await dispatch(
@@ -96,120 +89,110 @@ export function CreateVariationModal({
         }),
       ).unwrap();
 
-      toast.success(`Variation added successfully.`);
+      toast.success("Variation added to the log.");
+      resetForm();
       onSuccess();
+      onOpenChange(false);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to create variation";
+      setSubmitError(message);
       toast.error(message);
-    } finally {
-      setDescription("");
-      setCost("");
-      onOpenChange(false);
     }
   }
 
   const isSubmitting = mutation.status === "pending" || isPending;
+  const isCostInvalid = Boolean(cost.trim()) && !(Number(cost) > 0);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-[14px] border-border bg-white p-0 shadow-lg sm:max-w-150">
-        <DialogHeader className="flex flex-row items-center justify-between border-b border-border px-6 pb-4 pt-5">
-          <div>
-            <DialogTitle className="text-base font-bold">
-              Create Variation
-            </DialogTitle>
-            <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
-              This will generate an updated quote for the customer.
-            </DialogDescription>
-          </div>
+      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-[14px] border-border bg-card p-0 shadow-lg sm:max-w-150">
+        <DialogHeader className="border-b border-border px-6 pb-4 pt-5">
+          <DialogTitle className="text-lg font-semibold text-foreground">
+            Create variation
+          </DialogTitle>
+          <DialogDescription className="mt-0.5 text-sm text-muted-foreground">
+            Record a change to scope or cost. Fields marked * are required.
+          </DialogDescription>
         </DialogHeader>
 
         <form
           className="space-y-4 px-6 pb-6 pt-5"
-          onSubmit={(data) =>
-            startTransition(async () => await handleSubmit(data))
-          }
+          noValidate
+          onSubmit={(data) => {
+            if (isSubmitting) {
+              data.preventDefault();
+              return;
+            }
+            startTransition(async () => await handleSubmit(data));
+          }}
         >
+          {submitError ? (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-[12px] border border-destructive/40 bg-destructive-light px-3.5 py-3 text-sm text-destructive-ink"
+            >
+              <AlertCircle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
+              <p>{submitError}</p>
+            </div>
+          ) : null}
+
           <div className="space-y-1.5">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Variation Description
-            </label>
-            <Input
+            <Label htmlFor="variation-description" className={labelClassName}>
+              Variation description
+              <RequiredMark />
+            </Label>
+            <Textarea
+              id="variation-description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Enter a description for the variation..."
+              placeholder="Additional power points to the rumpus room"
+              rows={3}
               required
-              className="resize-y rounded-[7px] bg-white px-3 py-2 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10"
+              className="min-h-20 rounded-[7px] bg-background px-3 py-2 text-sm"
             />
-          </div>
-
-          <div className="flex gap-3">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="variation-cost"
-                className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Cost Impact ($)
-              </label>
-              <Input
-                id="variation-cost"
-                value={cost}
-                onChange={(event) => setCost(event.target.value)}
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                className="h-9 rounded-[7px] bg-white px-3 py-2 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Reason
-              </label>
-              <Select
-                value={reason}
-                onValueChange={(value) => setReason(value as VariationReason)}
-              >
-                <SelectTrigger className="h-9 w-full rounded-[7px] bg-white px-3 py-2 text-[13px] transition-all focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10">
-                  <SelectValue placeholder="Optional" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(ReasonLabels).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div className="space-y-1.5">
-            <label
-              htmlFor="variation-notes"
-              className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Notes
-            </label>
-            <Textarea
-              id="variation-notes"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="Optional notes about the variation..."
-              rows={4}
-              className="min-h-24 rounded-[7px] bg-white px-3 py-2 text-[13px] transition-all focus-visible:border-teal-600 focus-visible:ring-4 focus-visible:ring-teal-600/10"
+            <Label htmlFor="variation-cost" className={labelClassName}>
+              Cost impact (AUD)
+              <RequiredMark />
+            </Label>
+            <Input
+              id="variation-cost"
+              value={cost}
+              onChange={(event) => setCost(event.target.value)}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
               required
+              aria-invalid={isCostInvalid}
+              aria-describedby={
+                isCostInvalid ? "variation-cost-error" : undefined
+              }
+              className={`${fieldClassName} font-mono tabular-nums`}
             />
+            {isCostInvalid ? (
+              <p
+                id="variation-cost-error"
+                className="text-xs text-destructive-ink"
+              >
+                Cost impact must be greater than 0.
+              </p>
+            ) : null}
           </div>
 
-          <div className="rounded-[8px] bg-amber-50 px-3.5 py-2.5 text-[12px] text-amber-900 flex items-start gap-1.5">
-            <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <div className="flex items-start gap-1.5 rounded-[8px] bg-info-light px-3.5 py-2.5 text-xs text-info-ink">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <p>
-              A new quote will be created with this variation and the project
-              timeline will be recalculated.
+              The variation is added to this project&apos;s variation log and
+              included in the revised contract total. Approving it is a separate
+              step.
             </p>
           </div>
 
@@ -217,22 +200,27 @@ export function CreateVariationModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="h-9 rounded-[7px] px-3.5 text-[12.5px] font-medium transition-all hover:border-teal-600 hover:bg-slate-50 hover:text-teal-600"
+              disabled={isSubmitting}
+              onClick={() => handleOpenChange(false)}
+              className="h-9 rounded-[7px] px-3.5 text-sm font-medium"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting || !description.trim() || !cost.trim()}
-              className="h-9 rounded-[7px] bg-[#0D9488] px-3.5 text-[12.5px] font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#0F766E] hover:shadow-[0_4px_12px_rgba(13,148,136,0.3)]"
+              aria-busy={isSubmitting}
+              className="h-9 rounded-[7px] bg-primary px-3.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               {isSubmitting ? (
-                <Loader2 className="mr-1.5 size-4 animate-spin" />
+                <Loader2
+                  className="mr-1.5 size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
               ) : (
-                <FilePlus2 className="mr-1.5 size-4" />
+                <FilePlus2 className="mr-1.5 size-4" aria-hidden="true" />
               )}
-              Create Variation & Send Quote
+              {isSubmitting ? "Creating variation…" : "Create variation"}
             </Button>
           </div>
         </form>

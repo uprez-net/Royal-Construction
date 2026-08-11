@@ -50,28 +50,12 @@ export type ProjectMaterialItem = {
   deliveredStatus: "Yes" | "Partial" | "No";
 };
 
-export type ProjectPaymentItem = {
-  id: string;
-  invoiceNumber: string;
-  milestone: string;
-  amount: number;
-  gst: number;
-  sentOn: string;
-  paidOn?: string;
-  status: "Cleared" | "Pending" | "Overdue";
-};
-
-export type WorkerAttendanceItem = {
-  id: string;
-  name: string;
-  trade: string;
-  gpsActive: boolean;
-  checkIn: string;
-  checkOut: string;
-  hours: number;
-  hourlyRate: number;
-  status: "On Site" | "Completed";
-};
+// `ProjectPaymentItem` and `WorkerAttendanceItem` were removed here along with
+// the `projectPaymentsMock` / `workerAttendanceMock` fixtures they shaped. Both
+// described features with no backing Prisma model — there is no Invoice/Payment
+// table, and no attendance/check-in table — so they were fabricated data
+// structures, not a schema contract. If either feature is built for real, model
+// it from the schema rather than resurrecting these.
 
 export type QuoteRequestItem = {
   id: string;

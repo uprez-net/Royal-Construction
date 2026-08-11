@@ -1,6 +1,9 @@
 import { ProjectsClient } from "@/components/projects/projects-client";
-import { getCachedProjectKPIs, getCachedProjects } from "@/lib/data/projects";
+import { getProjectKPIs, getProjects } from "@/lib/data/projects";
+import { connection } from "next/server";
 import type { Metadata } from "next";
+import { auth } from "@clerk/nextjs/server";
+import { getUserByClerkIdCached } from "@/lib/data/user";
 
 export const metadata: Metadata = {
   title: "Projects Management",
@@ -9,13 +12,32 @@ export const metadata: Metadata = {
 
 const projectPageSize = 12;
 
-
-
 export default async function ProjectPage() {
-  const [projectsPage, kpis] = await Promise.all([
-    getCachedProjects({ page: 1, limit: projectPageSize }),
-    getCachedProjectKPIs(),
+  // Render on demand, never at build. Under Cache Components a `'use cache'`
+  // fetcher is PREFILLED during `next build`, which runs its DB query at build
+  // time -- and CI can't reach Neon, so the build died on ETIMEDOUT. The fix is
+  // two parts: (1) read the UNCACHED fetchers so the query happens at request
+  // time, and (2) `connection()` to defer this page's render off the build.
+  // Mirrors app/(main)/dashboard/page.tsx, which already builds without a DB.
+  await connection();
+  const [projectsPage, kpis, user] = await Promise.all([
+    getProjects({ page: 1, limit: projectPageSize }),
+    getProjectKPIs(),
+    auth().then(({ userId }) => userId ? getUserByClerkIdCached(userId) : null),
   ]);
 
-  return <ProjectsClient projects={projectsPage.items} pagination={projectsPage} kpis={kpis} />;
+  return (
+    <>
+      {/* The app shell renders the page name only as a breadcrumb, so the
+          document has no h1 of its own. Visually hidden keeps the existing
+          layout while giving assistive tech the page's top-level heading. */}
+      <h1 className="sr-only">Projects</h1>
+      <ProjectsClient
+        projects={projectsPage.items}
+        pagination={projectsPage}
+        kpis={kpis}
+        role={user!.role}
+      />
+    </>
+  );
 }

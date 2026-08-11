@@ -14,7 +14,7 @@ import {
 } from "@/lib/store/slices/offerSlice";
 import { OfferPagination } from "./offer-pagination";
 import { useRouter } from "next/navigation";
-import { OfferStatusBadge } from "./offer/offer-status-badge";
+import { OfferStatusBadge } from "./offer-status-badge";
 import { OfferStatus } from "@prisma/client";
 
 export function OfferTable({

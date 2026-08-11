@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useMemo, useState } from "react";
 import {
   Calendar,
@@ -8,52 +10,81 @@ import {
   User,
   AlertCircle,
   RefreshCw,
+  CalendarDays,
+  CalendarRange,
+  TimerReset,
 } from "lucide-react";
-import { Lead } from "@/lib/leads/types";
+import { Lead, LeadStage } from "@/lib/leads/types";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
 import { dialablePhone } from "@/lib/leads/lead-helpers";
+import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
+import {
+  addDays,
+  format,
+  parseISO,
+  isAfter,
+  isBefore,
+  isEqual,
+  isSameDay,
+} from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 
 interface FollowupsViewProps {
   loading: boolean;
   leads: Lead[];
+  followupStats: {
+    totalFollowUps: number;
+    pendingFollowUps: number;
+    upcomingFollowUps: number;
+    totalMeetings: number;
+    pendingMeetings: number;
+    upcomingMeetings: number;
+  } | null;
   onLeadUpdate: (lead: Lead) => void;
   onLeadDelete: (leadId: number) => void;
   showToast: (message: string, type?: "success" | "info" | "error") => void;
 }
 
-const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> = {
-  New: {
-    bg: "var(--royal-gold-light)",
-    color: "var(--royal-gold)",
-    dot: "var(--royal-gold)",
-  },
-  Contacted: {
-    bg: "var(--royal-orange-light)",
-    color: "var(--royal-orange)",
-    dot: "var(--royal-orange)",
-  },
-  Qualified: {
-    bg: "var(--success-light)",
-    color: "var(--success)",
-    dot: "var(--success)",
-  },
-  Quoted: {
-    bg: "var(--accent-purple-light)",
-    color: "var(--accent-purple)",
-    dot: "var(--accent-purple)",
-  },
-  Negotiating: {
-    bg: "var(--info-light)",
-    color: "var(--info)",
-    dot: "var(--info)",
-  },
-  Won: { bg: "var(--success-light)", color: "var(--success)", dot: "var(--success)" },
-  Lost: {
-    bg: "var(--destructive-light)",
-    color: "var(--destructive)",
-    dot: "var(--destructive)",
-  },
-};
+const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> =
+  {
+    New: {
+      bg: "var(--royal-gold-light)",
+      color: "var(--royal-gold)",
+      dot: "var(--royal-gold)",
+    },
+    Contacted: {
+      bg: "var(--royal-orange-light)",
+      color: "var(--royal-orange)",
+      dot: "var(--royal-orange)",
+    },
+    Qualified: {
+      bg: "var(--success-light)",
+      color: "var(--success)",
+      dot: "var(--success)",
+    },
+    Quoted: {
+      bg: "var(--accent-purple-light)",
+      color: "var(--accent-purple)",
+      dot: "var(--accent-purple)",
+    },
+    Negotiating: {
+      bg: "var(--info-light)",
+      color: "var(--info)",
+      dot: "var(--info)",
+    },
+    Won: {
+      bg: "var(--success-light)",
+      color: "var(--success)",
+      dot: "var(--success)",
+    },
+    Lost: {
+      bg: "var(--destructive-light)",
+      color: "var(--destructive)",
+      dot: "var(--destructive)",
+    },
+  };
 
 function getStageConfig(stage: string) {
   return (
@@ -65,56 +96,27 @@ function getStageConfig(stage: string) {
   );
 }
 
-/**
- * Helper to get date string in YYYY-MM-DD format for Australia/Sydney timezone.
- * Supports adding offset days (e.g. 1 for tomorrow).
- */
-function getAustralianDateString(offsetDays = 0): string {
-  const date = new Date();
-  if (offsetDays !== 0) {
-    date.setDate(date.getDate() + offsetDays);
-  }
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Australia/Sydney",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-
-  const year = parts.find((p) => p.type === "year")!.value;
-  const month = parts.find((p) => p.type === "month")!.value;
-  const day = parts.find((p) => p.type === "day")!.value;
-
-  return `${year}-${month}-${day}`;
+function getAustralianDate(offsetDays = 0): Date {
+  return addDays(toZonedTime(new Date(), "Australia/Sydney"), offsetDays);
 }
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
-  const date = new Date(dateStr + "T00:00:00");
+  const date = parseISO(dateStr);
+  if (isSameDay(date, getAustralianDate())) {
+    return "Today";
+  }
+  if (isSameDay(date, getAustralianDate(1))) {
+    return "Tomorrow";
+  }
 
-  const todayStr = getAustralianDateString(0);
-  const tomorrowStr = getAustralianDateString(1);
-
-  if (dateStr === todayStr) return "Today";
-  if (dateStr === tomorrowStr) return "Tomorrow";
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    weekday: "short",
-  });
+  return format(date, "EEE, MMM d");
 }
-
-
-/* ══════════════════════════════════════════════
-   FOLLOWUP ITEM
-   ══════════════════════════════════════════════ */
 
 interface FollowupItemProps {
   lead: Lead;
   index: number;
   onLeadUpdate: (lead: Lead) => void;
-  onLeadDelete: (leadId: number) => void;
   showToast: (message: string, type?: "success" | "info" | "error") => void;
 }
 
@@ -122,20 +124,17 @@ function FollowupItem({
   lead,
   index,
   onLeadUpdate,
-  // onLeadDelete, // available if needed later
   showToast,
 }: FollowupItemProps) {
   const [showEmailModal, setShowEmailModal] = useState(false);
-
   const handleCall = () => {
     const dial = dialablePhone(lead.phone);
     if (dial) window.location.href = `tel:${dial}`;
   };
 
   const stageConfig = getStageConfig(lead.stage);
-  const todayStr = getAustralianDateString(0);
-  const isToday = lead.followupDate === todayStr;
-
+  const todayStr = getAustralianDate(0);
+  const isToday = isSameDay(parseISO(lead.followupDate || ""), todayStr);
 
   return (
     <div className={`fu-item ${isToday ? "fu-item-today" : ""}`}>
@@ -148,7 +147,6 @@ function FollowupItem({
         />
       )}
 
-      {/* Timeline connector line */}
       <div className="fu-timeline-track">
         <div
           className="fu-timeline-dot"
@@ -158,7 +156,6 @@ function FollowupItem({
         </div>
       </div>
 
-      {/* Card content */}
       <div className="fu-item-body">
         <div className="fu-item-top">
           <div className="fu-item-name-row">
@@ -166,9 +163,7 @@ function FollowupItem({
             <span
               className="fu-stage-pill"
               style={{
-                background: isToday
-                  ? "var(--warning-light)"
-                  : stageConfig.bg,
+                background: isToday ? "var(--warning-light)" : stageConfig.bg,
                 color: isToday ? "var(--warning)" : stageConfig.color,
               }}
             >
@@ -228,88 +223,82 @@ function FollowupItem({
   );
 }
 
-/* ══════════════════════════════════════════════
-   STAT ITEM
-   ══════════════════════════════════════════════ */
-
-interface StatItemProps {
-  label: string;
-  value: number;
-  color: string;
-}
-
-function StatItem({ label, value, color }: StatItemProps) {
-  return (
-    <div className="fu-stat-row">
-      <div
-        className="fu-stat-indicator"
-        style={{ background: `${color}18`, border: `1.5px solid ${color}40` }}
-      >
-        <div className="fu-stat-dot" style={{ backgroundColor: color }} />
-      </div>
-      <div className="fu-stat-text">
-        <span className="fu-stat-label">{label}</span>
-        <span className="fu-stat-value">{value}</span>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   MAIN VIEW
-   ══════════════════════════════════════════════ */
-
-export default function FollowupsView({
+function FollowupsView({
   loading,
   leads,
+  followupStats,
   onLeadUpdate,
-  onLeadDelete,
   showToast,
 }: FollowupsViewProps) {
-  const upcomingFollowups = useMemo(() => {
-    const today = getAustralianDateString(0);
-    return leads
-      .filter(
+  const dispatch = useAppDispatch();
+
+  const relevantLeads = useMemo(
+    () =>
+      leads.filter(
         (lead) =>
-          lead.followupDate &&
-          lead.followupDate > today &&
-          lead.stage !== "Won" &&
-          lead.stage !== "Lost",
-      )
-      .sort((a, b) =>
-        (a.followupDate || "").localeCompare(b.followupDate || ""),
-      )
-      .slice(0, 10);
-  }, [leads]);
+          lead.stage === "Meeting Scheduled" || lead.stage === "In Follow-up",
+      ),
+    [leads],
+  );
+
+  const today = getAustralianDate();
 
   const pendingFollowups = useMemo(() => {
-    const today = getAustralianDateString(0);
-    return leads.filter(
+    return relevantLeads.filter(
       (lead) =>
+        lead.stage === "In Follow-up" &&
         lead.followupDate &&
-        lead.followupDate <= today &&
-        lead.stage !== "Won" &&
-        lead.stage !== "Lost",
+        (isBefore(parseISO(lead.followupDate), today) ||
+          isEqual(parseISO(lead.followupDate), today)),
     );
-  }, [leads]);
+  }, [relevantLeads, today]);
 
+  const upcomingFollowups = useMemo(() => {
+    return relevantLeads
+      .filter(
+        (lead) =>
+          lead.stage === "In Follow-up" &&
+          lead.followupDate &&
+          isAfter(parseISO(lead.followupDate), today),
+      )
+      .sort(
+        (a, b) =>
+          parseISO(a.followupDate!).getTime() -
+          parseISO(b.followupDate!).getTime(),
+      );
+  }, [relevantLeads, today]);
 
-  const stats = useMemo(() => {
-    return {
-      pending: pendingFollowups.length,
-      upcoming: upcomingFollowups.length,
-      byStage: {
-        new: leads.filter((l) => l.stage === "New").length,
-        contacted: leads.filter((l) => l.stage === "Contacted").length,
-        qualified: leads.filter((l) => l.stage === "Qualified").length,
-      },
-    };
-  }, [leads, pendingFollowups, upcomingFollowups]);
+  const pendingMeetings = useMemo(() => {
+    return relevantLeads.filter(
+      (lead) =>
+        lead.stage === "Meeting Scheduled" &&
+        lead.meetingDate &&
+        (isBefore(parseISO(lead.meetingDate), today) ||
+          isEqual(parseISO(lead.meetingDate), today)),
+    );
+  }, [relevantLeads, today]);
+
+  const upcomingMeetings = useMemo(() => {
+    return relevantLeads.filter(
+      (lead) =>
+        lead.stage === "Meeting Scheduled" &&
+        lead.meetingDate &&
+        isAfter(parseISO(lead.meetingDate), today),
+    );
+  }, [relevantLeads, today]);
+
+  const stats = followupStats ?? {
+    totalFollowUps: pendingFollowups.length + upcomingFollowups.length,
+    pendingFollowUps: pendingFollowups.length,
+    upcomingFollowUps: upcomingFollowups.length,
+    totalMeetings: pendingMeetings.length + upcomingMeetings.length,
+    pendingMeetings: pendingMeetings.length,
+    upcomingMeetings: upcomingMeetings.length,
+  };
 
   return (
     <div className="followups-view">
       <div className="followups-grid">
-        {/* ─── Main Column ─── */}
         <div className="followups-main">
           <div className="fu-card">
             <div className="fu-card-header">
@@ -319,7 +308,7 @@ export default function FollowupsView({
               </div>
               <span className="fu-pending-badge">
                 <span className="fu-pending-pulse" />
-                {stats.pending} pending
+                {stats.pendingFollowUps} pending
               </span>
             </div>
             <div className="fu-list">
@@ -340,7 +329,6 @@ export default function FollowupsView({
                     lead={lead}
                     index={index}
                     onLeadUpdate={onLeadUpdate}
-                    onLeadDelete={onLeadDelete}
                     showToast={showToast}
                   />
                 ))
@@ -349,9 +337,7 @@ export default function FollowupsView({
           </div>
         </div>
 
-        {/* ─── Sidebar ─── */}
         <div className="followups-sidebar">
-          {/* Upcoming Reminders Card */}
           <div className="fu-card">
             <div className="fu-card-header">
               <div className="fu-card-header-left">
@@ -409,7 +395,6 @@ export default function FollowupsView({
             )}
           </div>
 
-          {/* Quick Stats Card */}
           <div className="fu-card">
             <div className="fu-card-header">
               <div className="fu-card-header-left">
@@ -417,31 +402,118 @@ export default function FollowupsView({
                 <h3 className="fu-card-title">Quick Stats</h3>
               </div>
             </div>
-            <div className="fu-stats">
-              <StatItem
+            <div className="grid gap-3 p-4 grid-cols-1">
+              <LeadMetricCard
+                label="Total Follow-ups"
+                value={String(stats.totalFollowUps)}
+                note="All follow-up leads"
+                tone="primary"
+                icon={CalendarDays}
+                onClick={() =>
+                  dispatch(
+                    openModal({
+                      type: "leadStatsDrilldown",
+                      payload: {
+                        title: "Total Follow-ups",
+                        stage: ["In Follow-up"] as LeadStage[],
+                      },
+                    }),
+                  )
+                }
+              />
+              <LeadMetricCard
                 label="Pending Follow-ups"
-                value={stats.pending}
-                color="var(--destructive)"
+                value={String(stats.pendingFollowUps)}
+                note="Follow-ups due today or earlier"
+                tone="danger"
+                icon={Clock}
+                onClick={() =>
+                  dispatch(
+                    openModal({
+                      type: "leadStatsDrilldown",
+                      payload: {
+                        title: "Pending Follow-ups",
+                        stage: ["In Follow-up"] as LeadStage[],
+                        pendingFollowUps: true,
+                      },
+                    }),
+                  )
+                }
               />
-              <StatItem
-                label="Upcoming"
-                value={stats.upcoming}
-                color="var(--royal-gold)"
+              <LeadMetricCard
+                label="Upcoming Follow-ups"
+                value={String(stats.upcomingFollowUps)}
+                note="Scheduled after today"
+                tone="warning"
+                icon={CalendarRange}
+                onClick={() =>
+                  dispatch(
+                    openModal({
+                      type: "leadStatsDrilldown",
+                      payload: {
+                        title: "Upcoming Follow-ups",
+                        stage: ["In Follow-up"] as LeadStage[],
+                        upcomingFollowUps: true,
+                      },
+                    }),
+                  )
+                }
               />
-              <StatItem
-                label="New Leads"
-                value={stats.byStage.new}
-                color="var(--royal-gold)"
+              <LeadMetricCard
+                label="Total Meetings"
+                value={String(stats.totalMeetings)}
+                note="Meeting scheduled leads"
+                tone="info"
+                icon={Bell}
+                onClick={() =>
+                  dispatch(
+                    openModal({
+                      type: "leadStatsDrilldown",
+                      payload: {
+                        title: "Total Meetings",
+                        stage: ["Meeting Scheduled"] as LeadStage[],
+                      },
+                    }),
+                  )
+                }
               />
-              <StatItem
-                label="Contacted"
-                value={stats.byStage.contacted}
-                color="var(--royal-orange)"
+              <LeadMetricCard
+                label="Pending Meetings"
+                value={String(stats.pendingMeetings)}
+                note="Meetings that have passed"
+                tone="danger"
+                icon={TimerReset}
+                onClick={() =>
+                  dispatch(
+                    openModal({
+                      type: "leadStatsDrilldown",
+                      payload: {
+                        title: "Pending Meetings",
+                        stage: ["Meeting Scheduled"] as LeadStage[],
+                        pendingMeetings: true,
+                      },
+                    }),
+                  )
+                }
               />
-              <StatItem
-                label="Qualified"
-                value={stats.byStage.qualified}
-                color="var(--success)"
+              <LeadMetricCard
+                label="Upcoming Meetings"
+                value={String(stats.upcomingMeetings)}
+                note="Meetings still ahead"
+                tone="success"
+                icon={CalendarDays}
+                onClick={() =>
+                  dispatch(
+                    openModal({
+                      type: "leadStatsDrilldown",
+                      payload: {
+                        title: "Upcoming Meetings",
+                        stage: ["Meeting Scheduled"] as LeadStage[],
+                        upcomingMeetings: true,
+                      },
+                    }),
+                  )
+                }
               />
             </div>
           </div>
@@ -450,3 +522,5 @@ export default function FollowupsView({
     </div>
   );
 }
+
+export default FollowupsView;

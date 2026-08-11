@@ -14,6 +14,7 @@ interface UploadButtonProps {
   projectId?: string;
   milestoneId?: string;
   incidentId?: string;
+  accept?: string;
   onUpload: (file: DBFile[]) => void;
 }
 
@@ -25,6 +26,20 @@ export function UploadButton({
   projectId,
   milestoneId,
   incidentId,
+  accept = `
+    application/pdf,
+    application/msword,
+    application/vnd.openxmlformats-officedocument.wordprocessingml.document,
+    application/vnd.ms-excel,
+    application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,
+    text/csv,
+    .csv,
+    .doc,
+    .docx,
+    .xls,
+    xlsx,
+    .pdf
+        `,
   onUpload,
 }: UploadButtonProps) {
   const [isUploading, startTransition] = useTransition();
@@ -101,7 +116,7 @@ export function UploadButton({
         uploadedBy: "current_user", // Replace with actual user info if available
         createdAt: new Date(),
         updatedAt: new Date(),
-        incidentId: incidentId ?? null, 
+        incidentId: incidentId ?? null,
       } satisfies DBFile;
     } catch (error) {
       console.error("Error uploading file:", error);
@@ -171,20 +186,7 @@ export function UploadButton({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="
-            application/pdf,
-            application/msword,
-            application/vnd.openxmlformats-officedocument.wordprocessingml.document,
-            application/vnd.ms-excel,
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,
-            text/csv,
-            .csv,
-            .doc,
-            .docx,
-            .xls,
-            .xlsx,
-            .pdf
-        "
+        accept={accept}
         max={maxFiles}
         disabled={isUploading}
         className="hidden"

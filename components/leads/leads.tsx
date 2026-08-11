@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -38,9 +38,10 @@ import {
 } from "@/components/ui/select";
 import { useSearchParams } from "next/navigation";
 import TableView from "./views/table-view";
-import FollowupsView from "./views/followups-view";
+import { FollowupsView } from "./views";
 import AnalyticsView from "./views/analytics-view";
 import { useUser } from "@clerk/nextjs";
+import { LeadNotificationCard } from "./lead-notification-card";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -54,6 +55,7 @@ export default function Leads() {
   const {
     leads,
     stats,
+    followupStats,
     analyticsData,
     pageInfo,
     loading,
@@ -87,7 +89,8 @@ export default function Leads() {
       ? ((stats.conversion / stats.total) * 100).toFixed(1)
       : "0.0";
 
-  const statusParam = activeMetric === "total" ? "total" : activeMetric ?? undefined;
+  const statusParam =
+    activeMetric === "total" ? "total" : (activeMetric ?? undefined);
 
   /* ── Search + filter effect ── */
   useEffect(() => {
@@ -97,8 +100,15 @@ export default function Leads() {
         page: 1,
         limit: 10,
         query: q || undefined,
-        status: statusParam,
+        status:
+          statusParam === "Archived"
+            ? undefined
+            : statusParam
+                ?.split(",")
+                .filter((s) => s && s !== "Archived")
+                .join(",") || undefined,
         filterTiming: activeFilterTiming,
+        isArchived: statusParam?.includes("Archived") ? true : undefined,
       });
     }
   }, [debouncedSearch, refreshLeadsData, statusParam, activeFilterTiming]);
@@ -120,7 +130,9 @@ export default function Leads() {
           validatedStatus = decodedStatus;
         } else {
           const parts = decodedStatus.split(",");
-          const allValid = parts.every(part => leadStatusSchema.safeParse(part.trim()).success);
+          const allValid = parts.every(
+            (part) => leadStatusSchema.safeParse(part.trim()).success,
+          );
           if (allValid) {
             validatedStatus = decodedStatus;
           }
@@ -156,16 +168,7 @@ export default function Leads() {
       refreshLeadsData({
         page: 1,
         limit: 50,
-        status: [
-          "New",
-          "Contacted",
-          "Qualified",
-          "Quoted",
-          "Negotiating",
-          "Meeting Scheduled",
-          "In Follow-up",
-          "No Response",
-        ].join(","),
+        status: ["Meeting Scheduled", "In Follow-up"].join(","),
       });
     } else if (tab === "table") {
       refreshLeadsData({ page: 1, limit: 10 });
@@ -173,13 +176,21 @@ export default function Leads() {
   };
 
   const handleMetricClick = (metric: string | null) => {
+    setActiveTab("table");
     setActiveMetric(metric);
+    const cleanedMetric =
+      metric
+        ?.split(",")
+        .filter((s) => s && s !== "Archived")
+        .join(",") || undefined;
     refreshLeadsData({
       page: 1,
       limit: 10,
-      status: metric === "total" ? "total" : metric ?? undefined,
+      status:
+        metric === "total" || metric === "Archived" ? "total" : cleanedMetric,
       filterTiming: activeFilterTiming,
       query: debouncedSearch.trim() || undefined,
+      isArchived: metric?.includes("Archived") ? true : undefined,
     });
   };
 
@@ -204,7 +215,13 @@ export default function Leads() {
         filterTiming: activeFilterTiming,
       });
     },
-    [refreshLeadsData, statusParam, pageInfo.limit, searchTerm, activeFilterTiming],
+    [
+      refreshLeadsData,
+      statusParam,
+      pageInfo.limit,
+      searchTerm,
+      activeFilterTiming,
+    ],
   );
 
   const handleExport = async () => {
@@ -216,6 +233,9 @@ export default function Leads() {
       "phone",
       "email",
       "location",
+      "secondaryName",
+      "secondaryEmail",
+      "secondaryPhone",
       "SourceDetail",
       "Stage",
       "assigned",
@@ -228,15 +248,16 @@ export default function Leads() {
       "urgent",
     ];
     const leadRows = allLeads.map((l) => {
-      const types = normalizeTypes(l.type).filter(
-        (t) => t !== "Not Specified",
-      );
+      const types = normalizeTypes(l.type).filter((t) => t !== "Not Specified");
       return [
         l.id,
         l.name,
         l.phone,
         l.email,
         l.location,
+        l.secondaryName || "",
+        l.secondaryEmail || "",
+        l.secondaryPhone || "",
         l.sourceDetail,
         l.stage,
         l.assignedUser?.name || "",
@@ -249,13 +270,7 @@ export default function Leads() {
         l.urgent ? "true" : "false",
       ];
     });
-    const historyHeader = [
-      "leadId",
-      "action",
-      "detail",
-      "type",
-      "actionDate",
-    ];
+    const historyHeader = ["leadId", "action", "detail", "type", "actionDate"];
     const historyRows = allLeads.flatMap((l) =>
       (l.history ?? []).map((e) => [
         l.id,
@@ -338,62 +353,66 @@ export default function Leads() {
 
       {/* Metric cards */}
       {stats && !loading && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3">
-          <LeadMetricCard
-            label="Total Leads"
-            value={String(stats.total)}
-            note="All leads in the pipeline"
-            tone="primary"
-            icon={UserPlus}
-            onClick={() => handleMetricClick("total")}
-            active={activeMetric === "total"}
-          />
-          <LeadMetricCard
-            label="New & Contacted"
-            value={String((stats.new || 0) + (stats.contacted || 0))}
-            note="Fresh and contacted leads"
-            tone="info"
-            icon={Sparkles}
-            onClick={() => handleMetricClick("New,Contacted")}
-            active={activeMetric === "New,Contacted"}
-          />
-          <LeadMetricCard
-            label="Quoted"
-            value={String(stats.quoted || 0)}
-            note="Leads with active quotations"
-            tone="badge"
-            icon={FileText}
-            onClick={() => handleMetricClick("Quoted")}
-            active={activeMetric === "Quoted"}
-          />  
-          <LeadMetricCard
-            label={`Converted (${conversionRate}%)`}
-            value={String(stats.conversion)}
-            note="Won and converted leads"
-            tone="success"
-            icon={CircleCheckBig}
-            onClick={() => handleMetricClick("converted")}
-            active={activeMetric === "converted"}
-          />
-          <LeadMetricCard
-            label="Pending Follow-up"
-            value={String(stats.pendingFollowup)}
-            note="Leads awaiting next action"
-            tone="warning"
-            icon={Clock}
-            onClick={() => handleMetricClick("pendingFollowup")}
-            active={activeMetric === "pendingFollowup"}
-          />
-          <LeadMetricCard
-            label="Lost Leads"
-            value={String(stats.lost)}
-            note="Lost, cancelled or disqualified"
-            tone="danger"
-            icon={CircleX}
-            onClick={() => handleMetricClick("lost")}
-            active={activeMetric === "lost"}
-          />
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3">
+            <LeadMetricCard
+              label="Total Leads"
+              value={String(stats.total)}
+              note="All leads in the pipeline"
+              tone="primary"
+              icon={UserPlus}
+              onClick={() => handleMetricClick("total")}
+              active={activeMetric === "total"}
+            />
+            <LeadMetricCard
+              label="New & Contacted"
+              value={String((stats.new || 0) + (stats.contacted || 0))}
+              note="Fresh and contacted leads"
+              tone="info"
+              icon={Sparkles}
+              onClick={() => handleMetricClick("New,Contacted")}
+              active={activeMetric === "New,Contacted"}
+            />
+            <LeadMetricCard
+              label="Quoted"
+              value={String(stats.quoted || 0)}
+              note="Leads with active quotations"
+              tone="badge"
+              icon={FileText}
+              onClick={() => handleMetricClick("Quoted")}
+              active={activeMetric === "Quoted"}
+            />
+            <LeadMetricCard
+              label={`Converted (${conversionRate}%)`}
+              value={String(stats.conversion)}
+              note="Won and converted leads"
+              tone="success"
+              icon={CircleCheckBig}
+              onClick={() => handleMetricClick("converted")}
+              active={activeMetric === "converted"}
+            />
+            <LeadMetricCard
+              label="Pending Follow-up"
+              value={String(stats.pendingFollowup)}
+              note="Leads awaiting next action"
+              tone="warning"
+              icon={Clock}
+              onClick={() => handleMetricClick("pendingFollowup")}
+              active={activeMetric === "pendingFollowup"}
+            />
+            <LeadMetricCard
+              label="Lost Leads"
+              value={String(stats.lost)}
+              note="Lost, cancelled or disqualified"
+              tone="danger"
+              icon={CircleX}
+              onClick={() => handleMetricClick("lost")}
+              active={activeMetric === "lost"}
+            />
+          </div>
+
+          <LeadNotificationCard />
+        </>
       )}
 
       {/* Main card */}
@@ -434,7 +453,7 @@ export default function Leads() {
                 value={activeFilterTiming}
                 onValueChange={handleFilterTimingChange}
               >
-                  <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
                   <SelectValue placeholder="Select timeframe" />
                 </SelectTrigger>
                 <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
@@ -490,9 +509,10 @@ export default function Leads() {
                 <FollowupsView
                   loading={loadingLeads}
                   leads={leads}
+                  followupStats={followupStats}
                   onLeadUpdate={updateLeadInList}
                   onLeadDelete={removeLeadFromList}
-                  showToast={showToast} 
+                  showToast={showToast}
                 />
               )}
               {activeTab === "analytics" && (

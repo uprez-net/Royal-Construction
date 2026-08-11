@@ -32,6 +32,21 @@ export const notificationSchemas = {
         assignedTo: z.string(),
     }),
 
+    leadFollowupDue: z.object({
+        leadId: z.string(),
+        customerName: z.string(),
+        followupDate: z.string().optional(),
+        followupTime: z.string().optional(),
+    }),
+
+    leadMeetingReview: z.object({
+        leadId: z.string(),
+        customerName: z.string(),
+        meetingDate: z.string().optional(),
+        meetingTime: z.string().optional(),
+        meetingMode: z.string().optional(),
+    }),
+
     projectCreated: z.object({
         projectId: z.string(),
         projectName: z.string(),
@@ -168,6 +183,13 @@ export const notificationSchemas = {
         tradieId: z.string(),
         tradieName: z.string(),
         trade: z.string(),
+    }),
+
+    contractSigned: z.object({
+        leadId: z.string(),
+        offerReference: z.string(),
+        customerName: z.string(),
+        siteAddress: z.string(),
     }),
 
     milestoneStatusChanged: z.object({
