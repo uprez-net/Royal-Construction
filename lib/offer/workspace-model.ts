@@ -50,6 +50,10 @@ export type OfferOwnerSignatory = {
   readonly name: string;
   readonly email: string;
   readonly phone: string;
+  // Mobile number — distinct from `phone` (the "telephone" line). The BC4
+  // contract page ii "ADDITIONAL OWNERS" table carries separate TELEPHONE and
+  // MOBILE columns per owner (issue #142), so each signatory needs both.
+  readonly mobile: string;
   readonly capacity: string;
 };
 
@@ -311,7 +315,7 @@ export function createOfferSignatory(
   id: string,
   capacity: string,
 ): OfferOwnerSignatory {
-  return { id, name: "", email: "", phone: "", capacity };
+  return { id, name: "", email: "", phone: "", mobile: "", capacity };
 }
 
 // A blank individual owner: one signatory (the person themselves, capacity
@@ -755,6 +759,7 @@ export function ownersFromLegacyClientFields(fields: {
           name: fields.clientNames,
           email: fields.clientEmail,
           phone: fields.clientPhone,
+          mobile: "",
           capacity: OWNER_SIGNER_CAPACITY,
         },
       ],
@@ -777,6 +782,7 @@ export function ownersFromLegacyClientFields(fields: {
           // co-owner's own email (surfaced as a readiness issue).
           email: fields.secondaryCustomerEmail,
           phone: "",
+          mobile: "",
           capacity: OWNER_SIGNER_CAPACITY,
         },
       ],

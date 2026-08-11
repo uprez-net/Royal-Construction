@@ -208,6 +208,7 @@ const ownerSignatorySchema = z.object({
   name: z.string().default(""),
   email: z.string().default(""),
   phone: z.string().default(""),
+  mobile: z.string().default(""),
   capacity: z.string().default("Owner"),
 });
 

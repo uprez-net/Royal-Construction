@@ -492,13 +492,29 @@ function OwnersSection({
   const removeOwner = (index: number) =>
     onOwnersChange(owners.filter((_, i) => i !== index));
 
+  // The BC4 contract supports up to 4 Owners (issue #142). Cap the party set
+  // here rather than letting the estimator add more than the contract can print.
+  const MAX_OWNERS = 4;
+  const atOwnerCap = owners.length >= MAX_OWNERS;
+
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Owners
         </span>
-        <Button size="sm" type="button" variant="outline" onClick={addOwner}>
+        <Button
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={addOwner}
+          disabled={atOwnerCap}
+          title={
+            atOwnerCap
+              ? "The BC4 contract supports up to 4 owners"
+              : undefined
+          }
+        >
           <Plus className="size-4" aria-hidden="true" /> Add owner
         </Button>
       </div>
@@ -572,7 +588,7 @@ function OwnersSection({
                   }
                 />
               </Field>
-              <Field label="Phone">
+              <Field label="Telephone">
                 <Input
                   value={owner.signatories[0]?.phone ?? ""}
                   onChange={(event) =>
@@ -580,7 +596,15 @@ function OwnersSection({
                   }
                 />
               </Field>
-              <Field label="Current Location">
+              <Field label="Mobile">
+                <Input
+                  value={owner.signatories[0]?.mobile ?? ""}
+                  onChange={(event) =>
+                    updateSignatory(index, 0, { mobile: event.target.value })
+                  }
+                />
+              </Field>
+              <Field className="md:col-span-2 xl:col-span-4" label="Current Location">
                 <AddressAutocomplete
                   placeholder="Where the owner currently lives"
                   value={owner.currentLocation}
@@ -640,7 +664,7 @@ function OwnersSection({
                 {owner.signatories.map((director, sigIndex) => (
                   <div
                     key={director.id}
-                    className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"
+                    className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]"
                   >
                     {/* Repeated rows carry an explicit accessible name each — a
                         placeholder is not a label, and every row otherwise
@@ -667,12 +691,22 @@ function OwnersSection({
                       }
                     />
                     <Input
-                      placeholder="Director phone"
-                      aria-label={`Director ${sigIndex + 1} phone`}
+                      placeholder="Director telephone"
+                      aria-label={`Director ${sigIndex + 1} telephone`}
                       value={director.phone}
                       onChange={(event) =>
                         updateSignatory(index, sigIndex, {
                           phone: event.target.value,
+                        })
+                      }
+                    />
+                    <Input
+                      placeholder="Director mobile"
+                      aria-label={`Director ${sigIndex + 1} mobile`}
+                      value={director.mobile}
+                      onChange={(event) =>
+                        updateSignatory(index, sigIndex, {
+                          mobile: event.target.value,
                         })
                       }
                     />

@@ -20,7 +20,7 @@ function individual(
     ...createIndividualOwner(id),
     displayName: name,
     currentLocation,
-    signatories: [{ id: `${id}-s`, name, email, phone: "", capacity: "Owner" }],
+    signatories: [{ id: `${id}-s`, name, email, phone: "", mobile: "", capacity: "Owner" }],
   };
 }
 
@@ -41,6 +41,7 @@ function company(
         name: "Director One",
         email: directorEmail,
         phone: "",
+        mobile: "",
         capacity: "Director",
       },
     ],

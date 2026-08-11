@@ -318,6 +318,29 @@ export async function sendContractForSignature(input: {
   if (ownerPhoneValue) ownerContactTabs.push(locked("ownerPhone", ownerPhoneValue));
   if (ownerMobileValue) ownerContactTabs.push(locked("ownerMobile", ownerMobileValue));
 
+  // Owners 2–4 (issue #142): page ii's "ADDITIONAL OWNERS" table carries one
+  // row per extra owner with NAME / ADDRESS / TELEPHONE / MOBILE. Each value is
+  // a locked tab on the Owner role (the primary signer), matching the Owner 1
+  // pattern above. A blank field is left UNSET — the template's locked-empty
+  // tab stays read-only without sending an empty string that would visually
+  // clutter the table. Owners never exceed 4 in practice, so indexes 1–3 are
+  // handled explicitly/safely rather than via generic N-owner scaffolding.
+  const additionalOwnerTabs: ContractTabValue[] = [];
+  const additionalOwnerIndexes = [1, 2, 3] as const;
+  for (const i of additionalOwnerIndexes) {
+    const owner = ownerParties[i];
+    if (!owner) break;
+    const name = owner.displayName.trim();
+    const address = owner.currentLocation.trim();
+    const phone = (owner.signatories[0]?.phone ?? "").trim();
+    const mobile = (owner.signatories[0]?.mobile ?? "").trim();
+    const tabSuffix = i + 1; // owner2 / owner3 / owner4
+    if (name) additionalOwnerTabs.push(locked(`owner${tabSuffix}Name`, name));
+    if (address) additionalOwnerTabs.push(locked(`owner${tabSuffix}Address`, address));
+    if (phone) additionalOwnerTabs.push(locked(`owner${tabSuffix}Phone`, phone));
+    if (mobile) additionalOwnerTabs.push(locked(`owner${tabSuffix}Mobile`, mobile));
+  }
+
   // The DocuSign OWNER recipient routes to ownerSigners[0].email (the primary
   // signer's own email if valid, else the resolved customer email). The printed
   // ownerEmail tab MUST show that same address — using customerEmail directly let
@@ -348,6 +371,10 @@ export async function sendContractForSignature(input: {
     // Owner address/contact — sourced from the primary owner's Current Location +
     // contact (ADR 0003).
     ...ownerContactTabs,
+    // Owners 2–4 contact rows (issue #142) — the "ADDITIONAL OWNERS" table on
+    // page ii. Populated from each owner's Current Location + primary signatory's
+    // phone/mobile; blank fields are omitted (locked-empty in the template).
+    ...additionalOwnerTabs,
     // The primary signer's capacity ("Owner" / "Director of ABC Pty Ltd").
     locked("ownerCapacity", capacityLabel),
     // Estimator-entered BC4 particulars (issue #98). Only the FILLED ones are
