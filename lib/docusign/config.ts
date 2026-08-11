@@ -15,6 +15,8 @@ export interface DocusignConfig {
   // MBA BC4 contract template (see lib/docusign/contract-template-spec.md);
   // null until the template is created in the DocuSign account.
   readonly contractTemplateId: string | null;
+  readonly contractDefaultTemplateId: string | null;
+  readonly contractMultipleOwnersTemplateId: string | null;
 }
 
 export function getDocusignConfig(): DocusignConfig {
@@ -56,6 +58,8 @@ export function getDocusignConfig(): DocusignConfig {
     builderSignerEmail: builderSignerEmail as string,
     connectWebhookUrl: process.env.DOCUSIGN_CONNECT_WEBHOOK_URL ?? null,
     contractTemplateId: process.env.DOCUSIGN_CONTRACT_TEMPLATE_ID ?? null,
+    contractDefaultTemplateId: process.env.DOCUSIGN_CONTRACT__DEFAULT_TEMPLATE_ID ?? null,
+    contractMultipleOwnersTemplateId: process.env.DOCUSIGN_CONTRACT__MULTIPLE_TEMPLATE_ID ?? null,
   };
 }
 

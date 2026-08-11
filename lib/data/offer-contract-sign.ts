@@ -106,11 +106,11 @@ export async function sendContractForSignature(input: {
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }
-  if (!config.contractTemplateId) {
+  if (!config.contractTemplateId || !config.contractDefaultTemplateId || !config.contractMultipleOwnersTemplateId) {
     return {
       ok: false,
       error:
-        "DOCUSIGN_CONTRACT_TEMPLATE_ID is not configured — create the BC4 template first (see lib/docusign/contract-template-spec.md).",
+        "One or more required DocuSign contract template IDs are not configured — create the BC4 templates first (see lib/docusign/contract-template-spec.md).",
     };
   }
 
@@ -226,27 +226,27 @@ export async function sendContractForSignature(input: {
   // area only fits ~2 signatures before the Builder block — ADR 0003). Generate
   // it before the send is claimed so a failure needs no status rollback.
   let annexurePdfBase64: string | null = null;
-  if (ownerSigners.length > 1) {
-    try {
-      annexurePdfBase64 = await generatePDF({
-        html: buildContractSignatureAnnexureHtml({
-          reference,
-          siteAddress: job.siteAddress,
-          ownerNamesLine: ownerNames,
-          signers: ownerSigners.slice(1).map((signer) => ({
-            name: signer.name,
-            capacity: signer.capacity,
-            entityName: signer.entityName,
-          })),
-        }),
-      });
-    } catch (error) {
-      return {
-        ok: false,
-        error: `Failed to generate the owner signature schedule: ${(error as Error).message}`,
-      };
-    }
-  }
+  // if (ownerSigners.length > 1) {
+  //   try {
+  //     annexurePdfBase64 = await generatePDF({
+  //       html: buildContractSignatureAnnexureHtml({
+  //         reference,
+  //         siteAddress: job.siteAddress,
+  //         ownerNamesLine: ownerNames,
+  //         signers: ownerSigners.slice(1).map((signer) => ({
+  //           name: signer.name,
+  //           capacity: signer.capacity,
+  //           entityName: signer.entityName,
+  //         })),
+  //       }),
+  //     });
+  //   } catch (error) {
+  //     return {
+  //       ok: false,
+  //       error: `Failed to generate the owner signature schedule: ${(error as Error).message}`,
+  //     };
+  //   }
+  // }
 
   // ── Tab values (labels defined by scripts/docusign/create-bc4-template.ts;
   // unlocked particulars live in the template and are completed by the
@@ -329,16 +329,22 @@ export async function sendContractForSignature(input: {
   const additionalOwnerIndexes = [1, 2, 3] as const;
   for (const i of additionalOwnerIndexes) {
     const owner = ownerParties[i];
+    const ownerSignatory = contractSigners[i]?.signatory;
     if (!owner) break;
     const name = owner.displayName.trim();
     const address = owner.currentLocation.trim();
     const phone = (owner.signatories[0]?.phone ?? "").trim();
     const mobile = (owner.signatories[0]?.mobile ?? "").trim();
+    const capacity = ownerSignatory?.capacity ?? null;
     const tabSuffix = i + 1; // owner2 / owner3 / owner4
-    if (name) additionalOwnerTabs.push(locked(`owner${tabSuffix}Name`, name));
+    if (name) {
+      additionalOwnerTabs.push(locked(`owner${tabSuffix}PrintName`, name));
+      additionalOwnerTabs.push(locked(`owner${tabSuffix}Name`, name));
+    }
     if (address) additionalOwnerTabs.push(locked(`owner${tabSuffix}Address`, address));
     if (phone) additionalOwnerTabs.push(locked(`owner${tabSuffix}Phone`, phone));
     if (mobile) additionalOwnerTabs.push(locked(`owner${tabSuffix}Mobile`, mobile));
+    if (capacity) additionalOwnerTabs.push(locked(`owner${tabSuffix}Capacity`, capacity));
   }
 
   // The DocuSign OWNER recipient routes to ownerSigners[0].email (the primary
@@ -394,7 +400,12 @@ export async function sendContractForSignature(input: {
     envelope = await createContractEnvelope({
       context,
       config,
-      templateId: config.contractTemplateId,
+      templateId:
+        ownerSigners.length === 0 ?
+          config.contractTemplateId :
+          ownerSigners.length <= 2 ?
+            config.contractDefaultTemplateId :
+            config.contractMultipleOwnersTemplateId,
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
       builder: { name: config.builderSignerName, email: config.builderSignerEmail },
       owners: ownerSigners,

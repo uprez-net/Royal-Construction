@@ -188,6 +188,19 @@ function additionalOwnerTabs(locked: { locked: true }): docusign.Text[] {
   ]);
 }
 
+function additionalOwnerAcknowledgmentTabs(locked: { locked: boolean }): docusign.Text[] {
+    return ADDITIONAL_OWNER_INDEXES.flatMap((i) => [
+        textTab(`acknowledgement_of_owner_docusign_${i}_name_value`, `owner${i + 1}PrintName`, {
+            ...locked,
+            width: 220,
+        }),
+        textTab(`acknowledgement_of_owner_docusign_${i}_capacity_value`, `owner${i + 1}Capacity`, {
+            ...locked,
+            width: 220,
+        }),
+    ])
+}
+
 // The Builder counter-signs (routingOrder 2) — all contract DATA now lives on
 // the Owner role (the first signer), so the customer opens a complete contract.
 function builderTabs(): docusign.Tabs {
@@ -274,6 +287,10 @@ function ownerTabs(): docusign.Tabs {
       textTab("signed_year_value", "signedYear", { width: 40 }),
       textTab("acknowledgement_of_owner_docusign_0_name_value", "ownerPrintName", { width: 220 }),
       textTab("acknowledgement_of_owner_docusign_0_capacity_value", "ownerCapacity", { width: 220 }),
+      // Additional owners (issue #142) — page v Acknowledgement of Owner each
+      // carry one more PrintName + Capacity tab per additional owner, to the
+      // right of the Owner 1 tabs.
+      ...additionalOwnerAcknowledgmentTabs({ locked: false })
     ],
     checkboxTabs: [
       // Derived contract terms — value set by the send action, LOCKED so the
@@ -309,14 +326,14 @@ async function main() {
     description:
       "Head contract sent from the offer workflow once the Tender is signed. " +
       "Tabs AutoPlace onto the MBA webform's embedded merge tokens; created by " +
-      "scripts/docusign/create-bc4-template.ts — edit that script, not this template.",
+      "scripts/docusign/create-bc4-template-multiple.ts — edit that script, not this template.",
     emailSubject: "Residential Building Contract (BC4) — Royal Constructions",
     shared: "false",
     status: "created",
     documents: [
       {
         documentBase64: pdfBase64,
-        name: "MBA_BC4_Contract_vMar2025.pdf",
+        name: "MBA_BC4_Contract_vMar2025_Multiple.pdf",
         fileExtension: "pdf",
         documentId: "1",
       },
@@ -357,11 +374,11 @@ async function main() {
     if (/^DOCUSIGN_CONTRACT_TEMPLATE_ID=.*$/m.test(env)) {
       writeFileSync(
         ".env",
-        env.replace(/^DOCUSIGN_CONTRACT_TEMPLATE_ID=.*$/m, `DOCUSIGN_CONTRACT_TEMPLATE_ID=${templateId}`),
+        env.replace(/^DOCUSIGN_CONTRACT__MULTIPLE_TEMPLATE_ID=.*$/m, `DOCUSIGN_CONTRACT__MULTIPLE_TEMPLATE_ID=${templateId}`),
       );
-      console.log(".env updated with DOCUSIGN_CONTRACT_TEMPLATE_ID");
+      console.log(".env updated with DOCUSIGN_CONTRACT__MULTIPLE_TEMPLATE_ID");
     } else {
-      console.log(`Set DOCUSIGN_CONTRACT_TEMPLATE_ID=${templateId} in .env`);
+      console.log(`Set DOCUSIGN_CONTRACT__MULTIPLE_TEMPLATE_ID=${templateId} in .env`);
     }
   }
   process.exit(0);
