@@ -11,6 +11,19 @@
  * is exactly right for values printed in several places (contract price on
  * pages i+ii, bank details on pages iii+vi).
  *
+ * Up to 4 Owners (issue #142): page ii now carries an "ADDITIONAL OWNERS"
+ * table (Owner 2 / 3 / 4) with hidden anchor tokens
+ * `owners_1_owner_*_value` .. `owners_3_owner_*_value`, matching the
+ * existing `owners_0_owner_*_value` tokens for the first Owner. NAME,
+ * ADDRESS, TELEPHONE and MOBILE are all per-owner (each row in the table has
+ * its own owners_N_owner_name_value anchor) since owners may share a
+ * surname but not an address, and the table needs to read correctly on its
+ * own. `owners_0_owner_name_value` (tabLabel `ownerNames`) is left as-is and
+ * continues to carry the combined/primary "Owner(s):" line at the top of
+ * page ii — the send action can keep populating it with all owner names
+ * together for that summary line, independent of the per-owner names below.
+ * EMAIL remains a single shared field (`owners_0_owner_email_value`).
+ *
  * Roles (customer-first, issue #98): `Owner` (routingOrder 1 — the primary
  * authorised signatory, signs FIRST) and `Builder` (routingOrder 2 —
  * counter-signs to execute). EVERY value printed on the contract is a tab on
@@ -145,6 +158,36 @@ const SCHEDULE1_YES_TOKENS = [
   "security_of_payment_guide_included_yes_value",
 ];
 
+// Additional owners (issue #142) — the contract supports up to 4 Owners.
+// Owner 1's particulars use the original owners_0_* tokens (page ii, WHO
+// section). Owners 2-4 use owners_1_* / owners_2_* / owners_3_* tokens,
+// which AutoPlace onto the new "ADDITIONAL OWNERS" table on page ii — one
+// row per owner, each with its own NAME field so the table reads correctly
+// standalone. Only EMAIL stays on the single shared
+// owners_0_owner_email_value tab.
+const ADDITIONAL_OWNER_INDEXES = [1, 2, 3] as const;
+
+function additionalOwnerTabs(locked: { locked: true }): docusign.Text[] {
+  return ADDITIONAL_OWNER_INDEXES.flatMap((i) => [
+    textTab(`owners_${i}_owner_name_value`, `owner${i + 1}Name`, {
+      ...locked,
+      width: 220,
+    }),
+    textTab(`owners_${i}_owner_address_value`, `owner${i + 1}Address`, {
+      ...locked,
+      width: 300,
+    }),
+    textTab(`owners_${i}_owner_telephone_value`, `owner${i + 1}Phone`, {
+      ...locked,
+      width: 120,
+    }),
+    textTab(`owners_${i}_owner_mobile_value`, `owner${i + 1}Mobile`, {
+      ...locked,
+      width: 160,
+    }),
+  ]);
+}
+
 // The Builder counter-signs (routingOrder 2) — all contract DATA now lives on
 // the Owner role (the first signer), so the customer opens a complete contract.
 function builderTabs(): docusign.Tabs {
@@ -170,6 +213,11 @@ function ownerTabs(): docusign.Tabs {
     signHereTabs: [
       signHereTab("signed_by_owners_value"),
       signHereTab("acknowledgement_of_owner_docusign_0_signature_value"),
+      // Additional owners (issue #142) — page iii "SIGNED BY THE OWNER(S):"
+      // and page v Acknowledgement of Owner each carry one more SignHere
+      // anchor per additional owner, to the right of the Owner 1 anchor.
+      ...ADDITIONAL_OWNER_INDEXES.map((i) => signHereTab(`signed_by_owner_${i}_value`)),
+      ...ADDITIONAL_OWNER_INDEXES.map((i) => signHereTab(`acknowledgement_of_owner_docusign_${i}_signature_value`)),
     ],
     dateSignedTabs: [dateSignedTab("acknowledgement_of_owner_docusign_0_date_value")],
     textTabs: [
@@ -195,6 +243,10 @@ function ownerTabs(): docusign.Tabs {
       textTab("owners_0_owner_address_value", "ownerAddress", { ...locked, width: 380 }),
       textTab("owners_0_owner_telephone_value", "ownerPhone", { ...locked, width: 120 }),
       textTab("owners_0_owner_mobile_value", "ownerMobile", { ...locked, width: 160 }),
+      // ── 1c. Owners 2-4 (issue #142) — same locked pattern, one row each in
+      //        the new "ADDITIONAL OWNERS" table on page ii. Blank ones stay
+      //        read-only, matching Owner 1's behaviour above. ──
+      ...additionalOwnerTabs({ locked: true }),
       textTab("funding_lending_authority_value", "lendingAuthority", { ...locked, width: 200 }),
       textTab("funding_owner_value", "fundingOwner", { ...locked, width: 200 }),
       textTab("home_building_compensation_fund_insurance_cover_amount_value", "hbcfCost", { ...locked, width: 120 }),
