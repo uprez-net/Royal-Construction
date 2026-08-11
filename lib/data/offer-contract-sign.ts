@@ -225,7 +225,7 @@ export async function sendContractForSignature(input: {
   // director signs the appended Owner Signature Schedule (the single BC4 owner
   // area only fits ~2 signatures before the Builder block — ADR 0003). Generate
   // it before the send is claimed so a failure needs no status rollback.
-  let annexurePdfBase64: string | null = null;
+  // const annexurePdfBase64: string | null = null;
   // if (ownerSigners.length > 1) {
   //   try {
   //     annexurePdfBase64 = await generatePDF({
@@ -409,7 +409,7 @@ export async function sendContractForSignature(input: {
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
       builder: { name: config.builderSignerName, email: config.builderSignerEmail },
       owners: ownerSigners,
-      annexurePdfBase64,
+      // annexurePdfBase64,
       ownerTextTabs,
       ownerCheckboxTabs: [
         { tabLabel: "gstInclusive", selected: true },
