@@ -65,6 +65,17 @@ const projectInclude = {
 const projectDetailInclude = {
   customer: true,
   siteManager: true,
+  Lead: {
+    select: {
+      id: true,
+      email: true,
+      type: true,
+      location: true,
+      emails: {
+        orderBy: { sentAt: "asc" as const },
+      },
+    },
+  },
   activityLogs: {
     orderBy: { createdAt: "desc" as const },
     include: {
@@ -389,6 +400,13 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
 
     return {
       ...project,
+      lead: {
+        id: project.Lead.id,
+        email: project.Lead.email,
+        type: project.Lead.type.join(", "),
+        location: project.Lead.location,
+        emails: project.Lead.emails,
+      },
       requirements: project.requirements as unknown as ProjectRequirementsPayload,
       materials: project.materials.map((material) => ({
         ...material,
@@ -473,9 +491,9 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
         .filter((variation) => variation.status === "APPROVED")
         .reduce((sum, variation) => sum + Number(variation.cost), 0);
 
-      return {
-        ...project,
-        requirements: project.requirements as unknown as ProjectRequirementsPayload,
+    return {
+      ...project,
+      requirements: project.requirements as unknown as ProjectRequirementsPayload,
         milestones: project.milestones.map((milestone) => ({
           ...milestone,
           tradies: milestone.tradies.map((tradie) => ({

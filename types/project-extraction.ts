@@ -68,7 +68,7 @@ export const projectExtractionSections: FieldSection[] = [
   {
     key: "projectOverview",
     title: "Project Overview",
-    fields: ["projectName", "projectType", "summary"] as const,
+    fields: ["projectName", "projectType", "lotSize", "summary"] as const,
   },
   {
     key: "legalAdministration",

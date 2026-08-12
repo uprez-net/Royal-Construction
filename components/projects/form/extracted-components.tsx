@@ -20,7 +20,9 @@ import {
   Plug,
   Droplets,
   HardHat,
+  X,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Section metadata (icon + description) — mirrors the Project Overview tab
@@ -579,46 +581,199 @@ function BooleanControl({
   );
 }
 
+interface TagProps {
+  value: string;
+  onCommit: (newValue: string) => void;
+  onRemove: () => void;
+}
+
+interface TagListControlProps {
+  label: string;
+  values: readonly string[];
+  onChange: (values: string[]) => void;
+}
+
+/* ---------------------------------- Tag ---------------------------------- */
+/* Click the badge label to edit it in place. Enter/blur commits, Escape     */
+/* cancels, clearing the text removes the tag. The × removes without         */
+/* entering edit mode.                                                       */
+
+function Tag({ value, onCommit, onRemove }: TagProps): React.JSX.Element {
+  const [editing, setEditing] = useState<boolean>(false);
+  const [draft, setDraft] = useState<string>(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = (): void => {
+    const trimmed = draft.trim();
+    setEditing(false);
+    if (!trimmed) {
+      onRemove();
+    } else if (trimmed !== value) {
+      onCommit(trimmed);
+    }
+  };
+
+  if (editing) {
+    return (
+      <Input
+        ref={inputRef}
+        value={draft}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          setDraft(e.target.value)
+        }
+        onBlur={commit}
+        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="h-6 rounded-full border-indigo-300 bg-white px-2.5 text-xs text-slate-700 ring-2 ring-indigo-100 focus-visible:ring-indigo-100"
+        style={{ width: `${Math.max(draft.length, 3) + 2}ch` }}
+      />
+    );
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      className="group inline-flex h-auto min-h-6 max-w-80 items-center gap-1 rounded-full border-slate-200 bg-slate-50 py-1 pl-2.5 pr-1 text-xs font-normal leading-4 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100"
+    >
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+        className="min-w-0 flex-1 cursor-text whitespace-normal wrap-break-word text-left"
+        title="Click to edit"
+      >
+        {value}
+      </button>
+
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded-full p-0.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-slate-600 group-hover:opacity-100 focus:opacity-100"
+        aria-label={`Remove ${value}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </Badge>
+  );
+}
+
+/* ---------------------------- TagListControl ----------------------------- */
+/*                                                                            *
+ * - Badges are the source of truth for editing/removing existing entries.   *
+ * - The input is *only* for adding: Enter (or comma) commits, paste of      *
+ *   multi-line/comma text bulk-adds, Backspace on an empty input pops the   *
+ *   last tag (familiar "chip input" behavior).                             *
+ * - A local `draft` string holds in-progress typing so parent re-renders    *
+ *   don't fight the caret; `values` itself stays fully controlled via       *
+ *   `onChange`.                                                             *
+ *                                                                            */
+
 function TagListControl({
   label,
   values,
   onChange,
-}: {
-  label: string;
-  values: string[];
-  onChange: (values: string[]) => void;
-}) {
+}: TagListControlProps): React.JSX.Element {
+  const [draft, setDraft] = useState<string>("");
+
+  const addFromText = (text: string): void => {
+    const parts: string[] = text
+      .split(/[\n,]/)
+      .map((v) => v.trim())
+      .filter((v): v is string => v.length > 0);
+
+    if (parts.length === 0) return;
+
+    const next: string[] = [...values];
+    for (const part of parts) {
+      if (!next.includes(part)) next.push(part);
+    }
+    onChange(next);
+  };
+
+  const commitDraft = (): void => {
+    if (!draft.trim()) return;
+    addFromText(draft);
+    setDraft("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      commitDraft();
+    } else if (e.key === "Backspace" && draft === "" && values.length > 0) {
+      onChange(values.slice(0, -1));
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>): void => {
+    const text = e.clipboardData.getData("text");
+    if (/[\n,]/.test(text)) {
+      e.preventDefault();
+      addFromText(text);
+    }
+  };
+
+  const updateAt = (index: number, newValue: string): void => {
+    const next: string[] = [...values];
+    // if the edit collides with an existing entry, drop this one instead of duplicating
+    if (next.some((v, j) => j !== index && v === newValue)) {
+      next.splice(index, 1);
+    } else {
+      next[index] = newValue;
+    }
+    onChange(next);
+  };
+
+  const removeAt = (index: number): void => {
+    const next: string[] = [...values];
+    next.splice(index, 1);
+    onChange(next);
+  };
+
+  const isEmpty = values.length === 0 && draft.trim() === "";
+
   return (
-    <FieldShell
-      label={label}
-      isEmpty={values.length === 0 || values.every((v) => v.trim() === "")}
-    >
-      <Textarea
-        value={values.join("\n")}
-        onChange={(e) =>
-          onChange(
-            e.target.value
-              .split("\n")
-              .map((v) => v.trim())
-              .filter(Boolean),
-          )
-        }
-        placeholder="One per line"
-        className="min-h-16 resize-none rounded-lg border-slate-200 bg-white text-sm"
-      />
-      {values.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 pt-0.5">
-          {values.map((entry, i) => (
-            <Badge
-              key={`${label}-${i}`}
-              variant="outline"
-              className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-normal text-slate-600"
-            >
-              {entry}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
+    <FieldShell label={label} isEmpty={isEmpty}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {values.map((v: string, i: number) => (
+          <Tag
+            key={`${v}-${i}`}
+            value={v}
+            onCommit={(nv: string) => updateAt(i, nv)}
+            onRemove={() => removeAt(i)}
+          />
+        ))}
+        <Input
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setDraft(e.target.value)
+          }
+          onKeyDown={handleKeyDown}
+          onBlur={commitDraft}
+          onPaste={handlePaste}
+          placeholder={
+            values.length === 0 ? "Type and press Enter…" : "Add another…"
+          }
+          className="h-6 min-w-32 flex-1 border-none bg-transparent px-0.5 text-sm text-slate-700 shadow-none outline-none placeholder:text-slate-400 focus-visible:ring-0"
+        />
+      </div>
     </FieldShell>
   );
 }
@@ -628,15 +783,19 @@ function TagListControl({
 // ---------------------------------------------------------------------------
 
 export function ExtractionField({
+  title,
   field,
   value,
   onChange,
 }: {
+  title?: string;
   field: string;
   value: unknown;
   onChange: (field: string, value: unknown) => void;
 }) {
-  const label = fieldLabel(field);
+  const label = title
+    ? fieldLabel(removeTitleFromFieldName(title, field))
+    : fieldLabel(field);
   const type = resolveFieldType(field);
   const emit = (raw: string) => onChange(field, coerceFieldValue(field, raw));
 
@@ -709,7 +868,8 @@ function FieldGroupPanel({
         {fields.map((field) => (
           <ExtractionField
             key={field}
-            field={removeTitleFromFieldName(title, field)}
+            title={title}
+            field={field}
             value={values[field as keyof ProjectExtractionData]}
             onChange={onChange}
           />

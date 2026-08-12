@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/types/project";
 import type {
   ProjectRequirementsPayload,
@@ -73,7 +73,12 @@ interface FieldConfig {
 
 const SECTION_META: Record<
   ProjectFlowSectionKey,
-  { label: string; description: string; icon: React.ElementType, isAdminOnly?: boolean }
+  {
+    label: string;
+    description: string;
+    icon: React.ElementType;
+    isAdminOnly?: boolean;
+  }
 > = {
   legalAdministration: {
     label: "Legal and administration",
@@ -246,9 +251,7 @@ function FieldShell({
           {content}
         </Label>
       ) : (
-        <p className={cn("flex items-center", FIELD_LABEL_CLASS)}>
-          {content}
-        </p>
+        <p className={cn("flex items-center", FIELD_LABEL_CLASS)}>{content}</p>
       )}
       {children}
     </div>
@@ -456,50 +459,197 @@ function renderField(
   }
 }
 
-// Simple line-per-entry list editor, used for name/email/phone lists and exclusion lists.
-function TagListField({
+interface TagProps {
+  value: string;
+  onCommit: (newValue: string) => void;
+  onRemove: () => void;
+}
+
+interface TagListControlProps {
+  label: string;
+  values: readonly string[];
+  onChange: (values: string[]) => void;
+}
+
+/* ---------------------------------- Tag ---------------------------------- */
+/* Click the badge label to edit it in place. Enter/blur commits, Escape     */
+/* cancels, clearing the text removes the tag. The × removes without         */
+/* entering edit mode.                                                       */
+
+function Tag({ value, onCommit, onRemove }: TagProps): React.JSX.Element {
+  const [editing, setEditing] = useState<boolean>(false);
+  const [draft, setDraft] = useState<string>(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = (): void => {
+    const trimmed = draft.trim();
+    setEditing(false);
+    if (!trimmed) {
+      onRemove();
+    } else if (trimmed !== value) {
+      onCommit(trimmed);
+    }
+  };
+
+  if (editing) {
+    return (
+      <Input
+        ref={inputRef}
+        value={draft}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          setDraft(e.target.value)
+        }
+        onBlur={commit}
+        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="h-6 rounded-full border-indigo-300 bg-white px-2.5 text-xs text-slate-700 ring-2 ring-indigo-100 focus-visible:ring-indigo-100"
+        style={{ width: `${Math.max(draft.length, 3) + 2}ch` }}
+      />
+    );
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      className="group inline-flex h-auto min-h-6 max-w-80 items-center gap-1 rounded-full border-slate-200 bg-slate-50 py-1 pl-2.5 pr-1 text-xs font-normal leading-4 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100"
+    >
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+        className="min-w-0 flex-1 cursor-text whitespace-normal wrap-break-word text-left"
+        title="Click to edit"
+      >
+        {value}
+      </button>
+
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded-full p-0.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-slate-600 group-hover:opacity-100 focus:opacity-100"
+        aria-label={`Remove ${value}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </Badge>
+  );
+}
+
+/* ---------------------------- TagListControl ----------------------------- */
+/*                                                                            *
+ * - Badges are the source of truth for editing/removing existing entries.   *
+ * - The input is *only* for adding: Enter (or comma) commits, paste of      *
+ *   multi-line/comma text bulk-adds, Backspace on an empty input pops the   *
+ *   last tag (familiar "chip input" behavior).                             *
+ * - A local `draft` string holds in-progress typing so parent re-renders    *
+ *   don't fight the caret; `values` itself stays fully controlled via       *
+ *   `onChange`.                                                             *
+ *                                                                            */
+
+function TagListControl({
   label,
   values,
   onChange,
-}: {
-  label: string;
-  values: string[];
-  onChange: (values: string[]) => void;
-}) {
-  const id = useId();
-  const hintId = `${id}-hint`;
+}: TagListControlProps): React.JSX.Element {
+  const [draft, setDraft] = useState<string>("");
+
+  const addFromText = (text: string): void => {
+    const parts: string[] = text
+      .split(/[\n,]/)
+      .map((v) => v.trim())
+      .filter((v): v is string => v.length > 0);
+
+    if (parts.length === 0) return;
+
+    const next: string[] = [...values];
+    for (const part of parts) {
+      if (!next.includes(part)) next.push(part);
+    }
+    onChange(next);
+  };
+
+  const commitDraft = (): void => {
+    if (!draft.trim()) return;
+    addFromText(draft);
+    setDraft("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      commitDraft();
+    } else if (e.key === "Backspace" && draft === "" && values.length > 0) {
+      onChange(values.slice(0, -1));
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>): void => {
+    const text = e.clipboardData.getData("text");
+    if (/[\n,]/.test(text)) {
+      e.preventDefault();
+      addFromText(text);
+    }
+  };
+
+  const updateAt = (index: number, newValue: string): void => {
+    const next: string[] = [...values];
+    // if the edit collides with an existing entry, drop this one instead of duplicating
+    if (next.some((v, j) => j !== index && v === newValue)) {
+      next.splice(index, 1);
+    } else {
+      next[index] = newValue;
+    }
+    onChange(next);
+  };
+
+  const removeAt = (index: number): void => {
+    const next: string[] = [...values];
+    next.splice(index, 1);
+    onChange(next);
+  };
+
   return (
-    <FieldShell label={label} htmlFor={id}>
-      <Textarea
-        id={id}
-        aria-describedby={hintId}
-        value={values.join("\n")}
-        onChange={(e) =>
-          onChange(
-            e.target.value
-              .split("\n")
-              .map((v) => v.trim())
-              .filter(Boolean),
-          )
-        }
-        className="min-h-16 resize-none rounded-lg bg-card text-sm"
-      />
-      <p id={hintId} className="text-xs text-muted-foreground">
-        One entry per line.
-      </p>
-      {values.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 pt-0.5">
-          {values.map((entry, i) => (
-            <Badge
-              key={`${label}-${i}`}
-              variant="outline"
-              className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-normal text-muted-foreground"
-            >
-              {entry}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
+    <FieldShell label={label}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {values.map((v: string, i: number) => (
+          <Tag
+            key={`${v}-${i}`}
+            value={v}
+            onCommit={(nv: string) => updateAt(i, nv)}
+            onRemove={() => removeAt(i)}
+          />
+        ))}
+        <Input
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setDraft(e.target.value)
+          }
+          onKeyDown={handleKeyDown}
+          onBlur={commitDraft}
+          onPaste={handlePaste}
+          placeholder={
+            values.length === 0 ? "Type and press Enter…" : "Add another…"
+          }
+          className="h-6 min-w-32 flex-1 border-none bg-transparent px-0.5 text-sm text-slate-700 shadow-none outline-none placeholder:text-slate-400 focus-visible:ring-0"
+        />
+      </div>
     </FieldShell>
   );
 }
@@ -709,7 +859,10 @@ function SourceDocumentCard({
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <FileText aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+          <FileText
+            aria-hidden="true"
+            className="h-4 w-4 text-muted-foreground"
+          />
           <span className="text-sm font-semibold text-foreground">
             {kind} document
           </span>
@@ -881,7 +1034,13 @@ function ConflictRow({ conflict }: { conflict: ProjectConflictResult }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetail; isAdmin: boolean }) {
+export function ProjectOverviewTab({
+  project,
+  isAdmin,
+}: {
+  project: ProjectDetail;
+  isAdmin: boolean;
+}) {
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
   const [saving, setSaving] = useState(false);
@@ -1039,7 +1198,10 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
                 nothing between here and it is an <h2>, so this panel title is
                 the first h2 on the tab. The accordion triggers below sit in
                 Radix's <h3> headers, so there is no level skip. */}
-            <CardTitle as="h2" className="text-base font-semibold text-foreground">
+            <CardTitle
+              as="h2"
+              className="text-base font-semibold text-foreground"
+            >
               Project information
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -1105,24 +1267,26 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
           />
 
           {/* Source documents */}
-          {isAdmin && <div className="grid gap-4 md:grid-cols-2">
-            <SourceDocumentCard
-              kind="Tender"
-              fileName={tender.fileName ?? ""}
-              url={tender.url ?? ""}
-              onChange={(field, value) =>
-                updateSourceDocument("tender", field, value)
-              }
-            />
-            <SourceDocumentCard
-              kind="Contract"
-              fileName={contract.fileName ?? ""}
-              url={contract.url ?? ""}
-              onChange={(field, value) =>
-                updateSourceDocument("contract", field, value)
-              }
-            />
-          </div>}
+          {isAdmin && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <SourceDocumentCard
+                kind="Tender"
+                fileName={tender.fileName ?? ""}
+                url={tender.url ?? ""}
+                onChange={(field, value) =>
+                  updateSourceDocument("tender", field, value)
+                }
+              />
+              <SourceDocumentCard
+                kind="Contract"
+                fileName={contract.fileName ?? ""}
+                url={contract.url ?? ""}
+                onChange={(field, value) =>
+                  updateSourceDocument("contract", field, value)
+                }
+              />
+            </div>
+          )}
 
           {/* Automation triggers */}
           <div className="grid gap-3 md:grid-cols-3">
@@ -1170,7 +1334,8 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
             {sectionKeys.map((key) => {
               const meta = SECTION_META[key];
               const Icon = meta.icon;
-              const sectionData = (draft[key] as unknown as Record<string, unknown>) ?? {};
+              const sectionData =
+                (draft[key] as unknown as Record<string, unknown>) ?? {};
               const sectionValidations = validations.filter(
                 (v) => v.section === key,
               );
@@ -1178,7 +1343,7 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
                 (v) => v.severity === "fail",
               ).length;
 
-              if(!isAdmin && meta.isAdminOnly) {
+              if (!isAdmin && meta.isAdminOnly) {
                 return null;
               }
 
@@ -1255,20 +1420,16 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
 
                     {key === "inclusionsAndExclusions" ? (
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
-                        <TagListField
+                        <TagListControl
                           label="Inclusions"
-                          values={
-                            (sectionData.inclusions as string[]) ?? []
-                          }
+                          values={(sectionData.inclusions as string[]) ?? []}
                           onChange={(v) =>
                             updateInclusionsExclusionsList("inclusions", v)
                           }
                         />
-                        <TagListField
+                        <TagListControl
                           label="Exclusions"
-                          values={
-                            (sectionData.exclusions as string[]) ?? []
-                          }
+                          values={(sectionData.exclusions as string[]) ?? []}
                           onChange={(v) =>
                             updateInclusionsExclusionsList("exclusions", v)
                           }
