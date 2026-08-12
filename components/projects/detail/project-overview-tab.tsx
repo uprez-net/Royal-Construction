@@ -43,9 +43,6 @@ import {
   ScrollText,
   Landmark,
   Layers,
-  Building2,
-  Fan,
-  Paintbrush,
   ShieldAlert,
   Plug,
   Droplets,
@@ -94,24 +91,9 @@ const SECTION_META: Record<
     description: "Slab, termite and drainage specification",
     icon: Layers,
   },
-  shellAndExternal: {
-    label: "Shell and external",
-    description: "Ceilings, roofing, brick and window allowances",
-    icon: Building2,
-  },
-  mechanicalDetails: {
-    label: "Mechanical details",
-    description: "Air conditioning, lighting and power",
-    icon: Fan,
-  },
-  internalFitOutAndFinishes: {
-    label: "Internal fit out and finishes",
-    description: "Doors, stone, tiles and tapware",
-    icon: Paintbrush,
-  },
-  exclusionsAndRisks: {
-    label: "Exclusions and risks",
-    description: "Items excluded, owner risk and variation triggers",
+  inclusionsAndExclusions: {
+    label: "Inclusions and Exclusions",
+    description: "Items included and excluded from the tender scope",
     icon: ShieldAlert,
   },
   utilityInfrastructure: {
@@ -174,79 +156,7 @@ const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
     { key: "termiteSystem", label: "Termite system", type: "text" },
     { key: "sewerConnection", label: "Sewer connection", type: "text" },
   ],
-  shellAndExternal: [
-    {
-      key: "ceilingHeightGroundFloor",
-      label: "Ceiling height (ground)",
-      type: "text",
-    },
-    {
-      key: "ceilingHeightFirstFloor",
-      label: "Ceiling height (first floor)",
-      type: "text",
-    },
-    { key: "roofingMaterial", label: "Roofing material", type: "text" },
-    { key: "brickAllowance", label: "Brick allowance", type: "currency" },
-    { key: "brickCount", label: "Brick count", type: "number" },
-    {
-      key: "selectedBrickPrice",
-      label: "Selected brick price",
-      type: "currency",
-    },
-    { key: "windowProvider", label: "Window provider", type: "text" },
-    { key: "floorAreaM2", label: "Floor area", type: "number", unit: "m²" },
-  ],
-  mechanicalDetails: [
-    { key: "acSystemZones", label: "AC system zones", type: "text" },
-    {
-      key: "acRequiredCapacityKw",
-      label: "AC required capacity",
-      type: "number",
-      unit: "kW",
-    },
-    {
-      key: "acInstalledCapacityKw",
-      label: "AC installed capacity",
-      type: "number",
-      unit: "kW",
-    },
-    { key: "lightingCount", label: "Lighting count", type: "number" },
-    {
-      key: "tenderLightingCount",
-      label: "Tender lighting count",
-      type: "number",
-    },
-    { key: "powerPointCount", label: "Power point count", type: "number" },
-    { key: "externalPower", label: "External power", type: "text" },
-    { key: "jointSealants", label: "Joint sealants", type: "text" },
-  ],
-  internalFitOutAndFinishes: [
-    { key: "internalDoorHeight", label: "Internal door height", type: "text" },
-    { key: "skirtingSize", label: "Skirting size", type: "text" },
-    { key: "stoneThickness", label: "Stone thickness", type: "text" },
-    { key: "waterfallEnds", label: "Waterfall ends", type: "text" },
-    { key: "tapwareFinish", label: "Tapware finish", type: "text" },
-    { key: "tilesProvisionRate", label: "Tiles provision rate", type: "text" },
-    { key: "tileAllowance", label: "Tile allowance", type: "currency" },
-    {
-      key: "selectedTilePrice",
-      label: "Selected tile price",
-      type: "currency",
-    },
-    {
-      key: "wetAreaSizeM2",
-      label: "Wet area size",
-      type: "number",
-      unit: "m²",
-    },
-  ],
-  exclusionsAndRisks: [
-    { key: "retainingWalls", label: "Retaining walls", type: "text" },
-    { key: "fencing", label: "Fencing", type: "text" },
-    { key: "blinds", label: "Blinds", type: "text" },
-    { key: "solarProvisions", label: "Solar provisions", type: "text" },
-    { key: "rockExcavation", label: "Rock excavation", type: "text" },
-  ],
+  inclusionsAndExclusions: [],
   utilityInfrastructure: [
     { key: "electricalPhase", label: "Electrical phase", type: "text" },
     {
@@ -1027,11 +937,11 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
     }));
   };
 
-  const updateExclusionsList = (
-    field: "ownerResponsibility" | "variationRequired",
+  const updateInclusionsExclusionsList = (
+    field: "inclusions" | "exclusions",
     values: string[],
   ) => {
-    updateSectionField("exclusionsAndRisks", field, values);
+    updateSectionField("inclusionsAndExclusions", field, values);
   };
 
   const updateSourceDocument = (
@@ -1343,24 +1253,24 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
                       />
                     ) : null}
 
-                    {key === "exclusionsAndRisks" ? (
+                    {key === "inclusionsAndExclusions" ? (
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
                         <TagListField
-                          label="Owner responsibility"
+                          label="Inclusions"
                           values={
-                            (sectionData.ownerResponsibility as string[]) ?? []
+                            (sectionData.inclusions as string[]) ?? []
                           }
                           onChange={(v) =>
-                            updateExclusionsList("ownerResponsibility", v)
+                            updateInclusionsExclusionsList("inclusions", v)
                           }
                         />
                         <TagListField
-                          label="Variation required"
+                          label="Exclusions"
                           values={
-                            (sectionData.variationRequired as string[]) ?? []
+                            (sectionData.exclusions as string[]) ?? []
                           }
                           onChange={(v) =>
-                            updateExclusionsList("variationRequired", v)
+                            updateInclusionsExclusionsList("exclusions", v)
                           }
                         />
                       </div>

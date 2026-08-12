@@ -104,12 +104,12 @@ export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
     {}) as ProjectRequirementsPayload;
   const ownerContacts = requirements.legalAdministration?.ownerContacts;
   const commercials = requirements.commercialsAndClaims;
-  const ownerResponsibilities =
-    requirements.exclusionsAndRisks?.ownerResponsibility ?? [];
-  const variationRisks =
-    requirements.exclusionsAndRisks?.variationRequired ?? [];
+  const inclusions =
+    requirements.inclusionsAndExclusions?.inclusions ?? [];
+  const exclusions =
+    requirements.inclusionsAndExclusions?.exclusions ?? [];
   const hasRequirementFlags =
-    ownerResponsibilities.length > 0 || variationRisks.length > 0;
+    inclusions.length > 0 || exclusions.length > 0;
 
   const phone = project.customer.phone?.trim();
   const email = project.customer.email?.trim();
@@ -247,35 +247,35 @@ export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
 
         {hasRequirementFlags ? (
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-            {ownerResponsibilities.map((item) => (
+            {inclusions.map((item) => (
               <li
-                key={`owner-${item}`}
+                key={`inclusion-${item}`}
                 className="inline-flex items-start gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground"
               >
                 <Check
                   aria-hidden="true"
                   className="mt-0.5 h-3 w-3 shrink-0 text-success-ink"
                 />
-                Owner responsibility: {item}
+                Inclusion: {item}
               </li>
             ))}
-            {variationRisks.map((item) => (
+            {exclusions.map((item) => (
               <li
-                key={`variation-${item}`}
+                key={`exclusion-${item}`}
                 className="inline-flex items-start gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground"
               >
                 <AlertTriangle
                   aria-hidden="true"
                   className="mt-0.5 h-3 w-3 shrink-0 text-warning-ink"
                 />
-                Variation risk: {item}
+                Exclusion: {item}
               </li>
             ))}
           </ul>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">
-            No owner responsibilities or variation risks have been captured from
-            the contract yet.
+            No inclusions or exclusions have been captured from the contract
+            yet.
           </p>
         )}
       </div>

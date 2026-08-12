@@ -6,10 +6,7 @@ type FieldSection = {
   | "legalAdministration"
   | "commercialsAndClaims"
   | "subStructureAndGround"
-  | "shellAndExternal"
-  | "mechanicalDetails"
-  | "internalFitOutAndFinishes"
-  | "exclusionsAndRisks"
+  | "inclusionsAndExclusions"
   | "utilityInfrastructure"
   | "wetAreaCompliance"
   | "safetyAndSiteLogistics";
@@ -115,59 +112,11 @@ export const projectExtractionSections: FieldSection[] = [
     ] as const,
   },
   {
-    key: "shellAndExternal",
-    title: "Shell and External",
+    key: "inclusionsAndExclusions",
+    title: "Inclusions and Exclusions",
     fields: [
-      "shellAndExternalCeilingHeightGroundFloor",
-      "shellAndExternalCeilingHeightFirstFloor",
-      "shellAndExternalRoofingMaterial",
-      "shellAndExternalBrickAllowance",
-      "shellAndExternalBrickCount",
-      "shellAndExternalSelectedBrickPrice",
-      "shellAndExternalWindowProvider",
-      "shellAndExternalFloorAreaM2",
-    ] as const,
-  },
-  {
-    key: "mechanicalDetails",
-    title: "Mechanical Details",
-    fields: [
-      "mechanicalDetailsAcSystemZones",
-      "mechanicalDetailsAcRequiredCapacityKw",
-      "mechanicalDetailsAcInstalledCapacityKw",
-      "mechanicalDetailsLightingCount",
-      "mechanicalDetailsTenderLightingCount",
-      "mechanicalDetailsPowerPointCount",
-      "mechanicalDetailsExternalPower",
-      "mechanicalDetailsJointSealants",
-    ] as const,
-  },
-  {
-    key: "internalFitOutAndFinishes",
-    title: "Internal Fit Out and Finishes",
-    fields: [
-      "internalFitOutAndFinishesInternalDoorHeight",
-      "internalFitOutAndFinishesSkirtingSize",
-      "internalFitOutAndFinishesStoneThickness",
-      "internalFitOutAndFinishesWaterfallEnds",
-      "internalFitOutAndFinishesTapwareFinish",
-      "internalFitOutAndFinishesTilesProvisionRate",
-      "internalFitOutAndFinishesTileAllowance",
-      "internalFitOutAndFinishesSelectedTilePrice",
-      "internalFitOutAndFinishesWetAreaSizeM2",
-    ] as const,
-  },
-  {
-    key: "exclusionsAndRisks",
-    title: "Exclusions and Risks",
-    fields: [
-      "exclusionsAndRisksRetainingWalls",
-      "exclusionsAndRisksFencing",
-      "exclusionsAndRisksBlinds",
-      "exclusionsAndRisksSolarProvisions",
-      "exclusionsAndRisksRockExcavation",
-      "exclusionsAndRisksOwnerResponsibility",
-      "exclusionsAndRisksVariationRequired",
+      "inclusionsAndExclusionsInclusions",
+      "inclusionsAndExclusionsExclusions",
     ] as const,
   },
   {
@@ -212,6 +161,9 @@ export const projectExtractionSchema = z.object({
   ),
   projectType: blankStringField.describe(
     "Build type (e.g. new build, knockdown-rebuild, renovation) if explicitly stated on the cover page or header.",
+  ),
+  lotSize: z.number().nonnegative().nullable().default(null).describe(
+    "Lot size in square metres, only if explicitly stated. Used to confirm the build is within the correct lot boundaries.",
   ),
   summary: blankStringField.describe(
     "Faithful high-level summary of only what is explicitly stated; never editorialize or infer scope.",
@@ -288,101 +240,11 @@ export const projectExtractionSchema = z.object({
   subStructureAndGroundSewerConnection: blankStringField.describe(
     "Tender 1.13: sewer connection to main, and its included/by-owner status.",
   ),
-  shellAndExternalCeilingHeightGroundFloor: blankStringField.describe(
-    "Tender 2.1: ceiling height in mm for the ground floor (e.g. 2700mm).",
+  inclusionsAndExclusionsInclusions: stringArrayField.describe(
+    "Tender inclusions: each item explicitly listed as included in the tender/contract scope, one entry per item.",
   ),
-  shellAndExternalCeilingHeightFirstFloor: blankStringField.describe(
-    "Tender 2.1: ceiling height in mm for the first floor (e.g. 2700mm).",
-  ),
-  shellAndExternalRoofingMaterial: blankStringField.describe(
-    "Tender 2.4: roofing material and insulation (e.g. Colorbond + Anticon blanket).",
-  ),
-  shellAndExternalBrickAllowance: nullableNumberField.describe(
-    "Tender 2.5: the $ allowance per brick (e.g. $1.20), the baseline for any brick-selection variation.",
-  ),
-  shellAndExternalBrickCount: nullableNumberField.describe(
-    "Total brick count, only if explicitly stated. Used with the brick price delta to size a variation.",
-  ),
-  shellAndExternalSelectedBrickPrice: nullableNumberField.describe(
-    "Owner-selected brick price, only if explicitly documented in a selection or variation schedule.",
-  ),
-  shellAndExternalWindowProvider: blankStringField.describe(
-    "Tender 2.2: the named window provider (e.g. Aluminium or ABM).",
-  ),
-  shellAndExternalFloorAreaM2: nullableNumberField.describe(
-    "Total floor area in m², only if explicitly stated. Used to sanity-check AC capacity sizing.",
-  ),
-  mechanicalDetailsAcSystemZones: blankStringField.describe(
-    "Tender 2.16: AC brand + kW + zone count (e.g. Daikin / 16kW / 4 zones).",
-  ),
-  mechanicalDetailsAcRequiredCapacityKw: nullableNumberField.describe(
-    "Required AC capacity in kW, only if explicitly stated. Compared against installed capacity and floor area.",
-  ),
-  mechanicalDetailsAcInstalledCapacityKw: nullableNumberField.describe(
-    "Tender 2.16: installed AC system capacity in kW (e.g. 16kW).",
-  ),
-  mechanicalDetailsLightingCount: nullableNumberField.describe(
-    "Actual/as-built downlight count, only if explicitly stated. Compared against the tendered lighting count.",
-  ),
-  mechanicalDetailsTenderLightingCount: nullableNumberField.describe(
-    "Tender 2.8: specified LED downlight count (e.g. 65). Extra fittings above this are a variation.",
-  ),
-  mechanicalDetailsPowerPointCount: nullableNumberField.describe(
-    "Tender 2.8: specified double power point count (e.g. 35). Extra points above this are a variation.",
-  ),
-  mechanicalDetailsExternalPower: blankStringField.describe(
-    "Tender 2.22: external power points scope, which signals a waterproofing requirement.",
-  ),
-  mechanicalDetailsJointSealants: blankStringField.describe(
-    "Tender 2.5 / 2.11: waterproof/sealant references; must match the waterproofing certification.",
-  ),
-  internalFitOutAndFinishesInternalDoorHeight: blankStringField.describe(
-    "Tender 2.10: internal door height in mm (e.g. 2340mm vs standard 2040mm).",
-  ),
-  internalFitOutAndFinishesSkirtingSize: blankStringField.describe(
-    "Tender 2.10: skirting dimensions in mm x mm (e.g. 90mm x 18mm vs standard 67mm).",
-  ),
-  internalFitOutAndFinishesStoneThickness: blankStringField.describe(
-    "Tender 2.14: benchtop stone thickness in mm for kitchen/pantry (e.g. 40mm vs standard 20mm).",
-  ),
-  internalFitOutAndFinishesWaterfallEnds: blankStringField.describe(
-    "Tender 2.14: whether waterfall ends to the island are specified.",
-  ),
-  internalFitOutAndFinishesTapwareFinish: blankStringField.describe(
-    "Tender 2.15: tapware finish (e.g. Chrome, Black, Gunmetal).",
-  ),
-  internalFitOutAndFinishesTilesProvisionRate: blankStringField.describe(
-    "Tender 2.20: provisional tiling rate in $/m² (e.g. $30), the baseline for tiling overspend tracking.",
-  ),
-  internalFitOutAndFinishesTileAllowance: nullableNumberField.describe(
-    "Total tile allowance value, only if explicitly stated in a provisional sum schedule.",
-  ),
-  internalFitOutAndFinishesSelectedTilePrice: nullableNumberField.describe(
-    "Owner-selected tile price, only if explicitly documented. Compared against the provision rate for overspend.",
-  ),
-  internalFitOutAndFinishesWetAreaSizeM2: nullableNumberField.describe(
-    "Total wet area in m², only if explicitly stated. Used with tile price delta to size a tiling variation.",
-  ),
-  exclusionsAndRisksRetainingWalls: blankStringField.describe(
-    "Tender Exclusions & Notes: retaining wall inclusion/exclusion status.",
-  ),
-  exclusionsAndRisksFencing: blankStringField.describe(
-    "Tender 2.23: fencing status (e.g. Not Included).",
-  ),
-  exclusionsAndRisksBlinds: blankStringField.describe(
-    "Tender 2.25: blinds status (e.g. Not Included).",
-  ),
-  exclusionsAndRisksSolarProvisions: blankStringField.describe(
-    "Tender 2.27: solar provisions status (e.g. Not Included).",
-  ),
-  exclusionsAndRisksRockExcavation: blankStringField.describe(
-    "Tender Exclusions & Notes: rock excavation references, flagged as a variation item if present.",
-  ),
-  exclusionsAndRisksOwnerResponsibility: stringArrayField.describe(
-    "Tender Exclusions & Notes: items explicitly marked as owner responsibility, one entry per item.",
-  ),
-  exclusionsAndRisksVariationRequired: stringArrayField.describe(
-    "Tender Exclusions & Notes / Sec 4: items explicitly flagged as requiring a variation, one entry per item.",
+  inclusionsAndExclusionsExclusions: stringArrayField.describe(
+    "Tender exclusions: each item explicitly listed as excluded from the tender/contract scope, one entry per item.",
   ),
   utilityInfrastructureElectricalPhase: blankStringField.describe(
     "Tender 1.14: electrical phase (e.g. Three Phase), needed to support high-capacity AC systems.",

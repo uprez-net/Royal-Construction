@@ -16,9 +16,6 @@ import {
   ScrollText,
   Landmark,
   Layers,
-  Building2,
-  Fan,
-  Paintbrush,
   ShieldAlert,
   Plug,
   Droplets,
@@ -49,20 +46,8 @@ const SECTION_META: Record<
     description: "Slab, termite and drainage specification",
     icon: Layers,
   },
-  shellAndExternal: {
-    description: "Ceilings, roofing, brick and window allowances",
-    icon: Building2,
-  },
-  mechanicalDetails: {
-    description: "Air conditioning, lighting and power",
-    icon: Fan,
-  },
-  internalFitOutAndFinishes: {
-    description: "Doors, stone, tiles and tapware",
-    icon: Paintbrush,
-  },
-  exclusionsAndRisks: {
-    description: "Items excluded, owner risk and variation triggers",
+  inclusionsAndExclusions: {
+    description: "Items included and excluded from the tender scope",
     icon: ShieldAlert,
   },
   utilityInfrastructure: {
@@ -90,8 +75,8 @@ const ARRAY_FIELDS = new Set([
   "legalAdministrationOwnerEmails",
   "legalAdministrationOwnerPhones",
   "commercialsAndClaimsPaymentStages",
-  "exclusionsAndRisksOwnerResponsibility",
-  "exclusionsAndRisksVariationRequired",
+  "inclusionsAndExclusionsInclusions",
+  "inclusionsAndExclusionsExclusions",
 ]);
 
 const CURRENCY_FIELDS = new Set([
@@ -102,10 +87,6 @@ const CURRENCY_FIELDS = new Set([
   "commercialsAndClaimsDepositValue",
   "commercialsAndClaimsClaimStageSlabDollarValue",
   "commercialsAndClaimsVariationAdminFee",
-  "shellAndExternalBrickAllowance",
-  "shellAndExternalSelectedBrickPrice",
-  "internalFitOutAndFinishesTileAllowance",
-  "internalFitOutAndFinishesSelectedTilePrice",
 ]);
 
 const PERCENT_FIELDS = new Set([
@@ -115,20 +96,12 @@ const PERCENT_FIELDS = new Set([
 
 const NUMBER_UNITS: Record<string, string> = {
   subStructureAndGroundConcreteStrengthMpa: "MPa",
-  shellAndExternalFloorAreaM2: "m²",
-  mechanicalDetailsAcRequiredCapacityKw: "kW",
-  mechanicalDetailsAcInstalledCapacityKw: "kW",
-  internalFitOutAndFinishesWetAreaSizeM2: "m²",
 };
 
 const NUMERIC_FIELDS = new Set([
   ...CURRENCY_FIELDS,
   ...PERCENT_FIELDS,
   ...Object.keys(NUMBER_UNITS),
-  "shellAndExternalBrickCount",
-  "mechanicalDetailsLightingCount",
-  "mechanicalDetailsTenderLightingCount",
-  "mechanicalDetailsPowerPointCount",
   "wetAreaComplianceTiledNicheCount",
   "wetAreaComplianceShowerCount",
 ]);
@@ -178,12 +151,12 @@ const FIELD_GROUPS: {
     ],
   },
   {
-    id: "riskAllocation",
-    heading: "Risk Allocation",
-    caption: "Items flagged as owner responsibility versus variation triggers",
+    id: "inclusionsExclusions",
+    heading: "Inclusions & Exclusions",
+    caption: "Items included versus excluded from the tender scope",
     fields: [
-      "exclusionsAndRisksOwnerResponsibility",
-      "exclusionsAndRisksVariationRequired",
+      "inclusionsAndExclusionsInclusions",
+      "inclusionsAndExclusionsExclusions",
     ],
   },
 ];
