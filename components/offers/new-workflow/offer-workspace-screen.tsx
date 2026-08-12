@@ -709,7 +709,6 @@ export function OfferWorkspaceScreen({
             draft={draft}
             exclusions={exclusions}
             job={job}
-            lines={lines}
             pricing={pricing}
             priceAdjustmentLabel={priceAdjustmentLabel}
             standardPriceIncGst={standardPrice}

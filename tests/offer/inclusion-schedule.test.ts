@@ -7,10 +7,12 @@ import {
 } from "../../lib/offer/workspace-proposal-content";
 import {
   INITIAL_COST_LINES,
+  INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
   mergeCostScheduleIntoSchedule,
   type OfferWorkspaceCostLine,
 } from "../../lib/offer/workspace-model";
+import { getVisibleExclusions } from "../../lib/offer/workspace-print-template";
 import {
   CURRENT_WORKSPACE_SCHEMA_VERSION,
   migrateWorkspaceState,
@@ -148,4 +150,45 @@ test("pulling is idempotent", () => {
   const twice = mergeCostScheduleIntoSchedule(once, lines);
 
   assert.deepEqual(twice, once);
+});
+
+// ─── One exclusion rule across every surface (Task 3) ───
+
+test("visible exclusions union the draft bullets with the printed scope items", () => {
+  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: ["Bullet only"] };
+  const scopeItem = {
+    ...INITIAL_EXCLUSIONS[0],
+    id: "scope-1",
+    label: "Scope only",
+    includedInOfferDocument: true,
+  };
+
+  const result = getVisibleExclusions(draft, [scopeItem]);
+
+  assert.ok(result.includes("Bullet only"), "draft bullet must print");
+  assert.ok(result.includes("Scope only"), "scope item must print");
+});
+
+test("a scope item hidden from the document does not print", () => {
+  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: [] };
+  const hidden = {
+    ...INITIAL_EXCLUSIONS[0],
+    id: "scope-2",
+    label: "Hidden item",
+    includedInOfferDocument: false,
+  };
+
+  assert.deepEqual(getVisibleExclusions(draft, [hidden]), []);
+});
+
+test("a label duplicated across a bullet and a scope item prints once", () => {
+  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: ["Pool fencing"] };
+  const dupe = {
+    ...INITIAL_EXCLUSIONS[0],
+    id: "scope-3",
+    label: "Pool fencing",
+    includedInOfferDocument: true,
+  };
+
+  assert.deepEqual(getVisibleExclusions(draft, [dupe]), ["Pool fencing"]);
 });

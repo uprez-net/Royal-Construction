@@ -5,14 +5,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import type {
   OfferDocumentDraft,
-  OfferWorkspaceCostLine,
   OfferWorkspaceJob,
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
-import {
-  formatOwnerNamesLine,
-  getIncludedOfferTenderLineItems,
-} from "@/lib/offer/workspace-model";
+import { formatOwnerNamesLine } from "@/lib/offer/workspace-model";
+import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
 import type {
   EffectiveMargin,
   OfferCustomerPrice,
@@ -38,7 +35,6 @@ type OfferDocumentPreviewProps = {
   readonly draft: OfferDocumentDraft;
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
-  readonly lines: readonly OfferWorkspaceCostLine[];
   readonly priceAdjustmentLabel: string;
   readonly pricing: OfferWorkspacePricing;
   readonly standardPriceIncGst: number | null;
@@ -130,15 +126,10 @@ export function OfferDocumentPreview({
   draft,
   exclusions,
   job,
-  lines,
   priceAdjustmentLabel,
   pricing,
   standardPriceIncGst,
 }: OfferDocumentPreviewProps) {
-  const visibleExclusions = exclusions.filter(
-    (item) => item.includedInOfferDocument,
-  );
-  const offerTenderLineItems = getIncludedOfferTenderLineItems(lines);
   const saving =
     standardPriceIncGst !== null
       ? standardPriceIncGst - customerPrice.selectedContractValueIncGst
@@ -197,16 +188,12 @@ export function OfferDocumentPreview({
           </div>
           <p className="mt-4 text-sm leading-6">{draft.introText}</p>
           <PreviewList
-            items={
-              offerTenderLineItems.length > 0
-                ? offerTenderLineItems
-                : draft.inclusionBullets
-            }
-            title="Offer/Tender line items"
+            items={draft.inclusionSchedule}
+            title="Inclusions schedule"
           />
           <PreviewList
-            items={visibleExclusions.map((item) => item.label)}
-            title="Excluded scope"
+            items={getVisibleExclusions(draft, exclusions)}
+            title="Exclusions"
           />
           <div className="mt-4 rounded-lg bg-white p-3 text-sm">
             <p className="font-medium">Validity</p>

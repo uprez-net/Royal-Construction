@@ -5,7 +5,6 @@ import type {
   OfferWorkspaceJob,
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
-import { getIncludedOfferTenderLineItems } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 
@@ -41,7 +40,6 @@ export type OfferPrintTemplateData = {
   readonly preparedDateLabel: string;
   readonly savingAmount: number | null;
   readonly scopeRows: readonly OfferPrintScopeRow[];
-  readonly offerTenderLineItems: readonly string[];
   readonly validUntilLabel: string;
 };
 
@@ -51,6 +49,10 @@ export type OfferPrintTemplateInput = {
   readonly draft: OfferDocumentDraft;
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
+  // Carried by every caller and part of the workspace-shaped input, but no
+  // longer read here: the printed inclusions now come from draft.inclusionSchedule,
+  // which the estimator edits, rather than being derived from cost lines behind
+  // their back.
   readonly lines: readonly OfferWorkspaceCostLine[];
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly priceAdjustmentLabel: string;
@@ -68,7 +70,6 @@ export function buildOfferPrintTemplateData({
   draft,
   exclusions,
   job,
-  lines,
   paymentSchedule,
   priceAdjustmentLabel,
   standardPriceIncGst,
@@ -98,7 +99,6 @@ export function buildOfferPrintTemplateData({
         label: item.label,
         variationRule: item.variationRule,
       })),
-    offerTenderLineItems: getIncludedOfferTenderLineItems(lines),
     validUntilLabel: formatDateDisplay(job.validUntil),
   };
 }
@@ -184,7 +184,12 @@ function getPriceLine(
   return `${formatCurrencyText(selectedPrice)} incl. GST`;
 }
 
-function getVisibleExclusions(
+// The one rule for what prints as an exclusion: the estimator's free-text
+// bullets UNION the Scope step's exclusion items, deduped. Every surface — the
+// offer PDF, the tender, the on-screen preview and the tender view — resolves
+// through this. They previously each had their own rule (union / scope-only /
+// bullets-as-override), so nothing on screen predicted the client's document.
+export function getVisibleExclusions(
   draft: OfferDocumentDraft,
   exclusions: readonly OfferWorkspaceScopeItem[],
 ): readonly string[] {
