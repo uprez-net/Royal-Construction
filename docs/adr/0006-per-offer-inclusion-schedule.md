@@ -209,3 +209,39 @@ both is how a CSS tweak silently breaks the PDF.
   between the two surfaces — there is only one surface.
 - **Unchanged from the original decision:** `job.buildScope` prints on the
   tender but freezes at send; the welcome letter remains hard-coded.
+
+---
+
+## Amendment 2: the Category column comes back
+
+Date: 2026-08-12
+
+Dropping the Category column went too far. It is restored on both printed
+documents exactly as it was: `Category | Specification` with its heading row on
+the offer, `# | Category | Specification | Status` on the tender.
+
+- **Entries carry `category` again.** `OfferInclusionEntry` is now
+  `{ spec, summary?, category? }`, seeded from the template's `category`, with a
+  v4 → v5 migration that re-attaches it by matching the spec text against the
+  seed. That match is the only place the mapping exists.
+- **Uncategorised entries print `Miscellaneous`.** An entry pulled from the cost
+  schedule or typed by an estimator has no template match. An empty cell on a
+  fixed-price contract reads as an omission, so it gets a real word.
+- **`group` stays unused.** Investigation found `row.group` was **never rendered
+  anywhere** in the project's history — the six trade groups only ever affected
+  the order rows were authored in. Trade headings were considered and declined:
+  they would be new structure on a client-facing contract, not a restoration.
+- **Pagination was recalibrated, and this is not cosmetic.** The Category column
+  takes 45mm of the 165mm content width, so a spec wraps in ~68 characters, not
+  95, and a table row costs its tallest cell plus padding where a list item cost
+  neither. The un-recalibrated budget overflowed the seeded schedule by two
+  physical sheets while the footer still claimed 7 pages — the footer-desync
+  defect PR #124 fixed for signature blocks. `CHARS_PER_LINE_INCLUSION` is 68,
+  rows add `INCLUSION_ROW_CHROME_LINES`, and the page budget is 40 line units.
+  Verified against puppeteer-rendered PDFs on a seeded and a long-spec stress
+  schedule; declared page divs equal actual PDF pages on all four documents.
+- **Known gap:** the canvas has no category editor, so an entry the estimator
+  adds or pulls will print `Miscellaneous` with no way to change it. Adding a
+  category field per row is the obvious follow-up, deliberately not taken here
+  because the whole point of the canvas rework was to reduce what an estimator
+  has to fill in.
