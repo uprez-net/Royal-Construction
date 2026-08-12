@@ -26,6 +26,10 @@ import type {
   RateConstantKey,
 } from "@/lib/offer/formula-variables";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
+import {
+  OFFER_EXCLUDES_BULLETS,
+  STANDARD_INCLUSION_SPECIFICATIONS,
+} from "@/lib/offer/workspace-proposal-content";
 import { DEFAULT_RATE_CONSTANTS } from "@/lib/offer/formula-variables";
 
 export type AdminOfferPrefill = {
@@ -158,7 +162,8 @@ function resolveDraft(
     headline: c.headline,
     introText: c.introText,
     inclusionBullets: c.inclusions,
-    exclusionBullets: [],
+    exclusionBullets: [...OFFER_EXCLUDES_BULLETS],
+    inclusionSchedule: [...STANDARD_INCLUSION_SPECIFICATIONS],
     termsSummary: c.termsAndConditions,
   };
 }

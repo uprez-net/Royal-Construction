@@ -260,6 +260,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   },
 ];
 
+// The schedule as the customer now sees it: specification sentences only.
+// The grouped/categorised rows above are SEED DATA — they populate a new
+// offer's editable `draft.inclusionSchedule` and are never rendered directly.
+// Category headings and the `highlight` flag are deliberately not carried: the
+// printed schedule is a plain numbered list of what is included.
+export const STANDARD_INCLUSION_SPECIFICATIONS: readonly string[] =
+  STANDARD_INCLUSIONS_SCHEDULE.map((row) => row.specification);
+
 // Investment-summary bullet lists (customer-facing includes / excludes).
 export const OFFER_INCLUDES_BULLETS: readonly string[] = [
   "All structural works — slab, frame, roof",

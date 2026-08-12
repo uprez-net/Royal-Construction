@@ -8,6 +8,7 @@ import {
 import {
   OFFER_EXCLUDES_BULLETS,
   OFFER_INCLUDES_BULLETS,
+  STANDARD_INCLUSION_SPECIFICATIONS,
 } from "@/lib/offer/workspace-proposal-content";
 
 export const OFFER_STAGE_CATALOG = [
@@ -182,6 +183,11 @@ export type OfferDocumentDraft = {
   readonly introText: string;
   readonly inclusionBullets: readonly string[];
   readonly exclusionBullets: readonly string[];
+  // The full Inclusions Schedule printed on the offer and the tender — one
+  // specification sentence per entry. Per-offer and estimator-editable; seeded
+  // from STANDARD_INCLUSION_SPECIFICATIONS. Distinct from inclusionBullets,
+  // which is the short Investment Summary teaser on the price page.
+  readonly inclusionSchedule: readonly string[];
   readonly termsSummary: string;
 };
 
@@ -912,6 +918,7 @@ export const INITIAL_OFFER_DRAFT: OfferDocumentDraft = {
     "This proposal forms the basis of a Master Builders Association (MBA) fixed price home building contract. Every item below is locked into your fixed contract price — a number you can take to your bank today.",
   inclusionBullets: OFFER_INCLUDES_BULLETS,
   exclusionBullets: OFFER_EXCLUDES_BULLETS,
+  inclusionSchedule: STANDARD_INCLUSION_SPECIFICATIONS,
   termsSummary:
     "Final Tender is issued only after scope and price are agreed by builder and client.",
 };

@@ -21,6 +21,7 @@ import {
   RATE_CARD_PRODUCTS,
   RATE_CARD_TIERS,
 } from "./workspace-rate-card";
+import { STANDARD_INCLUSION_SPECIFICATIONS } from "./workspace-proposal-content";
 
 // The bundle of workspace state we persist (everything except transient status
 // and the ephemeral import result). Mirrors the container's useState set.
@@ -95,7 +96,9 @@ export function deriveTenderGateStatus(
   return "unlocked";
 }
 
-export const CURRENT_WORKSPACE_SCHEMA_VERSION = 2 as const;
+// v3 (this version): draft.inclusionSchedule — the Inclusions Schedule moved
+// from a hard-coded constant to per-offer editable copy. See migrateV2ToV3.
+export const CURRENT_WORKSPACE_SCHEMA_VERSION = 3 as const;
 
 // ─── Money helpers (ADR 0002: money persisted as integer cents) ───
 export const dollarsToCents = (value: number): number =>
@@ -287,6 +290,9 @@ const draftSchema = z.object({
   introText: z.string(),
   inclusionBullets: z.array(z.string()),
   exclusionBullets: z.array(z.string()),
+  // Defaulted so a snapshot that somehow skips the migration still parses;
+  // migrateV2ToV3 is what actually seeds pre-existing offers.
+  inclusionSchedule: z.array(z.string()).default([]),
   termsSummary: z.string(),
 });
 
@@ -347,7 +353,9 @@ const tenderGateSchema = z
   });
 
 const workspaceStateV1Schema = z.object({
-  schemaVersion: z.literal(2),
+  // Derived from the constant, never re-typed: a hard-coded literal here
+  // silently rejects every migrated snapshot the moment the version is bumped.
+  schemaVersion: z.literal(CURRENT_WORKSPACE_SCHEMA_VERSION),
   job: jobSchema,
   costLines: z.array(costLineSchema),
   allowances: z.array(scopeItemSchema),
@@ -410,6 +418,9 @@ export function migrateWorkspaceState(raw: unknown): unknown {
   if (version < 2) {
     next = migrateV1ToV2(next);
   }
+  if (version < 3) {
+    next = migrateV2ToV3(next);
+  }
   return next;
 }
 
@@ -448,6 +459,29 @@ function migrateV1ToV2(
       siteCouncil: str(job.siteCouncil),
       siteState: str(job.siteState),
       sitePostcode: str(job.sitePostcode),
+    },
+  };
+}
+
+// v2 → v3: the Inclusions Schedule moves from a hard-coded module constant to
+// per-offer editable copy on the draft. Snapshots written before this change
+// carry no schedule, and re-rendering one (revision viewer, re-send) must
+// reproduce the document the client actually received — so they are seeded with
+// the template list that WAS the schedule at the time they were written. An
+// explicitly empty array is left alone: from v3 on, "no rows" is a choice the
+// estimator can make, not a missing field.
+function migrateV2ToV3(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const draft = (state.draft ?? {}) as Record<string, unknown>;
+  return {
+    ...state,
+    schemaVersion: 3,
+    draft: {
+      ...draft,
+      inclusionSchedule: Array.isArray(draft.inclusionSchedule)
+        ? draft.inclusionSchedule
+        : [...STANDARD_INCLUSION_SPECIFICATIONS],
     },
   };
 }
@@ -495,6 +529,7 @@ export function serializeWorkspace(
       introText: snapshot.draft.introText,
       inclusionBullets: [...snapshot.draft.inclusionBullets],
       exclusionBullets: [...snapshot.draft.exclusionBullets],
+      inclusionSchedule: [...snapshot.draft.inclusionSchedule],
       termsSummary: snapshot.draft.termsSummary,
     },
     areaCalculator: { ...snapshot.areaCalculator },
