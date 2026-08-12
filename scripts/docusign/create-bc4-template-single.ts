@@ -243,7 +243,7 @@ function ownerTabs(): docusign.Tabs {
 async function main() {
   const pdfPath = process.argv[2];
   if (!pdfPath || !existsSync(pdfPath)) {
-    console.error("Usage: tsx scripts/docusign/create-bc4-template.ts <blank-BC4.pdf>");
+    console.error("Usage: tsx scripts/docusign/create-bc4-template-single.ts <blank-BC4.pdf>");
     process.exit(1);
   }
   const pdfBase64 = readFileSync(pdfPath).toString("base64");
