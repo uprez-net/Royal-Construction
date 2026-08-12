@@ -104,12 +104,9 @@ export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
     {}) as ProjectRequirementsPayload;
   const ownerContacts = requirements.legalAdministration?.ownerContacts;
   const commercials = requirements.commercialsAndClaims;
-  const inclusions =
-    requirements.inclusionsAndExclusions?.inclusions ?? [];
-  const exclusions =
-    requirements.inclusionsAndExclusions?.exclusions ?? [];
-  const hasRequirementFlags =
-    inclusions.length > 0 || exclusions.length > 0;
+  const inclusions = requirements.inclusionsAndExclusions?.inclusions ?? [];
+  const exclusions = requirements.inclusionsAndExclusions?.exclusions ?? [];
+  const hasRequirementFlags = inclusions.length > 0 || exclusions.length > 0;
 
   const phone = project.customer.phone?.trim();
   const email = project.customer.email?.trim();
@@ -242,36 +239,58 @@ export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
 
       <div>
         <h3 className="text-base font-semibold text-foreground">
-          Requirement flags
+          Requirements
         </h3>
 
         {hasRequirementFlags ? (
-          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-            {inclusions.map((item) => (
-              <li
-                key={`inclusion-${item}`}
-                className="inline-flex items-start gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground"
-              >
+          <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm grid grid-cols-2 gap-4">
+            <div className="col-span-2 md:col-span-1 space-y-3">
+              <h5 className="text-sm font-medium text-foreground flex items-center">
                 <Check
                   aria-hidden="true"
-                  className="mt-0.5 h-3 w-3 shrink-0 text-success-ink"
+                  className="mr-1 h-3 w-3 shrink-0 text-success-ink"
                 />
-                Inclusion: {item}
-              </li>
-            ))}
-            {exclusions.map((item) => (
-              <li
-                key={`exclusion-${item}`}
-                className="inline-flex items-start gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground"
-              >
+                Inclusions
+              </h5>
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2 max-h-[30vh] overflow-y-auto no-scrollbar pr-1">
+                {inclusions.map((item) => (
+                  <li
+                    key={`inclusion-${item}`}
+                    className="inline-flex items-start gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground"
+                  >
+                    <Check
+                      aria-hidden="true"
+                      className="mt-0.5 h-3 w-3 shrink-0 text-success-ink"
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="col-span-2 md:col-span-1 space-y-3">
+              <h5 className="text-sm font-medium text-foreground flex items-center">
                 <AlertTriangle
                   aria-hidden="true"
-                  className="mt-0.5 h-3 w-3 shrink-0 text-warning-ink"
+                  className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
                 />
-                Exclusion: {item}
-              </li>
-            ))}
-          </ul>
+                Exclusions
+              </h5>
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2 max-h-[30vh] overflow-y-auto no-scrollbar pr-1">
+                {exclusions.map((item) => (
+                  <li
+                    key={`exclusion-${item}`}
+                    className="inline-flex items-start gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground"
+                  >
+                    <AlertTriangle
+                      aria-hidden="true"
+                      className="mt-0.5 h-3 w-3 shrink-0 text-warning-ink"
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         ) : (
           <p className="mt-3 text-sm text-muted-foreground">
             No inclusions or exclusions have been captured from the contract

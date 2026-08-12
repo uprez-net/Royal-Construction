@@ -21,6 +21,7 @@ import {
   Droplets,
   HardHat,
   X,
+  Plus,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -395,7 +396,7 @@ function FieldShell({
   isEmpty,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   unit?: string;
   isEmpty: boolean;
   children: React.ReactNode;
@@ -581,24 +582,30 @@ function BooleanControl({
   );
 }
 
-interface TagProps {
+interface TagRowProps {
   value: string;
+  icon?: React.ReactNode;
   onCommit: (newValue: string) => void;
   onRemove: () => void;
 }
 
 interface TagListControlProps {
-  label: string;
+  label: React.ReactNode;
   values: readonly string[];
   onChange: (values: string[]) => void;
+  /** Optional leading icon rendered on every row (e.g. a <Check /> for "inclusions"). Omitted by default. */
+  icon?: React.ReactNode;
+  /** Max height of the scrollable list before it scrolls instead of growing the page. Default "30vh". */
+  maxHeight?: string;
 }
 
-/* ---------------------------------- Tag ---------------------------------- */
-/* Click the badge label to edit it in place. Enter/blur commits, Escape     */
-/* cancels, clearing the text removes the tag. The × removes without         */
-/* entering edit mode.                                                       */
+/* --------------------------------- TagRow --------------------------------- */
+/* A single row in the list. Click the text to edit in place. Enter/blur     */
+/* commits, Escape cancels, clearing the text removes the row. The ×         */
+/* removes without entering edit mode. Text truncates on one line with a     */
+/* native title tooltip for the full value.                                  */
 
-function Tag({ value, onCommit, onRemove }: TagProps): React.JSX.Element {
+function TagRow({ value, icon, onCommit, onRemove }: TagRowProps): React.JSX.Element {
   const [editing, setEditing] = useState<boolean>(false);
   const [draft, setDraft] = useState<string>(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -622,42 +629,42 @@ function Tag({ value, onCommit, onRemove }: TagProps): React.JSX.Element {
 
   if (editing) {
     return (
-      <Input
-        ref={inputRef}
-        value={draft}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-          setDraft(e.target.value)
-        }
-        onBlur={commit}
-        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit();
+      <li className="flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5">
+        {icon}
+        <Input
+          ref={inputRef}
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setDraft(e.target.value)
           }
-          if (e.key === "Escape") {
-            setDraft(value);
-            setEditing(false);
-          }
-        }}
-        className="h-6 rounded-full border-indigo-300 bg-white px-2.5 text-xs text-slate-700 ring-2 ring-indigo-100 focus-visible:ring-indigo-100"
-        style={{ width: `${Math.max(draft.length, 3) + 2}ch` }}
-      />
+          onBlur={commit}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+            if (e.key === "Escape") {
+              setDraft(value);
+              setEditing(false);
+            }
+          }}
+          className="h-5 flex-1 border-none bg-transparent p-0 text-xs font-medium text-foreground shadow-none outline-none focus-visible:ring-0"
+        />
+      </li>
     );
   }
 
   return (
-    <Badge
-      variant="outline"
-      className="group inline-flex h-auto min-h-6 max-w-80 items-center gap-1 rounded-full border-slate-200 bg-slate-50 py-1 pl-2.5 pr-1 text-xs font-normal leading-4 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100"
-    >
+    <li className="group inline-flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground">
+      {icon}
       <button
         type="button"
         onClick={() => {
           setDraft(value);
           setEditing(true);
         }}
-        className="min-w-0 flex-1 cursor-text whitespace-normal wrap-break-word text-left"
-        title="Click to edit"
+        className="min-w-0 flex-1 cursor-text truncate text-left"
+        title={value}
       >
         {value}
       </button>
@@ -665,21 +672,24 @@ function Tag({ value, onCommit, onRemove }: TagProps): React.JSX.Element {
       <button
         type="button"
         onClick={onRemove}
-        className="shrink-0 rounded-full p-0.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-slate-600 group-hover:opacity-100 focus:opacity-100"
+        className="shrink-0 rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 focus:opacity-100"
         aria-label={`Remove ${value}`}
       >
         <X className="h-3 w-3" />
       </button>
-    </Badge>
+    </li>
   );
 }
 
 /* ---------------------------- TagListControl ----------------------------- */
 /*                                                                            *
- * - Badges are the source of truth for editing/removing existing entries.   *
- * - The input is *only* for adding: Enter (or comma) commits, paste of      *
- *   multi-line/comma text bulk-adds, Backspace on an empty input pops the   *
- *   last tag (familiar "chip input" behavior).                             *
+ * - Rows are the source of truth for editing/removing existing entries.     *
+ * - The list itself is height-capped and scrolls (`no-scrollbar`) once it   *
+ *   overflows, instead of growing the page indefinitely.                    *
+ * - The add-input lives OUTSIDE the scroll region, so it's always reachable *
+ *   no matter how long the list gets or where it's scrolled to.             *
+ * - Enter (or comma) commits, paste of multi-line/comma text bulk-adds,     *
+ *   Backspace on an empty input pops the last row.                         *
  * - A local `draft` string holds in-progress typing so parent re-renders    *
  *   don't fight the caret; `values` itself stays fully controlled via       *
  *   `onChange`.                                                             *
@@ -689,6 +699,8 @@ function TagListControl({
   label,
   values,
   onChange,
+  icon,
+  maxHeight = "30vh",
 }: TagListControlProps): React.JSX.Element {
   const [draft, setDraft] = useState<string>("");
 
@@ -751,33 +763,44 @@ function TagListControl({
 
   return (
     <FieldShell label={label} isEmpty={isEmpty}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {values.map((v: string, i: number) => (
-          <Tag
-            key={`${v}-${i}`}
-            value={v}
-            onCommit={(nv: string) => updateAt(i, nv)}
-            onRemove={() => removeAt(i)}
+      <div className="space-y-2">
+        {values.length > 0 && (
+          <ul
+            className="grid gap-1.5 overflow-y-auto no-scrollbar pr-1 sm:grid-cols-2"
+            style={{ maxHeight }}
+          >
+            {values.map((v: string, i: number) => (
+              <TagRow
+                key={`${v}-${i}`}
+                value={v}
+                icon={icon}
+                onCommit={(nv: string) => updateAt(i, nv)}
+                onRemove={() => removeAt(i)}
+              />
+            ))}
+          </ul>
+        )}
+
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-2.5 py-1.5">
+          <Plus className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Input
+            value={draft}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setDraft(e.target.value)
+            }
+            onKeyDown={handleKeyDown}
+            onBlur={commitDraft}
+            onPaste={handlePaste}
+            placeholder={
+              values.length === 0 ? "Type and press Enter…" : "Add another…"
+            }
+            className="h-5 flex-1 border-none bg-transparent p-0 text-xs text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
           />
-        ))}
-        <Input
-          value={draft}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-            setDraft(e.target.value)
-          }
-          onKeyDown={handleKeyDown}
-          onBlur={commitDraft}
-          onPaste={handlePaste}
-          placeholder={
-            values.length === 0 ? "Type and press Enter…" : "Add another…"
-          }
-          className="h-6 min-w-32 flex-1 border-none bg-transparent px-0.5 text-sm text-slate-700 shadow-none outline-none placeholder:text-slate-400 focus-visible:ring-0"
-        />
+        </div>
       </div>
     </FieldShell>
   );
 }
-
 // ---------------------------------------------------------------------------
 // Single field renderer
 // ---------------------------------------------------------------------------
