@@ -16,6 +16,7 @@ import {
   getSummaryInclusions,
   inclusionPageStartIndexes,
   mergeCostScheduleIntoSchedule,
+  UNCATEGORISED_INCLUSION_LABEL,
   type OfferInclusionEntry,
   type OfferWorkspaceCostLine,
 } from "../../lib/offer/workspace-model";
@@ -114,7 +115,7 @@ test("v2 snapshots migrate straight through to v4 seeded from the template", () 
     draft: { inclusionSchedule: OfferInclusionEntry[] };
   };
 
-  assert.equal(migrated.schemaVersion, 4);
+  assert.equal(migrated.schemaVersion, 5);
   assert.deepEqual(migrated.draft.inclusionSchedule, STANDARD_INCLUSION_ENTRIES);
 });
 
@@ -143,7 +144,7 @@ test("v3 snapshots migrate to v4, keeping the schedule and dropping the bullets"
     };
   };
 
-  assert.equal(migrated.schemaVersion, 4);
+  assert.equal(migrated.schemaVersion, 5);
   assert.deepEqual(migrated.draft.inclusionSchedule, [
     { spec: "40mm engineered stone — kitchen island." },
   ]);
@@ -373,24 +374,77 @@ test("the offer PDF prints the draft schedule, not the template constant", () =>
   assert.doesNotMatch(html, /Engineered slab/);
 });
 
-test("the offer PDF drops the Category column heading", () => {
+test("the offer PDF keeps the Category / Specification table", () => {
   const html = buildProposalHtml(
-    buildProposalInput(snapshotWithSchedule([{ spec: "Only spec" }])),
+    buildProposalInput(
+      snapshotWithSchedule([{ spec: "Only spec", category: "Concrete Slab" }]),
+    ),
     EMPTY_OFFER_IMAGES,
   );
 
-  assert.doesNotMatch(html, /<th>Category<\/th>/);
-  assert.doesNotMatch(html, /<th>Specification<\/th>/);
+  assert.match(html, /<th>Category<\/th>/);
+  assert.match(html, /<th>Specification<\/th>/);
+  assert.match(html, /Concrete Slab/);
 });
 
-test("the tender prints the draft schedule and drops its column headings", () => {
+test("the tender keeps its numbered four-column schedule", () => {
   const html = buildTenderHtml(
-    buildProposalInput(snapshotWithSchedule([{ spec: "Tender spec" }])),
+    buildProposalInput(
+      snapshotWithSchedule([{ spec: "Tender spec", category: "Tiling" }]),
+    ),
   );
 
   assert.match(html, /Tender spec/);
-  assert.doesNotMatch(html, /<th>Category<\/th>/);
-  assert.doesNotMatch(html, /<th>Status<\/th>/);
+  assert.match(html, /<th>Category<\/th>/);
+  assert.match(html, /<th>Status<\/th>/);
+  assert.match(html, /Tiling/);
+});
+
+// An entry pulled from the cost schedule or typed by an estimator has no
+// category. It must never print an empty cell on a fixed-price contract.
+test("an entry with no category prints Miscellaneous on both documents", () => {
+  const snapshot = snapshotWithSchedule([{ spec: "Pulled from cost schedule." }]);
+
+  const offer = buildProposalHtml(buildProposalInput(snapshot), EMPTY_OFFER_IMAGES);
+  const tender = buildTenderHtml(buildProposalInput(snapshot));
+
+  assert.match(offer, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
+  assert.match(tender, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
+});
+
+test("a blank category is treated as missing, not printed as an empty cell", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(snapshotWithSchedule([{ spec: "S", category: "   " }])),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  assert.match(html, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
+});
+
+test("v4 entries regain their category by matching the seeded spec", () => {
+  const seeded = STANDARD_INCLUSION_ENTRIES[1];
+  const migrated = migrateWorkspaceState({
+    schemaVersion: 4,
+    job: {},
+    draft: {
+      headline: "H",
+      introText: "I",
+      exclusionBullets: [],
+      termsSummary: "T",
+      inclusionSchedule: [{ spec: seeded.spec }, { spec: "An estimator wrote this." }],
+    },
+  }) as {
+    schemaVersion: number;
+    draft: { inclusionSchedule: OfferInclusionEntry[] };
+  };
+
+  assert.equal(migrated.schemaVersion, 5);
+  assert.equal(migrated.draft.inclusionSchedule[0].category, seeded.category);
+  assert.equal(
+    migrated.draft.inclusionSchedule[1].category,
+    undefined,
+    "a spec with no template match stays uncategorised and prints Miscellaneous",
+  );
 });
 
 test("an empty schedule renders no inclusions page at all", () => {
@@ -402,21 +456,24 @@ test("an empty schedule renders no inclusions page at all", () => {
   assert.doesNotMatch(html, /Full inclusions schedule/);
 });
 
-test("schedule numbering continues across page breaks", () => {
+// The tender numbers every inclusion; the offer's Category/Specification table
+// never did. Numbering must run 1..n unbroken across the tender's page breaks.
+test("tender numbering continues across page breaks", () => {
   const specs = Array.from({ length: 60 }, (_, i) => ({
     spec: `Specification ${i + 1}`,
+    category: `Cat ${i + 1}`,
   }));
-  const html = buildProposalHtml(
-    buildProposalInput(snapshotWithSchedule(specs)),
-    EMPTY_OFFER_IMAGES,
-  );
+  const html = buildTenderHtml(buildProposalInput(snapshotWithSchedule(specs)));
 
-  const starts = [...html.matchAll(/<ol class="inc" start="(\d+)"/g)].map((m) =>
+  const numbers = [...html.matchAll(/<td class="num">(\d+)<\/td>/g)].map((m) =>
     Number(m[1]),
   );
-  assert.ok(starts.length > 1, "60 specs should paginate to more than one page");
-  assert.equal(starts[0], 1);
-  assert.ok(starts[1] > 1, "the second page must not restart numbering at 1");
+  assert.equal(numbers.length, 60, "every inclusion should be numbered once");
+  assert.deepEqual(
+    numbers,
+    Array.from({ length: 60 }, (_, i) => i + 1),
+    "numbering must run 1..60 unbroken across page breaks",
+  );
 });
 
 // ─── Pagination budgets by height, because the specs are estimator-editable ───

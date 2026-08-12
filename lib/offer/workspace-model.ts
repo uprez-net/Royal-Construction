@@ -189,7 +189,15 @@ export type OfferScopeAmountType =
 export type OfferInclusionEntry = {
   readonly spec: string;
   readonly summary?: string;
+  // The trade label printed in the schedule's Category column ("Concrete Slab",
+  // "Stone Benchtops"). Absent on entries pulled from the cost schedule or typed
+  // by an estimator; those print UNCATEGORISED_INCLUSION_LABEL rather than an
+  // empty cell.
+  readonly category?: string;
 };
+
+// What the Category column prints when an entry has no category of its own.
+export const UNCATEGORISED_INCLUSION_LABEL = "Miscellaneous";
 
 export type OfferDocumentDraft = {
   readonly headline: string;
@@ -591,10 +599,17 @@ export function withOwnerProjection(job: OfferWorkspaceJob): OfferWorkspaceJob {
 // prints a sheet the footer never declared.
 export const CHARS_PER_LINE_SIGNATURE = 60;
 export const CHARS_PER_LINE_TABLE_CELL = 34;
-// A full-width Inclusions Schedule entry (165mm column at 13px). Verified
-// against real Chromium output: the longest seeded specifications (~150-190
-// chars) wrap to exactly two lines.
-export const CHARS_PER_LINE_INCLUSION = 95;
+// The Inclusions Schedule's Specification cell, NOT a full-width line. The
+// Category column takes 45mm of the 165mm content width, so the spec wraps in
+// roughly 120mm — about 68 characters at 13px. This was 95 while the schedule
+// rendered as a full-width list; leaving it there after the table came back
+// under-counted every row and overflowed the page by two sheets.
+export const CHARS_PER_LINE_INCLUSION = 68;
+// The Category cell in the same row (45mm).
+export const CHARS_PER_LINE_INCLUSION_CATEGORY = 22;
+// A table row costs its tallest cell PLUS vertical padding (10px top and bottom
+// against a ~19px line). A list item had no such chrome.
+export const INCLUSION_ROW_CHROME_LINES = 1;
 
 // How many wrapped lines `text` occupies in a column that fits `charsPerLine`.
 // Always at least 1 so an empty cell still occupies its row.
@@ -1022,7 +1037,7 @@ export function getSummaryInclusions(
 // Shared by all THREE renderers (offer-proposal-html, offer-tender-html and the
 // React print template) so they cannot paginate differently for the same offer —
 // the signature budgets already drifted between two of them once.
-export const INCLUSIONS_LINES_PER_PAGE = 27;
+export const INCLUSIONS_LINES_PER_PAGE = 40;
 // The intro paragraph above the first page's list, in line units.
 export const INCLUSIONS_INTRO_LINES = 3;
 
@@ -1032,9 +1047,16 @@ export function chunkInclusionSchedule(
   if (entries.length === 0) {
     return [];
   }
-  // Only the spec prints in the schedule, so only the spec drives the height.
+  // A row is as tall as its TALLEST cell, plus the row's own padding. Measuring
+  // the spec alone under-counts a short spec sitting beside a long category.
   const heightOf = (entry: OfferInclusionEntry) =>
-    estimateWrappedLines(entry.spec, CHARS_PER_LINE_INCLUSION);
+    Math.max(
+      estimateWrappedLines(entry.spec, CHARS_PER_LINE_INCLUSION),
+      estimateWrappedLines(
+        entry.category ?? UNCATEGORISED_INCLUSION_LABEL,
+        CHARS_PER_LINE_INCLUSION_CATEGORY,
+      ),
+    ) + INCLUSION_ROW_CHROME_LINES;
   // The first page also carries the intro paragraph, so it gets a smaller budget.
   const firstBudget = Math.max(
     1,

@@ -23,6 +23,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
+  UNCATEGORISED_INCLUSION_LABEL,
   type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
@@ -265,8 +266,10 @@ export function buildProposalHtml(
   .cols ul { list-style: none; margin-top: 12px; }
   .cols li { position: relative; padding-left: 16px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
   .cols li:before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: ${GOLD}; }
-  ol.inc { margin-top: 22px; padding-left: 20px; max-width: 165mm; font-size: 13px; }
-  ol.inc li { margin-bottom: 9px; line-height: 1.5; color: ${MUTED}; padding-left: 4px; }
+  .inc { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 13px; }
+  .inc th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
+  .inc td { border-bottom: 1px solid ${BORDER}; padding: 10px; vertical-align: top; }
+  .inc td.cat { font-weight: 700; color: ${NAVY}; width: 45mm; }
   .pay th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .pay td { border-bottom: 1px solid ${BORDER}; padding: 12px 10px; font-size: 13px; }
   .pay td.stage { font-weight: 700; }
@@ -451,7 +454,12 @@ function inclusionsPage(
   continued: boolean,
   foot: string,
 ): string {
-  const body = specifications.map((entry) => `<li>${esc(entry.spec)}</li>`).join("");
+  const body = specifications
+    .map(
+      (entry) =>
+        `<tr><td class="cat">${esc(entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL)}</td><td class="muted">${esc(entry.spec)}</td></tr>`,
+    )
+    .join("");
   const intro = continued
     ? ""
     : `<p class="muted" style="margin-top:12px;max-width:155mm;">All items below are fixed within your contract price. Design provided by owner/architect — all costs fixed as per approved plans, confirmed at colour selection.</p>`;
@@ -460,7 +468,7 @@ function inclusionsPage(
     <div class="eyebrow">Inclusions</div>
     <h1 class="title">Full inclusions schedule${continued ? " (cont.)" : ""}</h1>
     ${intro}
-    <ol class="inc" start="${startIndex + 1}">${body}</ol>
+    <table class="inc"><thead><tr><th>Category</th><th>Specification</th></tr></thead><tbody>${body}</tbody></table>
     ${foot}
   </div>`;
 }

@@ -11,6 +11,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
+  UNCATEGORISED_INCLUSION_LABEL,
   type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
@@ -281,8 +282,6 @@ export function legalDocShell(body: string): string {
   .pill { display: inline-block; background: #e7efe1; color: #2f6b2f; border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 700; }
   ul { margin-top: 8px; padding-left: 18px; }
   li { margin-bottom: 5px; }
-  ol.inc { margin-top: 12px; padding-left: 20px; }
-  ol.inc > li { margin-bottom: 8px; line-height: 1.5; padding-left: 4px; }
   ol.terms { margin-top: 10px; padding-left: 18px; }
   ol.terms > li { margin-bottom: 9px; }
   ol.terms b { color: ${NAVY}; }
@@ -450,16 +449,18 @@ function ownerDetailRowsHtml(owner: OfferOwner): string {
   return header + directors;
 }
 
-// The per-row "Included" status pill is gone with the table: the intro sentence
-// already states that everything listed is in the Contract Sum, and the column
-// read "Included" on every single row.
 function inclusionsPage(
   specifications: readonly OfferInclusionEntry[],
   startIndex: number,
   continued: boolean,
   foot: string,
 ): string {
-  const body = specifications.map((entry) => `<li>${esc(entry.spec)}</li>`).join("");
+  const body = specifications
+    .map(
+      (entry, i) =>
+        `<tr><td class="num">${startIndex + i + 1}</td><td class="cat">${esc(entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL)}</td><td>${esc(entry.spec)}</td><td class="status"><span class="pill">Included</span></td></tr>`,
+    )
+    .join("");
   const intro = continued
     ? ""
     : `<p style="color:${MUTED};">All items below are included in the Contract Sum and fixed as per the approved plans and specifications, confirmed at colour selection.</p>`;
@@ -467,7 +468,7 @@ function inclusionsPage(
     ${masthead()}
     <h2 style="margin-top:20px;">Scope of Works — Inclusions Schedule${continued ? " (cont.)" : ""}</h2>
     ${intro}
-    <ol class="inc" start="${startIndex + 1}">${body}</ol>
+    <table><thead><tr><th>#</th><th>Category</th><th>Specification</th><th>Status</th></tr></thead><tbody>${body}</tbody></table>
     ${foot}
   </div>`;
 }

@@ -3,6 +3,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
+  UNCATEGORISED_INCLUSION_LABEL,
   type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
@@ -590,19 +591,26 @@ function PrintInclusionsPage({
           </p>
         )}
       </PrintSection>
-      <ol
-        className="mt-6 max-w-[165mm] list-decimal pl-5 text-sm"
-        start={startIndex + 1}
-      >
-        {specifications.map((entry, index) => (
-          <li
-            key={`${startIndex + index}`}
-            className="mb-2 pl-1 leading-6 text-muted-foreground"
-          >
-            {entry.spec}
-          </li>
-        ))}
-      </ol>
+      <table className="mt-6 w-full border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="w-[45mm] py-3 pr-4 font-semibold">Category</th>
+            <th className="px-4 py-3 font-semibold">Specification</th>
+          </tr>
+        </thead>
+        <tbody>
+          {specifications.map((entry, index) => (
+            <tr className="border-b border-border" key={`${startIndex + index}`}>
+              <td className="py-3 pr-4 align-top font-semibold text-sidebar">
+                {entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL}
+              </td>
+              <td className="px-4 py-3 align-top text-muted-foreground">
+                {entry.spec}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </PrintPage>
   );
 }

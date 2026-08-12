@@ -303,11 +303,11 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
 // schedule is a plain numbered list, and each entry's optional `summary` is
 // what the Investment Summary page prints beside the price.
 export const STANDARD_INCLUSION_ENTRIES: readonly OfferInclusionEntry[] =
-  STANDARD_INCLUSIONS_SCHEDULE.map((row) =>
-    row.summary === undefined
-      ? { spec: row.specification }
-      : { spec: row.specification, summary: row.summary },
-  );
+  STANDARD_INCLUSIONS_SCHEDULE.map((row) => ({
+    spec: row.specification,
+    category: row.category,
+    ...(row.summary === undefined ? {} : { summary: row.summary }),
+  }));
 
 // Page-4 exclusions. The includes side of this pair is gone — it is now the
 // `summary` on each inclusion entry, so it cannot drift from the schedule.

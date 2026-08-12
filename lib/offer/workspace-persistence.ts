@@ -96,10 +96,9 @@ export function deriveTenderGateStatus(
   return "unlocked";
 }
 
-// v4 (this version): the two inclusion lists became one. draft.inclusionSchedule
-// is now { spec, summary? } entries and draft.inclusionBullets is gone — page 4
-// is derived from the summaries. See migrateV3ToV4.
-export const CURRENT_WORKSPACE_SCHEMA_VERSION = 4 as const;
+// v5 (this version): inclusion entries carry their trade `category` again, so
+// the printed schedule can restore its Category column. See migrateV4ToV5.
+export const CURRENT_WORKSPACE_SCHEMA_VERSION = 5 as const;
 
 // ─── Money helpers (ADR 0002: money persisted as integer cents) ───
 export const dollarsToCents = (value: number): number =>
@@ -289,6 +288,7 @@ const scopeItemSchema = z.object({
 const inclusionEntrySchema = z.object({
   spec: z.string(),
   summary: z.string().optional(),
+  category: z.string().optional(),
 });
 
 const draftSchema = z.object({
@@ -429,6 +429,9 @@ export function migrateWorkspaceState(raw: unknown): unknown {
   if (version < 4) {
     next = migrateV3ToV4(next);
   }
+  if (version < 5) {
+    next = migrateV4ToV5(next);
+  }
   return next;
 }
 
@@ -537,6 +540,48 @@ function migrateV3ToV4(
   };
 }
 
+// v4 → v5: entries regain `category`, the trade label printed in the schedule's
+// Category column. v4 dropped it when the schedule was flattened to plain specs.
+//
+// Re-attached by matching the spec text against the seeded template, which is
+// the only place the mapping exists. An entry whose spec was edited, pulled from
+// the cost schedule, or typed from scratch has no template match and stays
+// uncategorised — those print UNCATEGORISED_INCLUSION_LABEL rather than an empty
+// cell on a contract document.
+function migrateV4ToV5(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const draft = (state.draft ?? {}) as Record<string, unknown>;
+  const schedule = Array.isArray(draft.inclusionSchedule)
+    ? draft.inclusionSchedule
+    : [];
+  const categoryBySpec = new Map(
+    STANDARD_INCLUSION_ENTRIES.filter((entry) => entry.category !== undefined).map(
+      (entry) => [entry.spec, entry.category as string],
+    ),
+  );
+  return {
+    ...state,
+    schemaVersion: 5,
+    draft: {
+      ...draft,
+      inclusionSchedule: schedule.map((entry) => {
+        if (typeof entry !== "string") {
+          const e = entry as Record<string, unknown>;
+          if (typeof e.category === "string") {
+            return e;
+          }
+          const match =
+            typeof e.spec === "string" ? categoryBySpec.get(e.spec) : undefined;
+          return match === undefined ? e : { ...e, category: match };
+        }
+        const match = categoryBySpec.get(entry);
+        return match === undefined ? { spec: entry } : { spec: entry, category: match };
+      }),
+    },
+  };
+}
+
 export function parseWorkspaceState(
   json: unknown,
 ): PersistedOfferWorkspaceState {
@@ -582,6 +627,7 @@ export function serializeWorkspace(
       inclusionSchedule: snapshot.draft.inclusionSchedule.map((entry) => ({
         spec: entry.spec,
         ...(entry.summary === undefined ? {} : { summary: entry.summary }),
+        ...(entry.category === undefined ? {} : { category: entry.category }),
       })),
       termsSummary: snapshot.draft.termsSummary,
     },
