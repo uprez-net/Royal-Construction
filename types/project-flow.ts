@@ -2,10 +2,7 @@ export type ProjectFlowSectionKey =
   | "legalAdministration"
   | "commercialsAndClaims"
   | "subStructureAndGround"
-  | "shellAndExternal"
-  | "mechanicalDetails"
-  | "internalFitOutAndFinishes"
-  | "exclusionsAndRisks"
+  | "inclusionsAndExclusions"
   | "utilityInfrastructure"
   | "wetAreaCompliance"
   | "safetyAndSiteLogistics";
@@ -87,48 +84,9 @@ export interface ProjectSubStructureSection {
   sewerConnection: string | null;
 }
 
-export interface ProjectShellAndExternalSection {
-  ceilingHeightGroundFloor: string | null;
-  ceilingHeightFirstFloor: string | null;
-  roofingMaterial: string | null;
-  brickAllowance: number | null;
-  brickCount: number | null;
-  selectedBrickPrice: number | null;
-  windowProvider: string | null;
-  floorAreaM2: number | null;
-}
-
-export interface ProjectMechanicalSection {
-  acSystemZones: string | null;
-  acRequiredCapacityKw: number | null;
-  acInstalledCapacityKw: number | null;
-  lightingCount: number | null;
-  tenderLightingCount: number | null;
-  powerPointCount: number | null;
-  externalPower: string | null;
-  jointSealants: string | null;
-}
-
-export interface ProjectFinishesSection {
-  internalDoorHeight: string | null;
-  skirtingSize: string | null;
-  stoneThickness: string | null;
-  waterfallEnds: string | null;
-  tapwareFinish: string | null;
-  tilesProvisionRate: string | null;
-  tileAllowance: number | null;
-  selectedTilePrice: number | null;
-  wetAreaSizeM2: number | null;
-}
-
-export interface ProjectExclusionsSection {
-  retainingWalls: string | null;
-  fencing: string | null;
-  blinds: string | null;
-  solarProvisions: string | null;
-  rockExcavation: string | null;
-  ownerResponsibility: string[];
-  variationRequired: string[];
+export interface ProjectInclusionsExclusionsSection {
+  inclusions: string[];
+  exclusions: string[];
 }
 
 export interface ProjectUtilityInfrastructureSection {
@@ -163,10 +121,7 @@ export interface ProjectExtractionDraft {
   legalAdministration: ProjectLegalAdministrationSection;
   commercialsAndClaims: ProjectCommercialSection;
   subStructureAndGround: ProjectSubStructureSection;
-  shellAndExternal: ProjectShellAndExternalSection;
-  mechanicalDetails: ProjectMechanicalSection;
-  internalFitOutAndFinishes: ProjectFinishesSection;
-  exclusionsAndRisks: ProjectExclusionsSection;
+  inclusionsAndExclusions: ProjectInclusionsExclusionsSection;
   utilityInfrastructure: ProjectUtilityInfrastructureSection;
   wetAreaCompliance: ProjectWetAreaSection;
   safetyAndSiteLogistics: ProjectSafetySection;

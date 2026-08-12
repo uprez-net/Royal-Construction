@@ -16,14 +16,14 @@ import {
   ScrollText,
   Landmark,
   Layers,
-  Building2,
-  Fan,
-  Paintbrush,
   ShieldAlert,
   Plug,
   Droplets,
   HardHat,
+  X,
+  Plus,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Section metadata (icon + description) — mirrors the Project Overview tab
@@ -49,20 +49,8 @@ const SECTION_META: Record<
     description: "Slab, termite and drainage specification",
     icon: Layers,
   },
-  shellAndExternal: {
-    description: "Ceilings, roofing, brick and window allowances",
-    icon: Building2,
-  },
-  mechanicalDetails: {
-    description: "Air conditioning, lighting and power",
-    icon: Fan,
-  },
-  internalFitOutAndFinishes: {
-    description: "Doors, stone, tiles and tapware",
-    icon: Paintbrush,
-  },
-  exclusionsAndRisks: {
-    description: "Items excluded, owner risk and variation triggers",
+  inclusionsAndExclusions: {
+    description: "Items included and excluded from the tender scope",
     icon: ShieldAlert,
   },
   utilityInfrastructure: {
@@ -90,8 +78,8 @@ const ARRAY_FIELDS = new Set([
   "legalAdministrationOwnerEmails",
   "legalAdministrationOwnerPhones",
   "commercialsAndClaimsPaymentStages",
-  "exclusionsAndRisksOwnerResponsibility",
-  "exclusionsAndRisksVariationRequired",
+  "inclusionsAndExclusionsInclusions",
+  "inclusionsAndExclusionsExclusions",
 ]);
 
 const CURRENCY_FIELDS = new Set([
@@ -102,10 +90,6 @@ const CURRENCY_FIELDS = new Set([
   "commercialsAndClaimsDepositValue",
   "commercialsAndClaimsClaimStageSlabDollarValue",
   "commercialsAndClaimsVariationAdminFee",
-  "shellAndExternalBrickAllowance",
-  "shellAndExternalSelectedBrickPrice",
-  "internalFitOutAndFinishesTileAllowance",
-  "internalFitOutAndFinishesSelectedTilePrice",
 ]);
 
 const PERCENT_FIELDS = new Set([
@@ -115,20 +99,12 @@ const PERCENT_FIELDS = new Set([
 
 const NUMBER_UNITS: Record<string, string> = {
   subStructureAndGroundConcreteStrengthMpa: "MPa",
-  shellAndExternalFloorAreaM2: "m²",
-  mechanicalDetailsAcRequiredCapacityKw: "kW",
-  mechanicalDetailsAcInstalledCapacityKw: "kW",
-  internalFitOutAndFinishesWetAreaSizeM2: "m²",
 };
 
 const NUMERIC_FIELDS = new Set([
   ...CURRENCY_FIELDS,
   ...PERCENT_FIELDS,
   ...Object.keys(NUMBER_UNITS),
-  "shellAndExternalBrickCount",
-  "mechanicalDetailsLightingCount",
-  "mechanicalDetailsTenderLightingCount",
-  "mechanicalDetailsPowerPointCount",
   "wetAreaComplianceTiledNicheCount",
   "wetAreaComplianceShowerCount",
 ]);
@@ -178,12 +154,12 @@ const FIELD_GROUPS: {
     ],
   },
   {
-    id: "riskAllocation",
-    heading: "Risk Allocation",
-    caption: "Items flagged as owner responsibility versus variation triggers",
+    id: "inclusionsExclusions",
+    heading: "Inclusions & Exclusions",
+    caption: "Items included versus excluded from the tender scope",
     fields: [
-      "exclusionsAndRisksOwnerResponsibility",
-      "exclusionsAndRisksVariationRequired",
+      "inclusionsAndExclusionsInclusions",
+      "inclusionsAndExclusionsExclusions",
     ],
   },
 ];
@@ -420,7 +396,7 @@ function FieldShell({
   isEmpty,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   unit?: string;
   isEmpty: boolean;
   children: React.ReactNode;
@@ -606,64 +582,243 @@ function BooleanControl({
   );
 }
 
+interface TagRowProps {
+  value: string;
+  icon?: React.ReactNode;
+  onCommit: (newValue: string) => void;
+  onRemove: () => void;
+}
+
+interface TagListControlProps {
+  label: React.ReactNode;
+  values: readonly string[];
+  onChange: (values: string[]) => void;
+  /** Optional leading icon rendered on every row (e.g. a <Check /> for "inclusions"). Omitted by default. */
+  icon?: React.ReactNode;
+  /** Max height of the scrollable list before it scrolls instead of growing the page. Default "30vh". */
+  maxHeight?: string;
+}
+
+/* --------------------------------- TagRow --------------------------------- */
+/* A single row in the list. Click the text to edit in place. Enter/blur     */
+/* commits, Escape cancels, clearing the text removes the row. The ×         */
+/* removes without entering edit mode. Text truncates on one line with a     */
+/* native title tooltip for the full value.                                  */
+
+function TagRow({ value, icon, onCommit, onRemove }: TagRowProps): React.JSX.Element {
+  const [editing, setEditing] = useState<boolean>(false);
+  const [draft, setDraft] = useState<string>(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = (): void => {
+    const trimmed = draft.trim();
+    setEditing(false);
+    if (!trimmed) {
+      onRemove();
+    } else if (trimmed !== value) {
+      onCommit(trimmed);
+    }
+  };
+
+  if (editing) {
+    return (
+      <li className="flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5">
+        {icon}
+        <Input
+          ref={inputRef}
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setDraft(e.target.value)
+          }
+          onBlur={commit}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+            if (e.key === "Escape") {
+              setDraft(value);
+              setEditing(false);
+            }
+          }}
+          className="h-5 flex-1 border-none bg-transparent p-0 text-xs font-medium text-foreground shadow-none outline-none focus-visible:ring-0"
+        />
+      </li>
+    );
+  }
+
+  return (
+    <li className="group inline-flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground">
+      {icon}
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+        className="min-w-0 flex-1 cursor-text truncate text-left"
+        title={value}
+      >
+        {value}
+      </button>
+
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+        aria-label={`Remove ${value}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </li>
+  );
+}
+
+/* ---------------------------- TagListControl ----------------------------- */
+/*                                                                            *
+ * - Rows are the source of truth for editing/removing existing entries.     *
+ * - The list itself is height-capped and scrolls (`no-scrollbar`) once it   *
+ *   overflows, instead of growing the page indefinitely.                    *
+ * - The add-input lives OUTSIDE the scroll region, so it's always reachable *
+ *   no matter how long the list gets or where it's scrolled to.             *
+ * - Enter (or comma) commits, paste of multi-line/comma text bulk-adds,     *
+ *   Backspace on an empty input pops the last row.                         *
+ * - A local `draft` string holds in-progress typing so parent re-renders    *
+ *   don't fight the caret; `values` itself stays fully controlled via       *
+ *   `onChange`.                                                             *
+ *                                                                            */
+
 function TagListControl({
   label,
   values,
   onChange,
-}: {
-  label: string;
-  values: string[];
-  onChange: (values: string[]) => void;
-}) {
+  icon,
+  maxHeight = "30vh",
+}: TagListControlProps): React.JSX.Element {
+  const [draft, setDraft] = useState<string>("");
+
+  const addFromText = (text: string): void => {
+    const parts: string[] = text
+      .split(/[\n,]/)
+      .map((v) => v.trim())
+      .filter((v): v is string => v.length > 0);
+
+    if (parts.length === 0) return;
+
+    const next: string[] = [...values];
+    for (const part of parts) {
+      if (!next.includes(part)) next.push(part);
+    }
+    onChange(next);
+  };
+
+  const commitDraft = (): void => {
+    if (!draft.trim()) return;
+    addFromText(draft);
+    setDraft("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      commitDraft();
+    } else if (e.key === "Backspace" && draft === "" && values.length > 0) {
+      onChange(values.slice(0, -1));
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>): void => {
+    const text = e.clipboardData.getData("text");
+    if (/[\n,]/.test(text)) {
+      e.preventDefault();
+      addFromText(text);
+    }
+  };
+
+  const updateAt = (index: number, newValue: string): void => {
+    const next: string[] = [...values];
+    // if the edit collides with an existing entry, drop this one instead of duplicating
+    if (next.some((v, j) => j !== index && v === newValue)) {
+      next.splice(index, 1);
+    } else {
+      next[index] = newValue;
+    }
+    onChange(next);
+  };
+
+  const removeAt = (index: number): void => {
+    const next: string[] = [...values];
+    next.splice(index, 1);
+    onChange(next);
+  };
+
+  const isEmpty = values.length === 0 && draft.trim() === "";
+
   return (
-    <FieldShell
-      label={label}
-      isEmpty={values.length === 0 || values.every((v) => v.trim() === "")}
-    >
-      <Textarea
-        value={values.join("\n")}
-        onChange={(e) =>
-          onChange(
-            e.target.value
-              .split("\n")
-              .map((v) => v.trim())
-              .filter(Boolean),
-          )
-        }
-        placeholder="One per line"
-        className="min-h-16 resize-none rounded-lg border-slate-200 bg-white text-sm"
-      />
-      {values.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 pt-0.5">
-          {values.map((entry, i) => (
-            <Badge
-              key={`${label}-${i}`}
-              variant="outline"
-              className="rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-normal text-slate-600"
-            >
-              {entry}
-            </Badge>
-          ))}
+    <FieldShell label={label} isEmpty={isEmpty}>
+      <div className="space-y-2">
+        {values.length > 0 && (
+          <ul
+            className="grid gap-1.5 overflow-y-auto no-scrollbar pr-1 sm:grid-cols-2"
+            style={{ maxHeight }}
+          >
+            {values.map((v: string, i: number) => (
+              <TagRow
+                key={`${v}-${i}`}
+                value={v}
+                icon={icon}
+                onCommit={(nv: string) => updateAt(i, nv)}
+                onRemove={() => removeAt(i)}
+              />
+            ))}
+          </ul>
+        )}
+
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-2.5 py-1.5">
+          <Plus className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Input
+            value={draft}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setDraft(e.target.value)
+            }
+            onKeyDown={handleKeyDown}
+            onBlur={commitDraft}
+            onPaste={handlePaste}
+            placeholder={
+              values.length === 0 ? "Type and press Enter…" : "Add another…"
+            }
+            className="h-5 flex-1 border-none bg-transparent p-0 text-xs text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+          />
         </div>
-      ) : null}
+      </div>
     </FieldShell>
   );
 }
-
 // ---------------------------------------------------------------------------
 // Single field renderer
 // ---------------------------------------------------------------------------
 
 export function ExtractionField({
+  title,
   field,
   value,
   onChange,
 }: {
+  title?: string;
   field: string;
   value: unknown;
   onChange: (field: string, value: unknown) => void;
 }) {
-  const label = fieldLabel(field);
+  const label = title
+    ? fieldLabel(removeTitleFromFieldName(title, field))
+    : fieldLabel(field);
   const type = resolveFieldType(field);
   const emit = (raw: string) => onChange(field, coerceFieldValue(field, raw));
 
@@ -736,7 +891,8 @@ function FieldGroupPanel({
         {fields.map((field) => (
           <ExtractionField
             key={field}
-            field={removeTitleFromFieldName(title, field)}
+            title={title}
+            field={field}
             value={values[field as keyof ProjectExtractionData]}
             onChange={onChange}
           />

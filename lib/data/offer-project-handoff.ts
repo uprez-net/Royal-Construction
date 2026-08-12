@@ -485,26 +485,9 @@ function buildExtractionPayload(
       concreteSlabClass: null, concreteStrengthMpa: null, vapourBarrier: null,
       termiteSystem: null, sewerConnection: null,
     },
-    shellAndExternal: {
-      ceilingHeightGroundFloor: null, ceilingHeightFirstFloor: null, roofingMaterial: null,
-      brickAllowance: null, brickCount: null, selectedBrickPrice: null, windowProvider: null,
-      floorAreaM2: job.groundFloorSqm + job.firstFloorSqm,
-    },
-    mechanicalDetails: {
-      acSystemZones: null, acRequiredCapacityKw: null, acInstalledCapacityKw: null,
-      lightingCount: null, tenderLightingCount: null, powerPointCount: null,
-      externalPower: null, jointSealants: null,
-    },
-    internalFitOutAndFinishes: {
-      internalDoorHeight: null, skirtingSize: null, stoneThickness: null, waterfallEnds: null,
-      tapwareFinish: null, tilesProvisionRate: null, tileAllowance: null,
-      selectedTilePrice: null, wetAreaSizeM2: null,
-    },
-    exclusionsAndRisks: {
-      retainingWalls: null, fencing: null, blinds: null, solarProvisions: null,
-      rockExcavation: null,
-      ownerResponsibility: [...snapshot.draft.exclusionBullets],
-      variationRequired: [],
+    inclusionsAndExclusions: {
+      inclusions: [...snapshot.draft.inclusionBullets],
+      exclusions: [...snapshot.draft.exclusionBullets],
     },
     utilityInfrastructure: {
       electricalPhase: null, communicationConduit: null, gasConnection: null,

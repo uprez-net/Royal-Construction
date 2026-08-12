@@ -1,4 +1,4 @@
-import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage } from "@prisma/client";
+import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, LeadEmails } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 
 export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize" | "requirements"> {
@@ -81,6 +81,13 @@ export interface ActivityLogWithAuthor extends ActivityLog {
 export interface ProjectDetail extends SafeProject {
   customer: Customer;
   siteManager: User | null;
+  lead: {
+    id: number;
+    email: string;
+    type: string;
+    location: string;
+    emails: LeadEmails[];
+  };
   activityLogs: ActivityLogWithAuthor[];
   milestones: MilestoneWithFilesTradiesUpdates[];
   siteUpdates: SiteUpdateWithAuthorAndMilestone[];

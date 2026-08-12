@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/types/project";
 import type {
   ProjectRequirementsPayload,
@@ -43,13 +43,11 @@ import {
   ScrollText,
   Landmark,
   Layers,
-  Building2,
-  Fan,
-  Paintbrush,
   ShieldAlert,
   Plug,
   Droplets,
   HardHat,
+  Check,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -76,7 +74,12 @@ interface FieldConfig {
 
 const SECTION_META: Record<
   ProjectFlowSectionKey,
-  { label: string; description: string; icon: React.ElementType, isAdminOnly?: boolean }
+  {
+    label: string;
+    description: string;
+    icon: React.ElementType;
+    isAdminOnly?: boolean;
+  }
 > = {
   legalAdministration: {
     label: "Legal and administration",
@@ -94,24 +97,9 @@ const SECTION_META: Record<
     description: "Slab, termite and drainage specification",
     icon: Layers,
   },
-  shellAndExternal: {
-    label: "Shell and external",
-    description: "Ceilings, roofing, brick and window allowances",
-    icon: Building2,
-  },
-  mechanicalDetails: {
-    label: "Mechanical details",
-    description: "Air conditioning, lighting and power",
-    icon: Fan,
-  },
-  internalFitOutAndFinishes: {
-    label: "Internal fit out and finishes",
-    description: "Doors, stone, tiles and tapware",
-    icon: Paintbrush,
-  },
-  exclusionsAndRisks: {
-    label: "Exclusions and risks",
-    description: "Items excluded, owner risk and variation triggers",
+  inclusionsAndExclusions: {
+    label: "Inclusions and Exclusions",
+    description: "Items included and excluded from the tender scope",
     icon: ShieldAlert,
   },
   utilityInfrastructure: {
@@ -174,79 +162,7 @@ const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
     { key: "termiteSystem", label: "Termite system", type: "text" },
     { key: "sewerConnection", label: "Sewer connection", type: "text" },
   ],
-  shellAndExternal: [
-    {
-      key: "ceilingHeightGroundFloor",
-      label: "Ceiling height (ground)",
-      type: "text",
-    },
-    {
-      key: "ceilingHeightFirstFloor",
-      label: "Ceiling height (first floor)",
-      type: "text",
-    },
-    { key: "roofingMaterial", label: "Roofing material", type: "text" },
-    { key: "brickAllowance", label: "Brick allowance", type: "currency" },
-    { key: "brickCount", label: "Brick count", type: "number" },
-    {
-      key: "selectedBrickPrice",
-      label: "Selected brick price",
-      type: "currency",
-    },
-    { key: "windowProvider", label: "Window provider", type: "text" },
-    { key: "floorAreaM2", label: "Floor area", type: "number", unit: "m²" },
-  ],
-  mechanicalDetails: [
-    { key: "acSystemZones", label: "AC system zones", type: "text" },
-    {
-      key: "acRequiredCapacityKw",
-      label: "AC required capacity",
-      type: "number",
-      unit: "kW",
-    },
-    {
-      key: "acInstalledCapacityKw",
-      label: "AC installed capacity",
-      type: "number",
-      unit: "kW",
-    },
-    { key: "lightingCount", label: "Lighting count", type: "number" },
-    {
-      key: "tenderLightingCount",
-      label: "Tender lighting count",
-      type: "number",
-    },
-    { key: "powerPointCount", label: "Power point count", type: "number" },
-    { key: "externalPower", label: "External power", type: "text" },
-    { key: "jointSealants", label: "Joint sealants", type: "text" },
-  ],
-  internalFitOutAndFinishes: [
-    { key: "internalDoorHeight", label: "Internal door height", type: "text" },
-    { key: "skirtingSize", label: "Skirting size", type: "text" },
-    { key: "stoneThickness", label: "Stone thickness", type: "text" },
-    { key: "waterfallEnds", label: "Waterfall ends", type: "text" },
-    { key: "tapwareFinish", label: "Tapware finish", type: "text" },
-    { key: "tilesProvisionRate", label: "Tiles provision rate", type: "text" },
-    { key: "tileAllowance", label: "Tile allowance", type: "currency" },
-    {
-      key: "selectedTilePrice",
-      label: "Selected tile price",
-      type: "currency",
-    },
-    {
-      key: "wetAreaSizeM2",
-      label: "Wet area size",
-      type: "number",
-      unit: "m²",
-    },
-  ],
-  exclusionsAndRisks: [
-    { key: "retainingWalls", label: "Retaining walls", type: "text" },
-    { key: "fencing", label: "Fencing", type: "text" },
-    { key: "blinds", label: "Blinds", type: "text" },
-    { key: "solarProvisions", label: "Solar provisions", type: "text" },
-    { key: "rockExcavation", label: "Rock excavation", type: "text" },
-  ],
+  inclusionsAndExclusions: [],
   utilityInfrastructure: [
     { key: "electricalPhase", label: "Electrical phase", type: "text" },
     {
@@ -315,7 +231,7 @@ function FieldShell({
   htmlFor,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   unit?: string;
   htmlFor?: string;
   children: React.ReactNode;
@@ -336,9 +252,7 @@ function FieldShell({
           {content}
         </Label>
       ) : (
-        <p className={cn("flex items-center", FIELD_LABEL_CLASS)}>
-          {content}
-        </p>
+        <p className={cn("flex items-center", FIELD_LABEL_CLASS)}>{content}</p>
       )}
       {children}
     </div>
@@ -546,54 +460,231 @@ function renderField(
   }
 }
 
-// Simple line-per-entry list editor, used for name/email/phone lists and exclusion lists.
-function TagListField({
-  label,
-  values,
-  onChange,
-}: {
-  label: string;
-  values: string[];
+interface TagRowProps {
+  value: string;
+  icon?: React.ReactNode;
+  onCommit: (newValue: string) => void;
+  onRemove: () => void;
+}
+
+interface TagListControlProps {
+  label: React.ReactNode;
+  values: readonly string[];
   onChange: (values: string[]) => void;
-}) {
-  const id = useId();
-  const hintId = `${id}-hint`;
+  /** Optional leading icon rendered on every row (e.g. a <Check /> for "inclusions"). Omitted by default. */
+  icon?: React.ReactNode;
+  /** Max height of the scrollable list before it scrolls instead of growing the page. Default "30vh". */
+  maxHeight?: string;
+}
+
+/* --------------------------------- TagRow --------------------------------- */
+/* A single row in the list. Click the text to edit in place. Enter/blur     */
+/* commits, Escape cancels, clearing the text removes the row. The ×         */
+/* removes without entering edit mode. Text truncates on one line with a     */
+/* native title tooltip for the full value.                                  */
+
+function TagRow({
+  value,
+  icon,
+  onCommit,
+  onRemove,
+}: TagRowProps): React.JSX.Element {
+  const [editing, setEditing] = useState<boolean>(false);
+  const [draft, setDraft] = useState<string>(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = (): void => {
+    const trimmed = draft.trim();
+    setEditing(false);
+    if (!trimmed) {
+      onRemove();
+    } else if (trimmed !== value) {
+      onCommit(trimmed);
+    }
+  };
+
+  if (editing) {
+    return (
+      <li className="flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5">
+        {icon}
+        <Input
+          ref={inputRef}
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setDraft(e.target.value)
+          }
+          onBlur={commit}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+            if (e.key === "Escape") {
+              setDraft(value);
+              setEditing(false);
+            }
+          }}
+          className="h-5 flex-1 border-none bg-transparent p-0 text-xs font-medium text-foreground shadow-none outline-none focus-visible:ring-0"
+        />
+      </li>
+    );
+  }
+
   return (
-    <FieldShell label={label} htmlFor={id}>
-      <Textarea
-        id={id}
-        aria-describedby={hintId}
-        value={values.join("\n")}
-        onChange={(e) =>
-          onChange(
-            e.target.value
-              .split("\n")
-              .map((v) => v.trim())
-              .filter(Boolean),
-          )
-        }
-        className="min-h-16 resize-none rounded-lg bg-card text-sm"
-      />
-      <p id={hintId} className="text-xs text-muted-foreground">
-        One entry per line.
-      </p>
-      {values.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 pt-0.5">
-          {values.map((entry, i) => (
-            <Badge
-              key={`${label}-${i}`}
-              variant="outline"
-              className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-normal text-muted-foreground"
-            >
-              {entry}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-    </FieldShell>
+    <li className="group inline-flex items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-foreground">
+      {icon}
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+        className="min-w-0 flex-1 cursor-text truncate text-left"
+        title={value}
+      >
+        {value}
+      </button>
+
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+        aria-label={`Remove ${value}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </li>
   );
 }
 
+/* ---------------------------- TagListControl ----------------------------- */
+/*                                                                            *
+ * - Rows are the source of truth for editing/removing existing entries.     *
+ * - The list itself is height-capped and scrolls (`no-scrollbar`) once it   *
+ *   overflows, instead of growing the page indefinitely.                    *
+ * - The add-input lives OUTSIDE the scroll region, so it's always reachable *
+ *   no matter how long the list gets or where it's scrolled to.             *
+ * - Enter (or comma) commits, paste of multi-line/comma text bulk-adds,     *
+ *   Backspace on an empty input pops the last row.                         *
+ * - A local `draft` string holds in-progress typing so parent re-renders    *
+ *   don't fight the caret; `values` itself stays fully controlled via       *
+ *   `onChange`.                                                             *
+ *                                                                            */
+
+function TagListControl({
+  label,
+  values,
+  onChange,
+  icon,
+  maxHeight = "30vh",
+}: TagListControlProps): React.JSX.Element {
+  const [draft, setDraft] = useState<string>("");
+
+  const addFromText = (text: string): void => {
+    const parts: string[] = text
+      .split(/[\n,]/)
+      .map((v) => v.trim())
+      .filter((v): v is string => v.length > 0);
+
+    if (parts.length === 0) return;
+
+    const next: string[] = [...values];
+    for (const part of parts) {
+      if (!next.includes(part)) next.push(part);
+    }
+    onChange(next);
+  };
+
+  const commitDraft = (): void => {
+    if (!draft.trim()) return;
+    addFromText(draft);
+    setDraft("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      commitDraft();
+    } else if (e.key === "Backspace" && draft === "" && values.length > 0) {
+      onChange(values.slice(0, -1));
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>): void => {
+    const text = e.clipboardData.getData("text");
+    if (/[\n,]/.test(text)) {
+      e.preventDefault();
+      addFromText(text);
+    }
+  };
+
+  const updateAt = (index: number, newValue: string): void => {
+    const next: string[] = [...values];
+    // if the edit collides with an existing entry, drop this one instead of duplicating
+    if (next.some((v, j) => j !== index && v === newValue)) {
+      next.splice(index, 1);
+    } else {
+      next[index] = newValue;
+    }
+    onChange(next);
+  };
+
+  const removeAt = (index: number): void => {
+    const next: string[] = [...values];
+    next.splice(index, 1);
+    onChange(next);
+  };
+
+  return (
+    <FieldShell label={label}>
+      <div className="space-y-2">
+        {values.length > 0 && (
+          <ul
+            className="grid gap-1.5 overflow-y-auto no-scrollbar pr-1 sm:grid-cols-2"
+            style={{ maxHeight }}
+          >
+            {values.map((v: string, i: number) => (
+              <TagRow
+                key={`${v}-${i}`}
+                value={v}
+                icon={icon}
+                onCommit={(nv: string) => updateAt(i, nv)}
+                onRemove={() => removeAt(i)}
+              />
+            ))}
+          </ul>
+        )}
+
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-2.5 py-1.5">
+          <Plus
+            className="h-3 w-3 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            value={draft}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setDraft(e.target.value)
+            }
+            onKeyDown={handleKeyDown}
+            onBlur={commitDraft}
+            onPaste={handlePaste}
+            placeholder={
+              values.length === 0 ? "Type and press Enter…" : "Add another…"
+            }
+            className="h-5 flex-1 border-none bg-transparent p-0 text-xs text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+          />
+        </div>
+      </div>
+    </FieldShell>
+  );
+}
 // ---------------------------------------------------------------------------
 // Section-specific composite blocks
 // ---------------------------------------------------------------------------
@@ -799,7 +890,10 @@ function SourceDocumentCard({
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <FileText aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+          <FileText
+            aria-hidden="true"
+            className="h-4 w-4 text-muted-foreground"
+          />
           <span className="text-sm font-semibold text-foreground">
             {kind} document
           </span>
@@ -971,7 +1065,13 @@ function ConflictRow({ conflict }: { conflict: ProjectConflictResult }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetail; isAdmin: boolean }) {
+export function ProjectOverviewTab({
+  project,
+  isAdmin,
+}: {
+  project: ProjectDetail;
+  isAdmin: boolean;
+}) {
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
   const [saving, setSaving] = useState(false);
@@ -1027,11 +1127,11 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
     }));
   };
 
-  const updateExclusionsList = (
-    field: "ownerResponsibility" | "variationRequired",
+  const updateInclusionsExclusionsList = (
+    field: "inclusions" | "exclusions",
     values: string[],
   ) => {
-    updateSectionField("exclusionsAndRisks", field, values);
+    updateSectionField("inclusionsAndExclusions", field, values);
   };
 
   const updateSourceDocument = (
@@ -1129,7 +1229,10 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
                 nothing between here and it is an <h2>, so this panel title is
                 the first h2 on the tab. The accordion triggers below sit in
                 Radix's <h3> headers, so there is no level skip. */}
-            <CardTitle as="h2" className="text-base font-semibold text-foreground">
+            <CardTitle
+              as="h2"
+              className="text-base font-semibold text-foreground"
+            >
               Project information
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -1195,24 +1298,26 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
           />
 
           {/* Source documents */}
-          {isAdmin && <div className="grid gap-4 md:grid-cols-2">
-            <SourceDocumentCard
-              kind="Tender"
-              fileName={tender.fileName ?? ""}
-              url={tender.url ?? ""}
-              onChange={(field, value) =>
-                updateSourceDocument("tender", field, value)
-              }
-            />
-            <SourceDocumentCard
-              kind="Contract"
-              fileName={contract.fileName ?? ""}
-              url={contract.url ?? ""}
-              onChange={(field, value) =>
-                updateSourceDocument("contract", field, value)
-              }
-            />
-          </div>}
+          {isAdmin && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <SourceDocumentCard
+                kind="Tender"
+                fileName={tender.fileName ?? ""}
+                url={tender.url ?? ""}
+                onChange={(field, value) =>
+                  updateSourceDocument("tender", field, value)
+                }
+              />
+              <SourceDocumentCard
+                kind="Contract"
+                fileName={contract.fileName ?? ""}
+                url={contract.url ?? ""}
+                onChange={(field, value) =>
+                  updateSourceDocument("contract", field, value)
+                }
+              />
+            </div>
+          )}
 
           {/* Automation triggers */}
           <div className="grid gap-3 md:grid-cols-3">
@@ -1260,7 +1365,8 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
             {sectionKeys.map((key) => {
               const meta = SECTION_META[key];
               const Icon = meta.icon;
-              const sectionData = (draft[key] as unknown as Record<string, unknown>) ?? {};
+              const sectionData =
+                (draft[key] as unknown as Record<string, unknown>) ?? {};
               const sectionValidations = validations.filter(
                 (v) => v.section === key,
               );
@@ -1268,7 +1374,7 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
                 (v) => v.severity === "fail",
               ).length;
 
-              if(!isAdmin && meta.isAdminOnly) {
+              if (!isAdmin && meta.isAdminOnly) {
                 return null;
               }
 
@@ -1343,24 +1449,48 @@ export function ProjectOverviewTab({ project, isAdmin }: { project: ProjectDetai
                       />
                     ) : null}
 
-                    {key === "exclusionsAndRisks" ? (
+                    {key === "inclusionsAndExclusions" ? (
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
-                        <TagListField
-                          label="Owner responsibility"
-                          values={
-                            (sectionData.ownerResponsibility as string[]) ?? []
+                        <TagListControl
+                          label={
+                            <h5 className="text-sm font-medium text-foreground flex items-center">
+                              <Check
+                                aria-hidden="true"
+                                className="mr-1 h-3 w-3 shrink-0 text-success-ink"
+                              />
+                              Inclusions
+                            </h5>
                           }
+                          icon={
+                            <Check
+                              aria-hidden="true"
+                              className="mr-1 h-3 w-3 shrink-0 text-success-ink"
+                            />
+                          }
+                          values={(sectionData.inclusions as string[]) ?? []}
                           onChange={(v) =>
-                            updateExclusionsList("ownerResponsibility", v)
+                            updateInclusionsExclusionsList("inclusions", v)
                           }
                         />
-                        <TagListField
-                          label="Variation required"
-                          values={
-                            (sectionData.variationRequired as string[]) ?? []
+                        <TagListControl
+                          label={
+                            <h5 className="text-sm font-medium text-foreground flex items-center">
+                              <AlertTriangle
+                                aria-hidden="true"
+                                className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
+                              />
+                              Exclusions
+                            </h5>
                           }
+                          icon={
+                            <AlertTriangle
+                              aria-hidden="true"
+                              className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
+                            />
+                          }
+                          values={(sectionData.exclusions as string[]) ?? []}
                           onChange={(v) =>
-                            updateExclusionsList("variationRequired", v)
+                            updateInclusionsExclusionsList("exclusions", v)
                           }
                         />
                       </div>

@@ -92,6 +92,10 @@ const projectExtractionDraftSchema = z.object({
     ownerResponsibility: z.array(z.string()).default([]),
     variationRequired: z.array(z.string()).default([]),
   }),
+  inclusionsAndExclusions: z.object({
+    inclusions: z.array(z.string()).default([]),
+    exclusions: z.array(z.string()).default([]),
+  }),
   utilityInfrastructure: z.object({
     electricalPhase: z.string().nullable(),
     communicationConduit: z.string().nullable(),

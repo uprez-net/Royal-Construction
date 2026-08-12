@@ -442,9 +442,7 @@ export function CreateProjectModal({
             siteAddress ||
             "New Project",
           leadId: selectedLeadId,
-          lotSize: Number(
-            normalizedExtraction.shellAndExternalFloorAreaM2 || 0,
-          ),
+          lotSize: normalizedExtraction.lotSize ?? 0,
           startDate:
             normalizedSigingDate ||
             startDate ||
