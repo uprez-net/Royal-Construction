@@ -35,7 +35,10 @@ import {
   X,
 } from "lucide-react";
 import { Fragment, useState, type KeyboardEvent } from "react";
-import { OfferCardHeading, OfferSummaryBadge } from "./offer-workspace-card-heading";
+import {
+  OfferCardHeading,
+  OfferSummaryBadge,
+} from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
 import { WorkbookImportControl } from "./offer-workspace-import";
 
@@ -197,7 +200,7 @@ export function CostSchedulePanel({
         <div className="max-w-full overflow-hidden rounded-lg border border-border bg-card">
           <Table
             aria-describedby="cost-schedule-summary cost-schedule-keyboard-help"
-            className="min-w-[1080px] table-fixed border-separate border-spacing-0 text-[13px]"
+            className="min-w-270 table-fixed border-separate border-spacing-0 text-[13px]"
           >
             <colgroup>
               <col className="w-11" />
@@ -209,8 +212,8 @@ export function CostSchedulePanel({
               <col className="w-16" />
             </colgroup>
             <TableCaption className="sr-only">
-              Editable offer calculation workbook showing task, mapped
-              building sequence, Offer and Tender line item, cost excluding GST,
+              Editable offer calculation workbook showing task, mapped building
+              sequence, Offer and Tender line item, cost excluding GST,
               inclusion status and remove action.
             </TableCaption>
             <TableHeader className="bg-muted/60">
@@ -263,10 +266,15 @@ export function CostSchedulePanel({
                         aria-hidden="true"
                       />
                       <p className="text-muted-foreground">
-                        No tasks yet. Add one or import a workbook to start
-                        the offer calculation.
+                        No tasks yet. Add one or import a workbook to start the
+                        offer calculation.
                       </p>
-                      <Button size="sm" type="button" variant="outline" onClick={onAddLine}>
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                        onClick={onAddLine}
+                      >
                         <Plus className="size-4" aria-hidden="true" />
                         Add task
                       </Button>
@@ -284,182 +292,192 @@ export function CostSchedulePanel({
 
                 return (
                   <Fragment key={line.id}>
-                  <TableRow
-                    className="group align-top hover:bg-royal-gold-light/25 focus-within:bg-royal-gold-light/35"
-                  >
-                    <TableCell className="sticky left-0 z-10 border-r border-border/70 bg-card px-1 py-0 align-middle group-hover:bg-royal-gold-light/25 group-focus-within:bg-royal-gold-light/35">
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          aria-controls={detailRowId}
-                          aria-expanded={isExpanded}
-                          aria-label={`${isExpanded ? "Collapse" : "Expand"} building sequence for ${rowLabel}`}
-                          className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
-                          onClick={() => toggleExpanded(line.id)}
-                          type="button"
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="size-4" aria-hidden="true" />
-                          ) : (
-                            <ChevronRight className="size-4" aria-hidden="true" />
-                          )}
-                        </button>
-                        <span id={rowLabelId} className="block text-xs">
-                          <span className="font-mono font-medium text-muted-foreground">
-                            {rowNumber}
-                          </span>
-                          <span className="sr-only"> {rowLabel}</span>
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="border-r border-border/70 p-0">
-                      <Input
-                        aria-labelledby={`${rowLabelId} cost-task-column`}
-                        aria-keyshortcuts="Enter Shift+Enter"
-                        className={gridCellControlClass}
-                        data-cost-grid-cell=""
-                        list={TASK_DATALIST_ID}
-                        placeholder="Task from workbook"
-                        title={line.itemName || undefined}
-                        value={line.itemName}
-                        onKeyDown={handleGridCellKeyDown}
-                        onChange={(event) =>
-                          onLineChange(line.id, {
-                            itemName: event.target.value,
-                          })
-                        }
-                      />
-                    </TableCell>
-                    <TableCell className="border-r border-border/70 p-0 align-middle">
-                      <button
-                        aria-controls={detailRowId}
-                        aria-expanded={isExpanded}
-                        aria-labelledby={`${rowLabelId} cost-sequence-column`}
-                        className={cn(
-                          "flex h-9 w-full items-center gap-2 px-3 text-left text-[13px] transition-colors",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold/40",
-                          stepCount > 0
-                            ? "text-foreground hover:bg-royal-gold-light/30"
-                            : "text-muted-foreground/80 hover:bg-muted/60",
-                        )}
-                        onClick={() => toggleExpanded(line.id)}
-                        type="button"
-                      >
-                        {stepCount > 0 ? (
-                          <>
-                            <Link2
-                              className="size-3.5 shrink-0 text-royal-gold"
-                              aria-hidden="true"
-                            />
-                            <span className="font-medium">
-                              {stepCount} mapped{" "}
-                              {stepCount === 1 ? "step" : "steps"}
+                    <TableRow className="group align-top hover:bg-royal-gold-light/25 focus-within:bg-royal-gold-light/35">
+                      <TableCell className="sticky left-0 z-10 border-r border-border/70 bg-card px-1 py-0 align-middle group-hover:bg-royal-gold-light/25 group-focus-within:bg-royal-gold-light/35">
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            aria-controls={detailRowId}
+                            aria-expanded={isExpanded}
+                            aria-label={`${isExpanded ? "Collapse" : "Expand"} building sequence for ${rowLabel}`}
+                            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+                            onClick={() => toggleExpanded(line.id)}
+                            type="button"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown
+                                className="size-4"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <ChevronRight
+                                className="size-4"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+                          <span id={rowLabelId} className="block text-xs">
+                            <span className="font-mono font-medium text-muted-foreground">
+                              {rowNumber}
                             </span>
-                          </>
-                        ) : (
-                          <>
-                            <ListPlus
-                              className="size-3.5 shrink-0"
-                              aria-hidden="true"
-                            />
-                            <span>Add steps</span>
-                          </>
-                        )}
-                      </button>
-                    </TableCell>
-                    <TableCell className="border-r border-border/70 p-0">
-                      <Textarea
-                        aria-labelledby={`${rowLabelId} cost-offer-line-column`}
-                        aria-keyshortcuts="Enter Shift+Enter"
-                        className={gridAutoTextCellControlClass}
-                        data-cost-grid-cell=""
-                        placeholder="Customer-visible Offer/Tender wording"
-                        rows={1}
-                        value={line.offerTenderLineItem}
-                        onKeyDown={handleGridCellKeyDown}
-                        onChange={(event) =>
-                          onLineChange(line.id, {
-                            offerTenderLineItem: event.target.value,
-                            notesOrSpec: event.target.value,
-                          })
-                        }
-                      />
-                    </TableCell>
-                    <TableCell className="border-r border-border/70 p-0">
-                      <Input
-                        aria-labelledby={`${rowLabelId} cost-value-column`}
-                        aria-keyshortcuts="Enter Shift+Enter"
-                        className={cn(gridCellControlClass, "text-right font-mono")}
-                        data-cost-grid-cell=""
-                        min="0"
-                        placeholder="0"
-                        type="number"
-                        value={numberInputValue(line.costExGst)}
-                        onKeyDown={handleGridCellKeyDown}
-                        onChange={(event) => {
-                          const costExGst = parseNonNegativeNumberInput(
-                            event.target.value,
-                          );
-                          if (costExGst === null) {
-                            return;
-                          }
-
-                          onLineChange(line.id, {
-                            costExGst,
-                            includedInContract:
-                              costExGst > 0 ? true : line.includedInContract,
-                          });
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell className="border-r border-border/70 p-0 align-middle">
-                      <div className="flex justify-center">
-                        <Checkbox
-                          aria-labelledby={`${rowLabelId} cost-included-column`}
+                            <span className="sr-only"> {rowLabel}</span>
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="border-r border-border/70 p-0">
+                        <Input
+                          aria-labelledby={`${rowLabelId} cost-task-column`}
                           aria-keyshortcuts="Enter Shift+Enter"
-                          checked={line.includedInContract}
-                          className="size-5 rounded-[5px] focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+                          className={gridCellControlClass}
                           data-cost-grid-cell=""
+                          list={TASK_DATALIST_ID}
+                          placeholder="Task from workbook"
+                          title={line.itemName || undefined}
+                          value={line.itemName}
                           onKeyDown={handleGridCellKeyDown}
-                          onCheckedChange={(checked) =>
+                          onChange={(event) =>
                             onLineChange(line.id, {
-                              includedInContract: checked === true,
+                              itemName: event.target.value,
                             })
                           }
                         />
-                      </div>
-                    </TableCell>
-                    <TableCell className="p-0 align-middle">
-                      <div className="flex justify-center">
-                        <Button
-                          aria-label={`Remove row ${rowNumber}, ${rowLabel}`}
-                          className="size-8 text-muted-foreground hover:text-destructive"
-                          size="icon"
+                      </TableCell>
+                      <TableCell className="border-r border-border/70 p-0 align-middle">
+                        <button
+                          aria-controls={detailRowId}
+                          aria-expanded={isExpanded}
+                          aria-labelledby={`${rowLabelId} cost-sequence-column`}
+                          className={cn(
+                            "flex h-9 w-full items-center gap-2 px-3 text-left text-[13px] transition-colors",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold/40",
+                            stepCount > 0
+                              ? "text-foreground hover:bg-royal-gold-light/30"
+                              : "text-muted-foreground/80 hover:bg-muted/60",
+                          )}
+                          onClick={() => toggleExpanded(line.id)}
                           type="button"
-                          variant="ghost"
-                          onClick={() => onRemoveLine(line.id)}
                         >
-                          <Trash2 className="size-4" aria-hidden="true" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {isExpanded ? (
-                    <TableRow className="hover:bg-transparent" id={detailRowId}>
-                      <TableCell className="sticky left-0 z-10 border-r border-border/70 bg-muted/20" />
-                      <TableCell
-                        className="border-t border-border/60 bg-muted/20 p-0"
-                        colSpan={6}
-                      >
-                        <SequenceStepEditor
-                          rowLabel={rowLabel}
-                          tasks={line.buildingSequenceTasks}
-                          onTasksChange={(buildingSequenceTasks) =>
-                            onLineChange(line.id, { buildingSequenceTasks })
+                          {stepCount > 0 ? (
+                            <>
+                              <Link2
+                                className="size-3.5 shrink-0 text-royal-gold"
+                                aria-hidden="true"
+                              />
+                              <span className="font-medium">
+                                {stepCount} mapped{" "}
+                                {stepCount === 1 ? "step" : "steps"}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <ListPlus
+                                className="size-3.5 shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span>Add steps</span>
+                            </>
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell className="border-r border-border/70 p-0">
+                        <Textarea
+                          aria-labelledby={`${rowLabelId} cost-offer-line-column`}
+                          aria-keyshortcuts="Enter Shift+Enter"
+                          className={gridAutoTextCellControlClass}
+                          data-cost-grid-cell=""
+                          placeholder="Customer-visible Offer/Tender wording"
+                          rows={1}
+                          value={line.offerTenderLineItem}
+                          onKeyDown={handleGridCellKeyDown}
+                          onChange={(event) =>
+                            onLineChange(line.id, {
+                              offerTenderLineItem: event.target.value,
+                              notesOrSpec: event.target.value,
+                            })
                           }
                         />
                       </TableCell>
+                      <TableCell className="border-r border-border/70 p-0">
+                        <Input
+                          aria-labelledby={`${rowLabelId} cost-value-column`}
+                          aria-keyshortcuts="Enter Shift+Enter"
+                          className={cn(
+                            gridCellControlClass,
+                            "text-right font-mono",
+                          )}
+                          data-cost-grid-cell=""
+                          min="0"
+                          placeholder="0"
+                          type="number"
+                          value={numberInputValue(line.costExGst)}
+                          onKeyDown={handleGridCellKeyDown}
+                          onChange={(event) => {
+                            const costExGst = parseNonNegativeNumberInput(
+                              event.target.value,
+                            );
+                            if (costExGst === null) {
+                              return;
+                            }
+
+                            onLineChange(line.id, {
+                              costExGst,
+                              includedInContract:
+                                costExGst > 0 ? true : line.includedInContract,
+                            });
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className="border-r border-border/70 p-0 align-middle">
+                        <div className="flex justify-center">
+                          <Checkbox
+                            aria-labelledby={`${rowLabelId} cost-included-column`}
+                            aria-keyshortcuts="Enter Shift+Enter"
+                            checked={line.includedInContract}
+                            className="size-5 rounded-[5px] focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+                            data-cost-grid-cell=""
+                            onKeyDown={handleGridCellKeyDown}
+                            onCheckedChange={(checked) =>
+                              onLineChange(line.id, {
+                                includedInContract: checked === true,
+                              })
+                            }
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-0 align-middle">
+                        <div className="flex justify-center">
+                          <Button
+                            aria-label={`Remove row ${rowNumber}, ${rowLabel}`}
+                            className="size-8 text-muted-foreground hover:text-destructive"
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                            onClick={() => onRemoveLine(line.id)}
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  ) : null}
+                    {isExpanded ? (
+                      <TableRow
+                        className="hover:bg-transparent"
+                        id={detailRowId}
+                      >
+                        <TableCell className="sticky left-0 z-10 border-r border-border/70 bg-muted/20" />
+                        <TableCell
+                          className="border-t border-border/60 bg-muted/20 p-0"
+                          colSpan={6}
+                        >
+                          <SequenceStepEditor
+                            rowLabel={rowLabel}
+                            tasks={line.buildingSequenceTasks}
+                            onTasksChange={(buildingSequenceTasks) =>
+                              onLineChange(line.id, { buildingSequenceTasks })
+                            }
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
                   </Fragment>
                 );
               })}
@@ -526,7 +544,7 @@ function SequenceStepEditor({
                 className="mt-0.5 size-3.5 shrink-0 text-royal-gold"
                 aria-hidden="true"
               />
-              <span className="min-w-0 flex-1 break-words">{task}</span>
+              <span className="min-w-0 flex-1 wrap-break-word">{task}</span>
               <button
                 aria-label={`Remove step: ${task}`}
                 className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"

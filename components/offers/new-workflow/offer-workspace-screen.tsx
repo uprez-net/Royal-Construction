@@ -13,7 +13,10 @@ import {
 } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type { ContractParticulars } from "@/lib/offer/contract-particulars";
-import type { OfferAreaCalculator, AreaRateConstants } from "@/lib/offer/workspace-area";
+import type {
+  OfferAreaCalculator,
+  AreaRateConstants,
+} from "@/lib/offer/workspace-area";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import type {
   EffectiveMargin,
@@ -32,7 +35,13 @@ import {
   type TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import { formatOfferReference } from "./offer-workspace-format";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
 import { OfferDocumentEditor } from "./offer-workspace-document";
@@ -133,7 +142,9 @@ type OfferWorkspaceScreenProps = {
   readonly onPrefillFromLead?: () => void;
   readonly canPrefill?: boolean;
   readonly prefilling?: boolean;
-  readonly prefillResult?: import("@/lib/data/offer-prefill").OfferPrefillResult | null;
+  readonly prefillResult?:
+    | import("@/lib/data/offer-prefill").OfferPrefillResult
+    | null;
   readonly onWorkspacePricingSettingsChange: (
     patch: Partial<OfferWorkspacePricingSettings>,
   ) => void;
@@ -185,7 +196,9 @@ type OfferWorkspaceScreenProps = {
   readonly onMarkContractSigned: () => void;
   readonly onCreateProject: () => void;
   readonly projectCreating?: boolean;
-  readonly projectResult?: import("@/lib/data/offer-project-handoff").ProjectHandoffResult | null;
+  readonly projectResult?:
+    | import("@/lib/data/offer-project-handoff").ProjectHandoffResult
+    | null;
   readonly onOverrideReasonChange: (value: string) => void;
   readonly onPaymentScheduleChange: (
     rows: readonly OfferPaymentScheduleRow[],
@@ -358,7 +371,10 @@ export function OfferWorkspaceScreen({
   const costScheduleLocked = !isOfferBuildStepEditable("cost-schedule", status);
   const pricingLocked = !isOfferBuildStepEditable("pricing", status);
   const scopeLocked = !isOfferBuildStepEditable("scope", status);
-  const offerDocumentLocked = !isOfferBuildStepEditable("offer-document", status);
+  const offerDocumentLocked = !isOfferBuildStepEditable(
+    "offer-document",
+    status,
+  );
   // In the `sent` window the document + scope are still editable while the price
   // is frozen — the banner explains this partial lock rather than a full one.
   const documentsStillEditable = offerDocumentStillEditableWhileIssued(status);
@@ -384,7 +400,8 @@ export function OfferWorkspaceScreen({
     if (!el) {
       return;
     }
-    const measure = () => setStickyOffset(el.getBoundingClientRect().height + 12);
+    const measure = () =>
+      setStickyOffset(el.getBoundingClientRect().height + 12);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -411,7 +428,10 @@ export function OfferWorkspaceScreen({
           saveState={saveState}
           onDownloadPreview={onDownloadOffer}
         />
-        <OfferWorkflowSteps status={status} tenderGateStatus={tenderGateStatus} />
+        <OfferWorkflowSteps
+          status={status}
+          tenderGateStatus={tenderGateStatus}
+        />
       </div>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-8">
@@ -525,7 +545,10 @@ export function OfferWorkspaceScreen({
             status={stepStatusById.get("offer-step-offer-document") ?? null}
           >
             <div className="space-y-6">
-              <OfferDocumentEditor draft={draft} onDraftChange={onDraftChange} />
+              <OfferDocumentEditor
+                draft={draft}
+                onDraftChange={onDraftChange}
+              />
               <OfferWorkspaceImages
                 images={images}
                 onImageChange={onImageChange}

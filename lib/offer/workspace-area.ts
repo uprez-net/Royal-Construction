@@ -76,6 +76,11 @@ export type AreaRateConstants = {
   readonly firstFloorFramePricePerSqm: number;
   readonly sandRatePerThousandBricks: number;
   readonly cementRatePerHundredBricks: number;
+  readonly brickPricePerBrick: number;
+  readonly brickLayingPricePerBrick: number;
+  readonly tilePricePerTile: number;
+  readonly tilingRatePerSqm: number;
+  readonly flooringRatePerSqm: number;
 };
 
 export const EMPTY_AREA_BASIS: OfferAreaBasis = {

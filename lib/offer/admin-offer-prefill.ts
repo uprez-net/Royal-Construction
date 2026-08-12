@@ -105,7 +105,6 @@ function resolveCostLines(
       });
     }
   }
-
   return lines;
 }
 
@@ -184,6 +183,11 @@ export function resolveAreaRateConstants(
     firstFloorFramePricePerSqm: rc.FRAME_FIRST_RATE_PER_SQM,
     sandRatePerThousandBricks: rc.SAND_RATE_PER_THOUSAND_BRICKS,
     cementRatePerHundredBricks: rc.CEMENT_RATE_PER_HUNDRED_BRICKS,
+    brickPricePerBrick: rc.BRICK_PRICE_PER_BRICK,
+    brickLayingPricePerBrick: rc.BRICK_LAYING_PRICE_PER_BRICK,
+    tilePricePerTile: rc.TILE_PRICE_PER_TILE,
+    tilingRatePerSqm: rc.TILING_RATE_PER_SQM,
+    flooringRatePerSqm: rc.FLOORING_RATE_PER_SQM,
   };
 }
 
@@ -231,7 +235,7 @@ export function reevaluateFormulaCostLines(
   const scope = buildFormulaScope(rateConstants, measurements);
   return costLines.map((line) =>
     line.formula
-      ? { ...line, costExGst: evaluateCostFormula(line.formula, scope) }
+      ? { ...line, costExGst: Math.ceil(evaluateCostFormula(line.formula, scope) / 1000) * 1000 }
       : line,
   );
 }

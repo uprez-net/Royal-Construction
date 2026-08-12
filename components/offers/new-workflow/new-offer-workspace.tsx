@@ -206,24 +206,21 @@ export function NewOfferWorkspace({
       ? { buildScope: adminPrefill.buildScope }
       : {}),
   }));
-  const [lines, setLines] =
-    useState<readonly OfferWorkspaceCostLine[]>(
-      adminPrefill?.costLines ?? INITIAL_COST_LINES,
-    );
-  const [allowances, setAllowances] =
-    useState<readonly OfferWorkspaceScopeItem[]>(
-      adminPrefill?.allowances ?? INITIAL_ALLOWANCES,
-    );
-  const [exclusions, setExclusions] =
-    useState<readonly OfferWorkspaceScopeItem[]>(
-      adminPrefill?.exclusions ?? INITIAL_EXCLUSIONS,
-    );
+  const [lines, setLines] = useState<readonly OfferWorkspaceCostLine[]>(
+    adminPrefill?.costLines ?? INITIAL_COST_LINES,
+  );
+  const [allowances, setAllowances] = useState<
+    readonly OfferWorkspaceScopeItem[]
+  >(adminPrefill?.allowances ?? INITIAL_ALLOWANCES);
+  const [exclusions, setExclusions] = useState<
+    readonly OfferWorkspaceScopeItem[]
+  >(adminPrefill?.exclusions ?? INITIAL_EXCLUSIONS);
   const [draft, setDraft] = useState<OfferDocumentDraft>(
     adminPrefill?.draft ?? INITIAL_OFFER_DRAFT,
   );
-  const rateConstantsRef = useRef<
-    Partial<Record<RateConstantKey, number>>
-  >(adminPrefill?.rateConstants ?? {});
+  const rateConstantsRef = useRef<Partial<Record<RateConstantKey, number>>>(
+    adminPrefill?.rateConstants ?? {},
+  );
   const [overrideReason, setOverrideReason] = useState("");
   const [selectedPriceInput, setSelectedPriceInput] = useState("");
   const [standardPriceInput, setStandardPriceInput] = useState("");
@@ -243,9 +240,8 @@ export function NewOfferWorkspace({
     readonly OfferPaymentScheduleRow[]
   >(INITIAL_PAYMENT_SCHEDULE);
   const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
-  const [tenderGate, setTenderGate] = useState<TenderGateState>(
-    INITIAL_TENDER_GATE,
-  );
+  const [tenderGate, setTenderGate] =
+    useState<TenderGateState>(INITIAL_TENDER_GATE);
   const [revising, setRevising] = useState(false);
   const [revisionNotice, setRevisionNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -305,6 +301,13 @@ export function NewOfferWorkspace({
   // touches lines that carry a `formula` string — fixed/none lines are
   // untouched, so manual edits are never clobbered.
   useEffect(() => {
+    if (
+      leadId === undefined ||
+      job.reference === INITIAL_OFFER_JOB.reference ||
+      areaCalculator === INITIAL_AREA_CALCULATOR
+    ) {
+      return;
+    }
     setLines((prev) => {
       if (!prev.some((l) => l.formula)) return prev;
       return reevaluateFormulaCostLines(
@@ -314,7 +317,7 @@ export function NewOfferWorkspace({
         areaCalculator,
       );
     });
-  }, [job, areaCalculator]);
+  }, [job, areaCalculator, leadId]);
 
   useEffect(() => {
     if (saveState !== "saving") return;
