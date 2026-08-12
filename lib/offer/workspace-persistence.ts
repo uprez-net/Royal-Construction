@@ -96,9 +96,9 @@ export function deriveTenderGateStatus(
   return "unlocked";
 }
 
-// v5 (this version): inclusion entries carry their trade `category` again, so
-// the printed schedule can restore its Category column. See migrateV4ToV5.
-export const CURRENT_WORKSPACE_SCHEMA_VERSION = 5 as const;
+// v6 (this version): the selling list moves off the schedule rows into
+// draft.inclusionHighlights. See migrateV5ToV6.
+export const CURRENT_WORKSPACE_SCHEMA_VERSION = 6 as const;
 
 // ─── Money helpers (ADR 0002: money persisted as integer cents) ───
 export const dollarsToCents = (value: number): number =>
@@ -287,18 +287,15 @@ const scopeItemSchema = z.object({
 
 const inclusionEntrySchema = z.object({
   spec: z.string(),
-  summary: z.string().optional(),
   category: z.string().optional(),
-  // Purely additive and optional, so snapshots written before it parse
-  // unchanged and need no schema version bump. An absent value means the label
-  // was hand-written, which is exactly how older snapshots should be treated.
-  summaryFromSpec: z.string().optional(),
+  draftedByAi: z.boolean().optional(),
 });
 
 const draftSchema = z.object({
   headline: z.string(),
   introText: z.string(),
   exclusionBullets: z.array(z.string()),
+  inclusionHighlights: z.array(z.string()).default([]),
   // Defaulted so a snapshot that somehow skips the migration still parses;
   // migrateV2ToV3 / migrateV3ToV4 are what actually seed pre-existing offers.
   inclusionSchedule: z.array(inclusionEntrySchema).default([]),
@@ -435,6 +432,9 @@ export function migrateWorkspaceState(raw: unknown): unknown {
   }
   if (version < 5) {
     next = migrateV4ToV5(next);
+  }
+  if (version < 6) {
+    next = migrateV5ToV6(next);
   }
   return next;
 }
@@ -586,6 +586,48 @@ function migrateV4ToV5(
   };
 }
 
+// v5 → v6: the selling list moves off the schedule rows and becomes its own
+// list. v5 stored it as a `summary` on each entry, which asserted one selling
+// line per contract row — but on a real offer "All structural works — slab,
+// frame, roof" covers six rows (#3 Frame, #4 Roof, #5 Roof Trusses, #56, #59).
+// A per-row field could never hold that, which is what made the estimator
+// maintain the mapping by hand.
+//
+// Summaries are lifted out IN SCHEDULE ORDER — the order they already printed
+// in — so page 4 is byte-identical after the migration. Nothing is lost: a
+// summary was only ever a line of page-4 text.
+function migrateV5ToV6(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const draft = (state.draft ?? {}) as Record<string, unknown>;
+  const schedule = Array.isArray(draft.inclusionSchedule)
+    ? draft.inclusionSchedule
+    : [];
+  const highlights: string[] = [];
+  const stripped = schedule.map((raw) => {
+    if (typeof raw !== "object" || raw === null) {
+      return raw;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured to DROP
+    const { summary, summaryFromSpec, ...rest } = raw as Record<string, unknown>;
+    if (typeof summary === "string" && summary.trim().length > 0) {
+      highlights.push(summary);
+    }
+    return rest;
+  });
+  return {
+    ...state,
+    schemaVersion: 6,
+    draft: {
+      ...draft,
+      inclusionHighlights: Array.isArray(draft.inclusionHighlights)
+        ? draft.inclusionHighlights
+        : highlights,
+      inclusionSchedule: stripped,
+    },
+  };
+}
+
 export function parseWorkspaceState(
   json: unknown,
 ): PersistedOfferWorkspaceState {
@@ -628,13 +670,13 @@ export function serializeWorkspace(
       headline: snapshot.draft.headline,
       introText: snapshot.draft.introText,
       exclusionBullets: [...snapshot.draft.exclusionBullets],
+      inclusionHighlights: [...snapshot.draft.inclusionHighlights],
       inclusionSchedule: snapshot.draft.inclusionSchedule.map((entry) => ({
         spec: entry.spec,
-        ...(entry.summary === undefined ? {} : { summary: entry.summary }),
         ...(entry.category === undefined ? {} : { category: entry.category }),
-        ...(entry.summaryFromSpec === undefined
+        ...(entry.draftedByAi === undefined
           ? {}
-          : { summaryFromSpec: entry.summaryFromSpec }),
+          : { draftedByAi: entry.draftedByAi }),
       })),
       termsSummary: snapshot.draft.termsSummary,
     },

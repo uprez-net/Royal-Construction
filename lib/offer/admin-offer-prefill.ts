@@ -29,6 +29,7 @@ import type { AdminOfferContent } from "@/types/admin-offer-content";
 import {
   OFFER_EXCLUDES_BULLETS,
   STANDARD_INCLUSION_ENTRIES,
+  STANDARD_INCLUSION_HIGHLIGHTS,
 } from "@/lib/offer/workspace-proposal-content";
 import { DEFAULT_RATE_CONSTANTS } from "@/lib/offer/formula-variables";
 
@@ -162,20 +163,19 @@ function resolveDraft(
     headline: c.headline,
     introText: c.introText,
     exclusionBullets: [...OFFER_EXCLUDES_BULLETS],
-    // Admin-configured inclusion copy becomes page-4 summaries on their own
-    // entries; the template supplies the contractual schedule beneath them.
-    inclusionSchedule: [
-      ...STANDARD_INCLUSION_ENTRIES,
+    // Admin-configured inclusion copy IS the selling list — short lines for the
+    // page beside the price. It is not schedule wording, so it no longer gets
+    // turned into contract rows.
+    inclusionHighlights: [
+      ...STANDARD_INCLUSION_HIGHLIGHTS,
       ...c.inclusions
-        .filter((line) => line.trim().length > 0)
+        .map((line) => line.trim())
         .filter(
           (line) =>
-            !STANDARD_INCLUSION_ENTRIES.some(
-              (entry) => entry.summary?.trim() === line.trim(),
-            ),
-        )
-        .map((line) => ({ spec: line.trim(), summary: line.trim() })),
+            line.length > 0 && !STANDARD_INCLUSION_HIGHLIGHTS.includes(line),
+        ),
     ],
+    inclusionSchedule: [...STANDARD_INCLUSION_ENTRIES],
     termsSummary: c.termsAndConditions,
   };
 }

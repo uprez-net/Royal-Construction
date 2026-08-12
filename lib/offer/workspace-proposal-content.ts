@@ -306,8 +306,15 @@ export const STANDARD_INCLUSION_ENTRIES: readonly OfferInclusionEntry[] =
   STANDARD_INCLUSIONS_SCHEDULE.map((row) => ({
     spec: row.specification,
     category: row.category,
-    ...(row.summary === undefined ? {} : { summary: row.summary }),
   }));
+
+// The seeded "This price includes" list. `summary` on a template row is the
+// SEED for this list, not a field on the entry: one selling line covers several
+// schedule rows, so it cannot live on any one of them.
+export const STANDARD_INCLUSION_HIGHLIGHTS: readonly string[] =
+  STANDARD_INCLUSIONS_SCHEDULE.map((row) => row.summary).filter(
+    (summary): summary is string => Boolean(summary?.trim()),
+  );
 
 // Page-4 exclusions. The includes side of this pair is gone — it is now the
 // `summary` on each inclusion entry, so it cannot drift from the schedule.

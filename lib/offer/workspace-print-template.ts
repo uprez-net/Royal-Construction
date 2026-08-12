@@ -1,4 +1,3 @@
-import { getSummaryInclusions } from "@/lib/offer/workspace-model";
 import type {
   OfferDocumentDraft,
   OfferScopeAmountType,
@@ -104,7 +103,9 @@ export function buildOfferPrintTemplateData({
         label: item.label,
         variationRule: item.variationRule,
       })),
-    summaryInclusions: getSummaryInclusions(draft.inclusionSchedule),
+    summaryInclusions: draft.inclusionHighlights
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
     validUntilLabel: formatDateDisplay(job.validUntil),
   };
 }

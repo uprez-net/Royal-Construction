@@ -8,6 +8,7 @@ import {
 import {
   OFFER_EXCLUDES_BULLETS,
   STANDARD_INCLUSION_ENTRIES,
+  STANDARD_INCLUSION_HIGHLIGHTS,
 } from "@/lib/offer/workspace-proposal-content";
 
 export const OFFER_STAGE_CATALOG = [
@@ -177,128 +178,46 @@ export type OfferScopeAmountType =
   | "rate_per_sqm"
   | "included_note";
 
-// One inclusion, stated once. `spec` is the contractual sentence printed in the
-// Inclusions Schedule. `summary` is the optional short form printed beside the
-// price on the Investment Summary page — present only on the items worth
-// selling on.
-//
-// These used to be two separately-edited lists, and they drifted in real
-// offers: page 4 promised "60mm stone benchtops" while page 6 promised "40mm
-// engineered stone", in the same fixed-price contract. There is now one place
-// to say it, so they cannot disagree.
+// One inclusion as it appears in the CONTRACTUAL schedule. No selling copy
+// here: a selling line routinely covers SEVERAL of these rows ("All structural
+// works — slab, frame, roof" stands for six on a real offer), so a per-row
+// label could never hold the relationship, and forcing one made the estimator
+// maintain it by hand.
 export type OfferInclusionEntry = {
   readonly spec: string;
-  readonly summary?: string;
   // The trade label printed in the schedule's Category column ("Concrete Slab",
-  // "Stone Benchtops"). Absent on entries pulled from the cost schedule or typed
-  // by an estimator; those print UNCATEGORISED_INCLUSION_LABEL rather than an
-  // empty cell.
+  // "Stone Benchtops"). Rows without one print UNCATEGORISED_INCLUSION_LABEL
+  // rather than an empty cell on a contract document.
   readonly category?: string;
-  // The spec text `summary` was generated FROM. Present only on a generated
-  // label, never on one the estimator typed.
-  //
-  // This is what makes staleness knowable rather than guessed: if it equals the
-  // current spec the label still describes it; if it differs, the spec was
-  // edited underneath and the label needs refreshing; if it is absent the label
-  // is hand-written and must never be regenerated without asking.
-  readonly summaryFromSpec?: string;
+  // True when this row's wording was drafted by the model for a selling line
+  // nothing in the schedule supported, and nobody has edited it since. It is
+  // contract text a human did not write, so it stays visibly marked and is
+  // surfaced before send.
+  readonly draftedByAi?: boolean;
 };
 
-// A drafted label/category for one schedule row, by position.
-export type InclusionCopyPatch = {
-  readonly index: number;
-  readonly summary?: string;
-  readonly category?: string;
-};
+// What the Category column prints when an entry has no category of its own.
+export const UNCATEGORISED_INCLUSION_LABEL = "Miscellaneous";
 
-// Apply drafted copy to a schedule. Stamps `summaryFromSpec` on any label it
-// writes, so the UI can later tell whether the spec was edited underneath.
-// Lives here rather than beside the server action because a "use server" module
-// may only export async functions.
-export function applyInclusionCopyPatches(
-  schedule: readonly OfferInclusionEntry[],
-  patches: readonly InclusionCopyPatch[],
-): readonly OfferInclusionEntry[] {
-  const byIndex = new Map(patches.map((patch) => [patch.index, patch]));
-  return schedule.map((entry, index) => {
-    const patch = byIndex.get(index);
-    if (!patch) return entry;
-    return {
-      ...entry,
-      ...(patch.summary === undefined
-        ? {}
-        : { summary: patch.summary, summaryFromSpec: entry.spec }),
-      ...(patch.category === undefined ? {} : { category: patch.category }),
-    };
-  });
-}
-
-export type InclusionSummaryState = "manual" | "current" | "stale" | "none";
-
-export function inclusionSummaryState(
-  entry: OfferInclusionEntry,
-): InclusionSummaryState {
-  if (entry.summary === undefined) return "none";
-  if (entry.summaryFromSpec === undefined) return "manual";
-  return entry.summaryFromSpec === entry.spec ? "current" : "stale";
-}
-
-// Rows that want drafted copy: a featured item with no label or a stale one,
-// or any row with no category (which would otherwise print "Miscellaneous").
-export function inclusionCopyRequests(
-  entries: readonly OfferInclusionEntry[],
-): readonly {
-  index: number;
-  spec: string;
-  wantSummary: boolean;
-  wantCategory: boolean;
-}[] {
-  return entries
-    .map((entry, index) => {
-      const state = inclusionSummaryState(entry);
-      // A hand-written label is the estimator's — never regenerate it.
-      const wantSummary =
-        state === "stale" ||
-        (state !== "manual" &&
-          entry.summary !== undefined &&
-          entry.summary.trim().length === 0);
-      const wantCategory = (entry.category ?? "").trim().length === 0;
-      return { index, spec: entry.spec, wantSummary, wantCategory };
-    })
-    .filter(
-      (request) =>
-        (request.wantSummary || request.wantCategory) &&
-        request.spec.trim().length > 0,
-    );
-}
-
-export function pendingInclusionCopyCount(
-  entries: readonly OfferInclusionEntry[],
-): number {
-  return inclusionCopyRequests(entries).length;
-}
-
-// The featured entries whose generated label no longer matches the spec it was
-// written from — i.e. someone edited the schedule wording afterwards.
-export function staleSummaryIndexes(
+// Rows whose contract wording was drafted by the model and never reviewed.
+export function unreviewedDraftedRows(
   entries: readonly OfferInclusionEntry[],
 ): readonly number[] {
   return entries
     .map((entry, index) => ({ entry, index }))
-    .filter(({ entry }) => inclusionSummaryState(entry) === "stale")
+    .filter(({ entry }) => entry.draftedByAi === true)
     .map(({ index }) => index);
 }
-
-// What the Category column prints when an entry has no category of its own.
-export const UNCATEGORISED_INCLUSION_LABEL = "Miscellaneous";
 
 export type OfferDocumentDraft = {
   readonly headline: string;
   readonly introText: string;
   readonly exclusionBullets: readonly string[];
-  // The single inclusions list. Per-offer and estimator-editable; seeded from
-  // STANDARD_INCLUSION_ENTRIES. Page 4 is DERIVED from it (getSummaryInclusions)
-  // and is not separately editable.
+  // The "This price includes" list beside the price — the SELLING view. Its own
+  // list because the relationship to the schedule is one-to-many. Kept honest by
+  // an on-demand consistency check, not by a stored per-row link.
+  readonly inclusionHighlights: readonly string[];
+  // The CONTRACTUAL schedule printed on the offer and the tender.
   readonly inclusionSchedule: readonly OfferInclusionEntry[];
   readonly termsSummary: string;
 };
@@ -1040,6 +959,7 @@ export const INITIAL_OFFER_DRAFT: OfferDocumentDraft = {
   introText:
     "This proposal forms the basis of a Master Builders Association (MBA) fixed price home building contract. Every item below is locked into your fixed contract price — a number you can take to your bank today.",
   exclusionBullets: OFFER_EXCLUDES_BULLETS,
+  inclusionHighlights: STANDARD_INCLUSION_HIGHLIGHTS,
   inclusionSchedule: STANDARD_INCLUSION_ENTRIES,
   termsSummary:
     "Final Tender is issued only after scope and price are agreed by builder and client.",
@@ -1109,16 +1029,6 @@ export function applyTaskMappingToCostLine(
   };
 }
 
-// The Investment Summary list, derived from the one inclusions list. Page 4 is
-// not separately editable by design: that is what stops it contradicting the
-// schedule it summarises.
-export function getSummaryInclusions(
-  entries: readonly OfferInclusionEntry[],
-): readonly string[] {
-  return entries
-    .map((entry) => entry.summary?.trim())
-    .filter((summary): summary is string => Boolean(summary));
-}
 
 // Inclusions Schedule pagination, in LINE UNITS rather than rows. The schedule
 // is estimator-editable free text, so a fixed rows-per-page count overflows the

@@ -8,21 +8,15 @@ import type {
   OfferWorkspaceJob,
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
-import {
-  formatOwnerNamesLine,
-  inclusionSummaryState,
-  pendingInclusionCopyCount,
-} from "@/lib/offer/workspace-model";
+import { formatOwnerNamesLine } from "@/lib/offer/workspace-model";
 import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import { cn } from "@/lib/utils";
-import { FileText, Plus, Sparkles, Star } from "lucide-react";
+import { FileText, Plus, ShieldCheck, Sparkles } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import {
   EditableBulletList,
   EditableText,
-  HoverRow,
 } from "./offer-document-canvas-fields";
 
 // The offer document, edited in place. Replaces the old copy form and the narrow
@@ -37,10 +31,12 @@ type OfferDocumentCanvasProps = {
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
   readonly onDraftChange: (patch: Partial<OfferDocumentDraft>) => void;
-  // Draft the derived copy (short labels, and categories for rows that would
-  // otherwise print "Miscellaneous"). Absent when the step is locked.
-  readonly onDraftCopy?: () => void;
-  readonly draftingCopy?: boolean;
+  // Draft the selling highlights FROM the schedule, and check them back
+  // against it. Absent when the step is locked.
+  readonly onDraftHighlights?: () => void;
+  readonly onCheckConsistency?: () => void;
+  readonly draftingHighlights?: boolean;
+  readonly checking?: boolean;
   readonly copyError?: string | null;
 };
 
@@ -50,20 +46,19 @@ export function OfferDocumentCanvas({
   exclusions,
   job,
   onDraftChange,
-  onDraftCopy,
-  draftingCopy = false,
+  onDraftHighlights,
+  onCheckConsistency,
+  draftingHighlights = false,
+  checking = false,
   copyError = null,
 }: OfferDocumentCanvasProps) {
+  const busy = draftingHighlights || checking;
   const schedule = draft.inclusionSchedule;
   // The featured entries, keyed back to their position in the schedule so the
   // "This price includes" block can edit them directly. Note these are entries
   // whose summary is DEFINED, including a blank one being typed — blanks are
   // filtered out at print time, not here, so a half-written label is visible
   // while you write it.
-  const featured = schedule
-    .map((entry, index) => ({ entry, index }))
-    .filter(({ entry }) => entry.summary !== undefined);
-  const pendingCopyCount = pendingInclusionCopyCount(schedule);
   const printedExclusions = getVisibleExclusions(draft, exclusions);
   const scopeExclusionLabels = exclusions
     .filter((item) => item.includedInOfferDocument)
@@ -76,15 +71,7 @@ export function OfferDocumentCanvas({
       ),
     });
 
-  const toggleFeatured = (index: number) => {
-    const entry = schedule[index];
-    patchEntry(
-      index,
-      entry.summary === undefined
-        ? { ...entry, summary: "" }
-        : { spec: entry.spec },
-    );
-  };
+
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -143,82 +130,47 @@ export function OfferDocumentCanvas({
               <h3 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 This price includes
               </h3>
-              {featured.length > 0 ? (
-                <div className="mt-1">
-                  {featured.map(({ entry, index }) => {
-                    const state = inclusionSummaryState(entry);
-                    return (
-                      <HoverRow
-                        key={index}
-                        onRemove={() =>
-                          patchEntry(index, {
-                            spec: entry.spec,
-                            ...(entry.category === undefined
-                              ? {}
-                              : { category: entry.category }),
-                          })
-                        }
-                        removeLabel={`Stop featuring inclusion ${index + 1}`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="mt-2 size-1.5 shrink-0 rounded-xs bg-royal-gold"
-                        />
-                        <EditableText
-                          ariaLabel={`Featured inclusion ${index + 1} short label`}
-                          className="text-sm leading-6"
-                          onChange={(summary) =>
-                            // Typing over a generated label makes it the
-                            // estimator's; drop the provenance so it is never
-                            // silently regenerated.
-                            patchEntry(index, {
-                              ...entry,
-                              summary,
-                              summaryFromSpec: undefined,
-                            })
-                          }
-                          placeholder="Short label…"
-                          value={entry.summary ?? ""}
-                        />
-                        {state === "stale" ? (
-                          <span
-                            className="mt-1.5 shrink-0 rounded-full bg-warning-light px-1.5 py-0.5 text-[10px] font-medium text-foreground"
-                            title="The schedule wording changed after this label was written."
-                          >
-                            Outdated
-                          </span>
-                        ) : null}
-                      </HoverRow>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="mt-1 px-1.5 text-sm text-muted-foreground">
-                  Nothing featured yet. Star an inclusion below to show it here.
-                </p>
-              )}
+              <div className="mt-1">
+                <EditableBulletList
+                  addLabel="Add inclusion highlight"
+                  ariaLabel="Highlight"
+                  emptyHint="Nothing here yet. Draft these from the schedule below."
+                  items={draft.inclusionHighlights}
+                  onChange={(inclusionHighlights) =>
+                    onDraftChange({ inclusionHighlights })
+                  }
+                />
+              </div>
               <div className="mt-2 flex flex-wrap items-center gap-2 px-1.5">
-                {onDraftCopy ? (
+                {onDraftHighlights ? (
                   <Button
-                    disabled={draftingCopy || pendingCopyCount === 0}
-                    onClick={onDraftCopy}
+                    disabled={busy}
+                    onClick={onDraftHighlights}
                     size="sm"
                     type="button"
                     variant="outline"
                   >
                     <Sparkles className="mr-1.5 size-3.5" />
-                    {draftingCopy
-                      ? "Writing…"
-                      : pendingCopyCount === 0
-                        ? "All labels up to date"
-                        : `Write ${pendingCopyCount} label${pendingCopyCount === 1 ? "" : "s"}`}
+                    {draftingHighlights ? "Writing…" : "Draft from schedule"}
                   </Button>
                 ) : null}
-                <p className="text-xs text-muted-foreground">
-                  Written from each item&apos;s schedule wording, so the two
-                  cannot disagree. Edit any label to make it yours.
-                </p>
+                {onCheckConsistency ? (
+                  <Button
+                    disabled={busy}
+                    onClick={onCheckConsistency}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <ShieldCheck className="mr-1.5 size-3.5" />
+                    {checking ? "Checking…" : "Check against schedule"}
+                  </Button>
+                ) : null}
               </div>
+              <p className="mt-1.5 px-1.5 text-xs text-muted-foreground">
+                A selling line can cover several schedule rows. The check
+                confirms the schedule backs every claim you make here.
+              </p>
               {copyError ? (
                 <p className="mt-1 px-1.5 text-xs text-destructive">{copyError}</p>
               ) : null}
@@ -273,7 +225,6 @@ export function OfferDocumentCanvas({
                 row heights against a two-line spec in the other column. */}
             <ol className="mt-3 gap-x-10 md:columns-2 [&>li]:break-inside-avoid">
               {schedule.map((entry, index) => {
-                const isFeatured = entry.summary !== undefined;
                 return (
                   <li
                     className="group/row flex items-start gap-1.5 border-b border-border/40 py-1"
@@ -289,33 +240,14 @@ export function OfferDocumentCanvas({
                       placeholder="Describe what is included…"
                       value={entry.spec}
                     />
-                    <Button
-                      aria-label={
-                        isFeatured
-                          ? `Stop featuring inclusion ${index + 1} beside the price`
-                          : `Feature inclusion ${index + 1} beside the price`
-                      }
-                      aria-pressed={isFeatured}
-                      className={cn(
-                        "mt-0.5 size-6 shrink-0 transition-opacity",
-                        isFeatured
-                          ? "opacity-100"
-                          : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
-                      )}
-                      onClick={() => toggleFeatured(index)}
-                      size="icon"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Star
-                        className={cn(
-                          "size-3.5",
-                          isFeatured
-                            ? "fill-royal-gold text-royal-gold"
-                            : "text-muted-foreground",
-                        )}
-                      />
-                    </Button>
+                    {entry.draftedByAi ? (
+                      <span
+                        className="mt-1 shrink-0 rounded-full bg-warning-light px-1.5 py-0.5 text-[10px] font-medium text-foreground"
+                        title="Drafted by AI for a selling line the schedule did not cover. Review this wording — it is contract text."
+                      >
+                        AI draft
+                      </span>
+                    ) : null}
                     <Button
                       aria-label={`Remove inclusion ${index + 1}`}
                       className="mt-0.5 size-6 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"

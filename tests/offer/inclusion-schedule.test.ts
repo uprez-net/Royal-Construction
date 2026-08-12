@@ -13,16 +13,15 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   chunkInclusionSchedule,
-  getSummaryInclusions,
-  applyInclusionCopyPatches,
-  inclusionCopyRequests,
   inclusionPageStartIndexes,
-  inclusionSummaryState,
-  staleSummaryIndexes,
   UNCATEGORISED_INCLUSION_LABEL,
+  unreviewedDraftedRows,
   type OfferInclusionEntry,
 } from "../../lib/offer/workspace-model";
-import { getVisibleExclusions } from "../../lib/offer/workspace-print-template";
+import {
+  buildOfferPrintTemplateData,
+  getVisibleExclusions,
+} from "../../lib/offer/workspace-print-template";
 import {
   CURRENT_WORKSPACE_SCHEMA_VERSION,
   INITIAL_TENDER_GATE,
@@ -51,17 +50,6 @@ test("the parsed schema version tracks the current schema version constant", () 
 
 // ─── One list: spec + optional summary ───
 
-test("every seeded entry carries a spec, and any summary it carries is non-empty", () => {
-  for (const entry of STANDARD_INCLUSION_ENTRIES) {
-    assert.ok(entry.spec.trim().length > 0, "every entry needs a spec");
-    if (entry.summary !== undefined) {
-      assert.ok(
-        entry.summary.trim().length > 0,
-        "a summary, if present, must be non-empty",
-      );
-    }
-  }
-});
 
 test("every template schedule row survives as an entry, in order", () => {
   const specs = STANDARD_INCLUSION_ENTRIES.map((entry) => entry.spec);
@@ -74,23 +62,8 @@ test("every template schedule row survives as an entry, in order", () => {
   }
 });
 
-test("the seeded summaries still cover the 14 items page 4 used to print", () => {
-  assert.equal(getSummaryInclusions(STANDARD_INCLUSION_ENTRIES).length, 14);
-});
 
-test("the page 4 list is exactly the entries carrying a summary, in order", () => {
-  const entries: OfferInclusionEntry[] = [
-    { spec: "Full spec A", summary: "Short A" },
-    { spec: "Full spec B" },
-    { spec: "Full spec C", summary: "Short C" },
-  ];
 
-  assert.deepEqual(getSummaryInclusions(entries), ["Short A", "Short C"]);
-});
-
-test("a blank summary is treated as no summary, not as an empty bullet", () => {
-  assert.deepEqual(getSummaryInclusions([{ spec: "S", summary: "   " }]), []);
-});
 
 test("a new offer draft seeds the full template entry list", () => {
   assert.deepEqual(
@@ -101,7 +74,7 @@ test("a new offer draft seeds the full template entry list", () => {
 
 // ─── Migrations ───
 
-test("v2 snapshots migrate straight through to v4 seeded from the template", () => {
+test("v2 snapshots migrate straight through to the current version", () => {
   const migrated = migrateWorkspaceState({
     schemaVersion: 2,
     job: {},
@@ -117,7 +90,7 @@ test("v2 snapshots migrate straight through to v4 seeded from the template", () 
     draft: { inclusionSchedule: OfferInclusionEntry[] };
   };
 
-  assert.equal(migrated.schemaVersion, 5);
+  assert.equal(migrated.schemaVersion, CURRENT_WORKSPACE_SCHEMA_VERSION);
   assert.deepEqual(migrated.draft.inclusionSchedule, STANDARD_INCLUSION_ENTRIES);
 });
 
@@ -126,7 +99,7 @@ test("v2 snapshots migrate straight through to v4 seeded from the template", () 
 // 4 promised "60mm stone benchtops" while page 6 promised "40mm engineered
 // stone" — so the schedule (the contractual statement) wins and the bullets are
 // dropped rather than guessed at.
-test("v3 snapshots migrate to v4, keeping the schedule and dropping the bullets", () => {
+test("v3 snapshots keep the schedule and drop the stale bullets", () => {
   const migrated = migrateWorkspaceState({
     schemaVersion: 3,
     job: {},
@@ -146,7 +119,7 @@ test("v3 snapshots migrate to v4, keeping the schedule and dropping the bullets"
     };
   };
 
-  assert.equal(migrated.schemaVersion, 5);
+  assert.equal(migrated.schemaVersion, CURRENT_WORKSPACE_SCHEMA_VERSION);
   assert.deepEqual(migrated.draft.inclusionSchedule, [
     { spec: "40mm engineered stone — kitchen island." },
   ]);
@@ -175,7 +148,7 @@ test("an estimator who emptied the schedule in v3 keeps it empty in v4", () => {
 });
 
 test("v4 entries are left untouched by the migration", () => {
-  const entries = [{ spec: "Already an entry", summary: "Short" }];
+  const entries = [{ spec: "Already an entry", category: "Cat" }];
   const migrated = migrateWorkspaceState({
     schemaVersion: 4,
     job: {},
@@ -257,24 +230,6 @@ function snapshotWithSchedule(
   } as OfferWorkspaceSnapshot;
 }
 
-test("page 4 prints the summary labels, the schedule prints the specs", () => {
-  const html = buildProposalHtml(
-    buildProposalInput(
-      snapshotWithSchedule([
-        { spec: "Long contractual sentence about stone.", summary: "Stone benchtops" },
-        { spec: "Long contractual sentence about tiling." },
-      ]),
-    ),
-    EMPTY_OFFER_IMAGES,
-  );
-
-  assert.match(html, /Stone benchtops/, "summary belongs on the investment page");
-  assert.match(
-    html,
-    /Long contractual sentence about tiling\./,
-    "spec belongs in the schedule",
-  );
-});
 
 test("an entry with no summary never reaches the investment page", () => {
   const html = buildProposalHtml(
@@ -370,7 +325,7 @@ test("v4 entries regain their category by matching the seeded spec", () => {
     draft: { inclusionSchedule: OfferInclusionEntry[] };
   };
 
-  assert.equal(migrated.schemaVersion, 5);
+  assert.equal(migrated.schemaVersion, CURRENT_WORKSPACE_SCHEMA_VERSION);
   assert.equal(migrated.draft.inclusionSchedule[0].category, seeded.category);
   assert.equal(
     migrated.draft.inclusionSchedule[1].category,
@@ -461,93 +416,94 @@ test("page start indexes make numbering continuous", () => {
   });
 });
 
-// ─── AI-drafted derived copy ───
+// ─── v6: the selling list moves off the schedule rows ───
 
-// The label beside the price is DERIVED from the schedule wording. Generating it
-// rather than asking for it is what makes the page-4-vs-schedule contradiction
-// unrepresentable: it can only ever restate the spec it came from.
-
-test("a hand-typed label is never offered for regeneration", () => {
-  const entry: OfferInclusionEntry = { spec: "S", summary: "Mine", category: "C" };
-
-  assert.equal(inclusionSummaryState(entry), "manual");
-  assert.deepEqual(staleSummaryIndexes([entry]), []);
-  assert.deepEqual(inclusionCopyRequests([entry]), []);
-});
-
-test("a generated label matching its spec is current", () => {
-  const entry: OfferInclusionEntry = {
-    spec: "40mm engineered stone.",
-    summary: "40mm stone benchtops",
-    summaryFromSpec: "40mm engineered stone.",
-    category: "Stone Benchtops",
+// v5 asserted one selling line per contract row. On a real offer "All
+// structural works — slab, frame, roof" covers six rows, so a per-row field
+// could never hold it.
+test("v5 summaries become the highlight list, in schedule order", () => {
+  const migrated = migrateWorkspaceState({
+    schemaVersion: 5,
+    job: {},
+    draft: {
+      headline: "H",
+      introText: "I",
+      exclusionBullets: [],
+      termsSummary: "T",
+      inclusionSchedule: [
+        { spec: "Engineered slab.", summary: "All structural works", category: "Concrete Slab" },
+        { spec: "Timber frame." },
+        { spec: "40mm stone.", summary: "40mm stone benchtops", summaryFromSpec: "40mm stone." },
+      ],
+    },
+  }) as {
+    schemaVersion: number;
+    draft: {
+      inclusionHighlights: string[];
+      inclusionSchedule: { spec: string; category?: string; summary?: unknown; summaryFromSpec?: unknown }[];
+    };
   };
 
-  assert.equal(inclusionSummaryState(entry), "current");
-  assert.deepEqual(inclusionCopyRequests([entry]), []);
-});
-
-// The exact bug: the spec was reworded after the label was written.
-test("editing the spec under a generated label marks it stale and re-requests it", () => {
-  const entry: OfferInclusionEntry = {
-    spec: "Minimalistic kitchen — overhead and base cabinets.",
-    summary: "Luxury shaker kitchen",
-    summaryFromSpec: "Custom shaker door kitchen — overhead and base cabinets.",
-    category: "Kitchen Cabinetry",
-  };
-
-  assert.equal(inclusionSummaryState(entry), "stale");
-  assert.deepEqual(staleSummaryIndexes([entry]), [0]);
-  assert.deepEqual(inclusionCopyRequests([entry]), [
-    { index: 0, spec: entry.spec, wantSummary: true, wantCategory: false },
+  assert.equal(migrated.schemaVersion, CURRENT_WORKSPACE_SCHEMA_VERSION);
+  assert.deepEqual(migrated.draft.inclusionHighlights, [
+    "All structural works",
+    "40mm stone benchtops",
   ]);
+  for (const entry of migrated.draft.inclusionSchedule) {
+    assert.equal(entry.summary, undefined, "selling copy must not survive on a contract row");
+    assert.equal(entry.summaryFromSpec, undefined);
+  }
+  assert.equal(migrated.draft.inclusionSchedule[0].spec, "Engineered slab.");
+  assert.equal(migrated.draft.inclusionSchedule[0].category, "Concrete Slab");
 });
 
-test("a row with no category is requested so it never prints Miscellaneous", () => {
-  const requests = inclusionCopyRequests([{ spec: "Pulled wording." }]);
+test("a v5 offer with no summaries migrates to an empty highlight list", () => {
+  const migrated = migrateWorkspaceState({
+    schemaVersion: 5,
+    job: {},
+    draft: {
+      headline: "H", introText: "I", exclusionBullets: [], termsSummary: "T",
+      inclusionSchedule: [{ spec: "Only a spec." }],
+    },
+  }) as { draft: { inclusionHighlights: string[] } };
 
-  assert.deepEqual(requests, [
-    { index: 0, spec: "Pulled wording.", wantSummary: false, wantCategory: true },
-  ]);
+  assert.deepEqual(migrated.draft.inclusionHighlights, []);
 });
 
-test("an unfeatured, categorised row needs nothing", () => {
+test("a v6 offer is left alone", () => {
+  const migrated = migrateWorkspaceState({
+    schemaVersion: 6,
+    job: {},
+    draft: {
+      headline: "H", introText: "I", exclusionBullets: [], termsSummary: "T",
+      inclusionHighlights: ["Mine"],
+      inclusionSchedule: [{ spec: "S" }],
+    },
+  }) as { draft: { inclusionHighlights: string[] } };
+
+  assert.deepEqual(migrated.draft.inclusionHighlights, ["Mine"]);
+});
+
+test("page 4 prints the highlight list, blanks dropped", () => {
+  const snapshot = snapshotWithSchedule([{ spec: "S" }]);
+  const data = buildOfferPrintTemplateData(
+    buildProposalInput({
+      ...snapshot,
+      draft: { ...snapshot.draft, inclusionHighlights: ["Real line", "   "] },
+    } as OfferWorkspaceSnapshot),
+  );
+
+  assert.deepEqual(data.summaryInclusions, ["Real line"]);
+});
+
+// Contract text the model wrote and nobody reviewed must stay visible.
+test("AI-drafted rows are reported so they can be surfaced before send", () => {
   assert.deepEqual(
-    inclusionCopyRequests([{ spec: "S", category: "Tiling" }]),
-    [],
+    unreviewedDraftedRows([
+      { spec: "Mine" },
+      { spec: "Drafted", draftedByAi: true },
+      { spec: "Reviewed" },
+    ]),
+    [1],
   );
-});
-
-test("applying a patch stamps the spec the label was written from", () => {
-  const schedule: OfferInclusionEntry[] = [{ spec: "40mm engineered stone." }];
-  const [applied] = applyInclusionCopyPatches(schedule, [
-    { index: 0, summary: "40mm stone benchtops", category: "Stone Benchtops" },
-  ]);
-
-  assert.equal(applied.summary, "40mm stone benchtops");
-  assert.equal(applied.category, "Stone Benchtops");
-  assert.equal(
-    applied.summaryFromSpec,
-    "40mm engineered stone.",
-    "provenance must be stamped, or staleness can never be detected",
-  );
-  assert.equal(inclusionSummaryState(applied), "current");
-});
-
-test("applying a patch never touches a row it was not addressed to", () => {
-  const schedule: OfferInclusionEntry[] = [
-    { spec: "First", summary: "Keep me", category: "Cat" },
-    { spec: "Second" },
-  ];
-  const applied = applyInclusionCopyPatches(schedule, [
-    { index: 1, category: "Waterproofing" },
-  ]);
-
-  assert.deepEqual(applied[0], schedule[0]);
-  assert.equal(applied[1].category, "Waterproofing");
-  assert.equal(applied[1].summary, undefined, "no label was asked for");
-});
-
-test("a blank spec is never sent for drafting", () => {
-  assert.deepEqual(inclusionCopyRequests([{ spec: "   " }]), []);
 });
