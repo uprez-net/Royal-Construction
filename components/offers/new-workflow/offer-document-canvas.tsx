@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-  getSummaryInclusions,
   mergeCostScheduleIntoSchedule,
   type OfferDocumentDraft,
   type OfferInclusionEntry,
@@ -14,18 +13,18 @@ import {
 import { formatOwnerNamesLine } from "@/lib/offer/workspace-model";
 import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import { FileText, Plus, TableProperties } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { FileText, Plus, Star, TableProperties } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import {
   EditableBulletList,
-  EditableInclusionRow,
   EditableText,
+  HoverRow,
 } from "./offer-document-canvas-fields";
 
-// The offer document, edited in place. This replaces the old copy form plus the
-// narrow sidebar preview: the estimator edits the thing the customer receives
-// rather than filling fields and checking a separate preview.
+// The offer document, edited in place. Replaces the old copy form and the narrow
+// sidebar preview: the estimator edits the thing the customer receives.
 //
 // Deliberately NOT the print template. offer-workspace-print-template.tsx stays
 // the pixel-accurate print/PDF surface; this mirrors its structure at screen
@@ -47,25 +46,36 @@ export function OfferDocumentCanvas({
   lines,
   onDraftChange,
 }: OfferDocumentCanvasProps) {
-  // Page 4's list is DERIVED, never edited directly. That is the whole point:
-  // it cannot contradict the schedule it summarises, because it is the schedule.
-  const summaryInclusions = getSummaryInclusions(draft.inclusionSchedule);
+  const schedule = draft.inclusionSchedule;
+  // The featured entries, keyed back to their position in the schedule so the
+  // "This price includes" block can edit them directly. Note these are entries
+  // whose summary is DEFINED, including a blank one being typed — blanks are
+  // filtered out at print time, not here, so a half-written label is visible
+  // while you write it.
+  const featured = schedule
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.summary !== undefined);
   const printedExclusions = getVisibleExclusions(draft, exclusions);
   const scopeExclusionLabels = exclusions
     .filter((item) => item.includedInOfferDocument)
     .map((item) => item.label);
 
-  const updateEntry = (index: number, next: OfferInclusionEntry) =>
+  const patchEntry = (index: number, next: OfferInclusionEntry) =>
     onDraftChange({
-      inclusionSchedule: draft.inclusionSchedule.map((entry, i) =>
+      inclusionSchedule: schedule.map((entry, i) =>
         i === index ? next : entry,
       ),
     });
 
-  const removeEntry = (index: number) =>
-    onDraftChange({
-      inclusionSchedule: draft.inclusionSchedule.filter((_, i) => i !== index),
-    });
+  const toggleFeatured = (index: number) => {
+    const entry = schedule[index];
+    patchEntry(
+      index,
+      entry.summary === undefined
+        ? { ...entry, summary: "" }
+        : { spec: entry.spec },
+    );
+  };
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -77,10 +87,9 @@ export function OfferDocumentCanvas({
         />
       </CardHeader>
       <CardContent className="pt-6">
-        <article className="mx-auto max-w-4xl rounded-lg border border-border bg-background p-6 sm:p-8">
-          {/* Identity — owned by Job setup, shown for context only. */}
-          <header className="border-b border-border pb-4">
-            <p className="font-mono text-xs text-muted-foreground">
+        <article className="rounded-lg border border-border bg-background px-5 py-6 sm:px-8">
+          <header className="border-b border-border pb-3">
+            <p className="px-1.5 font-mono text-xs text-muted-foreground">
               {job.reference}-{job.revision}
             </p>
             <EditableText
@@ -90,74 +99,85 @@ export function OfferDocumentCanvas({
               placeholder="Headline…"
               value={draft.headline}
             />
-            <p className="mt-1 px-1.5 text-sm text-muted-foreground">
+            <p className="px-1.5 text-sm text-muted-foreground">
               {formatOwnerNamesLine(job.owners ?? []) || job.clientNames} ·{" "}
               {job.siteAddress}
             </p>
           </header>
 
-          <EditableText
-            ariaLabel="Offer intro text"
-            className="mt-4 text-base leading-7"
-            onChange={(introText) => onDraftChange({ introText })}
-            placeholder="Opening paragraph…"
-            value={draft.introText}
-          />
-
-          {/* Price — owned by the Pricing step. */}
-          <div className="mt-6 rounded-lg border border-border bg-royal-gold-light/40 p-5 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Your fixed contract price
-            </p>
-            <p className="mt-1 font-heading text-4xl font-semibold text-sidebar">
-              {formatCurrency(customerPrice.selectedContractValueIncGst)}
-            </p>
-            <p className="mt-1 font-mono text-xs text-muted-foreground">
-              Including GST · Valid until {job.validUntil}
-            </p>
+          {/* Intro and price sit side by side: the intro is two or three lines
+              and the price is a single figure, so stacking them wasted a whole
+              screen of width. */}
+          <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+            <EditableText
+              ariaLabel="Offer intro text"
+              className="text-base leading-7"
+              onChange={(introText) => onDraftChange({ introText })}
+              placeholder="Opening paragraph…"
+              value={draft.introText}
+            />
+            <div className="rounded-lg border border-border bg-royal-gold-light/40 px-6 py-4 text-center lg:min-w-64">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Your fixed contract price
+              </p>
+              <p className="mt-0.5 font-heading text-3xl font-semibold text-sidebar">
+                {formatCurrency(customerPrice.selectedContractValueIncGst)}
+              </p>
+              <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                Incl. GST · Valid until {job.validUntil}
+              </p>
+            </div>
           </div>
 
-          <div className="mt-6 grid gap-6 md:grid-cols-2">
+          <div className="mt-6 grid gap-x-10 gap-y-6 border-t border-border pt-5 md:grid-cols-2">
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 This price includes
               </h3>
-              {summaryInclusions.length > 0 ? (
-                <ul className="mt-2 grid gap-1.5">
-                  {summaryInclusions.map((item, index) => (
-                    <li
-                      className="flex items-start gap-2 text-sm leading-6"
-                      key={`${item}-${index}`}
+              {featured.length > 0 ? (
+                <div className="mt-1">
+                  {featured.map(({ entry, index }) => (
+                    <HoverRow
+                      key={index}
+                      onRemove={() => patchEntry(index, { spec: entry.spec })}
+                      removeLabel={`Stop featuring inclusion ${index + 1}`}
                     >
                       <span
                         aria-hidden="true"
-                        className="mt-2.5 size-1.5 shrink-0 rounded-xs bg-royal-gold"
+                        className="mt-2 size-1.5 shrink-0 rounded-xs bg-royal-gold"
                       />
-                      {item}
-                    </li>
+                      <EditableText
+                        ariaLabel={`Featured inclusion ${index + 1}`}
+                        className="text-sm leading-6"
+                        onChange={(summary) =>
+                          patchEntry(index, { ...entry, summary })
+                        }
+                        placeholder="Short label…"
+                        value={entry.summary ?? ""}
+                      />
+                    </HoverRow>
                   ))}
-                </ul>
+                </div>
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Nothing here yet. Mark an inclusion below with{" "}
-                  <span className="font-medium">Show beside price</span> to
-                  feature it.
+                <p className="mt-1 px-1.5 text-sm text-muted-foreground">
+                  Nothing featured yet. Star an inclusion below to show it here.
                 </p>
               )}
-              <p className="mt-2 text-xs text-muted-foreground">
-                Taken from the short labels on the inclusions schedule below, so
-                the two can never disagree.
+              <p className="mt-1.5 px-1.5 text-xs text-muted-foreground">
+                Short labels for the schedule below — starred items appear here
+                and beside the price on the printed offer.
               </p>
             </section>
 
             <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 This price excludes
               </h3>
-              <div className="mt-2">
+              <div className="mt-1">
                 <EditableBulletList
                   addLabel="Add exclusion"
                   ariaLabel="Exclusion"
+                  emptyHint="No exclusions listed."
                   items={draft.exclusionBullets}
                   onChange={(exclusionBullets) =>
                     onDraftChange({ exclusionBullets })
@@ -165,24 +185,24 @@ export function OfferDocumentCanvas({
                 />
               </div>
               {scopeExclusionLabels.length > 0 ? (
-                <div className="mt-2 rounded-md border border-border/70 bg-muted/40 p-2.5">
-                  <ul className="grid gap-1 text-xs text-muted-foreground">
+                <div className="mt-1.5 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2">
+                  <ul className="grid gap-0.5 text-xs text-muted-foreground sm:grid-cols-2">
                     {scopeExclusionLabels.map((label) => (
                       <li key={label}>• {label}</li>
                     ))}
                   </ul>
-                  <p className="mt-1.5 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     From the Scope step — printed too. Edit them there.
                   </p>
                 </div>
               ) : null}
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-1.5 px-1.5 text-xs text-muted-foreground">
                 {printedExclusions.length} will print on the document.
               </p>
             </section>
           </div>
 
-          <section className="mt-8 border-t border-border pt-5">
+          <section className="mt-7 border-t border-border pt-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="font-heading text-lg font-semibold">
                 Inclusions schedule
@@ -191,7 +211,7 @@ export function OfferDocumentCanvas({
                 onClick={() =>
                   onDraftChange({
                     inclusionSchedule: mergeCostScheduleIntoSchedule(
-                      draft.inclusionSchedule,
+                      schedule,
                       lines,
                     ),
                   })
@@ -204,47 +224,101 @@ export function OfferDocumentCanvas({
                 Pull wording from cost schedule
               </Button>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Printed on the offer and the tender. Everything listed is fixed
-              within the contract price.
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Printed on the offer and the tender. Star an item to also show it
+              beside the price.
             </p>
-            <ol className="mt-3">
-              {draft.inclusionSchedule.map((entry, index) => (
-                <EditableInclusionRow
-                  entry={entry}
-                  index={index}
-                  key={index}
-                  onChange={(next) => updateEntry(index, next)}
-                  onRemove={() => removeEntry(index)}
-                />
-              ))}
+            {/* Two columns: these are one- and two-line specs, so a single
+                column left half the screen empty and made a 44-item list far
+                longer to scan than it needs to be. */}
+            <ol className="mt-3 grid gap-x-8 md:grid-cols-2">
+              {schedule.map((entry, index) => {
+                const isFeatured = entry.summary !== undefined;
+                return (
+                  <li
+                    className="group/row flex items-start gap-1.5 border-b border-border/40 py-1"
+                    key={index}
+                  >
+                    <span className="mt-1 w-5 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <EditableText
+                      ariaLabel={`Inclusion ${index + 1}`}
+                      className="text-sm leading-6"
+                      onChange={(spec) => patchEntry(index, { ...entry, spec })}
+                      placeholder="Describe what is included…"
+                      value={entry.spec}
+                    />
+                    <Button
+                      aria-label={
+                        isFeatured
+                          ? `Stop featuring inclusion ${index + 1} beside the price`
+                          : `Feature inclusion ${index + 1} beside the price`
+                      }
+                      aria-pressed={isFeatured}
+                      className={cn(
+                        "mt-0.5 size-6 shrink-0 transition-opacity",
+                        isFeatured
+                          ? "opacity-100"
+                          : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
+                      )}
+                      onClick={() => toggleFeatured(index)}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Star
+                        className={cn(
+                          "size-3.5",
+                          isFeatured
+                            ? "fill-royal-gold text-royal-gold"
+                            : "text-muted-foreground",
+                        )}
+                      />
+                    </Button>
+                    <Button
+                      aria-label={`Remove inclusion ${index + 1}`}
+                      className="mt-0.5 size-6 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+                      onClick={() =>
+                        onDraftChange({
+                          inclusionSchedule: schedule.filter(
+                            (_, i) => i !== index,
+                          ),
+                        })
+                      }
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Plus className="size-3 rotate-45" />
+                    </Button>
+                  </li>
+                );
+              })}
             </ol>
             <Button
-              className="mt-2 text-xs text-muted-foreground"
+              className="mt-2 h-7 px-1.5 text-xs text-muted-foreground"
               onClick={() =>
                 onDraftChange({
-                  inclusionSchedule: [
-                    ...draft.inclusionSchedule,
-                    { spec: "" },
-                  ],
+                  inclusionSchedule: [...schedule, { spec: "" }],
                 })
               }
               size="sm"
               type="button"
               variant="ghost"
             >
-              <Plus className="mr-1 size-3.5" />
+              <Plus className="mr-1 size-3" />
               Add inclusion
             </Button>
           </section>
 
-          <section className="mt-8 border-t border-border pt-5">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <section className="mt-7 border-t border-border pt-5">
+            <h3 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Validity and terms
             </h3>
             <EditableText
               ariaLabel="Terms summary"
-              className="mt-1 text-sm leading-6 text-muted-foreground"
+              className="text-sm leading-6 text-muted-foreground"
               onChange={(termsSummary) => onDraftChange({ termsSummary })}
               placeholder="Validity terms…"
               value={draft.termsSummary}
