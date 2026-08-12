@@ -2,19 +2,17 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import {
-  mergeCostScheduleIntoSchedule,
-  type OfferDocumentDraft,
-  type OfferInclusionEntry,
-  type OfferWorkspaceCostLine,
-  type OfferWorkspaceJob,
-  type OfferWorkspaceScopeItem,
+import type {
+  OfferDocumentDraft,
+  OfferInclusionEntry,
+  OfferWorkspaceJob,
+  OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
 import { formatOwnerNamesLine } from "@/lib/offer/workspace-model";
 import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import { cn } from "@/lib/utils";
-import { FileText, Plus, Star, TableProperties } from "lucide-react";
+import { FileText, Plus, Star } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import {
@@ -34,7 +32,6 @@ type OfferDocumentCanvasProps = {
   readonly draft: OfferDocumentDraft;
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
-  readonly lines: readonly OfferWorkspaceCostLine[];
   readonly onDraftChange: (patch: Partial<OfferDocumentDraft>) => void;
 };
 
@@ -43,7 +40,6 @@ export function OfferDocumentCanvas({
   draft,
   exclusions,
   job,
-  lines,
   onDraftChange,
 }: OfferDocumentCanvasProps) {
   const schedule = draft.inclusionSchedule;
@@ -135,27 +131,47 @@ export function OfferDocumentCanvas({
                 This price includes
               </h3>
               {featured.length > 0 ? (
-                <div className="mt-1">
+                <div className="mt-1 grid gap-2">
                   {featured.map(({ entry, index }) => (
-                    <HoverRow
-                      key={index}
-                      onRemove={() => patchEntry(index, { spec: entry.spec })}
-                      removeLabel={`Stop featuring inclusion ${index + 1}`}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="mt-2 size-1.5 shrink-0 rounded-xs bg-royal-gold"
-                      />
-                      <EditableText
-                        ariaLabel={`Featured inclusion ${index + 1}`}
-                        className="text-sm leading-6"
-                        onChange={(summary) =>
-                          patchEntry(index, { ...entry, summary })
-                        }
-                        placeholder="Short label…"
-                        value={entry.summary ?? ""}
-                      />
-                    </HoverRow>
+                    <div key={index}>
+                      <HoverRow
+                        onRemove={() => patchEntry(index, { spec: entry.spec })}
+                        removeLabel={`Stop featuring inclusion ${index + 1}`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="mt-2 size-1.5 shrink-0 rounded-xs bg-royal-gold"
+                        />
+                        <EditableText
+                          ariaLabel={`Featured inclusion ${index + 1} short label`}
+                          className="text-sm leading-6"
+                          onChange={(summary) =>
+                            patchEntry(index, { ...entry, summary })
+                          }
+                          placeholder="Short label…"
+                          value={entry.summary ?? ""}
+                        />
+                      </HoverRow>
+                      {/* The schedule sentence for the SAME entry, editable
+                          right here. Changing the short label above to
+                          "Minimalistic kitchen" while this still promised a
+                          "Custom shaker door kitchen" put two contradictory
+                          claims in one fixed-price contract. You cannot now
+                          reword one without the other in front of you. */}
+                      <div className="ml-4 border-l-2 border-border/60 pl-2">
+                        <EditableText
+                          ariaLabel={`Featured inclusion ${index + 1} schedule wording`}
+                          className="text-xs leading-5 text-muted-foreground"
+                          onChange={(spec) => patchEntry(index, { ...entry, spec })}
+                          placeholder="Full wording printed in the schedule…"
+                          value={entry.spec}
+                        />
+                        <p className="px-1.5 pt-0.5 text-[11px] text-muted-foreground/80">
+                          Schedule item {index + 1}
+                          {entry.category ? ` · ${entry.category}` : ""}
+                        </p>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -163,9 +179,10 @@ export function OfferDocumentCanvas({
                   Nothing featured yet. Star an inclusion below to show it here.
                 </p>
               )}
-              <p className="mt-1.5 px-1.5 text-xs text-muted-foreground">
-                Short labels for the schedule below — starred items appear here
-                and beside the price on the printed offer.
+              <p className="mt-2 px-1.5 text-xs text-muted-foreground">
+                Starred schedule items. The bold line prints beside the price;
+                the line under it is the same item&apos;s wording in the schedule
+                below. Keep them saying the same thing.
               </p>
             </section>
 
@@ -203,27 +220,9 @@ export function OfferDocumentCanvas({
           </div>
 
           <section className="mt-7 border-t border-border pt-5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-heading text-lg font-semibold">
-                Inclusions schedule
-              </h3>
-              <Button
-                onClick={() =>
-                  onDraftChange({
-                    inclusionSchedule: mergeCostScheduleIntoSchedule(
-                      schedule,
-                      lines,
-                    ),
-                  })
-                }
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <TableProperties className="mr-1.5 size-3.5" />
-                Pull wording from cost schedule
-              </Button>
-            </div>
+            <h3 className="font-heading text-lg font-semibold">
+              Inclusions schedule
+            </h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Printed on the offer and the tender. Star an item to also show it
               beside the price.

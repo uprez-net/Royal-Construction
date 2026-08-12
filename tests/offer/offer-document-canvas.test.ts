@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { OfferDocumentCanvas } from "../../components/offers/new-workflow/offer-document-canvas";
 import {
-  INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
@@ -22,7 +21,6 @@ function render(inclusionSchedule: readonly OfferInclusionEntry[]): string {
       draft: { ...INITIAL_OFFER_DRAFT, inclusionSchedule },
       exclusions: INITIAL_EXCLUSIONS,
       job: INITIAL_OFFER_JOB,
-      lines: INITIAL_COST_LINES,
       onDraftChange: () => {},
     }),
   );
@@ -68,9 +66,8 @@ test("the inclusions schedule uses multi-column, not a row-filled grid", () => {
 });
 
 // REGRESSION: a featured item's short label was rendered twice — once in the
-// "This price includes" block and again inline under its schedule row — which
-// read as duplicated content on a screen already dense with text. The label is
-// now shown once, where it prints, and the schedule row carries only a star.
+// "This price includes" block and again inline under its schedule row. The
+// label is now stated once, where it prints.
 test("a featured label appears exactly once on the canvas", () => {
   const label = "Uniquely identifiable short label";
   const html = render([
@@ -86,6 +83,34 @@ test("a featured label appears exactly once on the canvas", () => {
   );
 });
 
+// REGRESSION: editing a featured item's short label to "Minimalistic kitchen"
+// left its schedule row still promising a "Custom shaker door kitchen" — two
+// contradictory claims in one fixed-price contract. The schedule wording for a
+// featured item is now editable in the same block as its label, so the two
+// cannot be reworded independently without both being on screen.
+test("a featured item exposes its schedule wording for editing beside the label", () => {
+  const html = render([
+    { spec: "Custom shaker door kitchen and pantry.", summary: "Luxury kitchen" },
+  ]);
+
+  assert.match(html, /aria-label="Featured inclusion 1 short label"/);
+  assert.match(html, /aria-label="Featured inclusion 1 schedule wording"/);
+  assert.match(
+    html,
+    /Custom shaker door kitchen and pantry\./,
+    "the schedule sentence must be visible beside its label",
+  );
+});
+
+// The offer document carries inclusions and exclusions, not cost-schedule task
+// detail. Pulling task wording across produced rows with no category, which
+// printed as "Miscellaneous" on the client's contract.
+test("the canvas offers no way to pull cost-schedule wording", () => {
+  const html = render(INITIAL_OFFER_DRAFT.inclusionSchedule);
+
+  assert.doesNotMatch(html, /Pull wording from cost schedule/);
+});
+
 test("an unfeatured entry offers a star and contributes nothing to page 4", () => {
   const html = render([{ spec: "Schedule only." }]);
 
@@ -98,7 +123,7 @@ test("a featured entry's label is editable where it prints", () => {
 
   assert.match(
     html,
-    /aria-label="Featured inclusion 1"/,
+    /aria-label="Featured inclusion 1 short label"/,
     "the price-page label must be an editable field, not static text",
   );
   assert.match(html, /Stop featuring inclusion 1 beside the price/);

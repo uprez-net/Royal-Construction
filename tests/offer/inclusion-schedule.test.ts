@@ -15,10 +15,8 @@ import {
   chunkInclusionSchedule,
   getSummaryInclusions,
   inclusionPageStartIndexes,
-  mergeCostScheduleIntoSchedule,
   UNCATEGORISED_INCLUSION_LABEL,
   type OfferInclusionEntry,
-  type OfferWorkspaceCostLine,
 } from "../../lib/offer/workspace-model";
 import { getVisibleExclusions } from "../../lib/offer/workspace-print-template";
 import {
@@ -187,76 +185,6 @@ test("v4 entries are left untouched by the migration", () => {
   }) as { draft: { inclusionSchedule: OfferInclusionEntry[] } };
 
   assert.deepEqual(migrated.draft.inclusionSchedule, entries);
-});
-
-// ─── Pulling cost-schedule wording into the schedule ───
-
-function costLine(
-  overrides: Partial<OfferWorkspaceCostLine>,
-): OfferWorkspaceCostLine {
-  return {
-    ...INITIAL_COST_LINES[0],
-    id: "test-line",
-    includedInContract: true,
-    costExGst: 1000,
-    offerTenderLineItem: "Test wording",
-    ...overrides,
-  };
-}
-
-test("pulling from the cost schedule appends only missing wording", () => {
-  const result = mergeCostScheduleIntoSchedule(
-    [{ spec: "Existing spec" }, { spec: "Shared wording" }],
-    [
-      costLine({ id: "a", offerTenderLineItem: "Shared wording" }),
-      costLine({ id: "b", offerTenderLineItem: "New wording" }),
-    ],
-  );
-
-  assert.deepEqual(result, [
-    { spec: "Existing spec" },
-    { spec: "Shared wording" },
-    { spec: "New wording" },
-  ]);
-});
-
-// Cost-schedule wording is contractual, not a sales line, so a pulled entry
-// never arrives with a summary — the estimator decides what earns page 4.
-test("pulled entries carry no summary", () => {
-  const result = mergeCostScheduleIntoSchedule(
-    [],
-    [costLine({ id: "a", offerTenderLineItem: "Pulled" })],
-  );
-
-  assert.deepEqual(result, [{ spec: "Pulled" }]);
-});
-
-test("pulling ignores excluded and unpriced cost lines", () => {
-  const result = mergeCostScheduleIntoSchedule(
-    [],
-    [
-      costLine({
-        id: "a",
-        includedInContract: false,
-        offerTenderLineItem: "Excluded",
-      }),
-      costLine({ id: "b", costExGst: 0, offerTenderLineItem: "Unpriced" }),
-      costLine({ id: "c", offerTenderLineItem: "   " }),
-      costLine({ id: "d", offerTenderLineItem: "Kept" }),
-    ],
-  );
-
-  assert.deepEqual(result, [{ spec: "Kept" }]);
-});
-
-test("pulling is idempotent and preserves existing summaries", () => {
-  const lines = [costLine({ id: "a", offerTenderLineItem: "Once" })];
-  const seeded: OfferInclusionEntry[] = [{ spec: "Kept", summary: "Sales line" }];
-  const once = mergeCostScheduleIntoSchedule(seeded, lines);
-  const twice = mergeCostScheduleIntoSchedule(once, lines);
-
-  assert.deepEqual(twice, once);
-  assert.deepEqual(twice[0], { spec: "Kept", summary: "Sales line" });
 });
 
 // ─── One exclusion rule across every surface ───

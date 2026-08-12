@@ -1101,28 +1101,6 @@ export function getIncludedOfferTenderLineItems(
   );
 }
 
-// Append any priced, included cost-schedule wording the inclusions schedule
-// does not already carry, preserving the estimator's existing order and edits.
-// Matching is on exact trimmed text — an estimator who has reworded a line
-// keeps their wording AND gains the original, which is the safe direction to
-// fail: a duplicate is visible and deletable, a silently dropped inclusion is
-// not.
-//
-// Lives here rather than beside the schedule seed in workspace-proposal-content
-// because that module is imported by this one — pulling
-// getIncludedOfferTenderLineItems the other way is a runtime TDZ cycle.
-export function mergeCostScheduleIntoSchedule(
-  schedule: readonly OfferInclusionEntry[],
-  lines: readonly OfferWorkspaceCostLine[],
-): readonly OfferInclusionEntry[] {
-  const seen = new Set(schedule.map((entry) => entry.spec.trim()));
-  const additions = getIncludedOfferTenderLineItems(lines)
-    .filter((item) => !seen.has(item))
-    // No summary: cost-schedule wording is a contractual line, not a sales
-    // line. The estimator decides which entries earn a place beside the price.
-    .map((spec) => ({ spec }));
-  return [...schedule, ...additions];
-}
 
 export function inferOfferStageCode(taskName: string): OfferStageCode {
   const lowerName = taskName.toLowerCase();

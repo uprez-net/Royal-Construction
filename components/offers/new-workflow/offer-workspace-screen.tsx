@@ -546,7 +546,6 @@ export function OfferWorkspaceScreen({
                 draft={draft}
                 exclusions={exclusions}
                 job={job}
-                lines={lines}
                 onDraftChange={onDraftChange}
               />
               <OfferWorkspaceImages
