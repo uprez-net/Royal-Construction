@@ -4,12 +4,13 @@ import {
   COMPANY_LINE,
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
-import { STANDARD_INCLUSIONS_SCHEDULE } from "./workspace-proposal-content";
 import {
   formatBoundedOwnerList,
   CHARS_PER_LINE_SIGNATURE,
   CHARS_PER_LINE_TABLE_CELL,
   chunkByEstimatedHeight,
+  chunkInclusionSchedule,
+  inclusionPageStartIndexes,
   collectOfferSigners,
   estimateWrappedLines,
   type OfferOwner,
@@ -34,7 +35,6 @@ const GOLD_DARK = "#8f6a24";
 const BORDER = "#d9d9d6";
 const MUTED = "#5f5f5f";
 
-const INCLUSIONS_ROWS_PER_PAGE = 12;
 // Execution signature blocks per page. Each carries a signature space, a date
 // line and (for owners) an initial line, so they are tall — 4 is a conservative
 // fit for A4 alongside the masthead and the acceptance paragraph. Shared with the
@@ -91,8 +91,6 @@ function ownerDetailLines(owner: OfferOwner): number {
   );
 }
 
-type InclusionRow = (typeof STANDARD_INCLUSIONS_SCHEDULE)[number];
-
 // Shared by the Tender and Contract builders (see offer-contract-html.ts).
 export function esc(value: string): string {
   return value
@@ -143,12 +141,10 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     job.porchSqm +
     job.grannyFlatSqm;
 
-  const inclusionChunks: InclusionRow[][] = [];
-  for (let i = 0; i < STANDARD_INCLUSIONS_SCHEDULE.length; i += INCLUSIONS_ROWS_PER_PAGE) {
-    inclusionChunks.push(
-      STANDARD_INCLUSIONS_SCHEDULE.slice(i, i + INCLUSIONS_ROWS_PER_PAGE),
-    );
-  }
+  // The schedule the estimator edited on this offer — not a module constant.
+  // An empty schedule produces zero pages rather than an empty table.
+  const inclusionChunks = chunkInclusionSchedule(input.draft.inclusionSchedule);
+  const inclusionStartIndexes = inclusionPageStartIndexes(inclusionChunks);
 
   // Execution signature blocks (customer signers first, then the builder) are
   // chunked across as many pages as they need. Previously every block was emitted
@@ -226,7 +222,7 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
       ownerDetailsPage(rows, index > 0, foot()),
     ),
     ...inclusionChunks.map((rows, index) =>
-      inclusionsPage(rows, index * INCLUSIONS_ROWS_PER_PAGE, index > 0, foot()),
+      inclusionsPage(rows, inclusionStartIndexes[index], index > 0, foot()),
     ),
     exclusionsPaymentPage(data, foot()),
     termsPage(data, foot()),
@@ -284,6 +280,8 @@ export function legalDocShell(body: string): string {
   .pill { display: inline-block; background: #e7efe1; color: #2f6b2f; border-radius: 3px; padding: 1px 6px; font-size: 9px; font-weight: 700; }
   ul { margin-top: 8px; padding-left: 18px; }
   li { margin-bottom: 5px; }
+  ol.inc { margin-top: 12px; padding-left: 20px; }
+  ol.inc > li { margin-bottom: 8px; line-height: 1.5; padding-left: 4px; }
   ol.terms { margin-top: 10px; padding-left: 18px; }
   ol.terms > li { margin-bottom: 9px; }
   ol.terms b { color: ${NAVY}; }
@@ -451,18 +449,16 @@ function ownerDetailRowsHtml(owner: OfferOwner): string {
   return header + directors;
 }
 
+// The per-row "Included" status pill is gone with the table: the intro sentence
+// already states that everything listed is in the Contract Sum, and the column
+// read "Included" on every single row.
 function inclusionsPage(
-  rows: InclusionRow[],
+  specifications: readonly string[],
   startIndex: number,
   continued: boolean,
   foot: string,
 ): string {
-  const body = rows
-    .map(
-      (row, i) =>
-        `<tr><td class="num">${startIndex + i + 1}</td><td class="cat">${esc(row.category)}</td><td>${esc(row.specification)}</td><td class="status"><span class="pill">Included</span></td></tr>`,
-    )
-    .join("");
+  const body = specifications.map((spec) => `<li>${esc(spec)}</li>`).join("");
   const intro = continued
     ? ""
     : `<p style="color:${MUTED};">All items below are included in the Contract Sum and fixed as per the approved plans and specifications, confirmed at colour selection.</p>`;
@@ -470,7 +466,7 @@ function inclusionsPage(
     ${masthead()}
     <h2 style="margin-top:20px;">Scope of Works — Inclusions Schedule${continued ? " (cont.)" : ""}</h2>
     ${intro}
-    <table><thead><tr><th>#</th><th>Category</th><th>Specification</th><th>Status</th></tr></thead><tbody>${body}</tbody></table>
+    <ol class="inc" start="${startIndex + 1}">${body}</ol>
     ${foot}
   </div>`;
 }

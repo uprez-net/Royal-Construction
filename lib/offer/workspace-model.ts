@@ -580,6 +580,10 @@ export function withOwnerProjection(job: OfferWorkspaceJob): OfferWorkspaceJob {
 // prints a sheet the footer never declared.
 export const CHARS_PER_LINE_SIGNATURE = 60;
 export const CHARS_PER_LINE_TABLE_CELL = 34;
+// A full-width Inclusions Schedule entry (165mm column at 13px). Verified
+// against real Chromium output: the longest seeded specifications (~150-190
+// chars) wrap to exactly two lines.
+export const CHARS_PER_LINE_INCLUSION = 95;
 
 // How many wrapped lines `text` occupies in a column that fits `charsPerLine`.
 // Always at least 1 so an empty cell still occupies its row.
@@ -985,6 +989,55 @@ export function applyTaskMappingToCostLine(
     notesOrSpec: mapping.offerTenderWording,
     stageCode: inferOfferStageCode(mapping.taskName),
   };
+}
+
+// Inclusions Schedule pagination, in LINE UNITS rather than rows. The schedule
+// is estimator-editable free text, so a fixed rows-per-page count overflows the
+// moment someone writes specifications longer than the seeded ones — and an
+// overflowing page desyncs the "Page N of M" footer, the same defect PR #124
+// fixed for signature blocks. Verified against real Chromium output: 27 line
+// units fill an A4 page with a comfortable bottom margin.
+//
+// Shared by all THREE renderers (offer-proposal-html, offer-tender-html and the
+// React print template) so they cannot paginate differently for the same offer —
+// the signature budgets already drifted between two of them once.
+export const INCLUSIONS_LINES_PER_PAGE = 27;
+// The intro paragraph above the first page's list, in line units.
+export const INCLUSIONS_INTRO_LINES = 3;
+
+export function chunkInclusionSchedule(
+  specifications: readonly string[],
+): string[][] {
+  if (specifications.length === 0) {
+    return [];
+  }
+  const heightOf = (spec: string) =>
+    estimateWrappedLines(spec, CHARS_PER_LINE_INCLUSION);
+  // The first page also carries the intro paragraph, so it gets a smaller budget.
+  const firstBudget = Math.max(
+    1,
+    INCLUSIONS_LINES_PER_PAGE - INCLUSIONS_INTRO_LINES,
+  );
+  const first = chunkByEstimatedHeight([...specifications], firstBudget, heightOf)[0] ?? [];
+  const rest = specifications.slice(first.length);
+  return [
+    first,
+    ...chunkByEstimatedHeight([...rest], INCLUSIONS_LINES_PER_PAGE, heightOf),
+  ].filter((page) => page.length > 0);
+}
+
+// The 0-based index each page starts at, so `<ol start>` continues numbering
+// across page breaks instead of restarting at 1.
+export function inclusionPageStartIndexes(
+  pages: readonly (readonly string[])[],
+): number[] {
+  const starts: number[] = [];
+  let running = 0;
+  for (const page of pages) {
+    starts.push(running);
+    running += page.length;
+  }
+  return starts;
 }
 
 export function getIncludedOfferTenderLineItems(

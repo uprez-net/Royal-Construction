@@ -6,17 +6,30 @@ import {
   STANDARD_INCLUSIONS_SCHEDULE,
 } from "../../lib/offer/workspace-proposal-content";
 import {
+  DEFAULT_WORKSPACE_PRICING_SETTINGS,
+  INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
+  INITIAL_OFFER_JOB,
+  chunkInclusionSchedule,
+  inclusionPageStartIndexes,
   mergeCostScheduleIntoSchedule,
   type OfferWorkspaceCostLine,
 } from "../../lib/offer/workspace-model";
 import { getVisibleExclusions } from "../../lib/offer/workspace-print-template";
 import {
   CURRENT_WORKSPACE_SCHEMA_VERSION,
+  INITIAL_TENDER_GATE,
   migrateWorkspaceState,
+  type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
+import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
+import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
+import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
 
 // REGRESSION: the state schema pinned `schemaVersion: z.literal(2)` while
 // serialize wrote CURRENT_WORKSPACE_SCHEMA_VERSION. Bumping the constant made
@@ -191,4 +204,136 @@ test("a label duplicated across a bullet and a scope item prints once", () => {
   };
 
   assert.deepEqual(getVisibleExclusions(draft, [dupe]), ["Pool fencing"]);
+});
+
+// ─── The schedule renders from the draft, as a list (Task 4) ───
+
+function snapshotWithSchedule(
+  inclusionSchedule: readonly string[],
+): OfferWorkspaceSnapshot {
+  return {
+    job: INITIAL_OFFER_JOB,
+    lines: INITIAL_COST_LINES,
+    allowances: INITIAL_ALLOWANCES,
+    exclusions: INITIAL_EXCLUSIONS,
+    draft: { ...INITIAL_OFFER_DRAFT, inclusionSchedule },
+    areaCalculator: INITIAL_AREA_CALCULATOR,
+    workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
+    paymentSchedule: INITIAL_PAYMENT_SCHEDULE,
+    rateCardProduct: "DOUBLE_STOREY",
+    rateCardTier: "MID",
+    images: EMPTY_OFFER_IMAGES,
+    tenderGate: INITIAL_TENDER_GATE,
+    selectedPriceInput: "",
+    standardPriceInput: "",
+    overrideReason: "",
+    priceAdjustmentLabel: "",
+  } as OfferWorkspaceSnapshot;
+}
+
+test("the offer PDF prints the draft schedule, not the template constant", () => {
+  const snapshot = snapshotWithSchedule(["Bespoke spec one", "Bespoke spec two"]);
+  const html = buildProposalHtml(
+    buildProposalInput(snapshot),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  assert.match(html, /Bespoke spec one/);
+  assert.match(html, /Bespoke spec two/);
+  assert.doesNotMatch(html, /Engineered slab/);
+});
+
+test("the offer PDF drops the Category column heading", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(snapshotWithSchedule(["Only spec"])),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  assert.doesNotMatch(html, /<th>Category<\/th>/);
+  assert.doesNotMatch(html, /<th>Specification<\/th>/);
+});
+
+test("the tender prints the draft schedule and drops its column headings", () => {
+  const html = buildTenderHtml(
+    buildProposalInput(snapshotWithSchedule(["Tender spec"])),
+  );
+
+  assert.match(html, /Tender spec/);
+  assert.doesNotMatch(html, /<th>Category<\/th>/);
+  assert.doesNotMatch(html, /<th>Status<\/th>/);
+});
+
+test("an empty schedule renders no inclusions page at all", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(snapshotWithSchedule([])),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  assert.doesNotMatch(html, /Full inclusions schedule/);
+});
+
+test("schedule numbering continues across page breaks", () => {
+  const specs = Array.from({ length: 60 }, (_, i) => `Specification ${i + 1}`);
+  const html = buildProposalHtml(
+    buildProposalInput(snapshotWithSchedule(specs)),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  // Page 2 must resume where page 1 stopped rather than restarting at 1.
+  const starts = [...html.matchAll(/<ol class="inc" start="(\d+)"/g)].map((m) =>
+    Number(m[1]),
+  );
+  assert.ok(starts.length > 1, "60 specs should paginate to more than one page");
+  assert.equal(starts[0], 1);
+  assert.ok(starts[1] > 1, "the second page must not restart numbering at 1");
+});
+
+// The schedule is estimator-editable free text, so pagination budgets by
+// estimated wrapped height, not row count. A fixed rows-per-page count let long
+// specifications overflow the page — and an overflowing page desyncs the
+// "Page N of M" footer, the defect PR #124 fixed for signature blocks.
+test("long specifications paginate more conservatively than short ones", () => {
+  const short = Array.from({ length: 30 }, (_, i) => `Item ${i + 1}`);
+  const long = Array.from(
+    { length: 30 },
+    (_, i) =>
+      `Item ${i + 1}: ${"supply and install all materials, fixings and labour to complete this element in full accordance with the approved plans and the relevant Australian Standards. ".repeat(2)}`,
+  );
+
+  const shortPages = chunkInclusionSchedule(short);
+  const longPages = chunkInclusionSchedule(long);
+
+  assert.ok(
+    longPages.length > shortPages.length,
+    `long specs must need more pages (short=${shortPages.length}, long=${longPages.length})`,
+  );
+  assert.ok(
+    longPages[0].length < shortPages[0].length,
+    "a page of long specs must hold fewer entries",
+  );
+});
+
+test("chunking never drops or reorders a specification", () => {
+  const specs = Array.from({ length: 47 }, (_, i) => `Specification ${i + 1}`);
+  const pages = chunkInclusionSchedule(specs);
+
+  assert.deepEqual(pages.flat(), specs);
+});
+
+test("an empty schedule chunks to zero pages", () => {
+  assert.deepEqual(chunkInclusionSchedule([]), []);
+});
+
+test("page start indexes make numbering continuous", () => {
+  const specs = Array.from({ length: 47 }, (_, i) => `Specification ${i + 1}`);
+  const pages = chunkInclusionSchedule(specs);
+  const starts = inclusionPageStartIndexes(pages);
+
+  assert.equal(starts[0], 0);
+  starts.forEach((start, index) => {
+    const expected = pages
+      .slice(0, index)
+      .reduce((sum, page) => sum + page.length, 0);
+    assert.equal(start, expected, `page ${index} must resume after its predecessors`);
+  });
 });

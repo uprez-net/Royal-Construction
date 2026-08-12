@@ -1,6 +1,8 @@
 import {
   CHARS_PER_LINE_SIGNATURE,
   chunkByEstimatedHeight,
+  chunkInclusionSchedule,
+  inclusionPageStartIndexes,
   collectOfferSigners,
   estimateWrappedLines,
   formatOwnerGreetingNames,
@@ -21,8 +23,6 @@ import {
 import {
   buildWelcomeParagraphs,
   OFFER_SPEC_FACTS,
-  STANDARD_INCLUSIONS_SCHEDULE,
-  type OfferInclusionRow,
 } from "@/lib/offer/workspace-proposal-content";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import {
@@ -63,7 +63,6 @@ type OfferWorkspacePrintTemplateProps = {
   readonly screen?: boolean;
 };
 
-const INCLUSIONS_ROWS_PER_PAGE = 12;
 // Mirrors offer-proposal-html.ts: builder + up to 3 client signers still fit under
 // the terms-page payment table (the common case); beyond that the signatures move
 // onto their own page(s) so they can't overflow a nominal A4 page and desync the
@@ -92,14 +91,6 @@ type SignatureBlockSpec = {
   readonly label: string;
   readonly name: string;
 };
-
-function chunk<T>(items: readonly T[], size: number): T[][] {
-  const pages: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    pages.push(items.slice(i, i + size));
-  }
-  return pages;
-}
 
 // Acceptance paragraph naming every owner ("I/We, A and B and C, accept…"), the
 // same wording the emailed HTML uses. Falls back to the clientNames projection
@@ -153,10 +144,10 @@ export function OfferWorkspacePrintTemplate(
   props: OfferWorkspacePrintTemplateProps,
 ) {
   const data = buildOfferPrintTemplateData(props);
-  const inclusionPages = chunk(
-    STANDARD_INCLUSIONS_SCHEDULE,
-    INCLUSIONS_ROWS_PER_PAGE,
-  );
+  // The schedule the estimator edited on this offer — not a module constant.
+  // An empty schedule produces zero pages rather than an empty table.
+  const inclusionPages = chunkInclusionSchedule(props.draft.inclusionSchedule);
+  const inclusionStartIndexes = inclusionPageStartIndexes(inclusionPages);
   const galleryImages = getAttachedOfferImageSlots(props.images).filter(
     (slot) => slot.key !== "hero",
   );
@@ -246,7 +237,8 @@ export function OfferWorkspacePrintTemplate(
           (
             <PrintInclusionsPage
               key={`inclusions-${i}`}
-              rows={rows}
+              specifications={rows}
+              startIndex={inclusionStartIndexes[i]}
               continued={i > 0}
               footer={foot(data, n, total)}
             />
@@ -572,11 +564,13 @@ function PrintInvestmentPage({
 }
 
 function PrintInclusionsPage({
-  rows,
+  specifications,
+  startIndex,
   continued,
   footer,
 }: {
-  readonly rows: readonly OfferInclusionRow[];
+  readonly specifications: readonly string[];
+  readonly startIndex: number;
   readonly continued: boolean;
   readonly footer: string;
 }) {
@@ -595,33 +589,19 @@ function PrintInclusionsPage({
           </p>
         )}
       </PrintSection>
-      <table className="mt-6 w-full border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="w-[45mm] py-3 pr-4 font-semibold">Category</th>
-            <th className="px-4 py-3 font-semibold">Specification</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, index) => (
-            <tr
-              key={`${row.category}-${index}`}
-              className={
-                row.highlight
-                  ? "border-b border-border bg-royal-gold-light/50"
-                  : "border-b border-border"
-              }
-            >
-              <td className="py-3 pr-4 align-top font-semibold text-sidebar">
-                {row.category}
-              </td>
-              <td className="px-4 py-3 align-top text-muted-foreground">
-                {row.specification}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <ol
+        className="mt-6 max-w-[165mm] list-decimal pl-5 text-sm"
+        start={startIndex + 1}
+      >
+        {specifications.map((spec, index) => (
+          <li
+            key={`${startIndex + index}`}
+            className="mb-2 pl-1 leading-6 text-muted-foreground"
+          >
+            {spec}
+          </li>
+        ))}
+      </ol>
     </PrintPage>
   );
 }
