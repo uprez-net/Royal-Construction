@@ -8,11 +8,15 @@ import type {
   OfferWorkspaceJob,
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
-import { formatOwnerNamesLine } from "@/lib/offer/workspace-model";
+import {
+  formatOwnerNamesLine,
+  inclusionSummaryState,
+  pendingInclusionCopyCount,
+} from "@/lib/offer/workspace-model";
 import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import { cn } from "@/lib/utils";
-import { FileText, Plus, Star } from "lucide-react";
+import { FileText, Plus, Sparkles, Star } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import {
@@ -33,6 +37,11 @@ type OfferDocumentCanvasProps = {
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
   readonly onDraftChange: (patch: Partial<OfferDocumentDraft>) => void;
+  // Draft the derived copy (short labels, and categories for rows that would
+  // otherwise print "Miscellaneous"). Absent when the step is locked.
+  readonly onDraftCopy?: () => void;
+  readonly draftingCopy?: boolean;
+  readonly copyError?: string | null;
 };
 
 export function OfferDocumentCanvas({
@@ -41,6 +50,9 @@ export function OfferDocumentCanvas({
   exclusions,
   job,
   onDraftChange,
+  onDraftCopy,
+  draftingCopy = false,
+  copyError = null,
 }: OfferDocumentCanvasProps) {
   const schedule = draft.inclusionSchedule;
   // The featured entries, keyed back to their position in the schedule so the
@@ -51,6 +63,7 @@ export function OfferDocumentCanvas({
   const featured = schedule
     .map((entry, index) => ({ entry, index }))
     .filter(({ entry }) => entry.summary !== undefined);
+  const pendingCopyCount = pendingInclusionCopyCount(schedule);
   const printedExclusions = getVisibleExclusions(draft, exclusions);
   const scopeExclusionLabels = exclusions
     .filter((item) => item.includedInOfferDocument)
@@ -131,11 +144,20 @@ export function OfferDocumentCanvas({
                 This price includes
               </h3>
               {featured.length > 0 ? (
-                <div className="mt-1 grid gap-2">
-                  {featured.map(({ entry, index }) => (
-                    <div key={index}>
+                <div className="mt-1">
+                  {featured.map(({ entry, index }) => {
+                    const state = inclusionSummaryState(entry);
+                    return (
                       <HoverRow
-                        onRemove={() => patchEntry(index, { spec: entry.spec })}
+                        key={index}
+                        onRemove={() =>
+                          patchEntry(index, {
+                            spec: entry.spec,
+                            ...(entry.category === undefined
+                              ? {}
+                              : { category: entry.category }),
+                          })
+                        }
                         removeLabel={`Stop featuring inclusion ${index + 1}`}
                       >
                         <span
@@ -146,44 +168,60 @@ export function OfferDocumentCanvas({
                           ariaLabel={`Featured inclusion ${index + 1} short label`}
                           className="text-sm leading-6"
                           onChange={(summary) =>
-                            patchEntry(index, { ...entry, summary })
+                            // Typing over a generated label makes it the
+                            // estimator's; drop the provenance so it is never
+                            // silently regenerated.
+                            patchEntry(index, {
+                              ...entry,
+                              summary,
+                              summaryFromSpec: undefined,
+                            })
                           }
                           placeholder="Short label…"
                           value={entry.summary ?? ""}
                         />
+                        {state === "stale" ? (
+                          <span
+                            className="mt-1.5 shrink-0 rounded-full bg-warning-light px-1.5 py-0.5 text-[10px] font-medium text-foreground"
+                            title="The schedule wording changed after this label was written."
+                          >
+                            Outdated
+                          </span>
+                        ) : null}
                       </HoverRow>
-                      {/* The schedule sentence for the SAME entry, editable
-                          right here. Changing the short label above to
-                          "Minimalistic kitchen" while this still promised a
-                          "Custom shaker door kitchen" put two contradictory
-                          claims in one fixed-price contract. You cannot now
-                          reword one without the other in front of you. */}
-                      <div className="ml-4 border-l-2 border-border/60 pl-2">
-                        <EditableText
-                          ariaLabel={`Featured inclusion ${index + 1} schedule wording`}
-                          className="text-xs leading-5 text-muted-foreground"
-                          onChange={(spec) => patchEntry(index, { ...entry, spec })}
-                          placeholder="Full wording printed in the schedule…"
-                          value={entry.spec}
-                        />
-                        <p className="px-1.5 pt-0.5 text-[11px] text-muted-foreground/80">
-                          Schedule item {index + 1}
-                          {entry.category ? ` · ${entry.category}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="mt-1 px-1.5 text-sm text-muted-foreground">
                   Nothing featured yet. Star an inclusion below to show it here.
                 </p>
               )}
-              <p className="mt-2 px-1.5 text-xs text-muted-foreground">
-                Starred schedule items. The bold line prints beside the price;
-                the line under it is the same item&apos;s wording in the schedule
-                below. Keep them saying the same thing.
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 px-1.5">
+                {onDraftCopy ? (
+                  <Button
+                    disabled={draftingCopy || pendingCopyCount === 0}
+                    onClick={onDraftCopy}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Sparkles className="mr-1.5 size-3.5" />
+                    {draftingCopy
+                      ? "Writing…"
+                      : pendingCopyCount === 0
+                        ? "All labels up to date"
+                        : `Write ${pendingCopyCount} label${pendingCopyCount === 1 ? "" : "s"}`}
+                  </Button>
+                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  Written from each item&apos;s schedule wording, so the two
+                  cannot disagree. Edit any label to make it yours.
+                </p>
+              </div>
+              {copyError ? (
+                <p className="mt-1 px-1.5 text-xs text-destructive">{copyError}</p>
+              ) : null}
             </section>
 
             <section>

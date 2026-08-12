@@ -126,6 +126,9 @@ type OfferWorkspaceScreenProps = {
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
   readonly onDownloadOffer: () => void;
   readonly onDraftChange: (patch: Partial<OfferDocumentDraft>) => void;
+  readonly onDraftCopy?: () => void;
+  readonly draftingCopy?: boolean;
+  readonly copyError?: string | null;
   readonly onImageChange: (
     key: OfferImageSlotKey,
     image: OfferImage | null,
@@ -241,6 +244,9 @@ export function OfferWorkspaceScreen({
   onAreaChange,
   onDownloadOffer,
   onDraftChange,
+  onDraftCopy,
+  draftingCopy,
+  copyError,
   onImageChange,
   onExclusionChange,
   onImported,
@@ -547,6 +553,9 @@ export function OfferWorkspaceScreen({
                 exclusions={exclusions}
                 job={job}
                 onDraftChange={onDraftChange}
+                onDraftCopy={onDraftCopy}
+                draftingCopy={draftingCopy}
+                copyError={copyError}
               />
               <OfferWorkspaceImages
                 images={images}

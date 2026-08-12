@@ -83,23 +83,44 @@ test("a featured label appears exactly once on the canvas", () => {
   );
 });
 
-// REGRESSION: editing a featured item's short label to "Minimalistic kitchen"
-// left its schedule row still promising a "Custom shaker door kitchen" — two
-// contradictory claims in one fixed-price contract. The schedule wording for a
-// featured item is now editable in the same block as its label, so the two
-// cannot be reworded independently without both being on screen.
-test("a featured item exposes its schedule wording for editing beside the label", () => {
+// The label is DERIVED from the schedule wording, so the top block shows one
+// clean line per item. An earlier attempt put an editable copy of the spec under
+// each label; that removed the contradiction but read as a nested form.
+test("the top block shows one line per featured item, not a nested spec editor", () => {
   const html = render([
     { spec: "Custom shaker door kitchen and pantry.", summary: "Luxury kitchen" },
   ]);
 
   assert.match(html, /aria-label="Featured inclusion 1 short label"/);
-  assert.match(html, /aria-label="Featured inclusion 1 schedule wording"/);
-  assert.match(
+  assert.doesNotMatch(
     html,
-    /Custom shaker door kitchen and pantry\./,
-    "the schedule sentence must be visible beside its label",
+    /aria-label="Featured inclusion 1 schedule wording"/,
+    "the spec is edited in the schedule, not duplicated into the price block",
   );
+});
+
+// REGRESSION: editing a featured item's spec to "Minimalistic kitchen" left its
+// label still selling a "Luxury shaker kitchen" — two contradictory claims in
+// one fixed-price contract. A generated label knows the spec it came from, so a
+// spec edited underneath it is now flagged rather than silently shipped.
+test("a label whose spec changed underneath is flagged as outdated", () => {
+  const html = render([
+    {
+      spec: "Minimalistic kitchen — overhead and base cabinets.",
+      summary: "Luxury shaker kitchen",
+      summaryFromSpec: "Custom shaker door kitchen — overhead and base cabinets.",
+    },
+  ]);
+
+  assert.match(html, /Outdated/);
+});
+
+test("a label that still matches its spec is not flagged", () => {
+  const html = render([
+    { spec: "40mm engineered stone.", summary: "40mm stone benchtops", summaryFromSpec: "40mm engineered stone." },
+  ]);
+
+  assert.doesNotMatch(html, /Outdated/);
 });
 
 // The offer document carries inclusions and exclusions, not cost-schedule task

@@ -194,7 +194,100 @@ export type OfferInclusionEntry = {
   // by an estimator; those print UNCATEGORISED_INCLUSION_LABEL rather than an
   // empty cell.
   readonly category?: string;
+  // The spec text `summary` was generated FROM. Present only on a generated
+  // label, never on one the estimator typed.
+  //
+  // This is what makes staleness knowable rather than guessed: if it equals the
+  // current spec the label still describes it; if it differs, the spec was
+  // edited underneath and the label needs refreshing; if it is absent the label
+  // is hand-written and must never be regenerated without asking.
+  readonly summaryFromSpec?: string;
 };
+
+// A drafted label/category for one schedule row, by position.
+export type InclusionCopyPatch = {
+  readonly index: number;
+  readonly summary?: string;
+  readonly category?: string;
+};
+
+// Apply drafted copy to a schedule. Stamps `summaryFromSpec` on any label it
+// writes, so the UI can later tell whether the spec was edited underneath.
+// Lives here rather than beside the server action because a "use server" module
+// may only export async functions.
+export function applyInclusionCopyPatches(
+  schedule: readonly OfferInclusionEntry[],
+  patches: readonly InclusionCopyPatch[],
+): readonly OfferInclusionEntry[] {
+  const byIndex = new Map(patches.map((patch) => [patch.index, patch]));
+  return schedule.map((entry, index) => {
+    const patch = byIndex.get(index);
+    if (!patch) return entry;
+    return {
+      ...entry,
+      ...(patch.summary === undefined
+        ? {}
+        : { summary: patch.summary, summaryFromSpec: entry.spec }),
+      ...(patch.category === undefined ? {} : { category: patch.category }),
+    };
+  });
+}
+
+export type InclusionSummaryState = "manual" | "current" | "stale" | "none";
+
+export function inclusionSummaryState(
+  entry: OfferInclusionEntry,
+): InclusionSummaryState {
+  if (entry.summary === undefined) return "none";
+  if (entry.summaryFromSpec === undefined) return "manual";
+  return entry.summaryFromSpec === entry.spec ? "current" : "stale";
+}
+
+// Rows that want drafted copy: a featured item with no label or a stale one,
+// or any row with no category (which would otherwise print "Miscellaneous").
+export function inclusionCopyRequests(
+  entries: readonly OfferInclusionEntry[],
+): readonly {
+  index: number;
+  spec: string;
+  wantSummary: boolean;
+  wantCategory: boolean;
+}[] {
+  return entries
+    .map((entry, index) => {
+      const state = inclusionSummaryState(entry);
+      // A hand-written label is the estimator's — never regenerate it.
+      const wantSummary =
+        state === "stale" ||
+        (state !== "manual" &&
+          entry.summary !== undefined &&
+          entry.summary.trim().length === 0);
+      const wantCategory = (entry.category ?? "").trim().length === 0;
+      return { index, spec: entry.spec, wantSummary, wantCategory };
+    })
+    .filter(
+      (request) =>
+        (request.wantSummary || request.wantCategory) &&
+        request.spec.trim().length > 0,
+    );
+}
+
+export function pendingInclusionCopyCount(
+  entries: readonly OfferInclusionEntry[],
+): number {
+  return inclusionCopyRequests(entries).length;
+}
+
+// The featured entries whose generated label no longer matches the spec it was
+// written from — i.e. someone edited the schedule wording afterwards.
+export function staleSummaryIndexes(
+  entries: readonly OfferInclusionEntry[],
+): readonly number[] {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => inclusionSummaryState(entry) === "stale")
+    .map(({ index }) => index);
+}
 
 // What the Category column prints when an entry has no category of its own.
 export const UNCATEGORISED_INCLUSION_LABEL = "Miscellaneous";

@@ -14,7 +14,11 @@ import {
   INITIAL_OFFER_JOB,
   chunkInclusionSchedule,
   getSummaryInclusions,
+  applyInclusionCopyPatches,
+  inclusionCopyRequests,
   inclusionPageStartIndexes,
+  inclusionSummaryState,
+  staleSummaryIndexes,
   UNCATEGORISED_INCLUSION_LABEL,
   type OfferInclusionEntry,
 } from "../../lib/offer/workspace-model";
@@ -455,4 +459,95 @@ test("page start indexes make numbering continuous", () => {
       `page ${index} must resume after its predecessors`,
     );
   });
+});
+
+// ─── AI-drafted derived copy ───
+
+// The label beside the price is DERIVED from the schedule wording. Generating it
+// rather than asking for it is what makes the page-4-vs-schedule contradiction
+// unrepresentable: it can only ever restate the spec it came from.
+
+test("a hand-typed label is never offered for regeneration", () => {
+  const entry: OfferInclusionEntry = { spec: "S", summary: "Mine", category: "C" };
+
+  assert.equal(inclusionSummaryState(entry), "manual");
+  assert.deepEqual(staleSummaryIndexes([entry]), []);
+  assert.deepEqual(inclusionCopyRequests([entry]), []);
+});
+
+test("a generated label matching its spec is current", () => {
+  const entry: OfferInclusionEntry = {
+    spec: "40mm engineered stone.",
+    summary: "40mm stone benchtops",
+    summaryFromSpec: "40mm engineered stone.",
+    category: "Stone Benchtops",
+  };
+
+  assert.equal(inclusionSummaryState(entry), "current");
+  assert.deepEqual(inclusionCopyRequests([entry]), []);
+});
+
+// The exact bug: the spec was reworded after the label was written.
+test("editing the spec under a generated label marks it stale and re-requests it", () => {
+  const entry: OfferInclusionEntry = {
+    spec: "Minimalistic kitchen — overhead and base cabinets.",
+    summary: "Luxury shaker kitchen",
+    summaryFromSpec: "Custom shaker door kitchen — overhead and base cabinets.",
+    category: "Kitchen Cabinetry",
+  };
+
+  assert.equal(inclusionSummaryState(entry), "stale");
+  assert.deepEqual(staleSummaryIndexes([entry]), [0]);
+  assert.deepEqual(inclusionCopyRequests([entry]), [
+    { index: 0, spec: entry.spec, wantSummary: true, wantCategory: false },
+  ]);
+});
+
+test("a row with no category is requested so it never prints Miscellaneous", () => {
+  const requests = inclusionCopyRequests([{ spec: "Pulled wording." }]);
+
+  assert.deepEqual(requests, [
+    { index: 0, spec: "Pulled wording.", wantSummary: false, wantCategory: true },
+  ]);
+});
+
+test("an unfeatured, categorised row needs nothing", () => {
+  assert.deepEqual(
+    inclusionCopyRequests([{ spec: "S", category: "Tiling" }]),
+    [],
+  );
+});
+
+test("applying a patch stamps the spec the label was written from", () => {
+  const schedule: OfferInclusionEntry[] = [{ spec: "40mm engineered stone." }];
+  const [applied] = applyInclusionCopyPatches(schedule, [
+    { index: 0, summary: "40mm stone benchtops", category: "Stone Benchtops" },
+  ]);
+
+  assert.equal(applied.summary, "40mm stone benchtops");
+  assert.equal(applied.category, "Stone Benchtops");
+  assert.equal(
+    applied.summaryFromSpec,
+    "40mm engineered stone.",
+    "provenance must be stamped, or staleness can never be detected",
+  );
+  assert.equal(inclusionSummaryState(applied), "current");
+});
+
+test("applying a patch never touches a row it was not addressed to", () => {
+  const schedule: OfferInclusionEntry[] = [
+    { spec: "First", summary: "Keep me", category: "Cat" },
+    { spec: "Second" },
+  ];
+  const applied = applyInclusionCopyPatches(schedule, [
+    { index: 1, category: "Waterproofing" },
+  ]);
+
+  assert.deepEqual(applied[0], schedule[0]);
+  assert.equal(applied[1].category, "Waterproofing");
+  assert.equal(applied[1].summary, undefined, "no label was asked for");
+});
+
+test("a blank spec is never sent for drafting", () => {
+  assert.deepEqual(inclusionCopyRequests([{ spec: "   " }]), []);
 });

@@ -289,6 +289,10 @@ const inclusionEntrySchema = z.object({
   spec: z.string(),
   summary: z.string().optional(),
   category: z.string().optional(),
+  // Purely additive and optional, so snapshots written before it parse
+  // unchanged and need no schema version bump. An absent value means the label
+  // was hand-written, which is exactly how older snapshots should be treated.
+  summaryFromSpec: z.string().optional(),
 });
 
 const draftSchema = z.object({
@@ -628,6 +632,9 @@ export function serializeWorkspace(
         spec: entry.spec,
         ...(entry.summary === undefined ? {} : { summary: entry.summary }),
         ...(entry.category === undefined ? {} : { category: entry.category }),
+        ...(entry.summaryFromSpec === undefined
+          ? {}
+          : { summaryFromSpec: entry.summaryFromSpec }),
       })),
       termsSummary: snapshot.draft.termsSummary,
     },

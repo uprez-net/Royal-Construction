@@ -18,6 +18,8 @@ import {
   type OfferWorkspaceJob,
   type OfferWorkspaceScopeItem,
   type OfferWorkspaceStatus,
+  applyInclusionCopyPatches,
+  inclusionCopyRequests,
 } from "@/lib/offer/workspace-model";
 import {
   INITIAL_PAYMENT_SCHEDULE,
@@ -73,6 +75,7 @@ import {
   generateOfferPrefillFromLead,
   type OfferPrefillResult,
 } from "@/lib/data/offer-prefill";
+import { draftInclusionCopy } from "@/lib/data/offer-inclusion-copy";
 import {
   reevaluateFormulaCostLines,
   resolveAreaRateConstants,
@@ -276,6 +279,8 @@ export function NewOfferWorkspace({
   const [projectResult, setProjectResult] =
     useState<ProjectHandoffResult | null>(null);
   const [prefilling, setPrefilling] = useState(false);
+  const [draftingCopy, setDraftingCopy] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [prefillResult, setPrefillResult] = useState<OfferPrefillResult | null>(
     null,
   );
@@ -491,6 +496,43 @@ export function NewOfferWorkspace({
 
   function updateDraft(patch: Partial<OfferDocumentDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  // Draft the DERIVED inclusion copy: the short label printed beside the price,
+  // and the Category column value for rows that would otherwise read
+  // "Miscellaneous". Never the spec — that is the contractual sentence and stays
+  // the estimator's. See lib/offer/inclusion-copy-ai.ts.
+  function draftCopyForInclusions() {
+    if (leadId === undefined || draftingCopy) {
+      return;
+    }
+    const requests = inclusionCopyRequests(draft.inclusionSchedule);
+    if (requests.length === 0) {
+      return;
+    }
+    setDraftingCopy(true);
+    setCopyError(null);
+    void (async () => {
+      try {
+        const result = await draftInclusionCopy({ leadId, entries: requests });
+        if (!result.ok) {
+          setCopyError(result.message);
+          return;
+        }
+        setDraft((current) => ({
+          ...current,
+          inclusionSchedule: applyInclusionCopyPatches(
+            current.inclusionSchedule,
+            result.patches,
+          ),
+        }));
+      } catch (error) {
+        console.error("[offer] inclusion copy draft failed:", error);
+        setCopyError(`Could not write the labels: ${(error as Error).message}`);
+      } finally {
+        setDraftingCopy(false);
+      }
+    })();
   }
 
   function updateTenderGate(patch: Partial<TenderGateState>) {
@@ -1523,6 +1565,9 @@ export function NewOfferWorkspace({
         onImageChange={updateImage}
         onImported={importWorkbook}
         onJobChange={updateJob}
+        onDraftCopy={draftCopyForInclusions}
+        draftingCopy={draftingCopy}
+        copyError={copyError}
         onPrefillFromLead={prefillFromLead}
         canPrefill={leadId !== undefined}
         prefilling={prefilling}
