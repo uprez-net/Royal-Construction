@@ -1,5 +1,7 @@
 "use client";
 
+import { checkOfferLists } from "@/lib/data/offer-inclusion-check";
+import type { ConsistencyFinding } from "@/lib/offer/inclusion-consistency-ai";
 import {
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
@@ -18,6 +20,7 @@ import {
   type OfferWorkspaceJob,
   type OfferWorkspaceScopeItem,
   type OfferWorkspaceStatus,
+  getIncludedOfferTenderLineItems,
 } from "@/lib/offer/workspace-model";
 import {
   INITIAL_PAYMENT_SCHEDULE,
@@ -276,6 +279,10 @@ export function NewOfferWorkspace({
   const [projectResult, setProjectResult] =
     useState<ProjectHandoffResult | null>(null);
   const [prefilling, setPrefilling] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [findings, setFindings] = useState<readonly ConsistencyFinding[]>([]);
+  const [checkedClean, setCheckedClean] = useState(false);
   const [prefillResult, setPrefillResult] = useState<OfferPrefillResult | null>(
     null,
   );
@@ -491,6 +498,40 @@ export function NewOfferWorkspace({
 
   function updateDraft(patch: Partial<OfferDocumentDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
+    // Any edit invalidates the last judgement. Better no result than a stale
+    // one that says an offer is consistent when it no longer is.
+    setFindings([]);
+    setCheckedClean(false);
+  }
+
+  // Audit priced -> promised -> sold. The model only judges; it writes nothing.
+  function checkOfferConsistencyLists() {
+    if (leadId === undefined || checking) {
+      return;
+    }
+    setChecking(true);
+    setCopyError(null);
+    void (async () => {
+      try {
+        const result = await checkOfferLists({
+          leadId,
+          pricedItems: getIncludedOfferTenderLineItems(lines),
+          promised: draft.inclusionSchedule.map((entry) => entry.spec),
+          sold: draft.inclusionHighlights,
+        });
+        if (!result.ok) {
+          setCopyError(result.message);
+          return;
+        }
+        setFindings(result.findings);
+        setCheckedClean(result.findings.length === 0);
+      } catch (error) {
+        console.error("[offer] consistency check failed:", error);
+        setCopyError(`Could not run the check: ${(error as Error).message}`);
+      } finally {
+        setChecking(false);
+      }
+    })();
   }
 
 
@@ -1525,6 +1566,11 @@ export function NewOfferWorkspace({
         onImageChange={updateImage}
         onImported={importWorkbook}
         onJobChange={updateJob}
+        onCheckConsistency={checkOfferConsistencyLists}
+        checking={checking}
+        copyError={copyError}
+        findings={findings}
+        checkedClean={checkedClean}
         onPrefillFromLead={prefillFromLead}
         canPrefill={leadId !== undefined}
         prefilling={prefilling}

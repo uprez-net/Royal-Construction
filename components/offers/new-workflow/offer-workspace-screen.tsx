@@ -131,6 +131,8 @@ type OfferWorkspaceScreenProps = {
   readonly draftingHighlights?: boolean;
   readonly checking?: boolean;
   readonly copyError?: string | null;
+  readonly findings?: readonly import("@/lib/offer/inclusion-consistency-ai").ConsistencyFinding[];
+  readonly checkedClean?: boolean;
   readonly onImageChange: (
     key: OfferImageSlotKey,
     image: OfferImage | null,
@@ -251,6 +253,8 @@ export function OfferWorkspaceScreen({
   draftingHighlights,
   checking,
   copyError,
+  findings,
+  checkedClean,
   onImageChange,
   onExclusionChange,
   onImported,
@@ -562,6 +566,8 @@ export function OfferWorkspaceScreen({
                 draftingHighlights={draftingHighlights}
                 checking={checking}
                 copyError={copyError}
+                findings={findings}
+                checkedClean={checkedClean}
               />
               <OfferWorkspaceImages
                 images={images}

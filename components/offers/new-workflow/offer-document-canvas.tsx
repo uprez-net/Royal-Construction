@@ -10,6 +10,7 @@ import type {
 } from "@/lib/offer/workspace-model";
 import { formatOwnerNamesLine } from "@/lib/offer/workspace-model";
 import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
+import type { ConsistencyFinding } from "@/lib/offer/inclusion-consistency-ai";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import { FileText, Plus, ShieldCheck, Sparkles } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
@@ -38,6 +39,11 @@ type OfferDocumentCanvasProps = {
   readonly draftingHighlights?: boolean;
   readonly checking?: boolean;
   readonly copyError?: string | null;
+  // Findings from the priced -> promised -> sold check. Held in workspace
+  // state, never persisted: a stale judgement on a reloaded offer is worse
+  // than none.
+  readonly findings?: readonly ConsistencyFinding[];
+  readonly checkedClean?: boolean;
 };
 
 export function OfferDocumentCanvas({
@@ -51,6 +57,8 @@ export function OfferDocumentCanvas({
   draftingHighlights = false,
   checking = false,
   copyError = null,
+  findings = [],
+  checkedClean = false,
 }: OfferDocumentCanvasProps) {
   const busy = draftingHighlights || checking;
   const schedule = draft.inclusionSchedule;
@@ -173,6 +181,36 @@ export function OfferDocumentCanvas({
               </p>
               {copyError ? (
                 <p className="mt-1 px-1.5 text-xs text-destructive">{copyError}</p>
+              ) : null}
+              {findings.length > 0 ? (
+                <ul className="mt-2 grid gap-1.5">
+                  {findings.map((finding, i) => (
+                    <li
+                      className="rounded-md border border-warning/40 bg-warning-light/50 px-2.5 py-2 text-xs"
+                      key={i}
+                    >
+                      <p className="font-medium text-foreground">
+                        {finding.kind === "priced-not-promised"
+                          ? "Priced, not promised"
+                          : "Sold, not promised"}
+                      </p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        {finding.detail}
+                      </p>
+                      <p className="mt-0.5 text-muted-foreground/80">
+                        {finding.source}
+                        {finding.scheduleRows.length > 0
+                          ? ` · schedule ${finding.scheduleRows.join(", ")}`
+                          : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : checkedClean ? (
+                <p className="mt-2 px-1.5 text-xs text-success-foreground">
+                  Checked — everything sold is promised, and everything priced is
+                  in the schedule.
+                </p>
               ) : null}
             </section>
 

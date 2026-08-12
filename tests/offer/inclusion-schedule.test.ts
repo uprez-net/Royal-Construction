@@ -28,6 +28,7 @@ import {
   migrateWorkspaceState,
   type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
+import { collectOfferSendBlockers } from "../../lib/offer/offer-readiness";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
@@ -506,4 +507,43 @@ test("AI-drafted rows are reported so they can be surfaced before send", () => {
     ]),
     [1],
   );
+});
+
+// ─── priced → promised → sold ───
+
+// A model judgement about contract text must never stop a live deal going out.
+test("an unresolved mismatch warns before send, never blocks", () => {
+  const blockers = collectOfferSendBlockers({
+    hasLead: true,
+    needsOverrideReason: false,
+    expiryState: "valid",
+    inclusionFindingCount: 2,
+  });
+  const finding = blockers.find((b) => b.id === "inclusion-consistency");
+
+  assert.ok(finding, "an unresolved mismatch must surface before send");
+  assert.equal(finding.severity, "warn");
+  assert.equal(finding.stepId, "offer-step-offer-document");
+  assert.match(finding.label, /2 inclusion mismatches/);
+});
+
+test("one mismatch reads in the singular", () => {
+  const blockers = collectOfferSendBlockers({
+    hasLead: true, needsOverrideReason: false, expiryState: "valid",
+    inclusionFindingCount: 1,
+  });
+
+  assert.match(
+    blockers.find((b) => b.id === "inclusion-consistency")!.label,
+    /1 inclusion mismatch/,
+  );
+});
+
+test("no findings, no blocker", () => {
+  const blockers = collectOfferSendBlockers({
+    hasLead: true, needsOverrideReason: false, expiryState: "valid",
+    inclusionFindingCount: 0,
+  });
+
+  assert.equal(blockers.some((b) => b.id === "inclusion-consistency"), false);
 });
