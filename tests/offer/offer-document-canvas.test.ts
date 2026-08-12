@@ -46,13 +46,24 @@ test("every editable field hides overflow, so none can show a scrollbar", () => 
   }
 });
 
-test("the inclusions schedule lays out in two columns", () => {
+// REGRESSION: the schedule used `md:grid-cols-2`, and a grid fills ROW-wise, so
+// the left column read 1,3,5,7 and the right 2,4,6,8. Scanning down a column of
+// a numbered contractual schedule therefore showed every OTHER item. CSS
+// multi-column flows down then across, so the left column reads 1..n in order.
+test("the inclusions schedule uses multi-column, not a row-filled grid", () => {
   const html = render(INITIAL_OFFER_DRAFT.inclusionSchedule);
+  const ol = html.match(/<ol class="([^"]*)"/)?.[1] ?? "";
 
+  assert.match(ol, /md:columns-2/, "should use CSS multi-column for the schedule");
+  assert.doesNotMatch(
+    ol,
+    /grid-cols-2/,
+    "a row-filled grid breaks the reading order of a numbered schedule",
+  );
   assert.match(
-    html,
-    /<ol class="[^"]*md:grid-cols-2/,
-    "the schedule should use the full width, not a single narrow column",
+    ol,
+    /break-inside-avoid/,
+    "an entry must not split across the column break",
   );
 });
 

@@ -228,10 +228,13 @@ export function OfferDocumentCanvas({
               Printed on the offer and the tender. Star an item to also show it
               beside the price.
             </p>
-            {/* Two columns: these are one- and two-line specs, so a single
-                column left half the screen empty and made a 44-item list far
-                longer to scan than it needs to be. */}
-            <ol className="mt-3 grid gap-x-8 md:grid-cols-2">
+            {/* CSS multi-column, NOT a two-column grid. A grid fills row-wise,
+                which put 1,3,5,7 down the left and 2,4,6,8 down the right — so
+                scanning a numbered contractual schedule showed every OTHER item.
+                Multi-column flows down then across (1..32 left, 33..63 right),
+                and avoids the ragged gaps a grid creates when it force-aligns
+                row heights against a two-line spec in the other column. */}
+            <ol className="mt-3 gap-x-10 md:columns-2 [&>li]:break-inside-avoid">
               {schedule.map((entry, index) => {
                 const isFeatured = entry.summary !== undefined;
                 return (
