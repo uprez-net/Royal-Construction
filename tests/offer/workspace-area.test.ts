@@ -29,6 +29,11 @@ const defaultRates: AreaRateConstants = {
   firstFloorFramePricePerSqm: 148.5,
   sandRatePerThousandBricks: 100,
   cementRatePerHundredBricks: 15,
+  brickPricePerBrick: 0,
+  brickLayingPricePerBrick: 0,
+  tilePricePerTile: 0,
+  tilingRatePerSqm: 0,
+  flooringRatePerSqm: 0
 };
 
 // ─── calculateSlab ───
