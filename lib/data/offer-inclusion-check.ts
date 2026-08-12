@@ -8,7 +8,8 @@ import {
   type ConsistencyFinding,
 } from "@/lib/offer/inclusion-consistency-ai";
 
-// Audit the offer's three lists: priced -> promised -> sold.
+// Audit the offer's lists: estimated -> schedule -> offer, including what the
+// document explicitly excludes.
 // Returns findings only. Nothing is written, and the model authors no text.
 
 export type OfferConsistencyResult =
@@ -17,9 +18,10 @@ export type OfferConsistencyResult =
 
 export async function checkOfferLists(input: {
   readonly leadId: number;
-  readonly pricedItems: readonly string[];
-  readonly promised: readonly string[];
-  readonly sold: readonly string[];
+  readonly estimated: readonly string[];
+  readonly scheduled: readonly string[];
+  readonly excluded: readonly string[];
+  readonly offered: readonly string[];
 }): Promise<OfferConsistencyResult> {
   const { userId } = await auth();
   if (!userId) {
@@ -36,8 +38,9 @@ export async function checkOfferLists(input: {
   }
 
   return checkOfferConsistency({
-    pricedItems: input.pricedItems,
-    promised: input.promised,
-    sold: input.sold,
+    estimated: input.estimated,
+    scheduled: input.scheduled,
+    excluded: input.excluded,
+    offered: input.offered,
   });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { checkOfferLists } from "@/lib/data/offer-inclusion-check";
+import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
 import type { ConsistencyFinding } from "@/lib/offer/inclusion-consistency-ai";
 import {
   INITIAL_ALLOWANCES,
@@ -504,7 +505,7 @@ export function NewOfferWorkspace({
     setCheckedClean(false);
   }
 
-  // Audit priced -> promised -> sold. The model only judges; it writes nothing.
+  // Audit estimated -> schedule -> offer. The model only judges; writes nothing.
   function checkOfferConsistencyLists() {
     if (leadId === undefined || checking) {
       return;
@@ -515,9 +516,10 @@ export function NewOfferWorkspace({
       try {
         const result = await checkOfferLists({
           leadId,
-          pricedItems: getIncludedOfferTenderLineItems(lines),
-          promised: draft.inclusionSchedule.map((entry) => entry.spec),
-          sold: draft.inclusionHighlights,
+          estimated: getIncludedOfferTenderLineItems(lines),
+          scheduled: draft.inclusionSchedule.map((entry) => entry.spec),
+          excluded: getVisibleExclusions(draft, exclusions),
+          offered: draft.inclusionHighlights,
         });
         if (!result.ok) {
           setCopyError(result.message);
