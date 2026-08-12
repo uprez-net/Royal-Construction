@@ -7,8 +7,7 @@ import {
 } from "@/lib/offer/workspace-sequence-mapping";
 import {
   OFFER_EXCLUDES_BULLETS,
-  OFFER_INCLUDES_BULLETS,
-  STANDARD_INCLUSION_SPECIFICATIONS,
+  STANDARD_INCLUSION_ENTRIES,
 } from "@/lib/offer/workspace-proposal-content";
 
 export const OFFER_STAGE_CATALOG = [
@@ -178,16 +177,28 @@ export type OfferScopeAmountType =
   | "rate_per_sqm"
   | "included_note";
 
+// One inclusion, stated once. `spec` is the contractual sentence printed in the
+// Inclusions Schedule. `summary` is the optional short form printed beside the
+// price on the Investment Summary page — present only on the items worth
+// selling on.
+//
+// These used to be two separately-edited lists, and they drifted in real
+// offers: page 4 promised "60mm stone benchtops" while page 6 promised "40mm
+// engineered stone", in the same fixed-price contract. There is now one place
+// to say it, so they cannot disagree.
+export type OfferInclusionEntry = {
+  readonly spec: string;
+  readonly summary?: string;
+};
+
 export type OfferDocumentDraft = {
   readonly headline: string;
   readonly introText: string;
-  readonly inclusionBullets: readonly string[];
   readonly exclusionBullets: readonly string[];
-  // The full Inclusions Schedule printed on the offer and the tender — one
-  // specification sentence per entry. Per-offer and estimator-editable; seeded
-  // from STANDARD_INCLUSION_SPECIFICATIONS. Distinct from inclusionBullets,
-  // which is the short Investment Summary teaser on the price page.
-  readonly inclusionSchedule: readonly string[];
+  // The single inclusions list. Per-offer and estimator-editable; seeded from
+  // STANDARD_INCLUSION_ENTRIES. Page 4 is DERIVED from it (getSummaryInclusions)
+  // and is not separately editable.
+  readonly inclusionSchedule: readonly OfferInclusionEntry[];
   readonly termsSummary: string;
 };
 
@@ -920,9 +931,8 @@ export const INITIAL_OFFER_DRAFT: OfferDocumentDraft = {
   headline: "Your fixed price building proposal",
   introText:
     "This proposal forms the basis of a Master Builders Association (MBA) fixed price home building contract. Every item below is locked into your fixed contract price — a number you can take to your bank today.",
-  inclusionBullets: OFFER_INCLUDES_BULLETS,
   exclusionBullets: OFFER_EXCLUDES_BULLETS,
-  inclusionSchedule: STANDARD_INCLUSION_SPECIFICATIONS,
+  inclusionSchedule: STANDARD_INCLUSION_ENTRIES,
   termsSummary:
     "Final Tender is issued only after scope and price are agreed by builder and client.",
 };
@@ -991,6 +1001,17 @@ export function applyTaskMappingToCostLine(
   };
 }
 
+// The Investment Summary list, derived from the one inclusions list. Page 4 is
+// not separately editable by design: that is what stops it contradicting the
+// schedule it summarises.
+export function getSummaryInclusions(
+  entries: readonly OfferInclusionEntry[],
+): readonly string[] {
+  return entries
+    .map((entry) => entry.summary?.trim())
+    .filter((summary): summary is string => Boolean(summary));
+}
+
 // Inclusions Schedule pagination, in LINE UNITS rather than rows. The schedule
 // is estimator-editable free text, so a fixed rows-per-page count overflows the
 // moment someone writes specifications longer than the seeded ones — and an
@@ -1006,20 +1027,21 @@ export const INCLUSIONS_LINES_PER_PAGE = 27;
 export const INCLUSIONS_INTRO_LINES = 3;
 
 export function chunkInclusionSchedule(
-  specifications: readonly string[],
-): string[][] {
-  if (specifications.length === 0) {
+  entries: readonly OfferInclusionEntry[],
+): OfferInclusionEntry[][] {
+  if (entries.length === 0) {
     return [];
   }
-  const heightOf = (spec: string) =>
-    estimateWrappedLines(spec, CHARS_PER_LINE_INCLUSION);
+  // Only the spec prints in the schedule, so only the spec drives the height.
+  const heightOf = (entry: OfferInclusionEntry) =>
+    estimateWrappedLines(entry.spec, CHARS_PER_LINE_INCLUSION);
   // The first page also carries the intro paragraph, so it gets a smaller budget.
   const firstBudget = Math.max(
     1,
     INCLUSIONS_LINES_PER_PAGE - INCLUSIONS_INTRO_LINES,
   );
-  const first = chunkByEstimatedHeight([...specifications], firstBudget, heightOf)[0] ?? [];
-  const rest = specifications.slice(first.length);
+  const first = chunkByEstimatedHeight([...entries], firstBudget, heightOf)[0] ?? [];
+  const rest = entries.slice(first.length);
   return [
     first,
     ...chunkByEstimatedHeight([...rest], INCLUSIONS_LINES_PER_PAGE, heightOf),
@@ -1029,7 +1051,7 @@ export function chunkInclusionSchedule(
 // The 0-based index each page starts at, so `<ol start>` continues numbering
 // across page breaks instead of restarting at 1.
 export function inclusionPageStartIndexes(
-  pages: readonly (readonly string[])[],
+  pages: readonly (readonly OfferInclusionEntry[])[],
 ): number[] {
   const starts: number[] = [];
   let running = 0;
@@ -1068,13 +1090,15 @@ export function getIncludedOfferTenderLineItems(
 // because that module is imported by this one — pulling
 // getIncludedOfferTenderLineItems the other way is a runtime TDZ cycle.
 export function mergeCostScheduleIntoSchedule(
-  schedule: readonly string[],
+  schedule: readonly OfferInclusionEntry[],
   lines: readonly OfferWorkspaceCostLine[],
-): readonly string[] {
-  const seen = new Set(schedule.map((entry) => entry.trim()));
-  const additions = getIncludedOfferTenderLineItems(lines).filter(
-    (item) => !seen.has(item),
-  );
+): readonly OfferInclusionEntry[] {
+  const seen = new Set(schedule.map((entry) => entry.spec.trim()));
+  const additions = getIncludedOfferTenderLineItems(lines)
+    .filter((item) => !seen.has(item))
+    // No summary: cost-schedule wording is a contractual line, not a sales
+    // line. The estimator decides which entries earn a place beside the price.
+    .map((spec) => ({ spec }));
   return [...schedule, ...additions];
 }
 

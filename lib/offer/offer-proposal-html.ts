@@ -23,6 +23,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
+  type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
   formatOwnerGreetingNames,
@@ -423,7 +424,7 @@ function investmentPage(
     data.savingAmount !== null && data.savingAmount > 0
       ? `<div class="save">Standard price ${money(standardPriceIncGst)} - ${esc(priceAdjustmentLabel || "saving")} ${money(data.savingAmount)}</div>`
       : "";
-  const includes = draft.inclusionBullets.map((b) => `<li>${esc(b)}</li>`).join("");
+  const includes = data.summaryInclusions.map((b) => `<li>${esc(b)}</li>`).join("");
   const excludes = data.exclusionBullets.map((b) => `<li>${esc(b)}</li>`).join("");
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
@@ -445,12 +446,12 @@ function investmentPage(
 }
 
 function inclusionsPage(
-  specifications: readonly string[],
+  specifications: readonly OfferInclusionEntry[],
   startIndex: number,
   continued: boolean,
   foot: string,
 ): string {
-  const body = specifications.map((spec) => `<li>${esc(spec)}</li>`).join("");
+  const body = specifications.map((entry) => `<li>${esc(entry.spec)}</li>`).join("");
   const intro = continued
     ? ""
     : `<p class="muted" style="margin-top:12px;max-width:155mm;">All items below are fixed within your contract price. Design provided by owner/architect — all costs fixed as per approved plans, confirmed at colour selection.</p>`;

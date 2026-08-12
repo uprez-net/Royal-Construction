@@ -463,7 +463,7 @@ function TenderPreview({
           document. */}
       <TenderList
         emptyLabel="No inclusions captured yet."
-        items={draft.inclusionSchedule}
+        items={draft.inclusionSchedule.map((entry) => entry.spec)}
         numbered
         title="Inclusions"
       />

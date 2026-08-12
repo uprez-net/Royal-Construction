@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  STANDARD_INCLUSION_SPECIFICATIONS,
+  STANDARD_INCLUSION_ENTRIES,
   STANDARD_INCLUSIONS_SCHEDULE,
 } from "../../lib/offer/workspace-proposal-content";
 import {
@@ -13,8 +13,10 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   chunkInclusionSchedule,
+  getSummaryInclusions,
   inclusionPageStartIndexes,
   mergeCostScheduleIntoSchedule,
+  type OfferInclusionEntry,
   type OfferWorkspaceCostLine,
 } from "../../lib/offer/workspace-model";
 import { getVisibleExclusions } from "../../lib/offer/workspace-print-template";
@@ -44,21 +46,59 @@ test("the parsed schema version tracks the current schema version constant", () 
   assert.equal(migrated.schemaVersion, CURRENT_WORKSPACE_SCHEMA_VERSION);
 });
 
-test("STANDARD_INCLUSION_SPECIFICATIONS is every template specification, in order", () => {
-  assert.deepEqual(
-    STANDARD_INCLUSION_SPECIFICATIONS,
-    STANDARD_INCLUSIONS_SCHEDULE.map((row) => row.specification),
-  );
+// ─── One list: spec + optional summary ───
+
+test("every seeded entry carries a spec, and any summary it carries is non-empty", () => {
+  for (const entry of STANDARD_INCLUSION_ENTRIES) {
+    assert.ok(entry.spec.trim().length > 0, "every entry needs a spec");
+    if (entry.summary !== undefined) {
+      assert.ok(
+        entry.summary.trim().length > 0,
+        "a summary, if present, must be non-empty",
+      );
+    }
+  }
 });
 
-test("a new offer draft seeds the full template schedule", () => {
+test("every template schedule row survives as an entry, in order", () => {
+  const specs = STANDARD_INCLUSION_ENTRIES.map((entry) => entry.spec);
+
+  for (const row of STANDARD_INCLUSIONS_SCHEDULE) {
+    assert.ok(
+      specs.includes(row.specification),
+      `template row "${row.category}" must survive into the entry list`,
+    );
+  }
+});
+
+test("the seeded summaries still cover the 14 items page 4 used to print", () => {
+  assert.equal(getSummaryInclusions(STANDARD_INCLUSION_ENTRIES).length, 14);
+});
+
+test("the page 4 list is exactly the entries carrying a summary, in order", () => {
+  const entries: OfferInclusionEntry[] = [
+    { spec: "Full spec A", summary: "Short A" },
+    { spec: "Full spec B" },
+    { spec: "Full spec C", summary: "Short C" },
+  ];
+
+  assert.deepEqual(getSummaryInclusions(entries), ["Short A", "Short C"]);
+});
+
+test("a blank summary is treated as no summary, not as an empty bullet", () => {
+  assert.deepEqual(getSummaryInclusions([{ spec: "S", summary: "   " }]), []);
+});
+
+test("a new offer draft seeds the full template entry list", () => {
   assert.deepEqual(
     INITIAL_OFFER_DRAFT.inclusionSchedule,
-    STANDARD_INCLUSION_SPECIFICATIONS,
+    STANDARD_INCLUSION_ENTRIES,
   );
 });
 
-test("v2 snapshots migrate to v3 seeded with the template schedule", () => {
+// ─── Migrations ───
+
+test("v2 snapshots migrate straight through to v4 seeded from the template", () => {
   const migrated = migrateWorkspaceState({
     schemaVersion: 2,
     job: {},
@@ -69,33 +109,52 @@ test("v2 snapshots migrate to v3 seeded with the template schedule", () => {
       exclusionBullets: [],
       termsSummary: "T",
     },
-  }) as { schemaVersion: number; draft: { inclusionSchedule: string[] } };
+  }) as {
+    schemaVersion: number;
+    draft: { inclusionSchedule: OfferInclusionEntry[] };
+  };
 
-  assert.equal(migrated.schemaVersion, 3);
-  assert.deepEqual(
-    migrated.draft.inclusionSchedule,
-    STANDARD_INCLUSION_SPECIFICATIONS,
-  );
+  assert.equal(migrated.schemaVersion, 4);
+  assert.deepEqual(migrated.draft.inclusionSchedule, STANDARD_INCLUSION_ENTRIES);
 });
 
-test("migration does not clobber a schedule that is already present", () => {
+// v3 briefly stored the schedule as plain strings beside a separately-edited
+// inclusionBullets array. The two contradicted each other in real offers — page
+// 4 promised "60mm stone benchtops" while page 6 promised "40mm engineered
+// stone" — so the schedule (the contractual statement) wins and the bullets are
+// dropped rather than guessed at.
+test("v3 snapshots migrate to v4, keeping the schedule and dropping the bullets", () => {
   const migrated = migrateWorkspaceState({
-    schemaVersion: 2,
+    schemaVersion: 3,
     job: {},
     draft: {
       headline: "H",
       introText: "I",
-      inclusionBullets: [],
+      inclusionBullets: ["60mm stone benchtops throughout"],
       exclusionBullets: [],
       termsSummary: "T",
-      inclusionSchedule: ["Only this one"],
+      inclusionSchedule: ["40mm engineered stone — kitchen island."],
     },
-  }) as { draft: { inclusionSchedule: string[] } };
+  }) as {
+    schemaVersion: number;
+    draft: {
+      inclusionSchedule: OfferInclusionEntry[];
+      inclusionBullets?: unknown;
+    };
+  };
 
-  assert.deepEqual(migrated.draft.inclusionSchedule, ["Only this one"]);
+  assert.equal(migrated.schemaVersion, 4);
+  assert.deepEqual(migrated.draft.inclusionSchedule, [
+    { spec: "40mm engineered stone — kitchen island." },
+  ]);
+  assert.equal(
+    migrated.draft.inclusionBullets,
+    undefined,
+    "the stale bullet list must not survive — it is the contradiction we are removing",
+  );
 });
 
-test("an estimator who empties the schedule keeps it empty through v3", () => {
+test("an estimator who emptied the schedule in v3 keeps it empty in v4", () => {
   const migrated = migrateWorkspaceState({
     schemaVersion: 3,
     job: {},
@@ -107,12 +166,29 @@ test("an estimator who empties the schedule keeps it empty through v3", () => {
       termsSummary: "T",
       inclusionSchedule: [],
     },
-  }) as { draft: { inclusionSchedule: string[] } };
+  }) as { draft: { inclusionSchedule: OfferInclusionEntry[] } };
 
   assert.deepEqual(migrated.draft.inclusionSchedule, []);
 });
 
-// ─── Pulling cost-schedule wording into the schedule (Task 2) ───
+test("v4 entries are left untouched by the migration", () => {
+  const entries = [{ spec: "Already an entry", summary: "Short" }];
+  const migrated = migrateWorkspaceState({
+    schemaVersion: 4,
+    job: {},
+    draft: {
+      headline: "H",
+      introText: "I",
+      exclusionBullets: [],
+      termsSummary: "T",
+      inclusionSchedule: entries,
+    },
+  }) as { draft: { inclusionSchedule: OfferInclusionEntry[] } };
+
+  assert.deepEqual(migrated.draft.inclusionSchedule, entries);
+});
+
+// ─── Pulling cost-schedule wording into the schedule ───
 
 function costLine(
   overrides: Partial<OfferWorkspaceCostLine>,
@@ -129,14 +205,29 @@ function costLine(
 
 test("pulling from the cost schedule appends only missing wording", () => {
   const result = mergeCostScheduleIntoSchedule(
-    ["Existing spec", "Shared wording"],
+    [{ spec: "Existing spec" }, { spec: "Shared wording" }],
     [
       costLine({ id: "a", offerTenderLineItem: "Shared wording" }),
       costLine({ id: "b", offerTenderLineItem: "New wording" }),
     ],
   );
 
-  assert.deepEqual(result, ["Existing spec", "Shared wording", "New wording"]);
+  assert.deepEqual(result, [
+    { spec: "Existing spec" },
+    { spec: "Shared wording" },
+    { spec: "New wording" },
+  ]);
+});
+
+// Cost-schedule wording is contractual, not a sales line, so a pulled entry
+// never arrives with a summary — the estimator decides what earns page 4.
+test("pulled entries carry no summary", () => {
+  const result = mergeCostScheduleIntoSchedule(
+    [],
+    [costLine({ id: "a", offerTenderLineItem: "Pulled" })],
+  );
+
+  assert.deepEqual(result, [{ spec: "Pulled" }]);
 });
 
 test("pulling ignores excluded and unpriced cost lines", () => {
@@ -154,18 +245,20 @@ test("pulling ignores excluded and unpriced cost lines", () => {
     ],
   );
 
-  assert.deepEqual(result, ["Kept"]);
+  assert.deepEqual(result, [{ spec: "Kept" }]);
 });
 
-test("pulling is idempotent", () => {
+test("pulling is idempotent and preserves existing summaries", () => {
   const lines = [costLine({ id: "a", offerTenderLineItem: "Once" })];
-  const once = mergeCostScheduleIntoSchedule([], lines);
+  const seeded: OfferInclusionEntry[] = [{ spec: "Kept", summary: "Sales line" }];
+  const once = mergeCostScheduleIntoSchedule(seeded, lines);
   const twice = mergeCostScheduleIntoSchedule(once, lines);
 
   assert.deepEqual(twice, once);
+  assert.deepEqual(twice[0], { spec: "Kept", summary: "Sales line" });
 });
 
-// ─── One exclusion rule across every surface (Task 3) ───
+// ─── One exclusion rule across every surface ───
 
 test("visible exclusions union the draft bullets with the printed scope items", () => {
   const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: ["Bullet only"] };
@@ -206,10 +299,10 @@ test("a label duplicated across a bullet and a scope item prints once", () => {
   assert.deepEqual(getVisibleExclusions(draft, [dupe]), ["Pool fencing"]);
 });
 
-// ─── The schedule renders from the draft, as a list (Task 4) ───
+// ─── Rendering ───
 
 function snapshotWithSchedule(
-  inclusionSchedule: readonly string[],
+  inclusionSchedule: readonly OfferInclusionEntry[],
 ): OfferWorkspaceSnapshot {
   return {
     job: INITIAL_OFFER_JOB,
@@ -231,10 +324,47 @@ function snapshotWithSchedule(
   } as OfferWorkspaceSnapshot;
 }
 
-test("the offer PDF prints the draft schedule, not the template constant", () => {
-  const snapshot = snapshotWithSchedule(["Bespoke spec one", "Bespoke spec two"]);
+test("page 4 prints the summary labels, the schedule prints the specs", () => {
   const html = buildProposalHtml(
-    buildProposalInput(snapshot),
+    buildProposalInput(
+      snapshotWithSchedule([
+        { spec: "Long contractual sentence about stone.", summary: "Stone benchtops" },
+        { spec: "Long contractual sentence about tiling." },
+      ]),
+    ),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  assert.match(html, /Stone benchtops/, "summary belongs on the investment page");
+  assert.match(
+    html,
+    /Long contractual sentence about tiling\./,
+    "spec belongs in the schedule",
+  );
+});
+
+test("an entry with no summary never reaches the investment page", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(
+      snapshotWithSchedule([{ spec: "Schedule only, no summary." }]),
+    ),
+    EMPTY_OFFER_IMAGES,
+  );
+  const investmentPage =
+    html.split('class="page"').find((page) => page.includes("Investment summary")) ??
+    "";
+
+  assert.doesNotMatch(investmentPage, /Schedule only, no summary\./);
+});
+
+test("the offer PDF prints the draft schedule, not the template constant", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(
+      snapshotWithSchedule([
+        { spec: "Bespoke spec one" },
+        { spec: "Bespoke spec two" },
+      ]),
+    ),
     EMPTY_OFFER_IMAGES,
   );
 
@@ -245,7 +375,7 @@ test("the offer PDF prints the draft schedule, not the template constant", () =>
 
 test("the offer PDF drops the Category column heading", () => {
   const html = buildProposalHtml(
-    buildProposalInput(snapshotWithSchedule(["Only spec"])),
+    buildProposalInput(snapshotWithSchedule([{ spec: "Only spec" }])),
     EMPTY_OFFER_IMAGES,
   );
 
@@ -255,7 +385,7 @@ test("the offer PDF drops the Category column heading", () => {
 
 test("the tender prints the draft schedule and drops its column headings", () => {
   const html = buildTenderHtml(
-    buildProposalInput(snapshotWithSchedule(["Tender spec"])),
+    buildProposalInput(snapshotWithSchedule([{ spec: "Tender spec" }])),
   );
 
   assert.match(html, /Tender spec/);
@@ -273,13 +403,14 @@ test("an empty schedule renders no inclusions page at all", () => {
 });
 
 test("schedule numbering continues across page breaks", () => {
-  const specs = Array.from({ length: 60 }, (_, i) => `Specification ${i + 1}`);
+  const specs = Array.from({ length: 60 }, (_, i) => ({
+    spec: `Specification ${i + 1}`,
+  }));
   const html = buildProposalHtml(
     buildProposalInput(snapshotWithSchedule(specs)),
     EMPTY_OFFER_IMAGES,
   );
 
-  // Page 2 must resume where page 1 stopped rather than restarting at 1.
   const starts = [...html.matchAll(/<ol class="inc" start="(\d+)"/g)].map((m) =>
     Number(m[1]),
   );
@@ -288,17 +419,13 @@ test("schedule numbering continues across page breaks", () => {
   assert.ok(starts[1] > 1, "the second page must not restart numbering at 1");
 });
 
-// The schedule is estimator-editable free text, so pagination budgets by
-// estimated wrapped height, not row count. A fixed rows-per-page count let long
-// specifications overflow the page — and an overflowing page desyncs the
-// "Page N of M" footer, the defect PR #124 fixed for signature blocks.
+// ─── Pagination budgets by height, because the specs are estimator-editable ───
+
 test("long specifications paginate more conservatively than short ones", () => {
-  const short = Array.from({ length: 30 }, (_, i) => `Item ${i + 1}`);
-  const long = Array.from(
-    { length: 30 },
-    (_, i) =>
-      `Item ${i + 1}: ${"supply and install all materials, fixings and labour to complete this element in full accordance with the approved plans and the relevant Australian Standards. ".repeat(2)}`,
-  );
+  const short = Array.from({ length: 30 }, (_, i) => ({ spec: `Item ${i + 1}` }));
+  const long = Array.from({ length: 30 }, (_, i) => ({
+    spec: `Item ${i + 1}: ${"supply and install all materials, fixings and labour to complete this element in full accordance with the approved plans and the relevant Australian Standards. ".repeat(2)}`,
+  }));
 
   const shortPages = chunkInclusionSchedule(short);
   const longPages = chunkInclusionSchedule(long);
@@ -313,11 +440,12 @@ test("long specifications paginate more conservatively than short ones", () => {
   );
 });
 
-test("chunking never drops or reorders a specification", () => {
-  const specs = Array.from({ length: 47 }, (_, i) => `Specification ${i + 1}`);
-  const pages = chunkInclusionSchedule(specs);
+test("chunking never drops or reorders an entry", () => {
+  const entries = Array.from({ length: 47 }, (_, i) => ({
+    spec: `Specification ${i + 1}`,
+  }));
 
-  assert.deepEqual(pages.flat(), specs);
+  assert.deepEqual(chunkInclusionSchedule(entries).flat(), entries);
 });
 
 test("an empty schedule chunks to zero pages", () => {
@@ -325,8 +453,10 @@ test("an empty schedule chunks to zero pages", () => {
 });
 
 test("page start indexes make numbering continuous", () => {
-  const specs = Array.from({ length: 47 }, (_, i) => `Specification ${i + 1}`);
-  const pages = chunkInclusionSchedule(specs);
+  const entries = Array.from({ length: 47 }, (_, i) => ({
+    spec: `Specification ${i + 1}`,
+  }));
+  const pages = chunkInclusionSchedule(entries);
   const starts = inclusionPageStartIndexes(pages);
 
   assert.equal(starts[0], 0);
@@ -334,6 +464,10 @@ test("page start indexes make numbering continuous", () => {
     const expected = pages
       .slice(0, index)
       .reduce((sum, page) => sum + page.length, 0);
-    assert.equal(start, expected, `page ${index} must resume after its predecessors`);
+    assert.equal(
+      start,
+      expected,
+      `page ${index} must resume after its predecessors`,
+    );
   });
 });

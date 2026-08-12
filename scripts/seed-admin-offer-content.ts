@@ -12,6 +12,7 @@
 import "dotenv/config";
 import { OFFER_SEQUENCE_MAPPINGS } from "@/lib/offer/workspace-sequence-mapping";
 import {
+  getSummaryInclusions,
   INITIAL_ALLOWANCES,
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
@@ -82,13 +83,15 @@ async function seed() {
   }));
 
   const payload: AdminOfferContent = {
-    buildScope: [...INITIAL_OFFER_DRAFT.inclusionBullets],
+    buildScope: [...getSummaryInclusions(INITIAL_OFFER_DRAFT.inclusionSchedule)],
     costSchedule: { rows, rateConstants },
     offerScope: { allowances, exclusions },
     offerContent: {
       headline: INITIAL_OFFER_DRAFT.headline,
       introText: INITIAL_OFFER_DRAFT.introText,
-      inclusions: [...INITIAL_OFFER_DRAFT.inclusionBullets],
+      // The admin's inclusion copy is the page-4 wording, which now lives as
+      // the `summary` on each inclusion entry.
+      inclusions: [...getSummaryInclusions(INITIAL_OFFER_DRAFT.inclusionSchedule)],
       termsAndConditions: INITIAL_OFFER_DRAFT.termsSummary,
     },
   };

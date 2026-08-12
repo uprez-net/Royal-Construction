@@ -3,6 +3,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
+  type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
   formatOwnerGreetingNames,
@@ -556,7 +557,7 @@ function PrintInvestmentPage({
         </p>
       </div>
       <div className="mt-8 grid grid-cols-2 gap-8">
-        <PrintBulletList items={draft.inclusionBullets} title="This price includes" />
+        <PrintBulletList items={data.summaryInclusions} title="This price includes" />
         <PrintBulletList items={data.exclusionBullets} title="This price excludes" />
       </div>
     </PrintPage>
@@ -569,7 +570,7 @@ function PrintInclusionsPage({
   continued,
   footer,
 }: {
-  readonly specifications: readonly string[];
+  readonly specifications: readonly OfferInclusionEntry[];
   readonly startIndex: number;
   readonly continued: boolean;
   readonly footer: string;
@@ -593,12 +594,12 @@ function PrintInclusionsPage({
         className="mt-6 max-w-[165mm] list-decimal pl-5 text-sm"
         start={startIndex + 1}
       >
-        {specifications.map((spec, index) => (
+        {specifications.map((entry, index) => (
           <li
             key={`${startIndex + index}`}
             className="mb-2 pl-1 leading-6 text-muted-foreground"
           >
-            {spec}
+            {entry.spec}
           </li>
         ))}
       </ol>

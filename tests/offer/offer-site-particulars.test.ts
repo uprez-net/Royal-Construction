@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { formatSiteParticulars } from "../../lib/offer/workspace-print-template";
 import {
-  OFFER_INCLUDES_BULLETS,
+  STANDARD_INCLUSION_ENTRIES,
   OFFER_SPEC_FACTS,
   STANDARD_INCLUSIONS_SCHEDULE,
 } from "../../lib/offer/workspace-proposal-content";
@@ -77,9 +77,9 @@ function scheduleSpecFor(category: string): string {
 }
 
 function bulletContaining(fragment: string): string {
-  const bullet = OFFER_INCLUDES_BULLETS.find((entry) =>
-    entry.includes(fragment),
-  );
+  const bullet = STANDARD_INCLUSION_ENTRIES.map(
+    (entry: { summary?: string }) => entry.summary,
+  ).find((summary): summary is string => Boolean(summary?.includes(fragment)));
   assert.ok(bullet, `no investment-summary bullet mentions "${fragment}"`);
   return bullet;
 }

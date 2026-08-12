@@ -21,7 +21,7 @@ import {
   RATE_CARD_PRODUCTS,
   RATE_CARD_TIERS,
 } from "./workspace-rate-card";
-import { STANDARD_INCLUSION_SPECIFICATIONS } from "./workspace-proposal-content";
+import { STANDARD_INCLUSION_ENTRIES } from "./workspace-proposal-content";
 
 // The bundle of workspace state we persist (everything except transient status
 // and the ephemeral import result). Mirrors the container's useState set.
@@ -96,9 +96,10 @@ export function deriveTenderGateStatus(
   return "unlocked";
 }
 
-// v3 (this version): draft.inclusionSchedule — the Inclusions Schedule moved
-// from a hard-coded constant to per-offer editable copy. See migrateV2ToV3.
-export const CURRENT_WORKSPACE_SCHEMA_VERSION = 3 as const;
+// v4 (this version): the two inclusion lists became one. draft.inclusionSchedule
+// is now { spec, summary? } entries and draft.inclusionBullets is gone — page 4
+// is derived from the summaries. See migrateV3ToV4.
+export const CURRENT_WORKSPACE_SCHEMA_VERSION = 4 as const;
 
 // ─── Money helpers (ADR 0002: money persisted as integer cents) ───
 export const dollarsToCents = (value: number): number =>
@@ -285,14 +286,18 @@ const scopeItemSchema = z.object({
   includedInOfferDocument: z.boolean(),
 });
 
+const inclusionEntrySchema = z.object({
+  spec: z.string(),
+  summary: z.string().optional(),
+});
+
 const draftSchema = z.object({
   headline: z.string(),
   introText: z.string(),
-  inclusionBullets: z.array(z.string()),
   exclusionBullets: z.array(z.string()),
   // Defaulted so a snapshot that somehow skips the migration still parses;
-  // migrateV2ToV3 is what actually seeds pre-existing offers.
-  inclusionSchedule: z.array(z.string()).default([]),
+  // migrateV2ToV3 / migrateV3ToV4 are what actually seed pre-existing offers.
+  inclusionSchedule: z.array(inclusionEntrySchema).default([]),
   termsSummary: z.string(),
 });
 
@@ -421,6 +426,9 @@ export function migrateWorkspaceState(raw: unknown): unknown {
   if (version < 3) {
     next = migrateV2ToV3(next);
   }
+  if (version < 4) {
+    next = migrateV3ToV4(next);
+  }
   return next;
 }
 
@@ -481,7 +489,50 @@ function migrateV2ToV3(
       ...draft,
       inclusionSchedule: Array.isArray(draft.inclusionSchedule)
         ? draft.inclusionSchedule
-        : [...STANDARD_INCLUSION_SPECIFICATIONS],
+        : STANDARD_INCLUSION_ENTRIES.map((entry) => entry.spec),
+    },
+  };
+}
+
+// v3 → v4: the two inclusion lists become one. v3 stored inclusionSchedule as
+// plain strings alongside a separately-edited inclusionBullets array, and the
+// two had already contradicted each other in real offers — page 4 promising
+// "60mm stone benchtops" while page 6 promised "40mm engineered stone", in the
+// same fixed-price contract.
+//
+// The SCHEDULE wins: it is the contractual statement. The stale bullets are
+// DROPPED rather than migrated onto summaries, because when two claims conflict
+// there is no reliable way to tell which the estimator meant, and carrying
+// known-contradictory text into a contract is worse than losing it. A v2
+// snapshot arrives here with the freshly seeded template, so anything that
+// never diverged still gets its 14 summaries back from
+// migrateV2ToV3 → STANDARD_INCLUSION_ENTRIES below.
+function migrateV3ToV4(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const draft = (state.draft ?? {}) as Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured to DROP it
+  const { inclusionBullets: _droppedBullets, ...rest } = draft;
+  const schedule = Array.isArray(draft.inclusionSchedule)
+    ? draft.inclusionSchedule
+    : [];
+  const seededSpecs = new Map(
+    STANDARD_INCLUSION_ENTRIES.map((entry) => [entry.spec, entry]),
+  );
+  return {
+    ...state,
+    schemaVersion: 4,
+    draft: {
+      ...rest,
+      inclusionSchedule: schedule.map((entry) => {
+        if (typeof entry !== "string") {
+          return entry;
+        }
+        // An untouched seeded spec regains its summary, so an offer that never
+        // diverged keeps a populated page 4. An edited or custom spec becomes a
+        // schedule-only entry; the estimator re-adds a label if it earns one.
+        return seededSpecs.get(entry) ?? { spec: entry };
+      }),
     },
   };
 }
@@ -527,9 +578,11 @@ export function serializeWorkspace(
     draft: {
       headline: snapshot.draft.headline,
       introText: snapshot.draft.introText,
-      inclusionBullets: [...snapshot.draft.inclusionBullets],
       exclusionBullets: [...snapshot.draft.exclusionBullets],
-      inclusionSchedule: [...snapshot.draft.inclusionSchedule],
+      inclusionSchedule: snapshot.draft.inclusionSchedule.map((entry) => ({
+        spec: entry.spec,
+        ...(entry.summary === undefined ? {} : { summary: entry.summary }),
+      })),
       termsSummary: snapshot.draft.termsSummary,
     },
     areaCalculator: { ...snapshot.areaCalculator },

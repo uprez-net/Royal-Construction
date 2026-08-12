@@ -44,7 +44,7 @@ import {
 } from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
-import { OfferDocumentEditor } from "./offer-workspace-document";
+import { OfferDocumentCanvas } from "./offer-document-canvas";
 import {
   OfferWorkflowSteps,
   OfferWorkspaceHeader,
@@ -54,10 +54,7 @@ import { PriceBuildupPanel } from "./offer-workspace-price-buildup";
 import { ContractPanel } from "./offer-workspace-contract";
 import { ProjectHandoffPanel } from "./offer-workspace-project-handoff";
 import { TenderPanel } from "./offer-workspace-tender";
-import {
-  OfferDocumentPreview,
-  PricingSummary,
-} from "./offer-workspace-preview";
+import { PricingSummary } from "./offer-workspace-pricing-summary";
 import { PricingDecisionPanel } from "./offer-workspace-pricing-decision";
 import { ScopePanel } from "./offer-workspace-scope";
 import { OfferWorkspaceImages } from "./offer-workspace-images";
@@ -228,7 +225,6 @@ export function OfferWorkspaceScreen({
   priceAdjustmentLabel,
   pricing,
   selectedPriceInput,
-  standardPrice,
   standardPriceInput,
   status,
   offerExpiry,
@@ -545,9 +541,11 @@ export function OfferWorkspaceScreen({
             status={stepStatusById.get("offer-step-offer-document") ?? null}
           >
             <div className="space-y-6">
-              <OfferDocumentEditor
+              <OfferDocumentCanvas
+                customerPrice={customerPrice}
                 draft={draft}
                 exclusions={exclusions}
+                job={job}
                 lines={lines}
                 onDraftChange={onDraftChange}
               />
@@ -704,15 +702,6 @@ export function OfferWorkspaceScreen({
         </div>
         <aside className="min-w-0 space-y-5 xl:sticky xl:top-(--offer-sticky-offset,18rem) xl:self-start">
           <PricingSummary effectiveMargin={effectiveMargin} pricing={pricing} />
-          <OfferDocumentPreview
-            customerPrice={customerPrice}
-            draft={draft}
-            exclusions={exclusions}
-            job={job}
-            pricing={pricing}
-            priceAdjustmentLabel={priceAdjustmentLabel}
-            standardPriceIncGst={standardPrice}
-          />
         </aside>
       </div>
     </div>

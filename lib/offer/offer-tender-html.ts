@@ -11,6 +11,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
+  type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
   type OfferOwner,
@@ -453,12 +454,12 @@ function ownerDetailRowsHtml(owner: OfferOwner): string {
 // already states that everything listed is in the Contract Sum, and the column
 // read "Included" on every single row.
 function inclusionsPage(
-  specifications: readonly string[],
+  specifications: readonly OfferInclusionEntry[],
   startIndex: number,
   continued: boolean,
   foot: string,
 ): string {
-  const body = specifications.map((spec) => `<li>${esc(spec)}</li>`).join("");
+  const body = specifications.map((entry) => `<li>${esc(entry.spec)}</li>`).join("");
   const intro = continued
     ? ""
     : `<p style="color:${MUTED};">All items below are included in the Contract Sum and fixed as per the approved plans and specifications, confirmed at colour selection.</p>`;

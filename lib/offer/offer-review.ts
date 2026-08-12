@@ -157,13 +157,13 @@ export function buildOfferReview(
       issues: [
         draft.headline.trim().length === 0 && "Headline",
         draft.introText.trim().length === 0 && "Intro text",
-        draft.inclusionBullets.length === 0 && "Inclusion bullets",
+        draft.inclusionSchedule.length === 0 && "Inclusions",
       ]
         .filter((v): v is string => Boolean(v))
         .map((field) => `${field} is missing.`),
       rows: [
         { label: "Headline", value: draft.headline || "—" },
-        { label: "Inclusions", value: String(draft.inclusionBullets.length) },
+        { label: "Inclusions", value: String(draft.inclusionSchedule.length) },
         { label: "Exclusions", value: String(draft.exclusionBullets.length) },
       ],
     }),

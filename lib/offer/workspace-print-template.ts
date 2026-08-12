@@ -1,3 +1,4 @@
+import { getSummaryInclusions } from "@/lib/offer/workspace-model";
 import type {
   OfferDocumentDraft,
   OfferScopeAmountType,
@@ -40,6 +41,10 @@ export type OfferPrintTemplateData = {
   readonly preparedDateLabel: string;
   readonly savingAmount: number | null;
   readonly scopeRows: readonly OfferPrintScopeRow[];
+  // The "This price includes" list on the Investment Summary page, derived from
+  // the inclusions schedule's summary labels. Derived HERE rather than in each
+  // renderer — the three renderers have drifted before.
+  readonly summaryInclusions: readonly string[];
   readonly validUntilLabel: string;
 };
 
@@ -99,6 +104,7 @@ export function buildOfferPrintTemplateData({
         label: item.label,
         variationRule: item.variationRule,
       })),
+    summaryInclusions: getSummaryInclusions(draft.inclusionSchedule),
     validUntilLabel: formatDateDisplay(job.validUntil),
   };
 }

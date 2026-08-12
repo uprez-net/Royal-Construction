@@ -28,7 +28,7 @@ import type {
 import type { AdminOfferContent } from "@/types/admin-offer-content";
 import {
   OFFER_EXCLUDES_BULLETS,
-  STANDARD_INCLUSION_SPECIFICATIONS,
+  STANDARD_INCLUSION_ENTRIES,
 } from "@/lib/offer/workspace-proposal-content";
 import { DEFAULT_RATE_CONSTANTS } from "@/lib/offer/formula-variables";
 
@@ -161,9 +161,21 @@ function resolveDraft(
   return {
     headline: c.headline,
     introText: c.introText,
-    inclusionBullets: c.inclusions,
     exclusionBullets: [...OFFER_EXCLUDES_BULLETS],
-    inclusionSchedule: [...STANDARD_INCLUSION_SPECIFICATIONS],
+    // Admin-configured inclusion copy becomes page-4 summaries on their own
+    // entries; the template supplies the contractual schedule beneath them.
+    inclusionSchedule: [
+      ...STANDARD_INCLUSION_ENTRIES,
+      ...c.inclusions
+        .filter((line) => line.trim().length > 0)
+        .filter(
+          (line) =>
+            !STANDARD_INCLUSION_ENTRIES.some(
+              (entry) => entry.summary?.trim() === line.trim(),
+            ),
+        )
+        .map((line) => ({ spec: line.trim(), summary: line.trim() })),
+    ],
     termsSummary: c.termsAndConditions,
   };
 }
