@@ -5,7 +5,12 @@ import {
   STANDARD_INCLUSION_SPECIFICATIONS,
   STANDARD_INCLUSIONS_SCHEDULE,
 } from "../../lib/offer/workspace-proposal-content";
-import { INITIAL_OFFER_DRAFT } from "../../lib/offer/workspace-model";
+import {
+  INITIAL_COST_LINES,
+  INITIAL_OFFER_DRAFT,
+  mergeCostScheduleIntoSchedule,
+  type OfferWorkspaceCostLine,
+} from "../../lib/offer/workspace-model";
 import {
   CURRENT_WORKSPACE_SCHEMA_VERSION,
   migrateWorkspaceState,
@@ -90,4 +95,57 @@ test("an estimator who empties the schedule keeps it empty through v3", () => {
   }) as { draft: { inclusionSchedule: string[] } };
 
   assert.deepEqual(migrated.draft.inclusionSchedule, []);
+});
+
+// ─── Pulling cost-schedule wording into the schedule (Task 2) ───
+
+function costLine(
+  overrides: Partial<OfferWorkspaceCostLine>,
+): OfferWorkspaceCostLine {
+  return {
+    ...INITIAL_COST_LINES[0],
+    id: "test-line",
+    includedInContract: true,
+    costExGst: 1000,
+    offerTenderLineItem: "Test wording",
+    ...overrides,
+  };
+}
+
+test("pulling from the cost schedule appends only missing wording", () => {
+  const result = mergeCostScheduleIntoSchedule(
+    ["Existing spec", "Shared wording"],
+    [
+      costLine({ id: "a", offerTenderLineItem: "Shared wording" }),
+      costLine({ id: "b", offerTenderLineItem: "New wording" }),
+    ],
+  );
+
+  assert.deepEqual(result, ["Existing spec", "Shared wording", "New wording"]);
+});
+
+test("pulling ignores excluded and unpriced cost lines", () => {
+  const result = mergeCostScheduleIntoSchedule(
+    [],
+    [
+      costLine({
+        id: "a",
+        includedInContract: false,
+        offerTenderLineItem: "Excluded",
+      }),
+      costLine({ id: "b", costExGst: 0, offerTenderLineItem: "Unpriced" }),
+      costLine({ id: "c", offerTenderLineItem: "   " }),
+      costLine({ id: "d", offerTenderLineItem: "Kept" }),
+    ],
+  );
+
+  assert.deepEqual(result, ["Kept"]);
+});
+
+test("pulling is idempotent", () => {
+  const lines = [costLine({ id: "a", offerTenderLineItem: "Once" })];
+  const once = mergeCostScheduleIntoSchedule([], lines);
+  const twice = mergeCostScheduleIntoSchedule(once, lines);
+
+  assert.deepEqual(twice, once);
 });

@@ -547,6 +547,8 @@ export function OfferWorkspaceScreen({
             <div className="space-y-6">
               <OfferDocumentEditor
                 draft={draft}
+                exclusions={exclusions}
+                lines={lines}
                 onDraftChange={onDraftChange}
               />
               <OfferWorkspaceImages
