@@ -4,8 +4,14 @@ Date: 2026-08-12
 
 ## Status
 
-Accepted. Extends ADR 0002 (offer workspace persistence — snapshot schema now
-v3) and applies ADR 0005's editable-through-`sent` rule to the schedule.
+Accepted, then **superseded in part on the same day** — see "Amendment: one list,
+edited on the document" at the end. The core decision (the schedule is per-offer
+editable copy, persisted in the snapshot, printed as a plain numbered list)
+stands. The decision to keep `inclusionBullets` as a *second* hand-edited list,
+and to edit both through a form, did not survive first contact with a user.
+
+Extends ADR 0002 (offer workspace persistence — snapshot schema now v4) and
+applies ADR 0005's editable-through-`sent` rule to the schedule.
 
 ## Context
 
@@ -121,3 +127,85 @@ inventing construction details for that reason. Seeding is deterministic.
   existing `offerContent` pattern.
 - **Also unaddressed:** the welcome letter (`buildWelcomeParagraphs`) remains
   hard-coded — the same class of problem, worth a follow-up.
+
+---
+
+## Amendment: one list, edited on the document
+
+Date: 2026-08-12
+
+### What went wrong
+
+The decision above made the schedule editable but left `inclusionBullets` — the
+"This price includes" list on the Investment Summary page — as a second,
+separately hand-edited list. Step 5 then asked an estimator to fill five fields
+totalling roughly 65 lines, the largest being a 42-line monospace textarea
+inside a form.
+
+Two problems, and the second is the serious one.
+
+**Nobody maintains that.** It reads as data entry, not as a document. The
+likely outcome is that it gets filled once and never revisited, and the
+estimator stops trusting that the document reflects reality.
+
+**It reinstated the exact drift `OFFER_SPEC_FACTS` exists to prevent.** On a
+real offer, page 4 promised `60mm stone benchtops throughout` and `Timber-look
+herringbone flooring` while pages 5–7 promised `40mm engineered stone` and
+`600 x 1200 porcelain tiles` — different materials on different cost bases, in
+the same fixed-price contract. The `60mm`/`herringbone` wording had been removed
+from the codebase in `c2f0737` ("reconcile proposal specs"); the offer's saved
+bullets still carried it. Shared constants cannot help once both lists are free
+text a human edits separately.
+
+### Decision
+
+**One list.** `draft.inclusionSchedule` is now `OfferInclusionEntry[]`, where an
+entry is `{ spec, summary? }`. `spec` is the contractual sentence printed in the
+Inclusions Schedule. `summary` is the optional short form printed beside the
+price. `draft.inclusionBullets` is deleted.
+
+**Page 4 is derived, not authored.** `getSummaryInclusions()` collects the
+summaries; the Investment Summary list has no editor. This is the substance of
+the fix — the contradiction is no longer representable, rather than merely
+discouraged.
+
+**The document is the editor.** `offer-document-canvas.tsx` renders the offer as
+a document with every block editable in place, replacing both the copy form
+(`offer-workspace-document.tsx`) and the narrow sidebar preview
+(`offer-workspace-preview.tsx`), which are deleted. `PricingSummary` is
+extracted to `offer-workspace-pricing-summary.tsx` — it is still wanted on every
+step; the document preview it shared a file with was not.
+
+**Real form controls, never `contentEditable`.** This text is printed verbatim
+into an MBA fixed-price contract. `contentEditable` accepts pasted HTML, so a
+paste from Word could carry markup into a legal document. Textareas styled as
+document copy give the same in-place feel with none of that.
+
+**The canvas is not the print template.**
+`offer-workspace-print-template.tsx` remains the pixel-accurate print/PDF
+surface; the canvas mirrors its structure at screen width. One component serving
+both is how a CSS tweak silently breaks the PDF.
+
+### Consequences
+
+- **Two orphan bullets became real inclusions.** "All PC items per inclusions
+  schedule" and "Council certifier and approval fees" were sold on page 4 with
+  no schedule row, so collapsing the lists would have dropped them. They now
+  have specs of their own. All 14 page-4 items survive.
+- **v3 → v4 is lossy, deliberately.** The schedule wins and the stale bullets
+  are dropped rather than migrated onto summaries: when two claims conflict
+  there is no reliable way to tell which the estimator meant, and carrying
+  known-contradictory text into a contract is worse than losing it. An untouched
+  seeded spec regains its summary, so an offer that never diverged keeps a
+  populated page 4; an offer with a hand-tuned page 4 loses that tuning. Flagged
+  to and accepted by the user before implementation.
+- **Page 4 can no longer carry a line with no schedule counterpart.** If Royal
+  wants one, they add a schedule entry and give it a summary. That constraint is
+  the feature.
+- **v3 never shipped** (branch unmerged), but local snapshots existed from
+  testing, so v4 is a real migration rather than an amendment to v3.
+- **`OFFER_SPEC_FACTS` is now belt-and-braces.** It still keeps the seed's spec
+  and summary phrasings aligned, but it is no longer the only thing standing
+  between the two surfaces — there is only one surface.
+- **Unchanged from the original decision:** `job.buildScope` prints on the
+  tender but freezes at send; the welcome letter remains hard-coded.
