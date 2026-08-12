@@ -104,17 +104,17 @@ export function AreaCalculatorPanel({
           <HelperSection title="Frame">
             <div className="flex flex-col gap-2 space-x-3 mb-auto">
               <NumberField
-                label="Steel Cost / SQM"
+                label="Steel Cost"
                 value={area.steel}
                 onChange={(value) => onAreaChange({ steel: value })}
               />
               <NumberField
-                label="Installer Cost / SQM"
+                label="Installer Cost"
                 value={area.installer}
                 onChange={(value) => onAreaChange({ installer: value })}
               />
               <NumberField
-                label="Eaves Cost / SQM"
+                label="Eaves Cost"
                 value={area.eaves}
                 onChange={(value) => onAreaChange({ eaves: value })}
               />
