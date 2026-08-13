@@ -658,6 +658,7 @@ export function serializeWorkspace(
       offerTenderLineItem: line.offerTenderLineItem,
       tradeOrVendor: line.tradeOrVendor,
       notesOrSpec: line.notesOrSpec,
+      formula: line.formula,
       costExGstCents: dollarsToCents(line.costExGst),
       includedInContract: line.includedInContract,
       ...(line.sourceReference !== undefined
