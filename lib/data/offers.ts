@@ -58,6 +58,7 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
                 amount: offer.amount.toString(),
                 gstAmount: offer.gstAmount.toString(),
                 totalAmount: offer.totalAmount.toString(),
+                contractValueIncGst: offer.contractValueIncGst?.toString() ?? null,
                 version: offerFiles[0]?.version ?? 1,
             })),
             page: safePage,
