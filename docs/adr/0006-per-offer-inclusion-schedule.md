@@ -4,6 +4,10 @@ Date: 2026-08-12
 
 ## Status
 
+Superseded twice on the same day — read **Amendment 3** at the end for where
+this actually landed. The two earlier amendments are kept because they record
+wrong turns worth not repeating.
+
 Accepted, then **superseded in part on the same day** — see "Amendment: one list,
 edited on the document" at the end. The core decision (the schedule is per-offer
 editable copy, persisted in the snapshot, printed as a plain numbered list)
@@ -245,3 +249,97 @@ the offer, `# | Category | Specification | Status` on the tender.
   category field per row is the obvious follow-up, deliberately not taken here
   because the whole point of the canvas rework was to reduce what an estimator
   has to fill in.
+
+---
+
+## Amendment 3: three lists, checked not merged
+
+Date: 2026-08-12
+
+This is where the design landed. Amendments 1 and 2 above describe intermediate
+states that no longer exist.
+
+### The mistake both earlier amendments shared
+
+Both assumed **one selling line belongs to one contract row**. Amendment 1 put
+`summary` on `OfferInclusionEntry`; Amendment 2 kept it there.
+
+That assumption is false, and offer `RC-Q-2026-010-R2` disproves it. The line
+"All structural works — slab, frame, roof" was attached to row #2 (Concrete
+Slab) while plainly covering:
+
+```
+#3  Frame           Double storey structural timber frame…
+#4  Roof            Colorbond metal roofing…
+#5  Roof Trusses    Engineered prefabricated roof trusses…
+#56 Concrete Slab   Excavation, structural piering, formwork…
+#59 Timber Framing  Prefabricated timber wall frames…
+```
+
+One line, six rows. A per-row field could not hold it, so the estimator had to
+maintain the relationship by hand — which produced the double entry, then the
+nested label-over-spec block, then the reaction that the mapping "is not looking
+good". It was not looking good because it was wrong.
+
+### Decision
+
+**Three lists, in Royal's own words.**
+
+| List | What it is | Where it prints |
+| --- | --- | --- |
+| **Estimated** | Cost schedule (Step 2). What has money against it. | Nowhere — internal |
+| **Schedule** | `draft.inclusionSchedule`. What the contract commits to. | Tender |
+| **Offer** | `draft.inclusionHighlights`. What the client is pitched. | Offer, beside the price |
+
+The rule: **estimated → schedule → offer.** Never offer what is not in the
+schedule; never schedule what was never estimated.
+
+**Consistency is checked, not enforced by structure.** The relationship is
+one-to-many, so it is not modelled as a link. `checkOfferConsistency` audits all
+three lists plus the exclusions and returns findings —
+`estimated-not-scheduled`, `offer-not-scheduled`, `offer-contradicts-exclusion`.
+Unresolved findings surface as a **`warn`** send blocker, never a block: this is
+a model judgement on contract text and a false positive must not stop a live
+deal.
+
+**The model judges and shortens. It never authors contract text.**
+`draftInclusionHighlights` shortens and groups the schedule into selling lines —
+everything it emits was already in the input. Drafting a *specification* from a
+selling line was designed (an earlier plan's Task 4) and **deliberately not
+built**: expanding "Lux kitchen" into a contractual sentence means the model
+deciding what "lux" means, and whatever it decides Royal is bound to build. The
+danger is plausibility, not nonsense — a drafted "Premium bathroom package —
+freestanding bath, heated towel rail…" reads exactly like the real rows.
+
+**The offer sells; the tender contracts.** The full schedule no longer prints on
+the offer. It was three pages of contractual detail on a sales document, and it
+made the imbalance worse: inclusions got three pages while exclusions got one
+column beside the price — the asymmetry behind "you never told me that was not
+included". The offer now carries the selling list and the exclusions at equal
+weight, and drops from 8 pages to 5.
+
+**Step 5 is two cards**, schedule first (collapsed) then the offer document,
+matching the build order and keeping each card honest about where its content
+goes.
+
+### Consequences
+
+- **Schema is v6** and settled. The v5 → v6 migration lifts each `summary` out in
+  schedule order, so page 4 is byte-identical after migrating. Verified lossless
+  on the live offer: 62 rows in, 62 out, all 14 highlights preserved.
+- **The check earns its keep.** On first run against real data it found five
+  things, including `18kW 3-zone` sold against a schedule committing to
+  `4-zone` — a genuine mismatch nobody had noticed.
+- **`Miscellaneous` is gone.** All 24 offers scanned; none carry an
+  uncategorised row.
+- **`draftedByAi` exists but nothing sets it.** It was the first of three guards
+  agreed before the model would be allowed to draft contract wording. That
+  feature was not built, so the flag is currently inert — remove it, or keep it
+  if that decision is ever revisited.
+- **Still open, unchanged:** `job.buildScope` prints on the tender but freezes at
+  send (ADR 0005); the welcome letter remains hard-coded.
+- **Open question for Royal:** the offer can be signed via DocuSign acceptance,
+  and that signed copy now also lacks the schedule. ADR 0005 treats the
+  acceptance as a lightweight authority to proceed with the Tender as the binding
+  scope, so this is defensible — but if a signed offer is treated as more binding
+  in practice, the schedule should go back on the signature copy only.
