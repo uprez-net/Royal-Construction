@@ -135,3 +135,70 @@ export async function checkOfferConsistency(
     throw error;
   }
 }
+
+// ─── Drafting the OFFER list from the SCHEDULE ───
+
+const highlightsSchema = z.object({
+  highlights: z.array(z.string()),
+});
+
+export type HighlightDraftResult =
+  | { ok: true; highlights: readonly string[] }
+  | { ok: false; message: string };
+
+const DRAFT_SYSTEM_PROMPT = `You write the "This price includes" list for an Australian fixed-price residential building offer.
+
+You are given the full contractual Inclusions Schedule. Write 10-14 short selling lines summarising it for the page beside the price.
+
+<hard_rules>
+- Every line must be supported by the schedule. NEVER promise anything the schedule does not contain — an invented inclusion becomes a contractual obligation the builder must meet.
+- Preserve stated values EXACTLY. If the schedule says 40mm, write 40mm, never 60mm. Same for kW, zones, standards (AS3740), sizes and brands.
+- GROUP related rows. One line standing for several rows is wanted: "All structural works — slab, frame, roof" covering the slab, frame, roof and truss rows is correct. One line per row is wrong.
+- Lead with the concrete thing the schedule names: material, size, brand, quantity.
+- Prefer the notable over the obvious. A buyer chooses a builder for the stone benchtops and the full-facade render, not for the waterproofing compliance or the wall batts. Necessary-but-unremarkable items belong in the schedule, not on the price page.
+- Maximum 8 words per line. Australian English. No trailing full stop. No marketing adjectives the schedule does not itself use.
+</hard_rules>`;
+
+// Draft the selling list from the contractual schedule. This SHORTENS text the
+// human already committed to — it never authors a specification, which is the
+// line that separates it from writing contract wording.
+export async function draftInclusionHighlights(
+  scheduled: readonly string[],
+): Promise<HighlightDraftResult> {
+  const specs = scheduled
+    .map((spec) => spec.trim())
+    .filter((spec) => spec.length > 0);
+  if (specs.length === 0) {
+    return { ok: true, highlights: [] };
+  }
+
+  try {
+    const { output } = await generateText({
+      model: gateway("google/gemini-2.5-flash"),
+      // These are short human-facing lines; 0 tends to produce near-identical
+      // phrasing across every one.
+      temperature: 0.2,
+      system: DRAFT_SYSTEM_PROMPT,
+      output: Output.object({ schema: highlightsSchema }),
+      prompt: `Write the selling list for this schedule. Shorten and group only — never add a detail the schedule does not state.\n\n<schedule>\n${specs.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n</schedule>`,
+    });
+
+    const parsed = highlightsSchema.parse(output);
+    const highlights = parsed.highlights
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      // A runaway response must not replace a curated list with 60 lines.
+      .slice(0, 20);
+
+    return { ok: true, highlights };
+  } catch (error) {
+    if (
+      NoObjectGeneratedError.isInstance(error) ||
+      TypeValidationError.isInstance(error) ||
+      NoOutputGeneratedError.isInstance(error)
+    ) {
+      return { ok: false, message: (error as Error).message };
+    }
+    throw error;
+  }
+}
