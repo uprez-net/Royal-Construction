@@ -23,7 +23,7 @@ const FINDING_LABEL: Record<ConsistencyFindingKind, string> = {
   "offer-contradicts-exclusion": "Offer contradicts an exclusion",
 };
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import { FileText, Plus, ShieldCheck, Sparkles } from "lucide-react";
+import { FileText, ListChecks, Plus, ShieldCheck, Sparkles } from "lucide-react";
 import { formatCurrency } from "./offer-workspace-format";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import {
@@ -93,10 +93,106 @@ export function OfferDocumentCanvas({
 
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
+    <div className="space-y-5">
+      <Card className="border-border/70 bg-white/95 shadow-sm">
+        <CardHeader className="border-b border-border/70">
+          <OfferCardHeading
+            description={`${schedule.length} contractual rows. Prints on the tender, not on this offer — the offer sells, the tender contracts. The selling list below is drafted from these.`}
+            icon={<ListChecks className="size-4" aria-hidden="true" />}
+            title="Inclusions schedule"
+          />
+        </CardHeader>
+        <CardContent className="pt-5">
+          <details open={schedule.length === 0}>
+            <summary className="cursor-pointer text-sm font-medium text-muted-foreground marker:text-royal-gold">
+              {schedule.length === 0
+                ? "No inclusions yet"
+                : `Show all ${schedule.length} rows`}
+            </summary>
+            <div className="mt-3">
+          <section>
+            <h3 className="font-heading text-lg font-semibold">
+              Inclusions schedule
+            </h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Printed on the offer and the tender. Star an item to also show it
+              beside the price.
+            </p>
+            {/* CSS multi-column, NOT a two-column grid. A grid fills row-wise,
+                which put 1,3,5,7 down the left and 2,4,6,8 down the right — so
+                scanning a numbered contractual schedule showed every OTHER item.
+                Multi-column flows down then across (1..32 left, 33..63 right),
+                and avoids the ragged gaps a grid creates when it force-aligns
+                row heights against a two-line spec in the other column. */}
+            <ol className="mt-3 gap-x-10 md:columns-2 [&>li]:break-inside-avoid">
+              {schedule.map((entry, index) => {
+                return (
+                  <li
+                    className="group/row flex items-start gap-1.5 border-b border-border/40 py-1"
+                    key={index}
+                  >
+                    <span className="mt-1 w-5 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                      {index + 1}
+                    </span>
+                    <EditableText
+                      ariaLabel={`Inclusion ${index + 1}`}
+                      className="text-sm leading-6"
+                      onChange={(spec) => patchEntry(index, { ...entry, spec })}
+                      placeholder="Describe what is included…"
+                      value={entry.spec}
+                    />
+                    {entry.draftedByAi ? (
+                      <span
+                        className="mt-1 shrink-0 rounded-full bg-warning-light px-1.5 py-0.5 text-[10px] font-medium text-foreground"
+                        title="Drafted by AI for a selling line the schedule did not cover. Review this wording — it is contract text."
+                      >
+                        AI draft
+                      </span>
+                    ) : null}
+                    <Button
+                      aria-label={`Remove inclusion ${index + 1}`}
+                      className="mt-0.5 size-6 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+                      onClick={() =>
+                        onDraftChange({
+                          inclusionSchedule: schedule.filter(
+                            (_, i) => i !== index,
+                          ),
+                        })
+                      }
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Plus className="size-3 rotate-45" />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ol>
+            <Button
+              className="mt-2 h-7 px-1.5 text-xs text-muted-foreground"
+              onClick={() =>
+                onDraftChange({
+                  inclusionSchedule: [...schedule, { spec: "" }],
+                })
+              }
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Plus className="mr-1 size-3" />
+              Add inclusion
+            </Button>
+          </section>
+            </div>
+          </details>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
-          description="This is the document your client receives. Edit any part of it here — the PDF prints exactly what you see."
+          description="What your client receives. Edit any part of it here — the PDF prints exactly what you see."
           icon={<FileText className="size-4" aria-hidden="true" />}
           title="Offer document"
         />
@@ -259,80 +355,6 @@ export function OfferDocumentCanvas({
               </p>
             ) : null}
 
-          <section className="mt-7 border-t border-border pt-5">
-            <h3 className="font-heading text-lg font-semibold">
-              Inclusions schedule
-            </h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Printed on the offer and the tender. Star an item to also show it
-              beside the price.
-            </p>
-            {/* CSS multi-column, NOT a two-column grid. A grid fills row-wise,
-                which put 1,3,5,7 down the left and 2,4,6,8 down the right — so
-                scanning a numbered contractual schedule showed every OTHER item.
-                Multi-column flows down then across (1..32 left, 33..63 right),
-                and avoids the ragged gaps a grid creates when it force-aligns
-                row heights against a two-line spec in the other column. */}
-            <ol className="mt-3 gap-x-10 md:columns-2 [&>li]:break-inside-avoid">
-              {schedule.map((entry, index) => {
-                return (
-                  <li
-                    className="group/row flex items-start gap-1.5 border-b border-border/40 py-1"
-                    key={index}
-                  >
-                    <span className="mt-1 w-5 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                      {index + 1}
-                    </span>
-                    <EditableText
-                      ariaLabel={`Inclusion ${index + 1}`}
-                      className="text-sm leading-6"
-                      onChange={(spec) => patchEntry(index, { ...entry, spec })}
-                      placeholder="Describe what is included…"
-                      value={entry.spec}
-                    />
-                    {entry.draftedByAi ? (
-                      <span
-                        className="mt-1 shrink-0 rounded-full bg-warning-light px-1.5 py-0.5 text-[10px] font-medium text-foreground"
-                        title="Drafted by AI for a selling line the schedule did not cover. Review this wording — it is contract text."
-                      >
-                        AI draft
-                      </span>
-                    ) : null}
-                    <Button
-                      aria-label={`Remove inclusion ${index + 1}`}
-                      className="mt-0.5 size-6 shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
-                      onClick={() =>
-                        onDraftChange({
-                          inclusionSchedule: schedule.filter(
-                            (_, i) => i !== index,
-                          ),
-                        })
-                      }
-                      size="icon"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Plus className="size-3 rotate-45" />
-                    </Button>
-                  </li>
-                );
-              })}
-            </ol>
-            <Button
-              className="mt-2 h-7 px-1.5 text-xs text-muted-foreground"
-              onClick={() =>
-                onDraftChange({
-                  inclusionSchedule: [...schedule, { spec: "" }],
-                })
-              }
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <Plus className="mr-1 size-3" />
-              Add inclusion
-            </Button>
-          </section>
 
           <section className="mt-7 border-t border-border pt-5">
             <h3 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -349,5 +371,6 @@ export function OfferDocumentCanvas({
         </article>
       </CardContent>
     </Card>
+    </div>
   );
 }
