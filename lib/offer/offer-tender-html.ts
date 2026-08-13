@@ -256,7 +256,7 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
 export function legalDocShell(body: string): string {
   return `<!doctype html><html><head><meta charset="utf-8" />
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; color: #1f1f1f; font-size: 11.5px; line-height: 1.5; }
   .page { width: 210mm; min-height: 297mm; padding: 16mm 18mm; display: flex; flex-direction: column; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
@@ -323,13 +323,16 @@ export function legalDocShell(body: string): string {
     position: relative;
   }
 
+  /* A BORDER, not a background: a background-drawn rule disappears on any
+     print path with "Background graphics" off. */
   .scope-list::before {
     content: "";
     position: absolute;
     left: 50%;
     top: -10px;
     bottom: -10px;
-    width: 1px;
+    width: 0;
+    border-left: 1px solid ${BORDER};
     background: #c7b68c;
     transform: translateX(-50%);
   }

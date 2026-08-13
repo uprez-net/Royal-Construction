@@ -215,7 +215,9 @@ export function buildProposalHtml(
 
   return `<!doctype html><html><head><meta charset="utf-8" />
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* Keep the intended colours when the PDF is produced by a path that would
+     otherwise drop backgrounds (browser print, printBackground:false). */
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; color: #222; }
   .page { width: 210mm; min-height: 297mm; padding: 13mm 18mm; display: flex; flex-direction: column; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
@@ -258,7 +260,11 @@ export function buildProposalHtml(
   .cols h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; }
   .cols ul { list-style: none; margin-top: 12px; }
   .cols li { position: relative; padding-left: 16px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
-  .cols li:before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: ${GOLD}; }
+  /* A GLYPH, not a background box. Drawing the bullet with background-color
+     meant it vanished entirely on any print path with "Background graphics"
+     off — the client received a bare indented list with no bullets at all.
+     Text always prints. */
+  .cols li:before { content: "\\25AA"; position: absolute; left: 0; top: 0; color: ${GOLD}; font-size: 13px; line-height: 1.5; }
   .pay th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .pay td { border-bottom: 1px solid ${BORDER}; padding: 12px 10px; font-size: 13px; }
   .pay td.stage { font-weight: 700; }

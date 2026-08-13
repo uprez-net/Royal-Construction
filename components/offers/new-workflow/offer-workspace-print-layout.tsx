@@ -141,11 +141,12 @@ export function PrintBulletList({
       </h2>
       <ul className="mt-4 space-y-3 text-sm leading-6">
         {items.map((item) => (
-          <li key={item} className="flex gap-3">
-            <span
-              aria-hidden="true"
-              className="mt-2 size-1.5 shrink-0 bg-royal-gold"
-            />
+          <li key={item} className="flex gap-2">
+            {/* A glyph, not a background square: window.print() with
+                "Background graphics" off dropped the bullet entirely. */}
+            <span aria-hidden="true" className="shrink-0 text-royal-gold">
+              &#9642;
+            </span>
             <span>{item}</span>
           </li>
         ))}
