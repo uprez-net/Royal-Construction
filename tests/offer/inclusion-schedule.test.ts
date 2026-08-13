@@ -20,6 +20,7 @@ import {
 } from "../../lib/offer/workspace-model";
 import {
   buildOfferPrintTemplateData,
+  getVisibleExclusionRows,
   getVisibleExclusions,
 } from "../../lib/offer/workspace-print-template";
 import {
@@ -546,4 +547,85 @@ test("no findings, no blocker", () => {
   });
 
   assert.equal(blockers.some((b) => b.id === "inclusion-consistency"), false);
+});
+
+// ─── Exclusion detail reaches the tender ───
+
+// The Scope step captures `description` and `variationRule` on every exclusion,
+// and getVisibleExclusions took only `.label` — so an estimator typed "Can be
+// priced later as a written variation" and no client ever saw it.
+test("a scope exclusion carries its detail through to print", () => {
+  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: [] };
+  const item = {
+    ...INITIAL_EXCLUSIONS[0],
+    id: "scope-1",
+    label: "Pool, spa and water features",
+    description: "Can be priced later as a separate package.",
+    variationRule: "Priced as a written variation.",
+    includedInOfferDocument: true,
+  };
+
+  assert.deepEqual(getVisibleExclusionRows(draft, [item]), [
+    {
+      label: "Pool, spa and water features",
+      description: "Can be priced later as a separate package.",
+      variationRule: "Priced as a written variation.",
+    },
+  ]);
+});
+
+// A free-text bullet has no detail to carry. Printing it blank is honest;
+// inventing a description for it would be text nobody wrote.
+test("a free-text bullet prints label-only, with nothing invented", () => {
+  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: ["Boundary fencing"] };
+
+  assert.deepEqual(getVisibleExclusionRows(draft, []), [
+    { label: "Boundary fencing", description: "", variationRule: "" },
+  ]);
+});
+
+test("a scope item's detail wins over a bare bullet of the same label", () => {
+  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: ["Swimming pool or spa"] };
+  const item = {
+    ...INITIAL_EXCLUSIONS[0],
+    id: "scope-2",
+    label: "Swimming pool or spa",
+    description: "Not in the building scope.",
+    variationRule: "Separate contract.",
+    includedInOfferDocument: true,
+  };
+  const rows = getVisibleExclusionRows(draft, [item]);
+
+  assert.equal(rows.length, 1, "the label must not print twice");
+  assert.equal(rows[0].description, "Not in the building scope.");
+});
+
+test("the tender prints the exclusion detail; the offer keeps its short list", () => {
+  const snapshot = snapshotWithSchedule([{ spec: "S", category: "C" }]);
+  const withDetail = {
+    ...snapshot,
+    exclusions: [
+      {
+        ...INITIAL_EXCLUSIONS[0],
+        id: "x",
+        label: "Pool and spa",
+        description: "Priced separately on request.",
+        variationRule: "Written variation only.",
+        includedInOfferDocument: true,
+      },
+    ],
+    draft: { ...snapshot.draft, exclusionBullets: [] },
+  } as OfferWorkspaceSnapshot;
+
+  const tender = buildTenderHtml(buildProposalInput(withDetail));
+  const offer = buildProposalHtml(buildProposalInput(withDetail), EMPTY_OFFER_IMAGES);
+
+  assert.match(tender, /Priced separately on request\./);
+  assert.match(tender, /<th>What this means<\/th>/);
+  assert.match(offer, /Pool and spa/, "the offer still names the exclusion");
+  assert.doesNotMatch(
+    offer,
+    /Priced separately on request\./,
+    "the offer sells; the tender carries the obligation",
+  );
 });

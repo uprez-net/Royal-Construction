@@ -23,6 +23,15 @@ export type OfferPrintPaymentRow = {
   readonly trigger: string;
 };
 
+// A printed exclusion with the detail the Scope step already captures. The
+// tender prints all three columns; the offer prints the label alone, because
+// the offer sells and the tender carries the obligation.
+export type OfferPrintExclusionRow = {
+  readonly label: string;
+  readonly description: string;
+  readonly variationRule: string;
+};
+
 export type OfferPrintScopeRow = {
   readonly amountLabel: string;
   readonly description: string;
@@ -34,6 +43,7 @@ export type OfferPrintScopeRow = {
 export type OfferPrintTemplateData = {
   readonly areaLabel: string;
   readonly exclusionBullets: readonly string[];
+  readonly exclusionRows: readonly OfferPrintExclusionRow[];
   readonly footerBase: string;
   readonly paymentRows: readonly OfferPrintPaymentRow[];
   readonly priceLine: string;
@@ -86,6 +96,7 @@ export function buildOfferPrintTemplateData({
   return {
     areaLabel: getAreaLabel(getTotalAreaSqm(job)),
     exclusionBullets: getVisibleExclusions(draft, exclusions),
+    exclusionRows: getVisibleExclusionRows(draft, exclusions),
     footerBase: `${job.siteAddress} | Prepared by ${job.preparedBy}`,
     paymentRows: paymentSchedule.map((row) => ({
       ...row,
@@ -208,6 +219,39 @@ export function getVisibleExclusions(
         .map((item) => item.label),
     ]),
   );
+}
+
+// The same union rule as getVisibleExclusions, carrying the description and
+// variation rule a Scope item holds.
+//
+// Those two fields were captured on every Scope exclusion and printed NOWHERE —
+// getVisibleExclusions takes `.label` and drops the rest, so an estimator typed
+// "Can be priced later as a written variation" and no client ever saw it. A
+// free-text bullet has no such detail and prints label-only, which is visible
+// rather than hidden.
+export function getVisibleExclusionRows(
+  draft: OfferDocumentDraft,
+  exclusions: readonly OfferWorkspaceScopeItem[],
+): readonly OfferPrintExclusionRow[] {
+  const rows = new Map<string, OfferPrintExclusionRow>();
+  for (const label of draft.exclusionBullets) {
+    const key = label.trim();
+    if (key.length > 0 && !rows.has(key)) {
+      rows.set(key, { label: key, description: "", variationRule: "" });
+    }
+  }
+  for (const item of exclusions) {
+    if (!item.includedInOfferDocument) continue;
+    const key = item.label.trim();
+    if (key.length === 0) continue;
+    // A Scope item's detail wins over a bare bullet of the same label.
+    rows.set(key, {
+      label: key,
+      description: item.description.trim(),
+      variationRule: item.variationRule.trim(),
+    });
+  }
+  return [...rows.values()];
 }
 
 function formatScopeAmount(

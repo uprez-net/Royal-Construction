@@ -480,8 +480,19 @@ function exclusionsPaymentPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
   foot: string,
 ): string {
-  const excludes = data.exclusionBullets
-    .map((b) => `<li>${esc(b)}</li>`)
+  // Three columns, not a bullet list. The description and variation rule are
+  // already captured on every Scope exclusion and were printed NOWHERE — an
+  // estimator typed "Can be priced later as a written variation" and no client
+  // saw it. The offer keeps its short bullets; the TENDER is the document that
+  // carries the obligation, so it carries the detail.
+  //
+  // A free-text bullet has no such detail and prints label-only. That gap is
+  // visible here rather than hidden, which is the point.
+  const excludes = data.exclusionRows
+    .map(
+      (row) =>
+        `<tr><td class="cat">${esc(row.label)}</td><td>${esc(row.description) || "&mdash;"}</td><td>${esc(row.variationRule) || "&mdash;"}</td></tr>`,
+    )
     .join("");
   const pay = data.paymentRows
     .map(
@@ -493,7 +504,7 @@ function exclusionsPaymentPage(
     ${masthead()}
     <h2 style="margin-top:20px;">Exclusions</h2>
     <p style="color:${MUTED};">The following are not included in the Contract Sum and, if required, are priced as a written variation:</p>
-    <ul>${excludes}</ul>
+    <table><thead><tr><th>Item</th><th>What this means</th><th>If required</th></tr></thead><tbody>${excludes}</tbody></table>
     <h2>Progress Payment Schedule</h2>
     <table><thead><tr><th>Stage</th><th>%</th><th>Amount (inc GST)</th><th>Trigger</th></tr></thead><tbody>${pay}</tbody></table>
     ${foot}
