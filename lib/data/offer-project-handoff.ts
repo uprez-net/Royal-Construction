@@ -486,7 +486,7 @@ function buildExtractionPayload(
       termiteSystem: null, sewerConnection: null,
     },
     inclusionsAndExclusions: {
-      inclusions: [...snapshot.draft.inclusionBullets],
+      inclusions: [...snapshot.draft.inclusionHighlights],
       exclusions: [...snapshot.draft.exclusionBullets],
     },
     utilityInfrastructure: {
