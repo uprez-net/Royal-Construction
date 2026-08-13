@@ -39,11 +39,16 @@ export const rateCurrency = new Intl.NumberFormat("en-AU", {
  * - 1500 → "$1.5K"
  * - 1250000 → "$1.3M"
  */
+// trailingZeroDisplay is load-bearing, not cosmetic. Without it, Node's ICU and
+// the browser's disagree on compact zero — the server rendered "$0.0" and Chrome
+// rendered "$0", which threw a hydration error on every dashboard KPI tile. It
+// also drops the pointless ".0" from round values ("$25K", not "$25.0K").
 export const compactCurrency = new Intl.NumberFormat("en-AU", {
   style: "currency",
   currency: "AUD",
   notation: "compact",
   maximumFractionDigits: 1,
+  trailingZeroDisplay: "stripIfInteger",
 });
 
 /**

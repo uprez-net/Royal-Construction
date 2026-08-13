@@ -26,6 +26,11 @@ import type {
   RateConstantKey,
 } from "@/lib/offer/formula-variables";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
+import {
+  OFFER_EXCLUDES_BULLETS,
+  STANDARD_INCLUSION_ENTRIES,
+  STANDARD_INCLUSION_HIGHLIGHTS,
+} from "@/lib/offer/workspace-proposal-content";
 import { DEFAULT_RATE_CONSTANTS } from "@/lib/offer/formula-variables";
 
 export type AdminOfferPrefill = {
@@ -157,8 +162,20 @@ function resolveDraft(
   return {
     headline: c.headline,
     introText: c.introText,
-    inclusionBullets: c.inclusions,
-    exclusionBullets: [],
+    exclusionBullets: [...OFFER_EXCLUDES_BULLETS],
+    // Admin-configured inclusion copy IS the selling list — short lines for the
+    // page beside the price. It is not schedule wording, so it no longer gets
+    // turned into contract rows.
+    inclusionHighlights: [
+      ...STANDARD_INCLUSION_HIGHLIGHTS,
+      ...c.inclusions
+        .map((line) => line.trim())
+        .filter(
+          (line) =>
+            line.length > 0 && !STANDARD_INCLUSION_HIGHLIGHTS.includes(line),
+        ),
+    ],
+    inclusionSchedule: [...STANDARD_INCLUSION_ENTRIES],
     termsSummary: c.termsAndConditions,
   };
 }

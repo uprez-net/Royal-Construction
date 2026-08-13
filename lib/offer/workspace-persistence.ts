@@ -21,6 +21,7 @@ import {
   RATE_CARD_PRODUCTS,
   RATE_CARD_TIERS,
 } from "./workspace-rate-card";
+import { STANDARD_INCLUSION_ENTRIES } from "./workspace-proposal-content";
 
 // The bundle of workspace state we persist (everything except transient status
 // and the ephemeral import result). Mirrors the container's useState set.
@@ -95,7 +96,9 @@ export function deriveTenderGateStatus(
   return "unlocked";
 }
 
-export const CURRENT_WORKSPACE_SCHEMA_VERSION = 2 as const;
+// v6 (this version): the selling list moves off the schedule rows into
+// draft.inclusionHighlights. See migrateV5ToV6.
+export const CURRENT_WORKSPACE_SCHEMA_VERSION = 6 as const;
 
 // ─── Money helpers (ADR 0002: money persisted as integer cents) ───
 export const dollarsToCents = (value: number): number =>
@@ -282,11 +285,20 @@ const scopeItemSchema = z.object({
   includedInOfferDocument: z.boolean(),
 });
 
+const inclusionEntrySchema = z.object({
+  spec: z.string(),
+  category: z.string().optional(),
+  draftedByAi: z.boolean().optional(),
+});
+
 const draftSchema = z.object({
   headline: z.string(),
   introText: z.string(),
-  inclusionBullets: z.array(z.string()),
   exclusionBullets: z.array(z.string()),
+  inclusionHighlights: z.array(z.string()).default([]),
+  // Defaulted so a snapshot that somehow skips the migration still parses;
+  // migrateV2ToV3 / migrateV3ToV4 are what actually seed pre-existing offers.
+  inclusionSchedule: z.array(inclusionEntrySchema).default([]),
   termsSummary: z.string(),
 });
 
@@ -347,7 +359,9 @@ const tenderGateSchema = z
   });
 
 const workspaceStateV1Schema = z.object({
-  schemaVersion: z.literal(2),
+  // Derived from the constant, never re-typed: a hard-coded literal here
+  // silently rejects every migrated snapshot the moment the version is bumped.
+  schemaVersion: z.literal(CURRENT_WORKSPACE_SCHEMA_VERSION),
   job: jobSchema,
   costLines: z.array(costLineSchema),
   allowances: z.array(scopeItemSchema),
@@ -410,6 +424,18 @@ export function migrateWorkspaceState(raw: unknown): unknown {
   if (version < 2) {
     next = migrateV1ToV2(next);
   }
+  if (version < 3) {
+    next = migrateV2ToV3(next);
+  }
+  if (version < 4) {
+    next = migrateV3ToV4(next);
+  }
+  if (version < 5) {
+    next = migrateV4ToV5(next);
+  }
+  if (version < 6) {
+    next = migrateV5ToV6(next);
+  }
   return next;
 }
 
@@ -448,6 +474,156 @@ function migrateV1ToV2(
       siteCouncil: str(job.siteCouncil),
       siteState: str(job.siteState),
       sitePostcode: str(job.sitePostcode),
+    },
+  };
+}
+
+// v2 → v3: the Inclusions Schedule moves from a hard-coded module constant to
+// per-offer editable copy on the draft. Snapshots written before this change
+// carry no schedule, and re-rendering one (revision viewer, re-send) must
+// reproduce the document the client actually received — so they are seeded with
+// the template list that WAS the schedule at the time they were written. An
+// explicitly empty array is left alone: from v3 on, "no rows" is a choice the
+// estimator can make, not a missing field.
+function migrateV2ToV3(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const draft = (state.draft ?? {}) as Record<string, unknown>;
+  return {
+    ...state,
+    schemaVersion: 3,
+    draft: {
+      ...draft,
+      inclusionSchedule: Array.isArray(draft.inclusionSchedule)
+        ? draft.inclusionSchedule
+        : STANDARD_INCLUSION_ENTRIES.map((entry) => entry.spec),
+    },
+  };
+}
+
+// v3 → v4: the two inclusion lists become one. v3 stored inclusionSchedule as
+// plain strings alongside a separately-edited inclusionBullets array, and the
+// two had already contradicted each other in real offers — page 4 promising
+// "60mm stone benchtops" while page 6 promised "40mm engineered stone", in the
+// same fixed-price contract.
+//
+// The SCHEDULE wins: it is the contractual statement. The stale bullets are
+// DROPPED rather than migrated onto summaries, because when two claims conflict
+// there is no reliable way to tell which the estimator meant, and carrying
+// known-contradictory text into a contract is worse than losing it. A v2
+// snapshot arrives here with the freshly seeded template, so anything that
+// never diverged still gets its 14 summaries back from
+// migrateV2ToV3 → STANDARD_INCLUSION_ENTRIES below.
+function migrateV3ToV4(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const draft = (state.draft ?? {}) as Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured to DROP it
+  const { inclusionBullets: _droppedBullets, ...rest } = draft;
+  const schedule = Array.isArray(draft.inclusionSchedule)
+    ? draft.inclusionSchedule
+    : [];
+  const seededSpecs = new Map(
+    STANDARD_INCLUSION_ENTRIES.map((entry) => [entry.spec, entry]),
+  );
+  return {
+    ...state,
+    schemaVersion: 4,
+    draft: {
+      ...rest,
+      inclusionSchedule: schedule.map((entry) => {
+        if (typeof entry !== "string") {
+          return entry;
+        }
+        // An untouched seeded spec regains its summary, so an offer that never
+        // diverged keeps a populated page 4. An edited or custom spec becomes a
+        // schedule-only entry; the estimator re-adds a label if it earns one.
+        return seededSpecs.get(entry) ?? { spec: entry };
+      }),
+    },
+  };
+}
+
+// v4 → v5: entries regain `category`, the trade label printed in the schedule's
+// Category column. v4 dropped it when the schedule was flattened to plain specs.
+//
+// Re-attached by matching the spec text against the seeded template, which is
+// the only place the mapping exists. An entry whose spec was edited, pulled from
+// the cost schedule, or typed from scratch has no template match and stays
+// uncategorised — those print UNCATEGORISED_INCLUSION_LABEL rather than an empty
+// cell on a contract document.
+function migrateV4ToV5(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const draft = (state.draft ?? {}) as Record<string, unknown>;
+  const schedule = Array.isArray(draft.inclusionSchedule)
+    ? draft.inclusionSchedule
+    : [];
+  const categoryBySpec = new Map(
+    STANDARD_INCLUSION_ENTRIES.filter((entry) => entry.category !== undefined).map(
+      (entry) => [entry.spec, entry.category as string],
+    ),
+  );
+  return {
+    ...state,
+    schemaVersion: 5,
+    draft: {
+      ...draft,
+      inclusionSchedule: schedule.map((entry) => {
+        if (typeof entry !== "string") {
+          const e = entry as Record<string, unknown>;
+          if (typeof e.category === "string") {
+            return e;
+          }
+          const match =
+            typeof e.spec === "string" ? categoryBySpec.get(e.spec) : undefined;
+          return match === undefined ? e : { ...e, category: match };
+        }
+        const match = categoryBySpec.get(entry);
+        return match === undefined ? { spec: entry } : { spec: entry, category: match };
+      }),
+    },
+  };
+}
+
+// v5 → v6: the selling list moves off the schedule rows and becomes its own
+// list. v5 stored it as a `summary` on each entry, which asserted one selling
+// line per contract row — but on a real offer "All structural works — slab,
+// frame, roof" covers six rows (#3 Frame, #4 Roof, #5 Roof Trusses, #56, #59).
+// A per-row field could never hold that, which is what made the estimator
+// maintain the mapping by hand.
+//
+// Summaries are lifted out IN SCHEDULE ORDER — the order they already printed
+// in — so page 4 is byte-identical after the migration. Nothing is lost: a
+// summary was only ever a line of page-4 text.
+function migrateV5ToV6(
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const draft = (state.draft ?? {}) as Record<string, unknown>;
+  const schedule = Array.isArray(draft.inclusionSchedule)
+    ? draft.inclusionSchedule
+    : [];
+  const highlights: string[] = [];
+  const stripped = schedule.map((raw) => {
+    if (typeof raw !== "object" || raw === null) {
+      return raw;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured to DROP
+    const { summary, summaryFromSpec, ...rest } = raw as Record<string, unknown>;
+    if (typeof summary === "string" && summary.trim().length > 0) {
+      highlights.push(summary);
+    }
+    return rest;
+  });
+  return {
+    ...state,
+    schemaVersion: 6,
+    draft: {
+      ...draft,
+      inclusionHighlights: Array.isArray(draft.inclusionHighlights)
+        ? draft.inclusionHighlights
+        : highlights,
+      inclusionSchedule: stripped,
     },
   };
 }
@@ -493,8 +669,15 @@ export function serializeWorkspace(
     draft: {
       headline: snapshot.draft.headline,
       introText: snapshot.draft.introText,
-      inclusionBullets: [...snapshot.draft.inclusionBullets],
       exclusionBullets: [...snapshot.draft.exclusionBullets],
+      inclusionHighlights: [...snapshot.draft.inclusionHighlights],
+      inclusionSchedule: snapshot.draft.inclusionSchedule.map((entry) => ({
+        spec: entry.spec,
+        ...(entry.category === undefined ? {} : { category: entry.category }),
+        ...(entry.draftedByAi === undefined
+          ? {}
+          : { draftedByAi: entry.draftedByAi }),
+      })),
       termsSummary: snapshot.draft.termsSummary,
     },
     areaCalculator: { ...snapshot.areaCalculator },

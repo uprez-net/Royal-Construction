@@ -4,12 +4,15 @@ import {
   COMPANY_LINE,
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
-import { STANDARD_INCLUSIONS_SCHEDULE } from "./workspace-proposal-content";
 import {
   formatBoundedOwnerList,
   CHARS_PER_LINE_SIGNATURE,
   CHARS_PER_LINE_TABLE_CELL,
   chunkByEstimatedHeight,
+  chunkInclusionSchedule,
+  inclusionPageStartIndexes,
+  UNCATEGORISED_INCLUSION_LABEL,
+  type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
   type OfferOwner,
@@ -34,7 +37,6 @@ const GOLD_DARK = "#8f6a24";
 const BORDER = "#d9d9d6";
 const MUTED = "#5f5f5f";
 
-const INCLUSIONS_ROWS_PER_PAGE = 12;
 // Execution signature blocks per page. Each carries a signature space, a date
 // line and (for owners) an initial line, so they are tall — 4 is a conservative
 // fit for A4 alongside the masthead and the acceptance paragraph. Shared with the
@@ -91,8 +93,6 @@ function ownerDetailLines(owner: OfferOwner): number {
   );
 }
 
-type InclusionRow = (typeof STANDARD_INCLUSIONS_SCHEDULE)[number];
-
 // Shared by the Tender and Contract builders (see offer-contract-html.ts).
 export function esc(value: string): string {
   return value
@@ -143,12 +143,10 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     job.porchSqm +
     job.grannyFlatSqm;
 
-  const inclusionChunks: InclusionRow[][] = [];
-  for (let i = 0; i < STANDARD_INCLUSIONS_SCHEDULE.length; i += INCLUSIONS_ROWS_PER_PAGE) {
-    inclusionChunks.push(
-      STANDARD_INCLUSIONS_SCHEDULE.slice(i, i + INCLUSIONS_ROWS_PER_PAGE),
-    );
-  }
+  // The schedule the estimator edited on this offer — not a module constant.
+  // An empty schedule produces zero pages rather than an empty table.
+  const inclusionChunks = chunkInclusionSchedule(input.draft.inclusionSchedule);
+  const inclusionStartIndexes = inclusionPageStartIndexes(inclusionChunks);
 
   // Execution signature blocks (customer signers first, then the builder) are
   // chunked across as many pages as they need. Previously every block was emitted
@@ -226,7 +224,7 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
       ownerDetailsPage(rows, index > 0, foot()),
     ),
     ...inclusionChunks.map((rows, index) =>
-      inclusionsPage(rows, index * INCLUSIONS_ROWS_PER_PAGE, index > 0, foot()),
+      inclusionsPage(rows, inclusionStartIndexes[index], index > 0, foot()),
     ),
     exclusionsPaymentPage(data, foot()),
     termsPage(data, foot()),
@@ -258,7 +256,7 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
 export function legalDocShell(body: string): string {
   return `<!doctype html><html><head><meta charset="utf-8" />
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; color: #1f1f1f; font-size: 11.5px; line-height: 1.5; }
   .page { width: 210mm; min-height: 297mm; padding: 16mm 18mm; display: flex; flex-direction: column; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
@@ -325,13 +323,16 @@ export function legalDocShell(body: string): string {
     position: relative;
   }
 
+  /* A BORDER, not a background: a background-drawn rule disappears on any
+     print path with "Background graphics" off. */
   .scope-list::before {
     content: "";
     position: absolute;
     left: 50%;
     top: -10px;
     bottom: -10px;
-    width: 1px;
+    width: 0;
+    border-left: 1px solid ${BORDER};
     background: #c7b68c;
     transform: translateX(-50%);
   }
@@ -452,15 +453,15 @@ function ownerDetailRowsHtml(owner: OfferOwner): string {
 }
 
 function inclusionsPage(
-  rows: InclusionRow[],
+  specifications: readonly OfferInclusionEntry[],
   startIndex: number,
   continued: boolean,
   foot: string,
 ): string {
-  const body = rows
+  const body = specifications
     .map(
-      (row, i) =>
-        `<tr><td class="num">${startIndex + i + 1}</td><td class="cat">${esc(row.category)}</td><td>${esc(row.specification)}</td><td class="status"><span class="pill">Included</span></td></tr>`,
+      (entry, i) =>
+        `<tr><td class="num">${startIndex + i + 1}</td><td class="cat">${esc(entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL)}</td><td>${esc(entry.spec)}</td><td class="status"><span class="pill">Included</span></td></tr>`,
     )
     .join("");
   const intro = continued
@@ -479,8 +480,19 @@ function exclusionsPaymentPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
   foot: string,
 ): string {
-  const excludes = data.exclusionBullets
-    .map((b) => `<li>${esc(b)}</li>`)
+  // Three columns, not a bullet list. The description and variation rule are
+  // already captured on every Scope exclusion and were printed NOWHERE — an
+  // estimator typed "Can be priced later as a written variation" and no client
+  // saw it. The offer keeps its short bullets; the TENDER is the document that
+  // carries the obligation, so it carries the detail.
+  //
+  // A free-text bullet has no such detail and prints label-only. That gap is
+  // visible here rather than hidden, which is the point.
+  const excludes = data.exclusionRows
+    .map(
+      (row) =>
+        `<tr><td class="cat">${esc(row.label)}</td><td>${esc(row.description) || "&mdash;"}</td><td>${esc(row.variationRule) || "&mdash;"}</td></tr>`,
+    )
     .join("");
   const pay = data.paymentRows
     .map(
@@ -492,7 +504,7 @@ function exclusionsPaymentPage(
     ${masthead()}
     <h2 style="margin-top:20px;">Exclusions</h2>
     <p style="color:${MUTED};">The following are not included in the Contract Sum and, if required, are priced as a written variation:</p>
-    <ul>${excludes}</ul>
+    <table><thead><tr><th>Item</th><th>What this means</th><th>If required</th></tr></thead><tbody>${excludes}</tbody></table>
     <h2>Progress Payment Schedule</h2>
     <table><thead><tr><th>Stage</th><th>%</th><th>Amount (inc GST)</th><th>Trigger</th></tr></thead><tbody>${pay}</tbody></table>
     ${foot}

@@ -1,6 +1,12 @@
 "use client";
 
 import {
+  checkOfferLists,
+  draftHighlightsForOffer,
+} from "@/lib/data/offer-inclusion-check";
+import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
+import type { ConsistencyFinding } from "@/lib/offer/inclusion-consistency-ai";
+import {
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
@@ -18,6 +24,7 @@ import {
   type OfferWorkspaceJob,
   type OfferWorkspaceScopeItem,
   type OfferWorkspaceStatus,
+  getIncludedOfferTenderLineItems,
 } from "@/lib/offer/workspace-model";
 import {
   INITIAL_PAYMENT_SCHEDULE,
@@ -276,6 +283,11 @@ export function NewOfferWorkspace({
   const [projectResult, setProjectResult] =
     useState<ProjectHandoffResult | null>(null);
   const [prefilling, setPrefilling] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [draftingHighlights, setDraftingHighlights] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [findings, setFindings] = useState<readonly ConsistencyFinding[]>([]);
+  const [checkedClean, setCheckedClean] = useState(false);
   const [prefillResult, setPrefillResult] = useState<OfferPrefillResult | null>(
     null,
   );
@@ -491,7 +503,86 @@ export function NewOfferWorkspace({
 
   function updateDraft(patch: Partial<OfferDocumentDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
+    // Any edit invalidates the last judgement. Better no result than a stale
+    // one that says an offer is consistent when it no longer is.
+    setFindings([]);
+    setCheckedClean(false);
   }
+
+  // Draft the offer's selling list FROM the contractual schedule. This shortens
+  // and groups text the estimator already committed to; it never authors a
+  // specification. Replaces, so it is a deliberate act — the confirm below
+  // guards a curated list.
+  function draftHighlightsFromSchedule() {
+    if (leadId === undefined || draftingHighlights) {
+      return;
+    }
+    if (
+      draft.inclusionHighlights.length > 0 &&
+      !window.confirm(
+        `Replace all ${draft.inclusionHighlights.length} selling lines with a fresh draft from the schedule?`,
+      )
+    ) {
+      return;
+    }
+    setDraftingHighlights(true);
+    setCopyError(null);
+    void (async () => {
+      try {
+        const result = await draftHighlightsForOffer({
+          leadId,
+          scheduled: draft.inclusionSchedule.map((entry) => entry.spec),
+        });
+        if (!result.ok) {
+          setCopyError(result.message);
+          return;
+        }
+        if (result.highlights.length === 0) {
+          setCopyError("Nothing to draft from — the schedule is empty.");
+          return;
+        }
+        updateDraft({ inclusionHighlights: [...result.highlights] });
+      } catch (error) {
+        console.error("[offer] highlight draft failed:", error);
+        setCopyError(`Could not draft the list: ${(error as Error).message}`);
+      } finally {
+        setDraftingHighlights(false);
+      }
+    })();
+  }
+
+  // Audit estimated -> schedule -> offer. The model only judges; writes nothing.
+  function checkOfferConsistencyLists() {
+    if (leadId === undefined || checking) {
+      return;
+    }
+    setChecking(true);
+    setCopyError(null);
+    void (async () => {
+      try {
+        const result = await checkOfferLists({
+          leadId,
+          estimated: getIncludedOfferTenderLineItems(lines),
+          scheduled: draft.inclusionSchedule.map((entry) => entry.spec),
+          excluded: getVisibleExclusions(draft, exclusions),
+          offered: draft.inclusionHighlights,
+        });
+        if (!result.ok) {
+          setCopyError(result.message);
+          return;
+        }
+        setFindings(result.findings);
+        setCheckedClean(result.findings.length === 0);
+      } catch (error) {
+        console.error("[offer] consistency check failed:", error);
+        setCopyError(`Could not run the check: ${(error as Error).message}`);
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }
+
+
 
   function updateTenderGate(patch: Partial<TenderGateState>) {
     setTenderGate((current) => ({ ...current, ...patch }));
@@ -1523,6 +1614,13 @@ export function NewOfferWorkspace({
         onImageChange={updateImage}
         onImported={importWorkbook}
         onJobChange={updateJob}
+        onDraftHighlights={draftHighlightsFromSchedule}
+        draftingHighlights={draftingHighlights}
+        onCheckConsistency={checkOfferConsistencyLists}
+        checking={checking}
+        copyError={copyError}
+        findings={findings}
+        checkedClean={checkedClean}
         onPrefillFromLead={prefillFromLead}
         canPrefill={leadId !== undefined}
         prefilling={prefilling}

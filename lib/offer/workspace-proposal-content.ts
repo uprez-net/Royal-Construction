@@ -1,4 +1,7 @@
-import type { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
+import type {
+  OfferInclusionEntry,
+  OfferWorkspaceJob,
+} from "@/lib/offer/workspace-model";
 
 // Standard, reusable proposal content (welcome letter, inclusions schedule,
 // includes/excludes). This is boilerplate shared across offers — the same way
@@ -10,6 +13,11 @@ export type OfferInclusionRow = {
   readonly category: string;
   readonly specification: string;
   readonly highlight?: boolean;
+  // The short form printed beside the price on the Investment Summary page.
+  // Present only on the rows worth selling on. Stated HERE, next to the spec it
+  // summarises, so the two can never contradict each other — which is exactly
+  // what happened when page 4 and the schedule were separate hand-edited lists.
+  readonly summary?: string;
 };
 
 // Spec facts quoted on more than one page of the proposal.
@@ -40,6 +48,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Structure & Envelope",
     category: "Concrete Slab",
+    summary: "All structural works — slab, frame, roof",
     specification:
       "Engineered slab — piering to engineer spec. Drop edge beam to sloped boundary.",
   },
@@ -68,6 +77,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Structure & Envelope",
     category: "Rendering — Full Facade",
+    summary: "Full render to ALL elevations — both levels",
     specification:
       "Full acrylic render to entire external facade — ground floor AND first floor — as per architectural plans. Colour selection included. Premium inclusion priced into your fixed contract.",
     highlight: true,
@@ -101,6 +111,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Kitchen — Luxury",
     category: "Kitchen Cabinetry",
+    summary: "Luxury shaker kitchen + butler's pantry",
     specification:
       "Custom shaker door kitchen — overhead + base cabinets, soft-close. Butler's pantry with full shelving, bench and sink.",
     highlight: true,
@@ -108,6 +119,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Kitchen — Luxury",
     category: "Stone Benchtops",
+    summary: `${OFFER_SPEC_FACTS.stoneBenchtopThickness} stone benchtops throughout`,
     specification: `${OFFER_SPEC_FACTS.stoneBenchtopThickness} engineered stone — kitchen island, perimeter bench and butler's pantry. Choice from range.`,
   },
   {
@@ -135,6 +147,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Bathrooms",
     category: "Tiling",
+    summary: "Floor-to-ceiling tiles — all wet areas",
     specification: "Floor-to-ceiling wall tiles — all bathrooms and laundry.",
   },
   {
@@ -165,6 +178,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Staircase",
+    summary: "Feature staircase with glass balustrade",
     specification:
       "Feature staircase — MDF treads with glass/void balustrade per section drawings.",
   },
@@ -198,6 +212,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Flooring — Living",
+    summary: `${OFFER_SPEC_FACTS.livingFloorFinish} — living areas`,
     specification: `${OFFER_SPEC_FACTS.livingFloorFinish}. $30/m² allowance.`,
   },
   {
@@ -208,6 +223,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Electrical & HVAC",
     category: "Electrical",
+    summary: "All plumbing & electrical to completion",
     specification:
       "Full rough-in, final fit-out. Smoke alarms, data and camera wiring included.",
   },
@@ -219,6 +235,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Electrical & HVAC",
     category: "Ducted Air Con",
+    summary: `${OFFER_SPEC_FACTS.ductedAirConditioning} ducted air conditioning`,
     specification: `${OFFER_SPEC_FACTS.ductedAirConditioning} ducted reverse-cycle. All living areas and bedrooms.`,
     highlight: true,
   },
@@ -235,6 +252,7 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "External & Completion",
     category: "Driveway",
+    summary: "Driveway — both vehicle crossings",
     specification:
       "Exposed aggregate or brushed concrete driveway — both vehicle crossings.",
   },
@@ -251,33 +269,55 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "External & Completion",
     category: "Final Clean",
+    summary: "Final clean & defects period",
     specification: "Professional builders clean prior to handover.",
   },
   {
     group: "External & Completion",
     category: "HBCF",
+    summary: "HBCF home warranty insurance",
     specification: "Home Building Compensation Fund warranty insurance — included. iCare registered.",
+  },
+  // These two were sold on the Investment Summary page but had no schedule row
+  // of their own, so collapsing the two lists would have quietly dropped them
+  // from page 4. They are real inclusions, so they get real specs.
+  {
+    group: "External & Completion",
+    category: "PC & Provisional Items",
+    summary: "All PC items per inclusions schedule",
+    specification:
+      "All prime-cost and provisional-sum items as listed in this schedule, confirmed at colour selection.",
+  },
+  {
+    group: "External & Completion",
+    category: "Approvals",
+    summary: "Council certifier and approval fees",
+    specification:
+      "Council certifier fees, development application and construction certificate approval fees.",
   },
 ];
 
-// Investment-summary bullet lists (customer-facing includes / excludes).
-export const OFFER_INCLUDES_BULLETS: readonly string[] = [
-  "All structural works — slab, frame, roof",
-  "Full render to ALL elevations — both levels",
-  "All plumbing & electrical to completion",
-  "Luxury shaker kitchen + butler's pantry",
-  `${OFFER_SPEC_FACTS.stoneBenchtopThickness} stone benchtops throughout`,
-  `${OFFER_SPEC_FACTS.ductedAirConditioning} ducted air conditioning`,
-  `${OFFER_SPEC_FACTS.livingFloorFinish} — living areas`,
-  "Floor-to-ceiling tiles — all wet areas",
-  "Feature staircase with glass balustrade",
-  "All PC items per inclusions schedule",
-  "Council certifier and approval fees",
-  "Driveway — both vehicle crossings",
-  "HBCF home warranty insurance",
-  "Final clean & defects period",
-];
+// The single inclusions list a new offer starts from. The grouped/categorised
+// rows above are SEED DATA — they are never rendered directly. Category
+// headings and the `highlight` flag are deliberately not carried: the printed
+// schedule is a plain numbered list, and each entry's optional `summary` is
+// what the Investment Summary page prints beside the price.
+export const STANDARD_INCLUSION_ENTRIES: readonly OfferInclusionEntry[] =
+  STANDARD_INCLUSIONS_SCHEDULE.map((row) => ({
+    spec: row.specification,
+    category: row.category,
+  }));
 
+// The seeded "This price includes" list. `summary` on a template row is the
+// SEED for this list, not a field on the entry: one selling line covers several
+// schedule rows, so it cannot live on any one of them.
+export const STANDARD_INCLUSION_HIGHLIGHTS: readonly string[] =
+  STANDARD_INCLUSIONS_SCHEDULE.map((row) => row.summary).filter(
+    (summary): summary is string => Boolean(summary?.trim()),
+  );
+
+// Page-4 exclusions. The includes side of this pair is gone — it is now the
+// `summary` on each inclusion entry, so it cannot drift from the schedule.
 export const OFFER_EXCLUDES_BULLETS: readonly string[] = [
   "Landscaping & turf beyond driveway",
   "Boundary or pool fencing",

@@ -16,6 +16,7 @@ import {
   type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
+import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
 import { FileText, Info, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
@@ -422,13 +423,10 @@ function TenderPreview({
   // "Customer — <company>" line and dropped its directors.
   const ownerNamesLine = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
   const signers = collectOfferSigners(job.owners ?? []);
-  const shownExclusions = exclusions
-    .filter((item) => item.includedInOfferDocument)
-    .map((item) => item.label);
-  const exclusionLines =
-    draft.exclusionBullets.length > 0
-      ? draft.exclusionBullets
-      : shownExclusions;
+  // Same resolver the tender PDF uses. This previously treated the draft
+  // bullets as an OVERRIDE that suppressed the Scope items, so the on-screen
+  // tender showed a shorter exclusion list than the document it represents.
+  const exclusionLines = getVisibleExclusions(draft, exclusions);
   const stateLabel =
     state === "signed" ? "Executed" : state === "sent" ? "Out for signature" : "Draft";
 
@@ -460,9 +458,12 @@ function TenderPreview({
         </p>
       </div>
 
+      {/* The tender PDF prints the Inclusions Schedule, not the Investment
+          Summary bullets — this showed the bullets and so misrepresented the
+          document. */}
       <TenderList
         emptyLabel="No inclusions captured yet."
-        items={draft.inclusionBullets}
+        items={draft.inclusionSchedule.map((entry) => entry.spec)}
         numbered
         title="Inclusions"
       />
