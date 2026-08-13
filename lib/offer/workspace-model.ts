@@ -617,6 +617,9 @@ export const CHARS_PER_LINE_TABLE_CELL = 34;
 // rendered as a full-width list; leaving it there after the table came back
 // under-counted every row and overflowed the page by two sheets.
 export const CHARS_PER_LINE_INCLUSION = 68;
+// One "This price includes" / "excludes" item. Two columns share the 165mm
+// content width, so each is roughly 78mm — about 42 characters at 13px.
+export const CHARS_PER_LINE_INVESTMENT = 42;
 // The Category cell in the same row (45mm).
 export const CHARS_PER_LINE_INCLUSION_CATEGORY = 22;
 // A table row costs its tallest cell PLUS vertical padding (10px top and bottom

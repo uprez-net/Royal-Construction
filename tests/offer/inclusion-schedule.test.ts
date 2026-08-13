@@ -246,7 +246,34 @@ test("an entry with no summary never reaches the investment page", () => {
   assert.doesNotMatch(investmentPage, /Schedule only, no summary\./);
 });
 
+test("the offer PDF prints the draft schedule, not the template constant", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(
+      snapshotWithSchedule([
+        { spec: "Bespoke spec one" },
+        { spec: "Bespoke spec two" },
+      ]),
+    ),
+    EMPTY_OFFER_IMAGES,
+  );
 
+  assert.match(html, /Bespoke spec one/);
+  assert.match(html, /Bespoke spec two/);
+  assert.doesNotMatch(html, /Engineered slab/);
+});
+
+test("the offer PDF keeps the Category / Specification table", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(
+      snapshotWithSchedule([{ spec: "Only spec", category: "Concrete Slab" }]),
+    ),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  assert.match(html, /<th>Category<\/th>/);
+  assert.match(html, /<th>Specification<\/th>/);
+  assert.match(html, /Concrete Slab/);
+});
 
 test("the tender keeps its numbered four-column schedule", () => {
   const html = buildTenderHtml(
@@ -261,6 +288,26 @@ test("the tender keeps its numbered four-column schedule", () => {
   assert.match(html, /Tiling/);
 });
 
+// An entry pulled from the cost schedule or typed by an estimator has no
+// category. It must never print an empty cell on a fixed-price contract.
+test("an entry with no category prints Miscellaneous on both documents", () => {
+  const snapshot = snapshotWithSchedule([{ spec: "Pulled from cost schedule." }]);
+
+  const offer = buildProposalHtml(buildProposalInput(snapshot), EMPTY_OFFER_IMAGES);
+  const tender = buildTenderHtml(buildProposalInput(snapshot));
+
+  assert.match(offer, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
+  assert.match(tender, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
+});
+
+test("a blank category is treated as missing, not printed as an empty cell", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(snapshotWithSchedule([{ spec: "S", category: "   " }])),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  assert.match(html, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
+});
 
 test("v4 entries regain their category by matching the seeded spec", () => {
   const seeded = STANDARD_INCLUSION_ENTRIES[1];
@@ -288,6 +335,14 @@ test("v4 entries regain their category by matching the seeded spec", () => {
   );
 });
 
+test("an empty schedule renders no inclusions page at all", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(snapshotWithSchedule([])),
+    EMPTY_OFFER_IMAGES,
+  );
+
+  assert.doesNotMatch(html, /Full inclusions schedule/);
+});
 
 // The tender numbers every inclusion; the offer's Category/Specification table
 // never did. Numbering must run 1..n unbroken across the tender's page breaks.
@@ -491,68 +546,4 @@ test("no findings, no blocker", () => {
   });
 
   assert.equal(blockers.some((b) => b.id === "inclusion-consistency"), false);
-});
-
-// ─── The offer sells; the tender contracts ───
-
-// The full schedule is three pages of contractual detail. It belongs on the
-// document that contracts, not the one that sells — and printing it on the
-// offer also made the imbalance worse, giving inclusions three pages while
-// exclusions got a single column beside the price.
-test("the offer does not print the inclusions schedule", () => {
-  const html = buildProposalHtml(
-    buildProposalInput(
-      snapshotWithSchedule([
-        { spec: "A contractual sentence only the tender should carry.", category: "Tiling" },
-      ]),
-    ),
-    EMPTY_OFFER_IMAGES,
-  );
-
-  assert.doesNotMatch(html, /Full inclusions schedule/);
-  assert.doesNotMatch(html, /A contractual sentence only the tender should carry\./);
-  assert.doesNotMatch(html, /<th>Category<\/th>/);
-});
-
-test("the offer still prints what it sells and what it excludes", () => {
-  const snapshot = snapshotWithSchedule([{ spec: "S", category: "C" }]);
-  const html = buildProposalHtml(
-    buildProposalInput({
-      ...snapshot,
-      draft: { ...snapshot.draft, inclusionHighlights: ["40mm stone benchtops throughout"] },
-    } as OfferWorkspaceSnapshot),
-    EMPTY_OFFER_IMAGES,
-  );
-
-  assert.match(html, /This price includes/);
-  assert.match(html, /40mm stone benchtops throughout/);
-  assert.match(html, /This price excludes/);
-});
-
-test("the tender carries the full schedule with its Category column", () => {
-  const html = buildTenderHtml(
-    buildProposalInput(
-      snapshotWithSchedule([
-        { spec: "Full AS3740 waterproofing.", category: "Waterproofing" },
-      ]),
-    ),
-  );
-
-  assert.match(html, /Full AS3740 waterproofing\./);
-  assert.match(html, /<th>Category<\/th>/);
-  assert.match(html, /Waterproofing/);
-});
-
-test("an uncategorised row still prints Miscellaneous on the tender", () => {
-  const html = buildTenderHtml(
-    buildProposalInput(snapshotWithSchedule([{ spec: "No category here." }])),
-  );
-
-  assert.match(html, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
-});
-
-test("an empty schedule renders no inclusions page on the tender", () => {
-  const html = buildTenderHtml(buildProposalInput(snapshotWithSchedule([])));
-
-  assert.doesNotMatch(html, /Scope of Works/);
 });

@@ -1,6 +1,10 @@
 import {
   CHARS_PER_LINE_SIGNATURE,
   chunkByEstimatedHeight,
+  chunkInclusionSchedule,
+  inclusionPageStartIndexes,
+  UNCATEGORISED_INCLUSION_LABEL,
+  type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
   formatOwnerGreetingNames,
@@ -142,11 +146,10 @@ export function OfferWorkspacePrintTemplate(
   props: OfferWorkspacePrintTemplateProps,
 ) {
   const data = buildOfferPrintTemplateData(props);
-  // The full inclusions schedule is NOT on the offer. The offer SELLS — the
-  // page-4 includes/excludes lists — and the Tender CONTRACTS, carrying the
-  // 60-odd row schedule and its own exclusions page. Printing three pages of
-  // contractual detail on a sales document also made the imbalance worse:
-  // inclusions got three pages, exclusions got one column.
+  // The schedule the estimator edited on this offer — not a module constant.
+  // An empty schedule produces zero pages rather than an empty table.
+  const inclusionPages = chunkInclusionSchedule(props.draft.inclusionSchedule);
+  const inclusionStartIndexes = inclusionPageStartIndexes(inclusionPages);
   const galleryImages = getAttachedOfferImageSlots(props.images).filter(
     (slot) => slot.key !== "hero",
   );
@@ -228,6 +231,20 @@ export function OfferWorkspacePrintTemplate(
         props={props}
         footer={foot(data, n, total)}
       />
+    ),
+    ...inclusionPages.map(
+      (rows, i) =>
+        // eslint-disable-next-line react/display-name -- page factory, not a component
+        (n: number, total: number) =>
+          (
+            <PrintInclusionsPage
+              key={`inclusions-${i}`}
+              specifications={rows}
+              startIndex={inclusionStartIndexes[i]}
+              continued={i > 0}
+              footer={foot(data, n, total)}
+            />
+          ),
     ),
     (n, total) => (
       <PrintTermsPage
@@ -548,6 +565,55 @@ function PrintInvestmentPage({
   );
 }
 
+function PrintInclusionsPage({
+  specifications,
+  startIndex,
+  continued,
+  footer,
+}: {
+  readonly specifications: readonly OfferInclusionEntry[];
+  readonly startIndex: number;
+  readonly continued: boolean;
+  readonly footer: string;
+}) {
+  return (
+    <PrintPage footerText={footer}>
+      <ProposalMasthead />
+      <PrintSection
+        eyebrow="Inclusions"
+        title={continued ? "Full inclusions schedule (cont.)" : "Full inclusions schedule"}
+      >
+        {continued ? null : (
+          <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+            All items below are fixed within your contract price. Design provided
+            by owner/architect — all costs fixed as per approved plans, confirmed
+            at colour selection.
+          </p>
+        )}
+      </PrintSection>
+      <table className="mt-6 w-full border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="w-[45mm] py-3 pr-4 font-semibold">Category</th>
+            <th className="px-4 py-3 font-semibold">Specification</th>
+          </tr>
+        </thead>
+        <tbody>
+          {specifications.map((entry, index) => (
+            <tr className="border-b border-border" key={`${startIndex + index}`}>
+              <td className="py-3 pr-4 align-top font-semibold text-sidebar">
+                {entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL}
+              </td>
+              <td className="px-4 py-3 align-top text-muted-foreground">
+                {entry.spec}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </PrintPage>
+  );
+}
 
 function PrintTermsPage({
   data,

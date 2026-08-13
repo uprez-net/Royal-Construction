@@ -19,8 +19,13 @@ import {
 } from "./workspace-images";
 import {
   formatBoundedOwnerList,
+  CHARS_PER_LINE_INVESTMENT,
   CHARS_PER_LINE_SIGNATURE,
   chunkByEstimatedHeight,
+  chunkInclusionSchedule,
+  inclusionPageStartIndexes,
+  UNCATEGORISED_INCLUSION_LABEL,
+  type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
   formatOwnerGreetingNames,
@@ -142,11 +147,10 @@ export function buildProposalHtml(
     (slot) => slot.key !== "hero",
   );
 
-  // The full inclusions schedule is NOT on the offer. The offer SELLS — the
-  // page-4 includes/excludes lists — and the Tender CONTRACTS, carrying the
-  // 60-odd row schedule and its own exclusions page. Printing three pages of
-  // contractual detail on a sales document also made the imbalance worse:
-  // inclusions got three pages, exclusions got one column.
+  // The schedule the estimator edited on this offer — not a module constant.
+  // An empty schedule produces zero pages rather than an empty table.
+  const inclusionPages = chunkInclusionSchedule(input.draft.inclusionSchedule);
+  const inclusionStartIndexes = inclusionPageStartIndexes(inclusionPages);
 
   // Signature blocks (customer signers first, then the builder). A handful fit
   // under the terms-page payment table (the common 1–3 signer case, unchanged);
@@ -193,6 +197,7 @@ export function buildProposalHtml(
 
   const totalPages =
     5 +
+    inclusionPages.length +
     (galleryImages.length > 0 ? 1 : 0) +
     signatureChunks.length;
   let pageNo = 0;
@@ -207,6 +212,9 @@ export function buildProposalHtml(
     ...(galleryImages.length > 0 ? [galleryPage(galleryImages, foot())] : []),
     snapshotPage(input, data, foot()),
     investmentPage(input, data, foot()),
+    ...inclusionPages.map((rows, index) =>
+      inclusionsPage(rows, inclusionStartIndexes[index], index > 0, foot()),
+    ),
     termsPage(input, data, inlineSignatures ? signatureBlocks : null, foot()),
     ...signatureChunks.map((chunk, index) =>
       signaturePage(job, chunk, index > 0, foot()),
@@ -260,11 +268,22 @@ export function buildProposalHtml(
   .cols h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; }
   .cols ul { list-style: none; margin-top: 12px; }
   .cols li { position: relative; padding-left: 16px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
+  /* The includes list grows with the offer, and page 4 has a fixed height. At
+     15 items the last line was printing over the footer rule. Tighten the gap
+     first (whitespace is cheapest to lose), then the type, so a long list stays
+     on its page instead of spilling. */
+  .cols.tight li { margin-bottom: 6px; font-size: 12.5px; line-height: 1.45; }
+  .cols.tighter li { margin-bottom: 4px; font-size: 12px; line-height: 1.4; }
+  .cols.tightest li { margin-bottom: 2px; font-size: 11.5px; line-height: 1.35; }
   /* A GLYPH, not a background box. Drawing the bullet with background-color
      meant it vanished entirely on any print path with "Background graphics"
      off — the client received a bare indented list with no bullets at all.
      Text always prints. */
-  .cols li:before { content: "\\25AA"; position: absolute; left: 0; top: 0; color: ${GOLD}; font-size: 13px; line-height: 1.5; }
+  .cols li:before { content: "\\25AA"; position: absolute; left: 0; top: 0; color: ${GOLD}; font-size: inherit; line-height: inherit; }
+  .inc { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 13px; }
+  .inc th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
+  .inc td { border-bottom: 1px solid ${BORDER}; padding: 10px; vertical-align: top; }
+  .inc td.cat { font-weight: 700; color: ${NAVY}; width: 45mm; }
   .pay th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .pay td { border-bottom: 1px solid ${BORDER}; padding: 12px 10px; font-size: 13px; }
   .pay td.stage { font-weight: 700; }
@@ -412,6 +431,28 @@ function snapshotPage(
   </div>`;
 }
 
+// How hard to squeeze the page-4 lists so they stay on page 4.
+//
+// Budgeted in LINE UNITS, not item count: a wrapped item costs two lines, and
+// it was a 15-item list of mostly-wrapping lines that pushed the last entry
+// over the footer rule. The two columns sit side by side, so the taller one
+// decides. Thresholds verified against real Chromium output.
+export function investmentListDensity(
+  includes: readonly string[],
+  excludes: readonly string[],
+): "" | "tight" | "tighter" | "tightest" {
+  const lines = (items: readonly string[]) =>
+    items.reduce(
+      (sum, item) => sum + estimateWrappedLines(item, CHARS_PER_LINE_INVESTMENT),
+      0,
+    );
+  const tallest = Math.max(lines(includes), lines(excludes));
+  if (tallest <= 16) return "";
+  if (tallest <= 21) return "tight";
+  if (tallest <= 26) return "tighter";
+  return "tightest";
+}
+
 function investmentPage(
   input: OfferPrintTemplateInput,
   data: ReturnType<typeof buildOfferPrintTemplateData>,
@@ -435,7 +476,7 @@ function investmentPage(
       <div class="big">${money(customerPrice.selectedContractValueIncGst)}</div>
       <div class="muted" style="font-family:monospace;font-size:13px;margin-top:6px;">Including GST | MBA fixed price contract | Valid until ${esc(data.validUntilLabel)}</div>
     </div>
-    <div class="cols">
+    <div class="cols ${investmentListDensity(data.summaryInclusions, data.exclusionBullets)}">
       <div><h2>This price includes</h2><ul>${includes}</ul></div>
       <div><h2>This price excludes</h2><ul>${excludes}</ul></div>
     </div>
@@ -443,6 +484,30 @@ function investmentPage(
   </div>`;
 }
 
+function inclusionsPage(
+  specifications: readonly OfferInclusionEntry[],
+  startIndex: number,
+  continued: boolean,
+  foot: string,
+): string {
+  const body = specifications
+    .map(
+      (entry) =>
+        `<tr><td class="cat">${esc(entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL)}</td><td class="muted">${esc(entry.spec)}</td></tr>`,
+    )
+    .join("");
+  const intro = continued
+    ? ""
+    : `<p class="muted" style="margin-top:12px;max-width:155mm;">All items below are fixed within your contract price. Design provided by owner/architect — all costs fixed as per approved plans, confirmed at colour selection.</p>`;
+  return `<div class="page">
+    <div class="masthead">${esc(COMPANY_LINE)}</div>
+    <div class="eyebrow">Inclusions</div>
+    <h1 class="title">Full inclusions schedule${continued ? " (cont.)" : ""}</h1>
+    ${intro}
+    <table class="inc"><thead><tr><th>Category</th><th>Specification</th></tr></thead><tbody>${body}</tbody></table>
+    ${foot}
+  </div>`;
+}
 
 // Acceptance paragraph — names every owner ("I/We, A and B and C, accept…").
 // Single-owner offers keep the "I/We, <owner>, accept…" wording; `I/We` covers
