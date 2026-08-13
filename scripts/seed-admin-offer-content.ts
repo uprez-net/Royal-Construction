@@ -82,13 +82,15 @@ async function seed() {
   }));
 
   const payload: AdminOfferContent = {
-    buildScope: [...INITIAL_OFFER_DRAFT.inclusionBullets],
+    buildScope: [...INITIAL_OFFER_DRAFT.inclusionHighlights],
     costSchedule: { rows, rateConstants },
     offerScope: { allowances, exclusions },
     offerContent: {
       headline: INITIAL_OFFER_DRAFT.headline,
       introText: INITIAL_OFFER_DRAFT.introText,
-      inclusions: [...INITIAL_OFFER_DRAFT.inclusionBullets],
+      // The admin's inclusion copy is the page-4 wording, which now lives as
+      // the `summary` on each inclusion entry.
+      inclusions: [...INITIAL_OFFER_DRAFT.inclusionHighlights],
       termsAndConditions: INITIAL_OFFER_DRAFT.termsSummary,
     },
   };

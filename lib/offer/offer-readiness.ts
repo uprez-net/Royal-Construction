@@ -88,6 +88,10 @@ export type OfferSendReadinessInput = {
   // Location / signatory email). Block-severity so the offer can't be sent and
   // locked with party data that prints blank on the legal documents (codex #1).
   readonly ownerIssues?: readonly string[];
+  // Unresolved findings from the priced -> promised -> sold consistency check.
+  // WARN, never block: this is a model judgement on contract text, and a false
+  // positive must not stop a live deal going out.
+  readonly inclusionFindingCount?: number;
 };
 
 export function collectOfferSendBlockers({
@@ -95,6 +99,7 @@ export function collectOfferSendBlockers({
   needsOverrideReason,
   expiryState,
   ownerIssues = [],
+  inclusionFindingCount = 0,
 }: OfferSendReadinessInput): readonly OfferSendBlocker[] {
   const blockers: OfferSendBlocker[] = [];
 
@@ -128,6 +133,15 @@ export function collectOfferSendBlockers({
       id: "expired",
       label: "This offer's validity date has passed — extend it before sending an expired fixed price.",
       stepId: "offer-step-job-setup",
+      severity: "warn",
+    });
+  }
+
+  if (inclusionFindingCount > 0) {
+    blockers.push({
+      id: "inclusion-consistency",
+      label: `${inclusionFindingCount} inclusion ${inclusionFindingCount === 1 ? "mismatch" : "mismatches"} unresolved — review before sending`,
+      stepId: "offer-step-offer-document",
       severity: "warn",
     });
   }

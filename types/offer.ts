@@ -24,10 +24,17 @@ export interface SafeOfferDBFile extends Omit<OfferFile, 'offerContent'> {
     offerContent: OfferFileType;
 }
 
-export interface SafeOffer extends Omit<Offer, 'amount' | 'gstAmount' | 'totalAmount'> {
+// Every Prisma Decimal on Offer is narrowed to string here. Decimal is not a
+// plain object, so leaving one on this type lets it reach a Client Component and
+// trip React's "Only plain objects can be passed to Client Components" warning —
+// which is what contractValueIncGst did before it was added to this Omit.
+export interface SafeOffer
+    extends Omit<Offer, 'amount' | 'gstAmount' | 'totalAmount' | 'contractValueIncGst'> {
     amount: string;
     gstAmount: string;
     totalAmount: string;
+    // Nullable in the schema — an offer has no contract value until it is priced.
+    contractValueIncGst: string | null;
     version: number;
 }
 

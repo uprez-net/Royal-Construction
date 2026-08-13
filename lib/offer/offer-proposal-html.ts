@@ -10,7 +10,6 @@ import {
 import {
   buildWelcomeParagraphs,
   OFFER_SPEC_FACTS,
-  STANDARD_INCLUSIONS_SCHEDULE,
 } from "./workspace-proposal-content";
 import {
   getAttachedOfferImageSlots,
@@ -20,8 +19,13 @@ import {
 } from "./workspace-images";
 import {
   formatBoundedOwnerList,
+  CHARS_PER_LINE_INVESTMENT,
   CHARS_PER_LINE_SIGNATURE,
   chunkByEstimatedHeight,
+  chunkInclusionSchedule,
+  inclusionPageStartIndexes,
+  UNCATEGORISED_INCLUSION_LABEL,
+  type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
   formatOwnerGreetingNames,
@@ -39,7 +43,6 @@ const GOLD_LIGHT = "#f6efe0";
 const BORDER = "#e3e3e0";
 const MUTED = "#6b6b6b";
 
-const INCLUSIONS_ROWS_PER_PAGE = 12;
 // Builder + up to 3 client signers still fit under the terms-page payment table
 // (the common case, kept byte-identical); beyond that, signatures move onto their
 // own page(s), chunked so blocks never overflow a physical page (PR #124 review).
@@ -144,12 +147,10 @@ export function buildProposalHtml(
     (slot) => slot.key !== "hero",
   );
 
-  const inclusionPages: (typeof STANDARD_INCLUSIONS_SCHEDULE)[number][][] = [];
-  for (let i = 0; i < STANDARD_INCLUSIONS_SCHEDULE.length; i += INCLUSIONS_ROWS_PER_PAGE) {
-    inclusionPages.push(
-      STANDARD_INCLUSIONS_SCHEDULE.slice(i, i + INCLUSIONS_ROWS_PER_PAGE),
-    );
-  }
+  // The schedule the estimator edited on this offer — not a module constant.
+  // An empty schedule produces zero pages rather than an empty table.
+  const inclusionPages = chunkInclusionSchedule(input.draft.inclusionSchedule);
+  const inclusionStartIndexes = inclusionPageStartIndexes(inclusionPages);
 
   // Signature blocks (customer signers first, then the builder). A handful fit
   // under the terms-page payment table (the common 1–3 signer case, unchanged);
@@ -211,7 +212,9 @@ export function buildProposalHtml(
     ...(galleryImages.length > 0 ? [galleryPage(galleryImages, foot())] : []),
     snapshotPage(input, data, foot()),
     investmentPage(input, data, foot()),
-    ...inclusionPages.map((rows, index) => inclusionsPage(rows, index > 0, foot())),
+    ...inclusionPages.map((rows, index) =>
+      inclusionsPage(rows, inclusionStartIndexes[index], index > 0, foot()),
+    ),
     termsPage(input, data, inlineSignatures ? signatureBlocks : null, foot()),
     ...signatureChunks.map((chunk, index) =>
       signaturePage(job, chunk, index > 0, foot()),
@@ -220,7 +223,9 @@ export function buildProposalHtml(
 
   return `<!doctype html><html><head><meta charset="utf-8" />
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* Keep the intended colours when the PDF is produced by a path that would
+     otherwise drop backgrounds (browser print, printBackground:false). */
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: Arial, Helvetica, sans-serif; color: #222; }
   .page { width: 210mm; min-height: 297mm; padding: 13mm 18mm; display: flex; flex-direction: column; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
@@ -263,12 +268,22 @@ export function buildProposalHtml(
   .cols h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; }
   .cols ul { list-style: none; margin-top: 12px; }
   .cols li { position: relative; padding-left: 16px; margin-bottom: 10px; font-size: 13px; line-height: 1.5; }
-  .cols li:before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: ${GOLD}; }
+  /* The includes list grows with the offer, and page 4 has a fixed height. At
+     15 items the last line was printing over the footer rule. Tighten the gap
+     first (whitespace is cheapest to lose), then the type, so a long list stays
+     on its page instead of spilling. */
+  .cols.tight li { margin-bottom: 6px; font-size: 12.5px; line-height: 1.45; }
+  .cols.tighter li { margin-bottom: 4px; font-size: 12px; line-height: 1.4; }
+  .cols.tightest li { margin-bottom: 2px; font-size: 11.5px; line-height: 1.35; }
+  /* A GLYPH, not a background box. Drawing the bullet with background-color
+     meant it vanished entirely on any print path with "Background graphics"
+     off — the client received a bare indented list with no bullets at all.
+     Text always prints. */
+  .cols li:before { content: "\\25AA"; position: absolute; left: 0; top: 0; color: ${GOLD}; font-size: inherit; line-height: inherit; }
   .inc { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 13px; }
   .inc th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .inc td { border-bottom: 1px solid ${BORDER}; padding: 10px; vertical-align: top; }
   .inc td.cat { font-weight: 700; color: ${NAVY}; width: 45mm; }
-  .inc tr.hi td { background: ${GOLD_LIGHT}; }
   .pay th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .pay td { border-bottom: 1px solid ${BORDER}; padding: 12px 10px; font-size: 13px; }
   .pay td.stage { font-weight: 700; }
@@ -416,6 +431,28 @@ function snapshotPage(
   </div>`;
 }
 
+// How hard to squeeze the page-4 lists so they stay on page 4.
+//
+// Budgeted in LINE UNITS, not item count: a wrapped item costs two lines, and
+// it was a 15-item list of mostly-wrapping lines that pushed the last entry
+// over the footer rule. The two columns sit side by side, so the taller one
+// decides. Thresholds verified against real Chromium output.
+export function investmentListDensity(
+  includes: readonly string[],
+  excludes: readonly string[],
+): "" | "tight" | "tighter" | "tightest" {
+  const lines = (items: readonly string[]) =>
+    items.reduce(
+      (sum, item) => sum + estimateWrappedLines(item, CHARS_PER_LINE_INVESTMENT),
+      0,
+    );
+  const tallest = Math.max(lines(includes), lines(excludes));
+  if (tallest <= 16) return "";
+  if (tallest <= 21) return "tight";
+  if (tallest <= 26) return "tighter";
+  return "tightest";
+}
+
 function investmentPage(
   input: OfferPrintTemplateInput,
   data: ReturnType<typeof buildOfferPrintTemplateData>,
@@ -426,7 +463,7 @@ function investmentPage(
     data.savingAmount !== null && data.savingAmount > 0
       ? `<div class="save">Standard price ${money(standardPriceIncGst)} - ${esc(priceAdjustmentLabel || "saving")} ${money(data.savingAmount)}</div>`
       : "";
-  const includes = draft.inclusionBullets.map((b) => `<li>${esc(b)}</li>`).join("");
+  const includes = data.summaryInclusions.map((b) => `<li>${esc(b)}</li>`).join("");
   const excludes = data.exclusionBullets.map((b) => `<li>${esc(b)}</li>`).join("");
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
@@ -439,7 +476,7 @@ function investmentPage(
       <div class="big">${money(customerPrice.selectedContractValueIncGst)}</div>
       <div class="muted" style="font-family:monospace;font-size:13px;margin-top:6px;">Including GST | MBA fixed price contract | Valid until ${esc(data.validUntilLabel)}</div>
     </div>
-    <div class="cols">
+    <div class="cols ${investmentListDensity(data.summaryInclusions, data.exclusionBullets)}">
       <div><h2>This price includes</h2><ul>${includes}</ul></div>
       <div><h2>This price excludes</h2><ul>${excludes}</ul></div>
     </div>
@@ -448,14 +485,15 @@ function investmentPage(
 }
 
 function inclusionsPage(
-  rows: (typeof STANDARD_INCLUSIONS_SCHEDULE)[number][],
+  specifications: readonly OfferInclusionEntry[],
+  startIndex: number,
   continued: boolean,
   foot: string,
 ): string {
-  const body = rows
+  const body = specifications
     .map(
-      (row) =>
-        `<tr class="${row.highlight ? "hi" : ""}"><td class="cat">${esc(row.category)}</td><td class="muted">${esc(row.specification)}</td></tr>`,
+      (entry) =>
+        `<tr><td class="cat">${esc(entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL)}</td><td class="muted">${esc(entry.spec)}</td></tr>`,
     )
     .join("");
   const intro = continued

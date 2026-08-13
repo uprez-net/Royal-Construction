@@ -5,7 +5,6 @@ import type {
   OfferWorkspaceJob,
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
-import { getIncludedOfferTenderLineItems } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 
@@ -24,6 +23,15 @@ export type OfferPrintPaymentRow = {
   readonly trigger: string;
 };
 
+// A printed exclusion with the detail the Scope step already captures. The
+// tender prints all three columns; the offer prints the label alone, because
+// the offer sells and the tender carries the obligation.
+export type OfferPrintExclusionRow = {
+  readonly label: string;
+  readonly description: string;
+  readonly variationRule: string;
+};
+
 export type OfferPrintScopeRow = {
   readonly amountLabel: string;
   readonly description: string;
@@ -35,13 +43,17 @@ export type OfferPrintScopeRow = {
 export type OfferPrintTemplateData = {
   readonly areaLabel: string;
   readonly exclusionBullets: readonly string[];
+  readonly exclusionRows: readonly OfferPrintExclusionRow[];
   readonly footerBase: string;
   readonly paymentRows: readonly OfferPrintPaymentRow[];
   readonly priceLine: string;
   readonly preparedDateLabel: string;
   readonly savingAmount: number | null;
   readonly scopeRows: readonly OfferPrintScopeRow[];
-  readonly offerTenderLineItems: readonly string[];
+  // The "This price includes" list on the Investment Summary page, derived from
+  // the inclusions schedule's summary labels. Derived HERE rather than in each
+  // renderer — the three renderers have drifted before.
+  readonly summaryInclusions: readonly string[];
   readonly validUntilLabel: string;
 };
 
@@ -51,6 +63,10 @@ export type OfferPrintTemplateInput = {
   readonly draft: OfferDocumentDraft;
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
+  // Carried by every caller and part of the workspace-shaped input, but no
+  // longer read here: the printed inclusions now come from draft.inclusionSchedule,
+  // which the estimator edits, rather than being derived from cost lines behind
+  // their back.
   readonly lines: readonly OfferWorkspaceCostLine[];
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly priceAdjustmentLabel: string;
@@ -68,7 +84,6 @@ export function buildOfferPrintTemplateData({
   draft,
   exclusions,
   job,
-  lines,
   paymentSchedule,
   priceAdjustmentLabel,
   standardPriceIncGst,
@@ -81,6 +96,7 @@ export function buildOfferPrintTemplateData({
   return {
     areaLabel: getAreaLabel(getTotalAreaSqm(job)),
     exclusionBullets: getVisibleExclusions(draft, exclusions),
+    exclusionRows: getVisibleExclusionRows(draft, exclusions),
     footerBase: `${job.siteAddress} | Prepared by ${job.preparedBy}`,
     paymentRows: paymentSchedule.map((row) => ({
       ...row,
@@ -98,7 +114,9 @@ export function buildOfferPrintTemplateData({
         label: item.label,
         variationRule: item.variationRule,
       })),
-    offerTenderLineItems: getIncludedOfferTenderLineItems(lines),
+    summaryInclusions: draft.inclusionHighlights
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
     validUntilLabel: formatDateDisplay(job.validUntil),
   };
 }
@@ -184,7 +202,12 @@ function getPriceLine(
   return `${formatCurrencyText(selectedPrice)} incl. GST`;
 }
 
-function getVisibleExclusions(
+// The one rule for what prints as an exclusion: the estimator's free-text
+// bullets UNION the Scope step's exclusion items, deduped. Every surface — the
+// offer PDF, the tender, the on-screen preview and the tender view — resolves
+// through this. They previously each had their own rule (union / scope-only /
+// bullets-as-override), so nothing on screen predicted the client's document.
+export function getVisibleExclusions(
   draft: OfferDocumentDraft,
   exclusions: readonly OfferWorkspaceScopeItem[],
 ): readonly string[] {
@@ -196,6 +219,39 @@ function getVisibleExclusions(
         .map((item) => item.label),
     ]),
   );
+}
+
+// The same union rule as getVisibleExclusions, carrying the description and
+// variation rule a Scope item holds.
+//
+// Those two fields were captured on every Scope exclusion and printed NOWHERE —
+// getVisibleExclusions takes `.label` and drops the rest, so an estimator typed
+// "Can be priced later as a written variation" and no client ever saw it. A
+// free-text bullet has no such detail and prints label-only, which is visible
+// rather than hidden.
+export function getVisibleExclusionRows(
+  draft: OfferDocumentDraft,
+  exclusions: readonly OfferWorkspaceScopeItem[],
+): readonly OfferPrintExclusionRow[] {
+  const rows = new Map<string, OfferPrintExclusionRow>();
+  for (const label of draft.exclusionBullets) {
+    const key = label.trim();
+    if (key.length > 0 && !rows.has(key)) {
+      rows.set(key, { label: key, description: "", variationRule: "" });
+    }
+  }
+  for (const item of exclusions) {
+    if (!item.includedInOfferDocument) continue;
+    const key = item.label.trim();
+    if (key.length === 0) continue;
+    // A Scope item's detail wins over a bare bullet of the same label.
+    rows.set(key, {
+      label: key,
+      description: item.description.trim(),
+      variationRule: item.variationRule.trim(),
+    });
+  }
+  return [...rows.values()];
 }
 
 function formatScopeAmount(
