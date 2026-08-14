@@ -150,6 +150,7 @@ const LEAD_SUBJECT_LINES = new Set([
   '"i want to build" form submission',
   'get in touch form submission',
   'general enquiry form submission',
+  'new message from royal constructions'
 ]);
 
 export async function GET(request: Request): Promise<Response> {
@@ -344,6 +345,7 @@ export async function POST(request: Request): Promise<Response> {
             const normalizedSubject = (message.subject ?? "")
               .trim()
               .toLowerCase()
+              .replace(/["']/g, "")
               .replace(/\s+/g, " ");
 
             if (!LEAD_SUBJECT_LINES.has(normalizedSubject)) {
