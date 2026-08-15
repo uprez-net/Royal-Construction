@@ -270,7 +270,7 @@ export function CreateProjectModal({
     kind: UploadKind,
   ) => {
     if (!selectedLeadId) {
-      throw new Error("Select a lead first.");
+      throw new Error("Select a lead before continuing.");
     }
 
     const controller = new AbortController();
@@ -405,7 +405,7 @@ export function CreateProjectModal({
 
   const handleSubmit = async () => {
     if (!selectedLeadId) {
-      toast.error("Select a lead before creating the project.");
+      toast.error("Select a lead before continuing.");
       return;
     }
 

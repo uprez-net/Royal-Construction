@@ -27,7 +27,7 @@ export function DeleteConfirmModal({
       onClose();
     } catch (error) {
       console.error("Failed to archive lead", error);
-      showToast("Failed to archive lead", "error");
+      showToast("Failed to archive the lead. Please try again.", "error");
     } finally {
       setLoading(false);
     }

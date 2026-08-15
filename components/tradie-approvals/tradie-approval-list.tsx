@@ -83,7 +83,9 @@ export function TradieApprovalList() {
     try {
       const approval = approvals.find((a) => a.id === approvalId);
       if (!approval) {
-        throw new Error(`Approval with ID ${approvalId} not found`);
+        throw new Error(
+          "This approval request is no longer available. Refresh and try again.",
+        );
       }
       const approvalInput = {
         approvalId: approval.id,
@@ -112,7 +114,9 @@ export function TradieApprovalList() {
     try {
       const approval = approvals.find((a) => a.id === approvalId);
       if (!approval) {
-        throw new Error(`Approval with ID ${approvalId} not found`);
+        throw new Error(
+          "This approval request is no longer available. Refresh and try again.",
+        );
       }
       dispatch(
         openModal({
@@ -133,7 +137,9 @@ export function TradieApprovalList() {
   const handleClick = (approvalId: string) => {
     const approval = approvals.find((a) => a.id === approvalId);
     if (!approval) {
-      toast.error(`Approval with ID ${approvalId} not found`);
+      toast.error(
+        "This approval request is no longer available. Refresh and try again.",
+      );
       return;
     }
     dispatch(

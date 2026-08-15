@@ -44,7 +44,7 @@ export function FollowupModal({
       });
 
       if (!updated) {
-        showToast("Failed to update lead", "error");
+        showToast("Failed to update the follow-up. Please try again.", "error");
         return;
       }
       onLeadUpdate(updated);
@@ -52,7 +52,7 @@ export function FollowupModal({
       onClose();
     } catch (error) {
       console.error("Failed to update follow-up", error);
-      showToast("Failed to update follow-up", "error");
+      showToast("Failed to update the follow-up. Please try again.", "error");
     } finally {
       setSaving(false);
     }

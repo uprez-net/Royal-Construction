@@ -192,7 +192,7 @@ export function DetailModal({
 
   const handleUpdate = async () => {
     if (isLostStage(form.stage) && !form.lostReason.trim()) {
-      showToast("Add a lost reason before updating this lead.", "info");
+      showToast("Add a lost reason before updating this lead.", "error");
       return;
     }
 
@@ -248,7 +248,7 @@ export function DetailModal({
       onClose();
     } catch (error) {
       console.error("Failed to update lead", error);
-      showToast("Failed to update lead", "info");
+      showToast("Failed to update the lead. Please try again.", "error");
     } finally {
       setIsUpdating(false);
     }
@@ -280,7 +280,7 @@ export function DetailModal({
       );
     } catch (error) {
       console.error("Failed to save note", error);
-      showToast("Failed to save note", "info");
+      showToast("Failed to save the note. Please try again.", "error");
     } finally {
       setIsSavingNote(false);
     }
@@ -538,7 +538,7 @@ export function DetailModal({
               disabled={isSubmitting}
               onClick={async () => {
                 if (queuedFiles.length === 0) {
-                  showToast("No files to upload", "info");
+                  showToast("Add at least one file before uploading.", "error");
                   return;
                 }
                 setIsSubmitting(true);
@@ -573,7 +573,7 @@ export function DetailModal({
                   showToast("Files uploaded successfully", "success");
                 } catch (error) {
                   console.error("Failed to upload files", error);
-                  showToast("Failed to upload files", "info");
+                  showToast("Failed to upload the files. Please try again.", "error");
                 } finally {
                   setIsSubmitting(false);
                 }

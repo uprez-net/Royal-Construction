@@ -105,7 +105,7 @@ export function EmailFlowModal({
                         }
                   }
                   if (!finalHtmlBody) {
-                        showToast("Failed to generate email content", "info");
+                        showToast("Failed to generate the email content. Please try again.", "error");
                         setSending(false); // Used "setSending" instead of "setSendingEmail"
                         return;
                   }
@@ -132,11 +132,11 @@ export function EmailFlowModal({
                         if (updated) onLeadUpdate(updated);
                         showToast(`Email sent to ${lead.name} Successfully`, "success");
                   } else {
-                        showToast(`Failed to send email to ${lead.name}`, "info");
+                        showToast(`Failed to send the email to ${lead.name}. Please try again.`, "error");
                   }
             } catch (error) {
                   console.error("Error sending email:", error);
-                  showToast("An unexpected error occurred", "info");
+                  showToast("Failed to send the email. Please try again.", "error");
             } finally {
                   setSending(false);
                   onClose();

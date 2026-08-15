@@ -147,6 +147,16 @@ export function AddLeadModal({
   /* ── Submit ── */
 
   const handleSubmit = async (setReminder: boolean) => {
+    if (!form.email.trim()) {
+      showToast("Please add an email to create the lead.", "error");
+      return;
+    }
+
+    if (!form.assignedId.trim()) {
+      showToast("Please assign the lead to someone to create it.", "error");
+      return;
+    }
+
     const setLoading = setReminder ? setSavingWithReminder : setSaving;
     setLoading(true);
 
@@ -224,7 +234,7 @@ export function AddLeadModal({
           return;
         }
       }
-      showToast("Failed to create lead. Please try again.", "info");
+      showToast("Failed to create the lead. Please try again.", "error");
     } finally {
       setSaving(false);
       setSavingWithReminder(false);

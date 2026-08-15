@@ -225,7 +225,7 @@ export function EmailCampaignModal({
       );
     } catch (error) {
       console.error("Campaign error:", error);
-      showToast("An unexpected error occurred during the campaign", "info");
+      showToast("Failed to send the email campaign. Please try again.", "error");
     } finally {
       setSending(false);
       onClose();
@@ -374,7 +374,10 @@ export function EmailCampaignModal({
                     .map((l) => l.email);
 
                   if (archivedEmails.length === 0) {
-                    showToast("No archived leads with email found", "info");
+                    showToast(
+                      "No archived leads with an email address were found.",
+                      "info",
+                    );
                     return;
                   }
 

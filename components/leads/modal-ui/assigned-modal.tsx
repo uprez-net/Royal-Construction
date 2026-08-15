@@ -33,7 +33,7 @@ export function AssignedModal({
         assignedId: selectedUserId || null,
       });
       if (!updated) {
-        showToast("Failed to assign user", "error");
+        showToast("Failed to assign the lead. Please try again.", "error");
         return;
       }
 
@@ -46,7 +46,7 @@ export function AssignedModal({
       onClose();
     } catch (error) {
       console.error("Failed to update assigned", error);
-      showToast("Failed to assign user. Please try again.", "error");
+      showToast("Failed to assign the lead. Please try again.", "error");
     } finally {
       setSaving(false);
     }
