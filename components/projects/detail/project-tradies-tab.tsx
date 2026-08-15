@@ -210,6 +210,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     contact: {
       email: tradie.tradie.email,
       phone: tradie.tradie.phone,
+      additionalEmails: tradie.tradie.additionalEmails,
     },
     siteManager: {
       name: project.siteManager?.name ?? "Unassigned",
@@ -231,15 +232,15 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
         : money(tradie.quotedPrice);
     }
 
-    const hourlyRate = Number(tradie.tradie.hourlyRate);
+    const lastQuotedPrice = Number(tradie.tradie.lastQuotedPrice);
 
     // No rate on file is "unknown", not "$0" — and Number(null) is 0, so the
     // nullish check has to come before the finite check.
-    if (tradie.tradie.hourlyRate == null || !Number.isFinite(hourlyRate)) {
+    if (tradie.tradie.lastQuotedPrice == null || !Number.isFinite(lastQuotedPrice)) {
       return "—";
     }
 
-    return calculateScheduleTotalCost(hourlyRate, tradie.durationDays);
+    return calculateScheduleTotalCost(lastQuotedPrice, tradie.durationDays);
   };
 
   return (
@@ -490,6 +491,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                     contact: {
                       email: tradie.tradie.email,
                       phone: tradie.tradie.phone,
+                      additionalEmails: tradie.tradie.additionalEmails,
                     },
                     siteManager: {
                       name: project.siteManager?.name ?? "Unassigned",

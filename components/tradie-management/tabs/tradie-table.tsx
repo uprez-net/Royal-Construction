@@ -40,16 +40,15 @@ export function TradieTable({
   return (
     <DataTable
       caption="Tradies with their trade, hourly rate, rating, completed jobs and incident counts."
-      headers={["Tradie", "Trade", "Rate", "Rating", "Jobs", "Incidents", "Actions"]}
+      headers={["Tradie", "Trade", "Last Quoted Price", "Rating", "Jobs", "Incidents", "Actions"]}
       align={COLUMN_ALIGN}
       rows={filteredTradies.map((tradie) => [
         tradie.name,
         <TradieBadge trade={tradie.trade} key={`trade-${tradie.id}`} />,
         <span key={`rate-${tradie.id}`} className="whitespace-nowrap">
           <span className="font-mono tabular-nums">
-            {formatRate(tradie.hourlyRate)}
+            {formatRate(tradie.lastQuotedPrice)}
           </span>
-          <span className="text-xs text-muted-foreground">/hr</span>
         </span>,
         <RatingStars
           rating={parseFloat(tradie.rating ?? "0")}

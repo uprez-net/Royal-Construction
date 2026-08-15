@@ -89,7 +89,7 @@ export function PreviewPictureModal({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, goToPrevious, goToNext]);
+  }, [open, goToPrevious, goToNext, zoomIn, zoomOut]);
 
   const handleWheel = (event: React.WheelEvent) => {
     event.preventDefault();

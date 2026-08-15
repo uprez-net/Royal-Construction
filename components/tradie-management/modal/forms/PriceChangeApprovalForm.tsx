@@ -60,7 +60,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   // An absent rate stays `null` rather than being coerced: `Number(null)` is 0,
   // which would present a missing rate as a real $0.00/hr, and `Number(undefined)`
   // is NaN, which would poison the difference and the impact sentence.
-  const currentRate = parseRate(data.currentHourlyRate ?? approval.tradie.hourlyRate);
+  const currentRate = parseRate(data.currentHourlyRate ?? approval.tradie.lastQuotedPrice);
   const newRate = parseRate(data.newHourlyRate);
   const hasRates = currentRate !== null && newRate !== null;
 
@@ -68,7 +68,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   // `currentRate`, which falls back to this when the request payload omitted a
   // "current" figure — here we want what is actually on the record, so a
   // reviewer can see when the two disagree.
-  const storedRate = parseRate(approval.tradie.hourlyRate);
+  const storedRate = parseRate(approval.tradie.lastQuotedPrice);
 
   const submit = (resolution: "approved" | "rejected") => {
     mutation.mutate({

@@ -133,10 +133,10 @@ export function ApprovalDetailModal({
 
                 <DetailRow
                   icon={<DollarSign className="h-4 w-4" />}
-                  label="Hourly Rate"
+                  label="Last Quoted Price"
                   value={
-                    approval.tradie.hourlyRate
-                      ? `$${approval.tradie.hourlyRate}`
+                    approval.tradie.lastQuotedPrice
+                      ? `$${approval.tradie.lastQuotedPrice}`
                       : "-"
                   }
                 />

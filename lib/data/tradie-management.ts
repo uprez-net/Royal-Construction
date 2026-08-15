@@ -50,7 +50,7 @@ export async function createTradie(input: CreateTradieInput): Promise<TradieRow>
             name: res.name,
             trade: res.trade,
             isFavourite: res.isFavourite,
-            hourlyRate: res.hourlyRate ? res.hourlyRate.toString() : null,
+            lastQuotedPrice: res.lastQuotedPrice ? res.lastQuotedPrice.toString() : null,
             rating: res.rating ? res.rating.toString() : null,
             jobsCompleted: 0,
             incidentCount: {
@@ -118,7 +118,7 @@ export async function getTradieById(tradieId: string): Promise<TradieDetails | n
 
         return {
             ...tradieFields,
-            hourlyRate: tradie.hourlyRate?.toString(),
+            lastQuotedPrice: tradie.lastQuotedPrice?.toString(),
             rating: tradie.rating?.toString(),
             jobsCompleted: schedules.length,
             reviews: ratings.map(r => ({
@@ -205,7 +205,7 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
                 tradieName: tradie.name,
                 trade: tradie.trade,
                 newPrice: input.newHourlyRate,
-                oldPrice: parseFloat((tradie.hourlyRate ?? 0).toString()),
+                oldPrice: parseFloat((tradie.lastQuotedPrice ?? 0).toString()),
                 priceChangeDate: dateFormat.format(new Date()),
             });
 
@@ -474,7 +474,7 @@ export async function getTradieGroupedByCategory(): Promise<TradiesByCategory[]>
                 name: tradie.name,
                 trade: tradie.trade,
                 isFavourite: tradie.isFavourite,
-                hourlyRate: tradie.hourlyRate?.toString() ?? null,
+                lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
                 rating: tradie.rating?.toString() ?? null,
 
                 jobsCompleted: tradie.schedules.filter(
@@ -618,7 +618,7 @@ export async function fetchFilteredTradies(input: TradieTableQuery): Promise<Tra
         return tradies.map(tradie => {
             return {
                 ...tradie,
-                hourlyRate: tradie.hourlyRate?.toString() ?? null,
+                lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
                 rating: tradie.rating?.toString() ?? null,
                 jobsCompleted: tradie.schedules.filter(s => s.status === "COMPLETED").length,
                 incidentCount: {
@@ -862,7 +862,7 @@ export async function exportTradies() {
 
         return tradies.map(({ schedules, incidents, ...tradie }) => ({
             ...tradie,
-            hourlyRate: tradie.hourlyRate?.toString() ?? null,
+            lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
             rating: tradie.rating?.toString() ?? null,
             scheduledJobs: schedules.filter(s => ["CONFIRMED", "PENDING"].includes(s.status)).length,
             jobsCompleted: schedules.filter(s => s.status === "COMPLETED").length,
@@ -896,7 +896,7 @@ export async function exportTradies() {
  *
  * @throws Throws an error if the tradie update operation fails.
  */
-export async function updateTradie(tradieId: string, data: Partial<Pick<Tradie, 'email' | 'phone' | 'location' | 'note'>>): Promise<TradieDetails> {
+export async function updateTradie(tradieId: string, data: Partial<Pick<Tradie, 'email' | 'additionalEmails' | 'phone' | 'location' | 'note'>>): Promise<TradieDetails> {
     try {
         const updatedTradie = await prisma.tradie.update({
             where: { id: tradieId },
@@ -938,7 +938,7 @@ export async function updateTradie(tradieId: string, data: Partial<Pick<Tradie, 
 
         return {
             ...tradieFields,
-            hourlyRate: updatedTradie.hourlyRate?.toString(),
+            lastQuotedPrice: updatedTradie.lastQuotedPrice?.toString(),
             rating: updatedTradie.rating?.toString(),
             jobsCompleted: schedules.length,
             reviews: ratings.map(r => ({

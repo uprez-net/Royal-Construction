@@ -144,7 +144,7 @@ export function TradieScheduleDetailsModal({
     abn: schedule.abn,
     isFavourite: false,
     note: null,
-    requiresQuote: false
+    requiresQuote: false,
   } satisfies TradieScheduleListItem;
 
   const daysLeft = daysUntil(new Date(schedule.scheduledDate));
@@ -173,8 +173,7 @@ export function TradieScheduleDetailsModal({
                 </h2>
 
                 <p className="mt-1 text-[12.5px] text-muted-foreground">
-                  {schedule.tradeType} —{" "}
-                  {schedule.abn}
+                  {schedule.tradeType} — {schedule.abn}
                 </p>
               </div>
             </div>
@@ -230,7 +229,9 @@ export function TradieScheduleDetailsModal({
 
               <DetailItem
                 label="Scheduled"
-                icon={<CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />}
+                icon={
+                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                }
                 value={dateFormat.format(new Date(schedule.scheduledDate))}
               />
 
@@ -357,6 +358,37 @@ export function TradieScheduleDetailsModal({
                     <span className="truncate font-semibold text-foreground">
                       {schedule.contact.email}
                     </span>
+                  </div>
+
+                  <div
+                    className={cn(
+                      "flex items-center justify-between gap-4",
+                      "rounded-[8px] border border-border/70",
+                      "bg-card px-3 py-2 text-[12px]",
+                    )}
+                  >
+                    <span className="text-muted-foreground">
+                      Additional Emails
+                    </span>
+
+                    <div className="flex flex-col gap-1">
+                      {schedule.contact.additionalEmails.length > 0 ? (
+                        schedule.contact.additionalEmails.map(
+                          (email, index) => (
+                            <span
+                              key={index}
+                              className="truncate font-semibold text-foreground"
+                            >
+                              {email}
+                            </span>
+                          ),
+                        )
+                      ) : (
+                        <span className="font-semibold text-muted-foreground">
+                          None
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>

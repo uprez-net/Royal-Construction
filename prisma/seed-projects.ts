@@ -1283,7 +1283,7 @@ async function main() {
                     abn: generateRandomABN(),
                     phone: tradieSeed.phone,
                     email: tradieSeed.email,
-                    hourlyRate: decimal(tradieSeed.hourlyRate),
+                    lastQuotedPrice: decimal(tradieSeed.hourlyRate),
                     rating: decimal(tradieSeed.rating),
                 },
             }),

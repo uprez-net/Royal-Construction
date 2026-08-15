@@ -53,7 +53,8 @@ const convertToTradieScheduleListItem = (schedule: TradieScheduleWithRelations):
     quotedPrice: schedule.quotedPrice ?? undefined,
     contact: {
       email: schedule.tradie.email,
-      phone: schedule.tradie.phone
+      phone: schedule.tradie.phone,
+      additionalEmails: schedule.tradie.additionalEmails
     },
     siteManager: {
       name: schedule.project.siteManager?.name || "",
@@ -148,7 +149,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
         trade: schedule.tradie.trade,
         scheduleDate: dateFormat.format(schedule.scheduledDate),
         durationDays: schedule.durationDays,
-        cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.hourlyRate?.toString() ?? "0"), schedule.durationDays),
+        cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays),
         milestoneId: schedule.milestoneId ?? undefined,
         milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
       });
@@ -230,7 +231,7 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.hourlyRate?.toString() ?? "0"), schedule.durationDays),
+          cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
@@ -264,6 +265,7 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
           to: schedule.tradie.email,
           subject: emailContent.subject,
           body: emailContent.body,
+          cc: schedule.tradie.additionalEmails.length > 0 ? schedule.tradie.additionalEmails : undefined,
           attachments: attachments.length > 0 ? attachments.map(att => ({
             name: att.name,
             contentBytes: att.contentBytes,
@@ -319,7 +321,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
-      const totalCost = calculateTotalCost(parseFloat(schedule.tradie.hourlyRate?.toString() ?? "0"), schedule.durationDays);
+      const totalCost = calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays);
 
       if (updates.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL) {
         const approval = await prisma.tradieApproval.create({

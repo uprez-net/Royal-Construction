@@ -305,13 +305,14 @@ export function MilestoneCard({
                     contact: {
                       email: t.tradie.email,
                       phone: t.tradie.phone,
+                      additionalEmails: t.tradie.additionalEmails,
                     },
                     siteManager: {
                       name: project.siteManager?.name ?? "Site Manager",
                       email: project.siteManager?.email ?? "Site Manager Email",
                       phone: project.siteManager?.phone ?? "Site Manager Phone",
                     },
-                    hourlyRate: t.tradie.hourlyRate,
+                    lastQuotedPrice: t.tradie.lastQuotedPrice,
                     isFavourite: t.tradie.isFavourite,
                     note: t.tradie.note,
                     requiresQuote: t.requiresQuote,

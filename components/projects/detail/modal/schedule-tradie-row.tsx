@@ -147,10 +147,11 @@ export function TradieScheduleRow({
       note: null,
       updatedAt: "",
       requiresQuote: row.requiresQuote ?? false,
-      hourlyRate: selectedTradie?.hourlyRate ?? undefined,
+      lastQuotedPrice: selectedTradie?.lastQuotedPrice ?? undefined,
       contact: {
         email: "",
         phone: "",
+        additionalEmails: [],
       },
       siteManager: {
         name: activeProject?.siteManager?.name ?? "",
@@ -175,7 +176,7 @@ export function TradieScheduleRow({
     row.requiresQuote,
     selectedTradie?.name,
     selectedTradie?.trade,
-    selectedTradie?.hourlyRate,
+    selectedTradie?.lastQuotedPrice,
     activeProject?.name,
     activeProject?.siteManager?.name,
     activeProject?.siteManager?.email,

@@ -152,18 +152,22 @@ export default function ScheduleTradieModal({
 
   const updateRow = useCallback(
     (index: number, updatedRow: Partial<TradieScheduleInputRow>) => {
-      const prevRow = scheduleRows[index];
-      setScheduleRows((prev) =>
-        prev.map((row, i) => (i === index ? { ...row, ...updatedRow } : row)),
-      );
+      let updatedRows: TradieScheduleInputRow[] = [];
 
-      // Re-validate only rows that are already showing an error, so fixing a
-      // field clears its message instead of leaving it stale until the next
-      // submit, without shouting at a row the user has not submitted yet.
+      setScheduleRows((prev) => {
+        updatedRows = prev.map((row, i) =>
+          i === index ? { ...row, ...updatedRow } : row,
+        );
+
+        return updatedRows;
+      });
+
       setRowErrors((prev) =>
         prev.map((errors) =>
           errors.id === updatedRow.id && hasRowError(errors)
-            ? validateRow({ ...prevRow, ...updatedRow })
+            ? validateRow({
+                ...updatedRows[index],
+              })
             : errors,
         ),
       );

@@ -66,7 +66,7 @@ export async function fetchTradieApprovalById(approvalId: string): Promise<SafeT
             updationData: approval.updationData as unknown as TradieApprovalPayload,
             tradie: {
                 ...approval.tradie,
-                hourlyRate: approval.tradie.hourlyRate?.toString(),
+                lastQuotedPrice: approval.tradie.lastQuotedPrice?.toString(),
                 rating: approval.tradie.rating?.toString(),
             },
             requestBy: approval.user.name,
@@ -136,7 +136,7 @@ export async function handleAdminApproval(input: ApprovalInput) {
                         await tx.tradie.update({
                             where: { id: approval.tradieId },
                             data: {
-                                hourlyRate: payload.newHourlyRate,
+                                lastQuotedPrice: payload.newHourlyRate,
                             },
                         });
                     }
@@ -331,7 +331,7 @@ export async function fetchTradieApprovals(query: TradieApprovalQuery): Promise<
             updationData: approval.updationData as unknown as TradieApprovalPayload,
             tradie: {
                 ...approval.tradie,
-                hourlyRate: approval.tradie.hourlyRate?.toString(),
+                lastQuotedPrice: approval.tradie.lastQuotedPrice?.toString(),
                 rating: approval.tradie.rating?.toString(),
             },
             requestBy: approval.user.name,

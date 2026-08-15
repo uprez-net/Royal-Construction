@@ -133,13 +133,13 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
                 icon={<DollarSign className="size-4" />}
                 label="Hourly rate"
                 value={
-                  approval.tradie.hourlyRate
-                    ? `${rateCurrency.format(Number(approval.tradie.hourlyRate))}/hr`
+                  approval.tradie.lastQuotedPrice
+                    ? `${rateCurrency.format(Number(approval.tradie.lastQuotedPrice))}`
                     : "Not set"
                 }
                 // Mono is reserved for actual figures; the "Not set" placeholder
                 // renders as prose so a missing rate does not read like data.
-                mono={Boolean(approval.tradie.hourlyRate)}
+                mono={Boolean(approval.tradie.lastQuotedPrice)}
               />
             </div>
 

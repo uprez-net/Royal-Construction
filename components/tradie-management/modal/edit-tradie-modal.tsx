@@ -9,7 +9,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Mail, MapPin, Pencil, Phone, StickyNote } from "lucide-react";
+import {
+  Loader2,
+  Mail,
+  Mails,
+  MapPin,
+  Pencil,
+  Phone,
+  StickyNote,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -21,6 +29,7 @@ import { SearchableSelect } from "@/components/common/searchable-select";
 import { AddressSuggestion } from "@/types/data";
 import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
+import { EmailListInput } from "./forms/EmailLIstInput";
 
 interface EditTradieModalProps {
   open: boolean;
@@ -33,6 +42,7 @@ interface TradieUpdateInput {
   phone?: string;
   location?: string;
   note?: string;
+  additionalEmails?: string[];
 }
 
 // Strips spaces, dashes, and parens so "04 1234 5678" / "(02) 1234-5678" normalize cleanly.
@@ -44,6 +54,9 @@ const AU_PHONE_REGEX = /^(?:\+?61|0)[2-478]\d{8}$/;
 
 const updateTradieSchema = z.object({
   email: z.email("Please enter a valid email address"),
+  additionalEmails: z
+    .array(z.email("Please enter a valid email address"))
+    .optional(),
   phone: z
     .string()
     .min(1, "Phone number is required")
@@ -76,12 +89,13 @@ export default function EditTradieModal({
     phone: tradie.phone,
     location: tradie.location ?? "",
     note: tradie.note ?? "",
+    additionalEmails: tradie.additionalEmails ?? [],
   });
 
   const changes = useMemo(() => {
     return Object.fromEntries(
       Object.entries(formData).filter(([key, value]) => {
-        const newValue = value?.trim() || null;
+        const newValue = typeof value === "string" ? value?.trim() || null : value;
         const oldValue = tradie[key as keyof TradieDetails] || null;
 
         return newValue !== oldValue;
@@ -179,12 +193,29 @@ export default function EditTradieModal({
     }
   };
 
+  const updateField = <K extends keyof TradieUpdateInput>(
+    key: K,
+    value: TradieUpdateInput[K],
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
   const fields = [
     {
       key: "email",
       label: "Email address",
       icon: Mail,
       placeholder: "john@smith-electrical.com",
+      mono: false,
+    },
+    {
+      key: "additionalEmails",
+      label: "Additional email addresses",
+      icon: Mails,
+      placeholder: "Add additional emails",
       mono: false,
     },
     {
@@ -215,48 +246,63 @@ export default function EditTradieModal({
 
         <div className="space-y-6 pt-2">
           <div className="grid gap-5 md:grid-cols-2">
-            {fields.map(({ key, label, icon: Icon, placeholder, mono }) => (
-              // Add and edit modals can be mounted in the same document, so the
-              // DOM ids are namespaced per modal; bare "email"/"phone" ids would
-              // collide and point a <label for> at the wrong control.
-              <div key={key} className="space-y-2">
-                <Label htmlFor={`tradie-edit-${key}`}>
-                  {label}
-                  <span className="text-destructive">
-                    *<span className="sr-only"> required</span>
-                  </span>
-                </Label>
+            {fields.map(({ key, label, icon: Icon, placeholder, mono }) => {
+              if (key === "additionalEmails") {
+                return (
+                  <div className="md:col-span-2" key={key}>
+                    <EmailListInput
+                      value={formData.additionalEmails ?? []}
+                      onChange={(emails) =>
+                        updateField("additionalEmails", emails)
+                      }
+                      error={errors.additionalEmails}
+                    />
+                  </div>
+                );
+              }
+              return (
+                // Add and edit modals can be mounted in the same document, so the
+                // DOM ids are namespaced per modal; bare "email"/"phone" ids would
+                // collide and point a <label for> at the wrong control.
+                <div key={key} className="space-y-2">
+                  <Label htmlFor={`tradie-edit-${key}`}>
+                    {label}
+                    <span className="text-destructive">
+                      *<span className="sr-only"> required</span>
+                    </span>
+                  </Label>
 
-                <div className="relative">
-                  <Icon
-                    className="absolute left-3 top-3 h-4 w-4 text-muted-foreground"
-                    aria-hidden="true"
-                  />
+                  <div className="relative">
+                    <Icon
+                      className="absolute left-3 top-3 h-4 w-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
 
-                  <Input
-                    id={`tradie-edit-${key}`}
-                    required
-                    className={cn("pl-9", mono && "font-mono tabular-nums")}
-                    placeholder={placeholder}
-                    value={formData[key]}
-                    aria-invalid={Boolean(errors[key])}
-                    aria-describedby={
-                      errors[key] ? `tradie-edit-${key}-error` : undefined
-                    }
-                    onChange={(e) => handleInputChange(key, e.target.value)}
-                  />
+                    <Input
+                      id={`tradie-edit-${key}`}
+                      required
+                      className={cn("pl-9", mono && "font-mono tabular-nums")}
+                      placeholder={placeholder}
+                      value={formData[key]}
+                      aria-invalid={Boolean(errors[key])}
+                      aria-describedby={
+                        errors[key] ? `tradie-edit-${key}-error` : undefined
+                      }
+                      onChange={(e) => updateField(key, e.target.value)}
+                    />
+                  </div>
+
+                  {errors[key] && (
+                    <p
+                      id={`tradie-edit-${key}-error`}
+                      className="text-xs text-destructive"
+                    >
+                      {errors[key]}
+                    </p>
+                  )}
                 </div>
-
-                {errors[key] && (
-                  <p
-                    id={`tradie-edit-${key}-error`}
-                    className="text-xs text-destructive"
-                  >
-                    {errors[key]}
-                  </p>
-                )}
-              </div>
-            ))}
+              );
+            })}
 
             <div key="location" className="space-y-2">
               {/* The trigger is a Popover button with its own internal search

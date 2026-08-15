@@ -39,6 +39,8 @@ import { AddressSuggestion } from "@/types/data";
 import { SearchableSelect } from "@/components/common/searchable-select";
 import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
+import { EmailListInput } from "./forms/EmailLIstInput";
+import { TradeTypeField } from "./forms/TradieTypeInput";
 
 interface AddTradieModalProps {
   open: boolean;
@@ -54,6 +56,7 @@ const initialState: CreateTradieInput = {
   email: "",
   location: "",
   note: "",
+  additionalEmails: [],
 };
 
 // Strips spaces, dashes, and parens so "04 1234 5678" / "(02) 1234-5678" normalize cleanly.
@@ -84,6 +87,7 @@ const tradieSchema = z.object({
       "ABN must be exactly 11 digits",
     ),
   email: z.email("Enter a valid email address"),
+  additionalEmails: z.array(z.email("Enter a valid email address")).optional(),
   note: z.string().max(500).optional(),
 });
 
@@ -264,59 +268,14 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   </p>
                 )}
               </div>
-              <div className="space-y-2">
-                <Label
-                  htmlFor="tradie-trade"
-                  className="flex items-center gap-2"
-                >
-                  <HardHat className="h-4 w-4" aria-hidden="true" />
-                  Trade type
-                  <RequiredMark />
-                </Label>
-                <Select
-                  value={formData.trade}
-                  onValueChange={(value) => {
-                    updateField("trade", value);
-                    markTouched("trade");
-                  }}
-                >
-                  <SelectTrigger
-                    id="tradie-trade"
-                    aria-invalid={Boolean(fieldError("trade"))}
-                    aria-describedby={
-                      fieldError("trade") ? "tradie-trade-error" : undefined
-                    }
-                    className={cn(
-                      fieldError("trade") &&
-                        "border-destructive focus-visible:ring-destructive",
-                    )}
-                  >
-                    <SelectValue placeholder="Select trade type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(TRADIE_TYPES).map(([key, label]) => {
-                      const Icon =
-                        TRADIE_TYPE_ICONS[key as keyof typeof TRADIE_TYPES];
-                      return (
-                        <SelectItem key={key} value={label}>
-                          <div className="flex gap-2">
-                            <Icon className="h-4 w-4" aria-hidden="true" />
-                            {label}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                {fieldError("trade") && (
-                  <p
-                    id="tradie-trade-error"
-                    className="text-xs text-destructive"
-                  >
-                    {fieldError("trade")}
-                  </p>
-                )}
-              </div>
+              <TradeTypeField
+                id="tradie-trade"
+                value={formData.trade}
+                onChange={(value) => updateField("trade", value)}
+                onBlur={() => markTouched("trade")}
+                error={fieldError("trade")}
+                requiredMark={<RequiredMark />}
+              />
               <div className="space-y-2">
                 <Label htmlFor="tradie-abn" className="flex items-center gap-2">
                   <Building2 className="h-4 w-4" aria-hidden="true" />
@@ -362,7 +321,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   className="flex items-center gap-2"
                 >
                   <DollarSign className="h-4 w-4" aria-hidden="true" />
-                  Hourly rate
+                  Last Quoted Price
                   <RequiredMark />
                 </Label>
                 <div className="relative">
@@ -487,6 +446,16 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   </p>
                 )}
               </div>
+
+              <div className="md:col-span-2">
+                <EmailListInput
+                  value={formData.additionalEmails ?? []}
+                  onChange={(emails) => updateField("additionalEmails", emails)}
+                  onBlur={() => markTouched("additionalEmails")}
+                  error={fieldError("additionalEmails")}
+                />
+              </div>
+
               <div className="md:col-span-2 space-y-2">
                 {/* The trigger is a Popover button with its own internal search
                     field, so the visible text above is a plain div rather than a

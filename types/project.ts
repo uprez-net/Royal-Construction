@@ -13,8 +13,8 @@ export interface SafeMaterial extends Omit<Material, "unitCost" | "totalCost"> {
   totalCost: string;
 }
 
-export interface SafeTradie extends Omit<Tradie, "hourlyRate" | "rating"> {
-  hourlyRate?: string;
+export interface SafeTradie extends Omit<Tradie, "lastQuotedPrice" | "rating"> {
+  lastQuotedPrice?: string;
   rating?: string;
 }
 
@@ -148,13 +148,14 @@ export type TradieScheduleListItem = {
   note: string | null;
   reminderSentAt?: string;
   updatedAt: string;
-  hourlyRate?: string;
+  lastQuotedPrice?: string;
   rating?: string;
   requiresQuote: boolean;
   quotedPrice?: string;
   contact: {
     email: string;
     phone: string;
+    additionalEmails: string[];
   };
   siteManager: {
     name: string;
@@ -221,6 +222,7 @@ export type TradieUrgentReminderItem = {
   contact: {
     email: string;
     phone: string;
+    additionalEmails: string[];
   };
   hourlyRate?: string;
   rating?: string;

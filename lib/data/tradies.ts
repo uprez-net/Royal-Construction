@@ -23,7 +23,7 @@ import { ProjectRequirementsPayload } from "@/types/project-flow";
 function toSafeTradie(tradie: Awaited<ReturnType<typeof prisma.tradie.findMany>>[number]): SafeTradie {
   return {
     ...tradie,
-    hourlyRate: tradie.hourlyRate?.toString(),
+    lastQuotedPrice: tradie.lastQuotedPrice?.toString(),
     rating: tradie.rating?.toString(),
   };
 }
@@ -72,7 +72,7 @@ export async function getTradieSchedules(filters?: {
       ...schedule,
       tradie: {
         ...schedule.tradie,
-        hourlyRate: schedule.tradie.hourlyRate?.toString(),
+        lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
         rating: schedule.tradie.rating?.toString(),
       },
       project: {

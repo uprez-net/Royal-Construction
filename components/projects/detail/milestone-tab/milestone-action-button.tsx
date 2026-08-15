@@ -55,7 +55,7 @@ export function MilestoneActionGroup({
       <div className="flex flex-wrap items-center gap-1.5">
         <Button size="sm" onClick={() => onStartMilestone(milestone.id)}>
           <Play className="mr-1 h-4 w-4" aria-hidden="true" />
-          Start milestone
+          Start Activity
         </Button>
         <Button
           size="sm"

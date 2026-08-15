@@ -57,6 +57,23 @@ export function TradieBusinessDetailsCard() {
       ),
     },
     {
+      label: "Additional Emails",
+      icon: Mail,
+      content: (
+        <div className="space-y-1 flex flex-col">
+          {tradieDetails.additionalEmails?.map((email) => (
+            <a
+              key={email}
+              href={`mailto:${email}`}
+              className="text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {email}
+            </a>
+          ))}
+        </div>
+      ),
+    },
+    {
       label: "Location",
       icon: MapPin,
       content: tradieDetails.location ?? "Not recorded",
@@ -131,15 +148,16 @@ export function TradiePriorityCard() {
     return null;
   }
 
-  const { rating, hourlyRate, jobsCompleted } = tradieDetails;
-  const hourlyRateValue = hourlyRate == null ? null : Number(hourlyRate);
+  const { rating, lastQuotedPrice, jobsCompleted } = tradieDetails;
+  const lastQuotedPriceValue =
+    lastQuotedPrice == null ? null : Number(lastQuotedPrice);
   // `null` when there is no rate, so the render can keep mono for facts and use
   // prose for the placeholder. Previously this returned the string "Not set"
   // into a `font-mono tabular-nums` slot, so a missing value read like data.
-  const hourlyRateLabel =
-    hourlyRateValue == null || Number.isNaN(hourlyRateValue)
+  const lastQuotedPriceLabel =
+    lastQuotedPriceValue == null || Number.isNaN(lastQuotedPriceValue)
       ? null
-      : `${rateCurrency.format(hourlyRateValue)}/hr`;
+      : `${rateCurrency.format(lastQuotedPriceValue)}/hr`;
 
   const handleRatingChange = () => {
     const tradieRow = {
@@ -147,7 +165,7 @@ export function TradiePriorityCard() {
       name: tradieDetails.name,
       trade: tradieDetails.trade,
       isFavourite: tradieDetails.isFavourite,
-      hourlyRate: tradieDetails.hourlyRate ?? null,
+      lastQuotedPrice: tradieDetails.lastQuotedPrice ?? null,
       rating: tradieDetails.rating ?? null,
       jobsCompleted: tradieDetails.jobsCompleted,
       incidentCount: {
@@ -181,11 +199,13 @@ export function TradiePriorityCard() {
 
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg border border-border/70 p-3">
-            <div className="text-xs text-muted-foreground">Hourly rate</div>
+            <div className="text-xs text-muted-foreground">
+              Last quoted price
+            </div>
 
-            {hourlyRateLabel ? (
+            {lastQuotedPriceLabel ? (
               <div className="font-mono text-lg font-semibold tabular-nums">
-                {hourlyRateLabel}
+                {lastQuotedPriceLabel}
               </div>
             ) : (
               <div className="text-lg font-semibold text-muted-foreground">

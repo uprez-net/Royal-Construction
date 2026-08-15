@@ -31,9 +31,9 @@ export default function PriceChangeTradieModal({
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
 
-  const currentRate = Number(tradie.hourlyRate ?? 0);
+  const currentRate = Number(tradie.lastQuotedPrice ?? 0);
   const hasCurrentRate =
-    tradie.hourlyRate != null && !Number.isNaN(currentRate);
+    tradie.lastQuotedPrice != null && !Number.isNaN(currentRate);
 
   const [formData, setFormData] = useState({
     newHourlyRate: currentRate,
@@ -137,7 +137,7 @@ export default function PriceChangeTradieModal({
           {/* New rate */}
           <div className="space-y-2">
             <Label htmlFor="new-rate">
-              Proposed new rate ($/hr)
+              Proposed new rate
               <span className="text-destructive">
                 *<span className="sr-only"> required</span>
               </span>

@@ -45,7 +45,7 @@ export function TradieCard() {
     name: tradieDetails.name,
     trade: tradieDetails.trade,
     isFavourite: tradieDetails.isFavourite,
-    hourlyRate: tradieDetails.hourlyRate ?? null,
+    lastQuotedPrice: tradieDetails.lastQuotedPrice ?? null,
     rating: tradieDetails.rating ?? null,
     jobsCompleted: tradieDetails.jobsCompleted,
   } satisfies TradieRow;

@@ -100,7 +100,7 @@ export const addTradie = createAsyncThunk<TradieRow, CreateTradieInput>(
     },
 );
 
-export const updateTradieThunk = createAsyncThunk<TradieDetails, { tradieId: string; data: Partial<Pick<Tradie, 'email' | 'phone' | 'location' | 'note'>> }>(
+export const updateTradieThunk = createAsyncThunk<TradieDetails, { tradieId: string; data: Partial<Pick<Tradie, 'email' | 'additionalEmails' | 'phone' | 'location' | 'note'>> }>(
     "tradieManagement/updateTradie",
     async ({ tradieId, data }, thunkAPI) => {
         try {
@@ -333,7 +333,7 @@ const tradieManagementSlice = createSlice({
                 const updatedTradie = action.payload;
                 const normalizedTradieForDetails = {
                     ...updatedTradie,
-                    hourlyRate: updatedTradie.hourlyRate ?? undefined,
+                    lastQuotedPrice: updatedTradie.lastQuotedPrice ?? undefined,
                     rating: updatedTradie.rating ?? undefined,
                 };
                 const tradieIndex = state.tradies.findIndex((t) => t.id === updatedTradie.id);

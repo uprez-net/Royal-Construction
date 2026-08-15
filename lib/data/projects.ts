@@ -434,7 +434,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
           ...schedule,
           tradie: {
             ...schedule.tradie,
-            hourlyRate: schedule.tradie.hourlyRate?.toString(),
+            lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
             rating: schedule.tradie.rating?.toString(),
           },
         })),
@@ -447,7 +447,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
         ...schedule,
         tradie: {
           ...schedule.tradie,
-          hourlyRate: schedule.tradie.hourlyRate?.toString(),
+          lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
           rating: schedule.tradie.rating?.toString(),
         },
         milestone: schedule.milestone ? {

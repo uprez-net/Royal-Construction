@@ -124,8 +124,8 @@ function TradieListItem({ tradie }: { tradie: TradieRow }) {
     .toUpperCase();
 
   const rate =
-    tradie.hourlyRate !== null && Number.isFinite(parseFloat(tradie.hourlyRate))
-      ? rateCurrency.format(parseFloat(tradie.hourlyRate))
+    tradie.lastQuotedPrice !== null && Number.isFinite(parseFloat(tradie.lastQuotedPrice))
+      ? rateCurrency.format(parseFloat(tradie.lastQuotedPrice))
       : "—";
 
   // The row also holds an actions menu, so the wrapper must not be a button
@@ -170,7 +170,6 @@ function TradieListItem({ tradie }: { tradie: TradieRow }) {
           <p className="font-mono text-sm font-medium tabular-nums text-foreground">
             {rate}
           </p>
-          <p className="text-xs text-muted-foreground">/hr</p>
         </div>
 
         <div className="hidden min-w-15 text-center md:block">

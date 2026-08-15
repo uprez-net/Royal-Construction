@@ -7,7 +7,7 @@ export interface TradieRow {
     name: string;
     trade: string;
     isFavourite: boolean;
-    hourlyRate: string | null;
+    lastQuotedPrice: string | null;
     rating: string | null;
     jobsCompleted: number;
     incidentCount: {
@@ -44,6 +44,7 @@ export interface CreateTradieInput {
     abn: string;
     phone: string;
     email: string;
+    additionalEmails?: string[];
     location: string;
     note?: string;
 }

@@ -282,17 +282,18 @@ model Material {
 }
 
 model Tradie {
-  id          String   @id @default(uuid())
-  name        String
-  trade       String
-  abn         String   @unique
-  phone       String   @unique
-  email       String   @unique
-  location    String?
-  isFavourite Boolean  @default(false)
-  hourlyRate  Decimal? @db.Decimal(8, 2)
-  rating      Decimal? @db.Decimal(2, 1)
-  note        String?  @db.Text
+  id               String   @id @default(uuid())
+  name             String
+  trade            String
+  abn              String   @unique
+  phone            String   @unique
+  email            String   @unique
+  additionalEmails String[] @default([])
+  location         String?
+  isFavourite      Boolean  @default(false)
+  lastQuotedPrice  Decimal? @db.Decimal(8, 2)
+  rating           Decimal? @db.Decimal(2, 1)
+  note             String?  @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -473,10 +474,10 @@ model ActivityLog {
 }
 
 model Customer {
-  id    String @id @default(uuid())
-  name  String
-  email String @unique
-  phone String @unique
+  id      String  @id @default(uuid())
+  name    String
+  email   String  @unique
+  phone   String  @unique
   // Primary owner's Current Location (residential/postal address). Populated at
   // project handoff from the offer's owners[] (ADR 0003). Nullable — legacy
   // customers have none.
@@ -531,8 +532,8 @@ model Lead {
   // Nullable ADD COLUMN, no data loss; primary name/phone/email remain the
   // canonical client.
   secondaryName  String?
-  secondaryEmail  String?
-  secondaryPhone  String?
+  secondaryEmail String?
+  secondaryPhone String?
 
   source       String?
   sourceDetail String?
@@ -552,12 +553,12 @@ model Lead {
   notes    String? @db.Text
   notesDoc Json?
 
-  followupDate  DateTime?
-  followupTime  String?
-  followupNotes String?   @db.Text
-  meetingDate   DateTime?
-  meetingTime   String?
-  meetingMode   String?
+  followupDate           DateTime?
+  followupTime           String?
+  followupNotes          String?   @db.Text
+  meetingDate            DateTime?
+  meetingTime            String?
+  meetingMode            String?
   followupReminderSentAt DateTime?
   meetingReminderSentAt  DateTime?
 
@@ -609,7 +610,7 @@ model LeadHistory {
   lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   authorId String?
-  author   User? @relation("LeadHistoryAuthor", fields: [authorId], references: [id])
+  author   User?   @relation("LeadHistoryAuthor", fields: [authorId], references: [id])
 
   action String
   detail String @db.Text
@@ -662,14 +663,14 @@ model Offer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offerItems         OfferItem[]
-  offerFiles         OfferFile[]
-  tender             Tender?
-  contract           Contract?
-  acceptanceEnvelopes Envelope[]         @relation("OfferAcceptanceEnvelopes")
-  documentSends      OfferDocumentSend[]
-  statusEvents       OfferStatusEvent[]
-  lead               Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offerItems          OfferItem[]
+  offerFiles          OfferFile[]
+  tender              Tender?
+  contract            Contract?
+  acceptanceEnvelopes Envelope[]          @relation("OfferAcceptanceEnvelopes")
+  documentSends       OfferDocumentSend[]
+  statusEvents        OfferStatusEvent[]
+  lead                Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   // NOTE: one-active-per-lead is enforced via a partial unique index
   // (CREATE UNIQUE INDEX ... WHERE "isActive") added in the migration, since
@@ -902,11 +903,11 @@ model LeadEmails {
 }
 
 model AdminOfferContent {
-  id             String   @id @default(uuid())
-  buildScope     String[]
-  costSchedule   Json
-  offerScope     Json
-  offerContent   Json
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(uuid())
+  buildScope   String[]
+  costSchedule Json
+  offerScope   Json
+  offerContent Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

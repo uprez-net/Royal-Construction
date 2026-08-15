@@ -23,6 +23,7 @@ import {
   Compass,
   Droplets,
   Construction,
+  BadgeCheck,
 } from "lucide-react";
 
 export const TRADIE_TYPES = {
@@ -55,6 +56,7 @@ export const TRADIE_TYPES = {
   INTERIOR_FITOUT: "Interior Fit-out",
   GYPROCK_INSTALLER: "Gyprock",
   METAL_ROOFER: "Metal Roofing",
+  CERTIFIER: "Certifier",
 } as const;
 
 export const TRADIE_TYPE_ICONS: Record<
@@ -90,4 +92,5 @@ export const TRADIE_TYPE_ICONS: Record<
   INTERIOR_FITOUT: Sofa,
   GYPROCK_INSTALLER: PanelTop,
   METAL_ROOFER: Warehouse,
+  CERTIFIER: BadgeCheck,
 };

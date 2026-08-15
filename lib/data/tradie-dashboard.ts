@@ -58,7 +58,7 @@ type ScheduleRow = {
   scheduled_date: Date;
   duration_days: number;
   status: TradieScheduleStatus;
-  hourly_rate: string | null;
+  last_quoted_price: string | null;
   rating: string | null;
   reminder_sent_at: Date | null;
   updated_at: Date;
@@ -124,7 +124,7 @@ type UrgentRow = {
   reminder_sent_at: Date | null;
   tradie_email: string;
   tradie_phone: string;
-  hourly_rate: string | null;
+  last_quoted_price: string | null;
   rating: string | null;
 };
 
@@ -370,7 +370,7 @@ export async function getTradieCoordinationDashboard(
           ts."scheduledDate"  AS scheduled_date,
           ts."durationDays"   AS duration_days,
           ts.status,
-          t."hourlyRate"::text AS hourly_rate,
+          t."lastQuotedPrice"::text AS last_quoted_price,
           t.rating::text       AS rating,
           ts."reminderSentAt"  AS reminder_sent_at,
           ts."updatedAt"       AS updated_at,
@@ -626,7 +626,7 @@ export async function getTradieCoordinationDashboard(
           ts."reminderSentAt" AS reminder_sent_at,
           t.email             AS tradie_email,
           t.phone             AS tradie_phone,
-          t."hourlyRate"::text AS hourly_rate,
+          t."lastQuotedPrice"::text AS last_quoted_price,
           t.rating::text       AS rating
         FROM "TradieSchedule" ts
         JOIN "Tradie"  t  ON t.id  = ts."tradieId"
@@ -767,13 +767,14 @@ export async function getTradieCoordinationDashboard(
       scheduledDate: row.scheduled_date.toISOString(),
       durationDays: row.duration_days,
       status: row.status,
-      hourlyRate: row.hourly_rate ?? undefined,
+      lastQuotedPrice: row.last_quoted_price ?? undefined,
       rating: row.rating ?? undefined,
       reminderSentAt: row.reminder_sent_at?.toISOString(),
       updatedAt: row.updated_at.toISOString(),
       contact: {
         email: row.tradie_email,
         phone: row.tradie_phone,
+        additionalEmails: [],
       },
       siteManager: {
         name: row.site_manager_name ?? "Site manager",
@@ -816,6 +817,7 @@ export async function getTradieCoordinationDashboard(
       contact: {
         email: row.tradie_email,
         phone: row.tradie_phone,
+        additionalEmails: [],
       },
       siteManager: {
         name: row.site_manager_name ?? "Site manager",
@@ -823,7 +825,7 @@ export async function getTradieCoordinationDashboard(
         phone: row.site_manager_phone ?? "",
       },
       rating: row.rating ?? undefined,
-      hourlyRate: row.hourly_rate ?? undefined,
+      lastQuotedPrice: row.last_quoted_price ?? undefined,
       reminderSentAt: row.reminder_sent_at?.toISOString(),
     }));
 

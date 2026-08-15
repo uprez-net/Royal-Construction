@@ -488,6 +488,7 @@ const projectsSlice = createSlice({
               abn: schedule.abn,
               isFavourite: schedule.isFavourite,
               note: null,
+              additionalEmails: schedule.contact.additionalEmails
             },
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -532,7 +533,8 @@ const projectsSlice = createSlice({
                 location: null,
                 abn: schedule.abn,
                 isFavourite: schedule.isFavourite,
-                note: null
+                note: null,
+                additionalEmails: []
               },
               createdAt: new Date(),
               updatedAt: new Date(),

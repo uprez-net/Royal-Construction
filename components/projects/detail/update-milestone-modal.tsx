@@ -111,9 +111,9 @@ export default function UpdateMilestoneModal({
       if (schedule.requiresQuote) {
         return acc + parseFloat(schedule.quotedPrice ?? "0");
       } else {
-        const hourlyRate = parseFloat(schedule.tradie.hourlyRate ?? "0");
+        const lastQuotedPrice = parseFloat(schedule.tradie.lastQuotedPrice ?? "0");
         const totalHours = schedule.durationDays * 8;
-        return acc + hourlyRate * totalHours;
+        return acc + lastQuotedPrice * totalHours;
       }
     }, 0);
 
@@ -363,8 +363,7 @@ export default function UpdateMilestoneModal({
                   <Input
                     id="actualDate"
                     type="date"
-                    disabled
-                    readOnly
+                    min={formState.startDate}
                     className={inputClassName}
                     value={formState.actualDate || ""}
                     aria-describedby={

@@ -463,6 +463,7 @@ export function ProjectMilestonesTab({
                           contact: {
                             email: schedule.tradie.email,
                             phone: schedule.tradie.phone,
+                            additionalEmails: schedule.tradie.additionalEmails,
                           },
                           siteManager: {
                             name: project.siteManager?.name ?? "Site Manager",
