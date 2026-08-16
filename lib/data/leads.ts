@@ -8,6 +8,7 @@ import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import {
+  coerceMoney,
   computeForecast,
   computePipelineMetrics,
   type ForecastResult,
@@ -676,6 +677,7 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
+  const createdValue = coerceMoney(input.estimatedValue);
   const actingUserId = await resolveActingUserId();
 
   const historyInput = input.history ?? [];
@@ -770,12 +772,15 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         budget: input.budget,
         // A lead created with a value is manually owned until an offer exists;
         // the offer sync then takes over only if the source is not MANUAL.
-        estimatedValue:
-          input.estimatedValue === null || input.estimatedValue === undefined || input.estimatedValue === ""
-            ? null
-            : new Prisma.Decimal(input.estimatedValue),
-        estimatedValueSource: input.estimatedValue ? "MANUAL" : null,
+        // Both fields derive from ONE parse so they cannot disagree — keying
+        // the source off the raw input instead would make a typed 0 set a
+        // value while leaving the source null.
+        estimatedValue: createdValue,
+        estimatedValueSource: createdValue === null ? null : "MANUAL",
         expectedCloseDate: input.expectedCloseDate ?? null,
+        // A lead created directly in a closed stage needs its close date
+        // stamped, exactly as the two update paths do.
+        ...closeDatePatch(null, mappedStage, new Date()),
         type: input.type ?? [],
         notes: input.notes,
         meetingDate: input.meetingDate,
@@ -922,10 +927,12 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   // Deal economics. updateData is an explicit whitelist — new columns do not
   // flow through on their own.
   if (input.estimatedValue !== undefined) {
-    updateData.estimatedValue =
-      input.estimatedValue === null || input.estimatedValue === ""
-        ? null
-        : new Prisma.Decimal(input.estimatedValue);
+    // coerceMoney, not `new Prisma.Decimal(...)` — Decimal THROWS on a
+    // non-numeric or whitespace-only string, which would reject the entire
+    // lead update (name, stage, notes and all) with a 500 rather than a
+    // field-level error. Zod rejects bad money at the API boundary; this is
+    // defence in depth for the paths that do not go through it.
+    updateData.estimatedValue = coerceMoney(input.estimatedValue);
   }
   if (input.estimatedValueSource !== undefined) {
     updateData.estimatedValueSource = input.estimatedValueSource;

@@ -186,10 +186,21 @@ export const historySchema = z.object({
  * makes that class of mistake impossible.
  */
 const dealEconomicsFields = {
+  // Must actually validate: `new Prisma.Decimal("1,200")` throws, and an
+  // unvalidated string arm would turn a typo into a 500 that discards every
+  // other field in the same request. MAX matches the Decimal(14,2) column.
   estimatedValue: z
     .union([z.number(), z.string()])
     .nullable()
     .optional()
+    .refine(
+      (value) => {
+        if (value === null || value === undefined || value === "") return true;
+        const numeric = typeof value === "number" ? value : Number(String(value).trim());
+        return Number.isFinite(numeric) && numeric >= 0 && numeric < 1e12;
+      },
+      { message: "Deal value must be a non-negative number below 1,000,000,000,000" },
+    )
     .describe("Numeric deal value"),
   // Must be persistable: without it, a user's typed-over value would be
   // silently overwritten by the next offer save.

@@ -63,6 +63,39 @@ test("probabilityFor honours an explicit override", () => {
   assert.equal(probabilityFor(lead({ stage: "NEGOTIATING", probabilityOverride: 0 })), 0);
 });
 
+test("a closed stage outranks any stale override", () => {
+  // A lead can carry an override set while it was open (say 60% at
+  // Negotiating). Winning the deal does not clear that column, so without this
+  // rule a won deal weights at 60% — and forecast.weightedValue then comes out
+  // BELOW the forecast.wonValue it is supposed to contain in full.
+  assert.equal(probabilityFor(lead({ stage: "WON", probabilityOverride: 60 })), 100);
+  assert.equal(probabilityFor(lead({ stage: "CONVERTED", probabilityOverride: 5 })), 100);
+  assert.equal(probabilityFor(lead({ stage: "LOST", probabilityOverride: 90 })), 0);
+  assert.equal(probabilityFor(lead({ stage: "CANCELLED", probabilityOverride: 90 })), 0);
+  // Open stages still honour the override.
+  assert.equal(probabilityFor(lead({ stage: "NEGOTIATING", probabilityOverride: 60 })), 60);
+});
+
+test("forecast weightedValue always contains wonValue in full", () => {
+  const forecast = computeForecast(
+    [
+      lead({
+        id: 1, stage: "WON", estimatedValue: "800000",
+        probabilityOverride: 60, // stale, set while the lead was still open
+        expectedCloseDate: "2026-08-01T02:00:00Z",
+      }),
+    ],
+    2027,
+    1,
+  );
+  assert.equal(forecast.wonValue.toString(), "800000");
+  assert.equal(forecast.weightedValue.toString(), "800000");
+  assert.ok(
+    forecast.weightedValue.greaterThanOrEqualTo(forecast.wonValue),
+    "weighted must never fall below won",
+  );
+});
+
 test("probabilityFor clamps and rounds, and survives NaN", () => {
   assert.equal(probabilityFor(lead({ probabilityOverride: 150 })), 100);
   assert.equal(probabilityFor(lead({ probabilityOverride: -20 })), 0);

@@ -71,7 +71,17 @@ export function coerceMoney(
  * downstream sum into NaN.
  */
 export function probabilityFor(lead: LeadForMetrics): number {
-  const fallback = stageDef(lead.stage).probability;
+  const def = stageDef(lead.stage);
+
+  // A settled deal's likelihood is a fact, not an opinion, so a closed stage
+  // outranks any override. Overrides are not cleared when a lead closes, so
+  // without this a deal won at a stale 60% would weight to 60% of its value —
+  // making forecast.weightedValue come out BELOW the forecast.wonValue it is
+  // supposed to contain in full.
+  if (def.outcome === "WON") return 100;
+  if (def.outcome === "LOST") return 0;
+
+  const fallback = def.probability;
   const override = lead.probabilityOverride;
 
   if (override === null || override === undefined) return fallback;

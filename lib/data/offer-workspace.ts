@@ -439,31 +439,44 @@ export async function saveOfferWorkspace(input: {
   // read-then-write race. A zero/absent price must not null an existing value,
   // hence the greaterThan(0) guard. The offer update above is already scoped to
   // isActive, so a superseded revision cannot reach this point.
-  if (contractValue.greaterThan(0)) {
-    const offerLead = await prisma.offer.findUnique({
-      where: { id: input.offerId },
-      select: { leadId: true },
-    });
-    if (offerLead?.leadId) {
-      await prisma.lead.updateMany({
-        where: {
-          id: offerLead.leadId,
-          // Match the two syncable states EXPLICITLY. `NOT: { source: "MANUAL" }`
-          // looks equivalent but is not: it compiles to NOT (col = 'MANUAL'),
-          // which evaluates to NULL — not true — for rows where the column is
-          // NULL. That is every lead never manually overridden, so the sync
-          // would silently skip almost everything. Verified against Postgres.
-          OR: [
-            { estimatedValueSource: null },
-            { estimatedValueSource: "OFFER" },
-          ],
-        },
-        data: {
-          estimatedValue: contractValue,
-          estimatedValueSource: "OFFER",
-        },
+  //
+  // Deliberately non-fatal. The offer write above has ALREADY committed and
+  // bumped stateVersion; letting a sync failure throw here would report the
+  // save as failed while it actually succeeded, and the client would then
+  // retry against a stale expectedStateVersion and be told it is superseded.
+  // Mirroring the value onto the lead is secondary to persisting the offer.
+  try {
+    if (contractValue.greaterThan(0)) {
+      const offerLead = await prisma.offer.findUnique({
+        where: { id: input.offerId },
+        select: { leadId: true },
       });
+      if (offerLead?.leadId) {
+        await prisma.lead.updateMany({
+          where: {
+            id: offerLead.leadId,
+            // Match the two syncable states EXPLICITLY. `NOT: { source: "MANUAL" }`
+            // looks equivalent but is not: it compiles to NOT (col = 'MANUAL'),
+            // which evaluates to NULL — not true — for rows where the column is
+            // NULL. That is every lead never manually overridden, so the sync
+            // would silently skip almost everything. Verified against Postgres.
+            OR: [
+              { estimatedValueSource: null },
+              { estimatedValueSource: "OFFER" },
+            ],
+          },
+          data: {
+            estimatedValue: contractValue,
+            estimatedValueSource: "OFFER",
+          },
+        });
+      }
     }
+  } catch (error) {
+    console.error(
+      `[offer-workspace] lead value sync failed for offer ${input.offerId}; the offer itself saved successfully`,
+      error,
+    );
   }
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);

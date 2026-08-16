@@ -234,10 +234,14 @@ export function DetailModal({
         budget: form.budget,
         estimatedValue: form.estimatedValue === "" ? null : form.estimatedValue,
         estimatedValueSource: form.estimatedValueSource,
+        // Clamp and round at the source. The input is free-typed, so 150 or
+        // 79.6 would otherwise fail Zod's int 0-100 rule and reject the whole
+        // save — every unrelated edit in the modal with it — behind a generic
+        // toast that names no field.
         probabilityOverride:
           form.probabilityOverride === ""
             ? null
-            : Number(form.probabilityOverride),
+            : Math.max(0, Math.min(100, Math.round(Number(form.probabilityOverride) || 0))),
         expectedCloseDate: form.expectedCloseDate || null,
         type: typeValue,
         notes: form.notes,
@@ -570,7 +574,13 @@ export function DetailModal({
                 type="button"
                 className="mt-1 text-[11px] underline"
                 onClick={() =>
-                  patch({ estimatedValue: "", estimatedValueSource: null })
+                  // Clear only the ownership flag, never the figure. Nulling
+                  // the value would drop this lead out of pipeline totals
+                  // entirely until someone happens to re-save the offer
+                  // workspace — the sync only runs on an offer write, so
+                  // there is no path back in the meantime. A slightly stale
+                  // number beats no number.
+                  patch({ estimatedValueSource: null })
                 }
               >
                 Follow the offer price again
