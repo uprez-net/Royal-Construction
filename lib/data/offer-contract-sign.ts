@@ -401,9 +401,9 @@ export async function sendContractForSignature(input: {
       context,
       config,
       templateId:
-        ownerSigners.length === 0 ?
+        ownerSigners.length === 1 ?
           config.contractTemplateId :
-          ownerSigners.length <= 2 ?
+          ownerSigners.length === 2 ?
             config.contractDefaultTemplateId :
             config.contractMultipleOwnersTemplateId,
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
