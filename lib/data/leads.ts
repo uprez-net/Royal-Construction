@@ -768,6 +768,14 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         stage: mappedStage,
         ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
         budget: input.budget,
+        // A lead created with a value is manually owned until an offer exists;
+        // the offer sync then takes over only if the source is not MANUAL.
+        estimatedValue:
+          input.estimatedValue === null || input.estimatedValue === undefined || input.estimatedValue === ""
+            ? null
+            : new Prisma.Decimal(input.estimatedValue),
+        estimatedValueSource: input.estimatedValue ? "MANUAL" : null,
+        expectedCloseDate: input.expectedCloseDate ?? null,
         type: input.type ?? [],
         notes: input.notes,
         meetingDate: input.meetingDate,
