@@ -176,6 +176,36 @@ export const historySchema = z.object({
   actionDate: z.iso.datetime().nullable().describe("Action date").optional(),
 });
 
+/**
+ * Deal-economics fields, spread into BOTH lead schemas below.
+ *
+ * createLeadSchema and updateLeadSchema are independent object literals —
+ * update is NOT derived via .partial() — and PATCH parses against
+ * updateLeadSchema. Zod strips unknown keys silently, so a field added to only
+ * one schema vanishes on the other path with no error. Sharing the definition
+ * makes that class of mistake impossible.
+ */
+const dealEconomicsFields = {
+  estimatedValue: z
+    .union([z.number(), z.string()])
+    .nullable()
+    .optional()
+    .describe("Numeric deal value"),
+  probabilityOverride: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .nullable()
+    .optional()
+    .describe("Likelihood override 0-100; null inherits the stage default"),
+  // nullableDateInput, not z.iso.datetime() — the latter rejects the
+  // date-only strings a <input type="date"> emits.
+  expectedCloseDate: nullableDateInput
+    .describe("Expected close date")
+    .optional(),
+} as const;
+
 export const updateLeadSchema = z.object({
   name: z.string().trim().min(1).optional(),
 
@@ -225,6 +255,8 @@ export const updateLeadSchema = z.object({
   type: typeSchema.optional(),
 
   history: z.array(historyItemSchema).optional(),
+
+  ...dealEconomicsFields,
 });
 
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
@@ -289,6 +321,8 @@ export const createLeadSchema = z.object({
     .optional(),
 
   history: z.array(historySchema).optional(),
+
+  ...dealEconomicsFields,
 });
 
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;

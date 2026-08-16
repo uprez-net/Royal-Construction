@@ -6,6 +6,14 @@ import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
+import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
+import {
+  computeForecast,
+  computePipelineMetrics,
+  type ForecastResult,
+  type LeadForMetrics,
+  type PipelineMetrics,
+} from "@/lib/leads/pipeline-math";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
@@ -1268,12 +1276,87 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
     value: Number(row.value),
   }));
 
+  const now = new Date();
+  const leadsForMetrics = await fetchLeadsForMetrics();
+  const current = fyQuarterOf(now);
+
   return {
     sourceData,
     conversionData,
     monthlyTrend,
     lostReasons,
+    pipelineMetrics: serializeMetrics(computePipelineMetrics(leadsForMetrics, now)),
+    forecast: serializeForecast(
+      computeForecast(leadsForMetrics, current.fy, current.quarter),
+    ),
   };
+}
+
+/* ── Pipeline metrics & forecast ──────────────────────────────────────
+ *
+ * These MUST stay uncached. lib/data/leads.ts has no caching primitives and
+ * must not gain any: under cacheComponents, a 'use cache' fetcher called in a
+ * page body prefills at `next build` and fails CI with ETIMEDOUT.
+ */
+
+const PIPELINE_SELECT = {
+  id: true,
+  stage: true,
+  estimatedValue: true,
+  probabilityOverride: true,
+  expectedCloseDate: true,
+  wonAt: true,
+  lostAt: true,
+} as const;
+
+async function fetchLeadsForMetrics(): Promise<LeadForMetrics[]> {
+  // The isArchived filter matches every other lead aggregate in this file.
+  // Soft-deleted leads are invisible everywhere else and must not inflate
+  // pipeline value here.
+  const rows = await prisma.lead.findMany({
+    where: { isArchived: false },
+    select: PIPELINE_SELECT,
+  });
+  return rows.map((row) => ({
+    ...row,
+    estimatedValue: row.estimatedValue?.toString() ?? null,
+  }));
+}
+
+/** Decimal cannot cross to a Client Component — stringify at the boundary. */
+function serializeMetrics(metrics: PipelineMetrics) {
+  return {
+    ...metrics,
+    totalValue: metrics.totalValue.toString(),
+    weightedValue: metrics.weightedValue.toString(),
+    byStage: metrics.byStage.map((bucket) => ({
+      ...bucket,
+      total: bucket.total.toString(),
+      weighted: bucket.weighted.toString(),
+    })),
+  };
+}
+
+function serializeForecast(forecast: ForecastResult) {
+  return {
+    ...forecast,
+    expectedValue: forecast.expectedValue.toString(),
+    weightedValue: forecast.weightedValue.toString(),
+    wonValue: forecast.wonValue.toString(),
+    bankedValue: forecast.bankedValue.toString(),
+  };
+}
+
+export type SafePipelineMetrics = ReturnType<typeof serializeMetrics>;
+export type SafeForecast = ReturnType<typeof serializeForecast>;
+
+/** Forecast for an arbitrary FY quarter — backs the quarter selector. */
+export async function getForecast(
+  fy: number,
+  quarter: FyQuarter,
+): Promise<SafeForecast> {
+  const leads = await fetchLeadsForMetrics();
+  return serializeForecast(computeForecast(leads, fy, quarter));
 }
 
 /**

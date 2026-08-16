@@ -103,7 +103,14 @@ export interface Lead {
     name: string;
     email: string;
   } | null;
+  /** Free-text note only. `estimatedValue` is the source of truth for KPIs. */
   budget: BudgetRange | string;
+  /** Money as string — Decimal cannot cross to a Client Component. */
+  estimatedValue?: string | null;
+  estimatedValueSource?: "OFFER" | "MANUAL" | null;
+  /** Null inherits the stage default (lib/leads/pipeline-stages.ts). */
+  probabilityOverride?: number | null;
+  expectedCloseDate?: string | null;
   type: string;
   notes: string;
   notesDoc?: LeadRichTextDocument | null;
