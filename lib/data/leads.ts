@@ -911,6 +911,23 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       : { disconnect: true };
   }
   if (input.budget !== undefined) updateData.budget = input.budget;
+  // Deal economics. updateData is an explicit whitelist — new columns do not
+  // flow through on their own.
+  if (input.estimatedValue !== undefined) {
+    updateData.estimatedValue =
+      input.estimatedValue === null || input.estimatedValue === ""
+        ? null
+        : new Prisma.Decimal(input.estimatedValue);
+  }
+  if (input.estimatedValueSource !== undefined) {
+    updateData.estimatedValueSource = input.estimatedValueSource;
+  }
+  if (input.probabilityOverride !== undefined) {
+    updateData.probabilityOverride = input.probabilityOverride;
+  }
+  if (input.expectedCloseDate !== undefined) {
+    updateData.expectedCloseDate = input.expectedCloseDate;
+  }
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
   if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;

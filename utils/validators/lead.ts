@@ -191,6 +191,13 @@ const dealEconomicsFields = {
     .nullable()
     .optional()
     .describe("Numeric deal value"),
+  // Must be persistable: without it, a user's typed-over value would be
+  // silently overwritten by the next offer save.
+  estimatedValueSource: z
+    .enum(["OFFER", "MANUAL"])
+    .nullable()
+    .optional()
+    .describe("Whether the deal value follows the offer or was typed"),
   probabilityOverride: z
     .number()
     .int()

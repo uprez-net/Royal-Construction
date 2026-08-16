@@ -25,6 +25,10 @@ import {
   updateProjectUploadProgress,
 } from "@/lib/store/slices/projectsSlice";
 import { useAppDispatch } from "@/lib/store/hooks";
+import { currency } from "@/utils/formatters";
+import { stageToPrismaMap } from "@/types/lead";
+import { stageDef } from "@/lib/leads/pipeline-stages";
+import { formatFyQuarter, fyQuarterOf } from "@/lib/leads/fy-quarter";
 import { upload } from "@vercel/blob/client";
 import { ClientPayload } from "@/utils/validators/files";
 import { Button } from "@/components/ui/button";
@@ -228,6 +232,13 @@ export function DetailModal({
         assignedId: form.assignedId || null,
         assignedUser: form.assignedUser || null,
         budget: form.budget,
+        estimatedValue: form.estimatedValue === "" ? null : form.estimatedValue,
+        estimatedValueSource: form.estimatedValueSource,
+        probabilityOverride:
+          form.probabilityOverride === ""
+            ? null
+            : Number(form.probabilityOverride),
+        expectedCloseDate: form.expectedCloseDate || null,
         type: typeValue,
         notes: form.notes,
         notesDoc: form.notesDoc,
@@ -287,6 +298,33 @@ export function DetailModal({
   };
 
   /* ── Common input class ── */
+  /* ── Deal economics derived values ─────────────────────────────── */
+  // form.stage is the UI label; the stage ladder is keyed by the Prisma enum.
+  const stageProbability =
+    stageDef(stageToPrismaMap[form.stage]).probability;
+
+  const expectedCloseQuarter = useMemo(() => {
+    if (!form.expectedCloseDate) return null;
+    // Read the date as Sydney noon so the quarter matches what the forecast
+    // computes — a bare YYYY-MM-DD parses as UTC midnight and can slip a day.
+    const parsed = new Date(`${form.expectedCloseDate}T12:00:00+10:00`);
+    if (Number.isNaN(parsed.getTime())) return null;
+    const { fy, quarter } = fyQuarterOf(parsed);
+    return formatFyQuarter(fy, quarter);
+  }, [form.expectedCloseDate]);
+
+  const weightedPreview = useMemo(() => {
+    const value = Number(form.estimatedValue);
+    if (!form.estimatedValue || !Number.isFinite(value) || value <= 0) return null;
+    const pct = form.probabilityOverride === ""
+      ? stageProbability
+      : Math.max(0, Math.min(100, Number(form.probabilityOverride) || 0));
+    return {
+      equation: `${currency.format(value)} × ${pct}%`,
+      amount: currency.format((value * pct) / 100),
+    };
+  }, [form.estimatedValue, form.probabilityOverride, stageProbability]);
+
   const inputCls =
     "mt-1 w-full rounded-[4px] border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-[color:var(--royal-gold)] focus:outline-none focus:ring-2 focus:ring-[color:var(--royal-gold-light)]";
   const labelCls = "text-xs font-medium text-muted-foreground";
@@ -476,7 +514,7 @@ export function DetailModal({
           </div>
           <div>
             <label htmlFor={fieldId("budget")} className={labelCls}>
-              Budget
+              Budget discussed — rough note
             </label>
             <select
               id={fieldId("budget")}
@@ -491,6 +529,111 @@ export function DetailModal({
               ))}
             </select>
           </div>
+        </div>
+
+        {/* ── Deal economics ───────────────────────────────────────── */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <label htmlFor={fieldId("estimated-value")} className={labelCls}>
+              Deal value
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id={fieldId("estimated-value")}
+                type="number"
+                min={0}
+                step={1000}
+                className={inputCls}
+                value={form.estimatedValue}
+                onChange={(e) =>
+                  // Typing takes ownership: this lead stops following the offer.
+                  patch({
+                    estimatedValue: e.target.value,
+                    estimatedValueSource: "MANUAL",
+                  })
+                }
+              />
+              {form.estimatedValueSource === "OFFER" && (
+                <span
+                  className="whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
+                  style={{
+                    background: "var(--info-light)",
+                    color: "var(--info-ink)",
+                  }}
+                >
+                  From offer
+                </span>
+              )}
+            </div>
+            {form.estimatedValueSource === "MANUAL" ? (
+              <button
+                type="button"
+                className="mt-1 text-[11px] underline"
+                onClick={() =>
+                  patch({ estimatedValue: "", estimatedValueSource: null })
+                }
+              >
+                Follow the offer price again
+              </button>
+            ) : (
+              <span className="mt-1 block text-[11px] text-muted-foreground">
+                Follows the quoted contract price once an offer exists.
+              </span>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor={fieldId("probability")} className={labelCls}>
+              Likelihood
+            </label>
+            <input
+              id={fieldId("probability")}
+              type="number"
+              min={0}
+              max={100}
+              className={inputCls}
+              // The stage default is the PLACEHOLDER, never the value — writing
+              // it in would silently convert every lead to a manual override.
+              placeholder={String(stageProbability)}
+              value={form.probabilityOverride}
+              onChange={(e) => patch({ probabilityOverride: e.target.value })}
+            />
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              {form.stage} default is {stageProbability}%
+            </span>
+          </div>
+
+          <div>
+            <label htmlFor={fieldId("expected-close")} className={labelCls}>
+              Expected close
+            </label>
+            <input
+              id={fieldId("expected-close")}
+              type="date"
+              className={inputCls}
+              value={form.expectedCloseDate}
+              onChange={(e) => patch({ expectedCloseDate: e.target.value })}
+            />
+            {expectedCloseQuarter && (
+              <span className="mt-1 block text-[11px] text-muted-foreground">
+                Lands in {expectedCloseQuarter}
+              </span>
+            )}
+          </div>
+
+          {weightedPreview && (
+            <div className="flex items-center justify-between gap-3 rounded-md bg-muted px-3 py-2.5 text-[12.5px] md:col-span-2">
+              <span>
+                Counts toward the forecast as{" "}
+                <span className="font-mono text-[11px] text-muted-foreground">
+                  {weightedPreview.equation}
+                </span>
+              </span>
+              <span className="font-heading text-lg font-semibold tabular-nums">
+                {weightedPreview.amount}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Follow-up Date + Time */}
