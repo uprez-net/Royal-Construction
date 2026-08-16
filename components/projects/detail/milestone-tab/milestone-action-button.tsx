@@ -80,7 +80,7 @@ export function MilestoneActionGroup({
         {!hasChildren && (
           <Button size="sm" onClick={() => onStatusUpdate(milestone.id)}>
             <FilePenLine className="mr-1 h-4 w-4" aria-hidden="true" />
-            Finish milestone
+            Finish Activity
           </Button>
         )}
       </div>

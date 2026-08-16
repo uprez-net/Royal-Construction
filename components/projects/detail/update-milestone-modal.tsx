@@ -30,10 +30,17 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Edit, Loader2 } from "lucide-react";
+import { AlertCircle, CalendarIcon, Edit, Loader2 } from "lucide-react";
 import { currency } from "@/utils/formatters";
 import { format } from "date-fns";
 import { parseCurrency } from "@/utils/parser";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
 
 interface UpdateMilestoneModalProps {
   milestoneId: string;
@@ -111,7 +118,9 @@ export default function UpdateMilestoneModal({
       if (schedule.requiresQuote) {
         return acc + parseFloat(schedule.quotedPrice ?? "0");
       } else {
-        const lastQuotedPrice = parseFloat(schedule.tradie.lastQuotedPrice ?? "0");
+        const lastQuotedPrice = parseFloat(
+          schedule.tradie.lastQuotedPrice ?? "0",
+        );
         const totalHours = schedule.durationDays * 8;
         return acc + lastQuotedPrice * totalHours;
       }
@@ -196,7 +205,12 @@ export default function UpdateMilestoneModal({
       setSubmitError(null);
       const validatedData = milestoneUpdateSchema.safeParse({
         ...data,
-        spend: data.spend && data.spend > 0 ? data.spend : status === "DONE" ? 0 : undefined,
+        spend:
+          data.spend && data.spend > 0
+            ? data.spend
+            : status === "DONE"
+              ? 0
+              : undefined,
       });
       if (!validatedData.success) {
         const nextFieldErrors = validatedData.error.issues.reduce(
@@ -332,21 +346,52 @@ export default function UpdateMilestoneModal({
                   Start date
                   <RequiredMark />
                 </Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  required
-                  className={inputClassName}
-                  value={formState.startDate || ""}
-                  disabled={formState.status === "DONE"}
-                  onChange={(e) =>
-                    handleFormChange("startDate", e.target.value)
-                  }
-                  aria-invalid={Boolean(fieldErrors.startDate)}
-                  aria-describedby={
-                    fieldErrors.startDate ? "startDate-error" : undefined
-                  }
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="startDate"
+                      type="button"
+                      variant="outline"
+                      disabled={formState.status === "DONE"}
+                      className={cn(
+                        inputClassName,
+                        "w-full justify-start text-left font-normal",
+                        !formState.startDate && "text-muted-foreground",
+                      )}
+                      aria-invalid={Boolean(fieldErrors.startDate)}
+                      aria-describedby={
+                        fieldErrors.startDate ? "startDate-error" : undefined
+                      }
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formState.startDate ? (
+                        format(new Date(formState.startDate), "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={
+                        formState.startDate
+                          ? new Date(formState.startDate)
+                          : undefined
+                      }
+                      onSelect={(date) =>
+                        handleFormChange(
+                          "startDate",
+                          date ? format(date, "yyyy-MM-dd") : "",
+                        )
+                      }
+                      disabled={(date) =>
+                        formState.status === "DONE" ||
+                        date < new Date(new Date().setHours(0, 0, 0, 0))
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
                 {fieldErrors.startDate ? (
                   <p id="startDate-error" className="text-xs text-destructive">
                     {fieldErrors.startDate}
@@ -360,19 +405,54 @@ export default function UpdateMilestoneModal({
                   <Label htmlFor="actualDate" className={labelClassName}>
                     Completed on
                   </Label>
-                  <Input
-                    id="actualDate"
-                    type="date"
-                    min={formState.startDate}
-                    className={inputClassName}
-                    value={formState.actualDate || ""}
-                    aria-describedby={
-                      fieldErrors.actualDate
-                        ? "actualDate-error actualDate-hint"
-                        : "actualDate-hint"
-                    }
-                    aria-invalid={Boolean(fieldErrors.actualDate)}
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="actualDate"
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          inputClassName,
+                          "w-full justify-start text-left font-normal",
+                          !formState.actualDate && "text-muted-foreground",
+                        )}
+                        aria-describedby={
+                          fieldErrors.actualDate
+                            ? "actualDate-error actualDate-hint"
+                            : "actualDate-hint"
+                        }
+                        aria-invalid={Boolean(fieldErrors.actualDate)}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {formState.actualDate ? (
+                          format(new Date(formState.actualDate), "PPP")
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={
+                          formState.actualDate
+                            ? new Date(formState.actualDate)
+                            : undefined
+                        }
+                        onSelect={(date) =>
+                          handleFormChange(
+                            "actualDate",
+                            date ? format(date, "yyyy-MM-dd") : "",
+                          )
+                        }
+                        disabled={(date) =>
+                          formState.startDate
+                            ? date < new Date(formState.startDate)
+                            : false
+                        }
+                      />
+                    </PopoverContent>
+                  </Popover>
                   <p
                     id="actualDate-hint"
                     className="text-xs text-muted-foreground"
