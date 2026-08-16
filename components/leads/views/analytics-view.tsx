@@ -26,6 +26,10 @@ interface AnalyticsViewProps {
   analytics: LeadAnalyticsData;
 }
 
+import { ForecastPanel } from "@/components/leads/forecast-panel";
+import { PipelineKpi } from "@/components/leads/pipeline-kpi";
+import { PipelineStageChart } from "@/components/leads/pipeline-stage-chart";
+
 /* ── BuildPro chart tokens ─────── */
 const CHART = {
   lead: "var(--royal-gold)",
@@ -83,6 +87,14 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
 
   return (
     <div className="analytics-view">
+      <PipelineKpi
+        metrics={analytics.pipelineMetrics}
+        forecast={analytics.forecast}
+      />
+      <div className="analytics-row">
+        <PipelineStageChart metrics={analytics.pipelineMetrics} />
+        <ForecastPanel forecast={analytics.forecast} />
+      </div>
       <div className="analytics-summary" aria-label="Lead analytics summary">
         <div>
           <span>Top source</span>
