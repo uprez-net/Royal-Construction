@@ -448,7 +448,15 @@ export async function saveOfferWorkspace(input: {
       await prisma.lead.updateMany({
         where: {
           id: offerLead.leadId,
-          NOT: { estimatedValueSource: "MANUAL" },
+          // Match the two syncable states EXPLICITLY. `NOT: { source: "MANUAL" }`
+          // looks equivalent but is not: it compiles to NOT (col = 'MANUAL'),
+          // which evaluates to NULL — not true — for rows where the column is
+          // NULL. That is every lead never manually overridden, so the sync
+          // would silently skip almost everything. Verified against Postgres.
+          OR: [
+            { estimatedValueSource: null },
+            { estimatedValueSource: "OFFER" },
+          ],
         },
         data: {
           estimatedValue: contractValue,
