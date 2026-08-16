@@ -69,6 +69,11 @@ enum LeadStage {
   DISQUALIFIED
 }
 
+enum LeadValueSource {
+  OFFER
+  MANUAL
+}
+
 enum HistoryType {
   SYSTEM
   CALL
@@ -565,6 +570,21 @@ model Lead {
 
   urgent Boolean @default(false)
 
+  // ── Deal economics ────────────────────────────────────────────────
+  /// Numeric deal value. Auto-filled from the active offer's contract price
+  /// unless estimatedValueSource is MANUAL. `budget` above remains a
+  /// free-text note and is NOT the source of truth for any KPI.
+  estimatedValue       Decimal?         @db.Decimal(14, 2)
+  estimatedValueSource LeadValueSource?
+  /// Null means "inherit the stage default" (lib/leads/pipeline-stages.ts).
+  /// Never default this to 0 — that would read as 0% for every existing lead.
+  probabilityOverride  Int?
+  expectedCloseDate    DateTime?
+  /// Stamped by closeDatePatch() on stage transitions. Weighted pipeline and
+  /// win rate depend on these; updatedAt is not a usable substitute.
+  wonAt                DateTime?
+  lostAt               DateTime?
+
   MicrosoftmessageId String? @unique
 
   createdAt DateTime @default(now())
@@ -582,6 +602,9 @@ model Lead {
   @@index([stage])
   @@index([assignedId])
   @@index([createdAt])
+  @@index([expectedCloseDate])
+  @@index([wonAt])
+  @@index([lostAt])
 }
 
 model LeadNoteAnnotation {
