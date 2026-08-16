@@ -195,7 +195,7 @@ export function TradieScheduleRow({
             <RequiredMark />
           </Label>
 
-          <Popover>
+          <Popover modal>
             <PopoverTrigger asChild>
               <Button
                 id={fieldId("category")}
@@ -297,7 +297,7 @@ export function TradieScheduleRow({
             <RequiredMark />
           </Label>
 
-          <Popover>
+          <Popover modal>
             <PopoverTrigger asChild>
               <Button
                 id={fieldId("tradie")}
