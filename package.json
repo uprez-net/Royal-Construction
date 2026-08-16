@@ -19,7 +19,8 @@
     "prisma:migrate-deploy": "prisma migrate deploy",
     "seed:projects": "tsx prisma/seed-projects.ts",
     "seed:tradies": "tsx prisma/seed-tradie.ts",
-    "seed:admin-offer-content": "tsx scripts/seed-admin-offer-content.ts"
+    "seed:admin-offer-content": "tsx scripts/seed-admin-offer-content.ts",
+    "backfill:lead-close-dates": "tsx scripts/backfill-lead-close-dates.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.73",
