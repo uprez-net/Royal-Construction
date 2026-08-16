@@ -429,6 +429,35 @@ export async function saveOfferWorkspace(input: {
     };
   }
 
+  // Keep the lead's deal value in step with the quoted contract price.
+  // Offer.contractValueIncGst is the authoritative number once an offer
+  // exists; a second hand-typed figure on the lead would only ever disagree
+  // with it, and would leave the pipeline blank at exactly the stages where a
+  // real price is known.
+  //
+  // updateMany + the NOT filter skips manually-owned leads atomically, with no
+  // read-then-write race. A zero/absent price must not null an existing value,
+  // hence the greaterThan(0) guard. The offer update above is already scoped to
+  // isActive, so a superseded revision cannot reach this point.
+  if (contractValue.greaterThan(0)) {
+    const offerLead = await prisma.offer.findUnique({
+      where: { id: input.offerId },
+      select: { leadId: true },
+    });
+    if (offerLead?.leadId) {
+      await prisma.lead.updateMany({
+        where: {
+          id: offerLead.leadId,
+          NOT: { estimatedValueSource: "MANUAL" },
+        },
+        data: {
+          estimatedValue: contractValue,
+          estimatedValueSource: "OFFER",
+        },
+      });
+    }
+  }
+
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   return { ok: true, stateVersion: input.expectedStateVersion + 1 };
 }
