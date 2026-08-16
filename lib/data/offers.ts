@@ -9,6 +9,7 @@ import { calculateTrend } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { assertCanAccessLead } from "@/lib/offer/access";
+import { closeDatePatch } from "@/lib/leads/pipeline-stages";
 
 export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
@@ -312,7 +313,8 @@ export const updateOfferStatus = async (offerId: string, status: OfferStatus) =>
         
         const currentOffer = await prisma.offer.findUnique({
             where: { id: offerId },
-            select: { offerStatus: true, leadId: true },
+            // lead.stage is needed to work out the wonAt/lostAt patch below.
+            select: { offerStatus: true, leadId: true, lead: { select: { stage: true } } },
         });
         
         if (!currentOffer) {
@@ -325,13 +327,22 @@ export const updateOfferStatus = async (offerId: string, status: OfferStatus) =>
             throw new Error(`Invalid status transition from ${currentOffer.offerStatus} to ${status}`);
         }
 
+        // Most real wins are recorded through THIS path, not the lead modal —
+        // ACCEPTED/AGREED/TENDER_*/CONTRACT_*/PROJECT all map to WON. Stamping
+        // only in updateLead would leave the forecast blind to them.
+        const nextLeadStage = OFFER_TO_LEAD_STATUS_UPDATE_MAP[status];
         const offer = await prisma.offer.update({
             where: { id: offerId },
-            data: { 
+            data: {
                 offerStatus: status,
                 lead: {
                     update: {
-                        stage: OFFER_TO_LEAD_STATUS_UPDATE_MAP[status],
+                        stage: nextLeadStage,
+                        ...closeDatePatch(
+                            currentOffer.lead?.stage ?? null,
+                            nextLeadStage,
+                            new Date(),
+                        ),
                     }
                 }
             },

@@ -53,6 +53,13 @@ interface MetricCardProps {
   Icon: LucideIcon;
   isCurrency?: boolean;
   isInverse?: boolean; // Indicates if the trend delta should be treated as inverse (e.g., a negative trend is good)
+  /**
+   * Optional small line under the title. Use it where the headline number is
+   * meaningless without its sample size — a 60% win rate could be 3-of-5 or
+   * 60-of-100, and over a 90-day window with few closes that difference is the
+   * whole story.
+   */
+  caption?: string;
 }
 
 export function MetricCard({
@@ -64,6 +71,7 @@ export function MetricCard({
   Icon,
   isCurrency,
   isInverse,
+  caption,
 }: MetricCardProps) {
   const displayValue = isCurrency
     ? (() => {
@@ -92,6 +100,11 @@ export function MetricCard({
             {displayValue}
           </p>
           <p className="mt-1 truncate text-xs text-muted-foreground">{title}</p>
+          {caption ? (
+            <p className="mt-0.5 truncate font-mono text-[10.5px] tabular-nums text-muted-foreground">
+              {caption}
+            </p>
+          ) : null}
         </div>
         {trendDelta !== undefined && trendDelta !== 0 && (
           <TrendBadge value={trendDelta} isInverse={isInverse} />

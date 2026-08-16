@@ -5,6 +5,16 @@ import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
+import { closeDatePatch } from "@/lib/leads/pipeline-stages";
+import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
+import {
+  coerceMoney,
+  computeForecast,
+  computePipelineMetrics,
+  type ForecastResult,
+  type LeadForMetrics,
+  type PipelineMetrics,
+} from "@/lib/leads/pipeline-math";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
@@ -667,6 +677,7 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
+  const createdValue = coerceMoney(input.estimatedValue);
   const actingUserId = await resolveActingUserId();
 
   const historyInput = input.history ?? [];
@@ -759,6 +770,17 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         stage: mappedStage,
         ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
         budget: input.budget,
+        // A lead created with a value is manually owned until an offer exists;
+        // the offer sync then takes over only if the source is not MANUAL.
+        // Both fields derive from ONE parse so they cannot disagree — keying
+        // the source off the raw input instead would make a typed 0 set a
+        // value while leaving the source null.
+        estimatedValue: createdValue,
+        estimatedValueSource: createdValue === null ? null : "MANUAL",
+        expectedCloseDate: input.expectedCloseDate ?? null,
+        // A lead created directly in a closed stage needs its close date
+        // stamped, exactly as the two update paths do.
+        ...closeDatePatch(null, mappedStage, new Date()),
         type: input.type ?? [],
         notes: input.notes,
         meetingDate: input.meetingDate,
@@ -879,7 +901,22 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.secondaryPhone !== undefined) updateData.secondaryPhone = input.secondaryPhone;
   if (input.source !== undefined) updateData.source = input.source;
   if (input.sourceDetail !== undefined) updateData.sourceDetail = input.sourceDetail;
-  if (input.stage !== undefined) updateData.stage = mappedStage;
+  if (input.stage !== undefined) {
+    updateData.stage = mappedStage;
+    if (mappedStage) {
+      // Stamp wonAt/lostAt from the transition. The current stage has to be
+      // read first — the patch depends on where the lead is coming from, so
+      // that WON -> CONVERTED does not re-date an existing win.
+      const current = await prisma.lead.findUnique({
+        where: { id },
+        select: { stage: true },
+      });
+      Object.assign(
+        updateData,
+        closeDatePatch(current?.stage ?? null, mappedStage, new Date()),
+      );
+    }
+  }
   if (input.assignedId !== undefined) {
     const nextAssignedId = input.assignedId?.trim();
     updateData.assignedUser = nextAssignedId
@@ -887,6 +924,25 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       : { disconnect: true };
   }
   if (input.budget !== undefined) updateData.budget = input.budget;
+  // Deal economics. updateData is an explicit whitelist — new columns do not
+  // flow through on their own.
+  if (input.estimatedValue !== undefined) {
+    // coerceMoney, not `new Prisma.Decimal(...)` — Decimal THROWS on a
+    // non-numeric or whitespace-only string, which would reject the entire
+    // lead update (name, stage, notes and all) with a 500 rather than a
+    // field-level error. Zod rejects bad money at the API boundary; this is
+    // defence in depth for the paths that do not go through it.
+    updateData.estimatedValue = coerceMoney(input.estimatedValue);
+  }
+  if (input.estimatedValueSource !== undefined) {
+    updateData.estimatedValueSource = input.estimatedValueSource;
+  }
+  if (input.probabilityOverride !== undefined) {
+    updateData.probabilityOverride = input.probabilityOverride;
+  }
+  if (input.expectedCloseDate !== undefined) {
+    updateData.expectedCloseDate = input.expectedCloseDate;
+  }
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
   if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
@@ -1252,12 +1308,87 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
     value: Number(row.value),
   }));
 
+  const now = new Date();
+  const leadsForMetrics = await fetchLeadsForMetrics();
+  const current = fyQuarterOf(now);
+
   return {
     sourceData,
     conversionData,
     monthlyTrend,
     lostReasons,
+    pipelineMetrics: serializeMetrics(computePipelineMetrics(leadsForMetrics, now)),
+    forecast: serializeForecast(
+      computeForecast(leadsForMetrics, current.fy, current.quarter),
+    ),
   };
+}
+
+/* ── Pipeline metrics & forecast ──────────────────────────────────────
+ *
+ * These MUST stay uncached. lib/data/leads.ts has no caching primitives and
+ * must not gain any: under cacheComponents, a 'use cache' fetcher called in a
+ * page body prefills at `next build` and fails CI with ETIMEDOUT.
+ */
+
+const PIPELINE_SELECT = {
+  id: true,
+  stage: true,
+  estimatedValue: true,
+  probabilityOverride: true,
+  expectedCloseDate: true,
+  wonAt: true,
+  lostAt: true,
+} as const;
+
+async function fetchLeadsForMetrics(): Promise<LeadForMetrics[]> {
+  // The isArchived filter matches every other lead aggregate in this file.
+  // Soft-deleted leads are invisible everywhere else and must not inflate
+  // pipeline value here.
+  const rows = await prisma.lead.findMany({
+    where: { isArchived: false },
+    select: PIPELINE_SELECT,
+  });
+  return rows.map((row) => ({
+    ...row,
+    estimatedValue: row.estimatedValue?.toString() ?? null,
+  }));
+}
+
+/** Decimal cannot cross to a Client Component — stringify at the boundary. */
+function serializeMetrics(metrics: PipelineMetrics) {
+  return {
+    ...metrics,
+    totalValue: metrics.totalValue.toString(),
+    weightedValue: metrics.weightedValue.toString(),
+    byStage: metrics.byStage.map((bucket) => ({
+      ...bucket,
+      total: bucket.total.toString(),
+      weighted: bucket.weighted.toString(),
+    })),
+  };
+}
+
+function serializeForecast(forecast: ForecastResult) {
+  return {
+    ...forecast,
+    expectedValue: forecast.expectedValue.toString(),
+    weightedValue: forecast.weightedValue.toString(),
+    wonValue: forecast.wonValue.toString(),
+    bankedValue: forecast.bankedValue.toString(),
+  };
+}
+
+export type SafePipelineMetrics = ReturnType<typeof serializeMetrics>;
+export type SafeForecast = ReturnType<typeof serializeForecast>;
+
+/** Forecast for an arbitrary FY quarter — backs the quarter selector. */
+export async function getForecast(
+  fy: number,
+  quarter: FyQuarter,
+): Promise<SafeForecast> {
+  const leads = await fetchLeadsForMetrics();
+  return serializeForecast(computeForecast(leads, fy, quarter));
 }
 
 /**

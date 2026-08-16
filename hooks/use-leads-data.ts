@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Lead, LeadStage, LeadsStats } from "@/lib/leads/types";
 import { LeadAnalyticsData } from "@/types/lead";
+import { WIN_RATE_WINDOW_DAYS } from "@/lib/leads/pipeline-stages";
 import type { FollowupStats } from "@/lib/data/leads";
 import {
   fetchLeads,
@@ -35,6 +36,33 @@ export function useLeadsData() {
     conversionData: [],
     monthlyTrend: [],
     lostReasons: [],
+    pipelineMetrics: {
+      openCount: 0,
+      valuedCount: 0,
+      invalidValueCount: 0,
+      totalValue: "0",
+      weightedValue: "0",
+      byStage: [],
+      winRate: {
+        percent: null,
+        won: 0,
+        lost: 0,
+        windowDays: WIN_RATE_WINDOW_DAYS,
+        estimatedDates: false,
+      },
+    },
+    forecast: {
+      fy: 0,
+      quarter: 1,
+      label: "",
+      start: "",
+      endExclusive: "",
+      dealCount: 0,
+      expectedValue: "0",
+      weightedValue: "0",
+      wonValue: "0",
+      bankedValue: "0",
+    },
   });
   const [pageInfo, setPageInfo] = useState<PageInfo>({
     page: 1,

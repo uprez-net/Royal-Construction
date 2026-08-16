@@ -429,6 +429,56 @@ export async function saveOfferWorkspace(input: {
     };
   }
 
+  // Keep the lead's deal value in step with the quoted contract price.
+  // Offer.contractValueIncGst is the authoritative number once an offer
+  // exists; a second hand-typed figure on the lead would only ever disagree
+  // with it, and would leave the pipeline blank at exactly the stages where a
+  // real price is known.
+  //
+  // updateMany + the NOT filter skips manually-owned leads atomically, with no
+  // read-then-write race. A zero/absent price must not null an existing value,
+  // hence the greaterThan(0) guard. The offer update above is already scoped to
+  // isActive, so a superseded revision cannot reach this point.
+  //
+  // Deliberately non-fatal. The offer write above has ALREADY committed and
+  // bumped stateVersion; letting a sync failure throw here would report the
+  // save as failed while it actually succeeded, and the client would then
+  // retry against a stale expectedStateVersion and be told it is superseded.
+  // Mirroring the value onto the lead is secondary to persisting the offer.
+  try {
+    if (contractValue.greaterThan(0)) {
+      const offerLead = await prisma.offer.findUnique({
+        where: { id: input.offerId },
+        select: { leadId: true },
+      });
+      if (offerLead?.leadId) {
+        await prisma.lead.updateMany({
+          where: {
+            id: offerLead.leadId,
+            // Match the two syncable states EXPLICITLY. `NOT: { source: "MANUAL" }`
+            // looks equivalent but is not: it compiles to NOT (col = 'MANUAL'),
+            // which evaluates to NULL — not true — for rows where the column is
+            // NULL. That is every lead never manually overridden, so the sync
+            // would silently skip almost everything. Verified against Postgres.
+            OR: [
+              { estimatedValueSource: null },
+              { estimatedValueSource: "OFFER" },
+            ],
+          },
+          data: {
+            estimatedValue: contractValue,
+            estimatedValueSource: "OFFER",
+          },
+        });
+      }
+    }
+  } catch (error) {
+    console.error(
+      `[offer-workspace] lead value sync failed for offer ${input.offerId}; the offer itself saved successfully`,
+      error,
+    );
+  }
+
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   return { ok: true, stateVersion: input.expectedStateVersion + 1 };
 }

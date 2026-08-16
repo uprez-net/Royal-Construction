@@ -1,3 +1,4 @@
+import type { SafeForecast, SafePipelineMetrics } from "@/lib/data/leads";
 import type {
   ChatSession,
   HistoryType as PrismaHistoryType,
@@ -122,6 +123,12 @@ export function mapLead(
     assignedId: lead.assignedId ?? null,
     assignedUser: assignedUserFromRelation ?? assignedUserFallback,
     budget: lead.budget ?? "Not Discussed",
+    // mapLead is an explicit whitelist with no spread — new Prisma columns do
+    // NOT flow through on their own.
+    estimatedValue: lead.estimatedValue?.toString() ?? null,
+    estimatedValueSource: lead.estimatedValueSource ?? null,
+    probabilityOverride: lead.probabilityOverride ?? null,
+    expectedCloseDate: lead.expectedCloseDate?.toISOString() ?? null,
     type: lead.type.length > 0 ? lead.type.join(", ") : "Not Specified",
     notes: lead.notes ?? "",
     notesDoc: coerceLeadNotesDocument(lead.notesDoc, lead.notes ?? ""),
@@ -165,4 +172,7 @@ export interface LeadAnalyticsData {
   conversionData: { source: string; total: number; won: number }[];
   monthlyTrend: { month: string; leads: number; converted: number }[];
   lostReasons: { name: string; value: number }[];
+  /** Money fields arrive as strings — Decimal cannot cross to the client. */
+  pipelineMetrics: SafePipelineMetrics;
+  forecast: SafeForecast;
 }

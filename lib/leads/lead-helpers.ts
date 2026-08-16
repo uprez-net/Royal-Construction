@@ -100,7 +100,14 @@ export interface LeadDetailFormData {
   stage: LeadStage;
   assignedId?: string | null;
   assignedUser?: { id: string; name: string; email: string } | null;
+  /** Free-text note only — `estimatedValue` is the source of truth for KPIs. */
   budget: string;
+  /** Empty string means "not recorded"; the input is numeric text. */
+  estimatedValue: string;
+  estimatedValueSource: "OFFER" | "MANUAL" | null;
+  /** Empty string means "inherit the stage default". */
+  probabilityOverride: string;
+  expectedCloseDate: string;
   type: ProjectType[];
   notes: string;
   notesDoc: LeadRichTextDocument;
@@ -239,6 +246,16 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
     assignedId: lead.assignedId || null,
     assignedUser: lead.assignedUser || null,
     budget: lead.budget || "",
+    estimatedValue: lead.estimatedValue ?? "",
+    estimatedValueSource: lead.estimatedValueSource ?? null,
+    probabilityOverride:
+      lead.probabilityOverride === null || lead.probabilityOverride === undefined
+        ? ""
+        : String(lead.probabilityOverride),
+    // <input type="date"> wants YYYY-MM-DD, not a full ISO timestamp.
+    expectedCloseDate: lead.expectedCloseDate
+      ? lead.expectedCloseDate.slice(0, 10)
+      : "",
     type: normalizeTypes(lead.type),
     notes: lead.notes || "",
     notesDoc: coerceLeadNotesDocument(lead.notesDoc, lead.notes || ""),

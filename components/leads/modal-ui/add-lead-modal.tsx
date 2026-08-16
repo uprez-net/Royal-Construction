@@ -44,6 +44,8 @@ interface AddLeadFormData {
   stage: LeadStage;
   assignedId: string;
   budget: string;
+  estimatedValue: string;
+  expectedCloseDate: string;
   type: ProjectType[];
   notes: string;
   followupDate: string;
@@ -79,6 +81,8 @@ export function AddLeadModal({
     stage: "New",
     assignedId: "",
     budget: "Not Discussed",
+    estimatedValue: "",
+    expectedCloseDate: "",
     type: ["Not Specified"],
     notes: "",
     followupDate: "",
@@ -198,6 +202,8 @@ export function AddLeadModal({
         stage,
         assignedId: form.assignedId || null,
         budget: form.budget as BudgetRange,
+        estimatedValue: form.estimatedValue === "" ? null : form.estimatedValue,
+        expectedCloseDate: form.expectedCloseDate || null,
         type: form.type.length > 0 ? form.type : ["Not Specified"],
         notes: form.notes,
         followupDate: form.followupDate || null,
@@ -409,6 +415,41 @@ export function AddLeadModal({
                 <option key={o} value={o}>{o}</option>
               ))}
             </select>
+          </div>
+        </div>
+
+        {/* Deal value + expected close. No likelihood field here — a new lead
+            follows its stage default, and the value is usually unknown until
+            an offer is priced, at which point it auto-fills. */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label htmlFor={fieldId("estimated-value")} className={itemLbl}>
+              Deal value (optional)
+            </label>
+            <input
+              id={fieldId("estimated-value")}
+              type="number"
+              min={0}
+              step={1000}
+              className={fieldCls}
+              value={form.estimatedValue}
+              onChange={(e) => updateField("estimatedValue", e.target.value)}
+            />
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              Fills in automatically once an offer is priced.
+            </span>
+          </div>
+          <div>
+            <label htmlFor={fieldId("expected-close")} className={itemLbl}>
+              Expected close (optional)
+            </label>
+            <input
+              id={fieldId("expected-close")}
+              type="date"
+              className={fieldCls}
+              value={form.expectedCloseDate}
+              onChange={(e) => updateField("expectedCloseDate", e.target.value)}
+            />
           </div>
         </div>
 
