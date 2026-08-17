@@ -159,7 +159,7 @@ export function JobSetupPanel({
               placeholder="Auto-filled from lead requirements"
               value={job.bathrooms}
               onChange={(event) =>
-                onJobChange({ bathrooms: parseInt(event.target.value) || 0 })
+                onJobChange({ bathrooms: parseFloat(event.target.value) || 0 })
               }
             />
           </Field>
