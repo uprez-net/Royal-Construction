@@ -20,6 +20,7 @@ const basis: OfferAreaBasis = {
   garageSqm: 20,
   grannyFlatSqm: 0,
   balconySqm: 0,
+  voidSqm: 0,
 };
 
 const defaultRates: AreaRateConstants = {
@@ -226,6 +227,7 @@ assert.equal(
     porchSqm: 0,
     grannyFlatSqm: 0,
     balconySqm: 0,
+    voidSqm: 0,
   }),
   0,
 );

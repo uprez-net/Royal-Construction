@@ -521,6 +521,7 @@ function parseAreaCalculator(
       garageSqm: firstNumber([getCell(rows, 5, 2)], EMPTY_AREA_BASIS.garageSqm),
       grannyFlatSqm: firstNumber([getCell(rows, 6, 2)], EMPTY_AREA_BASIS.grannyFlatSqm),
       balconySqm: firstNumber([getCell(rows, 7, 5)], EMPTY_AREA_BASIS.balconySqm),
+      voidSqm: firstNumber([getCell(rows, 8, 5)], EMPTY_AREA_BASIS.voidSqm),
     },
     areaCalculator: {
       ...INITIAL_AREA_CALCULATOR,

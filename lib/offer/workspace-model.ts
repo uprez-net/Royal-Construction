@@ -118,6 +118,7 @@ export type OfferWorkspaceJob = {
   readonly buildType: string;
   readonly facade: string;
   readonly groundFloorSqm: number;
+  readonly voidSqm: number;
   readonly firstFloorSqm: number;
   readonly garageSqm: number;
   readonly alfrescoPorchSqm: number;
@@ -859,6 +860,7 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   buildType: "",
   facade: "",
   groundFloorSqm: 0,
+  voidSqm: 0,
   firstFloorSqm: 0,
   garageSqm: 0,
   alfrescoPorchSqm: 0,

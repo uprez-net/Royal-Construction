@@ -55,7 +55,8 @@ export function JobSetupPanel({
     job.alfrescoPorchSqm +
     job.porchSqm +
     job.grannyFlatSqm +
-    job.balconySqm;
+    job.balconySqm +
+    job.voidSqm;
 
   const owners = job.owners ?? [];
   // owners[] is the source of truth; emit the derived flat client* projection in
@@ -156,6 +157,9 @@ export function JobSetupPanel({
           </Field>
           <Field label="Number of bathrooms">
             <Input
+              type="number"
+              step="0.1"
+              min="0"
               placeholder="Auto-filled from lead requirements"
               value={job.bathrooms}
               onChange={(event) =>
@@ -239,6 +243,11 @@ export function JobSetupPanel({
             label="Ground floor sqm"
             value={job.groundFloorSqm}
             onChange={(groundFloorSqm) => onJobChange({ groundFloorSqm })}
+          />
+          <AreaField
+            label="Void sqm"
+            value={job.voidSqm}
+            onChange={(voidSqm) => onJobChange({ voidSqm })}
           />
           <AreaField
             label="First floor sqm"
@@ -510,9 +519,7 @@ function OwnersSection({
           onClick={addOwner}
           disabled={atOwnerCap}
           title={
-            atOwnerCap
-              ? "The BC4 contract supports up to 4 owners"
-              : undefined
+            atOwnerCap ? "The BC4 contract supports up to 4 owners" : undefined
           }
         >
           <Plus className="size-4" aria-hidden="true" /> Add owner
@@ -604,7 +611,10 @@ function OwnersSection({
                   }
                 />
               </Field>
-              <Field className="md:col-span-2 xl:col-span-4" label="Current Location">
+              <Field
+                className="md:col-span-2 xl:col-span-4"
+                label="Current Location"
+              >
                 <AddressAutocomplete
                   placeholder="Where the owner currently lives"
                   value={owner.currentLocation}

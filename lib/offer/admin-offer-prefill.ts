@@ -225,6 +225,7 @@ export function reevaluateFormulaCostLines(
     | "porchSqm"
     | "grannyFlatSqm"
     | "balconySqm"
+    | "voidSqm"
   >,
   area: OfferAreaCalculator,
 ): readonly OfferWorkspaceCostLine[] {

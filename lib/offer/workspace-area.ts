@@ -13,6 +13,7 @@ export type OfferAreaBasis = {
   readonly porchSqm: number;
   readonly grannyFlatSqm: number;
   readonly balconySqm: number;
+  readonly voidSqm: number;
 };
 
 // The estimator's project-specific inputs for the slab / frame / brick / tile
@@ -91,6 +92,7 @@ export const EMPTY_AREA_BASIS: OfferAreaBasis = {
   porchSqm: 0,
   grannyFlatSqm: 0,
   balconySqm: 0,
+  voidSqm: 0,
 };
 
 // Fresh-offer defaults: every estimator input starts at zero. Rate constants
@@ -123,6 +125,7 @@ export function offerAreaBasisFromJob(
     | "porchSqm"
     | "grannyFlatSqm"
     | "balconySqm"
+    | "voidSqm"
   >,
 ): OfferAreaBasis {
   return {
@@ -133,6 +136,7 @@ export function offerAreaBasisFromJob(
     porchSqm: job.porchSqm,
     grannyFlatSqm: job.grannyFlatSqm,
     balconySqm: job.balconySqm,
+    voidSqm: job.voidSqm, // default to 0 if voidSqm is not present in the job
   };
 }
 
@@ -143,7 +147,9 @@ export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
     basis.alfrescoSqm +
     basis.porchSqm +
     basis.garageSqm +
-    basis.grannyFlatSqm,
+    basis.voidSqm +
+    basis.grannyFlatSqm +
+    basis.balconySqm,
   );
 }
 
