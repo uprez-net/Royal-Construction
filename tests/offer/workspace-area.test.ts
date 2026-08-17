@@ -21,6 +21,7 @@ const basis: OfferAreaBasis = {
   grannyFlatSqm: 0,
   balconySqm: 0,
   voidSqm: 0,
+  kitchenSqm: 0,
 };
 
 const defaultRates: AreaRateConstants = {
@@ -34,42 +35,47 @@ const defaultRates: AreaRateConstants = {
   brickLayingPricePerBrick: 0,
   tilePricePerTile: 0,
   tilingRatePerSqm: 0,
-  flooringRatePerSqm: 0
+  flooringRatePerSqm: 0,
+  slabCostPerSqm: 200,
 };
 
 // ─── calculateSlab ───
-
 assert.deepEqual(
   calculateSlab(
+    basis,
     { slabCost: 30000, dropEdgeBeamSurfaceArea: 50, numberOfTrucks: 3 },
     {
       dropEdgeBeamCostPerSurfaceArea: 18,
       priceOfEachTruck: 500,
+      slabCostPerSqm: 200,
     },
   ),
   {
     totalDropEdgeBeamCost: 900,
     totalTruckPrice: 1500,
-    totalSlabCost: 32400,
+    totalSlabCost: 29700,
+    slabCost: 28200,
   },
 );
 
 // Zero/empty slab inputs
 assert.deepEqual(
   calculateSlab(
+    basis,
     { slabCost: 0, dropEdgeBeamSurfaceArea: 0, numberOfTrucks: 0 },
     {
       dropEdgeBeamCostPerSurfaceArea: 18,
       priceOfEachTruck: 500,
+      slabCostPerSqm: 200,
     },
   ),
   {
     totalDropEdgeBeamCost: 0,
     totalTruckPrice: 0,
-    totalSlabCost: 0,
+    totalSlabCost: 28200,
+    slabCost: 28200,
   },
 );
-
 // ─── calculateFrame ───
 
 assert.deepEqual(
@@ -186,7 +192,7 @@ const area: OfferAreaCalculator = {
 };
 
 const calc = calculateOfferArea(basis, area, defaultRates);
-assert.equal(calc.totalSlabCost, 32400);
+assert.equal(calc.totalSlabCost, 29700);
 assert.equal(calc.totalDropEdgeBeamCost, 900);
 assert.equal(calc.totalTruckPrice, 1500);
 assert.equal(calc.totalGroundFloorArea, 141);
@@ -202,7 +208,7 @@ assert.equal(calc.totalTilesRequired, 1375);
 // ─── All-zero calculator with defaults ───
 
 const zeroCalc = calculateOfferArea(basis, INITIAL_AREA_CALCULATOR, defaultRates);
-assert.equal(zeroCalc.totalSlabCost, 0);
+assert.equal(zeroCalc.totalSlabCost, 28200);
 assert.equal(zeroCalc.totalDropEdgeBeamCost, 0);
 assert.equal(zeroCalc.totalTruckPrice, 0);
 assert.equal(zeroCalc.totalGroundFloorArea, 141);
@@ -228,6 +234,7 @@ assert.equal(
     grannyFlatSqm: 0,
     balconySqm: 0,
     voidSqm: 0,
+    kitchenSqm: 0,
   }),
   0,
 );
