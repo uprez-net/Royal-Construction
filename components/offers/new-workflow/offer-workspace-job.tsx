@@ -55,7 +55,9 @@ export function JobSetupPanel({
     job.alfrescoPorchSqm +
     job.porchSqm +
     job.grannyFlatSqm +
-    job.balconySqm;
+    job.balconySqm +
+    job.voidSqm +
+    job.kitchenSqm;
 
   const owners = job.owners ?? [];
   // owners[] is the source of truth; emit the derived flat client* projection in
@@ -156,10 +158,13 @@ export function JobSetupPanel({
           </Field>
           <Field label="Number of bathrooms">
             <Input
+              type="number"
+              step="0.1"
+              min="0"
               placeholder="Auto-filled from lead requirements"
               value={job.bathrooms}
               onChange={(event) =>
-                onJobChange({ bathrooms: parseInt(event.target.value) || 0 })
+                onJobChange({ bathrooms: parseFloat(event.target.value) || 0 })
               }
             />
           </Field>
@@ -241,6 +246,11 @@ export function JobSetupPanel({
             onChange={(groundFloorSqm) => onJobChange({ groundFloorSqm })}
           />
           <AreaField
+            label="Void sqm"
+            value={job.voidSqm}
+            onChange={(voidSqm) => onJobChange({ voidSqm })}
+          />
+          <AreaField
             label="First floor sqm"
             value={job.firstFloorSqm}
             onChange={(firstFloorSqm) => onJobChange({ firstFloorSqm })}
@@ -269,6 +279,11 @@ export function JobSetupPanel({
             label="Balcony sqm"
             value={job.balconySqm}
             onChange={(balconySqm) => onJobChange({ balconySqm })}
+          />
+          <AreaField
+            label="Kitchen sqm"
+            value={job.kitchenSqm}
+            onChange={(kitchenSqm) => onJobChange({ kitchenSqm })}
           />
           <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -510,9 +525,7 @@ function OwnersSection({
           onClick={addOwner}
           disabled={atOwnerCap}
           title={
-            atOwnerCap
-              ? "The BC4 contract supports up to 4 owners"
-              : undefined
+            atOwnerCap ? "The BC4 contract supports up to 4 owners" : undefined
           }
         >
           <Plus className="size-4" aria-hidden="true" /> Add owner
@@ -604,7 +617,10 @@ function OwnersSection({
                   }
                 />
               </Field>
-              <Field className="md:col-span-2 xl:col-span-4" label="Current Location">
+              <Field
+                className="md:col-span-2 xl:col-span-4"
+                label="Current Location"
+              >
                 <AddressAutocomplete
                   placeholder="Where the owner currently lives"
                   value={owner.currentLocation}

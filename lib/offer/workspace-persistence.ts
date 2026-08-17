@@ -249,6 +249,8 @@ const jobSchema = z.object({
   porchSqm: z.number(),
   grannyFlatSqm: z.number(),
   balconySqm: z.number().default(0),
+  voidSqm: z.number().default(0),
+  kitchenSqm: z.number().default(0),
   validUntil: z.string(),
   preparedBy: z.string(),
   lotAreaSqm: z.number().default(0),

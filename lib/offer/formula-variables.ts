@@ -23,6 +23,9 @@ export const RATE_CONSTANT_KEYS = [
   "TILE_PRICE_PER_TILE",
   "TILING_RATE_PER_SQM",
   "FLOORING_RATE_PER_SQM",
+  "SLAB_COST_PER_SQM",
+  "KITCHEN_COST_PER_SQM",
+  "FRAME_INSTALLER_RATE_PER_SQM",
 ] as const;
 
 // Phase 1 calculated values (from the Area Calculator) that are available as
@@ -34,6 +37,7 @@ export const AREA_MEASUREMENT_KEYS = [
   "TOTAL_DROP_EDGE_BEAM_COST",
   "TOTAL_TRUCK_PRICE",
   // Frame section
+  "TOTAL_AREA",
   "TOTAL_GROUND_FLOOR_FRAME_COST",
   "TOTAL_FIRST_FLOOR_FRAME_COST",
   "TOTAL_GROUND_FLOOR_AREA",
@@ -47,6 +51,8 @@ export const AREA_MEASUREMENT_KEYS = [
   "TIE_COST",
   // Tiles section
   "TOTAL_TILES_REQUIRED",
+  // Kitchen section
+  "KITCHEN_AREA",
 ] as const;
 
 export type RateConstantKey = (typeof RATE_CONSTANT_KEYS)[number];
@@ -66,6 +72,9 @@ export const DEFAULT_RATE_CONSTANTS: Record<RateConstantKey, number> = {
   TILE_PRICE_PER_TILE: 28,
   TILING_RATE_PER_SQM: 65,
   FLOORING_RATE_PER_SQM: 60,
+  SLAB_COST_PER_SQM: 200,
+  KITCHEN_COST_PER_SQM: 700,
+  FRAME_INSTALLER_RATE_PER_SQM: 55,
 };
 
 // ─── Phase 2 line-item formulas ───

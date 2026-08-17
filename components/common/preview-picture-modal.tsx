@@ -47,17 +47,17 @@ export function PreviewPictureModal({
     setPosition({ x: 0, y: 0 });
   }, []);
 
-  const clampScale = (value: number) => {
+  const clampScale = useCallback((value: number) => {
     return Math.min(Math.max(value, MIN_SCALE), MAX_SCALE);
-  };
+  }, []);
 
-  const zoomIn = () => {
+  const zoomIn = useCallback(() => {
     setScale((prev) => clampScale(prev + ZOOM_STEP));
-  };
+  }, [clampScale]);
 
-  const zoomOut = () => {
+  const zoomOut = useCallback(() => {
     setScale((prev) => clampScale(prev - ZOOM_STEP));
-  };
+  }, [clampScale]);
 
   const goToPrevious = useCallback(() => {
     if (!hasMultipleImages) return;
