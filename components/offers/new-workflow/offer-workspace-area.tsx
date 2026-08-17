@@ -60,6 +60,7 @@ export function AreaCalculatorPanel({
           </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
             <BasisRow label="Ground floor" value={basis.groundFloorSqm} />
+            <BasisRow label="Void area" value={basis.voidSqm} />
             <BasisRow label="First floor" value={basis.firstFloorSqm} />
             <BasisRow label="Garage" value={basis.garageSqm} />
             <BasisRow label="Alfresco" value={basis.alfrescoSqm} />
