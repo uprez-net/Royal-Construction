@@ -67,16 +67,12 @@ export function AreaCalculatorPanel({
             <BasisRow label="Porch" value={basis.porchSqm} />
             <BasisRow label="Granny flat" value={basis.grannyFlatSqm} />
             <BasisRow label="Balcony" value={basis.balconySqm} />
+            <BasisRow label="Kitchen" value={basis.kitchenSqm} />
           </dl>
         </section>
         <div className="grid gap-4 xl:grid-cols-4">
           <HelperSection title="Slab">
             <div className="flex flex-col gap-2 space-x-3 mb-auto">
-              <NumberField
-                label="Slab Cost"
-                value={area.slabCost}
-                onChange={(value) => onAreaChange({ slabCost: value })}
-              />
               <NumberField
                 label="Drop edge beam surface area"
                 value={area.dropEdgeBeamSurfaceArea}
@@ -97,8 +93,11 @@ export function AreaCalculatorPanel({
                   formatCurrency(calc.totalDropEdgeBeamCost),
                 ],
                 ["Total Truck price", formatCurrency(calc.totalTruckPrice)],
-                ["Total slab cost", formatCurrency(calc.totalSlabCost)],
+                ["Total slab cost", formatCurrency(calc.slabCost)],
               ]}
+            />
+            <ResultRows
+              rows={[["Total cost", formatCurrency(calc.totalSlabCost)]]}
             />
           </HelperSection>
 
@@ -122,20 +121,30 @@ export function AreaCalculatorPanel({
             </div>
             <ResultRows
               rows={[
-                ["Total Ground floor area", `${calc.totalGroundFloorArea.toFixed(2)} sqm`],
-                ["Total Ground floor frame cost", formatCurrency(calc.totalGroundFloorFrameCost)],
+                [
+                  "Total Ground floor area",
+                  `${calc.totalGroundFloorArea.toFixed(2)} sqm`,
+                ],
+                [
+                  "Total Ground floor frame cost",
+                  formatCurrency(calc.totalGroundFloorFrameCost),
+                ],
               ]}
             />
             <ResultRows
               rows={[
-                ["Total First floor area", `${calc.totalFirstFloorArea.toFixed(2)} sqm`],
-                ["Total First floor frame cost", formatCurrency(calc.totalFirstFloorFrameCost)],
+                [
+                  "Total First floor area",
+                  `${calc.totalFirstFloorArea.toFixed(2)} sqm`,
+                ],
+                [
+                  "Total First floor frame cost",
+                  formatCurrency(calc.totalFirstFloorFrameCost),
+                ],
               ]}
             />
             <ResultRows
-              rows={[
-                ["Total Frame cost", formatCurrency(calc.totalFrameCost)],
-              ]}
+              rows={[["Total Frame cost", formatCurrency(calc.totalFrameCost)]]}
             />
           </HelperSection>
 

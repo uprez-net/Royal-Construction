@@ -56,7 +56,8 @@ export function JobSetupPanel({
     job.porchSqm +
     job.grannyFlatSqm +
     job.balconySqm +
-    job.voidSqm;
+    job.voidSqm +
+    job.kitchenSqm;
 
   const owners = job.owners ?? [];
   // owners[] is the source of truth; emit the derived flat client* projection in
@@ -278,6 +279,11 @@ export function JobSetupPanel({
             label="Balcony sqm"
             value={job.balconySqm}
             onChange={(balconySqm) => onJobChange({ balconySqm })}
+          />
+          <AreaField
+            label="Kitchen sqm"
+            value={job.kitchenSqm}
+            onChange={(kitchenSqm) => onJobChange({ kitchenSqm })}
           />
           <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

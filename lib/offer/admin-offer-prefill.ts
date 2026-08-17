@@ -205,6 +205,7 @@ export function resolveAreaRateConstants(
     tilePricePerTile: rc.TILE_PRICE_PER_TILE,
     tilingRatePerSqm: rc.TILING_RATE_PER_SQM,
     flooringRatePerSqm: rc.FLOORING_RATE_PER_SQM,
+    slabCostPerSqm: rc.SLAB_COST_PER_SQM,
   };
 }
 
@@ -226,6 +227,7 @@ export function reevaluateFormulaCostLines(
     | "grannyFlatSqm"
     | "balconySqm"
     | "voidSqm"
+    | "kitchenSqm"
   >,
   area: OfferAreaCalculator,
 ): readonly OfferWorkspaceCostLine[] {
@@ -248,6 +250,17 @@ export function reevaluateFormulaCostLines(
     TOTAL_CEMENT_COST: calc.totalCementCost,
     TIE_COST: area.tieCost,
     TOTAL_TILES_REQUIRED: calc.totalTilesRequired,
+    KITCHEN_AREA: basis.kitchenSqm,
+    TOTAL_AREA:
+      basis.groundFloorSqm +
+      basis.firstFloorSqm +
+      basis.garageSqm +
+      basis.alfrescoSqm +
+      basis.porchSqm +
+      basis.grannyFlatSqm +
+      basis.balconySqm +
+      basis.voidSqm +
+      basis.kitchenSqm,
   };
 
   const scope = buildFormulaScope(rateConstants, measurements);

@@ -125,6 +125,7 @@ export type OfferWorkspaceJob = {
   readonly porchSqm: number;
   readonly grannyFlatSqm: number;
   readonly balconySqm: number;
+  readonly kitchenSqm: number;
   readonly validUntil: string;
   readonly preparedBy: string;
   // Project snapshot (site particulars shown on the proposal snapshot page).
@@ -867,6 +868,7 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   porchSqm: 0,
   grannyFlatSqm: 0,
   balconySqm: 0,
+  kitchenSqm: 0,
   bedrooms: 0,
   bathrooms: 0,
   garageSpaces: 0,

@@ -11,6 +11,7 @@ export type OfferAreaBasis = {
   readonly garageSqm: number;
   readonly alfrescoSqm: number;
   readonly porchSqm: number;
+  readonly kitchenSqm: number;
   readonly grannyFlatSqm: number;
   readonly balconySqm: number;
   readonly voidSqm: number;
@@ -50,6 +51,7 @@ export type OfferAreaCalculation = {
   readonly totalDropEdgeBeamCost: number;
   readonly totalTruckPrice: number;
   readonly totalSlabCost: number;
+  readonly slabCost: number;
   // ── Frame ──
   readonly totalGroundFloorArea: number;
   readonly totalGroundFloorFrameCost: number;
@@ -82,6 +84,7 @@ export type AreaRateConstants = {
   readonly tilePricePerTile: number;
   readonly tilingRatePerSqm: number;
   readonly flooringRatePerSqm: number;
+  readonly slabCostPerSqm: number;
 };
 
 export const EMPTY_AREA_BASIS: OfferAreaBasis = {
@@ -93,6 +96,7 @@ export const EMPTY_AREA_BASIS: OfferAreaBasis = {
   grannyFlatSqm: 0,
   balconySqm: 0,
   voidSqm: 0,
+  kitchenSqm: 0,
 };
 
 // Fresh-offer defaults: every estimator input starts at zero. Rate constants
@@ -126,6 +130,7 @@ export function offerAreaBasisFromJob(
     | "grannyFlatSqm"
     | "balconySqm"
     | "voidSqm"
+    | "kitchenSqm"
   >,
 ): OfferAreaBasis {
   return {
@@ -136,7 +141,8 @@ export function offerAreaBasisFromJob(
     porchSqm: job.porchSqm,
     grannyFlatSqm: job.grannyFlatSqm,
     balconySqm: job.balconySqm,
-    voidSqm: job.voidSqm, // default to 0 if voidSqm is not present in the job
+    voidSqm: job.voidSqm,
+    kitchenSqm: job.kitchenSqm,
   };
 }
 
@@ -149,19 +155,22 @@ export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
     basis.garageSqm +
     basis.voidSqm +
     basis.grannyFlatSqm +
-    basis.balconySqm,
+    basis.balconySqm +
+    basis.kitchenSqm,
   );
 }
 
 // ─── Pure per-section calculation functions (unit-testable) ───
 
 export function calculateSlab(
+  basis: OfferAreaBasis,
   area: Pick<OfferAreaCalculator, "slabCost" | "dropEdgeBeamSurfaceArea" | "numberOfTrucks">,
-  rates: Pick<AreaRateConstants, "dropEdgeBeamCostPerSurfaceArea" | "priceOfEachTruck">,
+  rates: Pick<AreaRateConstants, "dropEdgeBeamCostPerSurfaceArea" | "priceOfEachTruck" | "slabCostPerSqm">,
 ): {
   readonly totalDropEdgeBeamCost: number;
   readonly totalTruckPrice: number;
   readonly totalSlabCost: number;
+  readonly slabCost: number;
 } {
   const totalDropEdgeBeamCost = roundCurrency(
     area.dropEdgeBeamSurfaceArea * rates.dropEdgeBeamCostPerSurfaceArea,
@@ -169,10 +178,13 @@ export function calculateSlab(
   const totalTruckPrice = roundCurrency(
     area.numberOfTrucks * rates.priceOfEachTruck,
   );
-  const totalSlabCost = roundCurrency(
-    area.slabCost + totalDropEdgeBeamCost + totalTruckPrice,
+  const slabCost = roundCurrency(
+    (basis.groundFloorSqm + basis.alfrescoSqm + basis.porchSqm + basis.garageSqm + basis.grannyFlatSqm) * rates.slabCostPerSqm
   );
-  return { totalDropEdgeBeamCost, totalTruckPrice, totalSlabCost };
+  const totalSlabCost = roundCurrency(
+    slabCost + totalDropEdgeBeamCost + totalTruckPrice,
+  );
+  return { totalDropEdgeBeamCost, totalTruckPrice, totalSlabCost, slabCost };
 }
 
 export function calculateFrame(
@@ -272,7 +284,7 @@ export function calculateOfferArea(
   area: OfferAreaCalculator,
   rates: AreaRateConstants,
 ): OfferAreaCalculation {
-  const slab = calculateSlab(area, rates);
+  const slab = calculateSlab(basis, area, rates);
   const frame = calculateFrame(basis, area, rates);
   const bricks = calculateBricks(area, rates);
   const tiles = calculateTiles(area);
