@@ -448,14 +448,20 @@ function PrintSnapshotPage({
   readonly footer: string;
 }) {
   const gfGarage = job.groundFloorSqm + job.garageSqm;
-  const alfrescoBalcony = job.alfrescoPorchSqm;
+  const alfrescoBalcony = job.alfrescoPorchSqm + job.balconySqm;
   const totalArea =
-    gfGarage + job.firstFloorSqm + alfrescoBalcony + job.porchSqm + job.grannyFlatSqm;
+    gfGarage + 
+    job.firstFloorSqm + 
+    alfrescoBalcony + 
+    job.porchSqm + 
+    job.grannyFlatSqm +
+    job.kitchenSqm
   const areaCells = [
     { label: "Ground Floor + Garage", value: formatArea(gfGarage) },
     { label: "First Floor", value: formatArea(job.firstFloorSqm) },
     { label: "Alfresco + Balcony", value: formatArea(alfrescoBalcony) },
     { label: "Porch", value: formatArea(job.porchSqm) },
+    { label: "Kitchen", value: formatArea(job.kitchenSqm) },
     // Granny flat is part of Total Area; show it as its own cell when present so
     // the breakdown reconciles with the emphasized total.
     ...(job.grannyFlatSqm > 0
