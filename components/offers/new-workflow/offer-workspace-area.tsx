@@ -73,7 +73,7 @@ export function AreaCalculatorPanel({
           <HelperSection title="Slab">
             <div className="flex flex-col gap-2 space-x-3 mb-auto">
               <NumberField
-                label="Slab Cost / SQM"
+                label="Slab Cost"
                 value={area.slabCost}
                 onChange={(value) => onAreaChange({ slabCost: value })}
               />
