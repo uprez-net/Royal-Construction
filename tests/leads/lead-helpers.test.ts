@@ -85,3 +85,34 @@ test("the live lead detail UI uses the shared likelihood parser", async () => {
   assert.ok(tab.includes("parseLikelihood"), "lead-overview-tab should use parseLikelihood");
   assert.ok(tab.includes("closureReasonCopy"), "lead-overview-tab should use stage-aware closure wording");
 });
+
+/* ── the reason rule holds on every path ───────────────────────────── */
+
+test("the offer path cannot put a lead in a closed stage without a reason", async () => {
+  const { readFileSync } = await import("node:fs");
+  const offers = readFileSync("lib/data/offers.ts", "utf8");
+  // updateOfferStatus writes lead.stage through a nested Prisma update, so it
+  // never reaches updateLead's guard. Mapping REJECTED to LOST there produced
+  // LOST rows with a null lostReason. Every declined/rejected offer status must
+  // therefore stay OPEN; closing a lead is a human action.
+  const map = offers.slice(
+    offers.indexOf("OFFER_TO_LEAD_STATUS_UPDATE_MAP"),
+    offers.indexOf("OFFER_STATE_MACHINE"),
+  );
+  assert.ok(!/REJECTED:\s*"LOST"/.test(map), "REJECTED must not map straight to LOST");
+  assert.ok(!/:\s*"LOST"/.test(map), "no offer status may map a lead to LOST without a reason");
+});
+
+test("lead-write MCP tools report failures as errors", async () => {
+  const { readFileSync } = await import("node:fs");
+  const mcp = readFileSync("app/(mcp)/api/mcp/route.ts", "utf8");
+  // These tools declare an outputSchema, so a catch that returns neither
+  // isError nor structuredContent fails SDK output validation and the real
+  // message never reaches the agent.
+  for (const verb of ["updating lead", "creating lead", "fetching leads"]) {
+    const at = mcp.indexOf(`Error ${verb}`);
+    assert.ok(at > -1, `no catch found for "${verb}"`);
+    const before = mcp.slice(Math.max(0, at - 400), at);
+    assert.ok(before.includes("isError: true"), `"${verb}" catch is missing isError: true`);
+  }
+});

@@ -685,7 +685,10 @@ const handler = createMcpHandler((server) => {
                 }
                 return toToolResult(validated.data);
             } catch (error) {
+                // See the note on update_lead: outputSchema is declared, so a
+                // result without isError fails SDK output validation.
                 return {
+                    isError: true,
                     content: [{ type: "text" as const, text: `Error creating lead ${error instanceof Error ? error.message : String(error)}` }],
                 }
             }
@@ -710,7 +713,13 @@ const handler = createMcpHandler((server) => {
                 }
                 return toToolResult(validated.data);
             } catch (error) {
+                // isError, or the SDK rejects the shape: this tool declares an
+                // outputSchema, and a result with neither isError nor
+                // structuredContent fails output validation — replacing the
+                // real message ("Add a reason before moving this lead to Lost")
+                // with a generic protocol error the agent cannot act on.
                 return {
+                    isError: true,
                     content: [{ type: "text" as const, text: `Error updating lead ${error instanceof Error ? error.message : String(error)}` }],
                 }
             }

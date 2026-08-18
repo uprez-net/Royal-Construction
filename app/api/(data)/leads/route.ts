@@ -2,6 +2,7 @@ import { badRequestResponse, createLeadSchema, errorResponse, leadLookupParamSch
 import { getLeads, createLead } from "@/lib/data/leads";
 import { NextRequest } from "next/server";
 import { parseLeadStageFilter } from "@/lib/leads/types";
+import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
 import type { LeadStage as DBLeadStage } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -56,6 +57,12 @@ export async function POST(request: NextRequest) {
     }
     return successResponse(created, { status: 201 });
   } catch (error) {
+    // Same reasoning as the PATCH route: a rule the caller can satisfy is a
+    // 400 carrying the reason, not a blanket 500.
+    if (isLeadValidationError(error)) {
+      console.warn("/api/leads POST rejected", { reason: error.message });
+      return badRequestResponse(error.message);
+    }
     console.error("/api/leads POST error", error);
     return errorResponse("Failed to create lead", {
       status: 500,
