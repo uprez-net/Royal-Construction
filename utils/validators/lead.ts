@@ -14,7 +14,6 @@ export const leadStages = [
   "Meeting Scheduled",
   "In Follow-up",
   "No Response",
-  "Converted",
   "Cancelled",
   "Disqualified",
 ] as const satisfies readonly LeadStage[];
@@ -320,23 +319,11 @@ export const createLeadSchema = z.object({
 
   urgent: z.boolean().optional().default(false),
 
-  stage: z
-    .enum([
-      "New",
-      "Contacted",
-      "Qualified",
-      "Quoted",
-      "Negotiating",
-      "Won",
-      "Lost",
-      "Meeting Scheduled",
-      "In Follow-up",
-      "No Response",
-      "Converted",
-      "Cancelled",
-      "Disqualified",
-    ])
-    .optional(),
+  // Was a hand-duplicated copy of `leadStages`, with no `satisfies` guard, so
+  // it drifted silently: removing a stage from the shared list left this one
+  // still accepting it and POST /api/leads kept writing rows the UI could not
+  // render. updateLeadSchema already used the shared list; now both do.
+  stage: z.enum(leadStages).optional(),
 
   history: z.array(historySchema).optional(),
 

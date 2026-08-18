@@ -45,13 +45,12 @@ export const LEAD_STAGE_OPTIONS: LeadStage[] = [
   "Qualified",
   "Quoted",
   "Negotiating",
-  //"Won",
+  "Won",
   "Lost",
   "Meeting Scheduled",
   "In Follow-up",
   "No Response",
-  "Converted",
-  //"Cancelled",
+  "Cancelled",
   "Disqualified",
 ];
 
@@ -121,7 +120,6 @@ export const STAGE_STYLES: Record<LeadStage, string> = {
   "Meeting Scheduled": "stage-badge-info",
   "In Follow-up": "stage-badge-warning",
   "No Response": "stage-badge-danger",
-  Converted: "stage-badge-success",
   Cancelled: "stage-badge-danger",
   Disqualified: "stage-badge-danger",
 };
@@ -456,6 +454,33 @@ export function isTerminalStage(stage: LeadStage): boolean {
 export function isQuotingStage(stage: LeadStage): boolean {
   return ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"].includes(stage);
 }
+/**
+ * Wording for the mandatory reason on a closed-unsuccessful lead.
+ *
+ * `isLostStage` groups Cancelled with Lost, so making Cancelled selectable
+ * turns on a required field labelled "Lost reason" for a lead that was not
+ * lost. The reason is stored in the same `lostReason` column either way —
+ * only the wording changes.
+ */
+export function closureReasonCopy(stage: LeadStage): {
+  label: string;
+  noun: string;
+  placeholder: string;
+} {
+  if (stage === "Cancelled") {
+    return {
+      label: "Cancellation reason",
+      noun: "cancellation reason",
+      placeholder: "e.g. Client postponed the build, finance fell through",
+    };
+  }
+  return {
+    label: "Lost reason",
+    noun: "lost reason",
+    placeholder: "e.g. Went with another builder, budget too low",
+  };
+}
+
 /**
  * Parse the free-typed likelihood field into a per-lead probability override.
  *

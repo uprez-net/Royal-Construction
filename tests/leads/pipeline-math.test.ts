@@ -256,7 +256,7 @@ test("computeForecast splits expected, weighted, won and banked", () => {
     [
       // Won this quarter, full value.
       lead({ id: 1, stage: "WON", estimatedValue: "1240000", expectedCloseDate: "2026-08-01T00:00:00Z", wonAt: "2026-08-01T00:00:00Z" }),
-      // Negotiating this quarter — banked, weighted at 70%.
+      // Negotiating this quarter — weighted at 70%, NOT banked.
       lead({ id: 2, stage: "NEGOTIATING", estimatedValue: "842150", expectedCloseDate: "2026-09-12T00:00:00Z" }),
       // Quoted this quarter — weighted at 55%, NOT banked.
       lead({ id: 3, stage: "QUOTED", estimatedValue: "400000", expectedCloseDate: "2026-09-20T00:00:00Z" }),
@@ -274,7 +274,10 @@ test("computeForecast splits expected, weighted, won and banked", () => {
   assert.equal(forecast.dealCount, 3);
   assert.equal(forecast.expectedValue.toString(), "2482150"); // 1240000+842150+400000
   assert.equal(forecast.wonValue.toString(), "1240000");
-  assert.equal(forecast.bankedValue.toString(), "2082150"); // won + negotiating
+  // Banked is won-only. It used to include Negotiating, which meant this
+  // number claimed 842150 the customer had not agreed to.
+  assert.equal(forecast.bankedValue.toString(), "1240000");
+  assert.equal(forecast.bankedValue.toString(), forecast.wonValue.toString());
   // 1240000*1.0 + 842150*0.7 + 400000*0.55 = 1240000 + 589505 + 220000
   assert.equal(forecast.weightedValue.toString(), "2049505");
 });

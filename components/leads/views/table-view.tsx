@@ -17,6 +17,7 @@ import {
   formatFollowup,
   dialablePhone,
   STAGE_STYLES,
+  LEAD_STAGE_OPTIONS,
 } from "@/lib/leads/lead-helpers";
 import { bookConsultationHref, leadActions } from "@/lib/leads/lead-actions";
 import { DeleteConfirmModal } from "@/components/leads/modal-ui/delete-confirm-modal";
@@ -68,7 +69,7 @@ export default function TableView({
   const activeFilters = useMemo(() => {
     if (!activeMetric) return ["all"];
     if (activeMetric.includes("total")) return ["all"];
-    if (activeMetric.includes("converted")) return ["Won", "Converted"];
+    if (activeMetric.includes("converted")) return ["Won"];
     if (activeMetric.includes("pendingFollowup")) return ["In Follow-up", "Meeting Scheduled"];
     if (activeMetric.includes("lost"))
       return ["Lost", "Cancelled", "Disqualified"];
@@ -110,23 +111,14 @@ export default function TableView({
           <div className="table-header-row">
             <div className="table-filters">
               <div className="filter-chips">
-                {[
-                  "all",
-                  "New",
-                  "Contacted",
-                  "Meeting Scheduled",
-                  "In Follow-up",
-                  "Qualified",
-                  "Quoted",
-                  "Negotiating",
-                  // "Won",
-                  "Converted",
-                  "No Response",
-                  //"Cancelled",
-                  "Disqualified",
-                  "Lost",
-                  "Archived",
-                ].map((stage) => (
+                {/*
+                  Derived from LEAD_STAGE_OPTIONS, not hand-maintained. This
+                  used to be a second copy of the stage list and the two had
+                  already drifted apart, so a lead could be SET to a stage the
+                  chips could not FILTER to. "all" and "Archived" are not
+                  stages, hence the bookends.
+                */}
+                {["all", ...LEAD_STAGE_OPTIONS, "Archived"].map((stage) => (
                   <button
                     key={stage}
                     className={`filter-chip ${activeFilters.includes(stage) ? "active" : ""}`}

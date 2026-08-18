@@ -12,6 +12,7 @@ import {
   buildFollowupHistoryEntry,
   isLostStage,
   parseLikelihood,
+  closureReasonCopy,
 } from "@/lib/leads/lead-helpers";
 import { ModalShell } from "@/components/common/modal-shell";
 import { LeadRichTextEditor } from "@/components/rich-text/lead-rich-text-editor";
@@ -198,7 +199,10 @@ export function DetailModal({
 
   const handleUpdate = async () => {
     if (isLostStage(form.stage) && !form.lostReason.trim()) {
-      showToast("Add a lost reason before updating this lead.", "error");
+      showToast(
+        `Add a ${closureReasonCopy(form.stage).noun} before updating this lead.`,
+        "error",
+      );
       return;
     }
     // Leads created before #110 carry the schema default of "" for email.
@@ -381,7 +385,7 @@ export function DetailModal({
             <span className="status-banner-text">
               {form.lostReason
                 ? `Reason: ${form.lostReason}`
-                : "Add a lost reason before updating."}
+                : `Add a ${closureReasonCopy(form.stage).noun} before updating.`}
             </span>
           </div>
         )}
@@ -501,11 +505,13 @@ export function DetailModal({
               className={inputCls}
               value={form.stage}
               onChange={(e) => {
-                const next = e.target.value as LeadStage;
-                patch({
-                  stage: next,
-                  lostReason: isLostStage(next) ? form.lostReason : "",
-                });
+                // Keep the reason text in form state when moving to an open
+                // stage — the payload already drops it (see the lostReason
+                // line in handleUpdate), so clearing it here only destroyed
+                // what the user typed. Cancellations get reversed often
+                // ("client came back"), and a mis-click on the stage select
+                // used to wipe the reason with no way back.
+                patch({ stage: e.target.value as LeadStage });
               }}
             >
               {LEAD_STAGE_OPTIONS.map((o) => (
@@ -901,12 +907,13 @@ export function DetailModal({
               htmlFor={fieldId("lost-reason")}
               className="text-sm font-medium text-destructive"
             >
-              Lost reason <span className="text-destructive">*</span>
+              {closureReasonCopy(form.stage).label}{" "}
+              <span className="text-destructive">*</span>
             </label>
             <input
               id={fieldId("lost-reason")}
               className={`mt-1 w-full rounded-lg border ${!form.lostReason.trim() ? "border-destructive ring-1 ring-(--destructive)/20" : "border-border"} bg-card px-3 py-2 text-sm text-foreground focus:border-destructive focus:outline-none focus:ring-2 focus:ring-destructive-light`}
-              placeholder="e.g. Went with another builder, budget too low"
+              placeholder={closureReasonCopy(form.stage).placeholder}
               value={form.lostReason}
               onChange={(e) => patch({ lostReason: e.target.value })}
               required

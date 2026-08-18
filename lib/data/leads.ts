@@ -5,7 +5,7 @@ import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
-import { closeDatePatch } from "@/lib/leads/pipeline-stages";
+import { closeDatePatch, isClosedUnsuccessful, stageDef } from "@/lib/leads/pipeline-stages";
 import { resolveLeadStage } from "@/lib/leads/resolve-stage";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import {
@@ -994,6 +994,23 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       updateData,
       closeDatePatch(existingLead?.stage ?? null, resolvedStage, new Date()),
     );
+
+    // Mirror of the modal's guard, which was the ONLY enforcement: the Zod
+    // schemas mark lostReason optional and nullable, so a direct PATCH, the
+    // MCP tool or any server-side caller could park a lead in LOST/CANCELLED/
+    // DISQUALIFIED with no reason. Those rows land in the "Unknown" slice of
+    // the non-conversion charts and are invisible to anyone auditing why work
+    // was lost. This is the only layer that holds both the resolved stage and
+    // the stored row, so it is the only place the rule can be enforced.
+    if (isClosedUnsuccessful(resolvedStage)) {
+      const reason =
+        input.lostReason !== undefined ? input.lostReason : existingLead?.lostReason;
+      if (!reason?.trim()) {
+        throw new Error(
+          `A reason is required to move a lead to ${stageDef(resolvedStage).label}.`,
+        );
+      }
+    }
   }
 
   if (input.meetingReviewOutcome === "no") {

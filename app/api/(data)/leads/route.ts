@@ -1,14 +1,27 @@
 import { badRequestResponse, createLeadSchema, errorResponse, leadLookupParamSchema, parseSearchParamsWithResponse, successResponse } from "@/utils/validators";
 import { getLeads, createLead } from "@/lib/data/leads";
 import { NextRequest } from "next/server";
-import { LeadStage, LeadStageToLeadStageDBMapping } from "@/lib/leads/types";
+import { parseLeadStageFilter } from "@/lib/leads/types";
+import type { LeadStage as DBLeadStage } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   try {
     const params = parseSearchParamsWithResponse(url, leadLookupParamSchema);
     if (!params.success) return params.response;
-    const statusFilterArray = params.data.status ? params.data.status.split(',').map(s => LeadStageToLeadStageDBMapping[(s.trim() as LeadStage)]) : undefined;
+    // An unknown label used to yield undefined, which getLeads strips out,
+    // which drops the stage filter entirely and returns EVERY lead — a wrong
+    // answer that looks like a working one. Retired labels (a bookmarked
+    // ?status=Converted) resolve through a legacy alias; anything else is a
+    // bad request.
+    let statusFilterArray: DBLeadStage[] | undefined;
+    if (params.data.status) {
+      const { stages, unknown } = parseLeadStageFilter(params.data.status);
+      if (unknown.length > 0) {
+        return badRequestResponse(`Unknown lead stage filter: ${unknown.join(", ")}`);
+      }
+      statusFilterArray = stages;
+    }
     const filterTiming = params.data.filterTiming;
     const filterLeadsWithoutProject = params.data.filterLeadsWithoutProject ? true : false;
     const isArchived = params.data.isArchived ? params.data.isArchived === 'true' : undefined;
