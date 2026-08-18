@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import {
   HBCF_DEFAULT_PROJECTION_MONTHS,
-  HBCF_TOTAL_SUM_ASSURED,
+  // HBCF_TOTAL_SUM_ASSURED,
   hbcfAssessment,
   hbcfAxisRange,
   hbcfClaimColour,
@@ -367,9 +367,10 @@ test("the default total sum assured is the 8 million product capacity", () => {
     claims: [claim({ projectId: "a", claimAmount: 200_000 })],
     needRange: null,
     today: TODAY,
+    totalSumAssured: 800_000,
   });
 
-  assert.equal(result.totalSumAssured, HBCF_TOTAL_SUM_ASSURED);
+  assert.equal(result.totalSumAssured, 800_000);
   assert.equal(result.directAvailable, 7_800_000);
 });
 

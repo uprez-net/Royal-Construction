@@ -93,6 +93,9 @@ async function seed() {
       inclusions: [...INITIAL_OFFER_DRAFT.inclusionHighlights],
       termsAndConditions: INITIAL_OFFER_DRAFT.termsSummary,
     },
+    hbfcClaim: {
+      claimAmount: 800_000,
+    }
   };
 
   console.log(
