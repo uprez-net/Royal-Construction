@@ -232,6 +232,16 @@ function parseNumber(raw: string): number | null {
  * anything longer is trimmed back to the date part rather than shown blank.
  */
 function toDateInputValue(value: unknown) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
   if (typeof value !== "string" || value.trim() === "") return "";
 
   const [datePart] = value.split("T");
@@ -1124,8 +1134,15 @@ export function ProjectOverviewTab({
   project: ProjectDetail;
   isAdmin: boolean;
 }) {
+  const { startDate, estimatedEndDate } = project;
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
+  const [stateStartDate, setStateStartDate] = useState<string | null>(
+    toDateInputValue(startDate),
+  );
+  const [stateEstimatedEndDate, setStateEstimatedEndDate] = useState<
+    string | null
+  >(toDateInputValue(estimatedEndDate));
   const [saving, setSaving] = useState(false);
   // Validations and conflicts are produced upstream from the tender/contract
   // extraction and stored on the requirements payload — nothing in the app
@@ -1233,7 +1250,11 @@ export function ProjectOverviewTab({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requirements: draft }),
+          body: JSON.stringify({
+            requirements: draft,
+            startDate: stateStartDate,
+            estimatedEndDate: stateEstimatedEndDate,
+          }),
         },
         "Unable to update project",
       );
@@ -1335,6 +1356,20 @@ export function ProjectOverviewTab({
               onChange={(v) =>
                 editDraft((c) => ({ ...c, projectType: v ?? "" }))
               }
+            />
+            <DateField
+              label="Start date"
+              value={stateStartDate}
+              onChange={(v) => {
+                setStateStartDate(v);
+              }}
+            />
+            <DateField
+              label="Estimated end date"
+              value={stateEstimatedEndDate}
+              onChange={(v) => {
+                setStateEstimatedEndDate(v);
+              }}
             />
             <FieldShell label="Version">
               <p className="flex h-9 items-center rounded-lg border border-border bg-muted px-3 font-mono text-sm tabular-nums text-muted-foreground">

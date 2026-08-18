@@ -121,7 +121,7 @@ export async function PATCH(
     const project = await prisma.project.update({
       where: { id: routeParams.data.projectId },
       data: {
-        ...(body.data.name ? { name: body.data.name } : {}),
+        ...(body.data.name ? { name: body.data.name } : body.data.requirements?.projectName ? { name: body.data.requirements.projectName } : {}),
         ...(body.data.location ? { location: body.data.location } : {}),
         ...(body.data.council !== undefined ? { council: body.data.council } : {}),
         ...(body.data.description !== undefined ? { description: body.data.description } : {}),

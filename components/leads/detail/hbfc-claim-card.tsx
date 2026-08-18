@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useHbfcTimeline } from "@/hooks/useHbfcTimeline";
 import {
+  HBCF_FREE_COLOUR,
   hbcfAxisRange,
   hbcfClaimColour,
   hbcfClaimLabel,
@@ -48,6 +49,13 @@ import { compactCurrency, currency, dateFormat } from "@/utils/formatters";
  * but the lead id.
  */
 
+interface Segment {
+  key: string;
+  label: string;
+  amount: number;
+  colour: string;
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                  Helpers                                   */
 /* -------------------------------------------------------------------------- */
@@ -60,6 +68,141 @@ function clampPercent(value: number) {
 /** A pale wash of a claim's colour, for row backgrounds and unfilled bars. */
 function tint(colour: string, percent: number) {
   return `color-mix(in oklab, ${colour} ${percent}%, transparent)`;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             Allocation summary                             */
+/* -------------------------------------------------------------------------- */
+
+const RING_RADIUS = 34;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+/** Usage reads as pressure, so the ring warms as the pool fills. */
+function ringColour(usedPercent: number) {
+  if (usedPercent >= 90) return "var(--destructive)";
+  if (usedPercent >= 75) return "var(--warning)";
+  return "var(--chart-2)";
+}
+
+function AllocationRing({ usedPercent }: { usedPercent: number }) {
+  const colour = ringColour(usedPercent);
+  const filled = (clampPercent(usedPercent) / 100) * RING_CIRCUMFERENCE;
+
+  return (
+    <div className="relative shrink-0">
+      <svg
+        width="88"
+        height="88"
+        viewBox="0 0 88 88"
+        role="img"
+        aria-label={`${Math.round(usedPercent)} percent of HBCF capacity used`}
+      >
+        <circle
+          cx="44"
+          cy="44"
+          r={RING_RADIUS}
+          fill="none"
+          stroke="var(--muted)"
+          strokeWidth="9"
+        />
+        <circle
+          cx="44"
+          cy="44"
+          r={RING_RADIUS}
+          fill="none"
+          stroke={colour}
+          strokeWidth="9"
+          strokeLinecap="round"
+          strokeDasharray={`${filled} ${RING_CIRCUMFERENCE}`}
+          transform="rotate(-90 44 44)"
+        />
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="font-heading text-lg font-semibold tabular-nums text-foreground">
+          {Math.round(usedPercent)}%
+        </span>
+        <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
+          Used
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function AllocationSummary({
+  segments,
+  usedAmount,
+  totalSumAssured,
+}: {
+  segments: Segment[];
+  usedAmount: number;
+  totalSumAssured: number;
+}) {
+  const usedPercent =
+    totalSumAssured > 0 ? (usedAmount / totalSumAssured) * 100 : 0;
+
+  return (
+    <section className="flex flex-wrap items-center gap-4 sm:flex-nowrap">
+      <AllocationRing usedPercent={usedPercent} />
+
+      <div className="min-w-0 flex-1 space-y-2.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-sm font-semibold text-foreground">
+            Current allocation
+          </h3>
+          <p className="font-mono text-sm tabular-nums text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              {compactCurrency.format(usedAmount)}
+            </span>{" "}
+            / {compactCurrency.format(totalSumAssured)}
+          </p>
+        </div>
+
+        <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+          {segments.map((segment) => {
+            const width =
+              totalSumAssured > 0
+                ? (segment.amount / totalSumAssured) * 100
+                : 0;
+            if (width <= 0) return null;
+
+            const isFree = segment.key === "free";
+            return (
+              <div
+                key={segment.key}
+                title={`${segment.label} — ${compactCurrency.format(segment.amount)}`}
+                style={{
+                  width: `${clampPercent(width)}%`,
+                  backgroundColor: isFree
+                    ? tint(segment.colour, 22)
+                    : segment.colour,
+                }}
+              />
+            );
+          })}
+        </div>
+
+        <ul className="flex flex-wrap gap-x-4 gap-y-1">
+          {segments.map((segment) => (
+            <li
+              key={segment.key}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: segment.colour }}
+              />
+              <span className="truncate">{segment.label}</span>
+              <span className="font-mono tabular-nums text-foreground">
+                {compactCurrency.format(segment.amount)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -463,6 +606,29 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
     [claims],
   );
 
+  const segments = useMemo<Segment[]>(() => {
+    if (!assessment) return [];
+
+    const claimSegments = claims.map((claim, index) => ({
+      key: claim.projectId,
+      label: hbcfClaimLabel(claim),
+      amount: claim.claimAmount,
+      colour: colours[index],
+    }));
+
+    return assessment.directAvailable > 0
+      ? [
+          ...claimSegments,
+          {
+            key: "free",
+            label: "Free",
+            amount: assessment.directAvailable,
+            colour: HBCF_FREE_COLOUR,
+          },
+        ]
+      : claimSegments;
+  }, [assessment, claims, colours]);
+
   return (
     <Collapsible
       open={open}
@@ -538,6 +704,11 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
               </div>
             ) : (
               <>
+                <AllocationSummary
+                  segments={segments}
+                  usedAmount={assessment.usedAmount}
+                  totalSumAssured={assessment.totalSumAssured}
+                />
                 <CapacityTimeline
                   claims={claims}
                   colours={colours}
