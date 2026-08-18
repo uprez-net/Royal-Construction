@@ -1,5 +1,6 @@
 import { badRequestResponse, errorResponse, notFoundResponse, successResponse, updateLeadSchema } from "@/utils/validators";
 import { findLeadById, updateLead, deleteLead } from "@/lib/data/leads";
+import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: string }> }) {
   try {
@@ -34,6 +35,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: s
     const updated = await updateLead(id, parsed.data);
     return successResponse(updated);
   } catch (error) {
+    // A rule the caller can satisfy is a 400 carrying the reason, not a 500
+    // saying "failed". Without this the stage dropdown in the lead header —
+    // which sends a stage and nothing else — just fails, and the user never
+    // learns that closing a lead needs a reason.
+    if (isLeadValidationError(error)) {
+      console.warn("/api/leads PATCH rejected", { reason: error.message });
+      return badRequestResponse(error.message);
+    }
     console.error("/api/leads PATCH error", error);
     return errorResponse("Failed to update lead", {
       status: 500,

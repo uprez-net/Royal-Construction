@@ -7,6 +7,7 @@ import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { closeDatePatch, isClosedUnsuccessful, stageDef } from "@/lib/leads/pipeline-stages";
 import { resolveLeadStage } from "@/lib/leads/resolve-stage";
+import { LeadValidationError } from "@/lib/leads/lead-validation-error";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import {
   coerceMoney,
@@ -686,8 +687,8 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   // can be created directly in a closed stage — the add-lead modal does not
   // offer one, but the API and the MCP create tool both accept it.
   if (isClosedUnsuccessful(mappedStage) && !input.lostReason?.trim()) {
-    throw new Error(
-      `A reason is required to create a lead in ${stageDef(mappedStage).label}.`,
+    throw new LeadValidationError(
+      `Add a reason before creating a lead in ${stageDef(mappedStage).label}.`,
     );
   }
 
@@ -1033,8 +1034,8 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       const reason =
         input.lostReason !== undefined ? input.lostReason : existingLead?.lostReason;
       if (!reason?.trim()) {
-        throw new Error(
-          `A reason is required to move a lead to ${stageDef(effectiveStage).label}.`,
+        throw new LeadValidationError(
+          `Add a reason before moving this lead to ${stageDef(effectiveStage).label}.`,
         );
       }
     }

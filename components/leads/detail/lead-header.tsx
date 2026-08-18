@@ -211,7 +211,14 @@ export function LeadHeader({
       toast.success(`Lead updated to "${newStage}"`);
     } catch (error) {
       console.error("Failed to update lead stage:", error);
-      toast.error(`Failed to update lead to "${newStage}"`);
+      // Surface the server's message. Closing a lead needs a recorded reason,
+      // and this control sends a stage and nothing else — so a fixed string
+      // here left the user with a failure and no way to understand it.
+      toast.error(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : `Failed to update lead to "${newStage}"`,
+      );
     } finally {
       setIsUpdatingStage(false);
     }

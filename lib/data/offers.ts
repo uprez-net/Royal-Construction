@@ -246,7 +246,15 @@ const OFFER_TO_LEAD_STATUS_UPDATE_MAP: Record<OfferStatus, LeadStage> = {
     PENDING: "NEGOTIATING",
     SENT: "NEGOTIATING",
     ACCEPTED: "WON",
-    REJECTED: "LOST",
+    // NEGOTIATING, not LOST. A rejected offer is not a lost lead — REJECTED is
+    // explicitly reversible (the state machine allows REJECTED -> PENDING), and
+    // the three modern declined statuses below all map to NEGOTIATING for the
+    // same reason. It also closes a data-integrity hole: this path writes
+    // lead.stage through a nested update rather than updateLead, so it bypassed
+    // the rule that a lead cannot enter LOST without a recorded reason, and was
+    // producing LOST rows with a null lostReason that land in the "Unknown"
+    // slice of the non-conversion charts. Closing a lead stays a human action.
+    REJECTED: "NEGOTIATING",
     // Offer-acceptance signing (ADR 0004) is pre-agreed, so still negotiating.
     OFFER_SENT: "NEGOTIATING",
     OFFER_SIGNED: "NEGOTIATING",

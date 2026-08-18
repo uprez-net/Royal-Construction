@@ -130,9 +130,14 @@ export default function Leads() {
           validatedStatus = decodedStatus;
         } else {
           const parts = decodedStatus.split(",");
-          const allValid = parts.every(
-            (part) => leadStatusSchema.safeParse(part.trim()).success,
-          );
+          const allValid = parts.every((part) => {
+            const label = part.trim();
+            // "Archived" is a chip but not a stage, and "Converted" is a stage
+            // that was retired — a bookmarked ?status=Converted must keep
+            // working rather than silently falling back to no filter.
+            if (label === "Archived" || label === "Converted") return true;
+            return leadStatusSchema.safeParse(label).success;
+          });
           if (allValid) {
             validatedStatus = decodedStatus;
           }

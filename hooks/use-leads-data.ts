@@ -24,7 +24,16 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
   if (status === "converted") return ["Won"];
   if (status === "pendingFollowup") return ["In Follow-up", "Meeting Scheduled"];
   if (status === "lost") return ["Lost", "Cancelled", "Disqualified"];
-  return status.split(",") as LeadStage[];
+  // "Archived" rides in the same comma list as the stage chips but is not a
+  // stage — it drives the isArchived flag. Passing it through made the API
+  // reject the whole filter, and before the API validated labels it silently
+  // dropped it and returned every lead instead. "Converted" is a retired
+  // stage label that may still arrive from a bookmark; it means Won.
+  return status
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s && s !== "Archived")
+    .map((s) => (s === "Converted" ? "Won" : s)) as LeadStage[];
 }
 
 export function useLeadsData() {
