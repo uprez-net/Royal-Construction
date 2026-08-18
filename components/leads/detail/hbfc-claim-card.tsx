@@ -22,6 +22,7 @@ import {
   hbcfAxisRange,
   hbcfClaimColour,
   hbcfClaimLabel,
+  hbcfIsActiveOn,
   hbcfParseDate,
   type HbcfAssessment,
   type HbcfProjectClaim,
@@ -576,6 +577,13 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
   const claims = useMemo(() => data?.claims ?? [], [data]);
   const assessment = data?.assessment ?? null;
 
+  // `generatedAt` anchors the NOW marker and the assessment to the same instant
+  // the server computed against, so the two can never disagree.
+  const today = useMemo(
+    () => (data ? hbcfParseDate(data.generatedAt) : new Date()),
+    [data],
+  );
+
   const colours = useMemo(
     () => claims.map((_, index) => hbcfClaimColour(index)),
     [claims],
@@ -584,12 +592,20 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
   const segments = useMemo<Segment[]>(() => {
     if (!assessment) return [];
 
-    const claimSegments = claims.map((claim, index) => ({
-      key: claim.projectId,
-      label: hbcfClaimLabel(claim),
-      amount: claim.claimAmount,
-      colour: colours[index],
-    }));
+    // Only cover that is live today is holding any of the pool, so only those
+    // claims get a slice — otherwise the bar would over-run the ring's total.
+    // Colours stay keyed to the claim's own index so the legend, the list and
+    // the Gantt row all agree on which project is which.
+    const claimSegments = claims
+      .map((claim, index) => ({
+        key: claim.projectId,
+        label: hbcfClaimLabel(claim),
+        amount: claim.claimAmount,
+        colour: colours[index],
+        live: hbcfIsActiveOn(claim, today),
+      }))
+      .filter((segment) => segment.live)
+      .map(({ live, ...segment }) => segment);
 
     return assessment.directAvailable > 0
       ? [
@@ -602,14 +618,7 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
           },
         ]
       : claimSegments;
-  }, [assessment, claims, colours]);
-
-  // `generatedAt` anchors the NOW marker and the assessment to the same instant
-  // the server computed against, so the two can never disagree.
-  const today = useMemo(
-    () => (data ? hbcfParseDate(data.generatedAt) : new Date()),
-    [data],
-  );
+  }, [assessment, claims, colours, today]);
 
   return (
     <Collapsible
