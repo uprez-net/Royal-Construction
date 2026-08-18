@@ -367,11 +367,14 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
       where: { projectId: updated.projectId, parentId: null },
       _sum: { spend: true },
     });
-
+    const pendingMilestones = await prisma.milestone.count({
+      where: { projectId: updated.projectId, status: "PENDING" },
+    });
     const projectUpdate = await prisma.project.update({
       where: { id: updated.projectId },
       data: {
         spent: allParentMilestoneSpent._sum.spend ?? undefined,
+        status: pendingMilestones > 0 ? "ACTIVE" : "COMPLETED",
       },
     });
 

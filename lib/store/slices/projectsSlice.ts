@@ -594,6 +594,12 @@ const projectsSlice = createSlice({
         state.mutations.updateMilestone = { status: "succeeded", error: null };
         if (state.activeProject?.id === action.payload.projectId) {
           const milestoneIndex = state.activeProject.milestones.findIndex((m) => m.id === action.meta.arg.milestoneId);
+          const pendingMilestones = state.activeProject.milestones.filter((m) => m.status === "PENDING");
+          if (pendingMilestones.length === 0 && state.activeProject.milestones.every((m) => ["DONE", "NOT_REQUIRED"].includes(m.status))) {
+            state.activeProject.status = "COMPLETED";
+          } else if (state.activeProject.status !== "ACTIVE") {
+            state.activeProject.status = "ACTIVE";
+          }
           if (milestoneIndex !== -1) {
             state.activeProject!.milestones[milestoneIndex] = { ...state.activeProject!.milestones[milestoneIndex], ...action.payload };
             const parentId = state.activeProject!.milestones[milestoneIndex].parentId;
