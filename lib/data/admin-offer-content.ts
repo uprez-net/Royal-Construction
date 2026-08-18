@@ -10,12 +10,14 @@ import {
   type OfferScopeData,
   ADMIN_OFFER_CONTENT_TAG,
   EMPTY_ADMIN_OFFER_CONTENT,
+  HBFCClaimData,
 } from "@/types/admin-offer-content";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   costScheduleDataSchema,
   offerScopeDataSchema,
   offerContentDataSchema,
+  hbfcClaimDataSchema,
 } from "@/lib/validations/admin-offer-content";
 
 /**
@@ -39,6 +41,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
         costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
         offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
         offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+        hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
       },
     });
     return {
@@ -46,6 +49,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
       costSchedule: coerceCostSchedule(created.costSchedule),
       offerScope: coerceOfferScope(created.offerScope),
       offerContent: coerceOfferContent(created.offerContent),
+      hbfcClaim: coerceHBFCClaim(created.hbfcClaim),
     };
   }
 
@@ -54,6 +58,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
     costSchedule: coerceCostSchedule(row.costSchedule),
     offerScope: coerceOfferScope(row.offerScope),
     offerContent: coerceOfferContent(row.offerContent),
+    hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
   };
 }
 /**
@@ -79,6 +84,7 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
         costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
         offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
         offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+        hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
       },
     });
     return {
@@ -86,6 +92,7 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
       costSchedule: coerceCostSchedule(created.costSchedule),
       offerScope: coerceOfferScope(created.offerScope),
       offerContent: coerceOfferContent(created.offerContent),
+      hbfcClaim: coerceHBFCClaim(created.hbfcClaim),
     };
   }
 
@@ -94,6 +101,7 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
     costSchedule: coerceCostSchedule(row.costSchedule),
     offerScope: coerceOfferScope(row.offerScope),
     offerContent: coerceOfferContent(row.offerContent),
+    hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
   };
 }
 
@@ -115,6 +123,12 @@ function coerceOfferContent(value: unknown): OfferContentData {
   return { headline: "", introText: "", inclusions: [], termsAndConditions: "" };
 }
 
+function coerceHBFCClaim(value: unknown): HBFCClaimData {
+  const parsed = hbfcClaimDataSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  return { claimAmount: 0 };
+}
+
 /**
  * Resolve the singleton row id, creating the row on first use. Each `update*`
  * helper below calls this then upserts only its own column, so a save on one
@@ -133,6 +147,7 @@ async function resolveSingletonId(): Promise<string> {
       costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
       offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
       offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+      hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
@@ -179,3 +194,12 @@ export async function updateOfferContent(
   });
 }
 
+export async function updateHBFCClaim(
+  data: HBFCClaimData,
+): Promise<void> {
+  const id = await resolveSingletonId();
+  await prisma.adminOfferContent.update({
+    where: { id },
+    data: { hbfcClaim: data as unknown as Prisma.InputJsonValue },
+  });
+}

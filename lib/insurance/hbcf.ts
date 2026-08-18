@@ -34,7 +34,7 @@ import { budgetBracket } from "@/lib/leads/lead-helpers";
  * confirms the number — or decides it belongs in a settings row — this constant
  * is the single place that changes.
  */
-export const HBCF_TOTAL_SUM_ASSURED = 8_000_000;
+// export const HBCF_TOTAL_SUM_ASSURED = 8_000_000;
 
 /**
  * Half-width of the cover band placed around a lead's recorded value, when that
@@ -280,12 +280,12 @@ export function hbcfAssessment({
   claims,
   needRange,
   today,
-  totalSumAssured = HBCF_TOTAL_SUM_ASSURED,
+  totalSumAssured,
 }: {
   claims: readonly HbcfProjectClaim[];
   needRange: HbcfNeedRange | null;
   today: Date;
-  totalSumAssured?: number;
+  totalSumAssured: number;
 }): HbcfAssessment {
   const usedAmount = claims.reduce((sum, claim) => sum + claim.claimAmount, 0);
   const directAvailable = Math.max(0, totalSumAssured - usedAmount);

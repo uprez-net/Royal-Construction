@@ -71,6 +71,10 @@ export const offerScopeDataSchema = z.object({
   exclusions: z.array(offerExclusionSchema),
 });
 
+export const hbfcClaimDataSchema = z.object({
+  claimAmount: z.number(),
+});
+
 export const offerContentDataSchema = z.object({
   headline: z.string(),
   introText: z.string(),

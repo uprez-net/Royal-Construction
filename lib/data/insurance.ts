@@ -10,6 +10,7 @@ import {
   type HbcfTimelinePayload,
 } from "@/lib/insurance/hbcf";
 import { format } from "date-fns";
+import { getAdminOfferContent } from "./admin-offer-content";
 
 /**
  * HBCF claim capacity, read across every project that is still holding cover.
@@ -112,12 +113,13 @@ export async function getActiveHbcfClaims(): Promise<HbcfProjectClaim[]> {
 export async function getHbcfTimelineForLead(
   leadId: number,
 ): Promise<HbcfTimelinePayload | null> {
-  const [lead, claims] = await Promise.all([
+  const [lead, claims, adminContent] = await Promise.all([
     prisma.lead.findUnique({
       where: { id: leadId },
       select: { id: true, budget: true, estimatedValue: true },
     }),
     getActiveHbcfClaims(),
+    getAdminOfferContent()
   ]);
 
   if (!lead) return null;
@@ -134,6 +136,7 @@ export async function getHbcfTimelineForLead(
         budget: lead.budget,
       }),
       today,
+      totalSumAssured: adminContent.hbfcClaim.claimAmount,
     }),
     generatedAt: format(today, "yyyy-MM-dd"),
   };

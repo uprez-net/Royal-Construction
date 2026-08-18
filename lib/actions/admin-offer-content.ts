@@ -8,6 +8,7 @@ import {
   type OfferScopeData,
   type OfferContentData,
   ADMIN_OFFER_CONTENT_TAG,
+  HBFCClaimData,
 } from "@/types/admin-offer-content";
 import {
   buildScopeSchema,
@@ -20,6 +21,7 @@ import {
   updateCostSchedule,
   updateOfferScope,
   updateOfferContent,
+  updateHBFCClaim,
 } from "@/lib/data/admin-offer-content";
 
 export type ActionResult =
@@ -91,5 +93,17 @@ export async function saveOfferContentAction(
     return { success: true };
   } catch (error) {
     return invalid(error instanceof Error ? error.message : "Failed to save offer content.");
+  }
+}
+
+export async function saveHBFCClaimAction(
+  data: HBFCClaimData,
+): Promise<ActionResult> {
+  try {
+    await updateHBFCClaim(data);
+    revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
+    return { success: true };
+  } catch (error) {
+    return invalid(error instanceof Error ? error.message : "Failed to save HBFC claim.");
   }
 }

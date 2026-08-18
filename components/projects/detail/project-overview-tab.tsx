@@ -1252,6 +1252,7 @@ export function ProjectOverviewTab({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             requirements: draft,
+            name: draft.projectName,
             startDate: stateStartDate,
             estimatedEndDate: stateEstimatedEndDate,
           }),
@@ -1260,6 +1261,10 @@ export function ProjectOverviewTab({
       );
       toast.success("Project sections updated");
       setDraft((response.data.requirements ?? draft) as RequirementsData);
+      setStateStartDate(toDateInputValue(response.data.startDate));
+      setStateEstimatedEndDate(
+        toDateInputValue(response.data.estimatedEndDate),
+      );
       setDirty(false);
     } catch (error) {
       toast.error(

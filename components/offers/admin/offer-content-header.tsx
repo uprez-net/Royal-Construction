@@ -7,13 +7,15 @@ export type AdminOfferTabs =
   | "job-setup"
   | "cost-schedule"
   | "offer-scope"
-  | "offer-content";
+  | "offer-content"
+  | "HBFC-claim";
 
 const TABS: readonly { id: AdminOfferTabs; label: string }[] = [
   { id: "job-setup", label: "Job Setup" },
   { id: "cost-schedule", label: "Cost Schedule" },
   { id: "offer-scope", label: "Scope" },
   { id: "offer-content", label: "Offer Document" },
+  { id: "HBFC-claim", label: "HBFC Claim" },
 ];
 
 interface OfferContentHeaderProps {
@@ -33,7 +35,7 @@ export function OfferContentHeader({
       className="max-w-full overflow-x-auto rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
     >
       {/* Phase band — single "Admin" phase spanning all steps */}
-      <ol aria-hidden="true" className="flex min-w-[760px]">
+      <ol aria-hidden="true" className="flex min-w-190">
         <li className="min-w-0 basis-0 px-1" style={{ flexGrow: TABS.length }}>
           <div className="border-b-2 border-royal-gold/70 pb-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-royal-gold-dark">
             Admin
@@ -42,7 +44,7 @@ export function OfferContentHeader({
       </ol>
 
       {/* Node rail */}
-      <ol className="flex min-w-[760px] pt-3">
+      <ol className="flex min-w-190 pt-3">
         {TABS.map((tab, index) => {
           const isFirst = index === 0;
           const isLast = index === TABS.length - 1;

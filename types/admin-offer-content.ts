@@ -74,12 +74,17 @@ export interface OfferContentData {
   termsAndConditions: string; // default T&C text
 }
 
+export interface HBFCClaimData {
+  claimAmount: number; // default HBFC claim amount
+}
+
 // ---- Aggregate ----
 export interface AdminOfferContent {
   buildScope: BuildScopeLines;
   costSchedule: CostScheduleData;
   offerScope: OfferScopeData;
   offerContent: OfferContentData;
+  hbfcClaim: HBFCClaimData;
 }
 
 export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
@@ -92,4 +97,7 @@ export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
     inclusions: [],
     termsAndConditions: "",
   },
+  hbfcClaim: {
+    claimAmount: 0,
+  }
 };

@@ -931,6 +931,7 @@ model AdminOfferContent {
   costSchedule Json
   offerScope   Json
   offerContent Json
+  hbfcClaim    Json     @default("{\"claimAmount\": 800000}")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
