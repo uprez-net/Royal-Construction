@@ -1,4 +1,5 @@
 import {
+  addDays,
   addMonths,
   differenceInCalendarDays,
   endOfMonth,
@@ -333,10 +334,12 @@ export function hbcfAssessment({
         hbcfParseDate(b.insuranceClaimEndDate).getTime(),
     );
 
-  let running = directAvailable;
   for (const claim of upcoming) {
-    running += claim.claimAmount;
-    if (running >= needRange.high) {
+    const dayAfterEnd = addDays(
+      hbcfParseDate(claim.insuranceClaimEndDate),
+      1,
+    );
+    if (totalSumAssured - hbcfUsedAt(claims, dayAfterEnd) >= needRange.high) {
       const start = claim.insuranceClaimEndDate;
       return {
         ...base,

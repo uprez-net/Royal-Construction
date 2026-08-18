@@ -145,6 +145,48 @@ test("hbcfUsedAt only counts claims active on the requested date", () => {
   );
 });
 
+test("an active commitment contributes its full amount midway through its window", () => {
+  const single = claim({
+    projectId: "single",
+    claimAmount: 600_000,
+    insuranceClaimStartDate: "2026-01-01",
+    insuranceClaimEndDate: "2026-06-30",
+  });
+
+  assert.equal(
+    hbcfUsedAt([single], new Date(2026, 2, 15)),
+    600_000,
+  );
+});
+
+test("an active commitment still contributes its full amount on its last day", () => {
+  const single = claim({
+    projectId: "single",
+    claimAmount: 600_000,
+    insuranceClaimStartDate: "2026-01-01",
+    insuranceClaimEndDate: "2026-06-30",
+  });
+
+  assert.equal(
+    hbcfUsedAt([single], new Date(2026, 5, 30)),
+    600_000,
+  );
+});
+
+test("a commitment contributes zero the day after its end date", () => {
+  const single = claim({
+    projectId: "single",
+    claimAmount: 600_000,
+    insuranceClaimStartDate: "2026-01-01",
+    insuranceClaimEndDate: "2026-06-30",
+  });
+
+  assert.equal(
+    hbcfUsedAt([single], new Date(2026, 6, 1)),
+    0,
+  );
+});
+
 /* ── Assessment ─────────────────────────────────────────────────────────── */
 
 test("free capacity covering the top of the range means the build can start now", () => {
@@ -367,11 +409,112 @@ test("the default total sum assured is the 8 million product capacity", () => {
     claims: [claim({ projectId: "a", claimAmount: 200_000 })],
     needRange: null,
     today: TODAY,
+    totalSumAssured: 8_000_000,
+  });
+
+  assert.equal(result.totalSumAssured, 8_000_000);
+  assert.equal(result.directAvailable, 7_800_000);
+});
+
+test("two large overlapping claims must both end before capacity is sufficient", () => {
+  // Pool: $800K. Two $500K claims overlap. Lead needs $400K.
+  // The old running-total approach (starting from a floored directAvailable
+  // of 0) would free $500K at the first expiry and report that date — but
+  // the other $500K claim is still active, leaving only $300K free.
+  const result = hbcfAssessment({
+    claims: [
+      claim({
+        projectId: "a",
+        leadName: "A",
+        claimAmount: 500_000,
+        insuranceClaimStartDate: "2026-01-01",
+        insuranceClaimEndDate: "2026-12-31",
+      }),
+      claim({
+        projectId: "b",
+        leadName: "B",
+        claimAmount: 500_000,
+        insuranceClaimStartDate: "2026-01-01",
+        insuranceClaimEndDate: "2027-06-30",
+      }),
+    ],
+    needRange: {
+      low: 350_000,
+      high: 400_000,
+      source: "estimatedValue",
+      isOpenEnded: false,
+    },
+    today: TODAY,
     totalSumAssured: 800_000,
   });
 
-  assert.equal(result.totalSumAssured, 800_000);
-  assert.equal(result.directAvailable, 7_800_000);
+  // A expires Dec 31 — B still holds $500K, only $300K free < $400K.
+  // B expires Jun 30 2027 — pool fully free, $800K >= $400K.
+  assert.equal(result.directAvailable, 0);
+  assert.equal(result.sufficient, false);
+  assert.notEqual(result.canStartFrom, "2026-12-31");
+  assert.equal(result.canStartFrom, "2027-06-30");
+  assert.equal(result.decisiveClaim?.label, "B");
+  assert.equal(result.decisiveClaim?.freesOn, "2027-06-30");
+});
+
+test("over-committed pool with four overlapping claims frees only at the last expiry", () => {
+  // Mirrors the real scenario from the bug report: four overlapping claims
+  // exceed the $800K pool. The lead needs $500K. The earliest sufficient date
+  // is only reached once ALL overlapping commitments have ended.
+  const result = hbcfAssessment({
+    claims: [
+      claim({
+        projectId: "a",
+        leadName: "A",
+        claimAmount: 605_000,
+        insuranceClaimStartDate: "2026-01-01",
+        insuranceClaimEndDate: "2026-12-31",
+      }),
+      claim({
+        projectId: "b",
+        leadName: "B",
+        claimAmount: 766_500,
+        insuranceClaimStartDate: "2026-01-01",
+        insuranceClaimEndDate: "2027-03-31",
+      }),
+      claim({
+        projectId: "c",
+        leadName: "C",
+        claimAmount: 766_500,
+        insuranceClaimStartDate: "2026-01-01",
+        insuranceClaimEndDate: "2027-06-30",
+      }),
+      claim({
+        projectId: "d",
+        leadName: "D",
+        claimAmount: 57_200,
+        insuranceClaimStartDate: "2026-01-01",
+        insuranceClaimEndDate: "2026-09-30",
+      }),
+    ],
+    needRange: {
+      low: 450_000,
+      high: 500_000,
+      source: "estimatedValue",
+      isOpenEnded: false,
+    },
+    today: TODAY,
+    totalSumAssured: 800_000,
+  });
+
+  // D expires Sep 30 — A+B+C still hold $2.138M, not enough.
+  // A expires Dec 31 — B+C still hold $1.533M, not enough.
+  // B expires Mar 31 — C still holds $766.5K, only $33.5K free, not enough.
+  // C expires Jun 30 — pool fully free, $800K >= $500K.
+  assert.equal(result.directAvailable, 0);
+  assert.equal(result.sufficient, false);
+  assert.notEqual(result.canStartFrom, "2026-09-30");
+  assert.notEqual(result.canStartFrom, "2026-12-31");
+  assert.notEqual(result.canStartFrom, "2027-03-31");
+  assert.equal(result.canStartFrom, "2027-06-30");
+  assert.equal(result.decisiveClaim?.label, "C");
+  assert.equal(result.decisiveClaim?.freesOn, "2027-06-30");
 });
 
 /* ── Projection and axis ────────────────────────────────────────────────── */
