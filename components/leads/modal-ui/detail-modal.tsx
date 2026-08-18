@@ -339,9 +339,11 @@ export function DetailModal({
   const weightedPreview = useMemo(() => {
     const value = Number(form.estimatedValue);
     if (!form.estimatedValue || !Number.isFinite(value) || value <= 0) return null;
-    const pct = form.probabilityOverride === ""
-      ? stageProbability
-      : Math.max(0, Math.min(100, Number(form.probabilityOverride) || 0));
+    // Same parse the save uses, so the preview can never show a percentage the
+    // save would not persist. null means "no override", which is exactly what
+    // resolveProbability falls back on (lib/leads/pipeline-math.ts) — the
+    // stage default. Also rounds, so 79.6 previews as the 80 that gets stored.
+    const pct = parseLikelihood(form.probabilityOverride) ?? stageProbability;
     return {
       equation: `${currency.format(value)} × ${pct}%`,
       amount: currency.format((value * pct) / 100),
