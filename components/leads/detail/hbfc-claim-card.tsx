@@ -62,15 +62,6 @@ function tint(colour: string, percent: number) {
   return `color-mix(in oklab, ${colour} ${percent}%, transparent)`;
 }
 
-function initials(label: string) {
-  return label
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
 /* -------------------------------------------------------------------------- */
 /*                             Capacity timeline                              */
 /* -------------------------------------------------------------------------- */

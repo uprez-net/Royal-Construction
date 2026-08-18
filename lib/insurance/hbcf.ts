@@ -258,21 +258,6 @@ function usedAtTime(claims: readonly HbcfProjectClaim[], time: number) {
   );
 }
 
-/**
- * Capacity still committed the moment a window closes on `time`: everything
- * whose window covers that day and does *not* end on it.
- */
-function usedAfterTime(claims: readonly HbcfProjectClaim[], time: number) {
-  return claims.reduce(
-    (sum, claim) =>
-      hbcfParseDate(claim.insuranceClaimStartDate).getTime() <= time &&
-      time < hbcfParseDate(claim.insuranceClaimEndDate).getTime()
-        ? sum + claim.claimAmount
-        : sum,
-    0,
-  );
-}
-
 /** Whole AUD held by cover that is live on `date`. */
 export function hbcfUsedAt(claims: readonly HbcfProjectClaim[], date: Date) {
   return usedAtTime(claims, startOfDay(date).getTime());

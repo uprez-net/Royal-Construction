@@ -24,7 +24,6 @@ const STAGE_DOT_STYLES: Record<LeadStage, string> = {
   "Meeting Scheduled": "bg-blue-500",
   "In Follow-up": "bg-amber-500",
   "No Response": "bg-red-500",
-  Converted: "bg-green-500",
   Cancelled: "bg-red-500",
   Disqualified: "bg-red-500",
 };

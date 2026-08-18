@@ -19,7 +19,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import {
-  STAGE_STYLES,
   budgetBracket,
   dialablePhone,
   isLostStage,
