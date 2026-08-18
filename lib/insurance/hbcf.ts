@@ -110,7 +110,6 @@ export interface HbcfFreeingClaim {
 
 export interface HbcfAssessment {
   totalSumAssured: number;
-  /** Held by cover that is live today — lapsed and not-yet-open windows hold nothing. */
   usedAmount: number;
   /** Capacity free right now, before any claim expires. Never negative. */
   directAvailable: number;
@@ -288,15 +287,9 @@ export function hbcfUsedAt(claims: readonly HbcfProjectClaim[], date: Date) {
  *
  * The threshold is the *top* of the need range: committing capacity that only
  * covers the optimistic end of the estimate would strand the build halfway
- * through.
- *
- * Cover windows overlap, so the amount a lapsing claim returns is not the
- * amount that becomes usable. Each candidate expiry is therefore scored by
- * re-deriving who is *still* holding cover on that day, never by adding freed
- * amounts onto a running total — a project ending in December frees nothing
- * usable if a second project runs on into February still holding half the pool.
- * The first expiry that leaves enough spare is the single date reported,
- * matching the design's one "nearest freeing up" line rather than a list.
+ * through. Claims are consumed in expiry order, and the one that tips the
+ * running total over is the single date reported — matching the design, which
+ * shows one "nearest freeing up" line rather than a list.
  */
 export function hbcfAssessment({
   claims,
@@ -309,8 +302,7 @@ export function hbcfAssessment({
   today: Date;
   totalSumAssured?: number;
 }): HbcfAssessment {
-  const nowTime = startOfDay(today).getTime();
-  const usedAmount = usedAtTime(claims, nowTime);
+  const usedAmount = claims.reduce((sum, claim) => sum + claim.claimAmount, 0);
   const directAvailable = Math.max(0, totalSumAssured - usedAmount);
   const projectionMonths = hbcfProjectionMonths(claims);
 
@@ -345,25 +337,21 @@ export function hbcfAssessment({
     };
   }
 
-  // Every expiry still ahead of us is a candidate date, oldest first. Ties are
-  // broken by size so the claim reported as "nearest freeing up" is the most
-  // material of the ones closing that day.
-  const candidates = [...claims]
+  // Only claims that have not already lapsed can free anything further.
+  const upcoming = [...claims]
     .filter(
-      (claim) => hbcfParseDate(claim.insuranceClaimEndDate).getTime() >= nowTime,
+      (claim) => hbcfParseDate(claim.insuranceClaimEndDate).getTime() >= today.getTime(),
     )
-    .sort((a, b) => {
-      const byEnd =
+    .sort(
+      (a, b) =>
         hbcfParseDate(a.insuranceClaimEndDate).getTime() -
-        hbcfParseDate(b.insuranceClaimEndDate).getTime();
-      return byEnd !== 0 ? byEnd : b.claimAmount - a.claimAmount;
-    });
+        hbcfParseDate(b.insuranceClaimEndDate).getTime(),
+    );
 
-  for (const claim of candidates) {
-    const endTime = hbcfParseDate(claim.insuranceClaimEndDate).getTime();
-    const stillHeld = usedAfterTime(claims, endTime);
-
-    if (totalSumAssured - stillHeld >= needRange.high) {
+  let running = directAvailable;
+  for (const claim of upcoming) {
+    running += claim.claimAmount;
+    if (running >= needRange.high) {
       const start = claim.insuranceClaimEndDate;
       return {
         ...base,

@@ -7,7 +7,12 @@ import {
   ChevronDown,
   ShieldCheck,
 } from "lucide-react";
-import { eachMonthOfInterval, endOfMonth, format, startOfMonth } from "date-fns";
+import {
+  eachMonthOfInterval,
+  endOfMonth,
+  format,
+  startOfMonth,
+} from "date-fns";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,19 +21,23 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useHbfcTimeline } from "@/hooks/useHbfcTimeline";
 import {
-  HBCF_FREE_COLOUR,
   hbcfAxisRange,
   hbcfClaimColour,
   hbcfClaimLabel,
-  hbcfIsActiveOn,
   hbcfParseDate,
   type HbcfAssessment,
   type HbcfProjectClaim,
 } from "@/lib/insurance/hbcf";
 import { cn } from "@/lib/utils";
-import { compactCurrency, dateFormat } from "@/utils/formatters";
+import { compactCurrency, currency, dateFormat } from "@/utils/formatters";
 
 /**
  * HBCF Claim Timeline.
@@ -62,208 +71,6 @@ function initials(label: string) {
     .join("");
 }
 
-interface Segment {
-  key: string;
-  label: string;
-  amount: number;
-  colour: string;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                             Allocation summary                             */
-/* -------------------------------------------------------------------------- */
-
-const RING_RADIUS = 34;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-/** Usage reads as pressure, so the ring warms as the pool fills. */
-function ringColour(usedPercent: number) {
-  if (usedPercent >= 90) return "var(--destructive)";
-  if (usedPercent >= 75) return "var(--warning)";
-  return "var(--chart-2)";
-}
-
-function AllocationRing({ usedPercent }: { usedPercent: number }) {
-  const colour = ringColour(usedPercent);
-  const filled = (clampPercent(usedPercent) / 100) * RING_CIRCUMFERENCE;
-
-  return (
-    <div className="relative shrink-0">
-      <svg
-        width="88"
-        height="88"
-        viewBox="0 0 88 88"
-        role="img"
-        aria-label={`${Math.round(usedPercent)} percent of HBCF capacity used`}
-      >
-        <circle
-          cx="44"
-          cy="44"
-          r={RING_RADIUS}
-          fill="none"
-          stroke="var(--muted)"
-          strokeWidth="9"
-        />
-        <circle
-          cx="44"
-          cy="44"
-          r={RING_RADIUS}
-          fill="none"
-          stroke={colour}
-          strokeWidth="9"
-          strokeLinecap="round"
-          strokeDasharray={`${filled} ${RING_CIRCUMFERENCE}`}
-          transform="rotate(-90 44 44)"
-        />
-      </svg>
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-heading text-lg font-semibold tabular-nums text-foreground">
-          {Math.round(usedPercent)}%
-        </span>
-        <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
-          Used
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function AllocationSummary({
-  segments,
-  usedAmount,
-  totalSumAssured,
-}: {
-  segments: Segment[];
-  usedAmount: number;
-  totalSumAssured: number;
-}) {
-  const usedPercent = totalSumAssured > 0 ? (usedAmount / totalSumAssured) * 100 : 0;
-
-  return (
-    <section className="flex flex-wrap items-center gap-4 sm:flex-nowrap">
-      <AllocationRing usedPercent={usedPercent} />
-
-      <div className="min-w-0 flex-1 space-y-2.5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-semibold text-foreground">
-            Current allocation
-          </h3>
-          <p className="font-mono text-sm tabular-nums text-muted-foreground">
-            <span className="font-semibold text-foreground">
-              {compactCurrency.format(usedAmount)}
-            </span>{" "}
-            / {compactCurrency.format(totalSumAssured)}
-          </p>
-        </div>
-
-        <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
-          {segments.map((segment) => {
-            const width =
-              totalSumAssured > 0 ? (segment.amount / totalSumAssured) * 100 : 0;
-            if (width <= 0) return null;
-
-            const isFree = segment.key === "free";
-            return (
-              <div
-                key={segment.key}
-                title={`${segment.label} — ${compactCurrency.format(segment.amount)}`}
-                style={{
-                  width: `${clampPercent(width)}%`,
-                  backgroundColor: isFree
-                    ? tint(segment.colour, 22)
-                    : segment.colour,
-                }}
-              />
-            );
-          })}
-        </div>
-
-        <ul className="flex flex-wrap gap-x-4 gap-y-1">
-          {segments.map((segment) => (
-            <li
-              key={segment.key}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground"
-            >
-              <span
-                aria-hidden="true"
-                className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: segment.colour }}
-              />
-              <span className="truncate">{segment.label}</span>
-              <span className="font-mono tabular-nums text-foreground">
-                {compactCurrency.format(segment.amount)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*                             Per-project list                               */
-/* -------------------------------------------------------------------------- */
-
-function ClaimList({
-  claims,
-  colours,
-}: {
-  claims: HbcfProjectClaim[];
-  colours: string[];
-}) {
-  return (
-    <ul className="space-y-2">
-      {claims.map((claim, index) => {
-        const colour = colours[index];
-        const label = hbcfClaimLabel(claim);
-        const start = hbcfParseDate(claim.insuranceClaimStartDate);
-        const end = hbcfParseDate(claim.insuranceClaimEndDate);
-
-        return (
-          <li
-            key={claim.projectId}
-            className="flex items-center gap-3 rounded-xl border border-border/70 p-3"
-            style={{ backgroundColor: tint(colour, 8) }}
-          >
-            <span
-              aria-hidden="true"
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white"
-              style={{ backgroundColor: colour }}
-            >
-              {initials(label)}
-            </span>
-
-            <div className="min-w-0 flex-1">
-              <p
-                className="truncate text-sm font-semibold text-foreground"
-                title={claim.projectName}
-              >
-                {label}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                Premium: {format(start, "MMM yyyy")} — {format(end, "MMM yyyy")}
-              </p>
-            </div>
-
-            <div className="shrink-0 text-right">
-              <p
-                className="font-mono text-sm font-semibold tabular-nums"
-                style={{ color: colour }}
-              >
-                {compactCurrency.format(claim.claimAmount)}
-              </p>
-              <p className="text-[11px] text-warning-ink">
-                Frees: {dateFormat.format(end)}
-              </p>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 /* -------------------------------------------------------------------------- */
 /*                             Capacity timeline                              */
 /* -------------------------------------------------------------------------- */
@@ -278,11 +85,15 @@ function CapacityTimeline({
   colours,
   assessment,
   today,
+  usedAmount,
+  totalSumAssured,
 }: {
   claims: HbcfProjectClaim[];
   colours: string[];
   assessment: HbcfAssessment;
   today: Date;
+  usedAmount: number;
+  totalSumAssured: number;
 }) {
   const axis = useMemo(
     () =>
@@ -336,96 +147,157 @@ function CapacityTimeline({
 
   return (
     <section className="space-y-2">
-      <h3 className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-        Capacity timeline
-      </h3>
+      <div className="flex items-baseline gap-2">
+        <h3 className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+          Capacity timeline
+        </h3>
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+          <span className="font-semibold text-foreground">
+            {compactCurrency.format(usedAmount)}
+          </span>{" "}
+          / {compactCurrency.format(totalSumAssured)}
+        </span>
+      </div>
 
-      <div className="overflow-x-auto no-scrollbar">
-        <div className="min-w-140">
-          {/* Month axis */}
-          <div className="flex">
-            <div className="w-20 shrink-0" />
-            <div className="relative h-5 flex-1">
-              {months.map((month) => (
+      <TooltipProvider>
+        <div className="overflow-x-auto no-scrollbar">
+          <div className="min-w-140">
+            {/* Month axis */}
+            <div className="flex">
+              <div className="w-20 shrink-0" />
+              <div className="relative h-5 flex-1">
+                {months.map((month) => (
+                  <span
+                    key={month.key}
+                    className="absolute top-0 overflow-hidden text-center text-[10px] text-muted-foreground"
+                    style={{
+                      left: `${month.leftPercent}%`,
+                      width: `${month.widthPercent}%`,
+                    }}
+                  >
+                    {month.label}
+                  </span>
+                ))}
+                {/* Labelled once, at the top; the line itself repeats per row. */}
                 <span
-                  key={month.key}
-                  className="absolute top-0 overflow-hidden text-center text-[10px] text-muted-foreground"
-                  style={{
-                    left: `${month.leftPercent}%`,
-                    width: `${month.widthPercent}%`,
-                  }}
+                  className="absolute -top-0.5 -translate-x-1/2 rounded-sm bg-foreground px-1 text-[9px] font-bold tracking-wide text-background"
+                  style={{ left: `${nowLeft}%` }}
                 >
-                  {month.label}
+                  NOW
                 </span>
-              ))}
-              {/* Labelled once, at the top; the line itself repeats per row. */}
-              <span
-                className="absolute -top-0.5 -translate-x-1/2 rounded-sm bg-foreground px-1 text-[9px] font-bold tracking-wide text-background"
-                style={{ left: `${nowLeft}%` }}
-              >
-                NOW
-              </span>
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            {claims.map((claim, index) => {
-              const bar = position(
-                hbcfParseDate(claim.insuranceClaimStartDate),
-                hbcfParseDate(claim.insuranceClaimEndDate),
-              );
+            <div className="space-y-1.5">
+              {claims.map((claim, index) => {
+                const bar = position(
+                  hbcfParseDate(claim.insuranceClaimStartDate),
+                  hbcfParseDate(claim.insuranceClaimEndDate),
+                );
 
-              return (
-                <div key={claim.projectId} className="flex items-center">
-                  <span className="w-20 shrink-0 truncate pr-2 text-xs text-muted-foreground">
-                    {hbcfClaimLabel(claim)}
+                return (
+                  <div key={claim.projectId} className="flex items-center">
+                    <span className="w-20 shrink-0 truncate pr-2 text-xs text-muted-foreground">
+                      {hbcfClaimLabel(claim)}
+                    </span>
+                    <div className="relative h-7 flex-1 rounded-md bg-muted/40">
+                      <NowMarker leftPercent={nowLeft} />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            tabIndex={0}
+                            className="absolute inset-y-0.5 flex items-center justify-center overflow-hidden rounded-md px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                            style={{
+                              left: `${bar.leftPercent}%`,
+                              width: `${bar.widthPercent}%`,
+                              backgroundColor: colours[index],
+                            }}
+                          >
+                            <span className="truncate text-[10px] font-semibold text-white">
+                              {compactCurrency.format(claim.claimAmount)}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div className="space-y-0.5">
+                            <p className="font-semibold">
+                              {hbcfClaimLabel(claim)}
+                            </p>
+                            <p className="font-mono tabular-nums">
+                              {currency.format(claim.claimAmount)}
+                            </p>
+                            <p className="text-background/70">
+                              {format(
+                                hbcfParseDate(claim.insuranceClaimStartDate),
+                                "MMM yyyy",
+                              )}{" "}
+                              —{" "}
+                              {format(
+                                hbcfParseDate(claim.insuranceClaimEndDate),
+                                "MMM yyyy",
+                              )}
+                            </p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {projected && assessment.projectedWindow ? (
+                <div className="flex items-center">
+                  <span className="w-20 shrink-0 truncate pr-2 text-xs font-medium text-foreground">
+                    This lead
                   </span>
                   <div className="relative h-7 flex-1 rounded-md bg-muted/40">
                     <NowMarker leftPercent={nowLeft} />
-                    <div
-                      className="absolute inset-y-0.5 flex items-center justify-center overflow-hidden rounded-md px-1"
-                      style={{
-                        left: `${bar.leftPercent}%`,
-                        width: `${bar.widthPercent}%`,
-                        backgroundColor: colours[index],
-                      }}
-                    >
-                      <span className="truncate text-[10px] font-semibold text-white">
-                        {compactCurrency.format(claim.claimAmount)}
-                      </span>
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          tabIndex={0}
+                          className="absolute inset-y-0.5 flex items-center justify-center overflow-hidden rounded-md border border-dashed px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                          style={{
+                            left: `${projected.leftPercent}%`,
+                            width: `${projected.widthPercent}%`,
+                            borderColor: "var(--warning-ink)",
+                            backgroundColor: tint("var(--warning)", 18),
+                          }}
+                        >
+                          <span className="truncate text-[10px] font-semibold text-warning-ink">
+                            {needLabel}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="space-y-0.5">
+                          <p className="font-semibold">This lead</p>
+                          {needLabel ? (
+                            <p className="font-mono tabular-nums">
+                              {currency.format(assessment.needRange?.high ?? 0)}
+                            </p>
+                          ) : null}
+                          <p className="text-background/70">
+                            {format(
+                              hbcfParseDate(assessment.projectedWindow.start),
+                              "MMM yyyy",
+                            )}{" "}
+                            —{" "}
+                            {format(
+                              hbcfParseDate(assessment.projectedWindow.end),
+                              "MMM yyyy",
+                            )}
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
-              );
-            })}
-
-            {projected ? (
-              <div className="flex items-center">
-                <span className="w-20 shrink-0 truncate pr-2 text-xs font-medium text-foreground">
-                  This lead
-                </span>
-                <div className="relative h-7 flex-1 rounded-md bg-muted/40">
-                  <NowMarker leftPercent={nowLeft} />
-                  {/* Dashed and unfilled: this bar is a projection, not a claim. */}
-                  <div
-                    className="absolute inset-y-0.5 flex items-center justify-center overflow-hidden rounded-md border border-dashed px-1"
-                    style={{
-                      left: `${projected.leftPercent}%`,
-                      width: `${projected.widthPercent}%`,
-                      borderColor: "var(--warning-ink)",
-                      backgroundColor: tint("var(--warning)", 18),
-                    }}
-                  >
-                    <span className="truncate text-[10px] font-semibold text-warning-ink">
-                      {needLabel}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      </TooltipProvider>
     </section>
   );
 }
@@ -445,8 +317,13 @@ function NowMarker({ leftPercent }: { leftPercent: number }) {
 /* -------------------------------------------------------------------------- */
 
 function BuildStartAssessment({ assessment }: { assessment: HbcfAssessment }) {
-  const { needRange, directAvailable, decisiveClaim, canStartFrom, sufficient } =
-    assessment;
+  const {
+    needRange,
+    // directAvailable,
+    // decisiveClaim,
+    canStartFrom,
+    sufficient,
+  } = assessment;
 
   if (!needRange) {
     return (
@@ -457,9 +334,9 @@ function BuildStartAssessment({ assessment }: { assessment: HbcfAssessment }) {
     );
   }
 
-  const needLabel = needRange.isOpenEnded
-    ? `${compactCurrency.format(needRange.low)}+`
-    : `~${compactCurrency.format(needRange.low)}–${compactCurrency.format(needRange.high)}`;
+  // const needLabel = needRange.isOpenEnded
+  //   ? `${compactCurrency.format(needRange.low)}+`
+  //   : `~${compactCurrency.format(needRange.low)}–${compactCurrency.format(needRange.high)}`;
 
   return (
     <section
@@ -480,13 +357,19 @@ function BuildStartAssessment({ assessment }: { assessment: HbcfAssessment }) {
           {compactCurrency.format(directAvailable)}
         </span>{" "}
         <span className="text-muted-foreground">
-          ({sufficient ? "sufficient for full build" : "insufficient for full build"})
+          (
+          {sufficient
+            ? "sufficient for full build"
+            : "insufficient for full build"}
+          )
         </span>
       </p>
 
       <p className="text-xs text-foreground">
         This lead needs:{" "}
-        <span className="font-mono font-semibold tabular-nums">{needLabel}</span>{" "}
+        <span className="font-mono font-semibold tabular-nums">
+          {needLabel}
+        </span>{" "}
         HBCF cover{" "}
         <span className="text-muted-foreground">
           (based on{" "}
@@ -572,7 +455,7 @@ function CardSkeleton() {
 
 export function HbfcClaimCard({ leadId }: { leadId: number }) {
   const { data, loading, error } = useHbfcTimeline(leadId);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   const claims = useMemo(() => data?.claims ?? [], [data]);
   const assessment = data?.assessment ?? null;
@@ -589,37 +472,6 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
     [claims],
   );
 
-  const segments = useMemo<Segment[]>(() => {
-    if (!assessment) return [];
-
-    // Only cover that is live today is holding any of the pool, so only those
-    // claims get a slice — otherwise the bar would over-run the ring's total.
-    // Colours stay keyed to the claim's own index so the legend, the list and
-    // the Gantt row all agree on which project is which.
-    const claimSegments = claims
-      .map((claim, index) => ({
-        key: claim.projectId,
-        label: hbcfClaimLabel(claim),
-        amount: claim.claimAmount,
-        colour: colours[index],
-        live: hbcfIsActiveOn(claim, today),
-      }))
-      .filter((segment) => segment.live)
-      .map(({ live, ...segment }) => segment);
-
-    return assessment.directAvailable > 0
-      ? [
-          ...claimSegments,
-          {
-            key: "free",
-            label: "Free",
-            amount: assessment.directAvailable,
-            colour: HBCF_FREE_COLOUR,
-          },
-        ]
-      : claimSegments;
-  }, [assessment, claims, colours, today]);
-
   return (
     <Collapsible
       open={open}
@@ -633,8 +485,8 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
             HBCF timeline
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track capacity across all active projects to determine build
-            start availability.
+            Track capacity across all active projects to determine build start
+            availability.
           </p>
         </div>
 
@@ -654,7 +506,9 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
           <CollapsibleTrigger
             className="group rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             aria-label={
-              open ? "Collapse HBCF claim timeline" : "Expand HBCF claim timeline"
+              open
+                ? "Collapse HBCF claim timeline"
+                : "Expand HBCF claim timeline"
             }
           >
             <ChevronDown
@@ -682,7 +536,8 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
             claims.length === 0 ? (
               <div className="space-y-3">
                 <p className="rounded-xl border border-dashed border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                  No project is currently holding HBCF cover, so the full pool of{" "}
+                  No project is currently holding HBCF cover, so the full pool
+                  of{" "}
                   <span className="font-mono tabular-nums">
                     {compactCurrency.format(assessment.totalSumAssured)}
                   </span>{" "}
@@ -692,17 +547,13 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
               </div>
             ) : (
               <>
-                <AllocationSummary
-                  segments={segments}
-                  usedAmount={assessment.usedAmount}
-                  totalSumAssured={assessment.totalSumAssured}
-                />
-                <ClaimList claims={claims} colours={colours} />
                 <CapacityTimeline
                   claims={claims}
                   colours={colours}
                   assessment={assessment}
                   today={today}
+                  usedAmount={assessment.usedAmount}
+                  totalSumAssured={assessment.totalSumAssured}
                 />
                 <BuildStartAssessment assessment={assessment} />
               </>
