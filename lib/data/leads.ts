@@ -1006,25 +1006,37 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     );
   }
 
-  // Reason enforcement, keyed off the stage the row will ACTUALLY hold — the
-  // resolved one if this update changes it, otherwise the stored one. Running
-  // it only on a stage change left a hole: `{lostReason: ""}` with no stage in
-  // the payload cleared the reason on an already-closed lead, which is the same
-  // end state the guard exists to prevent.
+  // Reason enforcement. This mirrors the modal's check, which was the ONLY
+  // enforcement: the Zod schemas mark lostReason optional and nullable, so a
+  // direct PATCH, the MCP tool or any server-side caller could strand a lead in
+  // LOST/CANCELLED/DISQUALIFIED with no reason. Those rows land in the
+  // "Unknown" slice of the non-conversion charts, invisible to anyone auditing
+  // why work was lost.
   //
-  // This mirrors the modal's check, which was the ONLY enforcement: the Zod
-  // schemas mark lostReason optional and nullable, so a direct PATCH, the MCP
-  // tool or any server-side caller could strand a lead in LOST/CANCELLED/
-  // DISQUALIFIED with no reason. Those rows land in the "Unknown" slice of the
-  // non-conversion charts, invisible to anyone auditing why work was lost.
+  // It fires on the two things this request can actually be blamed for:
+  //   1. moving a lead INTO a closed-unsuccessful stage, and
+  //   2. clearing the reason on a lead that is already in one.
+  //
+  // It deliberately does NOT fire on an unrelated edit to a lead that is
+  // already closed with no reason. Those rows predate the rule — staging has
+  // one today — and blocking every edit to them would make them permanently
+  // uneditable, including the edit that would supply the missing reason.
   const effectiveStage = resolvedStage ?? existingLead?.stage;
   if (effectiveStage && isClosedUnsuccessful(effectiveStage)) {
-    const reason =
-      input.lostReason !== undefined ? input.lostReason : existingLead?.lostReason;
-    if (!reason?.trim()) {
-      throw new Error(
-        `A reason is required to keep a lead in ${stageDef(effectiveStage).label}.`,
-      );
+    const enteringClosedStage =
+      resolvedStage !== undefined &&
+      !(existingLead && isClosedUnsuccessful(existingLead.stage));
+    const clearingReason =
+      input.lostReason !== undefined && !input.lostReason?.trim();
+
+    if (enteringClosedStage || clearingReason) {
+      const reason =
+        input.lostReason !== undefined ? input.lostReason : existingLead?.lostReason;
+      if (!reason?.trim()) {
+        throw new Error(
+          `A reason is required to move a lead to ${stageDef(effectiveStage).label}.`,
+        );
+      }
     }
   }
 

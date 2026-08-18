@@ -55,3 +55,19 @@ test("the stage select offers exactly one terminal-won label", () => {
   assert.ok(!LEAD_STAGE_OPTIONS.includes("Converted" as never));
   assert.ok(LEAD_STAGE_OPTIONS.includes("Cancelled"));
 });
+
+/* ── forecast copy ─────────────────────────────────────────────────── */
+
+test("banked copy no longer promises deals in negotiation", async () => {
+  const { readFileSync } = await import("node:fs");
+  const panel = readFileSync("components/leads/forecast-panel.tsx", "utf8");
+  assert.ok(
+    !/Won plus deals in negotiation/.test(panel),
+    "forecast panel still claims negotiating deals are banked",
+  );
+  const kpi = readFileSync("components/leads/leads.tsx", "utf8");
+  assert.ok(
+    !/Won and converted leads/.test(kpi),
+    "KPI card still refers to the retired Converted stage",
+  );
+});
