@@ -71,3 +71,17 @@ test("banked copy no longer promises deals in negotiation", async () => {
     "KPI card still refers to the retired Converted stage",
   );
 });
+
+test("the live lead detail UI uses the shared likelihood parser", async () => {
+  const { readFileSync } = await import("node:fs");
+  const tab = readFileSync("components/leads/detail/lead-overview-tab.tsx", "utf8");
+  // `Number(x) || 0` turns a typo into a real 0% forecast. It was fixed once in
+  // the old detail modal and reappeared when that modal was replaced by this
+  // full-page tab, so pin it here rather than relying on review.
+  assert.ok(
+    !/Number\(\s*(form\.)?probabilityOverride\s*\)\s*\|\|\s*0/.test(tab),
+    "lead-overview-tab reintroduced the `Number(...) || 0` likelihood bug",
+  );
+  assert.ok(tab.includes("parseLikelihood"), "lead-overview-tab should use parseLikelihood");
+  assert.ok(tab.includes("closureReasonCopy"), "lead-overview-tab should use stage-aware closure wording");
+});
