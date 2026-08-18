@@ -31,7 +31,8 @@ type ScheduleStatus =
   | "NO_RESPONSE"
   | "AWAITING_MATERIALS"
   | "DECLINED"
-  | "COMPLETED";
+  | "COMPLETED"
+  | "AWAITING_ADMIN_APPROVAL";
 
 const statusOptions: {
   value: ScheduleStatus;
@@ -139,12 +140,18 @@ export function ConfirmStatusModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
-  const [status, setStatus] = useState<ScheduleStatus>(schedule.status as ScheduleStatus);
-  const [activeLoading, setActiveLoading] = useState<ScheduleStatus | null>(null);
+  const [status, setStatus] = useState<ScheduleStatus>(
+    schedule.status as ScheduleStatus,
+  );
+  const [activeLoading, setActiveLoading] = useState<ScheduleStatus | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
-  const pendingFromStore = useAppSelector((s) => s.tradies.pendingScheduleIds.includes(schedule.id));
+  const pendingFromStore = useAppSelector((s) =>
+    s.tradies.pendingScheduleIds.includes(schedule.id),
+  );
 
   const resetState = () => {
     setStatus(schedule.status as ScheduleStatus);
@@ -166,12 +173,18 @@ export function ConfirmStatusModal({
 
     startTransition(() => {
       dispatch(
-        updateTradieScheduleStatus({ scheduleId: schedule.id, status: nextStatus as TradieScheduleStatus }),
+        updateTradieScheduleStatus({
+          scheduleId: schedule.id,
+          status:
+            nextStatus === "CONFIRMED"
+              ? "AWAITING_ADMIN_APPROVAL"
+              : (nextStatus as TradieScheduleStatus),
+        }),
       )
         .unwrap()
         .then(() => {
           setActiveLoading(null);
-          setStatus(nextStatus);
+          setStatus(nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus);
           onOpenChange(false);
           onSuccess();
         })
@@ -186,7 +199,7 @@ export function ConfirmStatusModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
-          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
+          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-170 overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
           "sm:rounded-[14px]",
           "max-h-[60vh] overflow-y-auto",
         )}
@@ -194,7 +207,7 @@ export function ConfirmStatusModal({
         {/* Header */}
         <DialogHeader className="flex-row items-center justify-between border-b border-border/70 px-6 py-5">
           <div>
-            <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-foreground">
+            <DialogTitle className="text-[18px] font-bold tracking-[-0.02em] text-foreground">
               Update Status — {schedule.tradieName}
             </DialogTitle>
           </div>
@@ -205,10 +218,10 @@ export function ConfirmStatusModal({
           {/* Current Status Card */}
           <div className="mb-4 rounded-[8px] bg-muted/40 p-3">
             <div className="text-[12px] text-foreground">
-              <span className="font-[700]">Current Status:</span>{" "}
+              <span className="font-bold">Current Status:</span>{" "}
               <span
                 className={cn(
-                  "inline-flex items-center rounded-full px-[10px] py-[3px] text-[10.5px] font-[600]",
+                  "inline-flex items-center rounded-full px-2.5 py-0.75 text-[10.5px] font-semibold",
                   getStatusStyles(schedule.status),
                 )}
               >
@@ -224,17 +237,19 @@ export function ConfirmStatusModal({
 
           {/* Error Message */}
           {error && (
-            <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-[color:var(--destructive-light)] px-3 py-2 text-[12px] text-[color:var(--destructive)]">
+            <div className="mb-2 flex items-center gap-2 rounded-[8px] bg-destructive-light px-3 py-2 text-[12px] text-destructive">
               <XCircle className="h-4 w-4" />
               {error}
             </div>
           )}
 
           {/* Status Options */}
-          <div className="flex flex-col gap-[6px]">
+          <div className="flex flex-col gap-1.5">
             {statusOptions.map((option) => {
               const selected = status === option.value;
-              const isLoading = activeLoading === option.value || (pendingFromStore && isPending);
+              const isLoading =
+                activeLoading === option.value ||
+                (pendingFromStore && isPending);
 
               return (
                 <button
@@ -243,11 +258,11 @@ export function ConfirmStatusModal({
                   disabled={isLoading}
                   onClick={() => updateStatus(option.value)}
                   className={cn(
-                    "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-card px-4 py-[14px] text-left transition-all",
-                    "hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
+                    "group flex w-full items-center gap-2.5 rounded-[10px] border-2 bg-card px-4 py-3.5 text-left transition-all",
+                    "hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
                     "disabled:pointer-events-none disabled:opacity-60",
                     selected
-                      ? "border-[var(--active-border)] bg-[var(--active-bg)]"
+                      ? "border-(--active-border) bg-(--active-bg)"
                       : "border-border/70",
                   )}
                   style={
@@ -277,7 +292,7 @@ export function ConfirmStatusModal({
                   {/* Text */}
                   <div className="min-w-0">
                     <div
-                      className="text-[13px] font-[600]"
+                      className="text-[13px] font-semibold"
                       style={{
                         color: option.color,
                       }}
