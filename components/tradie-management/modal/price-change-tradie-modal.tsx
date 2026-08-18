@@ -113,7 +113,7 @@ export default function PriceChangeTradieModal({
           {/* Current rate */}
           <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
             <div className="text-xs font-medium text-muted-foreground">
-              Current hourly rate
+              Last Quoted Price
             </div>
 
             {/* Mono is reserved for actual figures; the placeholder renders as
@@ -137,7 +137,7 @@ export default function PriceChangeTradieModal({
           {/* New rate */}
           <div className="space-y-2">
             <Label htmlFor="new-rate">
-              Proposed new rate
+              New Quoted Price
               <span className="text-destructive">
                 *<span className="sr-only"> required</span>
               </span>
@@ -205,7 +205,7 @@ export default function PriceChangeTradieModal({
               />
 
               <p className="text-xs leading-relaxed text-foreground/80">
-                This request is submitted for approval. The hourly rate is only
+                This request is submitted for approval. The new proposed price is only
                 updated once the request has been reviewed and approved.
               </p>
             </div>
