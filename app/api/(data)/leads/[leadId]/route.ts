@@ -17,11 +17,19 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: s
     const parsed = updateLeadSchema.safeParse(json);
 
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
       console.warn("/api/leads PATCH validation error", {
         leadId: id,
-        issues: parsed.error.flatten().fieldErrors,
+        issues: fieldErrors,
       });
-      return badRequestResponse(parsed.error.message);
+      // Name the offending field. `parsed.error.message` is a raw Zod JSON
+      // blob, which the lead modal could only render as a generic "please try
+      // again" toast — so a legacy lead with an empty email (schema default,
+      // rejected by requiredLeadEmail) failed every save with no clue why.
+      const summary = Object.entries(fieldErrors)
+        .map(([field, messages]) => `${field}: ${(messages ?? []).join(", ")}`)
+        .join("; ");
+      return badRequestResponse(summary || parsed.error.message);
     }
     const updated = await updateLead(id, parsed.data);
     return successResponse(updated);

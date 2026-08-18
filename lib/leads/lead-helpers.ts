@@ -456,3 +456,19 @@ export function isTerminalStage(stage: LeadStage): boolean {
 export function isQuotingStage(stage: LeadStage): boolean {
   return ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"].includes(stage);
 }
+/**
+ * Parse the free-typed likelihood field into a per-lead probability override.
+ *
+ * Blank means "no override" and so does anything unparseable. Rounding a typo
+ * down to 0 would be worse than ignoring it: 0% is a legitimate forecast value
+ * that removes the deal's weighted contribution entirely, so a stray keystroke
+ * would silently shrink the pipeline. Valid input is clamped to 0-100 and
+ * rounded, because Zod enforces an int in that range and rejecting the payload
+ * would take every unrelated edit in the modal down with it.
+ */
+export function parseLikelihood(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}

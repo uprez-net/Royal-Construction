@@ -53,7 +53,9 @@ assert.deepEqual(
   {
     totalDropEdgeBeamCost: 900,
     totalTruckPrice: 1500,
-    totalSlabCost: 29700,
+    // slabCost + totalDropEdgeBeamCost + totalTruckPrice = 28200 + 900 + 1500.
+    // The hand-updated expectation in 5ddded4 dropped the drop-edge-beam term.
+    totalSlabCost: 30600,
     slabCost: 28200,
   },
 );
@@ -192,7 +194,7 @@ const area: OfferAreaCalculator = {
 };
 
 const calc = calculateOfferArea(basis, area, defaultRates);
-assert.equal(calc.totalSlabCost, 29700);
+assert.equal(calc.totalSlabCost, 30600); // 28200 slab + 900 drop edge beam + 1500 trucks
 assert.equal(calc.totalDropEdgeBeamCost, 900);
 assert.equal(calc.totalTruckPrice, 1500);
 assert.equal(calc.totalGroundFloorArea, 141);
