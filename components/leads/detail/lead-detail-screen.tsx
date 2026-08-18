@@ -55,6 +55,7 @@ export function LeadDetailScreen({ lead: initialLead }: { lead: Lead }) {
         lead={lead}
         onArchiveClick={() => setShowArchiveConfirm(true)}
         onSendTextClick={() => setShowCommModal(true)}
+        onLeadUpdate={handleLeadUpdate}
       />
 
       <HbfcClaimCard leadId={lead.id} />

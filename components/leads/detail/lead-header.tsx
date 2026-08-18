@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -31,8 +31,11 @@ import {
   offerWorkspaceHref,
   type LeadActionState,
 } from "@/lib/leads/lead-actions";
-import type { Lead } from "@/lib/leads/types";
+import type { Lead, LeadStage } from "@/lib/leads/types";
 import { compactCurrency, dateFormat } from "@/utils/formatters";
+import { StageBadgeSelect } from "./select-stage-badge";
+import { updateLead } from "@/lib/leads/leads-service";
+import { toast } from "sonner";
 
 /** Mono is for facts. A missing value is prose, not a fact. */
 const NOT_SET = "Not set";
@@ -185,16 +188,35 @@ export function LeadHeader({
   lead,
   onArchiveClick,
   onSendTextClick,
+  onLeadUpdate,
 }: {
   lead: Lead;
   onArchiveClick: () => void;
   onSendTextClick: () => void;
+  onLeadUpdate: (lead: Lead) => void;
 }) {
   const router = useRouter();
   const { user } = useUser();
   const actions = leadActions(lead);
   const created = formatCreated(lead.created);
   const dialable = dialablePhone(lead.phone ?? "");
+  const [isUpdatingStage, setIsUpdatingStage] = useState(false);
+
+  const handleStageChange = async (newStage: LeadStage) => {
+    if (newStage === lead.stage) return;
+    setIsUpdatingStage(true);
+    try {
+      const updated = await updateLead(lead.id, { stage: newStage });
+      if (!updated) return;
+      onLeadUpdate(updated);
+      toast.success(`Lead updated to "${newStage}"`);
+    } catch (error) {
+      console.error("Failed to update lead stage:", error);
+      toast.error(`Failed to update lead to "${newStage}"`);
+    } finally {
+      setIsUpdatingStage(false);
+    }
+  };
 
   return (
     <section className="rounded-xl border border-border/70 bg-card p-6 px-7 shadow-sm">
@@ -212,9 +234,11 @@ export function LeadHeader({
             <h1 className="font-heading text-2xl leading-tight font-semibold tracking-tight text-foreground">
               {lead.name}
             </h1>
-            <span className={`stage-badge ${STAGE_STYLES[lead.stage]}`}>
-              {lead.stage}
-            </span>
+            <StageBadgeSelect
+              value={lead.stage}
+              onChange={handleStageChange}
+              disabled={isUpdatingStage}
+            />
             {lead.urgent ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive-light px-3 py-1 text-xs font-medium text-destructive-ink">
                 <span
