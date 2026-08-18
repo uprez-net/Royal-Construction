@@ -4,14 +4,22 @@
 // probability, same outcome, same banked flag — so this collapses a split
 // terminal state, it does not change any number.
 //
-// THIS IS A HARD PRECONDITION FOR THE PHASE B MIGRATION. Postgres has no
-// `ALTER TYPE ... DROP VALUE`, so dropping CONVERTED is a type swap whose
-// `USING ("stage"::text::"LeadStage_new")` cast raises 22P02 on any surviving
-// CONVERTED row. That aborts the migration AND leaves it half-recorded in
-// _prisma_migrations, after which EVERY `prisma migrate deploy` on that
-// database fails with P3009 until someone manually runs
-// `prisma migrate resolve --rolled-back`. That blocks unrelated deploys, not
-// just this one. Run this, confirm zero, then migrate.
+// Run this before the phase B migration so the enum drop has nothing left to
+// choke on. Postgres has no `ALTER TYPE ... DROP VALUE`, so dropping CONVERTED
+// is a type swap whose `USING ("stage"::text::"LeadStage_new")` cast raises
+// 22P02 on any surviving CONVERTED row. That aborts the migration AND leaves it
+// half-recorded in _prisma_migrations, after which EVERY `prisma migrate
+// deploy` on that database fails with P3009 until someone manually runs
+// `prisma migrate resolve --rolled-back` — blocking unrelated deploys, not just
+// this one.
+//
+// The zero-remaining check below is a point-in-time read, NOT a guarantee: it
+// cannot stop a write landing between this script finishing and the migration
+// running. So the phase B migration must ALSO perform the same UPDATE inside
+// its own transaction, immediately before the type swap. That makes the two
+// steps atomic and removes the need for a maintenance window. This script
+// exists to move the bulk of the data (and to record what moved) while nothing
+// is under time pressure, not to be the only safety net.
 //
 // Run: pnpm backfill:converted-to-won
 //
@@ -35,18 +43,19 @@ async function main() {
   // Print the ids BEFORE writing. Once rewritten, a backfilled row is
   // indistinguishable from a lead that was always WON — the data half of this
   // change is not reversible, so this list is the only record of what moved.
-  const affected = await prisma.$queryRaw<{ id: number; name: string }[]>`
-    SELECT "id", "name" FROM "Lead" WHERE "stage"::text = 'CONVERTED' ORDER BY "id"
+  // Ids only, deliberately: lead names are customer names, and this output ends
+  // up in terminal scrollback and deploy logs.
+  const affected = await prisma.$queryRaw<{ id: number }[]>`
+    SELECT "id" FROM "Lead" WHERE "stage"::text = 'CONVERTED' ORDER BY "id"
   `;
 
   if (affected.length === 0) {
     console.log("  nothing to do — no rows hold CONVERTED.");
-    console.log("  safe to run the phase B migration.");
     return;
   }
 
   console.log(`  ${affected.length} row(s) will change:`);
-  for (const row of affected) console.log(`    #${row.id}  ${row.name}`);
+  console.log(`    ids: ${affected.map((row) => row.id).join(", ")}`);
 
   const updated = await prisma.$executeRaw`
     UPDATE "Lead" SET "stage" = 'WON' WHERE "stage"::text = 'CONVERTED'
@@ -58,10 +67,12 @@ async function main() {
   `;
   if (Number(remaining) !== 0) {
     throw new Error(
-      `${remaining} row(s) still hold CONVERTED — do NOT run the phase B migration.`,
+      `${remaining} row(s) still hold CONVERTED — investigate before migrating.`,
     );
   }
-  console.log("  verified 0 remaining. Safe to run the phase B migration.");
+  console.log("  verified 0 remaining at this instant.");
+  console.log("  the phase B migration re-runs the same UPDATE transactionally,");
+  console.log("  so a late write cannot slip through the gap.");
 }
 
 main()

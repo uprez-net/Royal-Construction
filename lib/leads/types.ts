@@ -192,12 +192,22 @@ export const LEGACY_LEAD_STAGE_FILTER_ALIASES: Record<string, DBLeadStage> = {
   Converted: DBLeadStage.WON,
 };
 
-/** Resolve a filter label to a DB stage, tolerating retired labels. */
+/**
+ * Resolve a filter label to a DB stage, tolerating retired labels.
+ *
+ * `Object.hasOwn`, not a bare lookup: the label comes straight off a query
+ * string, and a plain object inherits from Object.prototype, so `toString`,
+ * `constructor` and `valueOf` all "resolve" to functions. Those would sail
+ * past the unknown-label guard and end up in a Prisma `where` clause.
+ */
 export function resolveLeadStageFilter(label: string): DBLeadStage | undefined {
-  return (
-    LeadStageToLeadStageDBMapping[label as LeadStage] ??
-    LEGACY_LEAD_STAGE_FILTER_ALIASES[label]
-  );
+  if (Object.hasOwn(LeadStageToLeadStageDBMapping, label)) {
+    return LeadStageToLeadStageDBMapping[label as LeadStage];
+  }
+  if (Object.hasOwn(LEGACY_LEAD_STAGE_FILTER_ALIASES, label)) {
+    return LEGACY_LEAD_STAGE_FILTER_ALIASES[label];
+  }
+  return undefined;
 }
 
 /**

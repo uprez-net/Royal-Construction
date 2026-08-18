@@ -651,7 +651,11 @@ const handler = createMcpHandler((server) => {
                 }
                 return toToolResult(validated.data);
             } catch (error) {
+                // isError so the client sees a failure. Without it an unknown
+                // stage filter returns a "successful" result whose text merely
+                // happens to start with "Error", which a model reads as data.
                 return {
+                    isError: true,
                     content: [{ type: "text" as const, text: `Error fetching leads ${error instanceof Error ? error.message : String(error)}` }],
                 }
             }

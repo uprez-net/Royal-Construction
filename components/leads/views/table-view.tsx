@@ -121,7 +121,9 @@ export default function TableView({
                 {["all", ...LEAD_STAGE_OPTIONS, "Archived"].map((stage) => (
                   <button
                     key={stage}
+                    type="button"
                     className={`filter-chip ${activeFilters.includes(stage) ? "active" : ""}`}
+                    aria-pressed={activeFilters.includes(stage)}
                     onClick={() => toggleFilter(stage)}
                   >
                     {stage === "all" ? "All" : stage}

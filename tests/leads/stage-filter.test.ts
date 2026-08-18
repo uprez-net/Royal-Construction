@@ -46,3 +46,30 @@ test("blank and whitespace-only segments are ignored, not treated as unknown", (
   assert.deepEqual(parseLeadStageFilter("Won, ,"), { stages: ["WON"], unknown: [] });
   assert.deepEqual(parseLeadStageFilter(""), { stages: [], unknown: [] });
 });
+
+test("inherited Object.prototype members are not stages", () => {
+  // A bare `map[label]` lookup resolves these to FUNCTIONS off the prototype
+  // chain. They then passed the unknown-label guard and were pushed into the
+  // array that becomes a Prisma `where` clause.
+  for (const label of ["toString", "constructor", "valueOf", "hasOwnProperty"]) {
+    assert.equal(resolveLeadStageFilter(label), undefined, label);
+  }
+  const parsed = parseLeadStageFilter("toString,constructor");
+  assert.deepEqual(parsed.stages, []);
+  assert.deepEqual(parsed.unknown, ["toString", "constructor"]);
+});
+
+test("__proto__ is not a stage", () => {
+  assert.equal(resolveLeadStageFilter("__proto__"), undefined);
+  assert.deepEqual(parseLeadStageFilter("__proto__"), {
+    stages: [],
+    unknown: ["__proto__"],
+  });
+});
+
+test("every resolved value is a real DB stage string", () => {
+  for (const label of ["Won", "Converted", "Cancelled", "toString", "nope"]) {
+    const v = resolveLeadStageFilter(label);
+    if (v !== undefined) assert.equal(typeof v, "string", label);
+  }
+});
