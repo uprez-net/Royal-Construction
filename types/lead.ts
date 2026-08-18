@@ -23,7 +23,14 @@ export const stageMap: Record<PrismaLeadStage, LeadStage> = {
   MEETING_SCHEDULED: "Meeting Scheduled",
   IN_FOLLOW_UP: "In Follow-up",
   NO_RESPONSE: "No Response",
-  CONVERTED: "Converted",
+  // Retargeted, NOT removed. This map is keyed by the generated Prisma enum,
+  // which still has CONVERTED until the phase B migration, and rows still hold
+  // it until the backfill runs. Rendering those as "Won" is the whole
+  // backwards-compatibility story: delete this key instead and leadToFormData
+  // yields form.stage === undefined, which makes detail-modal's
+  // `stageDef(stageToPrismaMap[form.stage]).probability` throw and blank the
+  // modal for every un-backfilled lead.
+  CONVERTED: "Won",
   CANCELLED: "Cancelled",
   DISQUALIFIED: "Disqualified",
 };
@@ -39,10 +46,11 @@ export const stageToPrismaMap: Record<LeadStage, PrismaLeadStage> = {
   "Meeting Scheduled": "MEETING_SCHEDULED",
   "In Follow-up": "IN_FOLLOW_UP",
   "No Response": "NO_RESPONSE",
-  Converted: "CONVERTED",
   Cancelled: "CANCELLED",
   Disqualified: "DISQUALIFIED",
 };
+// No Converted key: this is the UI -> DB WRITE map, and nothing may create a
+// CONVERTED row from here on. That is what makes the phase B enum drop safe.
 
 const historyTypeMap: Record<"SYSTEM" | "CALL" | "EMAIL" | "REFERRAL", HistoryItem["type"]> = {
   SYSTEM: "system",

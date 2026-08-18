@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseLikelihood } from "../../lib/leads/lead-helpers";
+import {
+  LEAD_STAGE_OPTIONS,
+  closureReasonCopy,
+  parseLikelihood,
+} from "../../lib/leads/lead-helpers";
 
 test("blank likelihood means no override", () => {
   assert.equal(parseLikelihood(""), null);
@@ -27,4 +31,57 @@ test("valid likelihood is rounded and clamped to 0-100", () => {
 test("an explicit zero is preserved as a real override", () => {
   assert.equal(parseLikelihood("0"), 0);
   assert.notEqual(parseLikelihood("0"), null);
+});
+
+/* ── closureReasonCopy ─────────────────────────────────────────────── */
+
+test("cancelled leads ask for a cancellation reason, not a lost reason", () => {
+  const c = closureReasonCopy("Cancelled");
+  assert.equal(c.label, "Cancellation reason");
+  assert.equal(c.noun, "cancellation reason");
+  assert.match(c.placeholder, /postponed|finance/i);
+});
+
+test("every other closed-unsuccessful stage keeps the lost wording", () => {
+  for (const stage of ["Lost", "Disqualified"] as const) {
+    assert.equal(closureReasonCopy(stage).label, "Lost reason", stage);
+  }
+});
+
+test("the stage select offers exactly one terminal-won label", () => {
+  // Converted and Won were indistinguishable in every calculation; offering
+  // both is what this change removes.
+  assert.ok(LEAD_STAGE_OPTIONS.includes("Won"));
+  assert.ok(!LEAD_STAGE_OPTIONS.includes("Converted" as never));
+  assert.ok(LEAD_STAGE_OPTIONS.includes("Cancelled"));
+});
+
+/* ── forecast copy ─────────────────────────────────────────────────── */
+
+test("banked copy no longer promises deals in negotiation", async () => {
+  const { readFileSync } = await import("node:fs");
+  const panel = readFileSync("components/leads/forecast-panel.tsx", "utf8");
+  assert.ok(
+    !/Won plus deals in negotiation/.test(panel),
+    "forecast panel still claims negotiating deals are banked",
+  );
+  const kpi = readFileSync("components/leads/leads.tsx", "utf8");
+  assert.ok(
+    !/Won and converted leads/.test(kpi),
+    "KPI card still refers to the retired Converted stage",
+  );
+});
+
+test("the live lead detail UI uses the shared likelihood parser", async () => {
+  const { readFileSync } = await import("node:fs");
+  const tab = readFileSync("components/leads/detail/lead-overview-tab.tsx", "utf8");
+  // `Number(x) || 0` turns a typo into a real 0% forecast. It was fixed once in
+  // the old detail modal and reappeared when that modal was replaced by this
+  // full-page tab, so pin it here rather than relying on review.
+  assert.ok(
+    !/Number\(\s*(form\.)?probabilityOverride\s*\)\s*\|\|\s*0/.test(tab),
+    "lead-overview-tab reintroduced the `Number(...) || 0` likelihood bug",
+  );
+  assert.ok(tab.includes("parseLikelihood"), "lead-overview-tab should use parseLikelihood");
+  assert.ok(tab.includes("closureReasonCopy"), "lead-overview-tab should use stage-aware closure wording");
 });

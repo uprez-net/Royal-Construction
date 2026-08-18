@@ -104,7 +104,7 @@ export function ForecastPanel({ forecast: initial }: { forecast: SafeForecast })
             </span>
           </div>
           <span className="mt-1 block text-[11px] text-muted-foreground">
-            Won plus deals in negotiation. Quoted and earlier excluded.
+            Deals won, at full value. Everything still open is in Weighted.
           </span>
         </div>
       </CardContent>

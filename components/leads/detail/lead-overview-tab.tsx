@@ -34,6 +34,8 @@ import {
   BUDGET_OPTIONS,
   LEAD_SOURCE_OPTIONS,
   LEAD_STAGE_OPTIONS,
+  closureReasonCopy,
+  parseLikelihood,
   buildFollowupHistoryEntry,
   isLostStage,
   leadToFormData,
@@ -100,7 +102,9 @@ const SECTION_META: Record<
     icon: CalendarClock,
   },
   lostReason: {
-    label: "Lost reason",
+    // Static because SECTION_META is module-scope; the field's own label is
+    // stage-aware via closureReasonCopy, which is what the user reads.
+    label: "Closure reason",
     description: "Why this lead did not convert",
     icon: CircleAlert,
   },
@@ -145,10 +149,10 @@ type SectionPayload = Parameters<typeof updateLead>[1];
  * 79.6 would otherwise fail Zod's int 0-100 rule and reject the whole save
  * behind a generic toast that names no field.
  */
-function clampProbability(value: string): number | null {
-  if (value === "") return null;
-  return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
-}
+// Was a local clamp with `Number(value) || 0`, which turned an unparseable
+// typo into a real 0% forecast and silently zeroed the deal's weighted
+// contribution. parseLikelihood treats unparseable as "no override" and is
+// shared with the save path, so preview and persistence cannot disagree.
 
 function buildSectionPayload(
   key: LeadSectionKey,
@@ -189,7 +193,7 @@ function buildSectionPayload(
       return {
         estimatedValue: form.estimatedValue === "" ? null : form.estimatedValue,
         estimatedValueSource: form.estimatedValueSource,
-        probabilityOverride: clampProbability(form.probabilityOverride),
+        probabilityOverride: parseLikelihood(form.probabilityOverride),
         expectedCloseDate: form.expectedCloseDate || null,
       };
 
@@ -361,10 +365,9 @@ export function LeadOverviewTab({
     const value = Number(form.estimatedValue);
     if (!form.estimatedValue || !Number.isFinite(value) || value <= 0)
       return null;
-    const pct =
-      form.probabilityOverride === ""
-        ? stageProbability
-        : Math.max(0, Math.min(100, Number(form.probabilityOverride) || 0));
+    // Same parse the save uses. null means "no override", which is exactly
+    // what resolveProbability falls back on server-side — the stage default.
+    const pct = parseLikelihood(form.probabilityOverride) ?? stageProbability;
     return {
       equation: `${currency.format(value)} × ${pct}%`,
       amount: currency.format((value * pct) / 100),
@@ -474,10 +477,12 @@ export function LeadOverviewTab({
                 value={form.stage}
                 onValueChange={(value) => {
                   const next = value as LeadStage;
-                  patch({
-                    stage: next,
-                    lostReason: isLostStage(next) ? form.lostReason : "",
-                  });
+                  // Keep the reason text in form state when moving to an open
+                  // stage — buildSectionPayload already drops it from the
+                  // payload, so clearing here only destroyed what the user
+                  // typed. Cancellations get reversed often ("client came
+                  // back") and a mis-click used to wipe the reason.
+                  patch({ stage: next });
                   // The reason becomes mandatory the moment the stage does, so
                   // open its section rather than hiding the blocker.
                   if (isLostStage(next))
@@ -720,7 +725,8 @@ export function LeadOverviewTab({
               htmlFor={fieldId("lost-reason")}
               className="text-sm font-medium text-destructive"
             >
-              Lost reason <span className="text-destructive">*</span>
+              {closureReasonCopy(form.stage).label}{" "}
+              <span className="text-destructive">*</span>
             </Label>
             <Input
               id={fieldId("lost-reason")}
@@ -730,7 +736,7 @@ export function LeadOverviewTab({
                 lostReasonMissing &&
                   "border-destructive ring-1 ring-(--destructive)/20",
               )}
-              placeholder="e.g. Went with another builder, budget too low"
+              placeholder={closureReasonCopy(form.stage).placeholder}
               value={form.lostReason}
               onChange={(e) => patch({ lostReason: e.target.value })}
               required
@@ -748,7 +754,7 @@ export function LeadOverviewTab({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            A lost reason is only recorded once the stage is Lost, Cancelled or
+            A reason is only recorded once the stage is Lost, Cancelled or
             Disqualified. Change the stage in
             <span className="font-medium"> Source and stage details</span> to
             add one.

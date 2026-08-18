@@ -63,7 +63,8 @@ import { v4 as uuid } from "uuid";
 import { saveFile } from "@/lib/data/file";
 import { auth } from '@clerk/nextjs/server'
 import { verifyClerkToken } from '@clerk/mcp-tools/next'
-import { LeadStage, LeadStageToLeadStageDBMapping } from "@/lib/leads/types";
+import { parseLeadStageFilter } from "@/lib/leads/types";
+import type { LeadStage as DBLeadStage } from "@prisma/client";
 
 const emptyInputSchema = z.object({}).strict();
 
@@ -632,7 +633,16 @@ const handler = createMcpHandler((server) => {
         },
         async ({ q, status, filterTiming, page, limit }) => {
             try {
-                const statusFilterArray = status ? status.split(',').map(s => LeadStageToLeadStageDBMapping[(s.trim() as LeadStage)]) : undefined;
+                // See the note in app/api/(data)/leads/route.ts: an unknown
+                // label silently widened the query to every lead.
+                let statusFilterArray: DBLeadStage[] | undefined;
+                if (status) {
+                    const { stages, unknown } = parseLeadStageFilter(status);
+                    if (unknown.length > 0) {
+                        throw new Error(`Unknown lead stage filter: ${unknown.join(", ")}`);
+                    }
+                    statusFilterArray = stages;
+                }
                 const res = removeAllNestedDateObjects(await getLeads(page, limit, q, statusFilterArray, filterTiming));
                 const validated = leadsResponseSchema.safeParse(res);
                 if (!validated.success) {
@@ -641,7 +651,11 @@ const handler = createMcpHandler((server) => {
                 }
                 return toToolResult(validated.data);
             } catch (error) {
+                // isError so the client sees a failure. Without it an unknown
+                // stage filter returns a "successful" result whose text merely
+                // happens to start with "Error", which a model reads as data.
                 return {
+                    isError: true,
                     content: [{ type: "text" as const, text: `Error fetching leads ${error instanceof Error ? error.message : String(error)}` }],
                 }
             }

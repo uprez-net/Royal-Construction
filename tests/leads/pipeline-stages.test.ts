@@ -43,9 +43,22 @@ test("outcome classification matches the design", () => {
   assert.equal(stageDef("NO_RESPONSE").outcome, "STALLED");
 });
 
-test("banked stages are exactly Negotiating, Won and Converted", () => {
+test("banked stages are won outcomes only", () => {
   const banked = ALL_STAGES.filter((c) => stageDef(c).banked).sort();
-  assert.deepEqual(banked, ["CONVERTED", "NEGOTIATING", "WON"]);
+  // NEGOTIATING was banked until the ladder change: sending an offer booked
+  // 100% of the deal's face value before the customer agreed to anything.
+  // CONVERTED is still here only because the Prisma enum keeps it until the
+  // phase B migration; it drops out of this list with the enum.
+  assert.deepEqual(banked, ["CONVERTED", "WON"]);
+});
+
+test("banked is equivalent to a won outcome", () => {
+  // The invariant the Banked card now promises. If these ever diverge again,
+  // the card is claiming money that has not been won.
+  for (const code of ALL_STAGES) {
+    const def = stageDef(code);
+    assert.equal(def.banked, def.outcome === "WON", `${code} banked/outcome disagree`);
+  }
 });
 
 test("isOpenStage excludes stalled and closed stages", () => {

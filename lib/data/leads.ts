@@ -5,7 +5,7 @@ import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
-import { closeDatePatch } from "@/lib/leads/pipeline-stages";
+import { closeDatePatch, isClosedUnsuccessful, stageDef } from "@/lib/leads/pipeline-stages";
 import { resolveLeadStage } from "@/lib/leads/resolve-stage";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import {
@@ -681,6 +681,16 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   const createdValue = coerceMoney(input.estimatedValue);
   const actingUserId = await resolveActingUserId();
 
+  // Same rule updateLead enforces: a lead cannot sit in LOST/CANCELLED/
+  // DISQUALIFIED without a recorded reason. Enforced here too because a lead
+  // can be created directly in a closed stage — the add-lead modal does not
+  // offer one, but the API and the MCP create tool both accept it.
+  if (isClosedUnsuccessful(mappedStage) && !input.lostReason?.trim()) {
+    throw new Error(
+      `A reason is required to create a lead in ${stageDef(mappedStage).label}.`,
+    );
+  }
+
   const historyInput = input.history ?? [];
   const historyCreate = historyInput.map((entry) => {
     const action = entry.action;
@@ -994,6 +1004,40 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       updateData,
       closeDatePatch(existingLead?.stage ?? null, resolvedStage, new Date()),
     );
+  }
+
+  // Reason enforcement. This mirrors the modal's check, which was the ONLY
+  // enforcement: the Zod schemas mark lostReason optional and nullable, so a
+  // direct PATCH, the MCP tool or any server-side caller could strand a lead in
+  // LOST/CANCELLED/DISQUALIFIED with no reason. Those rows land in the
+  // "Unknown" slice of the non-conversion charts, invisible to anyone auditing
+  // why work was lost.
+  //
+  // It fires on the two things this request can actually be blamed for:
+  //   1. moving a lead INTO a closed-unsuccessful stage, and
+  //   2. clearing the reason on a lead that is already in one.
+  //
+  // It deliberately does NOT fire on an unrelated edit to a lead that is
+  // already closed with no reason. Those rows predate the rule — staging has
+  // one today — and blocking every edit to them would make them permanently
+  // uneditable, including the edit that would supply the missing reason.
+  const effectiveStage = resolvedStage ?? existingLead?.stage;
+  if (effectiveStage && isClosedUnsuccessful(effectiveStage)) {
+    const enteringClosedStage =
+      resolvedStage !== undefined &&
+      !(existingLead && isClosedUnsuccessful(existingLead.stage));
+    const clearingReason =
+      input.lostReason !== undefined && !input.lostReason?.trim();
+
+    if (enteringClosedStage || clearingReason) {
+      const reason =
+        input.lostReason !== undefined ? input.lostReason : existingLead?.lostReason;
+      if (!reason?.trim()) {
+        throw new Error(
+          `A reason is required to move a lead to ${stageDef(effectiveStage).label}.`,
+        );
+      }
+    }
   }
 
   if (input.meetingReviewOutcome === "no") {

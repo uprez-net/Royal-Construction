@@ -84,6 +84,13 @@ const STAGE_CONFIG: Record<string, { bg: string; color: string; dot: string }> =
       color: "var(--destructive)",
       dot: "var(--destructive)",
     },
+    // Cancelled is now selectable, and without an entry it fell through to a
+    // muted grey pill that read as neutral rather than closed-unsuccessful.
+    Cancelled: {
+      bg: "var(--destructive-light)",
+      color: "var(--destructive)",
+      dot: "var(--destructive)",
+    },
   };
 
 function getStageConfig(stage: string) {
