@@ -70,6 +70,46 @@ export const BUDGET_OPTIONS = [
   "$700K+",
 ];
 
+export interface BudgetBracket {
+  /** Lower bound, in dollars. */
+  min: number;
+  /**
+   * Upper bound, in dollars. On the open-ended top bracket this is a display
+   * cap chosen so a bar has something to fill against — it is NOT a real
+   * ceiling, and `isOpenEnded` is what callers must branch on before labelling
+   * it as one.
+   */
+  max: number;
+  isOpenEnded: boolean;
+}
+
+/**
+ * `Lead.budget` is a rough free-text note, not structured money — the column
+ * holds a label such as "$350K - $500K" and the type permits arbitrary strings.
+ * This is the only place that reads numbers out of those labels, and it is
+ * deliberately a lookup rather than a regex: only the five options an operator
+ * can actually pick are meaningful, and anything else (including
+ * "Not Discussed", hand-typed text, and legacy values) has no defensible
+ * numeric reading and returns null so the caller can hide the affordance
+ * instead of inventing a range.
+ *
+ * `estimatedValue` remains the source of truth for money — see Lead in
+ * lib/leads/types.ts. Treat a bracket as a fallback for display only.
+ */
+const BUDGET_BRACKETS: Record<string, BudgetBracket> = {
+  "$200K - $350K": { min: 200_000, max: 350_000, isOpenEnded: false },
+  "$350K - $500K": { min: 350_000, max: 500_000, isOpenEnded: false },
+  "$500K - $700K": { min: 500_000, max: 700_000, isOpenEnded: false },
+  "$700K+": { min: 700_000, max: 1_000_000, isOpenEnded: true },
+};
+
+export function budgetBracket(
+  budget: string | null | undefined,
+): BudgetBracket | null {
+  if (!budget) return null;
+  return BUDGET_BRACKETS[budget.trim()] ?? null;
+}
+
 export const STAGE_STYLES: Record<LeadStage, string> = {
   New: "stage-badge-info",
   Contacted: "stage-badge-warning",
@@ -411,4 +451,8 @@ export function isLostStage(stage: LeadStage): boolean {
 
 export function isTerminalStage(stage: LeadStage): boolean {
   return ["Won", "Lost", "Cancelled", "Disqualified"].includes(stage);
+}
+
+export function isQuotingStage(stage: LeadStage): boolean {
+  return ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"].includes(stage);
 }

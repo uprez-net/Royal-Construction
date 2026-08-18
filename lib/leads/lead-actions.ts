@@ -1,5 +1,5 @@
 import type { Lead } from "./types";
-import { isTerminalStage } from "./lead-helpers";
+import { isQuotingStage, isTerminalStage } from "./lead-helpers";
 
 /**
  * One source of truth for "may the operator do this to this lead?".
@@ -34,6 +34,8 @@ export interface LeadActions {
   archive: LeadActionState;
   /** Jump to the consultation booking flow. */
   bookMeeting: LeadActionState;
+  /** Open this lead's offer workspace — "Check with Offer". */
+  checkOffer: LeadActionState;
 }
 
 const ARCHIVED = "This lead is archived, so it can no longer be actioned.";
@@ -76,7 +78,16 @@ export function leadActions(lead: Lead): LeadActions {
     sendText: gate(Boolean(lead.email)),
     archive,
     bookMeeting: gate(true),
+    checkOffer: gate(isQuotingStage(lead.stage)),
   };
+}
+
+/**
+ * The offer workspace for a lead. The route self-provisions the Offer row, so
+ * this is safe to link even for a lead that has never been priced.
+ */
+export function offerWorkspaceHref(lead: Lead): string {
+  return `/offers/${lead.id}`;
 }
 
 /**

@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -8,6 +9,7 @@ import {
   ArrowLeft,
   CalendarCheck,
   CalendarDays,
+  FileSearch,
   Mail,
   MapPin,
   MessageSquare,
@@ -18,15 +20,160 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   STAGE_STYLES,
+  budgetBracket,
   dialablePhone,
   isLostStage,
+  type BudgetBracket,
 } from "@/lib/leads/lead-helpers";
-import { bookConsultationHref, leadActions } from "@/lib/leads/lead-actions";
+import {
+  bookConsultationHref,
+  leadActions,
+  offerWorkspaceHref,
+  type LeadActionState,
+} from "@/lib/leads/lead-actions";
 import type { Lead } from "@/lib/leads/types";
-import { dateFormat } from "@/utils/formatters";
+import { compactCurrency, dateFormat } from "@/utils/formatters";
 
 /** Mono is for facts. A missing value is prose, not a fact. */
 const NOT_SET = "Not set";
+
+type DealValue = {
+  amount: number;
+  /** Where the headline number came from — shown as the caption. */
+  caption: string;
+  bracket: BudgetBracket | null;
+};
+
+/**
+ * Resolves the number to headline, in the order the data deserves:
+ *
+ * 1. `estimatedValue` — the source of truth for money (see Lead in
+ *    lib/leads/types.ts), already kept in step with the quoted contract price
+ *    by the offer workspace.
+ * 2. the midpoint of the budget bracket, when the lead has never been priced.
+ * 3. nothing — returns null so the caller drops the block rather than
+ *    rendering a $0 that reads like a real valuation.
+ */
+function resolveDealValue(lead: Lead): DealValue | null {
+  const bracket = budgetBracket(lead.budget);
+  const recorded = Number(lead.estimatedValue);
+  const hasRecorded =
+    lead.estimatedValue != null &&
+    lead.estimatedValue !== "" &&
+    Number.isFinite(recorded) &&
+    recorded > 0;
+
+  if (hasRecorded) {
+    return {
+      amount: recorded,
+      caption:
+        lead.estimatedValueSource === "OFFER" ? "from offer" : "recorded value",
+      bracket,
+    };
+  }
+
+  if (bracket) {
+    return {
+      // On the open-ended top bracket this midpoint is derived from the display
+      // cap rather than a real ceiling, so it is a weaker number than the ones
+      // above it — which is exactly what the caption says it is.
+      amount: (bracket.min + bracket.max) / 2,
+      caption: "mid-range estimate",
+      bracket,
+    };
+  }
+
+  return null;
+}
+
+function LeadDealValuePanel({
+  lead,
+  action,
+}: {
+  lead: Lead;
+  action: LeadActionState;
+}) {
+  const router = useRouter();
+  const headingId = useId();
+  const deal = resolveDealValue(lead);
+
+  // Neither a recorded value nor a readable budget bracket: there is nothing
+  // honest to show, so the block is not rendered at all.
+  if (!deal) return null;
+
+  const { bracket } = deal;
+  const fillPercent = bracket
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          ((deal.amount - bracket.min) / (bracket.max - bracket.min)) * 100,
+        ),
+      )
+    : null;
+  const rangeLabel = bracket
+    ? bracket.isOpenEnded
+      ? `${compactCurrency.format(bracket.min)}+`
+      : `${compactCurrency.format(bracket.min)} — ${compactCurrency.format(bracket.max)}`
+    : null;
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="rounded-xl border border-border/70 bg-card p-4 shadow-sm"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <h2
+          id={headingId}
+          className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase"
+        >
+          Estimated deal value
+        </h2>
+      </div>
+
+      <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
+        <span className="font-heading text-3xl font-semibold tracking-tight text-foreground tabular-nums">
+          {compactCurrency.format(deal.amount)}
+        </span>
+        <span className="text-xs text-muted-foreground">{deal.caption}</span>
+      </p>
+
+      {bracket && fillPercent !== null ? (
+        <div className="mt-3 flex items-center gap-3">
+          {/* Decorative: the sr-only sentence below states the same position in
+              words, which survives better than a bar with an ARIA value. */}
+          <div
+            aria-hidden="true"
+            className="h-2 flex-1 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className="h-full rounded-full bg-linear-to-r from-amber-400 to-orange-500"
+              style={{ width: `${fillPercent}%` }}
+            />
+          </div>
+          <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+            {rangeLabel}
+          </span>
+          <span className="sr-only">
+            {compactCurrency.format(deal.amount)} sits {Math.round(fillPercent)}
+            % through the {rangeLabel} budget range recorded for this lead.
+          </span>
+        </div>
+      ) : null}
+
+      <Button
+        type="button"
+        onClick={() => router.push(offerWorkspaceHref(lead))}
+        disabled={action.disabled}
+        title={action.disabledReason ?? undefined}
+        className="mt-4 w-full rounded-lg"
+      >
+        <FileSearch className="mr-2 size-4" aria-hidden="true" />
+        Check with Offer
+      </Button>
+    </section>
+  );
+}
 
 function formatCreated(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -149,58 +296,64 @@ export function LeadHeader({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          {actions.sendText.visible ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onSendTextClick}
-              disabled={actions.sendText.disabled}
-              title={actions.sendText.disabledReason ?? undefined}
-              className="h-9 rounded-lg px-3.5 text-sm font-medium"
-            >
-              <MessageSquare className="mr-1.5 size-4" aria-hidden="true" />
-              Send Text
-            </Button>
-          ) : null}
+        <div className="flex w-full flex-col gap-4 pt-1 lg:w-80">
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            {actions.sendText.visible ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onSendTextClick}
+                disabled={actions.sendText.disabled}
+                title={actions.sendText.disabledReason ?? undefined}
+                className="h-9 rounded-lg px-3.5 text-sm font-medium"
+              >
+                <MessageSquare className="mr-1.5 size-4" aria-hidden="true" />
+                Send Text
+              </Button>
+            ) : null}
 
-          {actions.bookMeeting.visible ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                router.push(bookConsultationHref(lead, user?.fullName))
-              }
-              disabled={actions.bookMeeting.disabled}
-              title={actions.bookMeeting.disabledReason ?? undefined}
-              className="h-9 rounded-lg px-3.5 text-sm font-medium"
-            >
-              <CalendarCheck className="mr-1.5 size-4" aria-hidden="true" />
-              Book Meeting
-            </Button>
-          ) : null}
+            {actions.bookMeeting.visible ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  router.push(bookConsultationHref(lead, user?.fullName))
+                }
+                disabled={actions.bookMeeting.disabled}
+                title={actions.bookMeeting.disabledReason ?? undefined}
+                className="h-9 rounded-lg px-3.5 text-sm font-medium"
+              >
+                <CalendarCheck className="mr-1.5 size-4" aria-hidden="true" />
+                Book Meeting
+              </Button>
+            ) : null}
 
-          {actions.archive.visible ? (
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={onArchiveClick}
-              disabled={actions.archive.disabled}
-              title={actions.archive.disabledReason ?? undefined}
-              className="h-9 rounded-lg px-3.5 text-sm font-medium"
-            >
-              <Archive className="mr-1.5 size-4" aria-hidden="true" />
-              Delete Lead
-            </Button>
-          ) : null}
+            {actions.archive.visible ? (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={onArchiveClick}
+                disabled={actions.archive.disabled}
+                title={actions.archive.disabledReason ?? undefined}
+                className="h-9 rounded-lg px-3.5 text-sm font-medium"
+              >
+                <Archive className="mr-1.5 size-4" aria-hidden="true" />
+                Delete Lead
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
-
+      <div className="mt-6 ">
+        <LeadDealValuePanel lead={lead} action={actions.checkOffer} />
+      </div>
       {/* Status banners, carried over from the modal. */}
       {lead.stage === "Won" ? (
         <div className="status-banner status-banner-success mt-5">
           <span className="status-banner-title">Status: Won</span>
-          <span className="status-banner-text">This lead is marked as won.</span>
+          <span className="status-banner-text">
+            This lead is marked as won.
+          </span>
         </div>
       ) : null}
       {isLostStage(lead.stage) ? (
