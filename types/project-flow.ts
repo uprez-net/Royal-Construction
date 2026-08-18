@@ -60,6 +60,14 @@ export interface ProjectLegalAdministrationSection {
   commencementTrigger: string | null;
   signedDate: string | null;
   pcaInspector: string | null;
+  /**
+   * Insurance coverage window for the build, captured when the first Slab-stage
+   * milestone is started (that stage is the physical start of construction).
+   * Stored as `yyyy-MM-dd`, matching `signedDate`. Optional because every
+   * requirements payload written before this field existed is missing it.
+   */
+  insuranceClaimStartDate?: string | null;
+  insuranceClaimEndDate?: string | null;
 }
 
 export interface ProjectCommercialSection {

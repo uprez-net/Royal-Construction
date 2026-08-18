@@ -16,6 +16,7 @@ export type ModalType =
   | "addMilestone"
   | "addMilestonePicture"
   | "updateMilestoneStatus"
+  | "insuranceClaimDates"
   | "createOfferFile"
   | "createLead"
   | "followUpPrompt"

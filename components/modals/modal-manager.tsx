@@ -52,6 +52,7 @@ import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
 import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
+import InsuranceClaimDatesModal from "../projects/detail/modal/insurance-claim-dates-modal";
 import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
 import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
 import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
@@ -342,6 +343,23 @@ export function ModalManager() {
           isAdmin={isAdmin}
         />
       );
+    case "insuranceClaimDates": {
+      const {
+        milestoneId: insuranceMilestoneId,
+        projectId: insuranceProjectId,
+      } = modal.payload as {
+        projectId: string;
+        milestoneId: string;
+      };
+      return (
+        <InsuranceClaimDatesModal
+          milestoneId={insuranceMilestoneId}
+          projectId={insuranceProjectId}
+          isOpen
+          onClose={handleClose}
+        />
+      );
+    }
     case "addMilestonePicture":
       const {
         milestoneId: addMilestonePictureId,

@@ -62,7 +62,8 @@ type FieldType =
   | "number"
   | "currency"
   | "percent"
-  | "boolean";
+  | "boolean"
+  | "date";
 
 interface FieldConfig {
   key: string;
@@ -125,6 +126,18 @@ const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
     { key: "commencementTrigger", label: "Commencement trigger", type: "text" },
     { key: "signedDate", label: "Signed date", type: "text" },
     { key: "pcaInspector", label: "PCA inspector", type: "text" },
+    // Captured when the first Slab-stage milestone starts, and editable here
+    // afterwards through the same PATCH that the kickoff prompt uses.
+    {
+      key: "insuranceClaimStartDate",
+      label: "Insurance Claim Start Date",
+      type: "date",
+    },
+    {
+      key: "insuranceClaimEndDate",
+      label: "Insurance Claim End Date",
+      type: "date",
+    },
   ],
   commercialsAndClaims: [
     { key: "totalContractSum", label: "Total contract sum", type: "currency" },
@@ -213,6 +226,18 @@ function parseNumber(raw: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * `<input type="date">` only accepts `yyyy-MM-dd`. Requirements dates are
+ * written in that shape, but older payloads may carry a full ISO timestamp, so
+ * anything longer is trimmed back to the date part rather than shown blank.
+ */
+function toDateInputValue(value: unknown) {
+  if (typeof value !== "string" || value.trim() === "") return "";
+
+  const [datePart] = value.split("T");
+  return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : "";
+}
+
 function displayValue(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value);
@@ -288,6 +313,29 @@ function TextField({
           className={FIELD_CONTROL_CLASS}
         />
       )}
+    </FieldShell>
+  );
+}
+
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (v: string | null) => void;
+}) {
+  const id = useId();
+  return (
+    <FieldShell label={label} htmlFor={id}>
+      <Input
+        id={id}
+        type="date"
+        value={toDateInputValue(value)}
+        onChange={(e) => onChange(emptyToNull(e.target.value))}
+        className={cn(FIELD_CONTROL_CLASS, "font-mono tabular-nums")}
+      />
     </FieldShell>
   );
 }
@@ -443,6 +491,10 @@ function renderField(
     case "boolean":
       return (
         <BooleanField label={config.label} value={value} onChange={onChange} />
+      );
+    case "date":
+      return (
+        <DateField label={config.label} value={value} onChange={onChange} />
       );
     case "textarea":
       return (
