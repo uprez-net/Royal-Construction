@@ -6,6 +6,7 @@ import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
+import { resolveLeadStage } from "@/lib/leads/resolve-stage";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import {
   coerceMoney,
@@ -892,6 +893,11 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   const updateData: Prisma.LeadUpdateInput = {};
   const actingUserId = await resolveActingUserId();
 
+  // Read once, up front. Both the stage resolution below and the follow-up /
+  // meeting branches need the current row, and this used to be two separate
+  // findUnique calls that could disagree.
+  const existingLead = await prisma.lead.findUnique({ where: { id } });
+
   if (input.name !== undefined) updateData.name = String(input.name);
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
   if (input.email !== undefined) updateData.email = input.email ?? "";
@@ -901,22 +907,9 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.secondaryPhone !== undefined) updateData.secondaryPhone = input.secondaryPhone;
   if (input.source !== undefined) updateData.source = input.source;
   if (input.sourceDetail !== undefined) updateData.sourceDetail = input.sourceDetail;
-  if (input.stage !== undefined) {
-    updateData.stage = mappedStage;
-    if (mappedStage) {
-      // Stamp wonAt/lostAt from the transition. The current stage has to be
-      // read first — the patch depends on where the lead is coming from, so
-      // that WON -> CONVERTED does not re-date an existing win.
-      const current = await prisma.lead.findUnique({
-        where: { id },
-        select: { stage: true },
-      });
-      Object.assign(
-        updateData,
-        closeDatePatch(current?.stage ?? null, mappedStage, new Date()),
-      );
-    }
-  }
+  // NOTE: `stage` is deliberately NOT written here. The follow-up branches
+  // further down can also set it, so both inputs are resolved together after
+  // them and stamped once — see the resolveLeadStage call below.
   if (input.assignedId !== undefined) {
     const nextAssignedId = input.assignedId?.trim();
     updateData.assignedUser = nextAssignedId
@@ -968,29 +961,39 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     };
   }
 
-  const existingLead = await prisma.lead.findUnique({ where: { id } });
-
   if (input.followupResponseOutcome === "yes") {
     updateData.followupDate = null;
     updateData.followupTime = null;
     updateData.followupReminderSentAt = new Date();
-    if (existingLead?.stage === "IN_FOLLOW_UP") {
-      updateData.stage = "CONTACTED";
-    }
   } else if (input.followupResponseOutcome === "notRequired") {
     updateData.followupDate = null;
     updateData.followupTime = null;
     updateData.followupReminderSentAt = new Date();
-    if (existingLead?.stage === "IN_FOLLOW_UP") {
-      updateData.stage = "CONTACTED";
-    }
   } else if (input.followupResponseOutcome === "reschedule") {
     const nextFollowupDate = new Date();
     nextFollowupDate.setDate(nextFollowupDate.getDate() + 1);
     updateData.followupDate = nextFollowupDate;
     updateData.followupTime = input.followupTime ?? existingLead?.followupTime ?? null;
     updateData.followupReminderSentAt = null;
-    updateData.stage = "IN_FOLLOW_UP";
+  }
+
+  // Single stage write. `stage` and `followupResponseOutcome` are independently
+  // optional on updateLeadSchema and both are exposed on the MCP surface, so
+  // they can arrive together; resolveLeadStage decides which wins. The
+  // close-date stamp is derived from the RESOLVED stage, never from the
+  // requested one, so the stage column and wonAt/lostAt can never describe two
+  // different transitions.
+  const resolvedStage = resolveLeadStage({
+    currentStage: existingLead?.stage ?? null,
+    requestedStage: mappedStage,
+    followupResponseOutcome: input.followupResponseOutcome,
+  });
+  if (resolvedStage !== undefined) {
+    updateData.stage = resolvedStage;
+    Object.assign(
+      updateData,
+      closeDatePatch(existingLead?.stage ?? null, resolvedStage, new Date()),
+    );
   }
 
   if (input.meetingReviewOutcome === "no") {

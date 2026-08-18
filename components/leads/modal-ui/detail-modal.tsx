@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from "react";
 import { Lead, LeadSource, LeadStage, HistoryItem } from "@/lib/leads/types";
 import { updateLead } from "@/lib/leads/leads-service";
+import { FetchError } from "@/utils/fetch";
 import {
   LeadDetailFormData,
   leadToFormData,
@@ -10,6 +11,7 @@ import {
   shouldSetFollowupStage,
   buildFollowupHistoryEntry,
   isLostStage,
+  parseLikelihood,
 } from "@/lib/leads/lead-helpers";
 import { ModalShell } from "@/components/common/modal-shell";
 import { LeadRichTextEditor } from "@/components/rich-text/lead-rich-text-editor";
@@ -199,6 +201,15 @@ export function DetailModal({
       showToast("Add a lost reason before updating this lead.", "error");
       return;
     }
+    // Leads created before #110 carry the schema default of "" for email.
+    // updateLeadSchema uses requiredLeadEmail.optional(), which permits the
+    // field being absent but not empty, so those leads reject EVERY save —
+    // stage, notes, expected close and all. Catch it here where we can point
+    // at the field the user has to fill in.
+    if (!form.email.trim()) {
+      showToast("Add a client email before updating this lead.", "error");
+      return;
+    }
 
     setIsUpdating(true);
     try {
@@ -237,11 +248,11 @@ export function DetailModal({
         // Clamp and round at the source. The input is free-typed, so 150 or
         // 79.6 would otherwise fail Zod's int 0-100 rule and reject the whole
         // save — every unrelated edit in the modal with it — behind a generic
-        // toast that names no field.
-        probabilityOverride:
-          form.probabilityOverride === ""
-            ? null
-            : Math.max(0, Math.min(100, Math.round(Number(form.probabilityOverride) || 0))),
+        // toast that names no field. Unparseable text falls back to null ("no
+        // override"), NOT 0: a 0% likelihood is a real forecast value and
+        // silently assigning it to a typo would zero the deal's weighted
+        // contribution.
+        probabilityOverride: parseLikelihood(form.probabilityOverride),
         expectedCloseDate: form.expectedCloseDate || null,
         type: typeValue,
         notes: form.notes,
@@ -263,7 +274,15 @@ export function DetailModal({
       onClose();
     } catch (error) {
       console.error("Failed to update lead", error);
-      showToast("Failed to update the lead. Please try again.", "error");
+      // A FetchError carries the API's own message, which now names the field
+      // that failed validation. Swallowing it behind a fixed string is what
+      // made the empty-email rejection undiagnosable.
+      showToast(
+        error instanceof FetchError && error.message.trim()
+          ? error.message
+          : "Failed to update the lead. Please try again.",
+        "error",
+      );
     } finally {
       setIsUpdating(false);
     }

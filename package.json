@@ -12,6 +12,7 @@
     "test:offer": "tsx --test tests/offer/*.test.ts",
     "test:graph": "tsx --test tests/graph/*.test.ts",
     "test": "tsx --test tests/*/*.test.ts",
+    "test:unit": "tsx --test $(ls tests/*/*.test.ts | grep -v offer-document-print-pages)",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "prisma:seed": "prisma db seed",
