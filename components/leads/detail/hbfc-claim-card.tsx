@@ -472,8 +472,8 @@ function BuildStartAssessment({ assessment }: { assessment: HbcfAssessment }) {
         <AlertTriangle className="size-4 text-warning-ink" aria-hidden="true" />
         Build start assessment
       </h3>
-
-      <p className="text-xs text-foreground">
+      {/* Hidden now should later be pushed based on requirment */}
+      {/* <p className="text-xs text-foreground">
         Direct amount available:{" "}
         <span className="font-mono font-semibold tabular-nums text-success-ink">
           {compactCurrency.format(directAvailable)}
@@ -507,7 +507,7 @@ function BuildStartAssessment({ assessment }: { assessment: HbcfAssessment }) {
             {dateFormat.format(hbcfParseDate(decisiveClaim.freesOn))}
           </span>
         </p>
-      ) : null}
+      ) : null} */}
 
       <div className="border-t border-border/70 pt-2">
         {canStartFrom ? (
@@ -621,10 +621,10 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
             <ShieldCheck className="size-4" aria-hidden="true" />
-            HBCF claim timeline
+            HBCF timeline
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track claim capacity across all active projects to determine build
+            Track capacity across all active projects to determine build
             start availability.
           </p>
         </div>
