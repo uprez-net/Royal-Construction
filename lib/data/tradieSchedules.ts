@@ -39,6 +39,7 @@ const convertToTradieScheduleListItem = (schedule: TradieScheduleWithRelations):
     abn: schedule.tradie.abn,
     tradieId: schedule.tradieId,
     tradieName: schedule.tradie.name,
+    lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
     tradeType: schedule.tradie.trade,
     projectId: schedule.projectId,
     projectName: schedule.project.name,

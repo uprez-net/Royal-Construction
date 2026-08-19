@@ -25,3 +25,18 @@ export const calculateScheduleTotalCost = (
   durationDays: number,
   unit: "HOURLY" | "FIXED",
 ): string => currency.format(scheduleTotalCost(price, durationDays, unit));
+
+/**
+ * A quoted price with its basis, e.g. "$120.00/hr" or "$4,800.00 fixed".
+ *
+ * One formatter because the "/hr" suffix was previously hardcoded at five
+ * separate display sites. Recording the unit is pointless if the screen still
+ * says per-hour regardless.
+ */
+export function formatQuotedPrice(
+  amount: number,
+  unit: "HOURLY" | "FIXED",
+  format: (value: number) => string,
+): string {
+  return unit === "FIXED" ? `${format(amount)} fixed` : `${format(amount)}/hr`;
+}

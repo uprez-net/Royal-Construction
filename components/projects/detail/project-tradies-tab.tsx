@@ -194,6 +194,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     id: tradie.id,
     tradieId: tradie.tradie.id,
     tradieName: tradie.tradie.name,
+    lastQuotedPriceUnit: tradie.tradie.lastQuotedPriceUnit,
     tradeType: tradie.tradie.trade,
     abn: tradie.tradie.abn,
     projectId: project.id,
@@ -477,6 +478,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   schedule: {
                     id: tradie.id,
                     tradieName: tradie.tradie.name,
+    lastQuotedPriceUnit: tradie.tradie.lastQuotedPriceUnit,
                     tradeType: tradie.tradie.trade,
                     abn: tradie.tradie.abn,
                     projectName: project.name,

@@ -297,6 +297,7 @@ export function MilestoneCard({
                     status: t.status,
                     tradeType: t.tradie.trade,
                     tradieName: t.tradie.name,
+                    lastQuotedPriceUnit: t.tradie.lastQuotedPriceUnit,
                     projectId: t.projectId,
                     projectName: project.name,
                     taskLabel: `${milestone.name} - ${t.tradie.trade}`,

@@ -24,6 +24,7 @@ import { useApprovalMutation } from "@/hooks/use-approval-mutation";
 import { RatingStars } from "@/components/common/rating-stars";
 import { rateCurrency, dataTimeFormat, formatStatus } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 interface Props {
   approval: SafeTradieApproval;
@@ -188,7 +189,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 label="Current stored rate"
                 value={
                   storedRate !== null
-                    ? `${rateCurrency.format(storedRate)}/hr`
+                    ? formatQuotedPrice(storedRate, approval.tradie.lastQuotedPriceUnit, rateCurrency.format)
                     : "Not set"
                 }
                 // Mono is reserved for actual figures; the "Not set" placeholder
@@ -264,7 +265,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 ) : (
                   <span className="font-mono tabular-nums">
                     {isIncrease ? "+" : ""}
-                    {rateCurrency.format(difference)}/hr
+                    {formatQuotedPrice(difference, approval.tradie.lastQuotedPriceUnit, rateCurrency.format)}
                     {percentageChange
                       ? ` (${isIncrease ? "+" : ""}${percentageChange}%)`
                       : ""}

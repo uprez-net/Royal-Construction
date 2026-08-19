@@ -1,3 +1,4 @@
+import type { TradiePriceUnit } from "@prisma/client";
 import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, LeadEmails } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 
@@ -15,6 +16,7 @@ export interface SafeMaterial extends Omit<Material, "unitCost" | "totalCost"> {
 
 export interface SafeTradie extends Omit<Tradie, "lastQuotedPrice" | "rating"> {
   lastQuotedPrice?: string;
+  lastQuotedPriceUnit: TradiePriceUnit;
   rating?: string;
 }
 
@@ -149,6 +151,7 @@ export type TradieScheduleListItem = {
   reminderSentAt?: string;
   updatedAt: string;
   lastQuotedPrice?: string;
+  lastQuotedPriceUnit: TradiePriceUnit;
   rating?: string;
   requiresQuote: boolean;
   quotedPrice?: string;
@@ -225,6 +228,7 @@ export type TradieUrgentReminderItem = {
     additionalEmails: string[];
   };
   lastQuotedPrice?: string;
+  lastQuotedPriceUnit: TradiePriceUnit;
   rating?: string;
   siteManager: {
     name: string;

@@ -59,6 +59,7 @@ type ScheduleRow = {
   duration_days: number;
   status: TradieScheduleStatus;
   last_quoted_price: string | null;
+  last_quoted_price_unit: "HOURLY" | "FIXED";
   rating: string | null;
   reminder_sent_at: Date | null;
   updated_at: Date;
@@ -125,6 +126,7 @@ type UrgentRow = {
   tradie_email: string;
   tradie_phone: string;
   last_quoted_price: string | null;
+  last_quoted_price_unit: "HOURLY" | "FIXED";
   rating: string | null;
 };
 
@@ -371,6 +373,7 @@ export async function getTradieCoordinationDashboard(
           ts."durationDays"   AS duration_days,
           ts.status,
           t."lastQuotedPrice"::text AS last_quoted_price,
+          t."lastQuotedPriceUnit"::text AS last_quoted_price_unit,
           t.rating::text       AS rating,
           ts."reminderSentAt"  AS reminder_sent_at,
           ts."updatedAt"       AS updated_at,
@@ -627,6 +630,7 @@ export async function getTradieCoordinationDashboard(
           t.email             AS tradie_email,
           t.phone             AS tradie_phone,
           t."lastQuotedPrice"::text AS last_quoted_price,
+          t."lastQuotedPriceUnit"::text AS last_quoted_price_unit,
           t.rating::text       AS rating
         FROM "TradieSchedule" ts
         JOIN "Tradie"  t  ON t.id  = ts."tradieId"
@@ -755,6 +759,7 @@ export async function getTradieCoordinationDashboard(
       id: row.id,
       tradieId: row.tradie_id,
       tradieName: row.tradie_name,
+      lastQuotedPriceUnit: row.last_quoted_price_unit,
       tradeType: row.trade_type,
       abn: row.abn,
       projectId: row.project_id,
@@ -806,6 +811,7 @@ export async function getTradieCoordinationDashboard(
     const urgentReminders = urgentRows.map((row) => ({
       id: row.id,
       tradieName: row.tradie_name,
+      lastQuotedPriceUnit: row.last_quoted_price_unit,
       tradeType: row.trade_type,
       projectName: row.project_name,
       milestoneName: row.milestone_name ?? undefined,

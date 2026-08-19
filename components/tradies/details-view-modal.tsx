@@ -128,6 +128,7 @@ export function TradieScheduleDetailsModal({
     id: schedule.id,
     tradieId: "tradieId",
     tradieName: schedule.tradieName,
+    lastQuotedPriceUnit: schedule.lastQuotedPriceUnit,
     tradeType: schedule.tradeType,
     projectId: "projectId",
     projectName: schedule.projectName,

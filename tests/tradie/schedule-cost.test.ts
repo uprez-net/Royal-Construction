@@ -28,3 +28,21 @@ test("zero duration costs nothing hourly but still owes a fixed quote", () => {
   assert.equal(scheduleTotalCost(120, 0, "HOURLY"), 0);
   assert.equal(scheduleTotalCost(4800, 0, "FIXED"), 4800);
 });
+
+/* ── display ───────────────────────────────────────────────────────── */
+
+import { formatQuotedPrice } from "../../utils/calculations";
+
+const money = (n: number) => `$${n.toFixed(2)}`;
+
+test("a fixed price never renders as a rate", () => {
+  // "/hr" was hardcoded at five display sites, so recording the unit changed
+  // the maths while every screen still said per-hour.
+  const shown = formatQuotedPrice(4800, "FIXED", money);
+  assert.ok(!shown.includes("/hr"), `fixed price rendered as a rate: ${shown}`);
+  assert.match(shown, /fixed/);
+});
+
+test("an hourly price still renders as a rate", () => {
+  assert.equal(formatQuotedPrice(120, "HOURLY", money), "$120.00/hr");
+});

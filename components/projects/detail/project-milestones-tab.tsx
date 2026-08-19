@@ -454,6 +454,7 @@ export function ProjectMilestonesTab({
                           status: schedule.status,
                           abn: schedule.tradie.abn,
                           tradieName: schedule.tradie.name,
+                          lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
                           tradeType: schedule.tradie.trade,
                           projectId: schedule.projectId,
                           projectName: project.name,
