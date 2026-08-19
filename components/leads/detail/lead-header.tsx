@@ -168,7 +168,7 @@ function LeadDealValuePanel({
         onClick={() => router.push(offerWorkspaceHref(lead))}
         disabled={action.disabled}
         title={action.disabledReason ?? undefined}
-        className="mt-4 w-full rounded-lg"
+        className="mt-4 rounded-lg"
       >
         <FileSearch className="mr-2 size-4" aria-hidden="true" />
         Check with Offer
@@ -326,7 +326,7 @@ export function LeadHeader({
           ) : null}
         </div>
 
-        <div className="flex w-full flex-col gap-4 pt-1 lg:w-80">
+        <div className="flex w-full flex-col gap-4 pt-1 lg:w-96">
           <div className="flex flex-wrap gap-2 lg:justify-end">
             {actions.sendText.visible ? (
               <Button

@@ -452,7 +452,7 @@ export function isTerminalStage(stage: LeadStage): boolean {
 }
 
 export function isQuotingStage(stage: LeadStage): boolean {
-  return ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"].includes(stage);
+  return ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating", "Won"].includes(stage);
 }
 /**
  * Wording for the mandatory reason on a closed-unsuccessful lead.

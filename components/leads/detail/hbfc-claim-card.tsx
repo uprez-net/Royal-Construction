@@ -314,7 +314,7 @@ function CapacityTimeline({
                 ))}
                 {/* Labelled once, at the top; the line itself repeats per row. */}
                 <span
-                  className="absolute -top-0.5 -translate-x-1/2 rounded-sm bg-foreground px-1 text-[9px] font-bold tracking-wide text-background"
+                  className="absolute top-4 -translate-x-1/2 rounded-sm bg-foreground px-1 text-[9px] font-bold tracking-wide text-background"
                   style={{ left: `${nowLeft}%` }}
                 >
                   NOW
@@ -322,7 +322,7 @@ function CapacityTimeline({
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 mt-3">
               {claims.map((claim, index) => {
                 const bar = position(
                   hbcfParseDate(claim.insuranceClaimStartDate),
