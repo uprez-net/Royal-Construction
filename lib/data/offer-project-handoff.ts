@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
 import { OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -121,6 +122,12 @@ export async function createProjectFromOffer(input: {
   if (claim.count !== 1) {
     return { ok: false, error: "This offer is already being handed off to a project." };
   }
+
+  // Normally a no-op — the deal is already WON from CONTRACT_SIGNED — but this
+  // is the backstop for an offer that reached PROJECT without the webhook ever
+  // firing, which is exactly how leads ended up frozen at "Meeting Scheduled"
+  // while their project was already running.
+  await syncLeadStageForOffer(offer.id);
   const revertClaim = () =>
     prisma.offer.updateMany({
       where: { id: offer.id, offerStatus: OfferStatus.PROJECT },

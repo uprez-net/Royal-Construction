@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
 import { put } from "@vercel/blob";
 import {
@@ -418,6 +419,14 @@ async function syncEnvelopeStatus(
       return true;
     });
 
+    // Deliberately AFTER the transaction, never inside it. A failure in here
+    // must not be able to roll back the signature — see the note on
+    // syncLeadStageForOffer for why swallowing an error inside a transaction
+    // silently discards the whole thing.
+    if (claimed) {
+      await syncLeadStageForOffer(offer.id);
+    }
+
     // Contract fully executed → nudge the admins to create the project.
     // Project creation stays a deliberate click (kickoff dates, site manager,
     // and booking warnings need a human), so the nudge is the automation.
@@ -470,6 +479,7 @@ async function advanceOfferOnDecline(
   // Atomic claim: only the delivery that flips *_SENT -> *_DECLINED records the
   // event, so concurrent duplicate webhooks can't write duplicate audit rows,
   // and a replayed decline (or an offer that already advanced) is a no-op.
+  let declined = false;
   await prisma.$transaction(async (tx) => {
     const latest = await tx.envelope.findFirst({
       where: target.siblingEnvelopeWhere,
@@ -500,5 +510,12 @@ async function advanceOfferOnDecline(
           : "Declined via DocuSign.",
       },
     });
+    declined = true;
   });
+
+  // A decline keeps the deal open rather than closing it, so the lead lands at
+  // NEGOTIATING. Outside the transaction, same reasoning as the signed path.
+  if (declined) {
+    await syncLeadStageForOffer(target.offerId);
+  }
 }

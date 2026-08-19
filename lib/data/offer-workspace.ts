@@ -1,6 +1,7 @@
 "use server";
 
 import { EnvelopeStatus, OfferStatus, Prisma } from "@prisma/client";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -592,6 +593,9 @@ export async function transitionOfferStatus(input: {
       },
     });
   });
+
+  // After the transaction, never inside it — see syncLeadStageForOffer.
+  await syncLeadStageForOffer(input.offerId);
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   return { ok: true, status: input.toStatus };

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { randomBytes } from "node:crypto";
 import { resolveMx } from "node:dns/promises";
 import { OfferStatus } from "@prisma/client";
@@ -294,6 +295,7 @@ export async function sendOfferDocument(input: {
         .catch((error) =>
           console.error("[offer] status event after send failed:", error),
         );
+      await syncLeadStageForOffer(offer.id);
     }
   }
 

@@ -22,7 +22,8 @@
     "seed:tradies": "tsx prisma/seed-tradie.ts",
     "seed:admin-offer-content": "tsx scripts/seed-admin-offer-content.ts",
     "backfill:lead-close-dates": "tsx scripts/backfill-lead-close-dates.ts",
-    "backfill:converted-to-won": "tsx scripts/backfill-converted-to-won.ts"
+    "backfill:converted-to-won": "tsx scripts/backfill-converted-to-won.ts",
+    "backfill:lead-stage-from-offers": "tsx scripts/backfill-lead-stage-from-offers.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.73",
