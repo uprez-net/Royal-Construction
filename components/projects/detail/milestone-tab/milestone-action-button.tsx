@@ -35,7 +35,7 @@ export function MilestoneActionGroup({
   const hasNoChildren = !hasChildren;
   const isFirstChildOfMilestone =
     prevMilestone?.id === milestone.parentId &&
-    prevMilestone?.order === milestone.order - 1;
+    prevMilestone.childrenMilestones.at(0)?.id === milestone.id;
 
   const isUnlocked =
     isFirstMilestone ||
@@ -49,6 +49,12 @@ export function MilestoneActionGroup({
   const canStart = isPending && hasNoChildren && isUnlocked;
 
   const isActive = milestone.status === "ACTIVE";
+    
+  if(milestone.name === "Termite Guys Book to Glue") {
+    console.log("canStart", canStart)
+    console.log("Milestone", milestone)
+    console.log("prevMilestone", prevMilestone)
+  }
 
   if (canStart) {
     return (
