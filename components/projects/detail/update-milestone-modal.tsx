@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
+import { scheduleTotalCost } from "@/utils/calculations";
 
 interface UpdateMilestoneModalProps {
   milestoneId: string;
@@ -121,8 +122,14 @@ export default function UpdateMilestoneModal({
         const lastQuotedPrice = parseFloat(
           schedule.tradie.lastQuotedPrice ?? "0",
         );
-        const totalHours = schedule.durationDays * 8;
-        return acc + lastQuotedPrice * totalHours;
+        return (
+          acc +
+          scheduleTotalCost(
+            lastQuotedPrice,
+            schedule.durationDays,
+            schedule.tradie.lastQuotedPriceUnit,
+          )
+        );
       }
     }, 0);
 

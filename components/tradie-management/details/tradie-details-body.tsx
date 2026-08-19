@@ -166,6 +166,7 @@ export function TradiePriorityCard() {
       trade: tradieDetails.trade,
       isFavourite: tradieDetails.isFavourite,
       lastQuotedPrice: tradieDetails.lastQuotedPrice ?? null,
+    lastQuotedPriceUnit: tradieDetails.lastQuotedPriceUnit,
       rating: tradieDetails.rating ?? null,
       jobsCompleted: tradieDetails.jobsCompleted,
       incidentCount: {

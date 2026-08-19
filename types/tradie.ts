@@ -1,3 +1,5 @@
+import type { TradiePriceUnit } from "@prisma/client";
+
 import type { SafeTradie } from "./project";
 import type { TradieRating, TradieIncident, IncidentSeverity, TradieApprovalActionType, TradieApproval } from "@prisma/client";
 import { TradieScheduleStatus } from "@prisma/client";
@@ -8,6 +10,7 @@ export interface TradieRow {
     trade: string;
     isFavourite: boolean;
     lastQuotedPrice: string | null;
+    lastQuotedPriceUnit: TradiePriceUnit;
     rating: string | null;
     jobsCompleted: number;
     incidentCount: {
@@ -46,6 +49,7 @@ export interface CreateTradieInput {
     // receives a variable rather than an object literal, TypeScript performs
     // no excess-property check and the build stays green.
     lastQuotedPrice: number;
+    lastQuotedPriceUnit: TradiePriceUnit;
     abn: string;
     phone: string;
     email: string;

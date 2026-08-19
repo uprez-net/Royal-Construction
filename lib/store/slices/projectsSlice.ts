@@ -479,6 +479,7 @@ const projectsSlice = createSlice({
             tradie: {
               name: schedule.tradieName,
               id: schedule.tradieId,
+              lastQuotedPriceUnit: "HOURLY" as const,
               createdAt: new Date(),
               updatedAt: new Date(),
               email: schedule.contact.email,
@@ -525,6 +526,7 @@ const projectsSlice = createSlice({
               tradie: {
                 name: schedule.tradieName,
                 id: schedule.tradieId,
+                lastQuotedPriceUnit: "HOURLY" as const,
                 createdAt: new Date(),
                 updatedAt: new Date(),
                 email: schedule.contact.email,

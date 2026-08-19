@@ -74,6 +74,14 @@ enum LeadValueSource {
   MANUAL
 }
 
+/// How to read Tradie.lastQuotedPrice. Without it the number is ambiguous —
+/// 120 could be an hourly rate or a whole job — and the schedule cost silently
+/// multiplied every value by 8 hours a day regardless.
+enum TradiePriceUnit {
+  HOURLY
+  FIXED
+}
+
 enum HistoryType {
   SYSTEM
   CALL
@@ -287,18 +295,22 @@ model Material {
 }
 
 model Tradie {
-  id               String   @id @default(uuid())
-  name             String
-  trade            String
-  abn              String   @unique
-  phone            String   @unique
-  email            String   @unique
-  additionalEmails String[] @default([])
-  location         String?
-  isFavourite      Boolean  @default(false)
-  lastQuotedPrice  Decimal? @db.Decimal(8, 2)
-  rating           Decimal? @db.Decimal(2, 1)
-  note             String?  @db.Text
+  id                  String          @id @default(uuid())
+  name                String
+  trade               String
+  abn                 String          @unique
+  phone               String          @unique
+  email               String          @unique
+  additionalEmails    String[]        @default([])
+  location            String?
+  isFavourite         Boolean         @default(false)
+  lastQuotedPrice     Decimal?        @db.Decimal(8, 2)
+  /// Defaults to HOURLY: every existing row was entered under the old
+  /// hourly-only behaviour, so anything else would silently restate project
+  /// costs already on screen.
+  lastQuotedPriceUnit TradiePriceUnit @default(HOURLY)
+  rating              Decimal?        @db.Decimal(2, 1)
+  note                String?         @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

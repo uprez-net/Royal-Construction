@@ -105,7 +105,13 @@ export default function PriceChangeTradieModal({
           </DialogTitle>
 
           <DialogDescription>
-            {tradie.name} &middot; {tradie.trade}
+            {tradie.name} &middot; {tradie.trade} &middot;{" "}
+            {/* The basis is not editable here — it rides in the approval
+                payload, which only carries an amount. Showing it stops an
+                approver reading a fixed job price as an hourly rate. */}
+            {tradie.lastQuotedPriceUnit === "FIXED"
+              ? "priced fixed for the job"
+              : "priced per hour"}
           </DialogDescription>
         </DialogHeader>
 

@@ -149,7 +149,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
         trade: schedule.tradie.trade,
         scheduleDate: dateFormat.format(schedule.scheduledDate),
         durationDays: schedule.durationDays,
-        cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays),
+        cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit),
         milestoneId: schedule.milestoneId ?? undefined,
         milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
       });
@@ -231,7 +231,7 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays),
+          cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
@@ -322,7 +322,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
-      const totalCost = calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays);
+      const totalCost = calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit);
 
       if (updates.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL) {
         const approval = await prisma.tradieApproval.create({

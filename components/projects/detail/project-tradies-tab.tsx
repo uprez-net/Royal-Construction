@@ -243,7 +243,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       return "—";
     }
 
-    return calculateScheduleTotalCost(lastQuotedPrice, tradie.durationDays);
+    return calculateScheduleTotalCost(
+      lastQuotedPrice,
+      tradie.durationDays,
+      tradie.tradie.lastQuotedPriceUnit,
+    );
   };
 
   return (

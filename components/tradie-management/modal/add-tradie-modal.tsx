@@ -32,6 +32,7 @@ import { fetchJson } from "@/utils/fetch";
 import { cn } from "@/lib/utils";
 import { EmailListInput } from "./forms/EmailLIstInput";
 import { TradeTypeField } from "./forms/TradieTypeInput";
+import { NORMAL_WORKING_HOURS } from "@/utils/calculations";
 
 interface AddTradieModalProps {
   open: boolean;
@@ -42,6 +43,7 @@ const initialState: CreateTradieInput = {
   name: "",
   trade: "",
   lastQuotedPrice: 0,
+  lastQuotedPriceUnit: "HOURLY",
   abn: "",
   phone: "",
   email: "",
@@ -71,6 +73,7 @@ const tradieSchema = z.object({
     ),
   location: z.string().min(2, "Location is required"),
   lastQuotedPrice: z.number().positive("Last quoted price must be greater than 0"),
+  lastQuotedPriceUnit: z.enum(["HOURLY", "FIXED"]),
   abn: z
     .string()
     .refine(
@@ -312,7 +315,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                   className="flex items-center gap-2"
                 >
                   <DollarSign className="h-4 w-4" aria-hidden="true" />
-                  Last Quoted Price
+                  Last quoted price
                   <RequiredMark />
                 </Label>
                 <div className="relative">
@@ -353,6 +356,35 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                     {fieldError("lastQuotedPrice")}
                   </p>
                 )}
+                <fieldset className="mt-2">
+                  <legend className="sr-only">What this price covers</legend>
+                  <div className="flex flex-wrap items-center gap-4">
+                    {(
+                      [
+                        ["HOURLY", "per hour"],
+                        ["FIXED", "fixed for the job"],
+                      ] as const
+                    ).map(([unit, label]) => (
+                      <label
+                        key={unit}
+                        className="flex cursor-pointer items-center gap-2 text-sm"
+                      >
+                        <input
+                          type="radio"
+                          name="tradie-price-unit"
+                          value={unit}
+                          checked={formData.lastQuotedPriceUnit === unit}
+                          onChange={() => updateField("lastQuotedPriceUnit", unit)}
+                          className="accent-(--primary)"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Site days are costed at {NORMAL_WORKING_HOURS} hours.
+                  </p>
+                </fieldset>
               </div>
             </div>
           </section>
