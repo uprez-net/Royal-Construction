@@ -40,7 +40,12 @@ export interface TradieDetails extends SafeTradie {
 export interface CreateTradieInput {
     name: string;
     trade: string;
-    hourlyRate: number;
+    // Matches the column. `createTradie` passes this object straight to
+    // `prisma.tradie.create({ data: input })`, so a field the schema does not
+    // have is an unknown-argument failure at runtime — and because `data`
+    // receives a variable rather than an object literal, TypeScript performs
+    // no excess-property check and the build stays green.
+    lastQuotedPrice: number;
     abn: string;
     phone: string;
     email: string;

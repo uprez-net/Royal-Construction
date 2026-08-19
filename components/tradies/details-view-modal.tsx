@@ -197,12 +197,12 @@ export function TradieScheduleDetailsModal({
                 }
               />
 
-              {schedule.hourlyRate && (
+              {schedule.lastQuotedPrice && (
                 <DetailItem
-                  label="Hourly Rate"
+                  label="Last quoted price"
                   value={
                     <span className="truncate">
-                      {rateCurrency.format(Number(schedule.hourlyRate))}/hr
+                      {rateCurrency.format(Number(schedule.lastQuotedPrice))}
                     </span>
                   }
                 />

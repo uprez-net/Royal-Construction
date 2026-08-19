@@ -116,3 +116,20 @@ test("lead-write MCP tools report failures as errors", async () => {
     assert.ok(before.includes("isError: true"), `"${verb}" catch is missing isError: true`);
   }
 });
+
+test("CreateTradieInput matches the Tradie columns", async () => {
+  const { readFileSync } = await import("node:fs");
+  const types = readFileSync("types/tradie.ts", "utf8");
+  const schema = readFileSync("prisma/schema.prisma", "utf8");
+  // createTradie does `prisma.tradie.create({ data: input })` — passing a
+  // variable, so TypeScript performs no excess-property check and a field the
+  // column list lacks fails only at runtime, with a green build.
+  const block = types.slice(types.indexOf("interface CreateTradieInput"));
+  const body = block.slice(0, block.indexOf("}"));
+  for (const m of body.matchAll(/^\s*(\w+)\??:/gm)) {
+    assert.ok(
+      schema.includes(`  ${m[1]} `) || schema.includes(`  ${m[1]}  `),
+      `CreateTradieInput.${m[1]} has no matching column on the Tradie model`,
+    );
+  }
+});

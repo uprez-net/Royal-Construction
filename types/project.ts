@@ -224,7 +224,7 @@ export type TradieUrgentReminderItem = {
     phone: string;
     additionalEmails: string[];
   };
-  hourlyRate?: string;
+  lastQuotedPrice?: string;
   rating?: string;
   siteManager: {
     name: string;
