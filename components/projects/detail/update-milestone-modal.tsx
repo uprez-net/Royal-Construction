@@ -450,11 +450,15 @@ export default function UpdateMilestoneModal({
                             date ? format(date, "yyyy-MM-dd") : "",
                           )
                         }
-                        disabled={(date) =>
-                          formState.startDate
-                            ? date < new Date(formState.startDate)
-                            : false
-                        }
+                        disabled={(date) => {
+                          if (!formState.startDate) return false;
+
+                          const startDate = new Date(
+                            `${formState.startDate}T00:00:00`,
+                          );
+
+                          return date < startDate;
+                        }}
                         captionLayout="dropdown"
                       />
                     </PopoverContent>
