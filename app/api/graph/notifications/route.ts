@@ -1,4 +1,5 @@
 import { createGraphContext, GraphMessage } from '@/lib/graph/client';
+import { isLeadSubject } from "@/lib/graph/lead-subject";
 import { getGraphConfig } from '@/lib/graph/config';
 import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
@@ -145,13 +146,6 @@ function handleValidationToken(request: Request): Response | null {
   console.log('Received Graph webhook validation request');
   return textResponse(200, validationToken);
 }
-
-const LEAD_SUBJECT_LINES = new Set([
-  '"i want to build" form submission',
-  'get in touch form submission',
-  'general enquiry form submission',
-  'new message from royal constructions'
-]);
 
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
@@ -342,13 +336,7 @@ export async function POST(request: Request): Promise<Response> {
             }
 
             // Check if the message subject matches any of the predefined lead subject lines
-            const normalizedSubject = (message.subject ?? "")
-              .trim()
-              .toLowerCase()
-              .replace(/["']/g, "")
-              .replace(/\s+/g, " ");
-
-            if (!LEAD_SUBJECT_LINES.has(normalizedSubject)) {
+            if (!isLeadSubject(message.subject)) {
               console.log(
                 `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
               );

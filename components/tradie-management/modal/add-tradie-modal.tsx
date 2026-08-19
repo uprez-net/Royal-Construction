@@ -41,7 +41,7 @@ interface AddTradieModalProps {
 const initialState: CreateTradieInput = {
   name: "",
   trade: "",
-  hourlyRate: 0,
+  lastQuotedPrice: 0,
   abn: "",
   phone: "",
   email: "",
@@ -70,7 +70,7 @@ const tradieSchema = z.object({
       "Enter a valid Australian number, e.g. 04XX XXX XXX or 02 XXXX XXXX",
     ),
   location: z.string().min(2, "Location is required"),
-  hourlyRate: z.number().positive("Hourly rate must be greater than 0"),
+  lastQuotedPrice: z.number().positive("Last quoted price must be greater than 0"),
   abn: z
     .string()
     .refine(
@@ -174,7 +174,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
         trade: true,
         phone: true,
         location: true,
-        hourlyRate: true,
+        lastQuotedPrice: true,
         abn: true,
         email: true,
         note: true,
@@ -325,32 +325,32 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                     required
                     className={cn(
                       "pl-8 font-mono tabular-nums",
-                      fieldError("hourlyRate") &&
+                      fieldError("lastQuotedPrice") &&
                         "border-destructive focus-visible:ring-destructive",
                     )}
                     type="number"
                     min={0}
                     step="0.01"
-                    value={formData.hourlyRate || ""}
-                    aria-invalid={Boolean(fieldError("hourlyRate"))}
+                    value={formData.lastQuotedPrice || ""}
+                    aria-invalid={Boolean(fieldError("lastQuotedPrice"))}
                     aria-describedby={
-                      fieldError("hourlyRate") ? "tradie-rate-error" : undefined
+                      fieldError("lastQuotedPrice") ? "tradie-rate-error" : undefined
                     }
                     onChange={(e) =>
                       updateField(
-                        "hourlyRate",
+                        "lastQuotedPrice",
                         e.target.value === "" ? 0 : Number(e.target.value),
                       )
                     }
-                    onBlur={() => markTouched("hourlyRate")}
+                    onBlur={() => markTouched("lastQuotedPrice")}
                   />
                 </div>
-                {fieldError("hourlyRate") && (
+                {fieldError("lastQuotedPrice") && (
                   <p
                     id="tradie-rate-error"
                     className="text-xs text-destructive"
                   >
-                    {fieldError("hourlyRate")}
+                    {fieldError("lastQuotedPrice")}
                   </p>
                 )}
               </div>
