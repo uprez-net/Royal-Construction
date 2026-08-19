@@ -385,10 +385,7 @@ export default function UpdateMilestoneModal({
                           date ? format(date, "yyyy-MM-dd") : "",
                         )
                       }
-                      disabled={(date) =>
-                        formState.status === "DONE" ||
-                        date < new Date(new Date().setHours(0, 0, 0, 0))
-                      }
+                      disabled={formState.status === "DONE"}
                     />
                   </PopoverContent>
                 </Popover>
