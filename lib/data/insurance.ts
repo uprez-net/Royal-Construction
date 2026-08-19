@@ -6,6 +6,8 @@ import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import {
   hbcfAssessment,
   hbcfNeedRange,
+  hbcfProjectBreach,
+  type HbcfProjectBreach,
   type HbcfProjectClaim,
   type HbcfTimelinePayload,
 } from "@/lib/insurance/hbcf";
@@ -140,4 +142,32 @@ export async function getHbcfTimelineForLead(
     }),
     generatedAt: format(today, "yyyy-MM-dd"),
   };
+}
+
+/**
+ * Whether this project's cover window overlaps others badly enough to push the
+ * HBCF pool past its limit — the input to the warning badge on the project
+ * header.
+ *
+ * Reads the same book as `getHbcfTimelineForLead`, but asks a different
+ * question of it: not "is there room for a new build?" but "is the room this
+ * build already occupies room we actually have?". Returns `null` when there is
+ * nothing to warn about, which is the expected answer on most projects.
+ *
+ * Note that `getActiveHbcfClaims` excludes completed projects, so a finished
+ * project reports no breach — its cover is no longer held against the pool.
+ */
+export async function getHbcfBreachForProject(
+  projectId: string,
+): Promise<HbcfProjectBreach | null> {
+  const [claims, adminContent] = await Promise.all([
+    getActiveHbcfClaims(),
+    getAdminOfferContent(),
+  ]);
+
+  return hbcfProjectBreach({
+    claims,
+    projectId,
+    totalSumAssured: adminContent.hbfcClaim.claimAmount,
+  });
 }

@@ -10,6 +10,7 @@ import {
   hbcfClaimLabel,
   hbcfIsActiveOn,
   hbcfNeedRange,
+  hbcfProjectBreach,
   hbcfProjectionMonths,
   hbcfUsedAt,
   type HbcfProjectClaim,
@@ -649,4 +650,149 @@ test("colours are assigned stably and wrap past the end of the palette", () => {
   assert.equal(hbcfClaimColour(0), hbcfClaimColour(0));
   assert.notEqual(hbcfClaimColour(0), hbcfClaimColour(1));
   assert.equal(hbcfClaimColour(0), hbcfClaimColour(5));
+});
+
+/* ── Project overcommitment ─────────────────────────────────────────────── */
+
+const POOL = 1_000_000;
+
+test("no breach when the concurrent peak fits inside the pool", () => {
+  assert.equal(
+    hbcfProjectBreach({
+      claims: [
+        claim({ projectId: "subject", claimAmount: 600_000 }),
+        claim({ projectId: "other", claimAmount: 300_000 }),
+      ],
+      projectId: "subject",
+      totalSumAssured: POOL,
+    }),
+    null,
+  );
+});
+
+test("a breach reports the peak day, the overrun and who else is on the book", () => {
+  const breach = hbcfProjectBreach({
+    claims: [
+      claim({
+        projectId: "subject",
+        leadName: "Smith",
+        claimAmount: 600_000,
+        insuranceClaimStartDate: "2026-01-01",
+        insuranceClaimEndDate: "2026-12-31",
+      }),
+      claim({
+        projectId: "early",
+        leadName: "Chen",
+        claimAmount: 300_000,
+        insuranceClaimStartDate: "2025-06-01",
+        insuranceClaimEndDate: "2026-06-30",
+      }),
+      claim({
+        projectId: "late",
+        leadName: "Patel",
+        claimAmount: 250_000,
+        insuranceClaimStartDate: "2026-03-01",
+        insuranceClaimEndDate: "2026-09-30",
+      }),
+    ],
+    projectId: "subject",
+    totalSumAssured: POOL,
+  });
+
+  assert.ok(breach);
+  // 1 Mar is where the third window opens: 600k + 300k + 250k all live.
+  assert.equal(breach.peakDate, "2026-03-01");
+  assert.equal(breach.peakUsedAmount, 1_150_000);
+  assert.equal(breach.exceededBy, 150_000);
+  assert.equal(breach.claimAmount, 600_000);
+  assert.deepEqual(
+    breach.overlappingClaims.map((claim) => claim.label),
+    ["Chen", "Patel"],
+  );
+});
+
+test("claims that never overlap the window are not counted against it", () => {
+  // Both are big enough to breach on their own totals, but they are never live
+  // at the same time — the naive sum would warn here and be wrong.
+  assert.equal(
+    hbcfProjectBreach({
+      claims: [
+        claim({
+          projectId: "subject",
+          claimAmount: 700_000,
+          insuranceClaimStartDate: "2026-01-01",
+          insuranceClaimEndDate: "2026-06-30",
+        }),
+        claim({
+          projectId: "after",
+          claimAmount: 700_000,
+          insuranceClaimStartDate: "2026-07-01",
+          insuranceClaimEndDate: "2026-12-31",
+        }),
+      ],
+      projectId: "subject",
+      totalSumAssured: POOL,
+    }),
+    null,
+  );
+});
+
+test("a claim already open when the window starts still counts", () => {
+  const breach = hbcfProjectBreach({
+    claims: [
+      claim({
+        projectId: "subject",
+        claimAmount: 600_000,
+        insuranceClaimStartDate: "2026-01-01",
+        insuranceClaimEndDate: "2026-12-31",
+      }),
+      claim({
+        projectId: "running",
+        claimAmount: 500_000,
+        insuranceClaimStartDate: "2025-01-01",
+        insuranceClaimEndDate: "2026-02-01",
+      }),
+    ],
+    projectId: "subject",
+    totalSumAssured: POOL,
+  });
+
+  assert.ok(breach);
+  assert.equal(breach.peakDate, "2026-01-01");
+  assert.equal(breach.exceededBy, 100_000);
+});
+
+test("no breach when the project holds no cover, or the pool is unset", () => {
+  const claims = [
+    claim({ projectId: "subject", claimAmount: 900_000 }),
+    claim({ projectId: "other", claimAmount: 900_000 }),
+  ];
+
+  assert.equal(
+    hbcfProjectBreach({ claims, projectId: "absent", totalSumAssured: POOL }),
+    null,
+  );
+  assert.equal(
+    hbcfProjectBreach({ claims, projectId: "subject", totalSumAssured: 0 }),
+    null,
+  );
+});
+
+test("an unreadable cover window is silent rather than alarming", () => {
+  assert.equal(
+    hbcfProjectBreach({
+      claims: [
+        claim({
+          projectId: "subject",
+          claimAmount: 900_000,
+          insuranceClaimStartDate: "not a date",
+          insuranceClaimEndDate: "also not a date",
+        }),
+        claim({ projectId: "other", claimAmount: 900_000 }),
+      ],
+      projectId: "subject",
+      totalSumAssured: POOL,
+    }),
+    null,
+  );
 });

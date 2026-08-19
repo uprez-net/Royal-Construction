@@ -265,6 +265,132 @@ export function hbcfUsedAt(claims: readonly HbcfProjectClaim[], date: Date) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                         Overcommitment on a window                         */
+/* -------------------------------------------------------------------------- */
+
+/** One other project holding cover at the same moment as the subject project. */
+export interface HbcfConcurrentClaim {
+  projectId: string;
+  label: string;
+  claimAmount: number;
+  /** `yyyy-MM-dd` — when this one lets go of its share. */
+  insuranceClaimEndDate: string;
+}
+
+/**
+ * The pool overrun a project's own cover window is part of.
+ *
+ * Only produced when the book is genuinely over the limit at some point inside
+ * that window; there is no "close to the limit" state here, because the badge
+ * this feeds is a warning, not a gauge.
+ */
+export interface HbcfProjectBreach {
+  totalSumAssured: number;
+  projectId: string;
+  /** The subject project's own share of the peak. */
+  claimAmount: number;
+  /** `yyyy-MM-dd` */
+  insuranceClaimStartDate: string;
+  /** `yyyy-MM-dd` */
+  insuranceClaimEndDate: string;
+  /** `yyyy-MM-dd` the concurrent commitment peaks on, inside the window above. */
+  peakDate: string;
+  /** Total committed on `peakDate`, the subject project included. */
+  peakUsedAmount: number;
+  /** `peakUsedAmount - totalSumAssured`. Always greater than zero. */
+  exceededBy: number;
+  /** The other projects live on `peakDate`, largest share first. */
+  overlappingClaims: HbcfConcurrentClaim[];
+}
+
+/**
+ * Does this project's cover window sit across a period the pool cannot carry?
+ *
+ * `hbcfAssessment` answers the lead-side question — "when is there room for a
+ * new build?" — by summing every claim on the books. That total is the wrong
+ * measure for a project that already exists: cover periods overlap only
+ * partially, so a book whose amounts add up past the limit may never actually
+ * be over it on any given day, and a book that adds up under it still can be if
+ * the windows stack. So this walks the window day-by-event instead.
+ *
+ * Commitment is a step function that only ever rises when a window opens, so
+ * the peak inside the subject's window sits either on its own start date or on
+ * the start date of a claim that opens during it. Those are the only candidates
+ * worth evaluating.
+ *
+ * Returns `null` — no warning — when the pool is unconfigured, when the project
+ * holds no cover of its own, when its recorded window is unreadable, or when
+ * the peak fits. Silence is the common case and has to stay cheap.
+ */
+export function hbcfProjectBreach({
+  claims,
+  projectId,
+  totalSumAssured,
+}: {
+  claims: readonly HbcfProjectClaim[];
+  projectId: string;
+  totalSumAssured: number;
+}): HbcfProjectBreach | null {
+  if (!Number.isFinite(totalSumAssured) || totalSumAssured <= 0) return null;
+
+  const subject = claims.find((claim) => claim.projectId === projectId);
+  if (!subject) return null;
+
+  const windowStart = hbcfParseDate(subject.insuranceClaimStartDate).getTime();
+  const windowEnd = hbcfParseDate(subject.insuranceClaimEndDate).getTime();
+  // Written as a positive assertion so an unparseable date, which makes both
+  // sides NaN, falls out here rather than warning off nonsense.
+  if (!(windowStart <= windowEnd)) return null;
+
+  const candidates = new Set<number>([windowStart]);
+  for (const claim of claims) {
+    const start = hbcfParseDate(claim.insuranceClaimStartDate).getTime();
+    if (start > windowStart && start <= windowEnd) candidates.add(start);
+  }
+
+  let peakTime = windowStart;
+  let peakUsedAmount = -1;
+  for (const time of candidates) {
+    const used = usedAtTime(claims, time);
+    if (used > peakUsedAmount) {
+      peakUsedAmount = used;
+      peakTime = time;
+    }
+  }
+
+  if (peakUsedAmount <= totalSumAssured) return null;
+
+  const peak = new Date(peakTime);
+
+  return {
+    totalSumAssured,
+    projectId: subject.projectId,
+    claimAmount: subject.claimAmount,
+    insuranceClaimStartDate: subject.insuranceClaimStartDate,
+    insuranceClaimEndDate: subject.insuranceClaimEndDate,
+    peakDate: toIso(peak),
+    peakUsedAmount,
+    exceededBy: peakUsedAmount - totalSumAssured,
+    overlappingClaims: claims
+      .filter(
+        (claim) =>
+          claim.projectId !== subject.projectId && hbcfIsActiveOn(claim, peak),
+      )
+      .sort(
+        (a, b) =>
+          b.claimAmount - a.claimAmount ||
+          a.projectId.localeCompare(b.projectId),
+      )
+      .map((claim) => ({
+        projectId: claim.projectId,
+        label: hbcfClaimLabel(claim),
+        claimAmount: claim.claimAmount,
+        insuranceClaimEndDate: claim.insuranceClaimEndDate,
+      })),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /*                          Build start assessment                            */
 /* -------------------------------------------------------------------------- */
 

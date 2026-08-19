@@ -1,12 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, MapPin, Phone, Printer, ShieldCheck, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  MapPin,
+  Phone,
+  Printer,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   formatStatus,
   projectStatusConfig,
 } from "@/components/projects/project-status";
+import { HbcfCapacityBadge } from "@/components/projects/detail/hbcf-capacity-badge";
 import type { ProjectDetail } from "@/types/project";
 import { dateFormat } from "@/utils/formatters";
 
@@ -15,6 +24,8 @@ type ProjectRequirementsHeader = {
     siteAddress?: string | null;
     signedDate?: string | null;
     pcaInspector?: string | null;
+    insuranceClaimStartDate?: string | null;
+    insuranceClaimEndDate?: string | null;
   };
 };
 
@@ -37,13 +48,12 @@ function formatSignedDate(value: string | null | undefined): string | null {
 /** Mono is for facts. A missing value is prose, not a fact. */
 const NOT_SET = "Not set";
 
-export function ProjectHeader({
-  project,
-}: {
-  project: ProjectDetail;
-}) {
-  const requirements = (project.requirements ?? {}) as ProjectRequirementsHeader;
-  const signedDate = formatSignedDate(requirements.legalAdministration?.signedDate);
+export function ProjectHeader({ project }: { project: ProjectDetail }) {
+  const requirements = (project.requirements ??
+    {}) as ProjectRequirementsHeader;
+  const signedDate = formatSignedDate(
+    requirements.legalAdministration?.signedDate,
+  );
   const statusTone = projectStatusConfig(project.status);
 
   return (
@@ -70,11 +80,15 @@ export function ProjectHeader({
               />
               {formatStatus(project.status)}
             </span>
+            {/* Sits beside the status because it qualifies the same thing: what
+                state this project is in. Absent unless the pool is breached. */}
+            <HbcfCapacityBadge projectId={project.id} />
           </div>
           <div className="flex flex-wrap items-center gap-3 pt-1 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <MapPin className="size-3.5" aria-hidden="true" />
-              {requirements.legalAdministration?.siteAddress || project.location}
+              {requirements.legalAdministration?.siteAddress ||
+                project.location}
             </span>
             <span aria-hidden="true">|</span>
             <span className="inline-flex items-center gap-1">
