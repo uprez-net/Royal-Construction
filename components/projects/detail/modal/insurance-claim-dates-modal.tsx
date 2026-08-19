@@ -303,6 +303,7 @@ export default function InsuranceClaimDatesModal({
                         )
                       }
                       disabled={(date) => date < startOfToday()}
+                      captionLayout="dropdown"
                     />
                   </PopoverContent>
                 </Popover>
@@ -367,6 +368,7 @@ export default function InsuranceClaimDatesModal({
                           ? date <= new Date(formState.insuranceClaimStartDate)
                           : date < startOfToday()
                       }
+                      captionLayout="dropdown"
                     />
                   </PopoverContent>
                 </Popover>

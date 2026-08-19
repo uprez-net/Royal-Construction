@@ -393,6 +393,7 @@ export default function UpdateMilestoneModal({
                         )
                       }
                       disabled={formState.status === "DONE"}
+                      captionLayout="dropdown"
                     />
                   </PopoverContent>
                 </Popover>
@@ -454,6 +455,7 @@ export default function UpdateMilestoneModal({
                             ? date < new Date(formState.startDate)
                             : false
                         }
+                        captionLayout="dropdown"
                       />
                     </PopoverContent>
                   </Popover>
