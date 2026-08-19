@@ -16,6 +16,7 @@ import { TradieRow } from "@/types/tradie";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { rateCurrency } from "@/utils/formatters";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 interface PriceChangeTradieModalProps {
   open: boolean;
@@ -131,10 +132,11 @@ export default function PriceChangeTradieModal({
                   : "mt-1 text-3xl font-semibold text-muted-foreground"
               }
             >
-              {hasCurrentRate ? rateCurrency.format(currentRate) : "Not set"}
+              {hasCurrentRate
+                ? formatQuotedPrice(currentRate, tradie.lastQuotedPriceUnit, rateCurrency.format)
+                : "Not set"}
               {hasCurrentRate && (
                 <span className="ml-1 font-sans text-sm font-medium text-muted-foreground">
-                  /hr
                 </span>
               )}
             </div>

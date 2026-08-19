@@ -24,6 +24,7 @@ import type {
 import { rateCurrency, dataTimeFormat, dateFormat } from "@/utils/formatters";
 import { daysUntil } from "@/utils/parser";
 import { RatingStars } from "../common/rating-stars";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 interface ViewDetailsModalProps {
   schedule: TradieUrgentReminderItem;
@@ -203,7 +204,11 @@ export function TradieScheduleDetailsModal({
                   label="Last quoted price"
                   value={
                     <span className="truncate">
-                      {rateCurrency.format(Number(schedule.lastQuotedPrice))}
+                      {formatQuotedPrice(
+                        Number(schedule.lastQuotedPrice),
+                        schedule.lastQuotedPriceUnit,
+                        rateCurrency.format,
+                      )}
                     </span>
                   }
                 />

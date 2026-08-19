@@ -24,6 +24,7 @@ import {
   convertCategoryToTradieType,
   type TradieType,
 } from "@/utils/normalize-tradie-type";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 export function TradieList({
   filteredTradies,
@@ -125,7 +126,7 @@ function TradieListItem({ tradie }: { tradie: TradieRow }) {
 
   const rate =
     tradie.lastQuotedPrice !== null && Number.isFinite(parseFloat(tradie.lastQuotedPrice))
-      ? rateCurrency.format(parseFloat(tradie.lastQuotedPrice))
+      ? formatQuotedPrice(parseFloat(tradie.lastQuotedPrice), tradie.lastQuotedPriceUnit, rateCurrency.format)
       : "—";
 
   // The row also holds an actions menu, so the wrapper must not be a button

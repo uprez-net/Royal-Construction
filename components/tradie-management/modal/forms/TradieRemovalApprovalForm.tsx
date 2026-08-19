@@ -25,6 +25,7 @@ import { useApprovalMutation } from "@/hooks/use-approval-mutation";
 import { RatingStars } from "@/components/common/rating-stars";
 import { rateCurrency, dataTimeFormat, formatStatus } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 interface Props {
   approval: SafeTradieApproval;
@@ -131,10 +132,10 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
 
               <DetailRow
                 icon={<DollarSign className="size-4" />}
-                label="Hourly rate"
+                label="Last quoted price"
                 value={
                   approval.tradie.lastQuotedPrice
-                    ? `${rateCurrency.format(Number(approval.tradie.lastQuotedPrice))}`
+                    ? formatQuotedPrice(Number(approval.tradie.lastQuotedPrice), approval.tradie.lastQuotedPriceUnit, rateCurrency.format)
                     : "Not set"
                 }
                 // Mono is reserved for actual figures; the "Not set" placeholder

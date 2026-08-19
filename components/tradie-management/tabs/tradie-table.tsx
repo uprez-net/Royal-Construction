@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { TradieBadge } from "../trade-badge";
 import { TradieActionsDropdown } from "../tradie-actions";
 import { CLEARED_TRADIE_QUERY, hasActiveTradieFilters } from "../tradie-tabs";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 const COLUMN_ALIGN: ColumnAlign[] = [
   "start", // Tradie
@@ -21,10 +22,11 @@ const COLUMN_ALIGN: ColumnAlign[] = [
   "start", // Actions
 ];
 
-function formatRate(hourlyRate: string | null) {
-  if (hourlyRate === null) return "—";
-  const parsed = parseFloat(hourlyRate);
-  return Number.isFinite(parsed) ? rateCurrency.format(parsed) : "—";
+function formatPrice(price: string | null, unit: "HOURLY" | "FIXED") {
+  if (price === null) return "—";
+  const parsed = parseFloat(price);
+  if (!Number.isFinite(parsed)) return "—";
+  return formatQuotedPrice(parsed, unit, rateCurrency.format);
 }
 
 export function TradieTable({
@@ -39,7 +41,7 @@ export function TradieTable({
 
   return (
     <DataTable
-      caption="Tradies with their trade, hourly rate, rating, completed jobs and incident counts."
+      caption="Tradies with their trade, last quoted price, rating, completed jobs and incident counts."
       headers={["Tradie", "Trade", "Last Quoted Price", "Rating", "Jobs", "Incidents", "Actions"]}
       align={COLUMN_ALIGN}
       rows={filteredTradies.map((tradie) => [
@@ -47,7 +49,7 @@ export function TradieTable({
         <TradieBadge trade={tradie.trade} key={`trade-${tradie.id}`} />,
         <span key={`rate-${tradie.id}`} className="whitespace-nowrap">
           <span className="font-mono tabular-nums">
-            {formatRate(tradie.lastQuotedPrice)}
+            {formatPrice(tradie.lastQuotedPrice, tradie.lastQuotedPriceUnit)}
           </span>
         </span>,
         <RatingStars

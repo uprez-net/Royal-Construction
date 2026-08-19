@@ -61,8 +61,8 @@ function ApprovalDetails({ approval }: { approval: SafeTradieApproval }) {
       const data = approval.updationData as PriceUpdateJsonPayload;
       return (
         <p>
-          New hourly rate requested:
-          <strong> ${data?.newHourlyRate}/hr</strong>
+          New price requested:
+          <strong> ${data?.newHourlyRate}</strong>
         </p>
       );
     }

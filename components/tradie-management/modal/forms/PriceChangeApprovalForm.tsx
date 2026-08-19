@@ -44,8 +44,13 @@ function parseRate(value: number | string | null | undefined): number | null {
 // Every rate render site goes through this, so a missing figure reads as a
 // placeholder instead of "$0.00" or "$NaN".
 const RATE_PLACEHOLDER = "Not recorded";
-const formatRate = (value: number | null) =>
-  value === null ? RATE_PLACEHOLDER : rateCurrency.format(value);
+const formatRate = (
+  value: number | null,
+  unit: "HOURLY" | "FIXED",
+) =>
+  value === null
+    ? RATE_PLACEHOLDER
+    : formatQuotedPrice(value, unit, rateCurrency.format);
 
 export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   const mutation = useApprovalMutation(onSuccess);
@@ -223,7 +228,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                       : "text-muted-foreground",
                   )}
                 >
-                  {formatRate(currentRate)}
+                  {formatRate(currentRate, approval.tradie.lastQuotedPriceUnit)}
                 </p>
 
                 <p className="text-sm text-muted-foreground">per hour</p>
@@ -247,7 +252,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                       : "text-muted-foreground",
                   )}
                 >
-                  {formatRate(newRate)}
+                  {formatRate(newRate, approval.tradie.lastQuotedPriceUnit)}
                 </p>
 
                 <p className="text-sm text-muted-foreground">per hour</p>
@@ -261,7 +266,7 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 {!hasRates ? (
                   <span>Change unavailable</span>
                 ) : difference === 0 ? (
-                  <span>No change to the hourly rate</span>
+                  <span>No change to the quoted price</span>
                 ) : (
                   <span className="font-mono tabular-nums">
                     {isIncrease ? "+" : ""}
@@ -325,13 +330,13 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                     currentRate !== null && "font-mono tabular-nums",
                   )}
                 >
-                  {formatRate(currentRate)}
+                  {formatRate(currentRate, approval.tradie.lastQuotedPriceUnit)}
                 </span>{" "}
                 to{" "}
                 <span
                   className={cn(newRate !== null && "font-mono tabular-nums")}
                 >
-                  {formatRate(newRate)}
+                  {formatRate(newRate, approval.tradie.lastQuotedPriceUnit)}
                 </span>
                 . Future estimates, quotations and project calculations use the
                 updated rate.
