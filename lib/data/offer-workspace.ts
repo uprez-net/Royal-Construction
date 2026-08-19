@@ -517,7 +517,7 @@ export async function transitionOfferStatus(input: {
   await prisma.$transaction(async (tx) => {
     const offer = await tx.offer.findUniqueOrThrow({
       where: { id: input.offerId },
-      select: { offerStatus: true, workspaceState: true, leadId: true, lead: { select: { stage: true } } },
+      select: { offerStatus: true, workspaceState: true },
     });
 
     const allowed =
@@ -592,17 +592,10 @@ export async function transitionOfferStatus(input: {
         note: input.note,
       },
     });
-
-    // Keep the lead's stage honest as the offer moves. In the same transaction
-    // so the two commit together, and best effort so a reporting field can
-    // never fail an operator's status change.
-    await syncLeadStageForOffer({
-      client: tx,
-      leadId: offer.leadId,
-      offerStatus: input.toStatus,
-      currentStage: offer.lead?.stage ?? null,
-    });
   });
+
+  // After the transaction, never inside it — see syncLeadStageForOffer.
+  await syncLeadStageForOffer(input.offerId);
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   return { ok: true, status: input.toStatus };

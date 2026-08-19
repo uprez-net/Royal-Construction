@@ -384,10 +384,7 @@ async function syncEnvelopeStatus(
       leadId: true,
       agreedSnapshot: true,
       workspaceState: true,
-      // stage, because the lead-stage sync below must compare against the
-      // value read in this same request — reading it separately reintroduces
-      // the read-then-write race the compare-and-swap exists to prevent.
-      lead: { select: { name: true, stage: true } },
+      lead: { select: { name: true } },
     },
   });
   if (offer && offer.offerStatus === target.expectedFromStatus) {
@@ -419,19 +416,16 @@ async function syncEnvelopeStatus(
           note: `DocuSign envelope ${envelope.docusignId} completed`,
         },
       });
-      // Placed AFTER the count check, so it runs only for the caller that won
-      // the compare-and-swap, and inside the transaction so the lead moves
-      // with the status. It never throws — a signature must not be lost
-      // because a reporting field failed to update, and this handler answers
-      // 500 on a throw specifically to make DocuSign retry.
-      await syncLeadStageForOffer({
-        client: tx,
-        leadId: offer.leadId,
-        offerStatus: target.signedStatus,
-        currentStage: offer.lead?.stage ?? null,
-      });
       return true;
     });
+
+    // Deliberately AFTER the transaction, never inside it. A failure in here
+    // must not be able to roll back the signature — see the note on
+    // syncLeadStageForOffer for why swallowing an error inside a transaction
+    // silently discards the whole thing.
+    if (claimed) {
+      await syncLeadStageForOffer(offer.id);
+    }
 
     // Contract fully executed → nudge the admins to create the project.
     // Project creation stays a deliberate click (kickoff dates, site manager,
@@ -485,6 +479,7 @@ async function advanceOfferOnDecline(
   // Atomic claim: only the delivery that flips *_SENT -> *_DECLINED records the
   // event, so concurrent duplicate webhooks can't write duplicate audit rows,
   // and a replayed decline (or an offer that already advanced) is a no-op.
+  let declined = false;
   await prisma.$transaction(async (tx) => {
     const latest = await tx.envelope.findFirst({
       where: target.siblingEnvelopeWhere,
@@ -515,5 +510,12 @@ async function advanceOfferOnDecline(
           : "Declined via DocuSign.",
       },
     });
+    declined = true;
   });
+
+  // A decline keeps the deal open rather than closing it, so the lead lands at
+  // NEGOTIATING. Outside the transaction, same reasoning as the signed path.
+  if (declined) {
+    await syncLeadStageForOffer(target.offerId);
+  }
 }

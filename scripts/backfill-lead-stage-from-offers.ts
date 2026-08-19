@@ -22,11 +22,16 @@
 
 import "dotenv/config";
 
+import type { LeadStage } from "@prisma/client";
+
+import { stageDef } from "@/lib/leads/pipeline-stages";
 import prisma from "@/lib/prisma";
 
 const COMMIT = process.argv.includes("--commit");
-const WON_STAGES = ["WON", "CONVERTED"] as const;
-const LOST_STAGES = ["LOST", "CANCELLED", "DISQUALIFIED"] as const;
+// Derived from the stage ladder, not re-listed — PIPELINE_STAGES is the one
+// definition of what an outcome means.
+const isWon = (stage: LeadStage) => stageDef(stage).outcome === "WON";
+const isLost = (stage: LeadStage) => stageDef(stage).outcome === "LOST";
 
 async function main() {
   console.log(COMMIT ? "Backfilling lead stages from offers…" : "DRY RUN — pass --commit to write");
@@ -59,14 +64,14 @@ async function main() {
     const lead = offer.lead;
     if (!lead) continue;
 
-    if ((WON_STAGES as readonly string[]).includes(lead.stage)) {
+    if (isWon(lead.stage)) {
       skippedWon++;
       continue;
     }
     // Never overrule a human who recorded this as lost. Surface it instead —
     // a signed contract on a lead marked lost is a contradiction a person
     // should look at, not something a script should silently resolve.
-    if ((LOST_STAGES as readonly string[]).includes(lead.stage)) {
+    if (isLost(lead.stage)) {
       skippedLost++;
       console.log(
         `    CONFLICT lead #${lead.id} is ${lead.stage} but offer ${offer.id} is ${offer.offerStatus} — left alone`,

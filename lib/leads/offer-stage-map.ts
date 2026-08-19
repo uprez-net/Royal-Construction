@@ -1,6 +1,6 @@
 import type { LeadStage, OfferStatus } from "@prisma/client";
 
-import { closeDatePatch } from "./pipeline-stages";
+import { closeDatePatch, stageDef } from "./pipeline-stages";
 
 /**
  * What an offer's status implies about its lead's stage.
@@ -77,6 +77,13 @@ export function leadStagePatchForOfferStatus(
   status: OfferStatus,
   currentStage: LeadStage | null,
   now: Date,
+  /**
+   * The lead's existing wonAt, so a move between two won stages can stamp one
+   * that was never set. CONVERTED pre-dates the column, so a legacy converted
+   * lead whose contract signs would otherwise land in WON with a null wonAt and
+   * stay invisible to win rate — won by every other measure, uncounted.
+   */
+  currentWonAt: Date | null = null,
 ): LeadStagePatch | null {
   const next = OFFER_STATUS_LEAD_STAGE[status];
   if (next === null) return null;
@@ -90,13 +97,21 @@ export function leadStagePatchForOfferStatus(
   // reason; an offer status has none to offer.
   if (currentStage && isLostStage(currentStage)) return null;
 
-  return { stage: next, ...closeDatePatch(currentStage, next, now) };
+  const patch: LeadStagePatch = { stage: next, ...closeDatePatch(currentStage, next, now) };
+  if (isWonStage(next) && patch.wonAt == null && currentWonAt == null) {
+    patch.wonAt = now;
+    patch.lostAt = null;
+  }
+  return patch;
 }
 
+// Derived from the stage ladder rather than re-listed. A new enum member gets
+// the right treatment automatically, and PIPELINE_STAGES is a total Record so
+// adding one without a definition is a compile error.
 function isWonStage(stage: LeadStage): boolean {
-  return stage === "WON" || stage === "CONVERTED";
+  return stageDef(stage).outcome === "WON";
 }
 
 function isLostStage(stage: LeadStage): boolean {
-  return stage === "LOST" || stage === "CANCELLED" || stage === "DISQUALIFIED";
+  return stageDef(stage).outcome === "LOST";
 }
