@@ -38,12 +38,15 @@ export default function PriceChangeTradieModal({
 
   const [formData, setFormData] = useState({
     newHourlyRate: currentRate,
+    newPriceUnit: tradie.lastQuotedPriceUnit,
     reason: "",
   });
 
   const isRateValid =
     Number.isFinite(formData.newHourlyRate) && formData.newHourlyRate > 0;
-  const isRateChanged = formData.newHourlyRate !== currentRate;
+  const isRateChanged =
+    formData.newHourlyRate !== currentRate ||
+    formData.newPriceUnit !== tradie.lastQuotedPriceUnit;
   const canSubmit =
     !isPending &&
     isRateValid &&
@@ -55,6 +58,7 @@ export default function PriceChangeTradieModal({
       onClose();
       setFormData({
         newHourlyRate: currentRate,
+        newPriceUnit: tradie.lastQuotedPriceUnit,
         reason: "",
       });
     }
@@ -67,7 +71,7 @@ export default function PriceChangeTradieModal({
     }
 
     if (!isRateChanged) {
-      toast.error("The proposed rate matches the current rate.");
+      toast.error("The proposed price matches the current one.");
       return;
     }
 
@@ -81,6 +85,7 @@ export default function PriceChangeTradieModal({
         updateTradiePriceThunk({
           tradieId: tradie.id,
           newHourlyRate: formData.newHourlyRate,
+          newPriceUnit: formData.newPriceUnit,
           reason: formData.reason,
         }),
       ).unwrap();
@@ -107,9 +112,6 @@ export default function PriceChangeTradieModal({
 
           <DialogDescription>
             {tradie.name} &middot; {tradie.trade} &middot;{" "}
-            {/* The basis is not editable here — it rides in the approval
-                payload, which only carries an amount. Showing it stops an
-                approver reading a fixed job price as an hourly rate. */}
             {tradie.lastQuotedPriceUnit === "FIXED"
               ? "priced fixed for the job"
               : "priced per hour"}
@@ -170,11 +172,40 @@ export default function PriceChangeTradieModal({
               }
             />
 
+            <fieldset className="pt-1">
+              <legend className="sr-only">What this price covers</legend>
+              <div className="flex flex-wrap items-center gap-4">
+                {(
+                  [
+                    ["HOURLY", "per hour"],
+                    ["FIXED", "fixed for the job"],
+                  ] as const
+                ).map(([unit, label]) => (
+                  <label
+                    key={unit}
+                    className="flex cursor-pointer items-center gap-2 text-sm"
+                  >
+                    <input
+                      type="radio"
+                      name="new-price-unit"
+                      value={unit}
+                      checked={formData.newPriceUnit === unit}
+                      onChange={() =>
+                        setFormData((prev) => ({ ...prev, newPriceUnit: unit }))
+                      }
+                      className="accent-(--primary)"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             <p id="new-rate-hint" className="text-xs text-muted-foreground">
               {!isRateValid
-                ? "Enter a rate greater than zero."
+                ? "Enter a price greater than zero."
                 : !isRateChanged
-                  ? "The proposed rate matches the current rate."
+                  ? "The proposed price and basis match the current ones."
                   : "Ready to submit for approval."}
             </p>
           </div>

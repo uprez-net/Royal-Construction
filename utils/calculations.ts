@@ -40,3 +40,19 @@ export function formatQuotedPrice(
 ): string {
   return unit === "FIXED" ? `${format(amount)} fixed` : `${format(amount)}/hr`;
 }
+
+/**
+ * Parse a quoted amount out of free text, e.g. "$5,000.00" or "5000".
+ *
+ * Quotes arrive as strings extracted from a tradie's email, so they carry
+ * currency symbols, thousands separators and stray whitespace. Returns null
+ * rather than 0 for anything unparseable — a quote of zero is a real value and
+ * must not be how a failed parse presents itself.
+ */
+export function parseQuotedAmount(raw: string | null | undefined): number | null {
+  if (raw == null) return null;
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  if (cleaned === "" || (cleaned.match(/\./g)?.length ?? 0) > 1) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}

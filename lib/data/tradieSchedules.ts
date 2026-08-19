@@ -2,6 +2,7 @@
 import prisma from "@/lib/prisma";
 import { TradieSchedule, TradieScheduleStatus, Tradie, Project, User, Milestone, TradieApprovalActionType } from "@prisma/client";
 import type { CreateTradieScheduleInput, UpdateTradieScheduleInput } from "@/utils/validators";
+import { TradiePriceUnit } from "@prisma/client";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
@@ -16,7 +17,7 @@ import { sendEmail } from "../azureClient";
 import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
-import { calculateScheduleTotalCost as calculateTotalCost } from "@/utils/calculations";
+import { calculateScheduleTotalCost as calculateTotalCost, parseQuotedAmount } from "@/utils/calculations";
 import { get } from "@vercel/blob";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
@@ -312,11 +313,47 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
     if (!TRADIE_SCHEDULE_STATE_MACHINE[existingSchedule.status].includes(updates.status)) {
       throw new Error(`Invalid status transition from ${existingSchedule.status} to ${updates.status}`);
     }
+    // The quote was accepted as input and then dropped — `data` only ever
+    // carried the status. So a tradie could email "$5,000 for the job", the
+    // extractor would pull it out, the status would flip to QUOTE_RECEIVED,
+    // and every downstream number still fell back to `quotedPrice ?? totalCost`
+    // with quotedPrice null. Admins approved against an hourly estimate rather
+    // than the price the tradie actually quoted.
+    const quotedAmount = parseQuotedAmount(updates.quote);
+
     const schedule = await prisma.tradieSchedule.update({
       where: { id: scheduleId },
-      data: { status: updates.status },
+      data: {
+        status: updates.status,
+        ...(quotedAmount !== null
+          ? { quotedPrice: quotedAmount.toFixed(2), requiresQuote: true }
+          : {}),
+      },
       include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
     });
+
+    // A quote arrives for a job, not an hour — the extractor asks for it only
+    // "when standard rates weren't applicable". Recording it as the tradie's
+    // last quoted price is what makes that field mean what it says, and FIXED
+    // is the only honest unit for it.
+    if (quotedAmount !== null) {
+      await prisma.tradie
+        .update({
+          where: { id: schedule.tradieId },
+          data: {
+            lastQuotedPrice: quotedAmount.toFixed(2),
+            lastQuotedPriceUnit: TradiePriceUnit.FIXED,
+          },
+        })
+        .catch((error) =>
+          // Best effort: the schedule already carries the quote, and losing the
+          // tradie-level copy must not fail the status change that recorded it.
+          console.error(
+            `[tradie ${schedule.tradieId}] failed to record last quoted price`,
+            error,
+          ),
+        );
+    }
 
     const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
     after(async () => {

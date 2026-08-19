@@ -137,6 +137,12 @@ export async function handleAdminApproval(input: ApprovalInput) {
                             where: { id: approval.tradieId },
                             data: {
                                 lastQuotedPrice: payload.newHourlyRate,
+                                // Older approvals were raised before the basis
+                                // was captured; leave the tradie's current one
+                                // alone rather than guessing at hourly.
+                                ...(payload.newPriceUnit
+                                    ? { lastQuotedPriceUnit: payload.newPriceUnit }
+                                    : {}),
                             },
                         });
                     }

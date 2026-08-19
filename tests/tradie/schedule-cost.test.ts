@@ -82,3 +82,28 @@ test("no component renders a tradie price without its unit", async () => {
   }
   assert.deepEqual(offenders, [], `price rendered without its unit:\n${offenders.join("\n")}`);
 });
+
+/* ── emailed quotes ────────────────────────────────────────────────── */
+
+import { parseQuotedAmount } from "../../utils/calculations";
+
+test("a quote is parsed out of the text a tradie actually sends", () => {
+  // The extractor asks for e.g. "$5000.00", but people write it many ways.
+  assert.equal(parseQuotedAmount("$5,000.00"), 5000);
+  assert.equal(parseQuotedAmount("5000"), 5000);
+  assert.equal(parseQuotedAmount(" $ 4,800.50 "), 4800.5);
+  assert.equal(parseQuotedAmount("AUD 1200"), 1200);
+});
+
+test("an unparseable quote is null, never zero", () => {
+  // Zero is a real quote. A failed parse must not masquerade as one, or the
+  // job silently costs nothing.
+  for (const raw of ["", "  ", "TBC", "call me", null, undefined, "1.2.3"]) {
+    assert.equal(parseQuotedAmount(raw), null, JSON.stringify(raw));
+  }
+});
+
+test("a genuine zero quote is preserved", () => {
+  assert.equal(parseQuotedAmount("$0.00"), 0);
+  assert.notEqual(parseQuotedAmount("$0.00"), null);
+});

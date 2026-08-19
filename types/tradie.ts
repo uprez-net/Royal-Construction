@@ -61,6 +61,10 @@ export interface CreateTradieInput {
 export interface UpdatePriceInput {
     tradieId: string;
     newHourlyRate: number;
+    /** The basis the new amount is quoted on. Optional so an older pending
+     *  approval, raised before the basis was captured, still applies against
+     *  whatever the tradie is currently set to. */
+    newPriceUnit?: TradiePriceUnit;
     reason: string;
 }
 
@@ -93,6 +97,7 @@ export interface TradieTableQuery {
 
 export interface UpdatePriceApprovalPayload {
     newHourlyRate: number;
+    newPriceUnit?: TradiePriceUnit;
 }
 
 export interface IncidentReportApprovalPayload {
@@ -120,6 +125,7 @@ export interface ScheduleApprovalJsonPayload {
 
 export interface PriceUpdateJsonPayload {
     newHourlyRate: number;
+    newPriceUnit?: TradiePriceUnit;
 }
 
 export interface IncidentReportJsonPayload {

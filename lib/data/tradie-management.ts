@@ -191,6 +191,7 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
                 requestedBy: user.id,
                 updationData: {
                     newHourlyRate: input.newHourlyRate,
+                    newPriceUnit: input.newPriceUnit,
                 } satisfies PriceUpdateJsonPayload
             },
             select: {
