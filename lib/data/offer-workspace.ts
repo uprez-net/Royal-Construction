@@ -1,6 +1,7 @@
 "use server";
 
 import { EnvelopeStatus, OfferStatus, Prisma } from "@prisma/client";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -516,7 +517,7 @@ export async function transitionOfferStatus(input: {
   await prisma.$transaction(async (tx) => {
     const offer = await tx.offer.findUniqueOrThrow({
       where: { id: input.offerId },
-      select: { offerStatus: true, workspaceState: true },
+      select: { offerStatus: true, workspaceState: true, leadId: true, lead: { select: { stage: true } } },
     });
 
     const allowed =
@@ -590,6 +591,16 @@ export async function transitionOfferStatus(input: {
         actorId: input.actorId,
         note: input.note,
       },
+    });
+
+    // Keep the lead's stage honest as the offer moves. In the same transaction
+    // so the two commit together, and best effort so a reporting field can
+    // never fail an operator's status change.
+    await syncLeadStageForOffer({
+      client: tx,
+      leadId: offer.leadId,
+      offerStatus: input.toStatus,
+      currentStage: offer.lead?.stage ?? null,
     });
   });
 

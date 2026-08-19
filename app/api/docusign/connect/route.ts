@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
 import { put } from "@vercel/blob";
 import {
@@ -383,7 +384,10 @@ async function syncEnvelopeStatus(
       leadId: true,
       agreedSnapshot: true,
       workspaceState: true,
-      lead: { select: { name: true } },
+      // stage, because the lead-stage sync below must compare against the
+      // value read in this same request — reading it separately reintroduces
+      // the read-then-write race the compare-and-swap exists to prevent.
+      lead: { select: { name: true, stage: true } },
     },
   });
   if (offer && offer.offerStatus === target.expectedFromStatus) {
@@ -414,6 +418,17 @@ async function syncEnvelopeStatus(
           toStatus: target.signedStatus,
           note: `DocuSign envelope ${envelope.docusignId} completed`,
         },
+      });
+      // Placed AFTER the count check, so it runs only for the caller that won
+      // the compare-and-swap, and inside the transaction so the lead moves
+      // with the status. It never throws — a signature must not be lost
+      // because a reporting field failed to update, and this handler answers
+      // 500 on a throw specifically to make DocuSign retry.
+      await syncLeadStageForOffer({
+        client: tx,
+        leadId: offer.leadId,
+        offerStatus: target.signedStatus,
+        currentStage: offer.lead?.stage ?? null,
       });
       return true;
     });

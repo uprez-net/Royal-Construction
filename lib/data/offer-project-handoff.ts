@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
 import { OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -59,7 +60,7 @@ export async function createProjectFromOffer(input: {
       agreedSnapshot: true,
       tender: { select: { executedPdfUrl: true } },
       contract: { select: { executedPdfUrl: true } },
-      lead: { select: { id: true, name: true, email: true, phone: true, project: { select: { id: true } } } },
+      lead: { select: { id: true, name: true, email: true, phone: true, stage: true, project: { select: { id: true } } } },
     },
   });
   if (!offer || !offer.lead) {
@@ -121,6 +122,18 @@ export async function createProjectFromOffer(input: {
   if (claim.count !== 1) {
     return { ok: false, error: "This offer is already being handed off to a project." };
   }
+
+  // The deal is already WON from CONTRACT_SIGNED, so this is normally a no-op —
+  // but it is the backstop for an offer that reached PROJECT without the
+  // webhook having fired, which is exactly how leads ended up frozen at
+  // "Meeting Scheduled" while their project was already running. Best effort,
+  // matching the status-event write further down.
+  await syncLeadStageForOffer({
+    client: prisma,
+    leadId: offer.leadId,
+    offerStatus: OfferStatus.PROJECT,
+    currentStage: offer.lead?.stage ?? null,
+  });
   const revertClaim = () =>
     prisma.offer.updateMany({
       where: { id: offer.id, offerStatus: OfferStatus.PROJECT },
