@@ -1,11 +1,12 @@
 'use server';
 import prisma from "../prisma";
+import type { PriceUpdateJsonPayload } from "@/types/tradie";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { after } from "next/server"
-import { ApprovalInput, IncidentReportApprovalPayload, SafeTradieApproval, ScheduleApprovalJsonPayload, TradieApprovalPayload, UpdatePriceApprovalPayload } from "@/types/tradie";
+import { ApprovalInput, IncidentReportApprovalPayload, SafeTradieApproval, ScheduleApprovalJsonPayload, TradieApprovalPayload } from "@/types/tradie";
 import { TradieApprovalActionType, TradieScheduleStatus } from "@prisma/client";
 import { ApprovalKPI, PaginatedTradieApprovals, TradieApprovalQuery } from "@/types/tradie-approvals";
 import { Prisma } from "@prisma/client";
@@ -129,19 +130,32 @@ export async function handleAdminApproval(input: ApprovalInput) {
 
             switch (input.type) {
                 case TradieApprovalActionType.PRICE_CHANGE: {
-                    const payload = input.payload as UpdatePriceApprovalPayload;
+                    // The price that gets applied is the one that was REQUESTED
+                    // and stored on the approval, not one supplied by whoever
+                    // resolves it. Reading input.payload let an approver write
+                    // any amount — and, once the basis was added, any basis —
+                    // regardless of what the requester asked for. Approving is a
+                    // yes/no on a pending request, not a chance to rewrite it.
+                    const requested = approval.updationData as unknown as
+                        | PriceUpdateJsonPayload
+                        | null;
                     const isApproved = input.resolution === "approved";
 
                     if (isApproved) {
+                        if (typeof requested?.newHourlyRate !== "number") {
+                            throw new Error(
+                                "This price change request has no recorded amount and cannot be approved.",
+                            );
+                        }
                         await tx.tradie.update({
                             where: { id: approval.tradieId },
                             data: {
-                                lastQuotedPrice: payload.newHourlyRate,
-                                // Older approvals were raised before the basis
-                                // was captured; leave the tradie's current one
-                                // alone rather than guessing at hourly.
-                                ...(payload.newPriceUnit
-                                    ? { lastQuotedPriceUnit: payload.newPriceUnit }
+                                lastQuotedPrice: requested.newHourlyRate,
+                                // Requests raised before the basis was captured
+                                // leave the tradie's current one alone rather
+                                // than guessing at hourly.
+                                ...(requested.newPriceUnit
+                                    ? { lastQuotedPriceUnit: requested.newPriceUnit }
                                     : {}),
                             },
                         });
@@ -151,7 +165,7 @@ export async function handleAdminApproval(input: ApprovalInput) {
                         approvalId: approval.id,
                         actionType: TradieApprovalActionType.PRICE_CHANGE,
                         tradieId: approval.tradieId,
-                        newHourlyRate: isApproved ? payload.newHourlyRate : undefined,
+                        newHourlyRate: isApproved ? requested?.newHourlyRate : undefined,
                         resolution: input.resolution,
                     };
                 }

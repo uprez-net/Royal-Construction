@@ -42,17 +42,29 @@ export function formatQuotedPrice(
 }
 
 /**
- * Parse a quoted amount out of free text, e.g. "$5,000.00" or "5000".
+ * Parse a single quoted amount out of free text, e.g. "$5,000.00" or "AUD 1200".
  *
- * Quotes arrive as strings extracted from a tradie's email, so they carry
- * currency symbols, thousands separators and stray whitespace. Returns null
- * rather than 0 for anything unparseable — a quote of zero is a real value and
- * must not be how a failed parse presents itself.
+ * Quotes arrive as strings an AI extracted from a tradie's email, so they carry
+ * currency symbols, thousands separators and whatever else the tradie typed.
+ *
+ * Stripping non-digits is not good enough, and was actively dangerous: it
+ * concatenates every digit in the string, so "Quote for REF-2024: $5000"
+ * became 20,245,000 and "$1,200 plus $300 travel" became 1,200,300. This
+ * matches money-shaped tokens instead and REFUSES anything ambiguous —
+ * two amounts in one string is a question for a human, not a number to guess.
+ *
+ * Returns null for unparseable, ambiguous or negative input. Never 0: a zero
+ * quote is a real value and a failed parse must not present as one.
  */
+const MONEY_TOKEN = /(?<![\w.])(?:\$\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?(?![\w.])|(?<![\w.])(?:\$\s*)?\d+(?:\.\d{1,2})?(?![\w.])/g;
+
 export function parseQuotedAmount(raw: string | null | undefined): number | null {
   if (raw == null) return null;
-  const cleaned = raw.replace(/[^0-9.]/g, "");
-  if (cleaned === "" || (cleaned.match(/\./g)?.length ?? 0) > 1) return null;
-  const parsed = Number(cleaned);
+  if (/-\s*\d/.test(raw)) return null; // a negative quote is not a quote
+
+  const matches = raw.match(MONEY_TOKEN);
+  if (!matches || matches.length !== 1) return null; // none, or ambiguous
+
+  const parsed = Number(matches[0].replace(/[$,\s]/g, ""));
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }

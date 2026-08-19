@@ -32,6 +32,8 @@ import {
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { formatQuotedPrice } from "@/utils/calculations";
+import { rateCurrency } from "@/utils/formatters";
 
 interface TradieApprovalRejectionModalProps {
   open: boolean;
@@ -62,7 +64,18 @@ function ApprovalDetails({ approval }: { approval: SafeTradieApproval }) {
       return (
         <p>
           New price requested:
-          <strong> ${data?.newHourlyRate}</strong>
+          <strong>
+            {" "}
+            {data?.newHourlyRate != null
+              ? formatQuotedPrice(
+                  data.newHourlyRate,
+                  // Requests raised before the basis was captured are hourly by
+                  // definition — that was the only behaviour at the time.
+                  data.newPriceUnit ?? "HOURLY",
+                  rateCurrency.format,
+                )
+              : "—"}
+          </strong>
         </p>
       );
     }

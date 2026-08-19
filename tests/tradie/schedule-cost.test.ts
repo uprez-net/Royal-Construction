@@ -103,6 +103,30 @@ test("an unparseable quote is null, never zero", () => {
   }
 });
 
+test("digits that are not the quote are never absorbed into it", () => {
+  // Stripping non-digits concatenated everything: "Quote for REF-2024: $5000"
+  // became 20,245,000, and "$1,200 plus $300 travel" became 1,200,300. Both
+  // would have been stored and approved as the job price.
+  assert.equal(parseQuotedAmount("Quote for REF-2024: $5000"), null);
+  assert.equal(parseQuotedAmount("AUD 12abc34"), null);
+  assert.equal(parseQuotedAmount("Ref 88 quote 500"), null);
+});
+
+test("two amounts in one message is a question, not a guess", () => {
+  assert.equal(parseQuotedAmount("$1,200 plus $300 travel"), null);
+  assert.equal(parseQuotedAmount("500 or 600 depending on access"), null);
+});
+
+test("a negative amount is not a quote", () => {
+  assert.equal(parseQuotedAmount("-500"), null);
+  assert.equal(parseQuotedAmount("$-1,200"), null);
+});
+
+test("a single amount is still read from a sentence", () => {
+  assert.equal(parseQuotedAmount("Total: $12,345.67"), 12345.67);
+  assert.equal(parseQuotedAmount("happy to do it for 4800"), 4800);
+});
+
 test("a genuine zero quote is preserved", () => {
   assert.equal(parseQuotedAmount("$0.00"), 0);
   assert.notEqual(parseQuotedAmount("$0.00"), null);

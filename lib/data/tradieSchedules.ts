@@ -17,7 +17,7 @@ import { sendEmail } from "../azureClient";
 import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
-import { calculateScheduleTotalCost as calculateTotalCost, parseQuotedAmount } from "@/utils/calculations";
+import { parseQuotedAmount, scheduleTotalCost } from "@/utils/calculations";
 import { get } from "@vercel/blob";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
@@ -151,7 +151,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
         trade: schedule.tradie.trade,
         scheduleDate: dateFormat.format(schedule.scheduledDate),
         durationDays: schedule.durationDays,
-        cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit),
+        cost: schedule.quotedPrice ?? currency.format(scheduleTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit)),
         milestoneId: schedule.milestoneId ?? undefined,
         milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
       });
@@ -233,7 +233,7 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit),
+          cost: schedule.quotedPrice ?? currency.format(scheduleTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit)),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
@@ -360,7 +360,15 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
-      const totalCost = calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit);
+      // Numeric, deliberately. calculateScheduleTotalCost returns a FORMATTED
+      // string, so `parseFloat(totalCost.toString())` below was parsing "$4,800"
+      // and yielding NaN — every approval and activity entry without an explicit
+      // quote displayed "$NaN". Format at the point of display instead.
+      const totalCost = scheduleTotalCost(
+        parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
+        schedule.durationDays,
+        schedule.tradie.lastQuotedPriceUnit,
+      );
 
       if (updates.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL) {
         const approval = await prisma.tradieApproval.create({
@@ -377,7 +385,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
               milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
               scheduledDate: dateFormat.format(schedule.scheduledDate),
               durationDays: schedule.durationDays,
-              cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+              cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
             } satisfies ScheduleApprovalJsonPayload,
           },
           select: {
@@ -395,7 +403,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           scheduledDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
           trade: schedule.tradie.trade,
@@ -408,7 +416,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
@@ -425,7 +433,9 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          quote: schedule.quotedPrice ?? totalCost,
+          quote: currency.format(
+            schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost,
+          ),
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
         await logAction(activityLogEntry);
@@ -440,7 +450,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           approved: true,
@@ -454,7 +464,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           scheduledDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
           trade: schedule.tradie.trade,
@@ -471,7 +481,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           approved: false,
@@ -485,7 +495,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           scheduledDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
           trade: schedule.tradie.trade,
