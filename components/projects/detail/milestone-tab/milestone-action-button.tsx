@@ -49,12 +49,6 @@ export function MilestoneActionGroup({
   const canStart = isPending && hasNoChildren && isUnlocked;
 
   const isActive = milestone.status === "ACTIVE";
-    
-  if(milestone.name === "Termite Guys Book to Glue") {
-    console.log("canStart", canStart)
-    console.log("Milestone", milestone)
-    console.log("prevMilestone", prevMilestone)
-  }
 
   if (canStart) {
     return (
