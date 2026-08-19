@@ -39,16 +39,22 @@ const convertToVisualMilestone = (
 ): UIMilestone[] => {
   const milestoneMap: Record<string, UIMilestone> = {};
 
-  // First pass to create all milestones in the map
+  // First pass: create every milestone so parents can be referenced
+  // regardless of their position in the input array.
   milestones.forEach((m) => {
-    milestoneMap[m.id] = { ...m, childrenMilestones: [] };
+    milestoneMap[m.id] = {
+      ...m,
+      childrenMilestones: [],
+    };
   });
 
-  // Second pass to assign children to their parents
   const rootMilestones: UIMilestone[] = [];
+
+  // Second pass: build the hierarchy.
   Object.values(milestoneMap).forEach((milestone) => {
     if (milestone.parentId) {
       const parent = milestoneMap[milestone.parentId];
+
       if (parent) {
         parent.childrenMilestones.push(milestone);
       }
@@ -56,6 +62,17 @@ const convertToVisualMilestone = (
       rootMilestones.push(milestone);
     }
   });
+
+  // Sort children recursively and roots by order.
+  const sortMilestones = (items: UIMilestone[]) => {
+    items.sort((a, b) => a.order - b.order);
+
+    items.forEach((milestone) => {
+      sortMilestones(milestone.childrenMilestones);
+    });
+  };
+
+  sortMilestones(rootMilestones);
 
   return rootMilestones;
 };
@@ -199,8 +216,13 @@ export function ProjectMilestonesTab({
     );
   };
 
-  const handleOpenViewPicture = (imageUrls: string[], selectedIndex: number) => {
-    dispatch(openModal({ type: "viewPicture", payload: { imageUrls, selectedIndex } }));
+  const handleOpenViewPicture = (
+    imageUrls: string[],
+    selectedIndex: number,
+  ) => {
+    dispatch(
+      openModal({ type: "viewPicture", payload: { imageUrls, selectedIndex } }),
+    );
   };
 
   const handleStatusUpdate = (milestoneId: string) => {
@@ -454,7 +476,8 @@ export function ProjectMilestonesTab({
                           status: schedule.status,
                           abn: schedule.tradie.abn,
                           tradieName: schedule.tradie.name,
-                          lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
+                          lastQuotedPriceUnit:
+                            schedule.tradie.lastQuotedPriceUnit,
                           tradeType: schedule.tradie.trade,
                           projectId: schedule.projectId,
                           projectName: project.name,
