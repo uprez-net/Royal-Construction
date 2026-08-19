@@ -477,6 +477,7 @@ function BookingContent() {
                     }}
                     disabled={isDateDisabled}
                     className="rounded-md border border-border p-3"
+                    captionLayout="dropdown"
                   />
                 </div>
 
