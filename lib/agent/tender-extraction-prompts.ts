@@ -397,6 +397,7 @@ ${EXTRACTION_CONTRACT}
   <rule>Treat every field as independent. Do not bundle values into paragraphs, tables, arrays of objects, or nested JSON.</rule>
   <rule>Use empty string, null, or [] for any value that cannot be verified directly from the documents.</rule>
 
+  <rule>Contract Document information takes precedence over Tender Document information for any field that appears in both documents.</rule>
   <rule>Use Tender sections for scope, inclusions, exclusions, allowances, payment schedule, and acceptance language.</rule>
   <rule>Use Contract sections for signature date, contract administration metadata, and any MBA-specific reference information.</rule>
   <rule>Use Lead Information for any missing site, client, or contact details.</rule>

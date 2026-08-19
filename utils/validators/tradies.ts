@@ -95,7 +95,7 @@ export const createTradieScheduleSchema = z.object({
         url: z.string().trim().url("Attachment URL must be a valid URL"),
       })
     ).default([]),
-  }),
+  }).optional(),
 });
 
 export type CreateTradieScheduleInput = z.infer<typeof createTradieScheduleSchema>;

@@ -54,6 +54,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       case "PENDING":
       case "PENDING_RESPONSE":
       case "AWAITING_QUOTE":
+      case "AWAITING_ADMIN_APPROVAL":
         return "warning";
       default:
         return "neutral";
@@ -76,6 +77,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
         return "Completed";
       case "AWAITING_QUOTE":
         return "Awaiting quote";
+      case "AWAITING_ADMIN_APPROVAL":
+        return "Awaiting admin approval";
       default:
         // Never render a raw enum: a status added to the schema but not to this
         // switch still reads as a label rather than SCREAMING_SNAKE_CASE.

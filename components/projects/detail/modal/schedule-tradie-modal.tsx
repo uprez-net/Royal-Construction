@@ -138,10 +138,6 @@ export default function ScheduleTradieModal({
       errors.durationDays = "Duration must be at least 1 day";
     }
 
-    if (row.emailContent === undefined) {
-      errors.emailContent = "Email content is required";
-    }
-
     return errors;
   }
 
@@ -216,7 +212,7 @@ export default function ScheduleTradieModal({
             durationDays: row.durationDays ?? 1,
             requiresQuote: row.requiresQuote ?? false,
             projectId,
-            emailContent: row.emailContent!,
+            emailContent: row.emailContent,
           })),
         ),
       ).unwrap();

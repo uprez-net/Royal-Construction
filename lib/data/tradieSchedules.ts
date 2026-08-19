@@ -238,6 +238,7 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
         await logAction(activityLogEntry);
         await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
         const emailContent = inputs.find(input => input.tradieId === schedule.tradieId)!.emailContent;
+        if(!emailContent) continue;
         const attachments: { name: string; contentBytes: string }[] = [];
         for (const attachment of emailContent.attachments) {
           const blob = await get(attachment.url, { access: "public" });

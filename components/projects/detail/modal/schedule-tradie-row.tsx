@@ -34,6 +34,7 @@ import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { format } from "date-fns";
 import { CollapsibleEmailContent } from "../tradie-tab/collapsible-email-content";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface TradieScheduleRowProps {
   row: TradieScheduleInputRow;
@@ -41,7 +42,10 @@ interface TradieScheduleRowProps {
   milestones: { id: string; name: string }[];
   /** 1-based position, used for the row's accessible group name. */
   position: number;
-  onChange: (index: number, updatedRow: Partial<TradieScheduleInputRow>) => void;
+  onChange: (
+    index: number,
+    updatedRow: Partial<TradieScheduleInputRow>,
+  ) => void;
   /** Omitted for the last remaining row, which cannot be removed. */
   onRemove?: () => void;
 }
@@ -91,6 +95,7 @@ export function TradieScheduleRow({
     (state) => state.tradieManagement,
   );
   const [tradieSearchQuery, setTradieSearchQuery] = useState("");
+  const [sendEmailCheck, setSendEmailCheck] = useState(false);
 
   const fieldId = (name: string) => `tradie-schedule-${row.id}-${name}`;
   const errorId = (name: string) => `${fieldId(name)}-error`;
@@ -160,11 +165,11 @@ export function TradieScheduleRow({
       },
     });
     onChange(index, {
-      emailContent: {
+      emailContent: sendEmailCheck ?{
         subject: generatedEmail.subject,
         body: generatedEmail.html,
         attachments: [],
-      },
+      }: undefined,
     });
   }, [
     onChange,
@@ -181,6 +186,7 @@ export function TradieScheduleRow({
     activeProject?.siteManager?.name,
     activeProject?.siteManager?.email,
     activeProject?.siteManager?.phone,
+    sendEmailCheck,
   ]);
 
   return (
@@ -195,7 +201,7 @@ export function TradieScheduleRow({
             <RequiredMark />
           </Label>
 
-          <Popover>
+          <Popover modal>
             <PopoverTrigger asChild>
               <Button
                 id={fieldId("category")}
@@ -297,7 +303,7 @@ export function TradieScheduleRow({
             <RequiredMark />
           </Label>
 
-          <Popover>
+          <Popover modal>
             <PopoverTrigger asChild>
               <Button
                 id={fieldId("tradie")}
@@ -545,7 +551,30 @@ export function TradieScheduleRow({
         </RadioGroup>
       </div>
 
-      {row.emailContent && (
+      <div className="rounded-lg bg-background p-3">
+        <p className="mb-3 text-sm font-medium text-foreground">
+          Send email to tradie
+        </p>
+
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={fieldId("send-email-checkbox")}
+            checked={sendEmailCheck}
+            onCheckedChange={(checked) => {
+              setSendEmailCheck(checked === true);
+            }}
+          />
+
+          <Label
+            htmlFor={fieldId("send-email-checkbox")}
+            className="font-normal"
+          >
+            Send an email to the tradie with the booking details
+          </Label>
+        </div>
+      </div>
+
+      {row.emailContent && sendEmailCheck && (
         <div className="rounded-lg bg-background p-3">
           <CollapsibleEmailContent
             rowId={row.id}
