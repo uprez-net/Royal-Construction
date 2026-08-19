@@ -12,12 +12,17 @@
  * what stops them drifting apart again.
  */
 
-/** Lower case, quote-free, single-spaced. */
+/**
+ * Lower case, quote-free, single-spaced.
+ *
+ * Curly quotes count: Outlook and Word autocorrect straight quotes, and the
+ * "I want to build" subject is the one that carries them.
+ */
 export function normalizeSubject(subject: string | null | undefined): string {
   return (subject ?? "")
     .trim()
     .toLowerCase()
-    .replace(/["']/g, "")
+    .replace(/[\u2018\u2019\u201C\u201D"']/g, "")
     .replace(/\s+/g, " ");
 }
 

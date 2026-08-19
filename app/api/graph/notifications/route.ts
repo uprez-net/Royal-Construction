@@ -147,8 +147,6 @@ function handleValidationToken(request: Request): Response | null {
   return textResponse(200, validationToken);
 }
 
-
-
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
   if (validation) {

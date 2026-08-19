@@ -86,7 +86,7 @@ Important fields:
 - `tradeType`
 - `phone`
 - `email`
-- `hourlyRate`
+- `lastQuotedPrice`
 - `rating`
 
 ### TradieSchedule

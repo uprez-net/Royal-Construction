@@ -9,7 +9,10 @@ test("the quoted 'I want to build' subject creates a lead", () => {
   assert.equal(isLeadSubject('"I want to build" Form Submission'), true);
   assert.equal(isLeadSubject('"i want to build" form submission'), true);
   assert.equal(isLeadSubject("I want to build Form Submission"), true);
-  assert.equal(isLeadSubject("“I want to build” Form Submission".replace(/[“”]/g, '"')), true);
+  // Curly quotes as Outlook and Word actually send them — NOT pre-stripped,
+  // which is what the first version of this test did, proving nothing.
+  assert.equal(isLeadSubject("\u201CI want to build\u201D Form Submission"), true);
+  assert.equal(isLeadSubject("\u2018I want to build\u2019 Form Submission"), true);
 });
 
 test("the other website forms still match", () => {
