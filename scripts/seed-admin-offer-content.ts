@@ -95,6 +95,8 @@ async function seed() {
     },
     hbfcClaim: {
       claimAmount: 800_000,
+      loadingChargePercent: 0,
+      totalPremiumToBePaid: 800_000, // default HBFC total premium to be paid
     }
   };
 
