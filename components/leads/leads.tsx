@@ -388,9 +388,9 @@ export default function Leads() {
               active={activeMetric === "Quoted"}
             />
             <LeadMetricCard
-              label={`Won (${conversionRate}%)`}
+              label={`Converted (${conversionRate}%)`}
               value={String(stats.conversion)}
-              note="Deals won"
+              note="Won and converted leads"
               tone="success"
               icon={CircleCheckBig}
               onClick={() => handleMetricClick("converted")}

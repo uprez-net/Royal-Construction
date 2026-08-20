@@ -9,9 +9,10 @@ test("current stage labels resolve to their DB enum member", () => {
   assert.equal(resolveLeadStageFilter("Cancelled"), "CANCELLED");
 });
 
-test("the retired Converted label still resolves, to Won", () => {
-  // A bookmarked ?status=Converted must keep working after the label is gone.
-  assert.equal(resolveLeadStageFilter("Converted"), "WON");
+test("Converted resolves to its own stage", () => {
+  // Converted is a live label again, so it filters to CONVERTED rows rather
+  // than being folded into WON.
+  assert.equal(resolveLeadStageFilter("Converted"), "CONVERTED");
 });
 
 test("an unknown label resolves to undefined rather than being ignored", () => {
@@ -24,7 +25,7 @@ test("parsing a comma-separated filter returns stages and names what failed", ()
     unknown: [],
   });
   assert.deepEqual(parseLeadStageFilter("Converted"), {
-    stages: ["WON"],
+    stages: ["CONVERTED"],
     unknown: [],
   });
 });

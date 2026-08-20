@@ -14,6 +14,7 @@ export const leadStages = [
   "Meeting Scheduled",
   "In Follow-up",
   "No Response",
+  "Converted",
   "Cancelled",
   "Disqualified",
 ] as const satisfies readonly LeadStage[];

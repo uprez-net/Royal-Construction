@@ -45,12 +45,16 @@ export const LEAD_STAGE_OPTIONS: LeadStage[] = [
   "Qualified",
   "Quoted",
   "Negotiating",
-  "Won",
+  // Won and Cancelled stay hidden: "Converted" is the word Royal Constructions
+  // uses for a won deal, and renaming it would mean re-teaching the team for no
+  // change in behaviour. Converted and Won are identical to every calculation.
+  //"Won",
   "Lost",
   "Meeting Scheduled",
   "In Follow-up",
   "No Response",
-  "Cancelled",
+  "Converted",
+  //"Cancelled",
   "Disqualified",
 ];
 
@@ -120,6 +124,7 @@ export const STAGE_STYLES: Record<LeadStage, string> = {
   "Meeting Scheduled": "stage-badge-info",
   "In Follow-up": "stage-badge-warning",
   "No Response": "stage-badge-danger",
+  Converted: "stage-badge-success",
   Cancelled: "stage-badge-danger",
   Disqualified: "stage-badge-danger",
 };
@@ -447,8 +452,17 @@ export function isLostStage(stage: LeadStage): boolean {
   return stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
 }
 
+/** A deal that closed successfully. "Converted" is Royal Constructions' word
+ *  for it; Won is the same thing and is currently hidden from the picker. */
+export function isWonStage(stage: LeadStage): boolean {
+  return stage === "Won" || stage === "Converted";
+}
+
 export function isTerminalStage(stage: LeadStage): boolean {
-  return ["Won", "Lost", "Cancelled", "Disqualified"].includes(stage);
+  // Converted belongs here. Leaving it out is why a won deal still showed a
+  // Call button and no Archive button — the row actions treated the one label
+  // operators can actually pick as though the lead were still open.
+  return isWonStage(stage) || isLostStage(stage);
 }
 
 export function isQuotingStage(stage: LeadStage): boolean {

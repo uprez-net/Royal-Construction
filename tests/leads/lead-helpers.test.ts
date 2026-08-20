@@ -4,6 +4,8 @@ import { test } from "node:test";
 import {
   LEAD_STAGE_OPTIONS,
   closureReasonCopy,
+  isTerminalStage,
+  isWonStage,
   parseLikelihood,
 } from "../../lib/leads/lead-helpers";
 
@@ -48,27 +50,36 @@ test("every other closed-unsuccessful stage keeps the lost wording", () => {
   }
 });
 
-test("the stage select offers exactly one terminal-won label", () => {
-  // Converted and Won were indistinguishable in every calculation; offering
-  // both is what this change removes.
-  assert.ok(LEAD_STAGE_OPTIONS.includes("Won"));
-  assert.ok(!LEAD_STAGE_OPTIONS.includes("Converted" as never));
-  assert.ok(LEAD_STAGE_OPTIONS.includes("Cancelled"));
+test("the stage select offers Converted, not Won", () => {
+  // "Converted" is the word Royal Constructions uses for a won deal. Renaming
+  // it in the picker would mean re-teaching the team for no behaviour change,
+  // so Won and Cancelled stay hidden and Converted stays the label.
+  assert.ok(LEAD_STAGE_OPTIONS.includes("Converted"));
+  assert.ok(!LEAD_STAGE_OPTIONS.includes("Won"));
+  assert.ok(!LEAD_STAGE_OPTIONS.includes("Cancelled"));
+});
+
+test("a Converted lead counts as terminal and as won", () => {
+  // The defect this branch fixes: isTerminalStage omitted Converted, so the
+  // one label operators can pick left a won deal showing a Call button and no
+  // Archive button — the row actions treated it as still open.
+  assert.ok(isWonStage("Converted"));
+  assert.ok(isTerminalStage("Converted"));
+  assert.ok(isTerminalStage("Won"));
+  assert.ok(!isTerminalStage("Negotiating"));
 });
 
 /* ── forecast copy ─────────────────────────────────────────────────── */
 
 test("banked copy no longer promises deals in negotiation", async () => {
+  // Negotiating is no longer banked, so the caption must not claim it is.
+  // Only the wording changed here — the KPI card keeps saying "Converted",
+  // which is still the vocabulary in the picker.
   const { readFileSync } = await import("node:fs");
   const panel = readFileSync("components/leads/forecast-panel.tsx", "utf8");
   assert.ok(
     !/Won plus deals in negotiation/.test(panel),
     "forecast panel still claims negotiating deals are banked",
-  );
-  const kpi = readFileSync("components/leads/leads.tsx", "utf8");
-  assert.ok(
-    !/Won and converted leads/.test(kpi),
-    "KPI card still refers to the retired Converted stage",
   );
 });
 

@@ -22,6 +22,7 @@ import {
   budgetBracket,
   dialablePhone,
   isLostStage,
+  isWonStage,
   type BudgetBracket,
 } from "@/lib/leads/lead-helpers";
 import {
@@ -378,11 +379,11 @@ export function LeadHeader({
         <LeadDealValuePanel lead={lead} action={actions.checkOffer} />
       </div>
       {/* Status banners, carried over from the modal. */}
-      {lead.stage === "Won" ? (
+      {isWonStage(lead.stage) ? (
         <div className="status-banner status-banner-success mt-5">
-          <span className="status-banner-title">Status: Won</span>
+          <span className="status-banner-title">Status: {lead.stage}</span>
           <span className="status-banner-text">
-            This lead is marked as won.
+            This lead is marked as {lead.stage.toLowerCase()}.
           </span>
         </div>
       ) : null}

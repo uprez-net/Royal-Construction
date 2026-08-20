@@ -69,7 +69,7 @@ export default function TableView({
   const activeFilters = useMemo(() => {
     if (!activeMetric) return ["all"];
     if (activeMetric.includes("total")) return ["all"];
-    if (activeMetric.includes("converted")) return ["Won"];
+    if (activeMetric.includes("converted")) return ["Won", "Converted"];
     if (activeMetric.includes("pendingFollowup")) return ["In Follow-up", "Meeting Scheduled"];
     if (activeMetric.includes("lost"))
       return ["Lost", "Cancelled", "Disqualified"];

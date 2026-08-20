@@ -11,13 +11,9 @@ export type LeadStage =
   | 'Meeting Scheduled'
   | 'In Follow-up'
   | 'No Response'
+  | 'Converted'
   | 'Cancelled'
   | 'Disqualified';
-// 'Converted' is gone from the UI vocabulary. It was indistinguishable from
-// 'Won' in every calculation (same probability, outcome and banked flag), so
-// it only ever split the terminal state in two. The Prisma enum still carries
-// CONVERTED until the phase B migration, and types/lead.ts stageMap renders any
-// surviving row as 'Won'.
 export type LeadSource =
   | 'Google Ads'
   | 'Referral'
@@ -174,23 +170,21 @@ export const LeadStageToLeadStageDBMapping: Record<LeadStage, DBLeadStage> = {
   "Meeting Scheduled": DBLeadStage.MEETING_SCHEDULED,
   "In Follow-up": DBLeadStage.IN_FOLLOW_UP,
   "No Response": DBLeadStage.NO_RESPONSE,
+  Converted: DBLeadStage.CONVERTED,
   Cancelled: DBLeadStage.CANCELLED,
   Disqualified: DBLeadStage.DISQUALIFIED
 };
 
 /**
- * Filter labels that no longer exist as stages but may still arrive in a
- * bookmarked URL or a saved MCP call.
+ * Filter labels that are not stages but may still arrive in a bookmarked URL
+ * or a saved MCP call.
  *
- * Without this, `?status=Converted` maps to undefined, lib/data/leads.ts
- * strips undefined out of the status array, the "is the array non-empty"
- * guard then skips the stage filter entirely, and the caller gets EVERY
- * non-archived lead back instead of an error — a wrong answer that looks like
- * a working one.
+ * Without this an unknown label maps to undefined, lib/data/leads.ts strips
+ * undefined out of the status array, the "is the array non-empty" guard then
+ * skips the stage filter entirely, and the caller gets EVERY non-archived lead
+ * back instead of an error — a wrong answer that looks like a working one.
  */
-export const LEGACY_LEAD_STAGE_FILTER_ALIASES: Record<string, DBLeadStage> = {
-  Converted: DBLeadStage.WON,
-};
+export const LEGACY_LEAD_STAGE_FILTER_ALIASES: Record<string, DBLeadStage> = {};
 
 /**
  * Resolve a filter label to a DB stage, tolerating retired labels.

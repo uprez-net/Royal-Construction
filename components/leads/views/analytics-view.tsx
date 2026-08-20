@@ -65,10 +65,7 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
 
   const trendChartConfig: ChartConfig = {
     leads: { label: "Leads", color: CHART.lead },
-    // Data key stays `converted` (the SQL aggregate and API field name); the
-    // LABEL follows the retired stage out. The sibling chart below already
-    // says "Won".
-    converted: { label: "Won", color: CHART.success },
+    converted: { label: "Converted", color: CHART.success },
   };
 
   const convChartConfig: ChartConfig = {
