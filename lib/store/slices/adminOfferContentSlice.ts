@@ -74,6 +74,24 @@ function unwrap(result: ActionResult): void {
   }
 }
 
+// Only claimAmount and loadingChargePercent are user-editable now;
+// totalPremiumToBePaid is always derived.
+type HBFCClaimInput = Pick<
+  HBFCClaimData,
+  "claimAmount" | "loadingChargePercent"
+>;
+
+function calcTotalPremium(
+  claimAmount: number,
+  loadingChargePercent: number,
+): number {
+  if (!Number.isFinite(claimAmount) || !Number.isFinite(loadingChargePercent)) {
+    return NaN;
+  }
+  const total = claimAmount + (claimAmount * loadingChargePercent) / 100;
+  return Math.round(total * 100) / 100; // avoid float cruft on currency
+}
+
 export const saveBuildScope = createAsyncThunk(
   "adminOfferContent/saveBuildScope",
   async (arg: void, thunkAPI) => {
@@ -154,7 +172,7 @@ export const saveHBFCClaim = createAsyncThunk(
     }
     catch (error) {
       return thunkAPI.rejectWithValue(
-        error instanceof Error ? error.message : "Failed to save HBFC claim.",
+        error instanceof Error ? error.message : "Failed to save HBCF claim.",
       );
     }
   },
@@ -252,8 +270,13 @@ const slice = createSlice({
       state.dirty.offerContent = true;
       state.error.offerContent = null;
     },
-    hbfcClaimChanged(state, action: PayloadAction<HBFCClaimData>) {
-      state.data.hbfcClaim = action.payload;
+    hbfcClaimChanged(state, action: PayloadAction<HBFCClaimInput>) {
+      const { claimAmount, loadingChargePercent } = action.payload;
+      state.data.hbfcClaim = {
+        claimAmount,
+        loadingChargePercent,
+        totalPremiumToBePaid: calcTotalPremium(claimAmount, loadingChargePercent),
+      };
       state.dirty.hbfcClaim = true;
       state.error.hbfcClaim = null;
     },

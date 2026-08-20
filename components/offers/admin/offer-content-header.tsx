@@ -17,7 +17,7 @@ const TABS: readonly { id: AdminOfferTabs; label: string }[] = [
   { id: "offer-scope", label: "Scope" },
   { id: "offer-inclusions", label: "Inclusions" },
   { id: "offer-content", label: "Offer Document" },
-  { id: "HBFC-claim", label: "HBFC Claim" },
+  { id: "HBFC-claim", label: "HBCF Claim" },
 ];
 
 interface OfferContentHeaderProps {

@@ -104,6 +104,6 @@ export async function saveHBFCClaimAction(
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
-    return invalid(error instanceof Error ? error.message : "Failed to save HBFC claim.");
+    return invalid(error instanceof Error ? error.message : "Failed to save HBCF claim.");
   }
 }

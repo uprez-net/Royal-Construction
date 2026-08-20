@@ -76,6 +76,8 @@ export interface OfferContentData {
 
 export interface HBFCClaimData {
   claimAmount: number; // default HBFC claim amount
+  loadingChargePercent: number; // default HBFC loading charge percentage
+  totalPremiumToBePaid: number; // default HBFC total premium to be paid
 }
 
 // ---- Aggregate ----
@@ -99,5 +101,7 @@ export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
   },
   hbfcClaim: {
     claimAmount: 0,
+    loadingChargePercent: 0,
+    totalPremiumToBePaid: 0,
   }
 };
