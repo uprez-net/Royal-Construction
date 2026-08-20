@@ -5,7 +5,7 @@
 // date has a lead sitting wherever a human last dragged it. Wiring the sync
 // only fixes future transitions; without this, the highest-value closed deals
 // stay invisible to win rate and keep inflating open pipeline. On staging that
-// was four signed-or-building deals and not one lead at WON, including a live
+// was four signed-or-building deals and not one lead marked won, including a live
 // project worth $945k whose lead read "Meeting Scheduled".
 //
 // wonAt comes from OfferStatusEvent.at — the real moment the contract was signed,
@@ -84,21 +84,23 @@ async function main() {
     if (!event) approximated++;
 
     console.log(
-      `    lead #${lead.id}: ${lead.stage} -> WON  wonAt=${wonAt.toISOString().slice(0, 10)}` +
+      `    lead #${lead.id}: ${lead.stage} -> CONVERTED  wonAt=${wonAt.toISOString().slice(0, 10)}` +
         (event ? "" : "  (approximated from offer.updatedAt)"),
     );
 
     if (COMMIT) {
       await prisma.lead.update({
         where: { id: lead.id },
-        data: { stage: "WON", wonAt, lostAt: null },
+        // CONVERTED, not WON: same outcome, but the only one of the two the
+        // stage picker offers. Must match the migration this previews.
+        data: { stage: "CONVERTED", wonAt, lostAt: null },
       });
     }
     moved++;
   }
 
   console.log("");
-  console.log(`  ${moved} lead(s) ${COMMIT ? "moved to" : "would move to"} WON`);
+  console.log(`  ${moved} lead(s) ${COMMIT ? "moved to" : "would move to"} CONVERTED`);
   console.log(`  ${skippedWon} already won, ${skippedLost} left alone as lost`);
   if (approximated > 0) {
     console.log(`  ${approximated} had no status event; wonAt approximated from offer.updatedAt`);
