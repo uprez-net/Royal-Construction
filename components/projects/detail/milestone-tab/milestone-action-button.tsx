@@ -1,8 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { useAppSelector } from "@/lib/store/hooks";
 import type { UIMilestone } from "@/types/project";
 import { BanIcon, Camera, FilePenLine, Play } from "lucide-react";
-import { useMemo } from "react";
 
 export function MilestoneActionGroup({
   isActiveStage,

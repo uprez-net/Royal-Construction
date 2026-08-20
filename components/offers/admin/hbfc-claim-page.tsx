@@ -25,7 +25,9 @@ function useNumericInput(value: number, onCommit: (value: number) => void) {
     const parsed = parseFloat(raw);
     const rawIsCurrent = Number.isFinite(value) ? parsed === value : raw === "";
     if (!rawIsCurrent) {
-      setRaw(Number.isFinite(value) ? String(value) : "");
+      setTimeout(() => {
+        setRaw(Number.isFinite(value) ? String(value) : "");
+      }, 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
