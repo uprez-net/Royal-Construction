@@ -15,6 +15,7 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { hydrated } from "@/lib/store/slices/adminOfferContentSlice";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
 import { Settings2 } from "lucide-react";
+import { OfferInclusionsPage } from "./offer-inclusion-page";
 
 interface AdminOfferPageProps {
   initialContent: AdminOfferContent;
@@ -66,6 +67,7 @@ export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
         {activeTab === "job-setup" && <JobSetupScreen />}
         {activeTab === "cost-schedule" && <OfferCostScheduleScreen />}
         {activeTab === "offer-scope" && <OfferScopePage />}
+        {activeTab === "offer-inclusions" && <OfferInclusionsPage />}
         {activeTab === "offer-content" && <OfferContentPage />}
       </div>
     </div>

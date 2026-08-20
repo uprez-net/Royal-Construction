@@ -54,6 +54,7 @@ export function BulletListEditor({
                 onChange={(e) => updateAt(index, e.target.value)}
                 placeholder={placeholder}
                 className="flex-1"
+                aiRewrite
               />
               <button
                 type="button"
@@ -79,6 +80,7 @@ export function BulletListEditor({
           }}
           placeholder={placeholder}
           className="flex-1"
+          aiRewrite
         />
         <Button type="button" variant="outline" size="sm" onClick={commitDraft}>
           <PlusIcon className="size-4" />
