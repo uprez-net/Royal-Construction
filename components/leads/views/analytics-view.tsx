@@ -70,7 +70,10 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
 
   const convChartConfig: ChartConfig = {
     total: { label: "Total", color: CHART.lead },
-    won: { label: "Won", color: CHART.success },
+    // Data key stays `won` because that is the API field name. The LABEL says
+    // Converted, matching the trend chart above and the KPI card. "Won" is not
+    // a word this UI shows anywhere else.
+    won: { label: "Converted", color: CHART.success },
   };
 
   const lostChartConfig: ChartConfig = {};

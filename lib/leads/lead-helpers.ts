@@ -484,7 +484,29 @@ export function isTerminalStage(stage: LeadStage): boolean {
 }
 
 export function isQuotingStage(stage: LeadStage): boolean {
-  return ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating", "Won"].includes(stage);
+  // isWonStage, not a bare "Won". This list named Won and missed Converted,
+  // and Converted is the label operators actually pick, so in practice no won
+  // lead ever showed Check Offer. Exactly the defect isTerminalStage had.
+  return (
+    isWonStage(stage) ||
+    ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"].includes(stage)
+  );
+}
+
+/**
+ * Metrics whose cohort cannot be drawn as chips.
+ *
+ * The KPI cards select groups that span hidden stages: "converted" means Won
+ * plus Converted and Won has no chip, "lost" includes Cancelled which has none
+ * either. Editing one of those cohorts chip by chip left the invisible half
+ * selected on its own, so clicking the Converted chip to clear it filtered the
+ * table to Won with no chip highlighted to explain why.
+ */
+const KPI_COHORT_METRICS = ["total", "converted", "pendingFollowup", "lost"];
+
+export function isKpiCohortMetric(activeMetric: string | null | undefined): boolean {
+  if (!activeMetric) return false;
+  return KPI_COHORT_METRICS.some((metric) => activeMetric.includes(metric));
 }
 /**
  * Wording for the mandatory reason on a closed-unsuccessful lead.

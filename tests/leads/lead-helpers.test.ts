@@ -4,6 +4,8 @@ import { test } from "node:test";
 import {
   LEAD_STAGE_OPTIONS,
   closureReasonCopy,
+  isKpiCohortMetric,
+  isQuotingStage,
   isTerminalStage,
   isWonStage,
   parseLikelihood,
@@ -160,4 +162,38 @@ test("both stage pickers offer the same list", async () => {
     "badge picker is building its own stage list again",
   );
   assert.ok(/stageOptionsFor\(/.test(badge), "badge picker should share stageOptionsFor");
+});
+
+/* ── isQuotingStage ────────────────────────────────────────────────── */
+
+test("a won deal keeps its offer link under either label", () => {
+  // The list named "Won" and missed "Converted". Converted is the label the
+  // picker offers, so no won lead ever showed Check Offer in practice.
+  assert.ok(isQuotingStage("Converted"));
+  assert.ok(isQuotingStage("Won"));
+});
+
+test("quoting stages still cover the open ladder, and nothing closed-lost", () => {
+  for (const open of ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"] as const) {
+    assert.ok(isQuotingStage(open), open);
+  }
+  for (const lost of ["Lost", "Cancelled", "Disqualified"] as const) {
+    assert.ok(!isQuotingStage(lost), lost);
+  }
+  assert.ok(!isQuotingStage("New"));
+});
+
+/* ── isKpiCohortMetric ─────────────────────────────────────────────── */
+
+test("a KPI cohort is recognised, a chip list is not", () => {
+  // The cohorts span stages with no chip: "converted" is Won + Converted.
+  // Clicking the one visible chip used to leave the invisible half selected.
+  for (const metric of ["total", "converted", "pendingFollowup", "lost"]) {
+    assert.ok(isKpiCohortMetric(metric), metric);
+  }
+  // Chip lists are capitalised stage labels, so they must not match.
+  assert.ok(!isKpiCohortMetric("Converted"));
+  assert.ok(!isKpiCohortMetric("Lost,Disqualified"));
+  assert.ok(!isKpiCohortMetric(null));
+  assert.ok(!isKpiCohortMetric(""));
 });

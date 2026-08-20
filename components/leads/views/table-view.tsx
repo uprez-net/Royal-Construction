@@ -18,6 +18,7 @@ import {
   dialablePhone,
   STAGE_STYLES,
   LEAD_STAGE_OPTIONS,
+  isKpiCohortMetric,
 } from "@/lib/leads/lead-helpers";
 import { bookConsultationHref, leadActions } from "@/lib/leads/lead-actions";
 import { DeleteConfirmModal } from "@/components/leads/modal-ui/delete-confirm-modal";
@@ -78,6 +79,11 @@ export default function TableView({
 
   const toggleFilter = (stage: string) => {
     if (stage === "all") return onActiveMetricChange(null);
+    // A KPI cohort is all-or-nothing: clicking its highlighted chip clears it,
+    // clicking any other chip replaces it. It must never survive in half.
+    if (isKpiCohortMetric(activeMetric)) {
+      return onActiveMetricChange(activeFilters.includes(stage) ? null : stage);
+    }
     if (activeFilters.includes(stage)) {
       const next = activeFilters.filter((s) => s !== stage);
       onActiveMetricChange(next.length === 0 ? null : next.join(","));
