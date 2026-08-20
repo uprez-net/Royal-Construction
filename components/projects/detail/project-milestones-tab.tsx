@@ -454,9 +454,6 @@ export function ProjectMilestonesTab({
                           key={milestone.id}
                           isActiveStage={isActiveStage}
                           isAdmin={isAdmin}
-                          prevMilestone={visualMilestones
-                            .flatMap((m) => [m, ...m.childrenMilestones])
-                            .find((m) => m.order === milestone.order - 1)}
                           milestone={milestone}
                           project={project}
                           tradieAlertsByMilestone={tradieAlertsByMilestone}

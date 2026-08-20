@@ -6,7 +6,7 @@ import {
   TradieScheduleWithTradieAndMilestone,
   UIMilestone,
 } from "@/types/project";
-import { currency, dateFormat, formatStatus } from "@/utils/formatters";
+import { dateFormat, formatStatus } from "@/utils/formatters";
 import { ReactNode } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import {
   Bell,
   Calendar,
   CheckCircle2,
-  DollarSign,
   Users,
   Wrench,
   ChevronDown,
@@ -76,7 +75,6 @@ function MilestoneMetaLine({
 export function MilestoneCard({
   isAdmin,
   isActiveStage,
-  prevMilestone,
   milestone,
   project,
   depth = 0,
@@ -90,7 +88,6 @@ export function MilestoneCard({
 }: {
   isAdmin: boolean;
   isActiveStage: boolean;
-  prevMilestone?: UIMilestone;
   milestone: UIMilestone;
   project: ProjectDetail;
   depth?: number;
@@ -352,11 +349,6 @@ export function MilestoneCard({
                       key={child.id}
                       isAdmin={isAdmin}
                       isActiveStage={isActiveStage}
-                      prevMilestone={
-                        milestone.childrenMilestones
-                          .flatMap((m) => [m, ...m.childrenMilestones])
-                          .find((m) => m.order === child.order - 1) ?? milestone
-                      }
                       milestone={child}
                       project={project}
                       depth={depth + 1}

@@ -6,14 +6,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   headlineChanged,
-  inclusionsChanged,
   introTextChanged,
   termsAndConditionsChanged,
   saveOfferContent,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import { OfferCardHeading } from "@/components/offers/new-workflow/offer-workspace-card-heading";
 import { FilePenLine } from "lucide-react";
-import { BulletListEditor } from "./shared/bullet-list-editor";
 import { SaveChangesButton } from "./shared/save-changes-button";
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
