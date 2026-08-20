@@ -147,3 +147,17 @@ test("a lead on a visible stage does not widen the list", () => {
   assert.deepEqual(stageOptionsFor("Converted"), LEAD_STAGE_OPTIONS);
   assert.equal(stageOptionsFor("New").length, LEAD_STAGE_OPTIONS.length);
 });
+
+test("both stage pickers offer the same list", async () => {
+  // They used to disagree: the header badge built its own list from
+  // STAGE_STYLES (a total Record, so all thirteen) while the Overview tab used
+  // LEAD_STAGE_OPTIONS. Won and Cancelled were settable from one and invisible
+  // in the other.
+  const { readFileSync } = await import("node:fs");
+  const badge = readFileSync("components/leads/detail/select-stage-badge.tsx", "utf8");
+  assert.ok(
+    !/Object\.keys\(STAGE_STYLES\)/.test(badge),
+    "badge picker is building its own stage list again",
+  );
+  assert.ok(/stageOptionsFor\(/.test(badge), "badge picker should share stageOptionsFor");
+});

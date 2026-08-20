@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LeadStage } from "@/lib/leads/types";
-import { STAGE_STYLES } from "@/lib/leads/lead-helpers";
+import { STAGE_STYLES, stageOptionsFor } from "@/lib/leads/lead-helpers";
 
 const STAGE_DOT_STYLES: Record<LeadStage, string> = {
   New: "bg-blue-500",
@@ -28,8 +28,6 @@ const STAGE_DOT_STYLES: Record<LeadStage, string> = {
   Cancelled: "bg-red-500",
   Disqualified: "bg-red-500",
 };
-
-const STAGE_OPTIONS = Object.keys(STAGE_STYLES) as LeadStage[];
 
 interface StageBadgeSelectProps {
   value: LeadStage;
@@ -66,7 +64,14 @@ export function StageBadgeSelect({ value, onChange, disabled }: StageBadgeSelect
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-48">
-        {STAGE_OPTIONS.map((stage) => (
+        {/*
+          The same list the Overview tab offers, not a second one built from
+          STAGE_STYLES. That Record is keyed by every LeadStage, so this menu
+          used to offer all thirteen and let anyone set Won or Cancelled from
+          a page whose own Stage field hides both. Production never shipped
+          this picker, so no habit is being broken by narrowing it.
+        */}
+        {stageOptionsFor(value).map((stage) => (
           <DropdownMenuItem key={stage} onSelect={() => handleSelect(stage)} className="gap-2">
             <span className={cn("h-2 w-2 rounded-full", STAGE_DOT_STYLES[stage])} />
             <span className="flex-1">{stage}</span>
