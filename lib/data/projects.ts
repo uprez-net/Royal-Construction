@@ -243,7 +243,7 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
 
   const mapped = projects.map(({ variations, ...project }) => {
     const milestoneCount = project.milestones.length;
-    const completedMilestoneCount = project.milestones.filter((milestone) => milestone.status === "DONE").length;
+    const completedMilestoneCount = project.milestones.filter((milestone) => ["DONE", "NOT_REQUIRED"].includes(milestone.status)).length;
     const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
     const approvedVariationSpend = variations
       .filter((variation) => variation.status === "APPROVED")
@@ -485,7 +485,7 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
 
     const mapped = projects.map(({ variations, ...project }) => {
       const milestoneCount = project.milestones.length;
-      const completedMilestoneCount = project.milestones.filter((milestone) => milestone.status === "DONE").length;
+      const completedMilestoneCount = project.milestones.filter((milestone) => ["DONE", "NOT_REQUIRED"].includes(milestone.status)).length;
       const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
       const approvedVariationSpend = variations
         .filter((variation) => variation.status === "APPROVED")

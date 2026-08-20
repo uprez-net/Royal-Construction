@@ -71,7 +71,7 @@ export function OfferVersionsMenu({
 
   return (
     <>
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open} onOpenChange={handleOpenChange} modal>
       <PopoverTrigger asChild>
         <Button ref={triggerRef} size="sm" type="button" variant="outline">
           <History className="size-4" aria-hidden="true" />

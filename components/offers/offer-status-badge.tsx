@@ -134,6 +134,7 @@ export function OfferStatusBadge({
     <Popover
       open={open && availableTransitions.length > 0}
       onOpenChange={setOpen}
+      modal
     >
       <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
         <button

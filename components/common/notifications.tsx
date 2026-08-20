@@ -78,7 +78,7 @@ export function Notifications({ maxHeight = 400 }: { maxHeight?: number }) {
   }
 
   return (
-    <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+    <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen} modal>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
