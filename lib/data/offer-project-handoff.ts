@@ -292,6 +292,7 @@ export async function createProjectFromOffer(input: {
       parties: JSON.parse(JSON.stringify(job.owners ?? [])),
       extraction,
       sourceDocuments,
+      costLines: snapshot.lines,
     });
     handoff = {
       projectId: (project as { id: string }).id,
