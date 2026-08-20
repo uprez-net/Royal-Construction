@@ -7,13 +7,15 @@ export type AdminOfferTabs =
   | "job-setup"
   | "cost-schedule"
   | "offer-scope"
-  | "offer-content"
-  | "HBFC-claim";
+  | "HBFC-claim"
+  | "offer-inclusions"
+  | "offer-content";
 
 const TABS: readonly { id: AdminOfferTabs; label: string }[] = [
   { id: "job-setup", label: "Job Setup" },
   { id: "cost-schedule", label: "Cost Schedule" },
   { id: "offer-scope", label: "Scope" },
+  { id: "offer-inclusions", label: "Inclusions" },
   { id: "offer-content", label: "Offer Document" },
   { id: "HBFC-claim", label: "HBFC Claim" },
 ];

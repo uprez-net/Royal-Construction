@@ -32,9 +32,6 @@ export function OfferContentPage() {
   const introText = useAppSelector(
     (s) => s.adminOfferContent.data.offerContent.introText,
   );
-  const inclusions = useAppSelector(
-    (s) => s.adminOfferContent.data.offerContent.inclusions,
-  );
   const terms = useAppSelector(
     (s) => s.adminOfferContent.data.offerContent.termsAndConditions,
   );
@@ -69,15 +66,6 @@ export function OfferContentPage() {
             onChange={(e) => dispatch(introTextChanged(e.target.value))}
             rows={4}
             placeholder="Opening paragraph shown on the offer one-pager…"
-          />
-        </label>
-        <label>
-          <FieldLabel>Inclusion bullets</FieldLabel>
-          <BulletListEditor
-            value={inclusions}
-            onChange={(lines) => dispatch(inclusionsChanged(lines))}
-            addLabel="Add bullet"
-            placeholder="Inclusion text"
           />
         </label>
         <label>

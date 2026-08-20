@@ -16,6 +16,7 @@ import { hydrated } from "@/lib/store/slices/adminOfferContentSlice";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
 import { Settings2 } from "lucide-react";
 import { HBFCClaimPage } from "./hbfc-claim-page";
+import { OfferInclusionsPage } from "./offer-inclusion-page";
 
 interface AdminOfferPageProps {
   initialContent: AdminOfferContent;
@@ -67,6 +68,7 @@ export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
         {activeTab === "job-setup" && <JobSetupScreen />}
         {activeTab === "cost-schedule" && <OfferCostScheduleScreen />}
         {activeTab === "offer-scope" && <OfferScopePage />}
+        {activeTab === "offer-inclusions" && <OfferInclusionsPage />}
         {activeTab === "offer-content" && <OfferContentPage />}
         {activeTab === "HBFC-claim" && <HBFCClaimPage />}
       </div>
