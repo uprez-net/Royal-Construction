@@ -12,7 +12,7 @@ import {
 
 const ALL_STAGES = [
   "NEW", "CONTACTED", "QUALIFIED", "QUOTED", "NEGOTIATING", "WON", "LOST",
-  "MEETING_SCHEDULED", "IN_FOLLOW_UP", "NO_RESPONSE", "CONVERTED",
+  "MEETING_SCHEDULED", "IN_FOLLOW_UP", "NO_RESPONSE",
   "CANCELLED", "DISQUALIFIED",
 ] as const;
 
@@ -35,7 +35,6 @@ test("orders are unique and contiguous from 1", () => {
 test("outcome classification matches the design", () => {
   assert.equal(stageDef("NEGOTIATING").outcome, "OPEN");
   assert.equal(stageDef("WON").outcome, "WON");
-  assert.equal(stageDef("CONVERTED").outcome, "WON");
   assert.equal(stageDef("LOST").outcome, "LOST");
   assert.equal(stageDef("CANCELLED").outcome, "LOST");
   assert.equal(stageDef("DISQUALIFIED").outcome, "LOST");
@@ -47,9 +46,7 @@ test("banked stages are won outcomes only", () => {
   const banked = ALL_STAGES.filter((c) => stageDef(c).banked).sort();
   // NEGOTIATING was banked until the ladder change: sending an offer booked
   // 100% of the deal's face value before the customer agreed to anything.
-  // CONVERTED is still here only because the Prisma enum keeps it until the
-  // phase B migration; it drops out of this list with the enum.
-  assert.deepEqual(banked, ["CONVERTED", "WON"]);
+  assert.deepEqual(banked, ["WON"]);
 });
 
 test("banked is equivalent to a won outcome", () => {
@@ -75,10 +72,6 @@ test("moving to a won stage stamps wonAt and clears lostAt", () => {
     wonAt: NOW,
     lostAt: null,
   });
-});
-
-test("WON to CONVERTED does not re-stamp wonAt", () => {
-  assert.deepEqual(closeDatePatch("WON", "CONVERTED", NOW), {});
 });
 
 test("moving to a lost stage stamps lostAt and clears wonAt", () => {

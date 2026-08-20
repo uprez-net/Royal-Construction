@@ -23,9 +23,8 @@ const stageMap: Record<string, LeadStage> = {
   "Meeting Scheduled": LeadStage.MEETING_SCHEDULED,
   "In Follow-up": LeadStage.IN_FOLLOW_UP,
   "No Response": LeadStage.NO_RESPONSE,
-  // Retired label. Seeding CONVERTED would re-poison the data the backfill
-  // cleans and block the phase B enum drop, so it maps to WON like everything
-  // else that used to be "Converted".
+  // Retired label, kept so older seed rows still load. Maps to WON, which is
+  // what the retire_converted_lead_stage migration did to the real data.
   "Converted": LeadStage.WON,
   "Cancelled": LeadStage.CANCELLED,
   "Disqualified": LeadStage.DISQUALIFIED,

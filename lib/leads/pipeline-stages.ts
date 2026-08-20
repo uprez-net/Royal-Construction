@@ -44,16 +44,10 @@ export const PIPELINE_STAGES: Record<LeadStage, PipelineStageDef> = {
   QUOTED:            { code: "QUOTED",            label: "Quoted",            order: 6,  probability: 55,  outcome: "OPEN",    banked: false, colorVar: "--stage-6" },
   NEGOTIATING:       { code: "NEGOTIATING",       label: "Negotiating",       order: 7,  probability: 70,  outcome: "OPEN",    banked: false, colorVar: "--stage-7" },
   WON:               { code: "WON",               label: "Won",               order: 8,  probability: 100, outcome: "WON",     banked: true,  colorVar: "--stage-7" },
-  // Retired stage. Kept only because this Record is keyed by the generated
-  // Prisma enum, which still has CONVERTED until the phase B migration. It is
-  // unreachable from the UI (no entry in stageToPrismaMap) and stageMap renders
-  // any surviving row as "Won". Delete this entry in phase B, and renumber the
-  // orders below to stay contiguous.
-  CONVERTED:         { code: "CONVERTED",         label: "Won",               order: 9,  probability: 100, outcome: "WON",     banked: true,  colorVar: "--stage-7" },
-  LOST:              { code: "LOST",              label: "Lost",              order: 10, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
-  CANCELLED:         { code: "CANCELLED",         label: "Cancelled",         order: 11, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
-  DISQUALIFIED:      { code: "DISQUALIFIED",      label: "Disqualified",      order: 12, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
-  NO_RESPONSE:       { code: "NO_RESPONSE",       label: "No Response",       order: 13, probability: 0,   outcome: "STALLED", banked: false, colorVar: "--stage-1" },
+  LOST:              { code: "LOST",              label: "Lost",              order: 9,  probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
+  CANCELLED:         { code: "CANCELLED",         label: "Cancelled",         order: 10, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
+  DISQUALIFIED:      { code: "DISQUALIFIED",      label: "Disqualified",      order: 11, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
+  NO_RESPONSE:       { code: "NO_RESPONSE",       label: "No Response",       order: 12, probability: 0,   outcome: "STALLED", banked: false, colorVar: "--stage-1" },
 };
 
 export function stageDef(code: LeadStage): PipelineStageDef {
@@ -102,7 +96,7 @@ export function closeDatePatch(
   const nextOutcome = PIPELINE_STAGES[next].outcome;
 
   if (nextOutcome === "WON") {
-    // WON -> CONVERTED is a move within the won outcome: keep the original date.
+    // Already won: a move within the won outcome keeps the original date.
     if (prevOutcome === "WON") return {};
     return { wonAt: now, lostAt: null };
   }

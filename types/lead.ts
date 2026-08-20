@@ -23,14 +23,6 @@ export const stageMap: Record<PrismaLeadStage, LeadStage> = {
   MEETING_SCHEDULED: "Meeting Scheduled",
   IN_FOLLOW_UP: "In Follow-up",
   NO_RESPONSE: "No Response",
-  // Retargeted, NOT removed. This map is keyed by the generated Prisma enum,
-  // which still has CONVERTED until the phase B migration, and rows still hold
-  // it until the backfill runs. Rendering those as "Won" is the whole
-  // backwards-compatibility story: delete this key instead and leadToFormData
-  // yields form.stage === undefined, which makes detail-modal's
-  // `stageDef(stageToPrismaMap[form.stage]).probability` throw and blank the
-  // modal for every un-backfilled lead.
-  CONVERTED: "Won",
   CANCELLED: "Cancelled",
   DISQUALIFIED: "Disqualified",
 };

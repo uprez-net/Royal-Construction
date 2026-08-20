@@ -13,11 +13,10 @@ export type LeadStage =
   | 'No Response'
   | 'Cancelled'
   | 'Disqualified';
-// 'Converted' is gone from the UI vocabulary. It was indistinguishable from
-// 'Won' in every calculation (same probability, outcome and banked flag), so
-// it only ever split the terminal state in two. The Prisma enum still carries
-// CONVERTED until the phase B migration, and types/lead.ts stageMap renders any
-// surviving row as 'Won'.
+// 'Converted' is retired. It was indistinguishable from 'Won' in every
+// calculation (same probability, outcome and banked flag), so it only ever
+// split the terminal state in two. Removed from the Prisma enum by the
+// retire_converted_lead_stage migration, which collapsed surviving rows to WON.
 export type LeadSource =
   | 'Google Ads'
   | 'Referral'

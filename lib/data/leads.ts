@@ -1191,7 +1191,7 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage = 'CONTACTED') AS contacted,
       COUNT(*) FILTER (WHERE stage = 'QUALIFIED') AS qualified,
       COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
-      COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
+      COUNT(*) FILTER (WHERE stage = 'WON') AS won,
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
       COUNT(*) FILTER (WHERE stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED')) AS "pendingFollowup"
     FROM "Lead"
@@ -1277,7 +1277,7 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
       COALESCE(source, "sourceDetail", 'Website') AS source,
       COUNT(*) AS total,
       COUNT(*) FILTER (
-        WHERE stage IN ('WON', 'CONVERTED')
+        WHERE stage = 'WON'
       ) AS won
     FROM "Lead"
     GROUP BY COALESCE(source, "sourceDetail", 'Website')
@@ -1295,7 +1295,7 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
       DATE_TRUNC('month', "createdAt") AS month,
       COUNT(*) AS leads,
       COUNT(*) FILTER (
-        WHERE stage IN ('WON', 'CONVERTED')
+        WHERE stage = 'WON'
       ) AS converted
     FROM "Lead"
     WHERE "createdAt" >= ${startOfMonth(subMonths(new Date(), 11))}

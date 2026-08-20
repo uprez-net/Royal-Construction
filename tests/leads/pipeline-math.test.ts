@@ -69,7 +69,7 @@ test("a closed stage outranks any stale override", () => {
   // rule a won deal weights at 60% — and forecast.weightedValue then comes out
   // BELOW the forecast.wonValue it is supposed to contain in full.
   assert.equal(probabilityFor(lead({ stage: "WON", probabilityOverride: 60 })), 100);
-  assert.equal(probabilityFor(lead({ stage: "CONVERTED", probabilityOverride: 5 })), 100);
+  assert.equal(probabilityFor(lead({ stage: "WON", probabilityOverride: 5 })), 100);
   assert.equal(probabilityFor(lead({ stage: "LOST", probabilityOverride: 90 })), 0);
   assert.equal(probabilityFor(lead({ stage: "CANCELLED", probabilityOverride: 90 })), 0);
   // Open stages still honour the override.
@@ -207,7 +207,7 @@ test("computeWinRate divides wins by decisions", () => {
   const rate = computeWinRate(
     [
       lead({ id: 1, stage: "WON", wonAt: "2026-07-01T00:00:00Z" }),
-      lead({ id: 2, stage: "CONVERTED", wonAt: "2026-07-15T00:00:00Z" }),
+      lead({ id: 2, stage: "WON", wonAt: "2026-07-15T00:00:00Z" }),
       lead({ id: 3, stage: "LOST", lostAt: "2026-07-20T00:00:00Z" }),
       lead({ id: 4, stage: "QUOTED" }),
       lead({ id: 5, stage: "NO_RESPONSE" }),

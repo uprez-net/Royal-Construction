@@ -82,12 +82,12 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
                     ) AS previous_month_leads,
 
                     COUNT(*) FILTER (
-                        WHERE stage IN ('WON', 'CONVERTED')
+                        WHERE stage = 'WON'
                         AND "updatedAt" >= ${currentMonthStart}
                     ) AS current_month_converted_leads,
 
                     COUNT(*) FILTER (
-                        WHERE stage IN ('WON', 'CONVERTED')
+                        WHERE stage = 'WON'
                         AND "updatedAt" >= ${previousMonthStart}
                         AND "updatedAt" < ${currentMonthStart}
                     ) AS previous_month_converted_leads
@@ -346,7 +346,7 @@ export async function getDashboardGraphData() {
                     SELECT
                         DATE_TRUNC('month', "createdAt") AS month,
                         COUNT(*) AS leads,
-                        COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS converted
+                        COUNT(*) FILTER (WHERE stage = 'WON') AS converted
                     FROM "Lead"
                     WHERE "createdAt" >= DATE_TRUNC('month', NOW() - INTERVAL '11 months') AND "isArchived" = false
                     GROUP BY 1
@@ -377,7 +377,7 @@ export async function getDashboardGraphData() {
             >`
             SELECT
                 CASE
-                WHEN stage IN ('WON', 'CONVERTED')
+                WHEN stage = 'WON'
                     THEN 'converted'
 
                 WHEN stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')

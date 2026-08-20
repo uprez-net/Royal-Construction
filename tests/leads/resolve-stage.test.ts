@@ -53,7 +53,7 @@ test("rescheduling moves a stalled lead to IN_FOLLOW_UP", () => {
 });
 
 test("rescheduling never reopens a closed lead", () => {
-  for (const stage of ["WON", "CONVERTED", "LOST", "CANCELLED", "DISQUALIFIED"] as const) {
+  for (const stage of ["WON", "LOST", "CANCELLED", "DISQUALIFIED"] as const) {
     assert.equal(
       resolveLeadStage({ currentStage: stage, followupResponseOutcome: "reschedule" }),
       undefined,

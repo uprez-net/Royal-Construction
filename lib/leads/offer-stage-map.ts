@@ -78,16 +78,25 @@ export function leadStagePatchForOfferStatus(
   currentStage: LeadStage | null,
   now: Date,
   /**
-   * The lead's existing wonAt, so a move between two won stages can stamp one
-   * that was never set. CONVERTED pre-dates the column, so a legacy converted
-   * lead whose contract signs would otherwise land in WON with a null wonAt and
-   * stay invisible to win rate — won by every other measure, uncounted.
+   * The lead's existing wonAt. A lead won before the column existed has none,
+   * and would otherwise sit at WON invisible to win rate — won by every other
+   * measure, uncounted. Passing it lets this repair the gap.
    */
   currentWonAt: Date | null = null,
 ): LeadStagePatch | null {
   const next = OFFER_STATUS_LEAD_STAGE[status];
   if (next === null) return null;
-  if (currentStage === next) return null;
+
+  if (currentStage === next) {
+    // Same stage, so normally nothing to do — except repairing a won lead that
+    // has no wonAt. That row is won by stage and invisible to the win-rate
+    // card, and nothing else will ever notice: every other path here keys off
+    // the stage CHANGING. Cheap to fix, and the invariant the forecast rests on.
+    if (isWonStage(next) && currentWonAt == null) {
+      return { stage: next, wonAt: now, lostAt: null };
+    }
+    return null;
+  }
 
   // Won is a ratchet. Out-of-order webhooks are normal, and a stale
   // CONTRACT_SENT arriving after CONTRACT_SIGNED must not reopen the deal.

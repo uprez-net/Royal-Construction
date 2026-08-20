@@ -28,8 +28,10 @@ test("signing the contract wins the deal and stamps wonAt", () => {
 });
 
 test("starting the project keeps it won without re-dating the win", () => {
-  // The lead is already WON from CONTRACT_SIGNED; PROJECT must not re-stamp.
-  assert.equal(leadStagePatchForOfferStatus("PROJECT", "WON", NOW), null);
+  // Already WON from CONTRACT_SIGNED, with the win already dated: PROJECT must
+  // not re-stamp it.
+  const wonAt = new Date("2026-07-01T00:00:00.000Z");
+  assert.equal(leadStagePatchForOfferStatus("PROJECT", "WON", NOW, wonAt), null);
 });
 
 test("a won deal is never reopened by a late or replayed earlier event", () => {
@@ -81,7 +83,13 @@ test("applying the same status twice is a no-op", () => {
   // This is what makes a replayed DocuSign webhook safe without a dedupe table.
   const first = leadStagePatchForOfferStatus("CONTRACT_SIGNED", "NEGOTIATING", NOW);
   assert.ok(first);
-  const second = leadStagePatchForOfferStatus("CONTRACT_SIGNED", first.stage, NOW);
+  // Replaying feeds back what the first application wrote, including its date.
+  const second = leadStagePatchForOfferStatus(
+    "CONTRACT_SIGNED",
+    first.stage,
+    NOW,
+    first.wonAt ?? null,
+  );
   assert.equal(second, null);
 });
 
@@ -95,27 +103,26 @@ test("a null current stage is tolerated", () => {
   assert.equal(patch?.stage, "WON");
 });
 
-test("a legacy converted lead with no wonAt gets one when its contract signs", () => {
-  // CONVERTED pre-dates the wonAt column. Both stages are won, so closeDatePatch
-  // stamps nothing, and the lead would land in WON invisible to win rate.
-  const patch = leadStagePatchForOfferStatus("CONTRACT_SIGNED", "CONVERTED", NOW, null);
+test("a won lead with no wonAt is repaired when its contract signs", () => {
+  // A lead won before the wonAt column existed has none. closeDatePatch stamps
+  // nothing for WON -> WON, so it would land in WON invisible to win rate.
+  const patch = leadStagePatchForOfferStatus("CONTRACT_SIGNED", "WON", NOW, null);
   assert.equal(patch?.stage, "WON");
   assert.equal(patch?.wonAt?.toISOString(), NOW.toISOString());
 });
 
 test("an existing wonAt is never re-dated", () => {
   const original = new Date("2026-01-01T00:00:00.000Z");
-  const patch = leadStagePatchForOfferStatus("CONTRACT_SIGNED", "CONVERTED", NOW, original);
-  assert.equal(patch?.stage, "WON");
-  assert.equal(patch?.wonAt, undefined, "must not overwrite the original win date");
+  // Same stage and a date already recorded: nothing to do at all.
+  assert.equal(leadStagePatchForOfferStatus("CONTRACT_SIGNED", "WON", NOW, original), null);
 });
 
 test("no won stage is ever produced without a wonAt", () => {
   // The invariant the whole forecast rests on.
   for (const s of ALL_STATUSES) {
-    for (const from of ["NEW", "NEGOTIATING", "QUOTED", "CONVERTED", "WON", null] as const) {
+    for (const from of ["NEW", "NEGOTIATING", "QUOTED", "WON", null] as const) {
       const patch = leadStagePatchForOfferStatus(s, from, NOW, null);
-      if (patch && (patch.stage === "WON" || patch.stage === "CONVERTED")) {
+      if (patch && patch.stage === "WON") {
         assert.ok(patch.wonAt, `${from} -> ${s} produced a won stage with no wonAt`);
       }
     }
