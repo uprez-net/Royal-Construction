@@ -1,0 +1,220 @@
+language: "en-AU"
+early_access: false
+inheritance: false
+tone_instructions: >-
+  Be concise, evidence-based, and specific. Prioritize correctness, security, data integrity,
+  accessibility, and user-visible regressions. Explain impact and cite the smallest practical fix.
+  Treat repository guidance and ADRs as authoritative.
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_instructions: >-
+    Summarize user-visible behavior, data or schema changes, security implications, test and build
+    evidence, and rollout risks. Call out migration, signing, or legal-document impact explicitly.
+  review_status: true
+  review_details: true
+  review_progress: true
+  fail_commit_status: true
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  enable_prompt_for_ai_agents: true
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+      - "DRAFT"
+      - "[skip review]"
+    drafts: false
+    base_branches:
+      - "main"
+      - "staging"
+      - "release/.*"
+
+  path_filters:
+    - "!**/.DS_Store"
+    - "!**/.next/**"
+    - "!**/coverage/**"
+    - "!**/generated/**"
+    - "!**/__generated__/**"
+    - "!**/*.lock"
+    - "!**/*.tsbuildinfo"
+    - "!**/*.bak"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+    - "!**/*.gif"
+    - "!**/*.svg"
+    - "!**/*.ico"
+    - "!**/*.webp"
+    - "!**/*.xlsx"
+    - "!**/*.xls"
+    - "!**/*.docx"
+    - "!**/*.pdf"
+    - "!**/*.zip"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Before reviewing, read AGENTS.md, CLAUDE.md, CONTEXT.md, and docs/coding-standards.md.
+        For architecture or workflow changes, also read the relevant document in docs/architecture.md,
+        docs/implementation.md, docs/adr/, or docs/offer/. Treat accepted ADRs and CONTEXT.md as the
+        source of truth for domain terminology and lifecycle behavior. Do not invent a replacement
+        model when the repository has already made a decision. Review behavior and risk, not only
+        formatting; avoid comments that merely restate the diff or duplicate a configured linter.
+
+    - path: "**/*.{ts,tsx,js,jsx,mjs,cjs}"
+      instructions: |
+        Follow the repository's TypeScript and React standards. Keep server-side data access in
+        lib/data or route/server-action code, keep client components focused on rendering and
+        interaction, and preserve serializable client boundaries. Prefer explicit types, shared
+        validators and response helpers, and the existing fetchJson/Redux/React Query patterns.
+        Flag unsafe assertions, implicit any, swallowed errors, secret leakage, missing auth, and
+        missing cache revalidation. Do not recommend setState-in-useEffect when a value can be
+        derived from props or query state. Include accessibility impact for interactive UI changes.
+
+    - path: "app/api/**/*.{ts,tsx}"
+      instructions: |
+        Treat every route handler as a request boundary. Verify authentication and authorization
+        before data access, validate params/query/body input with shared schemas, use the project's
+        standard response helpers, avoid exposing raw Prisma Decimal or internal errors, and make
+        mutations idempotent where retries or webhooks are possible. Check that writes refresh or
+        revalidate the canonical data used by server-rendered views. For webhook and cron routes,
+        verify signature/secret checks and safe handling of duplicate or out-of-order events.
+
+    - path: "components/**/*.{ts,tsx}"
+      instructions: |
+        Check the server/client boundary and keep database, secret, and server-only integration
+        code out of client components. Prefer existing shared primitives and centralized modal/state
+        patterns. Review loading, empty, error, keyboard, focus, and icon-label behavior. Flag state
+        synchronization implemented as an avoidable effect, uncontrolled async races, non-serializable
+        state, and UI that can display stale canonical data after a mutation.
+
+    - path: "lib/data/**/*.{ts,tsx}"
+      instructions: |
+        Review data helpers as the server-side domain boundary. Check authorization assumptions,
+        input validation, transaction scope, race conditions, N+1 queries, pagination/search behavior,
+        Decimal and JSON serialization, error context, and cache invalidation. A mutation should
+        return the refreshed canonical shape required by its callers and should not silently discard
+        a failed write or overwrite a newer revision.
+
+    - path: "{components/offers,lib/offer,lib/docusign,app/api/docusign}/**/*.{ts,tsx}"
+      instructions: |
+        Treat CONTEXT.md and ADR 0001 through ADR 0005 as contract-grade requirements. Preserve the
+        distinction between Offer, Offer document, Tender, Contract, and Project. Preserve revision
+        history and immutable snapshots after their lock points; do not allow a revision after
+        tender_signed. Preserve owners[] including company director signatories, one tracked signer
+        per person, customer routingOrder 1 in parallel, and the builder counter-signing at order 2.
+        Keep Current Location distinct from Site Location. Offer acceptance is customer-only and does
+        not itself generate the Tender; Project handoff is gated solely by contract_signed. Flag any
+        code that silently drops parties, changes status without an auditable event, treats a PDF
+        download as a send/signature, or makes a retry create a duplicate envelope or transition.
+
+    - path: "{lib/data,types}/**/*offer*.{ts,tsx}"
+      instructions: |
+        Apply the Offer lifecycle rules from CONTEXT.md and the accepted Offer ADRs. Check that
+        workspaceState remains versioned and validated, agreedSnapshot is treated as immutable after
+        agreement, money stored in JSON remains integer cents, and revision/access/editability rules
+        are enforced in the server layer rather than only by UI controls. Prefer explicit domain
+        types over clientNames/secondary-customer parsing or a single nominated signer.
+
+    - path: "prisma/**/*.{prisma,sql}"
+      instructions: |
+        Review schema and migration changes for forward/backward deploy safety, data-preserving enum
+        transitions, correct indexes and uniqueness, transaction/locking behavior, and rollback or
+        retry hazards. Never edit an already-applied migration to repair history. Keep the Offer,
+        Tender, Contract, Envelope, and signer audit model consistent with the accepted ADRs. Preserve
+        integer-cents rules inside JSON and Decimal handling at the database/application boundary.
+        Flag destructive changes, silent data loss, missing indexes for new query paths, or migrations
+        that are not compatible with the staged CI deployment order.
+
+    - path: "tests/**/*.test.ts"
+      instructions: |
+        Prefer tests that prove observable domain behavior and invariants rather than implementation
+        details. Keep cases independent and descriptive, cover boundary and failure states, and add
+        regression coverage for changes to Offer status transitions, revisions, ownership/signers,
+        DocuSign callbacks, pricing/cents arithmetic, and physical document pagination. Match the
+        repository's existing tsx test scripts and do not assume a pnpm test script that is absent.
+
+    - path: "docs/adr/**/*.md"
+      instructions: |
+        Review ADR edits for a clear status, decision, consequences, and consistency with CONTEXT.md,
+        the current Prisma schema, and the implementation. If code changes intentionally supersede a
+        domain decision, require the same PR to update or explicitly reconcile the affected ADR and
+        reference docs. Flag terminology that conflates Current Location/Site Location or Offer,
+        Tender, and Contract.
+
+  pre_merge_checks:
+    title:
+      mode: "warning"
+      requirements: >-
+        Use a concise, imperative Conventional Commit-style title (for example feat(offers): or
+        fix(docusign):), identify the affected domain, and avoid WIP or vague titles.
+    description:
+      mode: "warning"
+    issue_assessment:
+      mode: "warning"
+    custom_checks:
+      - name: "Offer workflow invariants"
+        mode: "warning"
+        instructions: >-
+          For changes touching offers, tenders, contracts, DocuSign, signers, or project handoff,
+          compare the behavior with CONTEXT.md and ADR 0001 through ADR 0005. Flag any change that
+          conflates documents, drops an owner/director signer, violates customer-parallel or builder-
+          last routing, mutates a locked snapshot, permits a revision after tender_signed, creates a
+          Project before contract_signed, uses a deposit/upload as the handoff gate, mixes Current
+          Location with Site Location, stores JSON money as floating point, or is not safe to retry.
+          Pass when the invariant is preserved or the governing documentation is updated in the PR.
+      - name: "Server boundary and data safety"
+        mode: "warning"
+        instructions: >-
+          For API routes, server actions, lib/data, Prisma, and client components, flag missing
+          auth or input validation, server-only code crossing into the client, raw Prisma Decimal or
+          secrets crossing a serialization boundary, missing mutation revalidation, N+1 queries,
+          silent error handling, and non-idempotent webhook writes. Pass when the change follows the
+          repository's shared validators, response helpers, authorization boundary, serialization,
+          transaction, and cache-invalidation conventions.
+
+  tools:
+    eslint:
+      enabled: true
+    prismaLint:
+      enabled: true
+    squawk:
+      enabled: true
+    actionlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    github-checks:
+      enabled: true
+      timeout_ms: 600000
+
+chat:
+  art: false
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - files: "AGENTS.md, CLAUDE.md, CONTEXT.md, docs/coding-standards.md, docs/architecture.md, docs/implementation.md"
+        applyTo: "**/*"
+      - files: "docs/adr/*.md, docs/offer/*.md"
+        applyTo: "components/offers/**, lib/offer/**, lib/docusign/**, app/api/docusign/**, lib/data/**, prisma/**, types/**"
+  learnings:
+    scope: "local"
+    approval_delay: 7
+  issues:
+    scope: "local"
+  pull_requests:
+    scope: "local"
