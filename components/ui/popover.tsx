@@ -5,6 +5,14 @@ import { Popover as PopoverPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+// Pass `modal` on any Popover rendered inside a Dialog/Sheet. Dialog wraps its
+// content in react-remove-scroll, whose document-level wheel listener cancels
+// every wheel event whose target is neither inside the dialog content nor one
+// of its declared shards. PopoverContent is portalled to <body>, so it is
+// neither: without `modal` the mouse wheel is silently swallowed over the
+// popover and a long list (a Command list, a scrollable menu) can only be moved
+// with the arrow keys. `modal` gives the popover its own scroll lock, which
+// takes over as the topmost lock and allows scrolling within its own content.
 function Popover({
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Root>) {

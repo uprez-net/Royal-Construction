@@ -353,7 +353,7 @@ export default function UpdateMilestoneModal({
                   Start date
                   <RequiredMark />
                 </Label>
-                <Popover>
+                <Popover modal>
                   <PopoverTrigger asChild>
                     <Button
                       id="startDate"
@@ -408,7 +408,7 @@ export default function UpdateMilestoneModal({
                   <Label htmlFor="actualDate" className={labelClassName}>
                     Completed on
                   </Label>
-                  <Popover>
+                  <Popover modal>
                     <PopoverTrigger asChild>
                       <Button
                         id="actualDate"
