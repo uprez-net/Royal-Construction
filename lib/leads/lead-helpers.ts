@@ -113,6 +113,24 @@ export function budgetBracket(
   return BUDGET_BRACKETS[budget.trim()] ?? null;
 }
 
+/**
+ * The stage list to render in a picker for a lead currently on `current`.
+ *
+ * LEAD_STAGE_OPTIONS hides Won and Cancelled, but a lead can still BE on one:
+ * the header badge picker builds its own list from STAGE_STYLES and offers all
+ * thirteen. Radix Select fills the trigger by portalling text out of the
+ * MATCHING item, and its placeholder only covers "" and undefined — so a value
+ * with no item renders the trigger completely blank, not even "Select a stage".
+ *
+ * Appending the current stage keeps that lead readable without making a hidden
+ * stage newly selectable for anyone else.
+ */
+export function stageOptionsFor(current: LeadStage): LeadStage[] {
+  return LEAD_STAGE_OPTIONS.includes(current)
+    ? LEAD_STAGE_OPTIONS
+    : [...LEAD_STAGE_OPTIONS, current];
+}
+
 export const STAGE_STYLES: Record<LeadStage, string> = {
   New: "stage-badge-info",
   Contacted: "stage-badge-warning",

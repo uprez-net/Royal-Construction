@@ -33,7 +33,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   BUDGET_OPTIONS,
   LEAD_SOURCE_OPTIONS,
-  LEAD_STAGE_OPTIONS,
+  stageOptionsFor,
   closureReasonCopy,
   parseLikelihood,
   buildFollowupHistoryEntry,
@@ -498,7 +498,7 @@ export function LeadOverviewTab({
                   <SelectValue placeholder="Select a stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  {LEAD_STAGE_OPTIONS.map((option) => (
+                  {stageOptionsFor(form.stage).map((option) => (
                     <SelectItem key={option} value={option}>
                       {option}
                     </SelectItem>

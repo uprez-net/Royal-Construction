@@ -7,6 +7,7 @@ import {
   isTerminalStage,
   isWonStage,
   parseLikelihood,
+  stageOptionsFor,
 } from "../../lib/leads/lead-helpers";
 
 test("blank likelihood means no override", () => {
@@ -126,4 +127,23 @@ test("lead-write MCP tools report failures as errors", async () => {
     const before = mcp.slice(Math.max(0, at - 400), at);
     assert.ok(before.includes("isError: true"), `"${verb}" catch is missing isError: true`);
   }
+});
+
+/* ── stageOptionsFor ───────────────────────────────────────────────── */
+
+test("a lead on a hidden stage still gets an option to render", () => {
+  // Won and Cancelled are hidden from the picker but the header badge can
+  // still set them. Without an item to match, Radix renders the trigger blank
+  // — its placeholder only covers "" and undefined.
+  for (const hidden of ["Won", "Cancelled"] as const) {
+    assert.ok(!LEAD_STAGE_OPTIONS.includes(hidden), `${hidden} should be hidden`);
+    assert.ok(stageOptionsFor(hidden).includes(hidden), `${hidden} must render`);
+  }
+});
+
+test("a lead on a visible stage does not widen the list", () => {
+  // Appending unconditionally would duplicate the option and, in Radix, give
+  // two items the same value.
+  assert.deepEqual(stageOptionsFor("Converted"), LEAD_STAGE_OPTIONS);
+  assert.equal(stageOptionsFor("New").length, LEAD_STAGE_OPTIONS.length);
 });
