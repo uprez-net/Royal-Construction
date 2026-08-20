@@ -227,14 +227,14 @@ export function ProjectMilestonesTab({
     );
   };
 
-  const handleStatusUpdate = (milestoneId: string) => {
+  const handleStatusUpdate = (milestoneId: string, status?: MilestoneStatus) => {
     dispatch(
       openModal({
         type: "updateMilestoneStatus",
         payload: {
           milestoneId,
           projectId: project.id,
-          newStatus: MilestoneStatus.DONE,
+          newStatus: status || MilestoneStatus.DONE,
           isAdmin: isAdmin,
         },
       }),

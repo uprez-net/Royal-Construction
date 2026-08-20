@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import type { UIMilestone } from "@/types/project";
-import { BanIcon, Camera, FilePenLine, Play } from "lucide-react";
+import { MilestoneStatus } from "@prisma/client";
+import { BanIcon, Camera, Edit, FilePenLine, Play } from "lucide-react";
 
 export function MilestoneActionGroup({
   isActiveStage,
@@ -13,13 +14,15 @@ export function MilestoneActionGroup({
   isActiveStage: boolean;
   milestone: UIMilestone;
   onOpenAddUpdateModal: (id: string) => void;
-  onStatusUpdate: (id: string) => void;
+  onStatusUpdate: (id: string, status?: MilestoneStatus) => void;
   onStartMilestone: (id: string) => void;
   onMarkasNotRequired: (id: string) => void;
 }) {
   const hasChildren = milestone.childrenMilestones.length > 0;
   const isActive = milestone.status === "ACTIVE";
   const isPending = milestone.status === "PENDING";
+  const isCompleted =
+    milestone.status === "DONE" || milestone.status === "NOT_REQUIRED";
 
   if (isActiveStage && isPending) {
     return (
@@ -35,6 +38,21 @@ export function MilestoneActionGroup({
           onClick={() => onMarkasNotRequired(milestone.id)}
         >
           <BanIcon className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
+    );
+  }
+
+  if (isCompleted) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onStatusUpdate(milestone.id, milestone.status)}
+        >
+          <Edit className="mr-1 h-4 w-4" aria-hidden="true" />
+          Edit Activity
         </Button>
       </div>
     );

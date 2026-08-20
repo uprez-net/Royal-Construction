@@ -231,7 +231,7 @@ export function AreaCalculatorPanel({
             </div>
             <ResultRows
               rows={[
-                ["Tiles wasted (10%)", String(Math.round(calc.tilesWasted))],
+                ["Additional Tiles for Waste (10%)", String(Math.round(calc.tilesWasted))],
                 [
                   "Total tiles required",
                   String(Math.round(calc.totalTilesRequired)),

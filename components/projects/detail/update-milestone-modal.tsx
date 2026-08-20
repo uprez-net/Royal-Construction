@@ -73,7 +73,7 @@ const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
   PENDING: ["ACTIVE", "NOT_REQUIRED"],
   ACTIVE: ["DONE"],
   DONE: [],
-  NOT_REQUIRED: [],
+  NOT_REQUIRED: ["PENDING"],
 };
 
 type MilestoneUpdateErrors = Partial<Record<keyof MilestoneUpdateData, string>>;
@@ -307,7 +307,7 @@ export default function UpdateMilestoneModal({
                 <RequiredMark />
               </Label>
               <Select
-                disabled={status === "ACTIVE" || status === "NOT_REQUIRED"}
+                disabled={status === "ACTIVE"}
                 value={formState.status}
                 onValueChange={(value) => {
                   handleFormChange("status", value);
@@ -359,7 +359,6 @@ export default function UpdateMilestoneModal({
                       id="startDate"
                       type="button"
                       variant="outline"
-                      disabled={formState.status === "DONE"}
                       className={cn(
                         inputClassName,
                         "w-full justify-start text-left font-normal",
@@ -392,7 +391,6 @@ export default function UpdateMilestoneModal({
                           date ? format(date, "yyyy-MM-dd") : "",
                         )
                       }
-                      disabled={formState.status === "DONE"}
                       captionLayout="dropdown"
                     />
                   </PopoverContent>
