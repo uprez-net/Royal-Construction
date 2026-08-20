@@ -73,6 +73,8 @@ export const offerScopeDataSchema = z.object({
 
 export const hbfcClaimDataSchema = z.object({
   claimAmount: z.number(),
+  loadingChargePercent: z.number(),
+  totalPremiumToBePaid: z.number(),
 });
 
 export const offerContentDataSchema = z.object({

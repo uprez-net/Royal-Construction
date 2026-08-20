@@ -126,7 +126,7 @@ function coerceOfferContent(value: unknown): OfferContentData {
 function coerceHBFCClaim(value: unknown): HBFCClaimData {
   const parsed = hbfcClaimDataSchema.safeParse(value);
   if (parsed.success) return parsed.data;
-  return { claimAmount: 0 };
+  return { claimAmount: 0, loadingChargePercent: 0, totalPremiumToBePaid: 0 };
 }
 
 /**
