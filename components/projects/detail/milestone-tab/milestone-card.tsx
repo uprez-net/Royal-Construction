@@ -26,6 +26,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { MilestoneActionGroup } from "./milestone-action-button";
+import { MilestoneStatus } from "@prisma/client";
 
 function getMilestoneTone(status: string) {
   if (status === "DONE") {
@@ -98,7 +99,7 @@ export function MilestoneCard({
     TradieScheduleWithTradieAndMilestone[]
   >;
   onOpenAddUpdateModal: (id: string) => void;
-  onStatusUpdate: (id: string) => void;
+  onStatusUpdate: (id: string, status?: MilestoneStatus) => void;
   onStartMilestone: (id: string) => void;
   onMarkasNotRequired: (id: string) => void;
   onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
@@ -123,7 +124,6 @@ export function MilestoneCard({
         tone.className,
         isCompact && "p-3",
         depth > 0 && "ml-4",
-        milestone.status === "NOT_REQUIRED" && "opacity-70 line-through",
       )}
     >
       {depth > 0 ? (
@@ -134,7 +134,12 @@ export function MilestoneCard({
       ) : null}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            "min-w-0 flex-1",
+            milestone.status === "NOT_REQUIRED"&& "opacity-70 line-through",
+          )}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <p
               className={cn(
