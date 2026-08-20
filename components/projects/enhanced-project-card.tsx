@@ -28,7 +28,7 @@ const calcMilestoneOverviewData = (
     }
     const stageData = stageMilestoneMap.get(stage)!;
     stageData.total++;
-    if (milestone.status === "DONE") {
+    if (milestone.status === "DONE" || milestone.status === "NOT_REQUIRED") {
       stageData.completed++;
     }
   }

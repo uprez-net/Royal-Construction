@@ -6,6 +6,7 @@ import {
   DollarSign,
   ListChecks,
   ChevronsDown,
+  Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DonutChartCard } from "@/components/charts/donut-chart-card";
@@ -33,6 +34,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const convertToVisualMilestone = (
   milestones: MilestoneWithFilesTradiesUpdates[],
@@ -89,7 +91,7 @@ const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
     }
     const stageData = stageMilestoneMap.get(stage)!;
     stageData.total++;
-    if (milestone.status === "DONE") {
+    if (milestone.status === "DONE" || milestone.status === "NOT_REQUIRED") {
       stageData.completed++;
     }
   }
@@ -187,7 +189,7 @@ export function ProjectMilestonesTab({
         count:
           projectStagesCount - completedStagesCount - inProgressStagesCount,
         color: "var(--muted)",
-      },
+      }
     ];
     return graphData;
   }, [project.milestones]);
@@ -316,7 +318,7 @@ export function ProjectMilestonesTab({
           <div className="mt-6 flex items-center justify-end gap-2">
             <Button size="sm" onClick={handleAddMilestone}>
               <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
-              Add milestone
+              Add Activity
             </Button>
           </div>
         </CardHeader>
@@ -324,34 +326,77 @@ export function ProjectMilestonesTab({
           {stageGroups.length === 0 ? (
             <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/70 px-4 py-12 text-center">
               <p className="text-sm font-medium text-foreground">
-                No milestones yet
+                No activities yet
               </p>
               <p className="max-w-sm text-xs text-muted-foreground">
-                Add the first milestone to break this project into stages with
+                Add the first activity to break this project into stages with
                 target dates and budgets.
               </p>
             </div>
           ) : (
             stageGroups.map(([stage, milestones]) => {
+              const isStageComplete = milestones
+                .flatMap((m) => [m, ...m.childrenMilestones])
+                .every((m) => m.status !== "PENDING");
+              const firstActiveStage = stageGroups.find(([, milestones]) => {
+                return milestones
+                  .flatMap((m) => [m, ...m.childrenMilestones])
+                  .some((m) => m.status === "PENDING");
+              })?.[0];
+
+              const isActiveStage = stage === firstActiveStage;
               const stagePercentage = PROJECT_STAGE_PERCENTAGE[stage] ?? 0;
               const projectBudget = Number(project.totalBudget);
               const stageBudget = Number.isFinite(projectBudget)
                 ? stagePercentage * projectBudget
                 : null;
 
+              // Sort milestone by status Completed > Active > Pending
+              const sortedMilestones = [...milestones].sort((a, b) => {
+                const statusOrder: Record<MilestoneStatus, number> = {
+                  DONE: 0,
+                  ACTIVE: 1,
+                  PENDING: 2,
+                  NOT_REQUIRED: 3,
+                };
+                return statusOrder[a.status] - statusOrder[b.status];
+              });
+
               return (
                 <Collapsible
                   key={stage}
-                  defaultOpen={
-                    milestones
-                      .flatMap((m) => [m, ...m.childrenMilestones])
-                      .some((m) => m.status === "ACTIVE") || stage === "Deposit"
-                  }
-                  className="rounded-lg border border-border/70 bg-card"
+                  defaultOpen={isActiveStage}
+                  className={cn(
+                    "rounded-lg border bg-card transition-colors",
+                    isStageComplete
+                      ? "border-emerald-500/30 bg-emerald-500/5"
+                      : isActiveStage
+                        ? "border-primary/40 bg-primary/5"
+                        : "border-border/70",
+                  )}
                 >
-                  <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+                  <CollapsibleTrigger
+                    className={cn(
+                      "group flex w-full items-center justify-between px-4 py-3",
+                      "transition-colors hover:bg-muted/40",
+                      "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                      isStageComplete && "hover:bg-emerald-500/10",
+                      isActiveStage &&
+                        !isStageComplete &&
+                        "hover:bg-primary/10",
+                    )}
+                  >
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-foreground">
+                      <h3
+                        className={cn(
+                          "text-sm font-semibold",
+                          isStageComplete
+                            ? "text-emerald-700 dark:text-emerald-400"
+                            : isActiveStage
+                              ? "text-primary"
+                              : "text-foreground",
+                        )}
+                      >
                         {PROJECT_STAGE_LABELS[stage] ?? stage}
                       </h3>
 
@@ -367,13 +412,32 @@ export function ProjectMilestonesTab({
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      {isStageComplete && (
+                        <Badge
+                          variant="default"
+                          className="flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-medium hover:bg-emerald-600"
+                        >
+                          <Check className="size-3.5" aria-hidden="true" />
+                          Complete
+                        </Badge>
+                      )}
+
+                      {isActiveStage && (
+                        <Badge
+                          variant="secondary"
+                          className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                        >
+                          <ListChecks className="size-3.5" aria-hidden="true" />
+                          Active
+                        </Badge>
+                      )}
                       <Badge
                         variant="secondary"
                         className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
                       >
                         <ListChecks className="size-3.5" aria-hidden="true" />
-                        {milestones.length} milestone
-                        {milestones.length === 1 ? "" : "s"}
+                        {milestones.length} activit
+                        {milestones.length === 1 ? "y" : "ies"}
                       </Badge>
 
                       <ChevronsDown
@@ -385,9 +449,10 @@ export function ProjectMilestonesTab({
 
                   <CollapsibleContent>
                     <div className="space-y-2 border-t border-border/70 p-3">
-                      {milestones.map((milestone) => (
+                      {sortedMilestones.map((milestone) => (
                         <MilestoneCard
                           key={milestone.id}
+                          isActiveStage={isActiveStage}
                           isAdmin={isAdmin}
                           prevMilestone={visualMilestones
                             .flatMap((m) => [m, ...m.childrenMilestones])

@@ -74,6 +74,7 @@ function MilestoneMetaLine({
 
 export function MilestoneCard({
   isAdmin,
+  isActiveStage,
   prevMilestone,
   milestone,
   project,
@@ -87,6 +88,7 @@ export function MilestoneCard({
   onOpenViewPicture,
 }: {
   isAdmin: boolean;
+  isActiveStage: boolean;
   prevMilestone?: UIMilestone;
   milestone: UIMilestone;
   project: ProjectDetail;
@@ -110,9 +112,9 @@ export function MilestoneCard({
   );
   const imageUrls = milestonePictures.map((file) => file.url);
   const nextTradies = tradieAlertsByMilestone[milestone.id] ?? [];
-  const budgetShare = Number(project.totalBudget)
-    ? (Number(milestone.budget) / Number(project.totalBudget)) * 100
-    : 0;
+  // const budgetShare = Number(project.totalBudget)
+  //   ? (Number(milestone.budget) / Number(project.totalBudget)) * 100
+  //   : 0;
 
   return (
     <article
@@ -171,12 +173,14 @@ export function MilestoneCard({
               isCompact && "gap-x-3",
             )}
           >
-            <MilestoneMetaLine icon={<Calendar className="h-3.5 w-3.5" />}>
-              Target{" "}
-              <span className="font-mono tabular-nums">
-                {dateFormat.format(new Date(milestone.targetDate))}
-              </span>
-            </MilestoneMetaLine>
+            {!hasChildren && (
+              <MilestoneMetaLine icon={<Calendar className="h-3.5 w-3.5" />}>
+                Target{" "}
+                <span className="font-mono tabular-nums">
+                  {dateFormat.format(new Date(milestone.targetDate))}
+                </span>
+              </MilestoneMetaLine>
+            )}
 
             {milestone.actualDate ? (
               <MilestoneMetaLine
@@ -188,18 +192,6 @@ export function MilestoneCard({
                 </span>
               </MilestoneMetaLine>
             ) : null}
-
-            {isAdmin && (
-              <MilestoneMetaLine icon={<DollarSign className="h-3.5 w-3.5" />}>
-                <span className="font-mono tabular-nums">
-                  {currency.format(Number(milestone.budget))}
-                </span>{" "}
-                <span className="font-mono tabular-nums">
-                  ({budgetShare.toFixed(1)}%)
-                </span>{" "}
-                of project budget
-              </MilestoneMetaLine>
-            )}
 
             {milestone.tradieSchedules.length > 0 ? (
               <MilestoneMetaLine icon={<Users className="h-3.5 w-3.5" />}>
@@ -215,7 +207,7 @@ export function MilestoneCard({
         </div>
 
         <MilestoneActionGroup
-          prevMilestone={prevMilestone}
+          isActiveStage={isActiveStage}
           milestone={milestone}
           onOpenAddUpdateModal={onOpenAddUpdateModal}
           onStatusUpdate={onStatusUpdate}
@@ -338,7 +330,7 @@ export function MilestoneCard({
                 className="group flex w-full items-center justify-between gap-3 text-left text-sm font-medium text-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 <span>
-                  {milestone.childrenMilestones.length} sub-milestone
+                  {milestone.childrenMilestones.length} sub-activity
                   {milestone.childrenMilestones.length === 1 ? "" : "s"}
                 </span>
                 <ChevronDown
@@ -355,6 +347,7 @@ export function MilestoneCard({
                     <MilestoneCard
                       key={child.id}
                       isAdmin={isAdmin}
+                      isActiveStage={isActiveStage}
                       prevMilestone={
                         milestone.childrenMilestones
                           .flatMap((m) => [m, ...m.childrenMilestones])
