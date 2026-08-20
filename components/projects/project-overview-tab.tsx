@@ -128,7 +128,7 @@ export function OverviewTab({
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           {project.completedMilestoneCount} of {project.milestoneCount}{" "}
-          milestones completed
+          activities completed
         </p>
       </div>
 

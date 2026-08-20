@@ -106,7 +106,14 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
 
       return acc;
     },
-    {} as Record<ProjectStage, ProjectWithStats["milestones"]>,
+    {
+      [ProjectStage.Deposit]: [],
+      [ProjectStage.Slab]: [],
+      [ProjectStage.Frame]: [],
+      [ProjectStage.Lockup]: [],
+      [ProjectStage.Interior_Fit_Out]: [],
+      [ProjectStage.Final]: [],
+    } as Record<ProjectStage, ProjectWithStats["milestones"]>,
   );
 
   const stages = Object.entries(milestonesMappedToStage) as [
@@ -119,7 +126,7 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {project.completedMilestoneCount} of {project.milestoneCount}{" "}
-          milestones completed
+          activities completed
         </p>
         <p className="font-mono text-sm font-medium text-foreground tabular-nums">
           {completionPercent}%
@@ -132,7 +139,7 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
         aria-valuenow={completionPercent}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuetext={`${project.completedMilestoneCount} of ${project.milestoneCount} milestones completed`}
+        aria-valuetext={`${project.completedMilestoneCount} of ${project.milestoneCount} activities completed`}
         className="h-3 overflow-hidden rounded-full bg-muted"
       >
         <div
@@ -167,8 +174,8 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
                       className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
                     >
                       <ListChecks className="size-3.5" aria-hidden="true" />
-                      {milestones.length} milestone
-                      {milestones.length === 1 ? "" : "s"}
+                      {milestones.length} activit
+                      {milestones.length === 1 ? "y" : "ies"}
                     </Badge>
 
                     <ChevronsDown
