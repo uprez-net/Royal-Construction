@@ -3,6 +3,7 @@ import { LeadStage as DBLeadStage, RunStatus, LeadEmails } from "@prisma/client"
 export type LeadStage =
   | 'New'
   | 'Contacted'
+  | 'Discovery'
   | 'Qualified'
   | 'Quoted'
   | 'Negotiating'
@@ -123,6 +124,9 @@ export interface Lead {
   followupNotes: string;
   followupReminderSentAt?: string | null;
   meetingReminderSentAt?: string | null;
+  /** Set when the task was closed out. The Follow-ups tab hides completed work. */
+  followupCompletedAt?: string | null;
+  meetingCompletedAt?: string | null;
   lostReason?: string;
   history: HistoryItem[];
   created: string;
@@ -162,6 +166,7 @@ export interface EmailTemplate {
 export const LeadStageToLeadStageDBMapping: Record<LeadStage, DBLeadStage> = {
   New: DBLeadStage.NEW,
   Contacted: DBLeadStage.CONTACTED,
+  Discovery: DBLeadStage.DISCOVERY,
   Qualified: DBLeadStage.QUALIFIED,
   Quoted: DBLeadStage.QUOTED,
   Negotiating: DBLeadStage.NEGOTIATING,

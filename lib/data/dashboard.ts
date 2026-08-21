@@ -10,7 +10,6 @@ import {
     isPast,
     isToday
 } from "date-fns";
-import { LeadStage } from "@prisma/client";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 import { calculateTrend } from "@/utils/formatters";
 import { getUserByClerkId } from "@/lib/data/user";
@@ -66,10 +65,8 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
                     COUNT(*) FILTER (
                         WHERE
                             "assignedId" = ${userId}
-                            AND (
-                                stage = 'IN_FOLLOW_UP'
-                                OR "followupDate" <= ${now}
-                            )
+                            AND "followupDate" <= ${now}
+                            AND "followupCompletedAt" IS NULL
                     ) AS follow_ups_count,
 
                     COUNT(*) FILTER (
@@ -262,10 +259,7 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
                 OR: [
                     {
                         assignedId: user.id,
-                        stage: LeadStage.IN_FOLLOW_UP,
-                    },
-                    {
-                        assignedId: user.id,
+                        followupCompletedAt: null,
                         followupDate: {
                             lte: now,
                         },
@@ -383,9 +377,11 @@ export async function getDashboardGraphData() {
                 WHEN stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')
                     THEN 'lost'
 
-                WHEN stage IN ('NEW', 'CONTACTED', 'QUALIFIED')
+                WHEN stage IN ('NEW', 'CONTACTED', 'DISCOVERY', 'QUALIFIED')
                     THEN 'nurture'
 
+                -- MEETING_SCHEDULED and IN_FOLLOW_UP stay listed only because
+                -- rows hold them until the data migration has run everywhere.
                 WHEN stage IN (
                     'QUOTED',
                     'NEGOTIATING',

@@ -40,7 +40,9 @@ export function FollowupModal({
         followupDate: date,
         followupTime: time,
         history: [buildFollowupHistoryEntry(date, time)],
-        stage: "In Follow-up",
+        // No stage. Scheduling a task is not a stage change; updateLead
+        // advances the lead to Discovery only if it has not got there yet, and
+        // leaves a lead at Qualified or beyond exactly where it is.
       });
 
       if (!updated) {

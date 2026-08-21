@@ -313,6 +313,7 @@ export async function getLeads(
   filterTiming?: string,
   filterLeadsWithoutProject?: boolean,
   isArchived?: boolean,
+  hasOpenTask?: boolean,
   pendingFollowUps?: boolean,
   upcomingFollowUps?: boolean,
   pendingMeetings?: boolean,
@@ -419,6 +420,24 @@ export async function getLeads(
           not: null,
           gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
         }
+      }),
+      // Leads carrying scheduled work. Replaces filtering the Follow-ups tab by
+      // stage: a lead at Quoted or Negotiating can have a follow-up booked, and
+      // the stage filter never returned it.
+      // Nested under AND, not spread as bare `stage` and `OR` keys. `...where`
+      // above already carries an OR for the search terms, and a second OR at
+      // this level overwrites it in the object literal, so searching while the
+      // Follow-ups tab was open would have silently ignored the search text.
+      ...(hasOpenTask && {
+        AND: [
+          { stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] as LeadStage[] } },
+          {
+            OR: [
+              { followupDate: { not: null }, followupCompletedAt: null },
+              { meetingDate: { not: null }, meetingCompletedAt: null },
+            ],
+          },
+        ],
       }),
       ...(isMeetingScheduledFilterActive && {
         meetingDate: {
@@ -950,10 +969,19 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
   if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
-  if (input.meetingDate !== undefined) updateData.meetingDate = input.meetingDate;
+  // Setting a date reopens the task: a lead carries one meeting and one
+  // follow-up at a time, so a fresh date must not inherit the last one's
+  // completion stamp and show up already done.
+  if (input.meetingDate !== undefined) {
+    updateData.meetingDate = input.meetingDate;
+    if (input.meetingDate !== null) updateData.meetingCompletedAt = null;
+  }
   if (input.meetingTime !== undefined) updateData.meetingTime = input.meetingTime;
   if (input.meetingMode !== undefined) updateData.meetingMode = input.meetingMode;
-  if (input.followupDate !== undefined) updateData.followupDate = input.followupDate;
+  if (input.followupDate !== undefined) {
+    updateData.followupDate = input.followupDate;
+    if (input.followupDate !== null) updateData.followupCompletedAt = null;
+  }
   if (input.followupTime !== undefined) updateData.followupTime = input.followupTime;
   if (input.followupNotes !== undefined) updateData.followupNotes = input.followupNotes;
   if (input.followupReminderSentAt !== undefined) updateData.followupReminderSentAt = input.followupReminderSentAt;
@@ -972,13 +1000,16 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     };
   }
 
-  if (input.followupResponseOutcome === "yes") {
-    updateData.followupDate = null;
-    updateData.followupTime = null;
-    updateData.followupReminderSentAt = new Date();
-  } else if (input.followupResponseOutcome === "notRequired") {
-    updateData.followupDate = null;
-    updateData.followupTime = null;
+  // Answering a follow-up closes the task. It used to null the date and write
+  // stage CONTACTED, and that stage write was the only record the software had
+  // that a follow-up had finished. It also cost a lead in negotiation 50 points
+  // for a call being answered. followupCompletedAt carries the fact now, and
+  // the date is kept so the tab can still show what was scheduled.
+  if (
+    input.followupResponseOutcome === "yes" ||
+    input.followupResponseOutcome === "notRequired"
+  ) {
+    updateData.followupCompletedAt = new Date();
     updateData.followupReminderSentAt = new Date();
   } else if (input.followupResponseOutcome === "reschedule") {
     const nextFollowupDate = new Date();
@@ -986,6 +1017,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     updateData.followupDate = nextFollowupDate;
     updateData.followupTime = input.followupTime ?? existingLead?.followupTime ?? null;
     updateData.followupReminderSentAt = null;
+    updateData.followupCompletedAt = null;
   }
 
   // Single stage write. `stage` and `followupResponseOutcome` are independently
@@ -994,10 +1026,18 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   // close-date stamp is derived from the RESOLVED stage, never from the
   // requested one, so the stage column and wonAt/lostAt can never describe two
   // different transitions.
+  // Scheduling work advances an early lead into Discovery and does nothing
+  // else. Answering or clearing a task never moves the stage: that is the whole
+  // point of the split, and it is why "yes" is absent from this condition.
+  const taskScheduled =
+    input.followupResponseOutcome === "reschedule" ||
+    (input.followupDate !== undefined && input.followupDate !== null) ||
+    (input.meetingDate !== undefined && input.meetingDate !== null);
+
   const resolvedStage = resolveLeadStage({
     currentStage: existingLead?.stage ?? null,
     requestedStage: mappedStage,
-    followupResponseOutcome: input.followupResponseOutcome,
+    taskScheduled,
   });
   if (resolvedStage !== undefined) {
     updateData.stage = resolvedStage;
@@ -1193,7 +1233,14 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
       COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      COUNT(*) FILTER (WHERE stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED')) AS "pendingFollowup"
+      -- Scheduled work, not a stage. This counted two stages that no longer
+      -- exist in the picker, and missed every lead further down the pipeline
+      -- that had a follow-up booked.
+      COUNT(*) FILTER (
+        WHERE stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
+          AND (("followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL)
+            OR ("meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL))
+      ) AS "pendingFollowup"
     FROM "Lead"
     WHERE "isArchived" = false
   `;
@@ -1220,6 +1267,17 @@ export async function getFollowupStats(): Promise<FollowupStats> {
   const todayUTC = fromZonedTime(todayStart, timeZone);
   const tomorrowUTC = fromZonedTime(tomorrowStart, timeZone);
 
+  // A Prisma.sql fragment, not a plain string: `${x}` in a $queryRaw template
+  // becomes a bound parameter, so a bare string would be sent as a value and
+  // the query would fail rather than filter.
+  //
+  // These counts used to key off stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED').
+  // Scheduled work is a task now, so the filter is the date plus "not yet
+  // completed", and the stage only decides whether the lead is still live at
+  // all. Without this clause the 13 closed and won leads on production that
+  // carry stale dates would count as outstanding work.
+  const OPEN_STAGES = Prisma.sql`stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')`;
+
   const [stats] = await prisma.$queryRaw<
     {
       totalFollowUps: bigint;
@@ -1231,12 +1289,12 @@ export async function getFollowupStats(): Promise<FollowupStats> {
     }[]
   >`
     SELECT
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP') AS "totalFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED') AS "totalMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
     FROM "Lead"
     WHERE "isArchived" = false
   `;
