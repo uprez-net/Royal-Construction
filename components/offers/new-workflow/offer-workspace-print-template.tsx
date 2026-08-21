@@ -454,8 +454,7 @@ function PrintSnapshotPage({
     job.firstFloorSqm + 
     alfrescoBalcony + 
     job.porchSqm + 
-    job.grannyFlatSqm +
-    job.kitchenSqm
+    job.grannyFlatSqm
   const areaCells = [
     { label: "Ground Floor + Garage", value: formatArea(gfGarage) },
     { label: "First Floor", value: formatArea(job.firstFloorSqm) },

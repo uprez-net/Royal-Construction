@@ -1,6 +1,11 @@
 "use client";
 
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
@@ -9,10 +14,13 @@ import {
   introTextChanged,
   termsAndConditionsChanged,
   saveOfferContent,
+  inclusionsChanged,
+  exclusionsListChanged
 } from "@/lib/store/slices/adminOfferContentSlice";
 import { OfferCardHeading } from "@/components/offers/new-workflow/offer-workspace-card-heading";
 import { FilePenLine } from "lucide-react";
 import { SaveChangesButton } from "./shared/save-changes-button";
+import { BulletListEditor } from "./shared/bullet-list-editor";
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -33,10 +41,15 @@ export function OfferContentPage() {
   const terms = useAppSelector(
     (s) => s.adminOfferContent.data.offerContent.termsAndConditions,
   );
-  const dirty = useAppSelector((s) => s.adminOfferContent.dirty.offerContent);
-  const saving = useAppSelector(
-    (s) => s.adminOfferContent.saving.offerContent,
+  const inclusions = useAppSelector(
+    (s) => s.adminOfferContent.data.offerContent.inclusions,
   );
+  const exclusions = useAppSelector(
+    (s) => s.adminOfferContent.data.offerContent.exclusions,
+  );
+
+  const dirty = useAppSelector((s) => s.adminOfferContent.dirty.offerContent);
+  const saving = useAppSelector((s) => s.adminOfferContent.saving.offerContent);
   const error = useAppSelector((s) => s.adminOfferContent.error.offerContent);
 
   return (
@@ -64,6 +77,24 @@ export function OfferContentPage() {
             onChange={(e) => dispatch(introTextChanged(e.target.value))}
             rows={4}
             placeholder="Opening paragraph shown on the offer one-pager…"
+          />
+        </label>
+        <label>
+          <FieldLabel>Inclusion bullets</FieldLabel>
+          <BulletListEditor
+            value={inclusions}
+            onChange={(lines) => dispatch(inclusionsChanged(lines as string[]))}
+            addLabel="Add bullet"
+            placeholder="Inclusion text"
+          />
+        </label>
+        <label>
+          <FieldLabel>Exclusion bullets</FieldLabel>
+          <BulletListEditor
+            value={exclusions}
+            onChange={(lines) => dispatch(exclusionsListChanged(lines as string[]))}
+            addLabel="Add bullet"
+            placeholder="Exclusion text"
           />
         </label>
         <label>

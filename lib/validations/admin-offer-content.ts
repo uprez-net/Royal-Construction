@@ -71,10 +71,17 @@ export const offerScopeDataSchema = z.object({
   exclusions: z.array(offerExclusionSchema),
 });
 
+export const inclusionScheduleRowSchema = z.object({
+  spec: z.string(),
+  category: z.string().optional(),
+});
+
 export const offerContentDataSchema = z.object({
   headline: z.string(),
   introText: z.string(),
   inclusions: z.array(z.string()),
+  inclusionSchedule: z.array(inclusionScheduleRowSchema),
+  exclusions: z.array(z.string()),
   termsAndConditions: z.string(),
 });
 

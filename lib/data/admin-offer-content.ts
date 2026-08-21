@@ -17,6 +17,7 @@ import {
   offerScopeDataSchema,
   offerContentDataSchema,
 } from "@/lib/validations/admin-offer-content";
+import { INITIAL_OFFER_DRAFT } from "../offer/workspace-model";
 
 /**
  * Read the application-wide singleton AdminOfferContent row, creating it with
@@ -112,7 +113,14 @@ function coerceOfferScope(value: unknown): OfferScopeData {
 function coerceOfferContent(value: unknown): OfferContentData {
   const parsed = offerContentDataSchema.safeParse(value);
   if (parsed.success) return parsed.data;
-  return { headline: "", introText: "", inclusions: [], termsAndConditions: "" };
+  return {
+    headline: INITIAL_OFFER_DRAFT.headline,
+    introText: INITIAL_OFFER_DRAFT.introText,
+    inclusions: [...INITIAL_OFFER_DRAFT.inclusionHighlights],
+    exclusions: [...INITIAL_OFFER_DRAFT.exclusionBullets],
+    inclusionSchedule: [...INITIAL_OFFER_DRAFT.inclusionSchedule],
+    termsAndConditions: INITIAL_OFFER_DRAFT.termsSummary,
+  };
 }
 
 /**

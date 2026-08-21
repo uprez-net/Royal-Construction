@@ -66,11 +66,18 @@ export interface OfferScopeData {
   exclusions: OfferExclusion[];
 }
 
+export interface InclusionScheduleRow {
+  spec: string;
+  category?: string;
+}
+
 // ---- Offer Content ----
 export interface OfferContentData {
   headline: string;
   introText: string;
   inclusions: string[]; // one-pager inclusion bullets
+  exclusions: string[]; // one-pager exclusion bullets
+  inclusionSchedule: InclusionScheduleRow[];
   termsAndConditions: string; // default T&C text
 }
 
@@ -90,6 +97,8 @@ export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
     headline: "",
     introText: "",
     inclusions: [],
+    exclusions: [],
+    inclusionSchedule: [],
     termsAndConditions: "",
   },
 };

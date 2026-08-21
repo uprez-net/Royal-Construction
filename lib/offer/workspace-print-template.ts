@@ -178,7 +178,6 @@ function getTotalAreaSqm(job: OfferWorkspaceJob): number {
     job.porchSqm +
     job.grannyFlatSqm +
     job.balconySqm +
-    job.kitchenSqm +
     job.voidSqm
   );
 }
