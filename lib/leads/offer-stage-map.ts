@@ -24,10 +24,18 @@ import { closeDatePatch, stageDef } from "./pipeline-stages";
  * without anyone noticing.
  */
 export const OFFER_STATUS_LEAD_STAGE: Record<OfferStatus, LeadStage | null> = {
-  // Nothing has been agreed yet, but the deal is live and being worked.
-  PENDING: "NEGOTIATING",
-  SENT: "NEGOTIATING",
-  OFFER_SENT: "NEGOTIATING",
+  // An offer exists but nothing has gone out. The deal is real enough to
+  // qualify the lead and no further.
+  PENDING: "QUALIFIED",
+
+  // A price is in the customer's hands. That is what Quoted means.
+  SENT: "QUOTED",
+  OFFER_SENT: "QUOTED",
+
+  // The customer has engaged with the price: signed the acceptance, agreed
+  // terms, or moved on to tender and contract paperwork. All of that is
+  // negotiation, and every one of these statuses comes after SENT, so none of
+  // them may map below it.
   OFFER_SIGNED: "NEGOTIATING",
   AGREED: "NEGOTIATING",
   TENDER_DRAFT: "NEGOTIATING",
@@ -36,19 +44,25 @@ export const OFFER_STATUS_LEAD_STAGE: Record<OfferStatus, LeadStage | null> = {
   CONTRACT_DRAFT: "NEGOTIATING",
   CONTRACT_SENT: "NEGOTIATING",
 
-  // A decline is a setback, not a loss — every one of these is revisable, and
-  // the offer state machine allows the deal to continue. Marking a lead LOST
-  // is a human act that carries a reason (see lib/data/leads.ts), and nothing
-  // here can supply one.
-  OFFER_DECLINED: "NEGOTIATING",
+  // A decline is a setback, not a loss. Every one of these is revisable and the
+  // offer state machine allows the deal to continue. Marking a lead LOST is a
+  // human act that carries a reason, and nothing here can supply one.
+  //
+  // Each decline sits level with the paperwork it came from, never above it. An
+  // offer decline follows OFFER_SENT, so it stays at QUOTED; a tender or
+  // contract decline follows documents that are already NEGOTIATING. Putting
+  // every decline at NEGOTIATING would have scored a declined offer at 70%
+  // against 55% for one the customer is still reading, which means saying no
+  // would raise the forecast.
+  OFFER_DECLINED: "QUOTED",
+  REJECTED: "QUOTED",
   TENDER_DECLINED: "NEGOTIATING",
   CONTRACT_DECLINED: "NEGOTIATING",
-  REJECTED: "NEGOTIATING",
 
   // The contract is signed. This is the moment the deal is won. CONVERTED, not
   // WON: they are the same outcome to every calculation, but CONVERTED is the
-  // only one of the two the stage picker offers, so writing WON here would put
-  // a badge on the lead that an operator can neither reproduce nor undo.
+  // only one of the two the stage picker offers, so writing WON would put a
+  // badge on the lead that an operator can neither reproduce nor undo.
   CONTRACT_SIGNED: "CONVERTED",
   // Work has started. Still won; the stage must not move backwards.
   PROJECT: "CONVERTED",
@@ -108,13 +122,32 @@ export function leadStagePatchForOfferStatus(
 
   if (currentStage === next) return null;
 
-  // Won is a ratchet. Out-of-order webhooks are normal, and a stale
+  // Won only moves forward. Out-of-order webhooks are normal, and a stale
   // CONTRACT_SENT arriving after CONTRACT_SIGNED must not reopen the deal.
   if (currentStage && isWonStage(currentStage) && !isWonStage(next)) return null;
 
   // Never overrule a human who has closed the deal as lost. They recorded a
   // reason; an offer status has none to offer.
   if (currentStage && isLostStage(currentStage)) return null;
+
+  // Never walk an open lead backwards.
+  //
+  // While every non-terminal status mapped to NEGOTIATING, the top open stage,
+  // this could not happen: the map only ever moved a lead up. Splitting the map
+  // across QUALIFIED, QUOTED and NEGOTIATING removes that accident, and without
+  // this guard an offer reset to PENDING would drop a lead in negotiation from
+  // 70% to 40%, and every decline-and-revise cycle would bounce the stage.
+  //
+  // Compared by probability rather than by `order`, because order is a display
+  // sequence: NO_RESPONSE sorts last at 13 but is worth nothing, and a stalled
+  // lead must be free to re-enter the pipeline when an offer appears. Only OPEN
+  // stages are held; STALLED is not a rung on the ladder.
+  if (currentStage) {
+    const from = stageDef(currentStage);
+    if (from.outcome === "OPEN" && stageDef(next).probability < from.probability) {
+      return null;
+    }
+  }
 
   const patch: LeadStagePatch = { stage: next, ...closeDatePatch(currentStage, next, now) };
   if (isWonStage(next) && patch.wonAt == null && currentWonAt == null) {
