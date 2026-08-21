@@ -25,6 +25,8 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
+  SelectLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -33,7 +35,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   BUDGET_OPTIONS,
   LEAD_SOURCE_OPTIONS,
-  stageOptionsFor,
+  stageGroupsFor,
   closureReasonCopy,
   parseLikelihood,
   buildFollowupHistoryEntry,
@@ -209,7 +211,8 @@ function buildSectionPayload(
         const history: HistoryItem[] = [
           buildFollowupHistoryEntry(form.followupDate, form.followupTime),
         ];
-        payload.stage = "In Follow-up";
+        // The date is already on the payload. updateLead advances the lead to
+        // Discovery if it is earlier than that, and otherwise writes no stage.
         payload.history = history;
       }
 
@@ -498,10 +501,15 @@ export function LeadOverviewTab({
                   <SelectValue placeholder="Select a stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  {stageOptionsFor(form.stage).map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
+                  {stageGroupsFor(form.stage).map((group) => (
+                    <SelectGroup key={group.label}>
+                      <SelectLabel>{group.label}</SelectLabel>
+                      {group.stages.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   ))}
                 </SelectContent>
               </Select>

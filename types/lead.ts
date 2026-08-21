@@ -151,6 +151,8 @@ export function mapLead(
     followupNotes: lead.followupNotes ?? "",
     followupReminderSentAt: lead.followupReminderSentAt?.toISOString() ?? null,
     meetingReminderSentAt: lead.meetingReminderSentAt?.toISOString() ?? null,
+    followupCompletedAt: lead.followupCompletedAt?.toISOString() ?? null,
+    meetingCompletedAt: lead.meetingCompletedAt?.toISOString() ?? null,
     lostReason: lead.lostReason ?? undefined,
     history: lead.history.map(mapHistory),
     created: toDateOnly(lead.createdAt) ?? "",

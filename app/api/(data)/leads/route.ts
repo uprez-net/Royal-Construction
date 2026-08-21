@@ -26,11 +26,12 @@ export async function GET(request: NextRequest) {
     const filterTiming = params.data.filterTiming;
     const filterLeadsWithoutProject = params.data.filterLeadsWithoutProject ? true : false;
     const isArchived = params.data.isArchived ? params.data.isArchived === 'true' : undefined;
+    const hasOpenTask = params.data.hasOpenTask === 'true';
     const pendingFollowUps = params.data.pendingFollowUps ? params.data.pendingFollowUps === 'true' : undefined;
     const upcomingFollowUps = params.data.upcomingFollowUps ? params.data.upcomingFollowUps === 'true' : undefined;
     const pendingMeetings = params.data.pendingMeetings ? params.data.pendingMeetings === 'true' : undefined;
     const upcomingMeetings = params.data.upcomingMeetings ? params.data.upcomingMeetings === 'true' : undefined;
-    const leads = await getLeads(params.data.page, params.data.limit, params.data.q, statusFilterArray, filterTiming, filterLeadsWithoutProject, isArchived, pendingFollowUps, upcomingFollowUps, pendingMeetings, upcomingMeetings);
+    const leads = await getLeads(params.data.page, params.data.limit, params.data.q, statusFilterArray, filterTiming, filterLeadsWithoutProject, isArchived, hasOpenTask, pendingFollowUps, upcomingFollowUps, pendingMeetings, upcomingMeetings);
     return successResponse(leads);
   } catch (error) {
     console.error("/api/leads GET error", error);

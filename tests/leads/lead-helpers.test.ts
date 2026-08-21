@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  LEAD_STAGE_GROUPS,
   LEAD_STAGE_OPTIONS,
   closureReasonCopy,
   isKpiCohortMetric,
@@ -9,6 +10,7 @@ import {
   isTerminalStage,
   isWonStage,
   parseLikelihood,
+  stageGroupsFor,
   stageOptionsFor,
 } from "../../lib/leads/lead-helpers";
 
@@ -196,4 +198,42 @@ test("a KPI cohort is recognised, a chip list is not", () => {
   assert.ok(!isKpiCohortMetric("Lost,Disqualified"));
   assert.ok(!isKpiCohortMetric(null));
   assert.ok(!isKpiCohortMetric(""));
+});
+
+/* ── the grouped picker ────────────────────────────────────────────── */
+
+test("the picker offers Discovery and no task stages", () => {
+  assert.ok(LEAD_STAGE_OPTIONS.includes("Discovery"));
+  for (const gone of ["In Follow-up", "Meeting Scheduled", "Won", "Cancelled"] as const) {
+    assert.ok(!LEAD_STAGE_OPTIONS.includes(gone), `${gone} should not be selectable`);
+  }
+});
+
+test("the closed group is not named after one of its members", () => {
+  // Disqualified is a stage inside it, so reusing the word would leave people
+  // guessing whether a filter meant the group or the stage.
+  const closed = LEAD_STAGE_GROUPS.find((g) => g.stages.includes("Disqualified"));
+  assert.equal(closed?.label, "Closed");
+  assert.deepEqual(closed?.stages, ["No Response", "Disqualified", "Lost"]);
+});
+
+test("groups and the flat list never drift", () => {
+  assert.deepEqual(LEAD_STAGE_GROUPS.flatMap((g) => g.stages), LEAD_STAGE_OPTIONS);
+});
+
+test("a lead on a retired stage still gets a rendered option", () => {
+  // Rows hold these until the data migration has run everywhere, and Radix
+  // renders the trigger blank when no item matches the value.
+  for (const retired of ["In Follow-up", "Meeting Scheduled", "Won", "Cancelled"] as const) {
+    assert.ok(stageOptionsFor(retired).includes(retired), retired);
+    const groups = stageGroupsFor(retired);
+    assert.ok(groups.flatMap((g) => g.stages).includes(retired), retired);
+    assert.equal(groups.at(-1)?.label, "Retired", retired);
+  }
+});
+
+test("a lead on a live stage does not get a Retired group", () => {
+  for (const live of ["Discovery", "Qualified", "Converted", "Lost"] as const) {
+    assert.deepEqual(stageGroupsFor(live), LEAD_STAGE_GROUPS, live);
+  }
 });

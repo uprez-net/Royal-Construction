@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Lead, LeadStage } from "@/lib/leads/types";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
-import { dialablePhone } from "@/lib/leads/lead-helpers";
+import { dialablePhone, isTerminalStage } from "@/lib/leads/lead-helpers";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -239,11 +239,19 @@ function FollowupsView({
 }: FollowupsViewProps) {
   const dispatch = useAppDispatch();
 
+  // Keyed off the dates, not the stage. Every bucket below already filtered on
+  // a date, so the stage clause did no work except hide leads: on production 19
+  // leads at other stages carried a scheduled date this tab refused to show,
+  // five of them Contacted and one No Response.
+  //
+  // Terminal leads are excluded, and that part is not optional. Thirteen closed
+  // or won leads carry stale dates and would otherwise appear as live work.
   const relevantLeads = useMemo(
     () =>
       leads.filter(
         (lead) =>
-          lead.stage === "Meeting Scheduled" || lead.stage === "In Follow-up",
+          !isTerminalStage(lead.stage) &&
+          (lead.followupDate || lead.meetingDate),
       ),
     [leads],
   );
@@ -253,8 +261,8 @@ function FollowupsView({
   const pendingFollowups = useMemo(() => {
     return relevantLeads.filter(
       (lead) =>
-        lead.stage === "In Follow-up" &&
         lead.followupDate &&
+        !lead.followupCompletedAt &&
         (isBefore(parseISO(lead.followupDate), today) ||
           isEqual(parseISO(lead.followupDate), today)),
     );
@@ -264,8 +272,8 @@ function FollowupsView({
     return relevantLeads
       .filter(
         (lead) =>
-          lead.stage === "In Follow-up" &&
           lead.followupDate &&
+          !lead.followupCompletedAt &&
           isAfter(parseISO(lead.followupDate), today),
       )
       .sort(
@@ -278,8 +286,8 @@ function FollowupsView({
   const pendingMeetings = useMemo(() => {
     return relevantLeads.filter(
       (lead) =>
-        lead.stage === "Meeting Scheduled" &&
         lead.meetingDate &&
+        !lead.meetingCompletedAt &&
         (isBefore(parseISO(lead.meetingDate), today) ||
           isEqual(parseISO(lead.meetingDate), today)),
     );
@@ -288,8 +296,8 @@ function FollowupsView({
   const upcomingMeetings = useMemo(() => {
     return relevantLeads.filter(
       (lead) =>
-        lead.stage === "Meeting Scheduled" &&
         lead.meetingDate &&
+        !lead.meetingCompletedAt &&
         isAfter(parseISO(lead.meetingDate), today),
     );
   }, [relevantLeads, today]);
@@ -422,7 +430,7 @@ function FollowupsView({
                       type: "leadStatsDrilldown",
                       payload: {
                         title: "Total Follow-ups",
-                        stage: ["In Follow-up"] as LeadStage[],
+                        stage: [] as LeadStage[],
                       },
                     }),
                   )
@@ -440,7 +448,7 @@ function FollowupsView({
                       type: "leadStatsDrilldown",
                       payload: {
                         title: "Pending Follow-ups",
-                        stage: ["In Follow-up"] as LeadStage[],
+                        stage: [] as LeadStage[],
                         pendingFollowUps: true,
                       },
                     }),
@@ -459,7 +467,7 @@ function FollowupsView({
                       type: "leadStatsDrilldown",
                       payload: {
                         title: "Upcoming Follow-ups",
-                        stage: ["In Follow-up"] as LeadStage[],
+                        stage: [] as LeadStage[],
                         upcomingFollowUps: true,
                       },
                     }),
@@ -478,7 +486,7 @@ function FollowupsView({
                       type: "leadStatsDrilldown",
                       payload: {
                         title: "Total Meetings",
-                        stage: ["Meeting Scheduled"] as LeadStage[],
+                        stage: [] as LeadStage[],
                       },
                     }),
                   )
@@ -496,7 +504,7 @@ function FollowupsView({
                       type: "leadStatsDrilldown",
                       payload: {
                         title: "Pending Meetings",
-                        stage: ["Meeting Scheduled"] as LeadStage[],
+                        stage: [] as LeadStage[],
                         pendingMeetings: true,
                       },
                     }),
@@ -515,7 +523,7 @@ function FollowupsView({
                       type: "leadStatsDrilldown",
                       payload: {
                         title: "Upcoming Meetings",
-                        stage: ["Meeting Scheduled"] as LeadStage[],
+                        stage: [] as LeadStage[],
                         upcomingMeetings: true,
                       },
                     }),

@@ -313,6 +313,7 @@ export async function getLeads(
   filterTiming?: string,
   filterLeadsWithoutProject?: boolean,
   isArchived?: boolean,
+  hasOpenTask?: boolean,
   pendingFollowUps?: boolean,
   upcomingFollowUps?: boolean,
   pendingMeetings?: boolean,
@@ -419,6 +420,24 @@ export async function getLeads(
           not: null,
           gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
         }
+      }),
+      // Leads carrying scheduled work. Replaces filtering the Follow-ups tab by
+      // stage: a lead at Quoted or Negotiating can have a follow-up booked, and
+      // the stage filter never returned it.
+      // Nested under AND, not spread as bare `stage` and `OR` keys. `...where`
+      // above already carries an OR for the search terms, and a second OR at
+      // this level overwrites it in the object literal, so searching while the
+      // Follow-ups tab was open would have silently ignored the search text.
+      ...(hasOpenTask && {
+        AND: [
+          { stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] as LeadStage[] } },
+          {
+            OR: [
+              { followupDate: { not: null }, followupCompletedAt: null },
+              { meetingDate: { not: null }, meetingCompletedAt: null },
+            ],
+          },
+        ],
       }),
       ...(isMeetingScheduledFilterActive && {
         meetingDate: {
@@ -1214,7 +1233,14 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
       COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      COUNT(*) FILTER (WHERE stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED')) AS "pendingFollowup"
+      -- Scheduled work, not a stage. This counted two stages that no longer
+      -- exist in the picker, and missed every lead further down the pipeline
+      -- that had a follow-up booked.
+      COUNT(*) FILTER (
+        WHERE stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
+          AND (("followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL)
+            OR ("meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL))
+      ) AS "pendingFollowup"
     FROM "Lead"
     WHERE "isArchived" = false
   `;
@@ -1241,6 +1267,17 @@ export async function getFollowupStats(): Promise<FollowupStats> {
   const todayUTC = fromZonedTime(todayStart, timeZone);
   const tomorrowUTC = fromZonedTime(tomorrowStart, timeZone);
 
+  // A Prisma.sql fragment, not a plain string: `${x}` in a $queryRaw template
+  // becomes a bound parameter, so a bare string would be sent as a value and
+  // the query would fail rather than filter.
+  //
+  // These counts used to key off stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED').
+  // Scheduled work is a task now, so the filter is the date plus "not yet
+  // completed", and the stage only decides whether the lead is still live at
+  // all. Without this clause the 13 closed and won leads on production that
+  // carry stale dates would count as outstanding work.
+  const OPEN_STAGES = Prisma.sql`stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')`;
+
   const [stats] = await prisma.$queryRaw<
     {
       totalFollowUps: bigint;
@@ -1252,12 +1289,12 @@ export async function getFollowupStats(): Promise<FollowupStats> {
     }[]
   >`
     SELECT
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP') AS "totalFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED') AS "totalMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
     FROM "Lead"
     WHERE "isArchived" = false
   `;

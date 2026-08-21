@@ -50,11 +50,16 @@ export async function GET(request: Request) {
     const todaySydneyStr = getSydneyTodayDateString();
     console.log(`[CRON] Starting followup-lead-reminder cron. Sydney Today: ${todaySydneyStr}`);
 
-    // 2. Fetch leads in IN_FOLLOW_UP stage with assigned users
+    // 2. Fetch leads with a follow-up due and an assigned user. Keyed off the
+    // date rather than the stage: a lead at Quoted or Negotiating can have a
+    // follow-up booked, and the old stage filter never emailed anyone about it.
     const leads = await prisma.lead.findMany({
       where: {
-        stage: "IN_FOLLOW_UP",
+        // Closed leads get no reminders. This used to be implied by the stage
+        // filter; scheduled work is a task now, so it has to be said.
+        stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] },
         followupDate: { not: null, lte: new Date(`${todaySydneyStr}T23:59:59.999Z`) },
+        followupCompletedAt: null,
         assignedId: { not: null },
         followupReminderSentAt: null,
       },

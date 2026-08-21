@@ -43,6 +43,7 @@ export async function fetchLeads(params:
     status?: LeadStage[];
     filterTiming?: string;
     isArchived?: boolean;
+    hasOpenTask?: boolean;
     pendingFollowUps?: boolean;
     upcomingFollowUps?: boolean;
     pendingMeetings?: boolean;
@@ -55,6 +56,7 @@ export async function fetchLeads(params:
   if (params.status) query.append('status', params.status.join(','));
   if (params.filterTiming) query.append('filterTiming', params.filterTiming);
   if (params.isArchived !== undefined) query.append('isArchived', params.isArchived.toString());
+  if (params.hasOpenTask) query.append('hasOpenTask', 'true');
   if (params.pendingFollowUps !== undefined) query.append('pendingFollowUps', params.pendingFollowUps.toString());
   if (params.upcomingFollowUps !== undefined) query.append('upcomingFollowUps', params.upcomingFollowUps.toString());
   if (params.pendingMeetings !== undefined) query.append('pendingMeetings', params.pendingMeetings.toString());

@@ -71,7 +71,10 @@ export default function TableView({
     if (!activeMetric) return ["all"];
     if (activeMetric.includes("total")) return ["all"];
     if (activeMetric.includes("converted")) return ["Won", "Converted"];
-    if (activeMetric.includes("pendingFollowup")) return ["In Follow-up", "Meeting Scheduled"];
+    // Scheduled work spans every live stage now, so this cohort highlights no
+    // single chip. "all" keeps the row in a sane state rather than lighting up
+    // two chips that no longer exist.
+    if (activeMetric.includes("pendingFollowup")) return ["all"];
     if (activeMetric.includes("lost"))
       return ["Lost", "Cancelled", "Disqualified"];
     return activeMetric.split(",").map((s) => s.trim());

@@ -347,6 +347,7 @@ export const leadLookupParamSchema = z.object({
   filterTiming: z.string().optional(),
   filterLeadsWithoutProject: z.string().optional(),
   isArchived: z.string().optional(),
+  hasOpenTask: z.string().optional(),
   pendingFollowUps: z.string().optional(),
   upcomingFollowUps: z.string().optional(),
   pendingMeetings: z.string().optional(),

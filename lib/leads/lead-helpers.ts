@@ -130,6 +130,22 @@ export function budgetBracket(
  * Appending the current stage keeps that lead readable without making a hidden
  * stage newly selectable for anyone else.
  */
+/**
+ * The grouped picker for a lead currently on `current`.
+ *
+ * Same contract as stageOptionsFor: a lead sitting on a stage the groups do not
+ * carry still gets an entry, so it renders and can keep what it has. Rows hold
+ * the four retired stages until the data migration has run everywhere, and
+ * Radix fills the trigger by portalling text out of the MATCHING item, so a
+ * value with no item renders the trigger completely blank.
+ */
+export function stageGroupsFor(
+  current: LeadStage,
+): { label: string; stages: LeadStage[] }[] {
+  if (LEAD_STAGE_OPTIONS.includes(current)) return LEAD_STAGE_GROUPS;
+  return [...LEAD_STAGE_GROUPS, { label: "Retired", stages: [current] }];
+}
+
 export function stageOptionsFor(current: LeadStage): LeadStage[] {
   return LEAD_STAGE_OPTIONS.includes(current)
     ? LEAD_STAGE_OPTIONS

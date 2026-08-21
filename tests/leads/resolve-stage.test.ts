@@ -75,11 +75,15 @@ test("a retired stage is not treated as earlier than Discovery", () => {
 test("completing a task is not a scheduling event and writes no stage", () => {
   // Answering a follow-up used to write CONTACTED. That single line put 6 of
   // the 11 Contacted leads on production where they are.
-  assert.equal(
-    resolveLeadStage({ currentStage: "NEGOTIATING", taskScheduled: false }),
-    undefined,
-  );
-  assert.equal(resolveLeadStage({ currentStage: "NEGOTIATING" }), undefined);
+  //
+  // Checked at both ends of the ladder. An early lead matters as much as a late
+  // one here: NEW and CONTACTED are the two stages the advance rule DOES fire
+  // for, so if completion were ever mistaken for scheduling, they are where it
+  // would show up first.
+  for (const from of ["NEW", "CONTACTED", "DISCOVERY", "NEGOTIATING"] as const) {
+    assert.equal(resolveLeadStage({ currentStage: from, taskScheduled: false }), undefined, from);
+    assert.equal(resolveLeadStage({ currentStage: from }), undefined, `${from} (omitted)`);
+  }
 });
 
 /* ── the invariant the forecast rests on ───────────────────────────── */

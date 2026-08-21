@@ -79,9 +79,14 @@ export function FollowupPromptModal({
 
     try {
       const updated = await updateLead(lead.id, {
-        followupDate: choice === "reschedule" ? date : null,
-        followupTime: choice === "reschedule" ? time : null,
-        stage: choice === "reschedule" ? "In Follow-up" : lead.stage,
+        // Rescheduling moves the date. Answering leaves it alone so the tab can
+        // still show what was scheduled; updateLead stamps followupCompletedAt
+        // from the outcome below, which is what closes the task now.
+        followupDate: choice === "reschedule" ? date : undefined,
+        followupTime: choice === "reschedule" ? time : undefined,
+        // No stage. Answering a follow-up used to write CONTACTED through this
+        // path, which is how a lead in negotiation lost its progress to a
+        // calendar action.
         history:
           choice === "reschedule"
             ? [buildFollowupRescheduledHistoryEntry(date, time, note)]

@@ -1,5 +1,6 @@
 'use client';
 import { useLeadsData } from "@/hooks/use-leads-data";
+import { isTerminalStage } from "@/lib/leads/lead-helpers";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import {
@@ -80,8 +81,8 @@ export function LeadNotificationCard() {
         ? []
         : leads.filter(
             (lead) =>
-              lead.stage === "Meeting Scheduled" ||
-              lead.stage === "In Follow-up",
+              !isTerminalStage(lead.stage) &&
+              Boolean(lead.followupDate || lead.meetingDate),
           ),
     [leads, loadingLeads],
   );
@@ -91,7 +92,7 @@ export function LeadNotificationCard() {
   const pendingFollowups = useMemo(() => {
     return relevantLeads.filter(
       (lead) =>
-        lead.stage === "In Follow-up" &&
+        !lead.followupCompletedAt &&
         lead.followupDate &&
         (isBefore(parseISO(lead.followupDate), today) ||
           isEqual(parseISO(lead.followupDate), today)),
@@ -101,7 +102,7 @@ export function LeadNotificationCard() {
   const pendingMeetings = useMemo(() => {
     return relevantLeads.filter(
       (lead) =>
-        lead.stage === "Meeting Scheduled" &&
+        !lead.meetingCompletedAt &&
         lead.meetingDate &&
         (isBefore(parseISO(lead.meetingDate), today) ||
           isEqual(parseISO(lead.meetingDate), today)),
@@ -147,11 +148,7 @@ export function LeadNotificationCard() {
   ];
 
   useEffect(() => {
-    refreshLeadsData({
-      page: 1,
-      limit: 50,
-      status: ["Meeting Scheduled", "In Follow-up"].join(","),
-    });
+    refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
   }, [refreshLeadsData]);
 
   return (

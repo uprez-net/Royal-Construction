@@ -124,6 +124,9 @@ export interface Lead {
   followupNotes: string;
   followupReminderSentAt?: string | null;
   meetingReminderSentAt?: string | null;
+  /** Set when the task was closed out. The Follow-ups tab hides completed work. */
+  followupCompletedAt?: string | null;
+  meetingCompletedAt?: string | null;
   lostReason?: string;
   history: HistoryItem[];
   created: string;
