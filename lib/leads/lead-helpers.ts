@@ -39,24 +39,29 @@ export const LEAD_SOURCE_OPTIONS: LeadSource[] = [
   "Business",
 ];
 
-export const LEAD_STAGE_OPTIONS: LeadStage[] = [
-  "New",
-  "Contacted",
-  "Qualified",
-  "Quoted",
-  "Negotiating",
-  // Won and Cancelled stay hidden: "Converted" is the word Royal Constructions
-  // uses for a won deal, and renaming it would mean re-teaching the team for no
-  // change in behaviour. Converted and Won are identical to every calculation.
-  //"Won",
-  "Lost",
-  "Meeting Scheduled",
-  "In Follow-up",
-  "No Response",
-  "Converted",
-  //"Cancelled",
-  "Disqualified",
+/**
+ * The picker, in groups.
+ *
+ * "Closed" rather than "Disqualified" for the third group: Disqualified is one
+ * of the three stages inside it, so reusing the word would leave people
+ * guessing whether a filter meant the group or the stage.
+ *
+ * Meeting Scheduled and In Follow-up are gone. Both described a scheduled task
+ * rather than progress, and completing one wrote CONTACTED, which is why 6 of
+ * the 11 Contacted leads on production got there by having the work done
+ * properly. They are tasks now, carried by followupDate and meetingDate.
+ *
+ * Won and Cancelled are gone too: nothing in any calculation could tell either
+ * apart from Converted and Lost.
+ */
+export const LEAD_STAGE_GROUPS: { label: string; stages: LeadStage[] }[] = [
+  { label: "Active", stages: ["New", "Contacted", "Discovery", "Qualified", "Quoted", "Negotiating"] },
+  { label: "Won", stages: ["Converted"] },
+  { label: "Closed", stages: ["No Response", "Disqualified", "Lost"] },
 ];
+
+/** Flat order, for the filter chips and anything that wants one list. */
+export const LEAD_STAGE_OPTIONS: LeadStage[] = LEAD_STAGE_GROUPS.flatMap((g) => g.stages);
 
 export const HISTORY_TYPE_OPTIONS: HistoryItem["type"][] = [
   "system",
@@ -134,6 +139,7 @@ export function stageOptionsFor(current: LeadStage): LeadStage[] {
 export const STAGE_STYLES: Record<LeadStage, string> = {
   New: "stage-badge-info",
   Contacted: "stage-badge-warning",
+  Discovery: "stage-badge-info",
   Qualified: "stage-badge-purple",
   Quoted: "stage-badge-accent",
   Negotiating: "stage-badge-pink",

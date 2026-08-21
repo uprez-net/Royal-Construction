@@ -950,10 +950,19 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
   if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
-  if (input.meetingDate !== undefined) updateData.meetingDate = input.meetingDate;
+  // Setting a date reopens the task: a lead carries one meeting and one
+  // follow-up at a time, so a fresh date must not inherit the last one's
+  // completion stamp and show up already done.
+  if (input.meetingDate !== undefined) {
+    updateData.meetingDate = input.meetingDate;
+    if (input.meetingDate !== null) updateData.meetingCompletedAt = null;
+  }
   if (input.meetingTime !== undefined) updateData.meetingTime = input.meetingTime;
   if (input.meetingMode !== undefined) updateData.meetingMode = input.meetingMode;
-  if (input.followupDate !== undefined) updateData.followupDate = input.followupDate;
+  if (input.followupDate !== undefined) {
+    updateData.followupDate = input.followupDate;
+    if (input.followupDate !== null) updateData.followupCompletedAt = null;
+  }
   if (input.followupTime !== undefined) updateData.followupTime = input.followupTime;
   if (input.followupNotes !== undefined) updateData.followupNotes = input.followupNotes;
   if (input.followupReminderSentAt !== undefined) updateData.followupReminderSentAt = input.followupReminderSentAt;
@@ -972,13 +981,16 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     };
   }
 
-  if (input.followupResponseOutcome === "yes") {
-    updateData.followupDate = null;
-    updateData.followupTime = null;
-    updateData.followupReminderSentAt = new Date();
-  } else if (input.followupResponseOutcome === "notRequired") {
-    updateData.followupDate = null;
-    updateData.followupTime = null;
+  // Answering a follow-up closes the task. It used to null the date and write
+  // stage CONTACTED, and that stage write was the only record the software had
+  // that a follow-up had finished. It also cost a lead in negotiation 50 points
+  // for a call being answered. followupCompletedAt carries the fact now, and
+  // the date is kept so the tab can still show what was scheduled.
+  if (
+    input.followupResponseOutcome === "yes" ||
+    input.followupResponseOutcome === "notRequired"
+  ) {
+    updateData.followupCompletedAt = new Date();
     updateData.followupReminderSentAt = new Date();
   } else if (input.followupResponseOutcome === "reschedule") {
     const nextFollowupDate = new Date();
@@ -986,6 +998,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     updateData.followupDate = nextFollowupDate;
     updateData.followupTime = input.followupTime ?? existingLead?.followupTime ?? null;
     updateData.followupReminderSentAt = null;
+    updateData.followupCompletedAt = null;
   }
 
   // Single stage write. `stage` and `followupResponseOutcome` are independently
@@ -994,10 +1007,18 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   // close-date stamp is derived from the RESOLVED stage, never from the
   // requested one, so the stage column and wonAt/lostAt can never describe two
   // different transitions.
+  // Scheduling work advances an early lead into Discovery and does nothing
+  // else. Answering or clearing a task never moves the stage: that is the whole
+  // point of the split, and it is why "yes" is absent from this condition.
+  const taskScheduled =
+    input.followupResponseOutcome === "reschedule" ||
+    (input.followupDate !== undefined && input.followupDate !== null) ||
+    (input.meetingDate !== undefined && input.meetingDate !== null);
+
   const resolvedStage = resolveLeadStage({
     currentStage: existingLead?.stage ?? null,
     requestedStage: mappedStage,
-    followupResponseOutcome: input.followupResponseOutcome,
+    taskScheduled,
   });
   if (resolvedStage !== undefined) {
     updateData.stage = resolvedStage;

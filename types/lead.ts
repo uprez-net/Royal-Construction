@@ -15,6 +15,7 @@ import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
 export const stageMap: Record<PrismaLeadStage, LeadStage> = {
   NEW: "New",
   CONTACTED: "Contacted",
+  DISCOVERY: "Discovery",
   QUALIFIED: "Qualified",
   QUOTED: "Quoted",
   NEGOTIATING: "Negotiating",
@@ -31,6 +32,7 @@ export const stageMap: Record<PrismaLeadStage, LeadStage> = {
 export const stageToPrismaMap: Record<LeadStage, PrismaLeadStage> = {
   New: "NEW",
   Contacted: "CONTACTED",
+  Discovery: "DISCOVERY",
   Qualified: "QUALIFIED",
   Quoted: "QUOTED",
   Negotiating: "NEGOTIATING",

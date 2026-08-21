@@ -6,6 +6,7 @@ import { paginationSchema } from "./common";
 export const leadStages = [
   "New",
   "Contacted",
+  "Discovery",
   "Qualified",
   "Quoted",
   "Negotiating",

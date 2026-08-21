@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { closeDatePatch } from "../../lib/leads/pipeline-stages";
+import { PIPELINE_STAGES, closeDatePatch } from "../../lib/leads/pipeline-stages";
 import { resolveLeadStage } from "../../lib/leads/resolve-stage";
 
-test("no stage input and no follow-up outcome writes nothing", () => {
-  assert.equal(
-    resolveLeadStage({ currentStage: "QUALIFIED" }),
-    undefined,
-  );
+test("nothing to say means nothing is written", () => {
+  assert.equal(resolveLeadStage({ currentStage: "QUALIFIED" }), undefined);
 });
 
 test("an explicit stage passes straight through", () => {
@@ -18,97 +15,94 @@ test("an explicit stage passes straight through", () => {
   );
 });
 
-test("answering a follow-up moves IN_FOLLOW_UP to CONTACTED", () => {
-  for (const outcome of ["yes", "notRequired"] as const) {
+test("a person's choice beats anything inferred from a task", () => {
+  // Both arrive together on updateLeadSchema and both are on the MCP surface.
+  assert.equal(
+    resolveLeadStage({ currentStage: "NEW", requestedStage: "LOST", taskScheduled: true }),
+    "LOST",
+  );
+});
+
+/* ── scheduling work ───────────────────────────────────────────────── */
+
+test("booking work on an unworked lead starts Discovery", () => {
+  for (const from of ["NEW", "CONTACTED"] as const) {
     assert.equal(
-      resolveLeadStage({
-        currentStage: "IN_FOLLOW_UP",
-        followupResponseOutcome: outcome,
-      }),
-      "CONTACTED",
-      `outcome ${outcome}`,
+      resolveLeadStage({ currentStage: from, taskScheduled: true }),
+      "DISCOVERY",
+      from,
     );
   }
 });
 
-test("answering a follow-up leaves a lead that is not IN_FOLLOW_UP alone", () => {
+test("booking work never moves a lead that is already further on", () => {
+  // The defect this replaces: a reschedule dragged ANY open lead to
+  // IN_FOLLOW_UP at 45%, so a deal in negotiation lost 30 points to a calendar
+  // action and another 25 when someone answered.
+  for (const from of ["DISCOVERY", "QUALIFIED", "QUOTED", "NEGOTIATING"] as const) {
+    assert.equal(
+      resolveLeadStage({ currentStage: from, taskScheduled: true }),
+      undefined,
+      from,
+    );
+  }
+});
+
+test("booking work never reopens a closed lead", () => {
+  for (const from of ["CONVERTED", "LOST", "DISQUALIFIED", "NO_RESPONSE"] as const) {
+    assert.equal(
+      resolveLeadStage({ currentStage: from, taskScheduled: true }),
+      undefined,
+      `${from} must not be dragged open by a calendar action`,
+    );
+  }
+});
+
+test("a retired stage is not treated as earlier than Discovery", () => {
+  // Rows still hold these until the data migration runs everywhere. They are
+  // worth 30%, the same as Discovery, so an unrelated reschedule must not shove
+  // them forward. This is why the check compares probability, not `order`:
+  // both sort AFTER Discovery in the display sequence.
+  for (const from of ["IN_FOLLOW_UP", "MEETING_SCHEDULED"] as const) {
+    assert.equal(
+      resolveLeadStage({ currentStage: from, taskScheduled: true }),
+      undefined,
+      from,
+    );
+  }
+});
+
+test("completing a task is not a scheduling event and writes no stage", () => {
+  // Answering a follow-up used to write CONTACTED. That single line put 6 of
+  // the 11 Contacted leads on production where they are.
   assert.equal(
-    resolveLeadStage({ currentStage: "QUALIFIED", followupResponseOutcome: "yes" }),
+    resolveLeadStage({ currentStage: "NEGOTIATING", taskScheduled: false }),
     undefined,
   );
+  assert.equal(resolveLeadStage({ currentStage: "NEGOTIATING" }), undefined);
 });
 
-test("rescheduling moves an open lead to IN_FOLLOW_UP", () => {
-  assert.equal(
-    resolveLeadStage({ currentStage: "QUOTED", followupResponseOutcome: "reschedule" }),
-    "IN_FOLLOW_UP",
-  );
-});
-
-test("rescheduling moves a stalled lead to IN_FOLLOW_UP", () => {
-  assert.equal(
-    resolveLeadStage({ currentStage: "NO_RESPONSE", followupResponseOutcome: "reschedule" }),
-    "IN_FOLLOW_UP",
-  );
-});
-
-test("rescheduling never reopens a closed lead", () => {
-  for (const stage of ["WON", "CONVERTED", "LOST", "CANCELLED", "DISQUALIFIED"] as const) {
-    assert.equal(
-      resolveLeadStage({ currentStage: stage, followupResponseOutcome: "reschedule" }),
-      undefined,
-      `${stage} must not be dragged back to IN_FOLLOW_UP`,
-    );
-  }
-});
-
-test("rescheduling does not override an explicit close in the same payload", () => {
-  // The regression: this used to save stage IN_FOLLOW_UP while closeDatePatch
-  // had already stamped wonAt from the requested WON.
-  assert.equal(
-    resolveLeadStage({
-      currentStage: "NEGOTIATING",
-      requestedStage: "WON",
-      followupResponseOutcome: "reschedule",
-    }),
-    "WON",
-  );
-});
-
-test("rescheduling still applies when the explicit stage is itself open", () => {
-  assert.equal(
-    resolveLeadStage({
-      currentStage: "NEW",
-      requestedStage: "QUALIFIED",
-      followupResponseOutcome: "reschedule",
-    }),
-    "IN_FOLLOW_UP",
-  );
-});
+/* ── the invariant the forecast rests on ───────────────────────────── */
 
 test("the resolved stage and the close-date stamp always agree", () => {
-  // The invariant the whole forecast rests on: outcome WON <=> wonAt set.
-  const now = new Date("2026-08-18T00:00:00.000Z");
+  const now = new Date("2026-08-21T00:00:00.000Z");
 
   const won = resolveLeadStage({
     currentStage: "NEGOTIATING",
-    requestedStage: "WON",
-    followupResponseOutcome: "reschedule",
+    requestedStage: "CONVERTED",
+    taskScheduled: true,
   });
-  assert.equal(won, "WON");
+  assert.equal(won, "CONVERTED");
   assert.deepEqual(closeDatePatch("NEGOTIATING", won!, now), { wonAt: now, lostAt: null });
 
-  const reopened = resolveLeadStage({
-    currentStage: "QUOTED",
-    followupResponseOutcome: "reschedule",
-  });
-  assert.equal(reopened, "IN_FOLLOW_UP");
-  // Open -> open stamps nothing, and defensively clears any stale close date.
-  assert.deepEqual(closeDatePatch("QUOTED", reopened!, now), { wonAt: null, lostAt: null });
+  const started = resolveLeadStage({ currentStage: "NEW", taskScheduled: true });
+  assert.equal(started, "DISCOVERY");
+  assert.deepEqual(closeDatePatch("NEW", started!, now), { wonAt: null, lostAt: null });
+});
 
-  // A won lead touched only by a reschedule keeps both its stage and its stamp.
-  assert.equal(
-    resolveLeadStage({ currentStage: "WON", followupResponseOutcome: "reschedule" }),
-    undefined,
-  );
+test("Discovery sits between Contacted and Qualified", () => {
+  // The whole advance rule reads off these numbers.
+  assert.ok(PIPELINE_STAGES.CONTACTED.probability < PIPELINE_STAGES.DISCOVERY.probability);
+  assert.ok(PIPELINE_STAGES.DISCOVERY.probability < PIPELINE_STAGES.QUALIFIED.probability);
+  assert.equal(PIPELINE_STAGES.DISCOVERY.outcome, "OPEN");
 });

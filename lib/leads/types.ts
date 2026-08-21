@@ -3,6 +3,7 @@ import { LeadStage as DBLeadStage, RunStatus, LeadEmails } from "@prisma/client"
 export type LeadStage =
   | 'New'
   | 'Contacted'
+  | 'Discovery'
   | 'Qualified'
   | 'Quoted'
   | 'Negotiating'
@@ -162,6 +163,7 @@ export interface EmailTemplate {
 export const LeadStageToLeadStageDBMapping: Record<LeadStage, DBLeadStage> = {
   New: DBLeadStage.NEW,
   Contacted: DBLeadStage.CONTACTED,
+  Discovery: DBLeadStage.DISCOVERY,
   Qualified: DBLeadStage.QUALIFIED,
   Quoted: DBLeadStage.QUOTED,
   Negotiating: DBLeadStage.NEGOTIATING,
