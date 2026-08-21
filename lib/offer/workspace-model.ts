@@ -134,6 +134,7 @@ export type OfferWorkspaceJob = {
   readonly zoning: string;
   readonly bedrooms: number;
   readonly bathrooms: number;
+  readonly linenCount: number;
   readonly garageSpaces: number;
   readonly buildScope: readonly string[];
 };
@@ -872,6 +873,7 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   bedrooms: 0,
   bathrooms: 0,
   garageSpaces: 0,
+  linenCount: 0,
   // Seeded per-offer at runtime via defaultOfferValidUntil(); empty here so a
   // stale constant can't ship an already-expired date.
   validUntil: "",

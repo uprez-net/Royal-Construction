@@ -26,6 +26,9 @@ export const RATE_CONSTANT_KEYS = [
   "SLAB_COST_PER_SQM",
   "KITCHEN_COST_PER_SQM",
   "FRAME_INSTALLER_RATE_PER_SQM",
+  "PRICE_OF_EACH_SHOWER",
+  "PRICE_OF_EACH_WARDROBE",
+  "PRICE_OF_EACH_LINEN"
 ] as const;
 
 // Phase 1 calculated values (from the Area Calculator) that are available as
@@ -53,6 +56,10 @@ export const AREA_MEASUREMENT_KEYS = [
   "TOTAL_TILES_REQUIRED",
   // Kitchen section
   "KITCHEN_AREA",
+  // Rooms section
+  "TOTAL_SHOWERS",
+  "TOTAL_BEDROOMS",
+  "TOTAL_LINENS",
 ] as const;
 
 export type RateConstantKey = (typeof RATE_CONSTANT_KEYS)[number];
@@ -75,6 +82,9 @@ export const DEFAULT_RATE_CONSTANTS: Record<RateConstantKey, number> = {
   SLAB_COST_PER_SQM: 200,
   KITCHEN_COST_PER_SQM: 700,
   FRAME_INSTALLER_RATE_PER_SQM: 55,
+  PRICE_OF_EACH_SHOWER: 500,
+  PRICE_OF_EACH_WARDROBE: 500,
+  PRICE_OF_EACH_LINEN: 500,
 };
 
 // ─── Phase 2 line-item formulas ───
