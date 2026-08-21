@@ -110,33 +110,38 @@ export interface CreateLeadTaskInput {
  * lead is not dragged open by someone booking a call.
  */
 export async function createLeadTask(input: CreateLeadTaskInput): Promise<LeadTaskRow> {
-  const lead = await prisma.lead.findUnique({
-    where: { id: input.leadId },
-    select: { stage: true, assignedId: true },
-  });
-  if (!lead) throw new Error(`Lead ${input.leadId} not found`);
-
-  const created = await prisma.leadTask.create({
-    data: {
-      leadId: input.leadId,
-      type: input.type,
-      dueDate: input.dueDate,
-      dueTime: input.dueTime ?? null,
-      notes: input.notes?.trim() || null,
-      assignedId: input.assignedId ?? lead.assignedId,
-    },
-    select: ROW_SELECT,
-  });
-
-  const nextStage = resolveLeadStage({ currentStage: lead.stage, taskScheduled: true });
-  if (nextStage !== undefined && nextStage !== lead.stage) {
-    await prisma.lead.update({
+  // One transaction. The task row and the stage move are one decision: if the
+  // second write failed on its own, the lead would carry work it never
+  // advanced for, and nothing would ever retry it.
+  return prisma.$transaction(async (tx) => {
+    const lead = await tx.lead.findUnique({
       where: { id: input.leadId },
-      data: { stage: nextStage, ...closeDatePatch(lead.stage, nextStage, new Date()) },
+      select: { stage: true, assignedId: true },
     });
-  }
+    if (!lead) throw new Error(`Lead ${input.leadId} not found`);
 
-  return toRow(created);
+    const created = await tx.leadTask.create({
+      data: {
+        leadId: input.leadId,
+        type: input.type,
+        dueDate: input.dueDate,
+        dueTime: input.dueTime ?? null,
+        notes: input.notes?.trim() || null,
+        assignedId: input.assignedId ?? lead.assignedId,
+      },
+      select: ROW_SELECT,
+    });
+
+    const nextStage = resolveLeadStage({ currentStage: lead.stage, taskScheduled: true });
+    if (nextStage !== undefined && nextStage !== lead.stage) {
+      await tx.lead.update({
+        where: { id: input.leadId },
+        data: { stage: nextStage, ...closeDatePatch(lead.stage, nextStage, new Date()) },
+      });
+    }
+
+    return toRow(created);
+  });
 }
 
 /**

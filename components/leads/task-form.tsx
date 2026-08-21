@@ -50,8 +50,11 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
       });
       onCreated(task);
       setNotes("");
-    } catch {
-      setError("Could not save the task. Please try again.");
+    } catch (err) {
+      // fetchJson throws a FetchError carrying the server's message. Showing it
+      // beats a generic sentence when the server had something specific to say.
+      const message = err instanceof Error ? err.message : "";
+      setError(message || "Could not save the task. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -104,8 +107,11 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
       </div>
 
       <div className="task-form-row">
-        <span className="task-form-label">Note</span>
+        <label className="task-form-label" htmlFor={`task-note-${leadId}`}>
+          Note
+        </label>
         <input
+          id={`task-note-${leadId}`}
           className="task-form-input"
           value={notes}
           placeholder="Optional"
@@ -113,7 +119,11 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
         />
       </div>
 
-      {error && <p className="task-form-error">{error}</p>}
+      {error && (
+        <p className="task-form-error" role="alert">
+          {error}
+        </p>
+      )}
 
       <div className="task-form-actions">
         {onCancel && (

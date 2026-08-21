@@ -10,7 +10,14 @@ export const createLeadTaskSchema = z.object({
   // Nullable on purpose: "no date yet" is a real state, and it is the one 5
   // production leads are parked in while the UI claims everything is caught up.
   dueDate: z.iso.datetime().nullable(),
-  dueTime: z.string().trim().max(10).nullable().optional(),
+  // HH:mm, matching the existing followupTime/meetingTime strings on Lead.
+  // max(10) accepted "banana" and "99:99", which would render as-is on a row.
+  dueTime: z
+    .string()
+    .trim()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Time must be HH:mm")
+    .nullable()
+    .optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
 });
 

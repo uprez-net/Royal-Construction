@@ -293,20 +293,24 @@ function FollowupsView({
   // lead ever and overwrote the previous one on every save.
   const [tasks, setTasks] = useState<LeadTaskRow[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const [tasksError, setTasksError] = useState(false);
   const busy = loading || tasksLoading;
 
   useEffect(() => {
     const controller = new AbortController();
     fetchOpenTasks(controller.signal)
       .then(setTasks)
-      .catch(() => {
-        /* Aborted on unmount, or the request failed. An empty list renders the
-           "All caught up" state, which is the same thing the tab showed before
-           tasks existed, so there is nothing to recover here. */
+      .catch((err: unknown) => {
+        // An abort on unmount is expected and silent. A real failure must not
+        // be: an empty list renders "All caught up", which is exactly the lie
+        // this whole change exists to stop telling.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setTasksError(true);
+        showToast("Could not load tasks. Refresh to try again.", "error");
       })
       .finally(() => setTasksLoading(false));
     return () => controller.abort();
-  }, []);
+  }, [showToast]);
 
   /** Drop a closed task from the list without refetching the whole tab. */
   const handleTaskDone = useCallback((taskId: number) => {
@@ -320,7 +324,11 @@ function FollowupsView({
     return m;
   }, [leads]);
 
-  const today = getAustralianDate();
+  // A stable key, not a fresh Date each render. getAustralianDate() returns a
+  // new object every call, so it changed identity on every render and each memo
+  // below recomputed regardless.
+  const todayKey = getAustralianDate().toDateString();
+  const today = useMemo(() => new Date(todayKey), [todayKey]);
 
   const meetings = useMemo(() => tasks.filter((t) => t.type === "MEETING"), [tasks]);
   const nonMeetings = useMemo(() => tasks.filter((t) => t.type !== "MEETING"), [tasks]);
@@ -328,17 +336,20 @@ function FollowupsView({
   // Undated tasks count as pending. They are work nobody has scheduled, and
   // hiding them is how 5 production leads ended up parked while the tab said
   // "All caught up".
+  // Every open task, whatever its type. Splitting meetings out of the list left
+  // them counted in Quick Stats and rendered nowhere, so a meeting had no Done
+  // button and no row. The type pill on each row tells them apart.
   const pendingFollowups = useMemo(
-    () => nonMeetings.filter((t) => t.dueDate === null || isDue(t, today)),
-    [nonMeetings, today],
+    () => tasks.filter((t) => t.dueDate === null || isDue(t, today)),
+    [tasks, today],
   );
 
   const upcomingFollowups = useMemo(
     () =>
-      nonMeetings
+      tasks
         .filter((t) => t.dueDate !== null && isAfter(parseISO(t.dueDate), today))
         .sort((a, b) => parseISO(a.dueDate!).getTime() - parseISO(b.dueDate!).getTime()),
-    [nonMeetings, today],
+    [tasks, today],
   );
 
   const pendingMeetings = useMemo(
@@ -357,8 +368,8 @@ function FollowupsView({
   const liveStats = useMemo(
     () => ({
       totalFollowUps: nonMeetings.length,
-      pendingFollowUps: pendingFollowups.length,
-      upcomingFollowUps: upcomingFollowups.length,
+      pendingFollowUps: pendingFollowups.filter((t) => t.type !== "MEETING").length,
+      upcomingFollowUps: upcomingFollowups.filter((t) => t.type !== "MEETING").length,
       totalMeetings: meetings.length,
       pendingMeetings: pendingMeetings.length,
       upcomingMeetings: upcomingMeetings.length,
@@ -391,11 +402,18 @@ function FollowupsView({
               {pendingFollowups.length === 0 ? (
                 <div className="fu-empty">
                   <div className="fu-empty-icon">
-                    <Calendar size={28} />
+                    {tasksError ? <AlertCircle size={28} /> : <Calendar size={28} />}
                   </div>
-                  <p className="fu-empty-title">All caught up!</p>
+                  {/* A failed request must never render as "All caught up".
+                      That sentence is what let 5 production leads sit parked
+                      with nothing scheduled and nobody the wiser. */}
+                  <p className="fu-empty-title">
+                    {tasksError ? "Could not load tasks" : "All caught up!"}
+                  </p>
                   <p className="fu-empty-desc">
-                    No pending follow-ups at the moment.
+                    {tasksError
+                      ? "This list is empty because the request failed, not because there is no work. Refresh to try again."
+                      : "No pending follow-ups at the moment."}
                   </p>
                 </div>
               ) : (

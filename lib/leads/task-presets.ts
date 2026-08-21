@@ -1,4 +1,9 @@
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
+
 import type { LeadTaskType } from "@prisma/client";
+
+/** Every date in this app is a Sydney date. */
+const TIME_ZONE = "Australia/Sydney";
 
 /**
  * The task vocabulary, taken from what people typed rather than invented.
@@ -45,10 +50,14 @@ export const LEAD_TASK_DUE_PRESETS: { label: string; days: number }[] = [
  * bucket boundary the next morning. The buckets compare whole days.
  */
 export function dueDateFromPreset(days: number, from: Date): Date {
-  const d = new Date(from);
-  d.setDate(d.getDate() + days);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  // Sydney midnight, converted back to an instant. Using the machine's local
+  // midnight would put a task on the wrong day for anyone outside Australia and
+  // for every server process, which all run UTC: "tomorrow" resolved on a UTC
+  // box lands at 10am or 11am Sydney, on the correct date only by luck.
+  const local = toZonedTime(from, TIME_ZONE);
+  local.setDate(local.getDate() + days);
+  local.setHours(0, 0, 0, 0);
+  return fromZonedTime(local, TIME_ZONE);
 }
 
 /**

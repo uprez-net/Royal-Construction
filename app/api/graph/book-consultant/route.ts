@@ -3,6 +3,7 @@ import { ClientSecretCredential } from '@azure/identity';
 import { fromZonedTime } from 'date-fns-tz';
 import { getGraphConfig } from '@/lib/graph/config';
 import { createLead, findLeadByEmail, updateLead } from '@/lib/data/leads';
+import { createLeadTask } from '@/lib/data/lead-tasks';
 import type { HistoryItem } from '@/lib/leads/types';
 import BookConsultantScheduleMeeting from '@/lib/graph/Email/book-consultant-ScheduleMeeting';
 import { render } from '@react-email/components';
@@ -135,12 +136,15 @@ async function upsertBookingNotes({
   email,
   notes,
   noteDetail,
+  /** When the consultation actually is. */
+  meetingAt,
 }: {
   id: number;
   name: string;
   email: string;
   notes: string;
   noteDetail: string;
+  meetingAt: Date;
 }) {
   const now = new Date();
   const noteEntry: HistoryItem = {
@@ -157,16 +161,27 @@ async function upsertBookingNotes({
     const updatedNotes = notes.length > 0 ? notes : existingLead.notes;
     await updateLead(existingLead.id, {
       notes: updatedNotes,
-      stage: 'Meeting Scheduled',
-      meetingDate: now.toISOString(),
-      meetingTime: toTimeOnly(now),
+      // Not 'Meeting Scheduled'. That stage was retired: it described a booked
+      // task rather than progress, and completing it wrote CONTACTED. The lead
+      // is in Discovery, and the booking is a task.
+      // No stage at all here in fact: updateLead advances a lead into Discovery
+      // when work is scheduled and leaves anything further on alone.
+      meetingDate: meetingAt.toISOString(),
+      meetingTime: toTimeOnly(meetingAt),
       meetingMode: 'Online',
       history: updatedHistory,
+    });
+    await createLeadTask({
+      leadId: existingLead.id,
+      type: 'MEETING',
+      dueDate: meetingAt,
+      dueTime: toTimeOnly(meetingAt),
+      notes: 'Consultation booked from the website',
     });
     return;
   }
 
-  await createLead(
+  const created = await createLead(
     {
       name: name.trim() || 'Client',
       phone: '',
@@ -174,12 +189,12 @@ async function upsertBookingNotes({
       location: '',
       source: 'Website',
       sourceDetail: NOTE_SOURCE_DETAIL,
-      stage: 'Meeting Scheduled',
+      stage: 'Discovery',
       budget: 'Not Discussed',
       type: ['Not Specified'],
       notes,
-      meetingDate: now.toISOString(),
-      meetingTime: toTimeOnly(now),
+      meetingDate: meetingAt.toISOString(),
+      meetingTime: toTimeOnly(meetingAt),
       meetingMode: 'Online',
       followupNotes: '',
       urgent: false,
@@ -194,6 +209,19 @@ async function upsertBookingNotes({
     },
     { skipWelcomeEmail: true }
   );
+
+  // The Follow-ups tab reads tasks, so a booking that only set meetingDate on
+  // the lead would be invisible there. createLead returns a conflict object
+  // rather than a lead when the email already exists, hence the id check.
+  if (created && typeof created === 'object' && 'id' in created) {
+    await createLeadTask({
+      leadId: Number(created.id),
+      type: 'MEETING',
+      dueDate: meetingAt,
+      dueTime: toTimeOnly(meetingAt),
+      notes: 'Consultation booked from the website',
+    });
+  }
 }
 
 
@@ -356,6 +384,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         email,
         notes: trimmedNotes,
         noteDetail,
+        meetingAt: start,
       });
     } catch (leadError) {
       console.error('Failed to save booking notes to lead', leadError);

@@ -18,7 +18,9 @@ export async function PATCH(
     if (!parsed.success) return badRequestResponse(parsed.error.message);
 
     const task = await completeLeadTask(Number(parsed.data.taskId));
-    if (!task) return badRequestResponse("Task not found");
+    if (!task) {
+      return errorResponse("Task not found", { status: 404, code: "LEAD_TASK_NOT_FOUND" });
+    }
     return successResponse(task);
   } catch (error) {
     console.error("/api/leads/tasks/[taskId] PATCH error", error);

@@ -7,6 +7,7 @@ import {
   dueDateFromPreset,
   taskTypeFromNote,
 } from "../../lib/leads/task-presets";
+import { createLeadTaskSchema } from "../../utils/validators/lead-task";
 
 test("every note recorded on production classifies", () => {
   // The real strings, verbatim from the production followupNotes column.
@@ -50,20 +51,25 @@ test("the presets cover the intervals people actually typed", () => {
   );
 });
 
-test("a preset lands on midnight, not on the moment it was created", () => {
-  // A task made at 4pm must not read as overdue the next morning just because
-  // the bucket boundary is midnight.
-  const from = new Date("2026-08-21T16:30:00.000Z");
-  const due = dueDateFromPreset(1, from);
-  assert.equal(due.getHours(), 0);
-  assert.equal(due.getMinutes(), 0);
-  assert.equal(due.getSeconds(), 0);
+const SYDNEY = "Australia/Sydney";
+const inSydney = (d: Date) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: SYDNEY,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(d);
+
+test("a preset lands on Sydney midnight, whatever zone the machine is in", () => {
+  // Asserted in Sydney, not in the runner's local zone. CI runs UTC and a
+  // developer's laptop does not, so getHours() would give two different
+  // answers for the same correct instant.
+  const due = dueDateFromPreset(1, new Date("2026-08-21T06:30:00.000Z"));
+  assert.match(inSydney(due), /^2026-08-22, 00:00$/);
 });
 
 test("a preset advances by whole days across a month boundary", () => {
   const due = dueDateFromPreset(7, new Date("2026-08-28T09:00:00.000Z"));
-  assert.equal(due.getMonth(), 8); // September
-  assert.equal(due.getDate(), 4);
+  assert.match(inSydney(due), /^2026-09-04, 00:00$/);
 });
 
 test("every type has a label and a verb", () => {
@@ -72,4 +78,18 @@ test("every type has a label and a verb", () => {
     assert.ok(t.label.length > 0, t.value);
     assert.ok(t.verb.length > 0, t.value);
   }
+});
+
+test("the due time schema rejects what max(10) used to accept", () => {
+  // The field ends up rendered verbatim on a row, so "banana" and "99:99"
+  // reaching the database is a display bug waiting to happen.
+  const ok = ["00:00", "09:30", "23:59"];
+  const bad = ["banana", "99:99", "9:30", "24:00", "12:60", ""];
+  for (const t of ok) {
+    assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(t).success, true, t);
+  }
+  for (const t of bad) {
+    assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(t).success, false, t);
+  }
+  assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(null).success, true);
 });
