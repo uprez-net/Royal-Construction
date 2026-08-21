@@ -258,8 +258,8 @@ export async function addPhotosToMilestone(projectId: string, milestoneId: strin
 const MILESTONE_STATE_MACHINE: Record<MilestoneStatus, MilestoneStatus[]> = {
   PENDING: ["ACTIVE", "NOT_REQUIRED"],
   ACTIVE: ["DONE"],
-  DONE: [],
-  NOT_REQUIRED: [],
+  DONE: ["DONE"],
+  NOT_REQUIRED: ["PENDING"],
 }
 
 /**
