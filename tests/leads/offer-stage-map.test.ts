@@ -5,6 +5,7 @@ import {
   OFFER_STATUS_LEAD_STAGE,
   leadStagePatchForOfferStatus,
 } from "../../lib/leads/offer-stage-map";
+import { stageDef } from "../../lib/leads/pipeline-stages";
 
 const NOW = new Date("2026-08-19T00:00:00.000Z");
 
@@ -79,8 +80,21 @@ test("a human's explicit loss is never overruled by offer activity", () => {
 });
 
 test("declines keep the deal open rather than closing it", () => {
-  for (const s of ["OFFER_DECLINED", "TENDER_DECLINED", "CONTRACT_DECLINED", "REJECTED"] as const) {
-    assert.equal(OFFER_STATUS_LEAD_STAGE[s], "NEGOTIATING", s);
+  // Pinned exactly, not just checked for OPEN. A decline sliding down to
+  // QUALIFIED would still be open and would still pass the never-outranks
+  // test below, because 40% is under QUOTED rather than over it.
+  const EXPECTED = {
+    OFFER_DECLINED: "QUOTED",
+    REJECTED: "QUOTED",
+    TENDER_DECLINED: "NEGOTIATING",
+    CONTRACT_DECLINED: "NEGOTIATING",
+  } as const;
+
+  for (const [status, expected] of Object.entries(EXPECTED)) {
+    const stage = OFFER_STATUS_LEAD_STAGE[status as keyof typeof EXPECTED];
+    assert.equal(stage, expected, status);
+    // And never a closing stage: that call carries a reason no status has.
+    assert.equal(stageDef(stage!).outcome, "OPEN", status);
   }
 });
 
@@ -101,9 +115,11 @@ test("applying the same status twice is a no-op", () => {
   assert.equal(second, null);
 });
 
-test("an early-stage offer moves a cold lead into negotiating", () => {
+test("an early-stage offer moves a cold lead to Quoted", () => {
+  // Was NEGOTIATING while every non-terminal status collapsed to that one
+  // stage. A price in the customer's hands is Quoted, not a negotiation.
   const patch = leadStagePatchForOfferStatus("SENT", "NEW", NOW, null);
-  assert.equal(patch?.stage, "NEGOTIATING");
+  assert.equal(patch?.stage, "QUOTED");
 });
 
 test("a null current stage is tolerated", () => {
@@ -138,4 +154,75 @@ test("no won stage is ever produced without a wonAt", () => {
       }
     }
   }
+});
+
+/* ── granularity, and the no-demote guard ──────────────────────────── */
+
+test("the map never sends a later status to a lower stage", () => {
+  // The invariant the whole split rests on. While everything mapped to
+  // NEGOTIATING this held by accident; now it has to be checked.
+  const SEQUENCE = [
+    "PENDING", "SENT", "OFFER_SENT", "OFFER_SIGNED", "AGREED",
+    "TENDER_DRAFT", "TENDER_SENT", "TENDER_SIGNED",
+    "CONTRACT_DRAFT", "CONTRACT_SENT", "CONTRACT_SIGNED", "PROJECT",
+  ] as const;
+
+  let floor = 0;
+  for (const status of SEQUENCE) {
+    const stage = OFFER_STATUS_LEAD_STAGE[status];
+    assert.ok(stage, `${status} should map somewhere`);
+    const p = stageDef(stage!).probability;
+    assert.ok(p >= floor, `${status} -> ${stage} (${p}%) drops below ${floor}%`);
+    floor = p;
+  }
+});
+
+test("a decline never outranks the paperwork it came from", () => {
+  // The defect in the first draft of this map: leaving declines at NEGOTIATING
+  // while lowering the live statuses meant a declined contract scored 70% and
+  // one awaiting signature scored 55%. Saying no raised the forecast.
+  for (const [live, declined] of [
+    ["SENT", "REJECTED"],
+    ["OFFER_SENT", "OFFER_DECLINED"],
+    ["TENDER_SENT", "TENDER_DECLINED"],
+    ["CONTRACT_SENT", "CONTRACT_DECLINED"],
+  ] as const) {
+    const livePct = stageDef(OFFER_STATUS_LEAD_STAGE[live]!).probability;
+    const deadPct = stageDef(OFFER_STATUS_LEAD_STAGE[declined]!).probability;
+    assert.ok(deadPct <= livePct, `${declined} (${deadPct}%) outranks ${live} (${livePct}%)`);
+  }
+});
+
+test("an offer reset to PENDING does not demote a lead in negotiation", () => {
+  // offer-workspace allows OFFER_DECLINED -> PENDING, so this is a real path,
+  // not a hypothetical. Without the guard the lead drops 70% to 40%.
+  assert.equal(leadStagePatchForOfferStatus("PENDING", "NEGOTIATING", NOW, null), null);
+  assert.equal(leadStagePatchForOfferStatus("SENT", "NEGOTIATING", NOW, null), null);
+});
+
+test("a revise cycle does not bounce the stage", () => {
+  // OFFER_SENT -> declined -> revised SENT -> declined again. Levelling the
+  // decline with the status it follows makes the whole loop a no-op after the
+  // first move, so the stage and the forecast sit still through every revision.
+  const sent = leadStagePatchForOfferStatus("OFFER_SENT", "CONTACTED", NOW, null);
+  assert.equal(sent?.stage, "QUOTED");
+  assert.equal(leadStagePatchForOfferStatus("OFFER_DECLINED", "QUOTED", NOW, null), null);
+  assert.equal(leadStagePatchForOfferStatus("SENT", "QUOTED", NOW, null), null);
+  assert.equal(leadStagePatchForOfferStatus("OFFER_DECLINED", "QUOTED", NOW, null), null);
+});
+
+test("a stalled lead can still re-enter the pipeline", () => {
+  // NO_RESPONSE sorts last by `order` but is worth nothing, which is why the
+  // guard compares probability and only holds OPEN stages.
+  const patch = leadStagePatchForOfferStatus("SENT", "NO_RESPONSE", NOW, null);
+  assert.equal(patch?.stage, "QUOTED");
+});
+
+test("an early lead is advanced by offer activity", () => {
+  assert.equal(leadStagePatchForOfferStatus("PENDING", "NEW", NOW, null)?.stage, "QUALIFIED");
+  assert.equal(leadStagePatchForOfferStatus("SENT", "CONTACTED", NOW, null)?.stage, "QUOTED");
+  assert.equal(
+    leadStagePatchForOfferStatus("CONTRACT_SENT", "QUOTED", NOW, null)?.stage,
+    "NEGOTIATING",
+  );
 });
