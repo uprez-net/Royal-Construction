@@ -17,6 +17,7 @@ import { createNotification } from "@/types/notification";
 import { logAction } from "./actionLog";
 import { triggerNotification } from "../notification/novu";
 import { getAllAdminUsersIds } from "./user";
+import { OfferWorkspaceCostLine } from "../offer/workspace-model";
 
 /**
  * Retrieves all milestones for a project ordered by their display order.
@@ -427,6 +428,7 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
 export async function createMilestonesFromTemplateForProject(
   projectId: string,
   startDate: Date,
+  costLines?: readonly OfferWorkspaceCostLine[],
   tx?: Prisma.TransactionClient
 ) {
   try {
@@ -434,8 +436,21 @@ export async function createMilestonesFromTemplateForProject(
     const milestoneRecords = milestoneTemplates.map((template) => {
       const id = randomUUID();
 
+      const calculateMilestoneBudget = (relatedCostLines: readonly string[] | undefined): number => {
+        if (!relatedCostLines || relatedCostLines.length === 0 || !costLines) {
+          return 0;
+        }
+        // Find all cost lines that match the related cost lines for this milestone
+        const matchingCostLines = costLines.filter((costLine) =>
+          relatedCostLines.includes(costLine.itemName)
+        );
+        // Sum the budgets of the matching cost lines
+        return matchingCostLines.reduce((total, costLine) => total + (costLine.costExGst), 0);
+      }
+
       return {
         ...template,
+        totalBudget: calculateMilestoneBudget(template.relatedCostLines),
         targetDate: addDays(startDate, template.order * 4), // Example: each milestone is 4 days apart based on its order
         id,
       };
@@ -456,6 +471,7 @@ export async function createMilestonesFromTemplateForProject(
           ? milestoneIdByOrder.get(milestone.parentId)
           : null,
         projectStage: milestone.projectStage,
+        budget: new Prisma.Decimal(milestone.totalBudget),
       })),
     });
 

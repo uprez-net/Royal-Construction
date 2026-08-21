@@ -19,6 +19,7 @@ import { Prisma } from "@prisma/client";
 import type { ProjectRequirementsPayload, ProjectSourceDocumentReference } from "@/types/project-flow";
 import { buildProjectRequirementsPayload, resolveProjectBudget } from "@/lib/data/projectFlow";
 import type { ProjectExtractionData } from "@/types/project-extraction";
+import { OfferWorkspaceCostLine } from "../offer/workspace-model";
 
 /**
  * Creates a new project from manually entered project data.
@@ -139,6 +140,7 @@ export interface CreateProjectWithLeadInput {
   // Full owner party set (owners[]) preserved on Project.parties (ADR 0003).
   parties?: Prisma.InputJsonValue | null;
   extraction?: ProjectRequirementsPayload | ProjectExtractionData | null;
+  costLines?: readonly OfferWorkspaceCostLine[];
   sourceDocuments: {
     tender: ProjectSourceDocumentReference;
     contract: ProjectSourceDocumentReference;
@@ -326,7 +328,24 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
  * Re-throws any database, AI inference, milestone generation, notification,
  * or transaction errors encountered during execution.
  */
-export async function createProjectWithLead({ leadId, lotSize, startDate, estimatedEndDate, address, council, siteManagerId, projectName, customerName, customerEmail, customerPhone, customerAddress, parties, extraction, sourceDocuments }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
+export async function createProjectWithLead({
+  leadId,
+  lotSize,
+  startDate,
+  estimatedEndDate,
+  address,
+  council,
+  siteManagerId,
+  projectName,
+  customerName,
+  customerEmail,
+  customerPhone,
+  customerAddress, 
+  parties, 
+  extraction, 
+  sourceDocuments,
+  costLines 
+}: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
@@ -479,7 +498,7 @@ export async function createProjectWithLead({ leadId, lotSize, startDate, estima
         }
       });
 
-      await createMilestonesFromTemplateForProject(newProject.id, normalisedStartDate, tx);
+      await createMilestonesFromTemplateForProject(newProject.id, normalisedStartDate, costLines, tx);
 
       const activityLogEntry = createActivityLogEntry("projectCreated", {
         projectType: projectType,
