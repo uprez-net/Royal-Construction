@@ -16,6 +16,7 @@ import { STAGE_STYLES, stageOptionsFor } from "@/lib/leads/lead-helpers";
 const STAGE_DOT_STYLES: Record<LeadStage, string> = {
   New: "bg-blue-500",
   Contacted: "bg-amber-500",
+  Discovery: "bg-sky-500",
   Qualified: "bg-purple-500",
   Quoted: "bg-teal-500",
   Negotiating: "bg-pink-500",

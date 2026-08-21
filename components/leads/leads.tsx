@@ -170,11 +170,7 @@ export default function Leads() {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     if (tab === "followups") {
-      refreshLeadsData({
-        page: 1,
-        limit: 50,
-        status: ["Meeting Scheduled", "In Follow-up"].join(","),
-      });
+      refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
     } else if (tab === "table") {
       refreshLeadsData({ page: 1, limit: 10 });
     }
@@ -196,6 +192,7 @@ export default function Leads() {
       filterTiming: activeFilterTiming,
       query: debouncedSearch.trim() || undefined,
       isArchived: metric?.includes("Archived") ? true : undefined,
+      hasOpenTask: metric === "pendingFollowup" ? true : undefined,
     });
   };
 

@@ -38,22 +38,32 @@ export interface PipelineStageDef {
 export const PIPELINE_STAGES: Record<LeadStage, PipelineStageDef> = {
   NEW:               { code: "NEW",               label: "New",               order: 1,  probability: 10,  outcome: "OPEN",    banked: false, colorVar: "--stage-1" },
   CONTACTED:         { code: "CONTACTED",         label: "Contacted",         order: 2,  probability: 20,  outcome: "OPEN",    banked: false, colorVar: "--stage-2" },
-  MEETING_SCHEDULED: { code: "MEETING_SCHEDULED", label: "Meeting Scheduled", order: 3,  probability: 30,  outcome: "OPEN",    banked: false, colorVar: "--stage-3" },
-  QUALIFIED:         { code: "QUALIFIED",         label: "Qualified",         order: 4,  probability: 40,  outcome: "OPEN",    banked: false, colorVar: "--stage-4" },
-  IN_FOLLOW_UP:      { code: "IN_FOLLOW_UP",      label: "In Follow-up",      order: 5,  probability: 45,  outcome: "OPEN",    banked: false, colorVar: "--stage-5" },
-  QUOTED:            { code: "QUOTED",            label: "Quoted",            order: 6,  probability: 55,  outcome: "OPEN",    banked: false, colorVar: "--stage-6" },
-  NEGOTIATING:       { code: "NEGOTIATING",       label: "Negotiating",       order: 7,  probability: 70,  outcome: "OPEN",    banked: false, colorVar: "--stage-7" },
-  WON:               { code: "WON",               label: "Won",               order: 8,  probability: 100, outcome: "WON",     banked: true,  colorVar: "--stage-7" },
-  // The same outcome as WON, under the name Royal Constructions actually uses.
-  // CONVERTED is the label the stage picker offers and WON is hidden, so every
-  // deal closed from the UI lands here; WON above stays for rows written by the
-  // offer sync and for older data. Identical probability, outcome and banked
-  // flag — nothing downstream needs to tell them apart.
-  CONVERTED:         { code: "CONVERTED",         label: "Converted",         order: 9,  probability: 100, outcome: "WON",     banked: true,  colorVar: "--stage-7" },
+  // Collecting the client's requirements. Replaces MEETING_SCHEDULED and
+  // IN_FOLLOW_UP, which described a scheduled task rather than progress: any
+  // open lead fell into them from a calendar action, and finishing the task
+  // wrote CONTACTED, so a deal in negotiation lost 50 points for having a call
+  // rescheduled. Those two live on below only because rows may still hold them.
+  DISCOVERY:         { code: "DISCOVERY",         label: "Discovery",         order: 3,  probability: 30,  outcome: "OPEN",    banked: false, colorVar: "--stage-3" },
+  QUALIFIED:         { code: "QUALIFIED",         label: "Qualified",         order: 4,  probability: 45,  outcome: "OPEN",    banked: false, colorVar: "--stage-4" },
+  QUOTED:            { code: "QUOTED",            label: "Quoted",            order: 5,  probability: 60,  outcome: "OPEN",    banked: false, colorVar: "--stage-6" },
+  NEGOTIATING:       { code: "NEGOTIATING",       label: "Negotiating",       order: 6,  probability: 75,  outcome: "OPEN",    banked: false, colorVar: "--stage-7" },
+  CONVERTED:         { code: "CONVERTED",         label: "Converted",         order: 7,  probability: 100, outcome: "WON",     banked: true,  colorVar: "--stage-7" },
+
+  // Closed, and grouped as "Closed" in the picker. Disqualified is one of the
+  // three, so naming the group after it would leave people guessing whether a
+  // filter meant the group or the stage.
+  NO_RESPONSE:       { code: "NO_RESPONSE",       label: "No Response",       order: 8,  probability: 0,   outcome: "STALLED", banked: false, colorVar: "--stage-1" },
+  DISQUALIFIED:      { code: "DISQUALIFIED",      label: "Disqualified",      order: 9,  probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
   LOST:              { code: "LOST",              label: "Lost",              order: 10, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
-  CANCELLED:         { code: "CANCELLED",         label: "Cancelled",         order: 11, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
-  DISQUALIFIED:      { code: "DISQUALIFIED",      label: "Disqualified",      order: 12, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
-  NO_RESPONSE:       { code: "NO_RESPONSE",       label: "No Response",       order: 13, probability: 0,   outcome: "STALLED", banked: false, colorVar: "--stage-1" },
+
+  // Retired. This Record is keyed by the generated Prisma enum, which still
+  // carries all four, and rows hold them until 20260821030100 has run
+  // everywhere. None is selectable and nothing writes them. Their definitions
+  // stay accurate so an un-migrated row still renders and still counts.
+  MEETING_SCHEDULED: { code: "MEETING_SCHEDULED", label: "Meeting Scheduled", order: 11, probability: 30,  outcome: "OPEN",    banked: false, colorVar: "--stage-3" },
+  IN_FOLLOW_UP:      { code: "IN_FOLLOW_UP",      label: "In Follow-up",      order: 12, probability: 30,  outcome: "OPEN",    banked: false, colorVar: "--stage-5" },
+  WON:               { code: "WON",               label: "Won",               order: 13, probability: 100, outcome: "WON",     banked: true,  colorVar: "--stage-7" },
+  CANCELLED:         { code: "CANCELLED",         label: "Cancelled",         order: 14, probability: 0,   outcome: "LOST",    banked: false, colorVar: "--stage-1" },
 };
 
 export function stageDef(code: LeadStage): PipelineStageDef {

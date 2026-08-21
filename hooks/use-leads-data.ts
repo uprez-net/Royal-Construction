@@ -22,7 +22,10 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
   if (!status) return undefined;
   if (status === "total") return [];
   if (status === "converted") return ["Won", "Converted"];
-  if (status === "pendingFollowup") return ["In Follow-up", "Meeting Scheduled"];
+  // Scheduled work is a task now, so this cohort is no longer expressible as
+  // stages. The caller sends hasOpenTask instead; an empty list means "do not
+  // filter by stage" rather than "match nothing".
+  if (status === "pendingFollowup") return [];
   if (status === "lost") return ["Lost", "Cancelled", "Disqualified"];
   // "Archived" rides in the same comma list as the stage chips but is not a
   // stage — it drives the isArchived flag. Passing it through made the API
@@ -102,6 +105,7 @@ export function useLeadsData() {
       status?: string;
       filterTiming?: string;
       isArchived?: boolean;
+      hasOpenTask?: boolean;
     }) => {
       try {
         setLoadingLeads(true);
@@ -112,6 +116,7 @@ export function useLeadsData() {
           status: resolveStatusFilter(params.status),
           filterTiming: params.filterTiming,
           isArchived: params.isArchived,
+          hasOpenTask: params.hasOpenTask,
         });
         setLeads(leadsData.items);
         setPageInfo({

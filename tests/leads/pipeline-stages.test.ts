@@ -11,9 +11,12 @@ import {
 } from "../../lib/leads/pipeline-stages";
 
 const ALL_STAGES = [
-  "NEW", "CONTACTED", "QUALIFIED", "QUOTED", "NEGOTIATING", "WON", "LOST",
-  "MEETING_SCHEDULED", "IN_FOLLOW_UP", "NO_RESPONSE", "CONVERTED",
-  "CANCELLED", "DISQUALIFIED",
+  // Live ladder.
+  "NEW", "CONTACTED", "DISCOVERY", "QUALIFIED", "QUOTED", "NEGOTIATING", "CONVERTED",
+  "NO_RESPONSE", "DISQUALIFIED", "LOST",
+  // Retired but still in the Prisma enum, so still keyed here. Rows hold them
+  // until 20260821030100 has run against every database.
+  "MEETING_SCHEDULED", "IN_FOLLOW_UP", "WON", "CANCELLED",
 ] as const;
 
 test("every LeadStage has a definition", () => {

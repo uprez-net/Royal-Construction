@@ -56,6 +56,10 @@ enum MaterialStatus {
 enum LeadStage {
   NEW
   CONTACTED
+  /// Collecting the client's requirements. Absorbs the work that used to be
+  /// recorded as MEETING_SCHEDULED and IN_FOLLOW_UP, both of which described a
+  /// scheduled task rather than how far the deal had progressed.
+  DISCOVERY
   QUALIFIED
   QUOTED
   NEGOTIATING
@@ -578,6 +582,12 @@ model Lead {
   meetingMode            String?
   followupReminderSentAt DateTime?
   meetingReminderSentAt  DateTime?
+  /// When the scheduled task was closed out. Before these existed, the only
+  /// record that a follow-up had finished was the stage flipping to CONTACTED,
+  /// which is why a lead in negotiation lost 50 points for having a call
+  /// rescheduled. The stage no longer moves; these do.
+  followupCompletedAt    DateTime?
+  meetingCompletedAt     DateTime?
 
   lostReason String?
 

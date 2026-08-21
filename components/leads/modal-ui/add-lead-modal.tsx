@@ -165,8 +165,11 @@ export function AddLeadModal({
     setLoading(true);
 
     try {
+      // Booking work at creation means Discovery has started. It used to write
+      // "In Follow-up", which was a task masquerading as a stage: the lead then
+      // dropped to Contacted the moment somebody answered the call.
       const stage: LeadStage =
-        form.followupDate && form.followupTime ? "In Follow-up" : "Contacted";
+        form.followupDate && form.followupTime ? "Discovery" : "Contacted";
 
       // let calendarCreated = true;
       // if (stage === "In Follow-up") {

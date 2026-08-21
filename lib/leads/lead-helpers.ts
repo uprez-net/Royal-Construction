@@ -39,24 +39,29 @@ export const LEAD_SOURCE_OPTIONS: LeadSource[] = [
   "Business",
 ];
 
-export const LEAD_STAGE_OPTIONS: LeadStage[] = [
-  "New",
-  "Contacted",
-  "Qualified",
-  "Quoted",
-  "Negotiating",
-  // Won and Cancelled stay hidden: "Converted" is the word Royal Constructions
-  // uses for a won deal, and renaming it would mean re-teaching the team for no
-  // change in behaviour. Converted and Won are identical to every calculation.
-  //"Won",
-  "Lost",
-  "Meeting Scheduled",
-  "In Follow-up",
-  "No Response",
-  "Converted",
-  //"Cancelled",
-  "Disqualified",
+/**
+ * The picker, in groups.
+ *
+ * "Closed" rather than "Disqualified" for the third group: Disqualified is one
+ * of the three stages inside it, so reusing the word would leave people
+ * guessing whether a filter meant the group or the stage.
+ *
+ * Meeting Scheduled and In Follow-up are gone. Both described a scheduled task
+ * rather than progress, and completing one wrote CONTACTED, which is why 6 of
+ * the 11 Contacted leads on production got there by having the work done
+ * properly. They are tasks now, carried by followupDate and meetingDate.
+ *
+ * Won and Cancelled are gone too: nothing in any calculation could tell either
+ * apart from Converted and Lost.
+ */
+export const LEAD_STAGE_GROUPS: { label: string; stages: LeadStage[] }[] = [
+  { label: "Active", stages: ["New", "Contacted", "Discovery", "Qualified", "Quoted", "Negotiating"] },
+  { label: "Won", stages: ["Converted"] },
+  { label: "Closed", stages: ["No Response", "Disqualified", "Lost"] },
 ];
+
+/** Flat order, for the filter chips and anything that wants one list. */
+export const LEAD_STAGE_OPTIONS: LeadStage[] = LEAD_STAGE_GROUPS.flatMap((g) => g.stages);
 
 export const HISTORY_TYPE_OPTIONS: HistoryItem["type"][] = [
   "system",
@@ -125,6 +130,22 @@ export function budgetBracket(
  * Appending the current stage keeps that lead readable without making a hidden
  * stage newly selectable for anyone else.
  */
+/**
+ * The grouped picker for a lead currently on `current`.
+ *
+ * Same contract as stageOptionsFor: a lead sitting on a stage the groups do not
+ * carry still gets an entry, so it renders and can keep what it has. Rows hold
+ * the four retired stages until the data migration has run everywhere, and
+ * Radix fills the trigger by portalling text out of the MATCHING item, so a
+ * value with no item renders the trigger completely blank.
+ */
+export function stageGroupsFor(
+  current: LeadStage,
+): { label: string; stages: LeadStage[] }[] {
+  if (LEAD_STAGE_OPTIONS.includes(current)) return LEAD_STAGE_GROUPS;
+  return [...LEAD_STAGE_GROUPS, { label: "Retired", stages: [current] }];
+}
+
 export function stageOptionsFor(current: LeadStage): LeadStage[] {
   return LEAD_STAGE_OPTIONS.includes(current)
     ? LEAD_STAGE_OPTIONS
@@ -134,6 +155,7 @@ export function stageOptionsFor(current: LeadStage): LeadStage[] {
 export const STAGE_STYLES: Record<LeadStage, string> = {
   New: "stage-badge-info",
   Contacted: "stage-badge-warning",
+  Discovery: "stage-badge-info",
   Qualified: "stage-badge-purple",
   Quoted: "stage-badge-accent",
   Negotiating: "stage-badge-pink",

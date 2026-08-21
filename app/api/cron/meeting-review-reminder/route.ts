@@ -41,11 +41,14 @@ export async function GET(request: Request) {
 
     const leads = await prisma.lead.findMany({
       where: {
-        stage: "MEETING_SCHEDULED",
+        // Closed leads get no reminders. This used to be implied by the stage
+        // filter; scheduled work is a task now, so it has to be said.
+        stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] },
         meetingDate: {
           not: null,
           lt: todayStart,
         },
+        meetingCompletedAt: null,
         assignedId: { not: null },
         meetingReminderSentAt: null,
       },
